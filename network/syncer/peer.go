@@ -46,7 +46,10 @@ type Offer struct {
 
 type Want struct {
 	ruid      uint
-	hashes    map[chunk.Address]bool
+	from      uint64
+	to        uint64
+	stream    string
+	hashes    map[string]bool
 	bv        *bitvector.BitVector
 	requested time.Time
 	wg        *sync.WaitGroup
@@ -63,7 +66,7 @@ type Peer struct {
 
 	streamCursors     map[uint]uint64           // key: bin, value: session cursor. when unset - we are not interested in that bin
 	historicalStreams map[uint]*syncStreamFetch //maintain state for each stream fetcher on the client side
-	openWants         map[uint]Want             //maintain open wants on the client side
+	openWants         map[uint]*Want            //maintain open wants on the client side
 	openOffers        map[uint]Offer            // maintain open offers on the server side
 	quit              chan struct{}             //peer is going offline
 }
@@ -74,7 +77,7 @@ func NewPeer(peer *network.BzzPeer, s *SwarmSyncer) *Peer {
 		BzzPeer:           peer,
 		streamCursors:     make(map[uint]uint64),
 		historicalStreams: make(map[uint]*syncStreamFetch),
-		openWants:         make(map[uint]Want),
+		openWants:         make(map[uint]*Want),
 		openOffers:        make(map[uint]Offer),
 		syncer:            s,
 		quit:              make(chan struct{}),
@@ -167,12 +170,26 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 				BatchSize: 128,
 				Roundtrip: true,
 			}
+
 			log.Debug("sending first GetRange to peer", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "GetRange", g)
 
 			if err := p.Send(ctx, g); err != nil {
 				log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s, "GetRange", g, "err", err)
 				p.Drop()
 			}
+
+			w := &Want{
+				ruid:   g.Ruid,
+				stream: g.Stream,
+				from:   g.From,
+				to:     g.To,
+
+				hashes:    make(map[string]bool),
+				requested: time.Now(),
+				wg:        &sync.WaitGroup{},
+			}
+
+			p.openWants[w.ruid] = w
 		}
 	}
 }
@@ -225,14 +242,10 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	if lenHashes%HashSize != 0 {
 		log.Error("error invalid hashes length", "len", lenHashes)
 	}
-	w := Want{
-		ruid:      msg.Ruid,
-		hashes:    make(map[chunk.Address]bool),
-		bv:        want,
-		requested: time.Now(),
-		wg:        &sync.WaitGroup{},
-		chunks:    cc,
-		done:      dc,
+
+	w, ok := p.openWants[msg.Ruid]
+	if !ok {
+		log.Error("ruid not found, dropping peer")
 	}
 
 	want, err := bv.New(lenHashes / HashSize)
@@ -246,15 +259,16 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 		log.Trace("checking offered hash", "ref", fmt.Sprintf("%x", hash))
+		c := chunk.Address(hash)
 
 		if _, wait := p.syncer.NeedData(ctx, hash); wait != nil {
 			ctr++
-			w.hashes[hash] = true
+			w.hashes[c.Hex()] = true
 			// set the bit, so create a request
 			want.Set(i/HashSize, true)
 			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
 		} else {
-			w.hashes[hash] = false
+			w.hashes[c.Hex()] = false
 		}
 	}
 
@@ -272,6 +286,9 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 	w.wg.Add(ctr)
+	w.bv = want
+	w.chunks = cc
+	w.done = dc
 
 	p.openWants[msg.Ruid] = w
 	log.Debug("open wants", "ow", p.openWants)
@@ -282,25 +299,28 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			log.Error("Wtf", "err", err)
 			return
 		}
-p.AddInterval(
+		err = p.AddInterval(w.from, w.to, p.ID().String()+w.stream)
+		if err != nil {
+			panic(err)
+		}
+		delete(p.openWants, msg.Ruid)
+
+		log.Debug("batch done", "from", w.from, "to", w.to)
 	}
 }
-func peerStreamIntervalsKey(p *Peer, s string) string {
-	return p.ID().String() + s
-}
 
-func (p *Peer) AddInterval(start, end uint64) (err error) {
+func (p *Peer) AddInterval(start, end uint64, peerStreamKey string) (err error) {
 	i := &intervals.Intervals{}
-	if err = c.intervalsStore.Get(c.intervalsKey, i); err != nil {
+	if err = p.syncer.intervalsStore.Get(peerStreamKey, i); err != nil {
 		return err
 	}
 	i.Add(start, end)
-	return c.intervalsStore.Put(c.intervalsKey, i)
+	return p.syncer.intervalsStore.Put(peerStreamKey, i)
 }
 
-func (p *Peer) NextInterval() (start, end uint64, err error) {
+func (p *Peer) NextInterval(peerStreamKey string) (start, end uint64, err error) {
 	i := &intervals.Intervals{}
-	err = c.intervalsStore.Get(c.intervalsKey, i)
+	err = p.syncer.intervalsStore.Get(peerStreamKey, i)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -309,38 +329,39 @@ func (p *Peer) NextInterval() (start, end uint64, err error) {
 }
 
 func (p *Peer) sealBatch(ruid uint) <-chan error {
-
 	want := p.openWants[ruid]
 
 	for {
 		select {
 		case c, ok := <-want.chunks:
-			p.mtx.Lock()
 			if !ok {
 				log.Error("want chanks rreturned on !ok")
-				panic("w00t")
+				panic("shouldnt happen")
 			}
-			if wants, ok := want.hashes[c.Addr]; !ok || !wants {
-				log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Addr)
+			p.mtx.Lock()
+			if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
+				log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
 				panic("shouldnt happen")
 			}
 			go func() {
-				seen, err := p.syncer.netStore.Put(ctx, chunk.ModePutSync, storage.NewChunk(c.Addr, c.Data))
+				ctx := context.TODO()
+				seen, err := p.syncer.netStore.Put(ctx, chunk.ModePutSync, storage.NewChunk(c.Address(), c.Data()))
 				if err != nil {
 					if err == storage.ErrChunkInvalid {
 						p.Drop()
 					}
 				}
 				if seen {
-					log.Error("chunk already seen!", "peer", p.ID(), "caddr", caddr)
+					log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
 					panic("shouldnt happen")
 				}
-				p.hashes[c.Addr] = false //todo: should by sync map
+				want.hashes[c.Address().Hex()] = false //todo: should by sync map
 				want.wg.Done()
 				p.mtx.Unlock()
 			}()
 		case <-p.quit:
-			return
+			//return
+			break
 		}
 	}
 
@@ -604,8 +625,6 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 			newDepth := s.kad.NeighbourhoodDepth()
 			log.Debug("got kademlia depth change sig", "peer", p.ID(), "peerPo", peerPo, "depth", depth, "newDepth", newDepth, "withinDepth", withinDepth)
 			switch {
-			//case newDepth == depth:
-			//continue
 			case peerPo >= newDepth:
 				// peer is within depth
 				if !withinDepth {
