@@ -17,11 +17,13 @@
 package swap
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	mrand "math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -128,11 +130,20 @@ func addBookings(swap *Swap, bookings []booking) {
 // take a swap pointer and a list of bookings, and verify the balances are as expected for a peer
 func verifyBookings(t *testing.T, swap *Swap, bookings []booking, peer *dummyPeer) {
 	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
-	expectedBalance := balancesAfterBookings[peer.ID()]
-	realBalance := swap.balances[peer.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be: %d, but is: %d", len(bookings), expectedBalance, realBalance))
+	expectedBalances := balancesAfterBookings
+	realBalances := swap.balances
+	if !reflect.DeepEqual(expectedBalances, realBalances) {
+		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be: %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances)))
 	}
+}
+
+// converts a balance map to a one-line string representation
+func stringifyBalance(balance map[enode.ID]int64) string {
+	marshaledBalance, err := json.Marshal(balance)
+	if err != nil {
+		return err.Error()
+	}
+	return string(marshaledBalance)
 }
 
 // take a swap pointer and a list of bookings, and calculate the expected balances.
