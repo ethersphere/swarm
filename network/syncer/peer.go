@@ -65,6 +65,12 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go p.handleStreamInfoReq(ctx, msg)
 	case *StreamInfoRes:
 		go p.handleStreamInfoRes(ctx, msg)
+	case *GetRange:
+		go p.handleGetRange(ctx, msg)
+	case *OfferedHashes:
+		go p.handleOfferedHashes(ctx, msg)
+	case *WantedHashes:
+		go p.handleWantedHashes(ctx, msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
@@ -130,6 +136,10 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 		log.Error("failed to send StreamInfoRes to client", "requested bins", msg.Streams)
 	}
 }
+
+func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange)           {}
+func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {}
+func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes)   {}
 
 // syncStreamFetch is a struct that holds exposed state used by a separate goroutine that handles stream retrievals
 type syncStreamFetch struct {
