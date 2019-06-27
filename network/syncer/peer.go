@@ -282,7 +282,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			log.Error("Wtf", "err", err)
 			return
 		}
-
+p.AddInterval(
 	}
 }
 func peerStreamIntervalsKey(p *Peer, s string) string {
