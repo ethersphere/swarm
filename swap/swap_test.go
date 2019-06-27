@@ -132,6 +132,7 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 }
 
+// take a swap pointer and a list of bookings, and call the accounting function for each of them
 func addBookings(swap *Swap, bookings []booking) {
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
