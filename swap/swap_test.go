@@ -139,12 +139,16 @@ func addBookings(swap *Swap, bookings []booking) {
 	}
 }
 
+// take a swap pointer and a list of bookings, and calculate the expected balances.
+// the result is a map which stores the balance for all the peers present in the bookings,
+// from the perspective of the node that loaded the swap struct.
 func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int64 {
 	expectedBalances := make(map[enode.ID]int64)
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
+		// balance is not expected to be affected once past the disconnect threshold
 		if peerBalance < swap.disconnectThreshold {
 			peerBalance += booking.amount
 		}
