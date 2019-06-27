@@ -18,7 +18,6 @@ package syncer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -61,12 +60,8 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
-		if len(nodeIDs) != 1 {
-			return errors.New("not enough nodes up")
-		}
 
 		item := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
-		//time.Sleep(1 * time.Second)
 
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
@@ -83,11 +78,15 @@ func TestTwoNodesFullSync(t *testing.T) {
 		if err := wait(cctx); err != nil {
 			return err
 		}
-
-		_, err = sim.AddNodesAndConnectStar(1)
+		id, err := sim.AddNodes(1)
 		if err != nil {
 			return err
 		}
+		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		if err != nil {
+			return err
+		}
+		nodeIDs = sim.UpNodeIDs()
 
 		uploaderNodeBinIDs := make([]uint64, 17)
 
