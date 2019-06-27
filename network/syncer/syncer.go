@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
@@ -53,6 +54,7 @@ var SyncerSpec = &protocols.Spec{
 		StreamInfoRes{},
 		GetRange{},
 		OfferedHashes{},
+		ChunkDelivery{},
 		WantedHashes{},
 	},
 }
@@ -188,6 +190,16 @@ func (s *SwarmSyncer) NeedData(ctx context.Context, key []byte) (loaded bool, wa
 		return nil
 	}
 }
+
+// GetData retrieves the actual chunk from netstore
+func (s *SwarmSyncer) GetData(ctx context.Context, key []byte) ([]byte, error) {
+	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetSync, storage.Address(key))
+	if err != nil {
+		return nil, err
+	}
+	return ch.Data(), nil
+}
+
 func ParseStream(stream string) (bin uint, err error) {
 	arr := strings.Split(stream, "|")
 	b, err := strconv.Atoi(arr[1])

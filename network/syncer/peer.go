@@ -36,6 +36,12 @@ var ErrEmptyBatch = errors.New("empty batch")
 
 const BatchSize = 128
 
+type Offer struct {
+	Ruid      uint
+	Hashes    []byte
+	Requested time.Time
+}
+
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
@@ -44,8 +50,8 @@ type Peer struct {
 	syncer       *SwarmSyncer
 
 	streamCursors     map[uint]uint64           // key: bin, value: session cursor. when unset - we are not interested in that bin
-	historicalStreams map[uint]*syncStreamFetch //maintain state for each stream fetcher
-	//openOffers map[uint]
+	historicalStreams map[uint]*syncStreamFetch //maintain state for each stream fetcher on the client side
+	openOffers        map[uint]Offer            // maintain open offers on the server side
 
 	quit chan struct{}
 }
@@ -56,6 +62,7 @@ func NewPeer(peer *network.BzzPeer, s *SwarmSyncer) *Peer {
 		BzzPeer:           peer,
 		streamCursors:     make(map[uint]uint64),
 		historicalStreams: make(map[uint]*syncStreamFetch),
+		openOffers:        make(map[uint]Offer),
 		syncer:            s,
 		quit:              make(chan struct{}),
 	}
@@ -79,6 +86,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go p.handleOfferedHashes(ctx, msg)
 	case *WantedHashes:
 		go p.handleWantedHashes(ctx, msg)
+	case *ChunkDelivery:
+		go p.handleChunkDelivery(ctx, msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
@@ -171,6 +180,14 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		p.Drop()
 	}
 
+	o := Offer{
+		Ruid:      msg.Ruid,
+		Hashes:    h,
+		Requested: time.Now(),
+	}
+
+	p.openOffers[msg.Ruid] = o
+
 	offered := OfferedHashes{
 		Ruid:      msg.Ruid,
 		LastIndex: uint(t),
@@ -217,6 +234,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
 		}
 	}
+
 	// TODO: place goroutine of abstraction to seal off batch HERE
 	w := WantedHashes{
 		Ruid:      msg.Ruid,
@@ -231,28 +249,67 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	log.Debug("peer.handleWantedHashes", "peer", p.ID(), "ruid", msg.Ruid)
 	// Get the length of the original Offer from state
-	l := -1
+	// get the offered hashes themselves
+	//ruid -> offer[]
+	offer, ok := p.openOffers[msg.Ruid]
+	if !ok {
+		// ruid doesn't exist. error and drop peer
+		log.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid, "peer", p.ID())
+		p.Drop()
+	}
+	l := len(offer.Hashes) / HashSize
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
 		log.Error("error initiaising bitvector", l, err)
 	}
+
+	frameSize := 0
+	const maxFrame = 5
+	cd := ChunkDelivery{
+		Ruid:      msg.Ruid,
+		LastIndex: 0,
+	}
+
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
+			frameSize++
+
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
-			hash := hashes[i*HashSize : (i+1)*HashSize]
+			hash := offer.Hashes[i*HashSize : (i+1)*HashSize]
 			data, err := p.syncer.GetData(ctx, hash)
 			if err != nil {
 				log.Error("handleWantedHashesMsg", "hash", hash, "err", err)
 				p.Drop()
 			}
-			chunk := storage.NewChunk(hash, data)
+			c := storage.NewChunk(hash, data)
 			//collect the chunk into the batch
+
+			cd.Chunks = append(cd.Chunks, c.Data())
+			if frameSize == maxFrame {
+				//send the batch
+				if err := p.Send(ctx, cd); err != nil {
+					log.Error("error sending chunk delivery frame", "peer", p.ID(), "ruid", msg.Ruid, "error", err)
+				}
+
+				frameSize = 0
+			}
+		}
+
+	}
+
+	if frameSize > 0 {
+		//send the batch
+		if err := p.Send(ctx, cd); err != nil {
+			log.Error("error sending chunk delivery frame", "peer", p.ID(), "ruid", msg.Ruid, "error", err)
 		}
 	}
 
-	//send the batch
-	return nil
+	return
+
+}
+
+func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
 
 }
 
