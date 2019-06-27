@@ -92,17 +92,19 @@ func TestRepeatedBookings(t *testing.T) {
 
 	var bookings []booking
 
+	// credits to peer 1
 	testPeer := newDummyPeer()
 	bookingAmount := int64(mrand.Intn(100))
 	bookingQuantity := 1 + mrand.Intn(10)
 	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer.Peer)
 
+	// debits to peer 2
 	testPeer2 := newDummyPeer()
 	bookingAmount = 0 - int64(mrand.Intn(100))
 	bookingQuantity = 1 + mrand.Intn(10)
 	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer2.Peer)
 
-	//mixed debits and credits
+	// credits and debits to peer 2
 	mixedBookings := []booking{
 		booking{int64(mrand.Intn(100)), testPeer2.Peer},
 		booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
