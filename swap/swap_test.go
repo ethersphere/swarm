@@ -105,12 +105,7 @@ func TestRepeatedBookings(t *testing.T) {
 		bookings = append(bookings, booking{0 - int64(amount), testPeer2.Peer})
 	}
 	addBookings(swap, bookings[len(bookings)-cnt:])
-	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
-	expectedBalance := balancesAfterBookings[testPeer2.Peer.ID()]
-	realBalance := swap.balances[testPeer2.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
-	}
+	verifyBookings(t, swap, bookings, testPeer2)
 
 	//mixed debits and credits
 	mixedBookings := []booking{
@@ -119,12 +114,7 @@ func TestRepeatedBookings(t *testing.T) {
 		booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
 	}
 	addBookings(swap, mixedBookings)
-	balancesAfterBookings = calculateExpectedBalances(swap, append(bookings, mixedBookings...))
-	expectedBalance = balancesAfterBookings[testPeer2.Peer.ID()]
-	realBalance = swap.balances[testPeer2.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
-	}
+	verifyBookings(t, swap, append(bookings, mixedBookings...), testPeer2)
 }
 
 // take a swap pointer and a list of bookings, and call the accounting function for each of them
@@ -138,7 +128,7 @@ func addBookings(swap *Swap, bookings []booking) {
 // take a swap pointer and a list of bookings, and verify the balances are as expected for a peer
 func verifyBookings(t *testing.T, swap *Swap, bookings []booking, peer *dummyPeer) {
 	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
-	expectedBalance := balancesAfterBookings[peer.Peer.ID()]
+	expectedBalance := balancesAfterBookings[peer.ID()]
 	realBalance := swap.balances[peer.ID()]
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be: %d, but is: %d", len(bookings), expectedBalance, realBalance))
