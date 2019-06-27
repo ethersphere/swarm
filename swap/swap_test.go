@@ -90,25 +90,17 @@ func TestRepeatedBookings(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	var bookings, peerBookings []booking
+	var bookings []booking
 
 	testPeer := newDummyPeer()
 	bookingAmount := int64(mrand.Intn(100))
 	bookingQuantity := 1 + mrand.Intn(10)
-
-	peerBookings = generateBookings(bookingAmount, bookingQuantity, testPeer.Peer)
-	bookings = append(bookings, peerBookings...)
-	addBookings(swap, peerBookings)
-	verifyBookings(t, swap, bookings)
+	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer.Peer)
 
 	testPeer2 := newDummyPeer()
 	bookingAmount = 0 - int64(mrand.Intn(100))
 	bookingQuantity = 1 + mrand.Intn(10)
-
-	peerBookings = generateBookings(bookingAmount, bookingQuantity, testPeer2.Peer)
-	bookings = append(bookings, peerBookings...)
-	addBookings(swap, peerBookings)
-	verifyBookings(t, swap, bookings)
+	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer2.Peer)
 
 	//mixed debits and credits
 	mixedBookings := []booking{
@@ -120,6 +112,16 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
+// generate bookings based on parameters, apply them to a Swap struct and verify the result
+// append generated bookings to slice pointer
+func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
+	*bookings = append(*bookings, peerBookings...)
+	addBookings(swap, peerBookings)
+	verifyBookings(t, swap, *bookings)
+}
+
+// generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
 func generateBookings(amount int64, quantity int, peer *protocols.Peer) (bookings []booking) {
 	for i := 0; i < quantity; i++ {
 		bookings = append(bookings, booking{amount, peer})
