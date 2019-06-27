@@ -127,10 +127,9 @@ func addBookings(swap *Swap, bookings []booking) {
 	}
 }
 
-// take a swap pointer and a list of bookings, and verify the balances are as expected for a peer
+// take a swap pointer and a list of bookings, and verify the resulting balances are as expected
 func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
-	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
-	expectedBalances := balancesAfterBookings
+	expectedBalances := calculateExpectedBalances(swap, bookings)
 	realBalances := swap.balances
 	if !reflect.DeepEqual(expectedBalances, realBalances) {
 		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances)))
