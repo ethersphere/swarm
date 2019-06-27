@@ -18,16 +18,23 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strconv"
-	"strings"
+	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	bv "github.com/ethersphere/swarm/network/bitvector"
+	"github.com/ethersphere/swarm/storage"
 )
+
+var ErrEmptyBatch = errors.New("empty batch")
+
+const BatchSize = 128
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
@@ -38,6 +45,7 @@ type Peer struct {
 
 	streamCursors     map[uint]uint64           // key: bin, value: session cursor. when unset - we are not interested in that bin
 	historicalStreams map[uint]*syncStreamFetch //maintain state for each stream fetcher
+	//openOffers map[uint]
 
 	quit chan struct{}
 }
@@ -119,34 +127,215 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	}
 
 	for _, s := range msg.Streams {
-		stream := strings.Split(s.Name, "|")
-		bin, err := strconv.Atoi(stream[1])
+		bin, err := ParseStream(s.Name)
 		if err != nil {
-			log.Error("got an error parsing stream name", "descriptor", s)
+			log.Error("error parsing stream", "stream", s.Name)
 			p.Drop()
 		}
-		log.Debug("setting bin cursor", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "cursors", p.streamCursors)
+		log.Debug("setting bin cursor", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor)
 
 		p.streamCursors[uint(bin)] = s.Cursor
 		if s.Cursor > 0 {
 			streamFetch := newSyncStreamFetch(uint(bin))
 			p.historicalStreams[uint(bin)] = streamFetch
-			g := GetRange{}
+			g := GetRange{
+				Ruid:      uint(rand.Uint32()),
+				Stream:    s.Name,
+				From:      1, //this should be from the interval store
+				To:        s.Cursor,
+				BatchSize: 128,
+				Roundtrip: true,
+			}
+			log.Debug("sending first GetRange to peer", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "GetRange", g)
+
 			if err := p.Send(ctx, g); err != nil {
 				log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s, "GetRange", g, "err", err)
 				p.Drop()
 			}
 		}
-
-		log.Debug("setting bin cursor done", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "cursors", p.streamCursors)
 	}
 }
 
 func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
+	log.Debug("peer.handleGetRange", "peer", p.ID(), "msg", msg)
+	bin, err := ParseStream(msg.Stream)
+	if err != nil {
+		log.Error("erroring parsing stream", "err", err, "stream", msg.Stream)
+		p.Drop()
+	}
+	//TODO hard limit for BatchSize
+	//TODO check msg integrity
+	h, f, t, err := p.collectBatch(ctx, bin, msg.From, msg.To)
+	if err != nil {
+		log.Error("erroring getting batch for stream", "peer", p.ID(), "bin", bin, "stream", msg.Stream, "err", err)
+		p.Drop()
+	}
+
+	offered := OfferedHashes{
+		Ruid:      msg.Ruid,
+		LastIndex: uint(t),
+		Hashes:    h,
+	}
+	l := len(h) / 32
+	log.Debug("server offering batch", "peer", p.ID(), "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "l", l)
+	if err := p.Send(ctx, offered); err != nil {
+		log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
+	}
+}
+
+const HashSize = 32
+
+// handleOfferedHashes handles the OfferedHashes wire protocol message.
+// this message is handled by the CLIENT.
+func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
+	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg", msg)
+	//TODO if ruid does not exist in state - drop the peer
+
+	hashes := msg.Hashes
+	lenHashes := len(hashes)
+	if lenHashes%HashSize != 0 {
+		log.Error("error invalid hashes length", "len", lenHashes)
+	}
+
+	want, err := bv.New(lenHashes / HashSize)
+	if err != nil {
+		log.Error("error initiaising bitvector", "len", lenHashes/HashSize, "err", err)
+		p.Drop()
+	}
+
+	ctr := 0
+
+	for i := 0; i < lenHashes; i += HashSize {
+		hash := hashes[i : i+HashSize]
+		log.Trace("checking offered hash", "ref", fmt.Sprintf("%x", hash))
+
+		if _, wait := p.syncer.NeedData(ctx, hash); wait != nil {
+			ctr++
+
+			// set the bit, so create a request
+			want.Set(i/HashSize, true)
+			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
+		}
+	}
+	// TODO: place goroutine of abstraction to seal off batch HERE
+	w := WantedHashes{
+		Ruid:      msg.Ruid,
+		BitVector: want.Bytes(),
+	}
+	log.Debug("sending wanted hashes", "peer", p.ID(), "offered", lenHashes/HashSize, "want", ctr)
+	if err := p.Send(ctx, w); err != nil {
+		log.Error("error sending wanted hashes", "peer", p.ID(), "w", w)
+		p.Drop()
+	}
+}
+func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
+	log.Debug("peer.handleWantedHashes", "peer", p.ID(), "ruid", msg.Ruid)
+	// Get the length of the original Offer from state
+	l := -1
+	want, err := bv.NewFromBytes(msg.BitVector, l)
+	if err != nil {
+		log.Error("error initiaising bitvector", l, err)
+	}
+	for i := 0; i < l; i++ {
+		if want.Get(i) {
+			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
+
+			hash := hashes[i*HashSize : (i+1)*HashSize]
+			data, err := p.syncer.GetData(ctx, hash)
+			if err != nil {
+				log.Error("handleWantedHashesMsg", "hash", hash, "err", err)
+				p.Drop()
+			}
+			chunk := storage.NewChunk(hash, data)
+			//collect the chunk into the batch
+		}
+	}
+
+	//send the batch
+	return nil
 
 }
-func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {}
-func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes)   {}
+
+func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (hashes []byte, f, t uint64, err error) {
+	batchStart := time.Now()
+	descriptors, stop := p.syncer.netStore.SubscribePull(ctx, uint8(bin), from, to)
+	defer stop()
+
+	const batchTimeout = 2 * time.Second
+
+	var (
+		batch        []byte
+		batchSize    int
+		batchStartID *uint64
+		batchEndID   uint64
+		timer        *time.Timer
+		timerC       <-chan time.Time
+	)
+
+	defer func(start time.Time) {
+		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(int64(batchSize))
+		if timer != nil {
+			timer.Stop()
+		}
+	}(batchStart)
+
+	for iterate := true; iterate; {
+		select {
+		case d, ok := <-descriptors:
+			if !ok {
+				iterate = false
+				break
+			}
+			batch = append(batch, d.Address[:]...)
+			// This is the most naive approach to label the chunk as synced
+			// allowing it to be garbage collected. A proper way requires
+			// validating that the chunk is successfully stored by the peer.
+			err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
+			if err != nil {
+				metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
+				//log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
+				return nil, 0, 0, err
+			}
+			batchSize++
+			if batchStartID == nil {
+				// set batch start id only if
+				// this is the first iteration
+				batchStartID = &d.BinID
+			}
+			batchEndID = d.BinID
+			if batchSize >= BatchSize {
+				iterate = false
+				metrics.GetOrRegisterCounter("syncer.set-next-batch.full-batch", nil).Inc(1)
+				log.Trace("syncer pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+			}
+			if timer == nil {
+				timer = time.NewTimer(batchTimeout)
+			} else {
+				if !timer.Stop() {
+					<-timer.C
+				}
+				timer.Reset(batchTimeout)
+			}
+			timerC = timer.C
+		case <-timerC:
+			// return batch if new chunks are not
+			// received after some time
+			iterate = false
+			metrics.GetOrRegisterCounter("syncer.set-next-batch.timer-expire", nil).Inc(1)
+			//log.Trace("syncer pull subscription timer expired", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+		case <-p.syncer.quit:
+			iterate = false
+			//log.Trace("syncer pull subscription - quit received", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+		}
+	}
+	if batchStartID == nil {
+		// if batch start id is not set, it means we timed out
+		return nil, 0, 0, ErrEmptyBatch
+	}
+	return batch, *batchStartID, batchEndID, nil
+
+}
 
 // syncStreamFetch is a struct that holds exposed state used by a separate goroutine that handles stream retrievals
 type syncStreamFetch struct {
