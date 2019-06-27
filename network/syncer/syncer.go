@@ -17,16 +17,21 @@
 package syncer
 
 import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -164,9 +169,31 @@ func (s *SwarmSyncer) Stop() error {
 	return nil
 }
 
-func (s *SwarmSyncer) GetBinsForPeer(p *Peer) (bins []uint, depth int) {
-	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
-	depth = s.kad.NeighbourhoodDepth()
-	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
-	return sub, depth
+func (s *SwarmSyncer) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
+	start := time.Now()
+
+	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
+	if !ok {
+		return loaded, nil
+	}
+
+	return loaded, func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
+		case <-time.After(timeouts.SyncerClientWaitTimeout):
+			metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
+			return fmt.Errorf("chunk not delivered through syncing after %dsec. ref=%s", timeouts.SyncerClientWaitTimeout, fmt.Sprintf("%x", key))
+		}
+		return nil
+	}
+}
+func ParseStream(stream string) (bin uint, err error) {
+	arr := strings.Split(stream, "|")
+	b, err := strconv.Atoi(arr[1])
+	return uint(b), err
+}
+
+func EncodeStream(bin uint) string {
+	return fmt.Sprintf("SYNC|%d", bin)
 }

@@ -33,8 +33,8 @@ type StreamDescriptor struct {
 type GetRange struct {
 	Ruid      uint
 	Stream    string
-	From      uint
-	To        uint `rlp:nil`
+	From      uint64
+	To        uint64 `rlp:nil`
 	BatchSize uint
 	Roundtrip bool
 }
