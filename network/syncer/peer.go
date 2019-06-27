@@ -82,8 +82,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 // this message is handled by the SERVER (*Peer is the client in this case)
 func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 	log.Debug("handleStreamInfoReq", "peer", p.ID(), "msg", msg)
-	//p.mtx.Lock()
-	//defer p.mtx.Unlock()
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 	streamRes := StreamInfoRes{}
 	if len(msg.Streams) == 0 {
 		panic("nil streams msg requested")
@@ -110,8 +110,8 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 // this message is handled by the CLIENT (*Peer is the server in this case)
 func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	log.Debug("handleStreamInfoRes", "peer", p.ID(), "msg", msg)
-	//p.mtx.Lock()
-	//defer p.mtx.Unlock()
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 
 	if len(msg.Streams) == 0 {
 		log.Error("StreamInfo response is empty")
@@ -131,6 +131,11 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 		if s.Cursor > 0 {
 			streamFetch := newSyncStreamFetch(uint(bin))
 			p.historicalStreams[uint(bin)] = streamFetch
+			g := GetRange{}
+			if err := p.Send(ctx, g); err != nil {
+				log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s, "GetRange", g, "err", err)
+				p.Drop()
+			}
 		}
 
 		log.Debug("setting bin cursor done", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "cursors", p.streamCursors)
