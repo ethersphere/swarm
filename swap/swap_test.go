@@ -90,23 +90,24 @@ func TestRepeatedBookings(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
+	var bookings, peerBookings []booking
+
 	testPeer := newDummyPeer()
-	amount := mrand.Intn(100)
-	cnt := 1 + mrand.Intn(10)
-	var bookings []booking
-	for i := 0; i < cnt; i++ {
-		bookings = append(bookings, booking{int64(amount), testPeer.Peer})
-	}
-	addBookings(swap, bookings)
+	bookingAmount := int64(mrand.Intn(100))
+	bookingQuantity := 1 + mrand.Intn(10)
+
+	peerBookings = generateBookings(bookingAmount, bookingQuantity, testPeer.Peer)
+	bookings = append(bookings, peerBookings...)
+	addBookings(swap, peerBookings)
 	verifyBookings(t, swap, bookings)
 
 	testPeer2 := newDummyPeer()
-	amount = mrand.Intn(100)
-	cnt = 1 + mrand.Intn(10)
-	for i := 0; i < cnt; i++ {
-		bookings = append(bookings, booking{0 - int64(amount), testPeer2.Peer})
-	}
-	addBookings(swap, bookings[len(bookings)-cnt:])
+	bookingAmount = 0 - int64(mrand.Intn(100))
+	bookingQuantity = 1 + mrand.Intn(10)
+
+	peerBookings = generateBookings(bookingAmount, bookingQuantity, testPeer2.Peer)
+	bookings = append(bookings, peerBookings...)
+	addBookings(swap, peerBookings)
 	verifyBookings(t, swap, bookings)
 
 	//mixed debits and credits
@@ -119,7 +120,14 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
-// take a swap pointer and a list of bookings, and call the accounting function for each of them
+func generateBookings(amount int64, quantity int, peer *protocols.Peer) (bookings []booking) {
+	for i := 0; i < quantity; i++ {
+		bookings = append(bookings, booking{amount, peer})
+	}
+	return
+}
+
+// take a Swap struct and a list of bookings, and call the accounting function for each of them
 func addBookings(swap *Swap, bookings []booking) {
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
@@ -127,7 +135,7 @@ func addBookings(swap *Swap, bookings []booking) {
 	}
 }
 
-// take a swap pointer and a list of bookings, and verify the resulting balances are as expected
+// take a Swap struct and a list of bookings, and verify the resulting balances are as expected
 func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
 	expectedBalances := calculateExpectedBalances(swap, bookings)
 	realBalances := swap.balances
@@ -145,9 +153,9 @@ func stringifyBalance(balance map[enode.ID]int64) string {
 	return string(marshaledBalance)
 }
 
-// take a swap pointer and a list of bookings, and calculate the expected balances.
+// take a swap struct and a list of bookings, and calculate the expected balances.
 // the result is a map which stores the balance for all the peers present in the bookings,
-// from the perspective of the node that loaded the swap struct.
+// from the perspective of the node that loaded the Swap struct.
 func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int64 {
 	expectedBalances := make(map[enode.ID]int64)
 	for i := 0; i < len(bookings); i++ {
