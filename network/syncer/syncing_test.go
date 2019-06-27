@@ -84,7 +84,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 			return err
 		}
 
-		_, err := sim.AddNodesAndConnectStar(1)
+		_, err = sim.AddNodesAndConnectStar(1)
 		if err != nil {
 			return err
 		}
