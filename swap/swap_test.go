@@ -96,12 +96,7 @@ func TestRepeatedBookings(t *testing.T) {
 		bookings = append(bookings, booking{int64(amount), testPeer.Peer})
 	}
 	addBookings(swap, bookings)
-	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
-	expectedBalance := balancesAfterBookings[testPeer.Peer.ID()]
-	realBalance := swap.balances[testPeer.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d credits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
-	}
+	verifyBookings(t, swap, bookings, testPeer)
 
 	testPeer2 := newDummyPeer()
 	amount = mrand.Intn(100)
@@ -110,9 +105,9 @@ func TestRepeatedBookings(t *testing.T) {
 		bookings = append(bookings, booking{0 - int64(amount), testPeer2.Peer})
 	}
 	addBookings(swap, bookings[len(bookings)-cnt:])
-	balancesAfterBookings = calculateExpectedBalances(swap, bookings)
-	expectedBalance = balancesAfterBookings[testPeer2.Peer.ID()]
-	realBalance = swap.balances[testPeer2.ID()]
+	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
+	expectedBalance := balancesAfterBookings[testPeer2.Peer.ID()]
+	realBalance := swap.balances[testPeer2.ID()]
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
 	}
@@ -137,6 +132,16 @@ func addBookings(swap *Swap, bookings []booking) {
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
 		swap.Add(booking.amount, booking.peer)
+	}
+}
+
+// take a swap pointer and a list of bookings, and verify the balances are as expected for a peer
+func verifyBookings(t *testing.T, swap *Swap, bookings []booking, peer *dummyPeer) {
+	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
+	expectedBalance := balancesAfterBookings[peer.Peer.ID()]
+	realBalance := swap.balances[peer.ID()]
+	if expectedBalance != realBalance {
+		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be: %d, but is: %d", len(bookings), expectedBalance, realBalance))
 	}
 }
 
