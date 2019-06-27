@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
@@ -243,26 +244,26 @@ func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, e
 
 		// skip peers that we have already tried
 		if req.SkipPeer(id.String()) {
-			log.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
+			log.Trace("findpeer skip peer", "self", hexutil.Encode(d.kad.BaseAddr()), "origin", req.Origin.String(), "peer", id, "ref", req.Addr.String())
 			return true
 		}
 
 		if myPo < depth { //  chunk is NOT within the neighbourhood
 			if po <= myPo { // always choose a peer strictly closer to chunk than us
-				log.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				log.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "self", hexutil.Encode(d.kad.BaseAddr()), "origin", req.Origin.String(), "peer", id, "ref", req.Addr.String())
 				return false
 			} else {
-				log.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				log.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "self", hexutil.Encode(d.kad.BaseAddr()), "origin", req.Origin.String(), "peer", id, "ref", req.Addr.String())
 			}
 		} else { // chunk IS WITHIN neighbourhood
 			if po < depth { // do not select peer outside the neighbourhood. But allows peers further from the chunk than us
-				log.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				log.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "self", hexutil.Encode(d.kad.BaseAddr()), "origin", req.Origin.String(), "peer", id, "ref", req.Addr.String())
 				return false
 			} else if po <= originPo { // avoid loop in neighbourhood, so not forward when a request comes from the neighbourhood
-				log.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				log.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "self", hexutil.Encode(d.kad.BaseAddr()), "origin", req.Origin.String(), "peer", id, "ref", req.Addr.String())
 				return false
 			} else {
-				log.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				log.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "self", hexutil.Encode(d.kad.BaseAddr()), "origin", req.Origin.String(), "peer", id, "ref", req.Addr.String())
 			}
 		}
 

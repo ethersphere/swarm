@@ -23,14 +23,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
-
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
@@ -107,7 +106,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
-	log.Trace("netstore.put", "ref", ch.Address().String(), "mode", mode)
+	log.Trace("netstore.put", "ref", ch.Address().String(), "self", n.localID.String(), "mode", mode)
 
 	// put the chunk to the localstore, there should be no error
 	exists, err := n.Store.Put(ctx, mode, ch)
@@ -151,7 +150,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 	ref := req.Addr
 
-	log.Trace("netstore.get", "ref", ref.String())
+	log.Trace("netstore.get", "ref", ref.String(), "self", n.localID.String())
 
 	ch, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
@@ -160,7 +159,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			log.Error("localstore get error", "err", err)
 		}
 
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "self", n.localID.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
@@ -198,7 +197,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 		c := v.(Chunk)
 
-		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
+		log.Trace("netstore.singleflight returned", "ref", ref.String(), "self", n.localID.String(), "err", err)
 
 		return c, nil
 	}
@@ -211,7 +210,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 	return ch, nil
 }
 
-// RemoteFetch is handling the retry mechanism when making a chunk request to our peers.
+// RemoteFetch is handling the retry mechanism when making a chunk request to ou			r peers.
 // For a given chunk Request, we call RemoteGet, which selects the next eligible peer and
 // issues a RetrieveRequest and we wait for a delivery. If a delivery doesn't arrive within the SearchTimeout
 // we retry.
@@ -237,13 +236,11 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			log.Trace(err.Error(), "ref", ref)
 			osp.LogFields(olog.String("err", err.Error()))
 			osp.Finish()
-			return ErrNoSuitablePeer
+		} else {
+			// add peer to the set of peers to skip from now
+			log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
+			req.PeersToSkip.Store(currentPeer.String(), time.Now())
 		}
-
-		// add peer to the set of peers to skip from now
-		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
-		req.PeersToSkip.Store(currentPeer.String(), time.Now())
-
 		select {
 		case <-fi.Delivered:
 			log.Trace("remote.fetch, chunk delivered", "ref", ref)
@@ -256,7 +253,6 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 
 			osp.LogFields(olog.Bool("timeout", true))
 			osp.Finish()
-			break
 		case <-ctx.Done(): // global fetcher timeout
 			log.Trace("remote.fetch, fail", "ref", ref)
 			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
@@ -290,7 +286,7 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 
 	f = NewFetcher()
 	v, loaded := n.fetchers.Get(ref.String())
-	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
+	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded, "self", n.localID.String())
 	if loaded {
 		f = v.(*Fetcher)
 	} else {
