@@ -16,6 +16,8 @@
 
 package syncer
 
+import "github.com/ethersphere/swarm/storage"
+
 type StreamInfoReq struct {
 	Streams []uint
 }
@@ -53,7 +55,12 @@ type WantedHashes struct {
 type ChunkDelivery struct {
 	Ruid      uint
 	LastIndex uint
-	Chunks    [][]byte
+	Chunks    []DeliveredChunk
+}
+
+type DeliveredChunk struct {
+	Addr storage.Address //chunk address
+	Data []byte          //chunk data
 }
 
 type BatchDone struct {
