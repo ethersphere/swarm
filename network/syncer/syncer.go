@@ -77,7 +77,7 @@ type SwarmSyncer struct {
 	quit chan struct{} // terminates registry goroutines
 }
 
-func NewSwarmSyncer(me enode.ID, intervalsStore state.Store, kad *network.Kademlia, ns *storage.NetStore) *SwarmSyncer {
+func NewSwarmSyncer(intervalsStore state.Store, kad *network.Kademlia, ns *storage.NetStore) *SwarmSyncer {
 	syncer := &SwarmSyncer{
 		intervalsStore: intervalsStore,
 		peers:          make(map[enode.ID]*Peer),

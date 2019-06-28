@@ -21,7 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -31,6 +34,7 @@ import (
 	"github.com/ethersphere/swarm/network/bitvector"
 	bv "github.com/ethersphere/swarm/network/bitvector"
 	"github.com/ethersphere/swarm/network/stream/intervals"
+	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -38,7 +42,9 @@ var ErrEmptyBatch = errors.New("empty batch")
 
 const (
 	HashSize  = 32
-	BatchSize = 128
+	BatchSize = 3
+	//DeliveryFrameSize        = 128
+	HistoricalStreamPageSize = 3
 )
 
 type Offer struct {
@@ -56,6 +62,7 @@ type Want struct {
 	bv        *bitvector.BitVector
 	requested time.Time
 	wg        *sync.WaitGroup
+	remaining uint64
 	chunks    chan chunk.Chunk
 	done      chan error
 }
@@ -154,49 +161,87 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	}
 
 	for _, s := range msg.Streams {
-		bin, err := ParseStream(s.Name)
+		bin, err := syncStreamToBin(s.Name) //ParseStream(s.Name)
 		if err != nil {
 			log.Error("error parsing stream", "stream", s.Name)
 			p.Drop()
 		}
 		log.Debug("setting bin cursor", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor)
-
 		p.streamCursors[uint(bin)] = s.Cursor
+
 		if s.Cursor > 0 {
-			streamFetch := newSyncStreamFetch(uint(bin))
-			p.historicalStreams[uint(bin)] = streamFetch
-			g := GetRange{
-				Ruid:      uint(rand.Uint32()),
-				Stream:    s.Name,
-				From:      1, //this should be from the interval store
-				To:        s.Cursor,
-				BatchSize: 128,
-				Roundtrip: true,
-			}
-
-			log.Debug("sending first GetRange to peer", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "GetRange", g)
-
-			if err := p.Send(ctx, g); err != nil {
-				log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s, "GetRange", g, "err", err)
+			err := p.requestStreamRange(ctx, s.Name, uint(bin), s.Cursor)
+			if err != nil {
+				log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Name, "err", err)
 				p.Drop()
 			}
-
-			w := &Want{
-				ruid:   g.Ruid,
-				stream: g.Stream,
-				from:   g.From,
-				to:     g.To,
-
-				hashes:    make(map[string]bool),
-				requested: time.Now(),
-				wg:        &sync.WaitGroup{},
-			}
-
-			p.openWants[w.ruid] = w
 		}
 	}
 }
 
+func (p *Peer) requestStreamRange(ctx context.Context, stream string, bin uint, cursor uint64) error {
+	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor)
+	interval, err := p.getOrCreateInterval(bin)
+	if err != nil {
+		return err
+	}
+	from, to := interval.Next()
+	log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor, "from", from, "to", to)
+	if from > cursor {
+		log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor)
+		// stream finished. quit
+		return nil
+	}
+	if to > cursor {
+		log.Debug("adjusting cursor")
+		to = cursor
+	}
+	if to == 0 {
+		// todo: Next() should take a ceiling argument. it returns 0 if there's no upper bound in the interval (i.e. HEAD)
+		to = cursor
+	}
+	if from == 0 {
+		panic("no")
+	}
+	if to-from > HistoricalStreamPageSize-1 {
+		log.Debug("limiting TO to HistoricalStreamPageSize", "to", to, "new to", from+HistoricalStreamPageSize)
+		to = from + HistoricalStreamPageSize - 1 //because the intervals are INCLUSIVE, it means we get also FROM, so we have to deduce one
+		// from the end cursor, because...
+	}
+	streamFetch := newSyncStreamFetch(uint(bin))
+	p.historicalStreams[uint(bin)] = streamFetch
+	g := GetRange{
+		Ruid:      uint(rand.Uint32()),
+		Stream:    stream,
+		From:      from,
+		To:        to,
+		BatchSize: 128,
+		Roundtrip: true,
+	}
+	log.Debug("sending GetRange to peer", "peer", p.ID(), "bin", uint(bin), "cursor", cursor, "GetRange", g)
+
+	if err := p.Send(ctx, g); err != nil {
+		return err
+	}
+
+	w := &Want{
+		ruid:   g.Ruid,
+		stream: g.Stream,
+		from:   g.From,
+		to:     g.To,
+
+		hashes:    make(map[string]bool),
+		requested: time.Now(),
+		wg:        &sync.WaitGroup{},
+	}
+
+	p.openWants[w.ruid] = w
+	return nil
+}
+
+// handleGetRange is handled by the SERVER and sends in response an OfferedHashes message
+// in the case that for the specific interval no chunks exist - the server sends an empty OfferedHashes
+// message so that the client could seal the interval and request the next
 func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 	log.Debug("peer.handleGetRange", "peer", p.ID(), "msg", msg)
 	bin, err := ParseStream(msg.Stream)
@@ -255,7 +300,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		p.Drop()
 	}
 
-	ctr := 0
+	var ctr uint64 = 0
 
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
@@ -272,41 +317,53 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			w.hashes[c.Hex()] = false
 		}
 	}
+	cc := make(chan chunk.Chunk)
+	dc := make(chan error)
+	atomic.AddUint64(&w.remaining, ctr)
+	w.bv = want
+	w.chunks = cc
+	w.done = dc
+	bin, err := syncStreamToBin(w.stream)
+	if err != nil {
+		panic(err)
+	}
 
-	// TODO: place goroutine of abstraction to seal off batch HERE
+	errc := p.sealBatch(msg.Ruid)
 	wantedHashesMsg := WantedHashes{
 		Ruid:      msg.Ruid,
 		BitVector: want.Bytes(),
 	}
+
 	log.Debug("sending wanted hashes", "peer", p.ID(), "offered", lenHashes/HashSize, "want", ctr)
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		log.Error("error sending wanted hashes", "peer", p.ID(), "w", wantedHashesMsg)
 		p.Drop()
 	}
 
-	cc := make(chan chunk.Chunk)
-	dc := make(chan error)
-	w.wg.Add(ctr)
-	w.bv = want
-	w.chunks = cc
-	w.done = dc
-
 	p.openWants[msg.Ruid] = w
 	log.Debug("open wants", "ow", p.openWants)
-	errc := p.sealBatch(msg.Ruid)
+	stream := w.stream
 	select {
 	case err := <-errc:
 		if err != nil {
 			log.Error("Wtf", "err", err)
-			return
+			panic(err)
 		}
-		err = p.AddInterval(w.from, w.to, p.ID().String()+w.stream)
+		log.Debug("adding interval", "f", w.from, "t", w.to, "key", p.getIntervalsKey(bin))
+		err = p.AddInterval(w.from, w.to, p.getIntervalsKey(bin))
 		if err != nil {
 			panic(err)
 		}
 		delete(p.openWants, msg.Ruid)
 
 		log.Debug("batch done", "from", w.from, "to", w.to)
+		//TODO BATCH TIMEOUT?
+	}
+
+	f, t, err := p.NextInterval(p.getIntervalsKey(bin))
+	log.Error("next interval", "f", f, "t", t, "err", err, "intervalsKey", p.getIntervalsKey(bin))
+	if err := p.requestStreamRange(ctx, stream, uint(bin), p.streamCursors[bin]); err != nil {
+		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 	}
 }
 
@@ -329,45 +386,79 @@ func (p *Peer) NextInterval(peerStreamKey string) (start, end uint64, err error)
 	return start, end, nil
 }
 
+func (p *Peer) getOrCreateInterval(bin uint) (*intervals.Intervals, error) {
+	key := p.getIntervalsKey(bin)
+
+	// check that an interval entry exists
+	i := &intervals.Intervals{}
+	err := p.syncer.intervalsStore.Get(key, i)
+	switch err {
+	case nil:
+	case state.ErrNotFound:
+		i = intervals.NewIntervals(1) // syncing bin indexes are ALWAYS > 0
+		if err := p.syncer.intervalsStore.Put(key, i); err != nil {
+			return nil, err
+		}
+	default:
+		log.Error("unknown error while getting interval for peer", "err", err)
+		panic(err)
+	}
+	return i, nil
+}
+
+func (p *Peer) getIntervalsKey(bin uint) string {
+	key := fmt.Sprintf("%s|%s", p.ID().String(), binToSyncStream(bin))
+	log.Debug("peer.getIntervalsKey", "peer", p.ID(), "bin", bin, "key", key)
+	return key
+}
+
 func (p *Peer) sealBatch(ruid uint) <-chan error {
 	want := p.openWants[ruid]
+	errc := make(chan error)
+	go func() {
 
-	for {
-		select {
-		case c, ok := <-want.chunks:
-			if !ok {
-				log.Error("want chanks rreturned on !ok")
-				panic("shouldnt happen")
-			}
-			p.mtx.Lock()
-			if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
-				log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
-				panic("shouldnt happen")
-			}
-			go func() {
-				ctx := context.TODO()
-				seen, err := p.syncer.netStore.Put(ctx, chunk.ModePutSync, storage.NewChunk(c.Address(), c.Data()))
-				if err != nil {
-					if err == storage.ErrChunkInvalid {
-						p.Drop()
-					}
-				}
-				if seen {
-					log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
+		for {
+			select {
+			case c, ok := <-want.chunks:
+				if !ok {
+					log.Error("want chanks rreturned on !ok")
 					panic("shouldnt happen")
 				}
-				want.hashes[c.Address().Hex()] = false //todo: should by sync map
-				want.wg.Done()
-				p.mtx.Unlock()
-			}()
-		case <-p.quit:
-			//return
-			break
+				p.mtx.Lock()
+				if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
+					log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
+					panic("shouldnt happen")
+				}
+				go func() {
+					ctx := context.TODO()
+					seen, err := p.syncer.netStore.Put(ctx, chunk.ModePutSync, storage.NewChunk(c.Address(), c.Data()))
+					if err != nil {
+						if err == storage.ErrChunkInvalid {
+							p.Drop()
+						}
+					}
+					if seen {
+						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
+						panic("shouldnt happen")
+					}
+					want.hashes[c.Address().Hex()] = false //todo: should by sync map
+					atomic.AddUint64(&want.remaining, ^uint64(0))
+					p.mtx.Unlock()
+				}()
+			case <-p.quit:
+
+				break
+			default:
+				v := atomic.LoadUint64(&want.remaining)
+				if v == 0 {
+					log.Debug("batchdone")
+					close(errc)
+					return
+				}
+			}
 		}
-	}
-
-	//log.Trace("handle.chunk.delivery", "ref", msg.Addr, "from peer", sp.ID())
-
+	}()
+	return errc
 }
 
 // handleWantedHashes is handled on the SERVER side and is dependent on a preceding OfferedHashes message
@@ -389,7 +480,7 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	}
 
 	frameSize := 0
-	const maxFrame = 5
+	const maxFrame = 128
 	cd := ChunkDelivery{
 		Ruid:      msg.Ruid,
 		LastIndex: 0,
@@ -412,7 +503,6 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 				Addr: hash,
 				Data: data,
 			}
-			//c := storage.NewChunk(hash, data)
 			//collect the chunk into the batch
 
 			cd.Chunks = append(cd.Chunks, chunkD)
@@ -440,11 +530,12 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 }
 
 func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
-	log.Debug("peer.handleChunkDelivery", "peer", p.ID(), "msg", msg)
+	log.Debug("peer.handleChunkDelivery", "peer", p.ID(), "chunks", len(msg.Chunks))
 
 	w, ok := p.openWants[msg.Ruid]
 	if !ok {
 		log.Error("no open offers for for ruid", "peer", p.ID(), "ruid", msg.Ruid)
+		panic("should not happen")
 	}
 	if len(msg.Chunks) == 0 {
 		log.Error("no chunks in msg!", "peer", p.ID(), "ruid", msg.Ruid)
@@ -460,6 +551,7 @@ func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
 }
 
 func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (hashes []byte, f, t uint64, err error) {
+	log.Debug("collectBatch", "peer", p.ID(), "bin", bin, "from", from, "to", to)
 	batchStart := time.Now()
 	descriptors, stop := p.syncer.netStore.SubscribePull(ctx, uint8(bin), from, to)
 	defer stop()
@@ -506,11 +598,12 @@ func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (has
 				// this is the first iteration
 				batchStartID = &d.BinID
 			}
+			log.Debug("got bin id", "id", d.BinID)
 			batchEndID = d.BinID
 			if batchSize >= BatchSize {
 				iterate = false
 				metrics.GetOrRegisterCounter("syncer.set-next-batch.full-batch", nil).Inc(1)
-				log.Trace("syncer pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+				log.Trace("syncer pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", *batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
 				timer = time.NewTimer(batchTimeout)
@@ -729,4 +822,20 @@ func intRange(start, end int) (r []uint) {
 		r = append(r, uint(i))
 	}
 	return r
+}
+
+func syncStreamToBin(stream string) (uint, error) {
+	vals := strings.Split(stream, "|")
+	if len(vals) != 2 {
+		return 0, fmt.Errorf("error getting bin id from stream string: %s", stream)
+	}
+	bin, err := strconv.Atoi(vals[1])
+	if err != nil {
+		return 0, err
+	}
+	return uint(bin), nil
+}
+
+func binToSyncStream(bin uint) string {
+	return fmt.Sprintf("SYNC|%d", bin)
 }
