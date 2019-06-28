@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
 )
@@ -465,13 +468,6 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 				return nil, nil, err
 			}
 		}
-		// verify bins just upto 8 (given random distribution and 1000 chunks
-		// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
-		//for i := 0; i <= 5; i++ {
-		//if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
-		//return nil, nil, fmt.Errorf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
-		//}
-		//}
 
 		binIndexes := make([]uint64, 17)
 		for i := 0; i <= 16; i++ {
@@ -481,7 +477,19 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 			}
 			binIndexes[i] = binIndex
 		}
-		o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
+
+		var store *state.DBStore
+		// Use on-disk DBStore to reduce memory consumption in race tests.
+		dir, err := ioutil.TempDir("", "swarm-stream-")
+		if err != nil {
+			return nil, nil, err
+		}
+		store, err = state.NewDBStore(dir)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		o := NewSwarmSyncer(store, kad, netStore)
 		bucket.Store(bucketKeyBinIndex, binIndexes)
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(simulation.BucketKeyKademlia, kad)
@@ -490,6 +498,8 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 		cleanup = func() {
 			localStore.Close()
 			localStoreCleanup()
+			store.Close()
+			os.RemoveAll(dir)
 		}
 
 		return o, cleanup, nil

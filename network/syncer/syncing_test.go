@@ -42,7 +42,7 @@ const dataChunkCount = 1000
 func TestTwoNodesFullSync(t *testing.T) {
 	var (
 		chunkCount = 1000
-		syncTime   = 2 * time.Second
+		syncTime   = 5 * time.Second
 	)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
@@ -87,6 +87,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 			return err
 		}
 		nodeIDs = sim.UpNodeIDs()
+		syncingNodeId := nodeIDs[1]
 
 		uploaderNodeBinIDs := make([]uint64, 17)
 
@@ -105,27 +106,22 @@ func TestTwoNodesFullSync(t *testing.T) {
 		time.Sleep(syncTime)
 
 		// check that the sum of bin indexes is equal
-		for idx := range nodeIDs {
-			if nodeIDs[idx] == nodeIDs[0] {
-				continue
-			}
 
-			log.Debug("compare to", "enode", nodeIDs[idx])
-			item = sim.NodeItem(nodeIDs[idx], bucketKeyFileStore)
-			db := item.(chunk.Store)
+		log.Debug("compare to", "enode", syncingNodeId)
+		item = sim.NodeItem(syncingNodeId, bucketKeyFileStore)
+		db := item.(chunk.Store)
 
-			uploaderSum, otherNodeSum := 0, 0
-			for po, uploaderUntil := range uploaderNodeBinIDs {
-				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
-				if err != nil {
-					return err
-				}
-				otherNodeSum += int(shouldUntil)
-				uploaderSum += int(uploaderUntil)
+		uploaderSum, otherNodeSum := 0, 0
+		for po, uploaderUntil := range uploaderNodeBinIDs {
+			shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				return err
 			}
-			if uploaderSum != otherNodeSum {
-				return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
-			}
+			otherNodeSum += int(shouldUntil)
+			uploaderSum += int(uploaderUntil)
+		}
+		if uploaderSum != otherNodeSum {
+			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 		}
 		return nil
 	})
