@@ -36,7 +36,7 @@ type Intervals struct {
 
 // New creates a new instance of Intervals.
 // Start argument limits the lower bound of intervals.
-// No range bellow start bound will be added by Add method or
+// No range below start bound will be added by Add method or
 // returned by Next method. This limit may be used for
 // tracking "live" synchronization, where the sync session
 // starts from a specific value, and if "live" sync intervals
