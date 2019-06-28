@@ -36,7 +36,10 @@ import (
 
 var ErrEmptyBatch = errors.New("empty batch")
 
-const BatchSize = 128
+const (
+	HashSize  = 32
+	BatchSize = 128
+)
 
 type Offer struct {
 	Ruid      uint
@@ -222,14 +225,12 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		LastIndex: uint(t),
 		Hashes:    h,
 	}
-	l := len(h) / 32
+	l := len(h) / HashSize
 	log.Debug("server offering batch", "peer", p.ID(), "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "l", l)
 	if err := p.Send(ctx, offered); err != nil {
 		log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
 	}
 }
-
-const HashSize = 32
 
 // handleOfferedHashes handles the OfferedHashes wire protocol message.
 // this message is handled by the CLIENT.
@@ -440,6 +441,22 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 
 func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
 	log.Debug("peer.handleChunkDelivery", "peer", p.ID(), "msg", msg)
+
+	w, ok := p.openWants[msg.Ruid]
+	if !ok {
+		log.Error("no open offers for for ruid", "peer", p.ID(), "ruid", msg.Ruid)
+	}
+	if len(msg.Chunks) == 0 {
+		log.Error("no chunks in msg!", "peer", p.ID(), "ruid", msg.Ruid)
+		panic("should not happen")
+	}
+	log.Debug("delivering chunks for peer", "peer", p.ID(), "chunks", len(msg.Chunks))
+	for _, dc := range msg.Chunks {
+		c := chunk.NewChunk(dc.Addr, dc.Data)
+		log.Debug("writing chunk to chunks channel", "peer", p.ID(), "caddr", c.Address())
+		w.chunks <- c
+	}
+	log.Debug("done writing batch to chunks channel", "peer", p.ID())
 }
 
 func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (hashes []byte, f, t uint64, err error) {
