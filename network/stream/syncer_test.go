@@ -51,8 +51,8 @@ const dataChunkCount = 1000
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) { //
 	var (
-		chunkCount = 1000 //~4mb
-		syncTime   = 5 * time.Second
+		chunkCount = 5000 //~4mb
+		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -99,7 +99,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 	defer sim.Close()
 
 	// create context for simulation run
-	timeout := 30 * time.Second
+	timeout := 10 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
@@ -131,50 +131,50 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
 
-		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		_, _, err = fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
 
-		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
-		if err != nil {
-			return fmt.Errorf("fileStore.Store: %v", err)
-		}
+		//_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		//if err != nil {
+		//return fmt.Errorf("fileStore.Store: %v", err)
+		//}
 
-		wait1(ctx)
-		wait2(ctx)
-		time.Sleep(1 * time.Second)
+		//wait1(ctx)
+		//wait2(ctx)
+		//time.Sleep(1 * time.Second)
 
-		//explicitly check that all subscriptions are there on all bins
-		for idx, id := range nodeIDs {
-			node := sim.Net.GetNode(id)
-			client, err := node.Client()
-			if err != nil {
-				return fmt.Errorf("create node %d rpc client fail: %v", idx, err)
-			}
+		////explicitly check that all subscriptions are there on all bins
+		//for idx, id := range nodeIDs {
+		//node := sim.Net.GetNode(id)
+		//client, err := node.Client()
+		//if err != nil {
+		//return fmt.Errorf("create node %d rpc client fail: %v", idx, err)
+		//}
 
-			//ask it for subscriptions
-			pstreams := make(map[string][]string)
-			err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
-			if err != nil {
-				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
-			}
-			for _, streams := range pstreams {
-				b := make([]bool, 17)
-				for _, sub := range streams {
-					subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
-					if err != nil {
-						return err
-					}
-					b[int(subPO)] = true
-				}
-				for bin, v := range b {
-					if !v {
-						return fmt.Errorf("did not find any subscriptions for node %d on bin %d", idx, bin)
-					}
-				}
-			}
-		}
+		////ask it for subscriptions
+		//pstreams := make(map[string][]string)
+		//err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+		//if err != nil {
+		//return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+		//}
+		//for _, streams := range pstreams {
+		//b := make([]bool, 17)
+		//for _, sub := range streams {
+		//subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
+		//if err != nil {
+		//return err
+		//}
+		//b[int(subPO)] = true
+		//}
+		//for bin, v := range b {
+		//if !v {
+		//return fmt.Errorf("did not find any subscriptions for node %d on bin %d", idx, bin)
+		//}
+		//}
+		//}
+		//}
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
 		item = sim.NodeItem(nodeIDs[0], bucketKeyStore)
@@ -213,7 +213,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 				uploaderSum += int(uploaderUntil)
 			}
 			if uploaderSum != otherNodeSum {
-				t.Fatalf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+				return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 			}
 		}
 		return nil

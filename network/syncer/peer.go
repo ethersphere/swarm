@@ -42,9 +42,9 @@ var ErrEmptyBatch = errors.New("empty batch")
 
 const (
 	HashSize  = 32
-	BatchSize = 3
+	BatchSize = 50
 	//DeliveryFrameSize        = 128
-	HistoricalStreamPageSize = 3
+	HistoricalStreamPageSize = BatchSize
 )
 
 type Offer struct {
@@ -170,11 +170,13 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 		p.streamCursors[uint(bin)] = s.Cursor
 
 		if s.Cursor > 0 {
-			err := p.requestStreamRange(ctx, s.Name, uint(bin), s.Cursor)
-			if err != nil {
-				log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Name, "err", err)
-				p.Drop()
-			}
+			go func(name string, b uint, cursor uint64) {
+				err := p.requestStreamRange(ctx, name, b, cursor)
+				if err != nil {
+					log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", name, "err", err)
+					p.Drop()
+				}
+			}(s.Name, uint(bin), s.Cursor)
 		}
 	}
 }
@@ -317,6 +319,9 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			w.hashes[c.Hex()] = false
 		}
 	}
+	//if len(w.hashes) == 0 {
+	//panic("should be larger than 0")
+	//}
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 	atomic.AddUint64(&w.remaining, ctr)
@@ -327,11 +332,19 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	if err != nil {
 		panic(err)
 	}
+	var wantedHashesMsg WantedHashes
 
 	errc := p.sealBatch(msg.Ruid)
-	wantedHashesMsg := WantedHashes{
-		Ruid:      msg.Ruid,
-		BitVector: want.Bytes(),
+	if len(w.hashes) == 0 {
+		wantedHashesMsg = WantedHashes{
+			Ruid:      msg.Ruid,
+			BitVector: []byte{},
+		}
+	} else {
+		wantedHashesMsg = WantedHashes{
+			Ruid:      msg.Ruid,
+			BitVector: want.Bytes(),
+		}
 	}
 
 	log.Debug("sending wanted hashes", "peer", p.ID(), "offered", lenHashes/HashSize, "want", ctr)
@@ -416,7 +429,6 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 	want := p.openWants[ruid]
 	errc := make(chan error)
 	go func() {
-
 		for {
 			select {
 			case c, ok := <-want.chunks:
@@ -424,11 +436,11 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 					log.Error("want chanks rreturned on !ok")
 					panic("shouldnt happen")
 				}
-				p.mtx.Lock()
-				if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
-					log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
-					panic("shouldnt happen")
-				}
+				//p.mtx.Lock()
+				//if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
+				//log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
+				//panic("shouldnt happen")
+				//}
 				go func() {
 					ctx := context.TODO()
 					seen, err := p.syncer.netStore.Put(ctx, chunk.ModePutSync, storage.NewChunk(c.Address(), c.Data()))
@@ -441,20 +453,21 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
 						panic("shouldnt happen")
 					}
-					want.hashes[c.Address().Hex()] = false //todo: should by sync map
+					//want.hashes[c.Address().Hex()] = false //todo: should by sync map
 					atomic.AddUint64(&want.remaining, ^uint64(0))
-					p.mtx.Unlock()
+					//p.mtx.Unlock()
+					v := atomic.LoadUint64(&want.remaining)
+					if v == 0 {
+						log.Debug("batchdone")
+						close(errc)
+						return
+					}
+
 				}()
 			case <-p.quit:
 
 				break
-			default:
-				v := atomic.LoadUint64(&want.remaining)
-				if v == 0 {
-					log.Debug("batchdone")
-					close(errc)
-					return
-				}
+				//default:
 			}
 		}
 	}()
@@ -480,7 +493,7 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	}
 
 	frameSize := 0
-	const maxFrame = 128
+	const maxFrame = BatchSize
 	cd := ChunkDelivery{
 		Ruid:      msg.Ruid,
 		LastIndex: 0,
@@ -508,10 +521,11 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 			cd.Chunks = append(cd.Chunks, chunkD)
 			if frameSize == maxFrame {
 				//send the batch
-				if err := p.Send(ctx, cd); err != nil {
-					log.Error("error sending chunk delivery frame", "peer", p.ID(), "ruid", msg.Ruid, "error", err)
-				}
-
+				go func(cd ChunkDelivery) {
+					if err := p.Send(ctx, cd); err != nil {
+						log.Error("error sending chunk delivery frame", "peer", p.ID(), "ruid", msg.Ruid, "error", err)
+					}
+				}(cd)
 				frameSize = 0
 				cd = ChunkDelivery{
 					Ruid:      msg.Ruid,
