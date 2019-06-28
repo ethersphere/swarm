@@ -30,8 +30,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
-const dataChunkCount = 1000
-
 // TestTwoNodesFullSync connects two nodes, uploads content to one node and expects the
 // uploader node's chunks to be synced to the second node. This is expected behaviour since although
 // both nodes might share address bits, due to kademlia depth=0 when under ProxBinSize - this will
@@ -41,8 +39,8 @@ const dataChunkCount = 1000
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
 	var (
-		chunkCount = 1000
-		syncTime   = 5 * time.Second
+		chunkCount = 10000
+		syncTime   = 1 * time.Second
 	)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
