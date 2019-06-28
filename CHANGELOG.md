@@ -7,6 +7,9 @@
 ### Improvements
 
 ### Bug fixes
+
+* [#1503](https://github.com/ethersphere/swarm/pull/1503): network/simulation: add ExecAdapter capability to swarm simulations
+* [#1495](https://github.com/ethersphere/swarm/pull/1495): build: enable ubuntu ppa disco (19.04) builds
 * [#1395](https://github.com/ethersphere/swarm/pull/1395): swarm/storage: support for uploading 100gb files
 * [#1344](https://github.com/ethersphere/swarm/pull/1344): swarm/network, swarm/storage: simplification of fetchers
 * [#1488](https://github.com/ethersphere/swarm/pull/1488): docker: include git commit hash in swarm version
