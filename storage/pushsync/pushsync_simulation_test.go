@@ -203,7 +203,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(lstore, pubSub, p.PushReceipt)
+	s := NewStorer(netStore, pubSub, p.PushReceipt)
 
 	cleanup := func() {
 		p.Close()
