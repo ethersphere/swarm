@@ -57,9 +57,9 @@ var (
 // * downloader downloads the chunk
 // Trials are run concurrently
 func TestPushSyncSimulation(t *testing.T) {
-	nodeCnt := 4
-	chunkCnt := 500
-	trials := 10
+	nodeCnt := 64
+	chunkCnt := 32
+	trials := 32
 	testSyncerWithPubSub(t, nodeCnt, chunkCnt, trials, newServiceFunc)
 }
 
@@ -195,7 +195,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(lstore, pubSub, p.PushReceipt)
+	s := NewStorer(netStore, pubSub, p.PushReceipt)
 
 	cleanup := func() {
 		p.Close()
