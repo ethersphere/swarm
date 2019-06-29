@@ -32,6 +32,14 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
+var (
+	capabilitiesFlagRetrieve      = []byte{0x00, 0x01}
+	capabilitiesFlagPush          = []byte{0x00, 0x02}
+	capabilitiesFlagRelayRetrieve = []byte{0x00, 0x10}
+	capabilitiesFlagRelayPush     = []byte{0x00, 0x20}
+	capabilitiesFlagStorer        = []byte{0x80, 0x00}
+)
+
 const (
 	DefaultNetworkID = 4
 	// timeout for waiting
@@ -76,6 +84,7 @@ type Bzz struct {
 	*Hive
 	NetworkID    uint64
 	LightNode    bool
+	capabilities Capabilities
 	localAddr    *BzzAddr
 	mtx          sync.Mutex
 	handshakes   map[enode.ID]*HandshakeMsg
@@ -92,7 +101,6 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	bzz := &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
-		LightNode:    config.LightNode,
 		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes:   make(map[enode.ID]*HandshakeMsg),
 		streamerRun:  streamerRun,
@@ -104,7 +112,30 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		bzz.streamerSpec = nil
 	}
 
+	if config.LightNode {
+		bzz.capabilities = append(bzz.capabilities, lightCapability())
+	} else {
+		bzz.capabilities = append(bzz.capabilities, fullCapability())
+	}
+
 	return bzz
+}
+
+func lightCapability() Capability {
+	c := NewCapability(0, 2)
+	c.Set(capabilitiesFlagRetrieve)
+	c.Set(capabilitiesFlagPush)
+	return c
+}
+
+func fullCapability() Capability {
+	c := NewCapability(0, 2)
+	c.Set(capabilitiesFlagRetrieve)
+	c.Set(capabilitiesFlagPush)
+	c.Set(capabilitiesFlagRelayRetrieve)
+	c.Set(capabilitiesFlagRelayPush)
+	c.Set(capabilitiesFlagStorer)
+	return c
 }
 
 // UpdateLocalAddr updates underlayaddress of the running node
@@ -189,10 +220,10 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 		}
 		// the handshake has succeeded so construct the BzzPeer and run the protocol
 		peer := &BzzPeer{
-			Peer:       protocols.NewPeer(p, rw, spec),
-			BzzAddr:    handshake.peerAddr,
-			lastActive: time.Now(),
-			LightNode:  handshake.LightNode,
+			Peer:         protocols.NewPeer(p, rw, spec),
+			BzzAddr:      handshake.peerAddr,
+			lastActive:   time.Now(),
+			Capabilities: handshake.Capabilities,
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -215,7 +246,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		return err
 	}
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
-	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
+	handshake.Capabilities = rsh.(*HandshakeMsg).Capabilities
 	return nil
 }
 
@@ -251,6 +282,7 @@ type BzzPeer struct {
 	*BzzAddr                  // remote address -> implements Addr interface = protocols.Peer
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 	LightNode       bool
+	Capabilities    Capabilities
 }
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
@@ -273,10 +305,10 @@ func (p *BzzPeer) ID() enode.ID {
 * Addr: the address advertised by the node including underlay and overlay connecctions
 */
 type HandshakeMsg struct {
-	Version   uint64
-	NetworkID uint64
-	Addr      *BzzAddr
-	LightNode bool
+	Version      uint64
+	NetworkID    uint64
+	Addr         *BzzAddr
+	Capabilities Capabilities
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -288,7 +320,7 @@ type HandshakeMsg struct {
 
 // String pretty prints the handshake
 func (bh *HandshakeMsg) String() string {
-	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, LightNode: %v, peerAddr: %v", bh.Version, bh.NetworkID, bh.Addr, bh.LightNode, bh.peerAddr)
+	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, peerAddr: %v, Capabilities: %v", bh.Version, bh.NetworkID, bh.Addr, bh.Capabilities, bh.peerAddr)
 }
 
 // Perform initiates the handshake and validates the remote handshake message
@@ -318,12 +350,12 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 	handshake, found := b.handshakes[peerID]
 	if !found {
 		handshake = &HandshakeMsg{
-			Version:   uint64(BzzSpec.Version),
-			NetworkID: b.NetworkID,
-			Addr:      b.localAddr,
-			LightNode: b.LightNode,
-			init:      make(chan bool, 1),
-			done:      make(chan struct{}),
+			Version:      uint64(BzzSpec.Version),
+			NetworkID:    b.NetworkID,
+			Addr:         b.localAddr,
+			Capabilities: b.capabilities,
+			init:         make(chan bool, 1),
+			done:         make(chan struct{}),
 		}
 		// when handhsake is first created for a remote peer
 		// it is initialised with the init
