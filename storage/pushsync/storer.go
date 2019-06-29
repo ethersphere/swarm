@@ -91,6 +91,7 @@ func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
 	if _, err := s.store.Put(context.TODO(), chunk.ModePutSync, ch); err != nil {
 		return err
 	}
+	log.Debug("push sync storer", "addr", label(chmsg.Addr), "to", label(chmsg.Origin), "self", hex.EncodeToString(s.ps.BaseAddr()))
 	// TODO: check if originator or relayer is a nearest neighbour then return
 	// otherwise send back receipt
 	return s.sendReceiptMsg(chmsg)
@@ -114,6 +115,6 @@ func (s *Storer) sendReceiptMsg(chmsg *chunkMsg) error {
 		return err
 	}
 	to := chmsg.Origin
-	log.Debug("send receipt", "addr", label(rmsg.Addr), "to", label(to), "self", hex.EncodeToString(s.ps.BaseAddr()))
+	log.Debug("send receipt", "addr", label(chmsg.Addr), "to", label(to), "self", hex.EncodeToString(s.ps.BaseAddr()))
 	return s.ps.Send(to, pssReceiptTopic, msg)
 }
