@@ -55,29 +55,25 @@ func TestCapabilitiesString(t *testing.T) {
 	addr := RandomAddr()
 
 	// set up capabilities with arbitary content
-	var caps Capabilities
-
 	cOne := NewCapability(0, 2)
 	controlFlags := []byte{0x08, 0x2a}
 	cOne.Set(controlFlags)
-	caps.Add(cOne)
+	addr.Capabilities.Add(cOne)
 
 	cTwo := NewCapability(127, 3)
 	controlFlags = []byte{0x00, 0x02, 0x6e}
 	cTwo.Set(controlFlags)
+	addr.Capabilities.Add(cTwo)
 
 	controlString := "00:0000100000101010,7f:000000000000001001101110"
 
-	caps.Add(cTwo)
-
 	m := HandshakeMsg{
-		Version:      42,
-		NetworkID:    622,
-		Addr:         addr,
-		Capabilities: caps,
+		Version:   42,
+		NetworkID: 622,
+		Addr:      addr,
 	}
 
-	capstring := fmt.Sprintf("%v", m.Capabilities)
+	capstring := fmt.Sprintf("%v", m.Addr.Capabilities)
 	if capstring != controlString {
 		t.Fatalf("capabilities string mismatch, expected: '%s', got '%s'", controlString, capstring)
 	}
@@ -114,13 +110,11 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		cap = newFullCapability()
 	}
 	cap.Set(cap)
-	caps := Capabilities{}
-	caps.Add(cap)
+	addr.Capabilities.Add(cap)
 	msg := &HandshakeMsg{
-		Version:      version,
-		NetworkID:    networkId,
-		Addr:         addr,
-		Capabilities: caps,
+		Version:   version,
+		NetworkID: networkId,
+		Addr:      addr,
 	}
 	return msg
 }
@@ -156,7 +150,7 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 		mu.Lock()
 		nodeToAddr[p.ID()] = addrs[0]
 		mu.Unlock()
-		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String())}
+		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String()), Capabilities{}}
 		addrs = addrs[1:]
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
 	}
@@ -335,11 +329,11 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
 
-	msg.Capabilities[0][2] |= 0x40
+	msg.Addr.Capabilities[0][2] |= 0x40
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Capabilities)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Addr.Capabilities)},
 	)
 
 	if err != nil {
@@ -411,9 +405,9 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for i, b := range pt.bzz.handshakes[node.ID()].Capabilities {
+				for i, b := range pt.bzz.handshakes[node.ID()].peerAddr.Capabilities {
 					if !bytes.Equal(b, nodeCapabilities[i]) {
-						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities, nodeCapabilities)
+						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].peerAddr.Capabilities, nodeCapabilities)
 					}
 				}
 			case <-time.After(10 * time.Second):
