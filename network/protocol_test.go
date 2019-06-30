@@ -54,13 +54,21 @@ func init() {
 func TestCapabilitiesString(t *testing.T) {
 	addr := RandomAddr()
 
+	// set up capabilities with arbitary content
 	var caps Capabilities
-	c := NewCapability(0, 2)
 
-	controlFlags := []byte{0x08, 0x20}
-	controlString := "00:0000100000100000"
-	c.Set(controlFlags)
-	caps.Add(c)
+	cOne := NewCapability(0, 2)
+	controlFlags := []byte{0x08, 0x2a}
+	cOne.Set(controlFlags)
+	caps.Add(cOne)
+
+	cTwo := NewCapability(127, 3)
+	controlFlags = []byte{0x00, 0x02, 0x6e}
+	cTwo.Set(controlFlags)
+
+	controlString := "00:0000100000101010,7f:000000000000001001101110"
+
+	caps.Add(cTwo)
 
 	m := HandshakeMsg{
 		Version:      42,
@@ -279,7 +287,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(TestProtocolVersion, 321, NewAddr(node), lightNode),
+		newBzzHandshakeMsg(TestProtocolVersion, 321, NewAddr(node), false),
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
 	)
 
@@ -303,7 +311,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewAddr(node), lightNode),
+		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewAddr(node), false),
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
 	)
 
@@ -327,7 +335,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), lightNode),
+		newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false),
 	)
 
 	if err != nil {
@@ -350,7 +358,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pt, err := newBzzHandshakeTester(1, prvkey, test.lightNode)
+			pt, err := newBzzHandshakeTester(1, prvkey, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -360,7 +368,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			addr := NewAddr(node)
 
 			err = pt.testHandshake(
-				correctBzzHandshake(pt.addr, test.lightNode),
+				correctBzzHandshake(pt.addr, false),
 				newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, addr, test.lightNode),
 			)
 
@@ -377,7 +385,6 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				//if pt.bzz.handshakes[node.ID()].LightNode != test.lightNode {
 				for i, b := range pt.bzz.handshakes[node.ID()].Capabilities {
 					if !bytes.Equal(b, nodeCapabilities[i]) {
 						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities, nodeCapabilities)

@@ -117,9 +117,9 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	}
 
 	if config.LightNode {
-		bzz.capabilities.Add(lightCapability()) // = append(bzz.capabilities, lightCapability())
+		bzz.capabilities.Add(lightCapability())
 	} else {
-		bzz.capabilities.Add(fullCapability()) // = append(bzz.capabilities, fullCapability())
+		bzz.capabilities.Add(fullCapability())
 	}
 
 	return bzz
@@ -233,7 +233,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			BzzAddr:      handshake.peerAddr,
 			lastActive:   time.Now(),
 			Capabilities: handshake.Capabilities,
-			LightNode:    isLightCapability(handshake.Capabilities[0]),
+			LightNode:    isLightCapability(handshake.Capabilities[0]), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
