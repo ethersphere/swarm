@@ -299,7 +299,6 @@ type BzzPeer struct {
 	*BzzAddr                  // remote address -> implements Addr interface = protocols.Peer
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 	LightNode       bool
-	Capabilities    Capabilities
 }
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
