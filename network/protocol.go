@@ -39,6 +39,8 @@ var (
 	capabilitiesFlagRelayRetrieve = []byte{0x00, 0x10}
 	capabilitiesFlagRelayPush     = []byte{0x00, 0x20}
 	capabilitiesFlagStorer        = []byte{0x80, 0x00}
+	fullCapability                Capability
+	lightCapability               Capability
 )
 
 const (
@@ -70,6 +72,28 @@ var DiscoverySpec = &protocols.Spec{
 		peersMsg{},
 		subPeersMsg{},
 	},
+}
+
+func init() {
+	fullCapability = newFullCapability()
+	lightCapability = newLightCapability()
+}
+
+func newLightCapability() Capability {
+	c := NewCapability(0, 2)
+	c.Set(capabilitiesFlagRetrieve)
+	c.Set(capabilitiesFlagPush)
+	return c
+}
+
+func newFullCapability() Capability {
+	c := NewCapability(0, 2)
+	c.Set(capabilitiesFlagRetrieve)
+	c.Set(capabilitiesFlagPush)
+	c.Set(capabilitiesFlagRelayRetrieve)
+	c.Set(capabilitiesFlagRelayPush)
+	c.Set(capabilitiesFlagStorer)
+	return c
 }
 
 // BzzConfig captures the config params used by the hive
@@ -117,33 +141,20 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	}
 
 	if config.LightNode {
-		bzz.capabilities.Add(lightCapability())
+		bzz.capabilities.Add(newLightCapability())
 	} else {
-		bzz.capabilities.Add(fullCapability())
+		bzz.capabilities.Add(newFullCapability())
 	}
 
 	return bzz
 }
 
-func lightCapability() Capability {
-	c := NewCapability(0, 2)
-	c.Set(capabilitiesFlagRetrieve)
-	c.Set(capabilitiesFlagPush)
-	return c
-}
-
-func fullCapability() Capability {
-	c := NewCapability(0, 2)
-	c.Set(capabilitiesFlagRetrieve)
-	c.Set(capabilitiesFlagPush)
-	c.Set(capabilitiesFlagRelayRetrieve)
-	c.Set(capabilitiesFlagRelayPush)
-	c.Set(capabilitiesFlagStorer)
-	return c
-}
-
 func isLightCapability(c Capability) bool {
-	return !bytes.Equal(c, fullCapability())
+	return bytes.Equal(c, lightCapability)
+}
+
+func isFullCapability(c Capability) bool {
+	return bytes.Equal(c, fullCapability)
 }
 
 // UpdateLocalAddr updates underlayaddress of the running node
@@ -341,6 +352,9 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	}
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
+	}
+	if !isFullCapability(rhs.Capabilities[0]) && !isLightCapability(rhs.Capabilities[0]) {
+		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}
 	return nil
 }

@@ -109,9 +109,9 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	cap := NewCapability(0, 2)
 	if lightNode {
-		cap = lightCapability()
+		cap = newLightCapability()
 	} else {
-		cap = fullCapability()
+		cap = newFullCapability()
 	}
 	cap.Set(cap)
 	caps := Capabilities{}
@@ -320,6 +320,32 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	}
 }
 
+func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
+	lightNode := false
+	prvkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := newBzzHandshakeTester(1, prvkey, lightNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+	node := s.Nodes[0]
+
+	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
+
+	msg.Capabilities[0][2] |= 0x40
+	err = s.testHandshake(
+		correctBzzHandshake(s.addr, lightNode),
+		msg,
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Capabilities)},
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 func TestBzzHandshakeSuccess(t *testing.T) {
 	lightNode := false
 	prvkey, err := crypto.GenerateKey()
@@ -378,9 +404,9 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 
 			nodeCapabilities := Capabilities{}
 			if test.lightNode {
-				nodeCapabilities.Add(lightCapability())
+				nodeCapabilities.Add(newLightCapability())
 			} else {
-				nodeCapabilities.Add(fullCapability())
+				nodeCapabilities.Add(newFullCapability())
 			}
 			select {
 
