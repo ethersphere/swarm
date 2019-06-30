@@ -105,7 +105,7 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 	} else {
 		cap = fullCapability()
 	}
-	cap.Set(*cap)
+	cap.Set(cap)
 	caps := Capabilities{}
 	caps.Add(cap)
 	msg := &HandshakeMsg{
