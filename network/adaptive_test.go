@@ -37,11 +37,12 @@ func TestCapabilitiesAPI(t *testing.T) {
 	// Initialize capability
 	// Set explicitly with builtin bzz value
 	caps := NewCapabilities()
-	defer caps.Destroy()
+	id, changeC := caps.subscribe()
+	defer caps.unsubscribe(id)
 	go func() {
 		for {
 			select {
-			case f, ok := <-caps.changeC:
+			case f, ok := <-changeC:
 				if !ok {
 					return
 				}

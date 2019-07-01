@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -15,24 +14,42 @@ import (
 */
 
 type Capabilities struct {
-	Flags   []capability
-	changeC chan []byte
+	Flags         []capability
+	changeC       map[uint64]chan capability
+	lastChangeCId uint64
 }
 
-type CapabilitiesMsg []capability
+type CapabilitiesMsg Capabilities
 
 func NewCapabilities() *Capabilities {
 	return &Capabilities{
-		changeC: make(chan []byte),
+		changeC: make(map[uint64]chan capability),
 	}
 }
 
-func (m Capabilities) Destroy() {
-	close(m.changeC)
+func (m Capabilities) subscribe() (uint64, <-chan capability) {
+	id := m.lastChangeCId
+	m.changeC[id] = make(chan capability)
+	m.lastChangeCId = m.lastChangeCId + 1
+	return id, m.changeC[id]
+}
+
+func (m Capabilities) unsubscribe(id uint64) error {
+	if _, ok := m.changeC[id]; !ok {
+		fmt.Errorf("no subscription with id %d", id)
+	}
+	close(m.changeC[id])
+	return nil
+}
+
+func (m Capabilities) destroy() {
+	for k := range m.changeC {
+		delete(m.changeC, k)
+	}
 }
 
 func (m Capabilities) toMsg() CapabilitiesMsg {
-	return CapabilitiesMsg(m.Flags)
+	return CapabilitiesMsg(m)
 }
 
 func (m Capabilities) String() string {
@@ -44,7 +61,6 @@ func (m Capabilities) String() string {
 }
 
 func (m Capabilities) get(id uint8) capability {
-	log.Error("get", "c", id, "m", m.Flags, "l", len(m.Flags))
 	if len(m.Flags) == 0 {
 		return nil
 	}
@@ -61,6 +77,12 @@ func (m *Capabilities) add(c capability) {
 	m.Flags = append(m.Flags, c)
 }
 
+func (m *Capabilities) notify(c capability) {
+	for _, cC := range m.changeC {
+		cC <- c
+	}
+}
+
 func (m *Capabilities) SetCapability(id uint8, flags []byte) error {
 	if len(flags) == 0 {
 		return errors.New("flag bytes cannot be empty")
@@ -73,9 +95,7 @@ func (m *Capabilities) SetCapability(id uint8, flags []byte) error {
 	if err != nil {
 		return err
 	}
-	chanBytes := make([]byte, len(c))
-	copy(chanBytes, c)
-	m.changeC <- chanBytes
+	m.notify(c)
 	return nil
 }
 
@@ -88,9 +108,7 @@ func (m *Capabilities) RemoveCapability(id uint8, flags []byte) error {
 	if err != nil {
 		return err
 	}
-	chanBytes := make([]byte, len(c))
-	copy(chanBytes, c)
-	m.changeC <- chanBytes
+	m.notify(c)
 	return nil
 }
 
@@ -117,7 +135,6 @@ func (c *capability) set(flag []byte) error {
 	if !c.validLength(flag) {
 		return fmt.Errorf("Bitfield must be %d bytes long", len(*c))
 	}
-	log.Error("set", "flag", flag, "c", (*c)[2:])
 	for i, b := range flag {
 		(*c)[2+i] |= b
 	}

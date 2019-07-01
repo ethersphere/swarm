@@ -74,19 +74,23 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 }
 
 func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNode bool) *HandshakeMsg {
-	cap := newCapability(0, 2)
+	capabilities := NewCapabilities()
+	//cap := newCapability(0, 2)
+	var cap capability
 	if lightNode {
 		cap = newLightCapability()
 	} else {
 		cap = newFullCapability()
 	}
-	cap.set(cap)
-	addr.Capabilities.add(cap)
+	capabilities.add(cap)
 	msg := &HandshakeMsg{
-		Version:   version,
-		NetworkID: networkId,
-		Addr:      addr,
+		Version:      version,
+		NetworkID:    networkId,
+		Addr:         addr,
+		Capabilities: *capabilities,
 	}
+
+	log.Error("hsmsg", "h", msg, "caps", capabilities)
 	return msg
 }
 
@@ -121,7 +125,7 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 		mu.Lock()
 		nodeToAddr[p.ID()] = addrs[0]
 		mu.Unlock()
-		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String()), Capabilities{}}
+		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String())}
 		addrs = addrs[1:]
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
 	}
@@ -300,11 +304,11 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
 
-	msg.Addr.Capabilities.Flags[0][2] |= 0x40
+	msg.Capabilities.get(0)[2] |= 0x40
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Addr.Capabilities)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Capabilities)},
 	)
 
 	if err != nil {
@@ -376,9 +380,9 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for i, b := range pt.bzz.handshakes[node.ID()].peerAddr.Capabilities.Flags {
+				for i, b := range pt.bzz.handshakes[node.ID()].Capabilities.Flags {
 					if !bytes.Equal(b, nodeCapabilities.Flags[i]) {
-						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].peerAddr.Capabilities.Flags, nodeCapabilities.Flags)
+						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities.Flags, nodeCapabilities.Flags)
 					}
 				}
 			case <-time.After(10 * time.Second):

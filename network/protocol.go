@@ -107,14 +107,15 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	NetworkID    uint64
-	LightNode    bool
-	Capabilities Capabilities
-	localAddr    *BzzAddr
-	mtx          sync.Mutex
-	handshakes   map[enode.ID]*HandshakeMsg
-	streamerSpec *protocols.Spec
-	streamerRun  func(*BzzPeer) error
+	NetworkID     uint64
+	LightNode     bool
+	capabilities  *Capabilities // capabilities set on the node
+	localAddr     *BzzAddr
+	mtx           sync.Mutex
+	handshakes    map[enode.ID]*HandshakeMsg
+	streamerSpec  *protocols.Spec
+	streamerRun   func(*BzzPeer) error
+	capabilitiesC <-chan capability // reports changes in capabilities
 }
 
 // NewBzz is the swarm protocol constructor
@@ -123,15 +124,14 @@ type Bzz struct {
 // * overlay driver
 // * peer store
 func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
-	capabilities := Capabilities{}
 	bzz := &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
-		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr, capabilities},
+		capabilities: NewCapabilities(),
+		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes:   make(map[enode.ID]*HandshakeMsg),
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
-		Capabilities: capabilities,
 	}
 
 	if config.BootnodeMode {
@@ -139,11 +139,14 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		bzz.streamerSpec = nil
 	}
 
+	// temporary capabilities presets for current notions of "light" and "full" nodes
 	if config.LightNode {
-		bzz.localAddr.Capabilities.add(newLightCapability())
+		bzz.capabilities.add(newLightCapability())
 	} else {
-		bzz.localAddr.Capabilities.add(newFullCapability())
+		bzz.capabilities.add(newFullCapability())
 	}
+	_, capabilitiesC := bzz.capabilities.subscribe()
+	bzz.capabilitiesC = capabilitiesC
 
 	return bzz
 }
@@ -159,9 +162,8 @@ func isFullCapability(c capability) bool {
 // UpdateLocalAddr updates underlayaddress of the running node
 func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *BzzAddr {
 	b.localAddr = b.localAddr.Update(&BzzAddr{
-		UAddr:        byteaddr,
-		OAddr:        b.localAddr.OAddr,
-		Capabilities: b.localAddr.Capabilities,
+		UAddr: byteaddr,
+		OAddr: b.localAddr.OAddr,
 	})
 
 	return b.localAddr
@@ -246,7 +248,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			Peer:       protocols.NewPeer(p, rw, spec),
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
-			LightNode:  isLightCapability(handshake.peerAddr.Capabilities.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
+			LightNode:  isLightCapability(handshake.Capabilities.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -269,6 +271,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		return err
 	}
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
+	handshake.Capabilities = rsh.(*HandshakeMsg).Capabilities
 	return nil
 }
 
@@ -326,9 +329,10 @@ func (p *BzzPeer) ID() enode.ID {
 * Addr: the address advertised by the node including underlay and overlay connecctions
 */
 type HandshakeMsg struct {
-	Version   uint64
-	NetworkID uint64
-	Addr      *BzzAddr
+	Version      uint64
+	NetworkID    uint64
+	Addr         *BzzAddr
+	Capabilities Capabilities
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -352,8 +356,8 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
-	if !isFullCapability(rhs.Addr.Capabilities.get(0)) && !isLightCapability(rhs.Addr.Capabilities.get(0)) {
-		return fmt.Errorf("invalid capabilities setting: %s", rhs.Addr.Capabilities)
+	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
+		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}
 	return nil
 }
@@ -373,11 +377,12 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 	handshake, found := b.handshakes[peerID]
 	if !found {
 		handshake = &HandshakeMsg{
-			Version:   uint64(BzzSpec.Version),
-			NetworkID: b.NetworkID,
-			Addr:      b.localAddr,
-			init:      make(chan bool, 1),
-			done:      make(chan struct{}),
+			Version:      uint64(BzzSpec.Version),
+			NetworkID:    b.NetworkID,
+			Addr:         b.localAddr,
+			Capabilities: *b.capabilities,
+			init:         make(chan bool, 1),
+			done:         make(chan struct{}),
 		}
 		// when handhsake is first created for a remote peer
 		// it is initialised with the init
