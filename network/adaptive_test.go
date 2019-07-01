@@ -6,18 +6,19 @@ import (
 	"testing"
 )
 
+// TestCapabilitiesString tests the correctness
 func TestCapabilitiesString(t *testing.T) {
 	caps := Capabilities{}
 
 	// set up capabilities with arbitary content
-	cOne := NewCapability(0, 2)
+	cOne := newCapability(0, 2)
 	controlFlags := []byte{0x08, 0x2a}
-	cOne.Set(controlFlags)
+	cOne.set(controlFlags)
 	caps.add(cOne)
 
-	cTwo := NewCapability(127, 3)
+	cTwo := newCapability(127, 3)
 	controlFlags = []byte{0x00, 0x02, 0x6e}
-	cTwo.Set(controlFlags)
+	cTwo.set(controlFlags)
 	caps.add(cTwo)
 
 	controlString := "00:0000100000101010,7f:000000000000001001101110"

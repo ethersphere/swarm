@@ -74,13 +74,13 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 }
 
 func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNode bool) *HandshakeMsg {
-	cap := NewCapability(0, 2)
+	cap := newCapability(0, 2)
 	if lightNode {
 		cap = newLightCapability()
 	} else {
 		cap = newFullCapability()
 	}
-	cap.Set(cap)
+	cap.set(cap)
 	addr.Capabilities.add(cap)
 	msg := &HandshakeMsg{
 		Version:   version,

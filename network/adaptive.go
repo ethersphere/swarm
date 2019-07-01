@@ -24,7 +24,7 @@ func (m Capabilities) String() string {
 	return strings.Join(caps, ",")
 }
 
-func (m *Capabilities) get(id uint8) Capability {
+func (m *Capabilities) get(id uint8) capability {
 	if len(*m) == 0 {
 		return nil
 	}
@@ -37,7 +37,7 @@ func (m *Capabilities) get(id uint8) Capability {
 }
 
 // TODO: check if code already exists in db
-func (m *Capabilities) add(c Capability) {
+func (m *Capabilities) add(c capability) {
 	*m = append(*m, c)
 }
 
@@ -49,7 +49,7 @@ func (m *Capabilities) SetCapability(id uint8, flags []byte) error {
 	if c == nil {
 		return fmt.Errorf("capability id %d not registered", id)
 	}
-	return c.Set(flags)
+	return c.set(flags)
 }
 
 func (m *Capabilities) RemoveCapability(id uint8, flags []byte) error {
@@ -57,7 +57,7 @@ func (m *Capabilities) RemoveCapability(id uint8, flags []byte) error {
 	if c == nil {
 		return fmt.Errorf("capability id %d not registered", id)
 	}
-	return c.Unset(flags)
+	return c.unset(flags)
 }
 
 func (m *Capabilities) RegisterCapabilityModule(id uint8, length uint8) error {
@@ -65,21 +65,21 @@ func (m *Capabilities) RegisterCapabilityModule(id uint8, length uint8) error {
 	if c != nil {
 		return fmt.Errorf("capability %d already registered", id)
 	}
-	c = NewCapability(id, length)
+	c = newCapability(id, length)
 	m.add(c)
 	return nil
 }
 
-type Capability []byte
+type capability []byte
 
-func NewCapability(code uint8, byteLength uint8) Capability {
-	c := make(Capability, byteLength+2)
+func newCapability(code uint8, byteLength uint8) capability {
+	c := make(capability, byteLength+2)
 	c[0] = code
 	c[1] = byteLength
 	return c
 }
 
-func (c *Capability) Set(flag []byte) error {
+func (c *capability) set(flag []byte) error {
 	if !c.validLength(flag) {
 		return fmt.Errorf("Bitfield must be %d bytes long", len(*c))
 	}
@@ -89,7 +89,7 @@ func (c *Capability) Set(flag []byte) error {
 	return nil
 }
 
-func (c *Capability) Unset(flag []byte) error {
+func (c *capability) unset(flag []byte) error {
 	if !c.validLength(flag) {
 		return fmt.Errorf("Bitfield must be %d bytes long", len(*c))
 	}
@@ -99,7 +99,7 @@ func (c *Capability) Unset(flag []byte) error {
 	return nil
 }
 
-func (c *Capability) validLength(flag []byte) bool {
+func (c *capability) validLength(flag []byte) bool {
 	if len(flag) != len(*c)-2 {
 		return false
 	}

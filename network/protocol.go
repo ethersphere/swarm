@@ -39,8 +39,8 @@ var (
 	capabilitiesFlagRelayRetrieve = []byte{0x00, 0x10}
 	capabilitiesFlagRelayPush     = []byte{0x00, 0x20}
 	capabilitiesFlagStorer        = []byte{0x80, 0x00}
-	fullCapability                Capability
-	lightCapability               Capability
+	fullCapability                capability
+	lightCapability               capability
 )
 
 const (
@@ -77,20 +77,20 @@ func init() {
 	lightCapability = newLightCapability()
 }
 
-func newLightCapability() Capability {
-	c := NewCapability(0, 2)
-	c.Set(capabilitiesFlagRetrieve)
-	c.Set(capabilitiesFlagPush)
+func newLightCapability() capability {
+	c := newCapability(0, 2)
+	c.set(capabilitiesFlagRetrieve)
+	c.set(capabilitiesFlagPush)
 	return c
 }
 
-func newFullCapability() Capability {
-	c := NewCapability(0, 2)
-	c.Set(capabilitiesFlagRetrieve)
-	c.Set(capabilitiesFlagPush)
-	c.Set(capabilitiesFlagRelayRetrieve)
-	c.Set(capabilitiesFlagRelayPush)
-	c.Set(capabilitiesFlagStorer)
+func newFullCapability() capability {
+	c := newCapability(0, 2)
+	c.set(capabilitiesFlagRetrieve)
+	c.set(capabilitiesFlagPush)
+	c.set(capabilitiesFlagRelayRetrieve)
+	c.set(capabilitiesFlagRelayPush)
+	c.set(capabilitiesFlagStorer)
 	return c
 }
 
@@ -148,11 +148,11 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	return bzz
 }
 
-func isLightCapability(c Capability) bool {
+func isLightCapability(c capability) bool {
 	return bytes.Equal(c, lightCapability)
 }
 
-func isFullCapability(c Capability) bool {
+func isFullCapability(c capability) bool {
 	return bytes.Equal(c, fullCapability)
 }
 
