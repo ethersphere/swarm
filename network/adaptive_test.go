@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-
-	"github.com/ethersphere/swarm/log"
 )
 
 // TestCapabilitiesString tests the correctness
@@ -34,19 +32,36 @@ func TestCapabilitiesString(t *testing.T) {
 // TestCapabilitiesAPI tests that the API alters the capabilities as they should, and throws errors when it should
 func TestCapabilitiesAPI(t *testing.T) {
 
+	changes := [][]byte{
+		{0x01, 0x02},
+		{0x82, 0x04},
+		{0x01, 0x02},
+	}
+	expects := [][]byte{
+		{0x01, 0x02},
+		{0x83, 0x06},
+		{0x82, 0x04},
+	}
+
 	// Initialize capability
 	// Set explicitly with builtin bzz value
 	caps := NewCapabilities()
 	id, changeC := caps.subscribe()
-	defer caps.unsubscribe(id)
+
+	errC := make(chan error, len(expects))
 	go func() {
+		i := 0
 		for {
 			select {
 			case f, ok := <-changeC:
 				if !ok {
+					close(errC)
 					return
 				}
-				log.Warn("got change", "c", f)
+				if !bytes.Equal(expects[i], f[2:]) {
+					errC <- fmt.Errorf("notify (%d) failed: got %v, expect %v", i, f, expects[i])
+				}
+				i++
 			}
 		}
 	}()
@@ -88,35 +103,43 @@ func TestCapabilitiesAPI(t *testing.T) {
 	}
 
 	// Correct flag byte and capability id should succeed
-	err = caps.SetCapability(1, []byte{0x01, 0x02})
+	err = caps.SetCapability(1, changes[0])
 	if err != nil {
 		t.Fatalf("SetCapability (1) fail: %v", err)
 	}
 
 	// check set correctly
-	expected := []byte{0x01, 0x02}
-	if !bytes.Equal(caps.Flags[0][2:], expected) {
-		t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expected, caps.Flags[0][2:])
+	if !bytes.Equal(caps.Flags[0][2:], expects[0]) {
+		t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], caps.Flags[0][2:])
 	}
 
 	// Consecutive setcapability should only set specified bytes, leave others alone
-	err = caps.SetCapability(1, []byte{0x82, 0x04})
+	err = caps.SetCapability(1, changes[1])
 	if err != nil {
 		t.Fatalf("SetCapability (2) fail: %v", err)
 	}
-	expected = []byte{0x83, 0x06}
-	if !bytes.Equal(caps.Flags[0][2:], expected) {
-		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expected, caps.Flags[0][2:])
+	if !bytes.Equal(caps.Flags[0][2:], expects[1]) {
+		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expects[1], caps.Flags[0][2:])
 	}
 
 	// Removecapability should only remove specified bytes, leave others alone
-	err = caps.RemoveCapability(1, []byte{0x01, 0x02})
+	err = caps.RemoveCapability(1, changes[2])
 	if err != nil {
 		t.Fatalf("RemoveCapability fail: %v", err)
 	}
-	expected = []byte{0x82, 0x04}
-	if !bytes.Equal(caps.Flags[0][2:], expected) {
-		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expected, caps.Flags[0][2:])
+	if !bytes.Equal(caps.Flags[0][2:], expects[2]) {
+		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expects[2], caps.Flags[0][2:])
 	}
 
+	err = caps.unsubscribe(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		err, ok := <-errC
+		if !ok {
+			break
+		}
+		t.Fatal(err)
+	}
 }

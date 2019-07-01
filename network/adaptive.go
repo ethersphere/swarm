@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ethersphere/swarm/pot"
 )
@@ -17,6 +18,7 @@ type Capabilities struct {
 	Flags         []capability
 	changeC       map[uint64]chan capability
 	lastChangeCId uint64
+	mu            sync.RWMutex
 }
 
 type CapabilitiesMsg Capabilities
@@ -91,11 +93,15 @@ func (m *Capabilities) SetCapability(id uint8, flags []byte) error {
 	if c == nil {
 		return fmt.Errorf("capability id %d not registered", id)
 	}
+	m.mu.Lock()
 	err := c.set(flags)
+	ccopy := newCapability(c[0], c[1])
+	ccopy.set(c[2:])
+	m.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	m.notify(c)
+	m.notify(ccopy)
 	return nil
 }
 
@@ -104,11 +110,15 @@ func (m *Capabilities) RemoveCapability(id uint8, flags []byte) error {
 	if c == nil {
 		return fmt.Errorf("capability id %d not registered", id)
 	}
+	m.mu.Lock()
 	err := c.unset(flags)
+	ccopy := newCapability(c[0], c[1])
+	ccopy.set(c[2:])
+	m.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	m.notify(c)
+	m.notify(ccopy)
 	return nil
 }
 
