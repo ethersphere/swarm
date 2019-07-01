@@ -120,10 +120,9 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 // entry represents a Kademlia table entry (an extension of BzzAddr)
 type entry struct {
 	*BzzAddr
-	Capabilities Capabilities
-	conn         *Peer
-	seenAt       time.Time
-	retries      int
+	conn    *Peer
+	seenAt  time.Time
+	retries int
 }
 
 // newEntry creates a kademlia peer from a *Peer

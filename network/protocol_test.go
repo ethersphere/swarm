@@ -75,7 +75,6 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 
 func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	capabilities := NewCapabilities()
-	//cap := newCapability(0, 2)
 	var cap capability
 	if lightNode {
 		cap = newLightCapability()
@@ -90,7 +89,6 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		Capabilities: *capabilities,
 	}
 
-	log.Error("hsmsg", "h", msg, "caps", capabilities)
 	return msg
 }
 

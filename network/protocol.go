@@ -72,6 +72,7 @@ var DiscoverySpec = &protocols.Spec{
 	},
 }
 
+// temporary capabilities presets for current notions of "light" and "full" nodes
 func init() {
 	fullCapability = newFullCapability()
 	lightCapability = newLightCapability()
@@ -94,6 +95,14 @@ func newFullCapability() capability {
 	return c
 }
 
+func isLightCapability(c capability) bool {
+	return bytes.Equal(c, lightCapability)
+}
+
+func isFullCapability(c capability) bool {
+	return bytes.Equal(c, fullCapability)
+}
+
 // BzzConfig captures the config params used by the hive
 type BzzConfig struct {
 	OverlayAddr  []byte // base address of the overlay network
@@ -109,12 +118,12 @@ type Bzz struct {
 	*Hive
 	NetworkID     uint64
 	LightNode     bool
-	capabilities  *Capabilities // capabilities set on the node
 	localAddr     *BzzAddr
 	mtx           sync.Mutex
 	handshakes    map[enode.ID]*HandshakeMsg
 	streamerSpec  *protocols.Spec
 	streamerRun   func(*BzzPeer) error
+	capabilities  *Capabilities     // capabilities set on the node
 	capabilitiesC <-chan capability // reports changes in capabilities
 }
 
@@ -127,11 +136,11 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	bzz := &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
-		capabilities: NewCapabilities(),
 		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes:   make(map[enode.ID]*HandshakeMsg),
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
+		capabilities: NewCapabilities(),
 	}
 
 	if config.BootnodeMode {
@@ -139,7 +148,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		bzz.streamerSpec = nil
 	}
 
-	// temporary capabilities presets for current notions of "light" and "full" nodes
+	// set temporary capabilities presets for current notions of "light" and "full" nodes
 	if config.LightNode {
 		bzz.capabilities.add(newLightCapability())
 	} else {
@@ -151,12 +160,11 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	return bzz
 }
 
-func isLightCapability(c capability) bool {
-	return bytes.Equal(c, lightCapability)
-}
-
-func isFullCapability(c capability) bool {
-	return bytes.Equal(c, fullCapability)
+// Stop Implements node.Service
+func (b *Bzz) Stop() error {
+	err := b.Hive.Stop()
+	b.capabilities.destroy()
+	return err
 }
 
 // UpdateLocalAddr updates underlayaddress of the running node
