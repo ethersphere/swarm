@@ -1,11 +1,14 @@
 package network
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -16,37 +19,51 @@ import (
 
 type Capabilities struct {
 	Flags         []capability
-	changeC       map[uint64]chan capability
+	changeC       chan<- capability
+	notifiers     map[rpc.ID]*rpc.Notifier
 	lastChangeCId uint64
 	mu            sync.RWMutex
 }
 
 type CapabilitiesMsg Capabilities
 
-func NewCapabilities() *Capabilities {
+func NewCapabilities(changeC chan<- capability) *Capabilities {
 	return &Capabilities{
-		changeC: make(map[uint64]chan capability),
+		changeC:   changeC,
+		notifiers: make(map[rpc.ID]*rpc.Notifier),
 	}
 }
 
-func (m Capabilities) subscribe() (uint64, <-chan capability) {
-	id := m.lastChangeCId
-	m.changeC[id] = make(chan capability)
-	m.lastChangeCId = m.lastChangeCId + 1
-	return id, m.changeC[id]
+func (m Capabilities) SubscribeChange(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, ok := rpc.NotifierFromContext(ctx)
+	if !ok {
+		return nil, errors.New("notifications not supported")
+	}
+	sub := notifier.CreateSubscription()
+	m.notifiers[sub.ID] = notifier
+	go func(sub *rpc.Subscription, notifier *rpc.Notifier) {
+		select {
+		case err := <-sub.Err():
+			log.Warn("rpc capabilities subscription end", "err", err)
+		case <-notifier.Closed():
+			log.Warn("rpc capabilities notifier closed")
+		}
+	}(sub, notifier)
+	return sub, nil
 }
 
-func (m Capabilities) unsubscribe(id uint64) error {
-	if _, ok := m.changeC[id]; !ok {
-		fmt.Errorf("no subscription with id %d", id)
+func (m Capabilities) notify(c capability) {
+	if m.changeC != nil {
+		m.changeC <- c
 	}
-	close(m.changeC[id])
-	return nil
+	for id, notifier := range m.notifiers {
+		notifier.Notify(id, c)
+	}
 }
 
 func (m Capabilities) destroy() {
-	for k := range m.changeC {
-		delete(m.changeC, k)
+	if m.changeC != nil {
+		close(m.changeC)
 	}
 }
 
@@ -74,15 +91,8 @@ func (m Capabilities) get(id uint8) capability {
 	return nil
 }
 
-// TODO: check if code already exists in db
 func (m *Capabilities) add(c capability) {
 	m.Flags = append(m.Flags, c)
-}
-
-func (m *Capabilities) notify(c capability) {
-	for _, cC := range m.changeC {
-		cC <- c
-	}
 }
 
 func (m *Capabilities) SetCapability(id uint8, flags []byte) error {

@@ -947,7 +947,7 @@ func testSendRaw(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, true, false)
+	lsub, err := clients[0].SubscribeChange(lctx, "pss", lmsgC, "receive", topic, true, false)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
