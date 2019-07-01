@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -122,33 +121,50 @@ func TestCapabilitiesAPI(t *testing.T) {
 func TestCapabilitiesNotification(t *testing.T) {
 
 	// Initialize capability
-	caps := NewCapabilities(nil)
+	changeLocalC := make(chan capability)
+	caps := NewCapabilities(changeLocalC)
 
 	rpcSrv := rpc.NewServer()
 	rpcSrv.RegisterName("cap", caps)
 	rpcClient := rpc.DialInProc(rpcSrv)
 
-	changeC := make(chan capability)
+	changeRemoteC := make(chan capability)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sub, err := rpcClient.Subscribe(ctx, "cap", changeC, "subscribeChange")
+	sub, err := rpcClient.Subscribe(ctx, "cap", changeRemoteC, "subscribeChange")
 	if err != nil {
 		t.Fatalf("Capabilities change subscription fail: %v", err)
 	}
 
-	errC := make(chan error)
+	errLocalC := make(chan error)
+	errRemoteC := make(chan error)
 	go func() {
 		i := 0
 		for {
 			select {
-			case c, ok := <-changeC:
+			case c, ok := <-changeRemoteC:
 				if !ok {
-					log.Error("closed")
-					close(errC)
+					close(errRemoteC)
 					return
 				}
 				if !bytes.Equal(c[2:], expects[i]) {
-					errC <- fmt.Errorf("subscribe return fail, got: %v, expected %v", c[2:], expects[i])
+					errRemoteC <- fmt.Errorf("subscribe remote return fail, got: %v, expected %v", c[2:], expects[i])
+				}
+			}
+			i = i + 1
+		}
+	}()
+	go func() {
+		i := 0
+		for {
+			select {
+			case c, ok := <-changeLocalC:
+				if !ok {
+					close(errLocalC)
+					return
+				}
+				if !bytes.Equal(c[2:], expects[i]) {
+					errLocalC <- fmt.Errorf("subscribe local return fail, got: %v, expected %v", c[2:], expects[i])
 				}
 			}
 			i = i + 1
@@ -180,10 +196,15 @@ func TestCapabilitiesNotification(t *testing.T) {
 	}
 
 	sub.Unsubscribe()
-	close(changeC)
-
-	err, ok := <-errC
+	close(changeRemoteC)
+	close(changeLocalC)
+	err, ok := <-errRemoteC
 	if ok {
 		t.Fatal(err)
 	}
+	err, ok = <-errLocalC
+	if ok {
+		t.Fatal(err)
+	}
+
 }
