@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+
+	"github.com/ethersphere/swarm/log"
 )
 
 // TestCapabilitiesString tests the correctness
@@ -34,7 +36,19 @@ func TestCapabilitiesAPI(t *testing.T) {
 
 	// Initialize capability
 	// Set explicitly with builtin bzz value
-	caps := Capabilities{}
+	caps := NewCapabilities()
+	defer caps.Destroy()
+	go func() {
+		for {
+			select {
+			case f, ok := <-caps.changeC:
+				if !ok {
+					return
+				}
+				log.Warn("got change", "c", f)
+			}
+		}
+	}()
 
 	// Register module. Should succeeed
 	err := caps.RegisterCapabilityModule(1, 2)
@@ -80,8 +94,8 @@ func TestCapabilitiesAPI(t *testing.T) {
 
 	// check set correctly
 	expected := []byte{0x01, 0x02}
-	if !bytes.Equal(caps[0][2:], expected) {
-		t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expected, caps[0][2:])
+	if !bytes.Equal(caps.Flags[0][2:], expected) {
+		t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expected, caps.Flags[0][2:])
 	}
 
 	// Consecutive setcapability should only set specified bytes, leave others alone
@@ -90,8 +104,8 @@ func TestCapabilitiesAPI(t *testing.T) {
 		t.Fatalf("SetCapability (2) fail: %v", err)
 	}
 	expected = []byte{0x83, 0x06}
-	if !bytes.Equal(caps[0][2:], expected) {
-		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expected, caps[0][2:])
+	if !bytes.Equal(caps.Flags[0][2:], expected) {
+		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expected, caps.Flags[0][2:])
 	}
 
 	// Removecapability should only remove specified bytes, leave others alone
@@ -100,8 +114,8 @@ func TestCapabilitiesAPI(t *testing.T) {
 		t.Fatalf("RemoveCapability fail: %v", err)
 	}
 	expected = []byte{0x82, 0x04}
-	if !bytes.Equal(caps[0][2:], expected) {
-		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expected, caps[0][2:])
+	if !bytes.Equal(caps.Flags[0][2:], expected) {
+		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expected, caps.Flags[0][2:])
 	}
 
 }

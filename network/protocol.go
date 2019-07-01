@@ -246,7 +246,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			Peer:       protocols.NewPeer(p, rw, spec),
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
-			LightNode:  isLightCapability(handshake.peerAddr.Capabilities[0]), // this is a temporary member kept until kademlia code accommodates Capabilities instead
+			LightNode:  isLightCapability(handshake.peerAddr.Capabilities.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -352,7 +352,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
-	if !isFullCapability(rhs.Addr.Capabilities[0]) && !isLightCapability(rhs.Addr.Capabilities[0]) {
+	if !isFullCapability(rhs.Addr.Capabilities.get(0)) && !isLightCapability(rhs.Addr.Capabilities.get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Addr.Capabilities)
 	}
 	return nil
