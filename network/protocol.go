@@ -109,6 +109,7 @@ type Bzz struct {
 	*Hive
 	NetworkID    uint64
 	LightNode    bool
+	Capabilities Capabilities
 	localAddr    *BzzAddr
 	mtx          sync.Mutex
 	handshakes   map[enode.ID]*HandshakeMsg
@@ -122,13 +123,15 @@ type Bzz struct {
 // * overlay driver
 // * peer store
 func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
+	capabilities := Capabilities{}
 	bzz := &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
-		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr, Capabilities{}},
+		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr, capabilities},
 		handshakes:   make(map[enode.ID]*HandshakeMsg),
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
+		Capabilities: capabilities,
 	}
 
 	if config.BootnodeMode {
@@ -137,9 +140,9 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 	}
 
 	if config.LightNode {
-		bzz.localAddr.Capabilities.Add(newLightCapability())
+		bzz.localAddr.Capabilities.add(newLightCapability())
 	} else {
-		bzz.localAddr.Capabilities.Add(newFullCapability())
+		bzz.localAddr.Capabilities.add(newFullCapability())
 	}
 
 	return bzz
@@ -206,11 +209,13 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 // * hive
 // Bzz implements the node.Service interface
 func (b *Bzz) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "hive",
-		Version:   "3.0",
-		Service:   b.Hive,
-	}}
+	return []rpc.API{
+		{
+			Namespace: "hive",
+			Version:   "3.0",
+			Service:   b.Hive,
+		},
+	}
 }
 
 // RunProtocol is a wrapper for swarm subprotocols

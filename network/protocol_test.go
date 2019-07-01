@@ -50,35 +50,6 @@ func init() {
 	flag.Parse()
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 }
-
-func TestCapabilitiesString(t *testing.T) {
-	addr := RandomAddr()
-
-	// set up capabilities with arbitary content
-	cOne := NewCapability(0, 2)
-	controlFlags := []byte{0x08, 0x2a}
-	cOne.Set(controlFlags)
-	addr.Capabilities.Add(cOne)
-
-	cTwo := NewCapability(127, 3)
-	controlFlags = []byte{0x00, 0x02, 0x6e}
-	cTwo.Set(controlFlags)
-	addr.Capabilities.Add(cTwo)
-
-	controlString := "00:0000100000101010,7f:000000000000001001101110"
-
-	m := HandshakeMsg{
-		Version:   42,
-		NetworkID: 622,
-		Addr:      addr,
-	}
-
-	capstring := fmt.Sprintf("%v", m.Addr.Capabilities)
-	if capstring != controlString {
-		t.Fatalf("capabilities string mismatch, expected: '%s', got '%s'", controlString, capstring)
-	}
-}
-
 func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchange {
 	return []p2ptest.Exchange{
 		{
@@ -110,7 +81,7 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		cap = newFullCapability()
 	}
 	cap.Set(cap)
-	addr.Capabilities.Add(cap)
+	addr.Capabilities.add(cap)
 	msg := &HandshakeMsg{
 		Version:   version,
 		NetworkID: networkId,
@@ -398,9 +369,9 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 
 			nodeCapabilities := Capabilities{}
 			if test.lightNode {
-				nodeCapabilities.Add(newLightCapability())
+				nodeCapabilities.add(newLightCapability())
 			} else {
-				nodeCapabilities.Add(newFullCapability())
+				nodeCapabilities.add(newFullCapability())
 			}
 			select {
 
