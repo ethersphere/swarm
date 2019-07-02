@@ -64,33 +64,20 @@ func (bv *BitVector) Set(i int, v bool) {
 	}
 }
 
-// SetBytes sets all bits in the bitvector that are set in the argument
+// SetBytes modifies all bits in the bitvector that are set in the argument
+//
+// If v is true, it sets all bits in the bitvector that are set in the argument
+// If v is false, it unsets all bites in the bitvector that are set in the argument
 //
 // The argument must be the same as the bitvector length
-func (bv *BitVector) SetBytes(bs []byte) error {
+func (bv *BitVector) SetBytes(bs []byte, v bool) error {
 	if len(bs) != bv.len {
 		return errors.New("invalid length")
 	}
 	for i := 0; i < bv.len*8; i++ {
 		bi := i / 8
 		if bs[bi]&(0x01<<uint(i%8)) > 0 {
-			bv.Set(i, true)
-		}
-	}
-	return nil
-}
-
-// UnsetBytes UNSETS all bits in the bitvector that are set in the argument
-//
-// The argument must be the same as the bitvector length
-func (bv *BitVector) UnsetBytes(bs []byte) error {
-	if len(bs) != bv.len {
-		return errors.New("invalid length")
-	}
-	for i := 0; i < bv.len*8; i++ {
-		bi := i / 8
-		if bs[bi]&(0x01<<uint(i%8)) > 0 {
-			bv.Set(i, false)
+			bv.Set(i, v)
 		}
 	}
 	return nil

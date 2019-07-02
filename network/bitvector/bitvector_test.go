@@ -18,6 +18,7 @@ package bitvector
 
 import "testing"
 
+// TestBitvectorNew checks that enforcements of argument length works in the constructors
 func TestBitvectorNew(t *testing.T) {
 	_, err := New(0)
 	if err != errInvalidLength {
@@ -40,6 +41,7 @@ func TestBitvectorNew(t *testing.T) {
 	}
 }
 
+// TestBitvectorGetSet tests correctness of individual Set and Get commands
 func TestBitvectorGetSet(t *testing.T) {
 	for _, length := range []int{
 		1,
@@ -93,6 +95,7 @@ func TestBitvectorGetSet(t *testing.T) {
 	}
 }
 
+// TestBitvectorNewFromBytesGet tests that bit vector is initialized correctly from underlying byte slice
 func TestBitvectorNewFromBytesGet(t *testing.T) {
 	bv, err := NewFromBytes([]byte{8}, 8)
 	if err != nil {
@@ -103,6 +106,7 @@ func TestBitvectorNewFromBytesGet(t *testing.T) {
 	}
 }
 
+// TestBitVectorString tests that string representation of bit vector is correct
 func TestBitVectorString(t *testing.T) {
 	b := []byte{0xa5, 0x81}
 	expect := "1010010110000001"
@@ -115,7 +119,8 @@ func TestBitVectorString(t *testing.T) {
 	}
 }
 
-func TestBitVectorSetUnsetBytes(t *testing.T) {
+// TestBitVectorSetUnsetBytes tests that setting and unsetting by byte slice modifies the bit vector correctly
+func TestBitVectorSetBytes(t *testing.T) {
 	b := []byte{0xff, 0xff}
 	cb := []byte{0xa5, 0x81}
 	expectUnset := "0101101001111110"
@@ -124,11 +129,11 @@ func TestBitVectorSetUnsetBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bv.UnsetBytes(cb)
+	bv.SetBytes(cb, false)
 	if bv.String() != expectUnset {
 		t.Fatalf("bitvector unset bytes fail: got %s, expect %s", bv.String(), expectUnset)
 	}
-	bv.SetBytes(cb)
+	bv.SetBytes(cb, true)
 	if bv.String() != expectReset {
 		t.Fatalf("bitvector reset bytes fail: got %s, expect %s", bv.String(), expectReset)
 	}
