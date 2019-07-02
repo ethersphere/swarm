@@ -25,7 +25,7 @@ func TestCapabilitiesControl(t *testing.T) {
 	// Initialize capability
 	caps := NewCapabilities(nil)
 
-	// Register module. Should succeeed
+	// Register module. Should succeed
 	err := caps.registerModule(1, 2)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule fail: %v", err)
@@ -152,7 +152,7 @@ func TestCapabilitiesNotifications(t *testing.T) {
 func TestCapabilitiesString(t *testing.T) {
 	caps := Capabilities{}
 
-	// set up capabilities with arbitary content
+	// set up capabilities with arbitrary content
 	cOne := newCapability(0, 2)
 	controlFlags := []byte{0x08, 0x2a}
 	cOne.set(controlFlags)
