@@ -73,7 +73,7 @@ func TestBitvectorGetSet(t *testing.T) {
 		}()
 
 		for i := 0; i < length; i++ {
-			bv.Set(i, true)
+			bv.Set(i)
 			for j := 0; j < length; j++ {
 				if j == i {
 					if !bv.Get(j) {
@@ -86,7 +86,7 @@ func TestBitvectorGetSet(t *testing.T) {
 				}
 			}
 
-			bv.Set(i, false)
+			bv.Unset(i)
 
 			if bv.Get(i) {
 				t.Errorf("element on index %v is not set to false", i)
@@ -129,11 +129,11 @@ func TestBitVectorSetBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bv.SetBytes(cb, false)
+	bv.UnsetBytes(cb)
 	if bv.String() != expectUnset {
 		t.Fatalf("bitvector unset bytes fail: got %s, expect %s", bv.String(), expectUnset)
 	}
-	bv.SetBytes(cb, true)
+	bv.SetBytes(cb)
 	if bv.String() != expectReset {
 		t.Fatalf("bitvector reset bytes fail: got %s, expect %s", bv.String(), expectReset)
 	}
