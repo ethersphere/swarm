@@ -16,10 +16,14 @@
 
 package syncer
 
-import "github.com/ethersphere/swarm/storage"
+import (
+	"fmt"
+
+	"github.com/ethersphere/swarm/storage"
+)
 
 type StreamInfoReq struct {
-	Streams []uint
+	Streams []ID
 }
 
 type StreamInfoRes struct {
@@ -27,14 +31,14 @@ type StreamInfoRes struct {
 }
 
 type StreamDescriptor struct {
-	Name    string
+	Stream  ID
 	Cursor  uint64
 	Bounded bool
 }
 
 type GetRange struct {
 	Ruid      uint
-	Stream    string
+	Stream    ID
 	From      uint64
 	To        uint64 `rlp:nil`
 	BatchSize uint
@@ -69,7 +73,27 @@ type BatchDone struct {
 }
 
 type StreamState struct {
-	Stream  string
+	Stream  ID
 	Code    uint16
 	Message string
+}
+
+// Stream defines a unique stream identifier.
+type ID struct {
+	// Name is used for Client and Server functions identification.
+	Name string
+	// Key is the name of specific stream data.
+	Key string
+}
+
+func NewID(name string, key string) ID {
+	return Stream{
+		Name: name,
+		Key:  key,
+	}
+}
+
+// String return a stream id based on all Stream fields.
+func (s ID) String() string {
+	return fmt.Sprintf("%s|%s", s.Name, s.Key)
 }
