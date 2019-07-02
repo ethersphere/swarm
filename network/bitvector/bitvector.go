@@ -57,6 +57,44 @@ func (bv *BitVector) Set(i int, v bool) {
 	}
 }
 
+func (bv *BitVector) SetBytes(bs []byte) error {
+	if len(bs) != bv.len {
+		return errors.New("invalid length")
+	}
+	for i := 0; i < bv.len*8; i++ {
+		bi := i / 8
+		if bs[bi]&(0x01<<uint(i%8)) > 0 {
+			bv.Set(i, true)
+		}
+	}
+	return nil
+}
+
+func (bv *BitVector) UnsetBytes(bs []byte) error {
+	if len(bs) != bv.len {
+		return errors.New("invalid length")
+	}
+	for i := 0; i < bv.len*8; i++ {
+		bi := i / 8
+		if bs[bi]&(0x01<<uint(i%8)) > 0 {
+			bv.Set(i, false)
+		}
+	}
+	return nil
+}
+
+// String implements Stringer interface
+func (bv *BitVector) String() (s string) {
+	for i := 0; i < bv.len*8; i++ {
+		if bv.Get(i) {
+			s += "1"
+		} else {
+			s += "0"
+		}
+	}
+	return s
+}
+
 func (bv *BitVector) Bytes() []byte {
 	return bv.b
 }
