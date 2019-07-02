@@ -34,13 +34,15 @@ import (
 )
 
 var (
-	capabilitiesFlagRetrieve      = []byte{0x00, 0x01}
-	capabilitiesFlagPush          = []byte{0x00, 0x02}
-	capabilitiesFlagRelayRetrieve = []byte{0x00, 0x10}
-	capabilitiesFlagRelayPush     = []byte{0x00, 0x20}
-	capabilitiesFlagStorer        = []byte{0x80, 0x00}
-	fullCapability                capability
-	lightCapability               capability
+	capabilitiesFlagRetrieve      = []byte{0x00, 0x01} // node retrieves data for itself
+	capabilitiesFlagPush          = []byte{0x00, 0x02} // node pushes own data to network
+	capabilitiesFlagRelayRetrieve = []byte{0x00, 0x10} // node relays retrieve requests for the network
+	capabilitiesFlagRelayPush     = []byte{0x00, 0x20} // node relays push requests for the network
+	capabilitiesFlagStorer        = []byte{0x80, 0x00} // node is part of network storage (sync)
+
+	// temporary presets to emulate the legacy LightNode/full node regime
+	fullCapability  capability
+	lightCapability capability
 )
 
 const (
@@ -78,13 +80,18 @@ func init() {
 	lightCapability = newLightCapability()
 }
 
+// temporary convenience functions for legacy "LightNode"
 func newLightCapability() capability {
 	c := newCapability(0, 2)
 	c.set(capabilitiesFlagRetrieve)
 	c.set(capabilitiesFlagPush)
 	return c
 }
+func isLightCapability(c capability) bool {
+	return bytes.Equal(c, lightCapability)
+}
 
+// temporary convenience functions for legacy "full node"
 func newFullCapability() capability {
 	c := newCapability(0, 2)
 	c.set(capabilitiesFlagRetrieve)
@@ -93,10 +100,6 @@ func newFullCapability() capability {
 	c.set(capabilitiesFlagRelayPush)
 	c.set(capabilitiesFlagStorer)
 	return c
-}
-
-func isLightCapability(c capability) bool {
-	return bytes.Equal(c, lightCapability)
 }
 
 func isFullCapability(c capability) bool {
@@ -109,7 +112,7 @@ type BzzConfig struct {
 	UnderlayAddr []byte // node's underlay address
 	HiveParams   *HiveParams
 	NetworkID    uint64
-	LightNode    bool
+	LightNode    bool // temporarily kept as we still only define light/full on operational level
 	BootnodeMode bool
 }
 
@@ -117,13 +120,12 @@ type BzzConfig struct {
 type Bzz struct {
 	*Hive
 	NetworkID     uint64
-	LightNode     bool
 	localAddr     *BzzAddr
 	mtx           sync.Mutex
 	handshakes    map[enode.ID]*HandshakeMsg
 	streamerSpec  *protocols.Spec
 	streamerRun   func(*BzzPeer) error
-	capabilities  *Capabilities     // capabilities set on the node
+	capabilities  *Capabilities     // capabilities control and state
 	capabilitiesC <-chan capability // reports changes in capabilities
 }
 
@@ -150,7 +152,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		bzz.streamerSpec = nil
 	}
 
-	// set temporary capabilities presets for current notions of "light" and "full" nodes
+	// temporary legacy light/full, as above
 	if config.LightNode {
 		bzz.capabilities.add(newLightCapability())
 	} else {
@@ -219,13 +221,11 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 // * hive
 // Bzz implements the node.Service interface
 func (b *Bzz) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "hive",
-			Version:   "3.0",
-			Service:   b.Hive,
-		},
-	}
+	return []rpc.API{{
+		Namespace: "hive",
+		Version:   "3.0",
+		Service:   b.Hive,
+	}}
 }
 
 // RunProtocol is a wrapper for swarm subprotocols
@@ -335,6 +335,7 @@ func (p *BzzPeer) ID() enode.ID {
 * Version: 8 byte integer version of the protocol
 * NetworkID: 8 byte integer network identifier
 * Addr: the address advertised by the node including underlay and overlay connecctions
+* Capabilities: the capabilities bitvector
 */
 type HandshakeMsg struct {
 	Version      uint64
@@ -352,7 +353,7 @@ type HandshakeMsg struct {
 
 // String pretty prints the handshake
 func (bh *HandshakeMsg) String() string {
-	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, peerAddr: %v", bh.Version, bh.NetworkID, bh.Addr, bh.peerAddr)
+	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, peerAddr: %v, caps: %s", bh.Version, bh.NetworkID, bh.Addr, bh.peerAddr, bh.Capabilities)
 }
 
 // Perform initiates the handshake and validates the remote handshake message
@@ -364,6 +365,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
+	// temporary check for valid capability settings, legacy full/light
 	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}

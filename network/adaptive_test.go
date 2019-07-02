@@ -19,30 +19,7 @@ var (
 	}
 )
 
-// TestCapabilitiesString tests the correctness
-func TestCapabilitiesString(t *testing.T) {
-	caps := Capabilities{}
-
-	// set up capabilities with arbitary content
-	cOne := newCapability(0, 2)
-	controlFlags := []byte{0x08, 0x2a}
-	cOne.set(controlFlags)
-	caps.add(cOne)
-
-	cTwo := newCapability(127, 3)
-	controlFlags = []byte{0x00, 0x02, 0x6e}
-	cTwo.set(controlFlags)
-	caps.add(cTwo)
-
-	controlString := "00:0000100000101010,7f:000000000000001001101110"
-
-	capstring := fmt.Sprintf("%v", caps)
-	if capstring != controlString {
-		t.Fatalf("capabilities string mismatch, expected: '%s', got '%s'", controlString, capstring)
-	}
-}
-
-// TestCapabilitiesAPI tests that the API alters the capabilities as they should, and throws errors when it should
+// TestCapabilitiesControl tests that the methods for manipulating the capabilities bitvectors set values correctly and return errors when they should
 func TestCapabilitiesControl(t *testing.T) {
 
 	// Initialize capability
@@ -89,38 +66,41 @@ func TestCapabilitiesControl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetCapability (1) fail: %v", err)
 	}
-
-	// check set correctly
+	// verify value
 	if !bytes.Equal(caps.Flags[0][2:], expects[0]) {
 		t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], caps.Flags[0][2:])
 	}
 
-	// Consecutive setcapability should only set specified bytes, leave others alone
+	// Consecutive set should only set specified bytes, leave others alone
 	err = caps.set(1, changes[1])
 	if err != nil {
 		t.Fatalf("SetCapability (2) fail: %v", err)
 	}
+	// verify value
 	if !bytes.Equal(caps.Flags[0][2:], expects[1]) {
 		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expects[1], caps.Flags[0][2:])
 	}
 
-	// Removecapability should only remove specified bytes, leave others alone
+	// Unset should only remove specified bytes, leave others alone
 	err = caps.unset(1, changes[2])
 	if err != nil {
 		t.Fatalf("RemoveCapability fail: %v", err)
 	}
+	// verify value
 	if !bytes.Equal(caps.Flags[0][2:], expects[2]) {
 		t.Fatalf("Expected capability flags after second SetCapability %v, got: %v", expects[2], caps.Flags[0][2:])
 	}
 
 }
 
+// TestCapabilitiesNotifications tests that changes in capabilities bitvector values are correctly reported through the internal notification channel
 func TestCapabilitiesNotifications(t *testing.T) {
 
 	// Initialize capability
 	changeC := make(chan capability)
 	caps := NewCapabilities(changeC)
 
+	// Spawn goroutine to collect the notifications
 	errC := make(chan error)
 	go func() {
 		i := 0
@@ -139,33 +119,54 @@ func TestCapabilitiesNotifications(t *testing.T) {
 		}
 	}()
 
-	// register capability
+	// We use same test vector as TestCapabilitiesControl
 	err := caps.registerModule(1, 2)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule fail: %v", err)
 	}
 
-	// Correct flag byte and capability id should succeed
 	err = caps.set(1, changes[0])
 	if err != nil {
 		t.Fatalf("SetCapability (1) fail: %v", err)
 	}
 
-	// Consecutive setcapability should only set specified bytes, leave others alone
 	err = caps.set(1, changes[1])
 	if err != nil {
 		t.Fatalf("SetCapability (2) fail: %v", err)
 	}
 
-	// Removecapability should only remove specified bytes, leave others alone
 	err = caps.unset(1, changes[2])
 	if err != nil {
 		t.Fatalf("RemoveCapability fail: %v", err)
 	}
 
+	// check if notify listener recorded an anomaly and fail if it did
 	close(changeC)
 	err, ok := <-errC
 	if ok {
 		t.Fatal(err)
+	}
+}
+
+// TestCapabilitiesString tests the correctness of the string representation of the Capabilities collection
+func TestCapabilitiesString(t *testing.T) {
+	caps := Capabilities{}
+
+	// set up capabilities with arbitary content
+	cOne := newCapability(0, 2)
+	controlFlags := []byte{0x08, 0x2a}
+	cOne.set(controlFlags)
+	caps.add(cOne)
+
+	cTwo := newCapability(127, 3)
+	controlFlags = []byte{0x00, 0x02, 0x6e}
+	cTwo.set(controlFlags)
+	caps.add(cTwo)
+
+	controlString := "00:0000100000101010,7f:000000000000001001101110"
+
+	capstring := fmt.Sprintf("%v", caps)
+	if capstring != controlString {
+		t.Fatalf("capabilities string mismatch, expected: '%s', got '%s'", controlString, capstring)
 	}
 }

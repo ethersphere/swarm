@@ -287,6 +287,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	}
 }
 
+// Checks the temporary checkHandshake criteria for legacy full/light capabilities presets
 func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	lightNode := false
 	prvkey, err := crypto.GenerateKey()
