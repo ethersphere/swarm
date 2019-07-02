@@ -1,14 +1,11 @@
 package network
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -18,47 +15,23 @@ import (
 */
 
 type Capabilities struct {
-	Flags         []capability
-	changeC       chan<- capability
-	notifiers     map[rpc.ID]*rpc.Notifier
-	lastChangeCId uint64
-	mu            sync.RWMutex
+	Flags   []capability
+	changeC chan<- capability
+	mu      sync.Mutex
 }
-
-type CapabilitiesMsg Capabilities
 
 func NewCapabilities(changeC chan<- capability) *Capabilities {
 	return &Capabilities{
-		changeC:   changeC,
-		notifiers: make(map[rpc.ID]*rpc.Notifier),
+		changeC: changeC,
 	}
 }
 
-func (m Capabilities) SubscribeChange(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, ok := rpc.NotifierFromContext(ctx)
-	if !ok {
-		return nil, errors.New("notifications not supported")
+func (c Capabilities) String() string {
+	var caps []string
+	for _, cap := range c.Flags {
+		caps = append(caps, fmt.Sprintf("%02x:%v", cap[0], pot.ToBin(cap[2:])))
 	}
-	sub := notifier.CreateSubscription()
-	m.notifiers[sub.ID] = notifier
-	go func(sub *rpc.Subscription, notifier *rpc.Notifier) {
-		select {
-		case err := <-sub.Err():
-			log.Warn("rpc capabilities subscription end", "err", err)
-		case <-notifier.Closed():
-			log.Warn("rpc capabilities notifier closed")
-		}
-	}(sub, notifier)
-	return sub, nil
-}
-
-func (m Capabilities) notify(c capability) {
-	if m.changeC != nil {
-		m.changeC <- c
-	}
-	for id, notifier := range m.notifiers {
-		notifier.Notify(id, c)
-	}
+	return strings.Join(caps, ",")
 }
 
 func (m Capabilities) destroy() {
@@ -67,78 +40,72 @@ func (m Capabilities) destroy() {
 	}
 }
 
-func (m Capabilities) toMsg() CapabilitiesMsg {
-	return CapabilitiesMsg(m)
-}
-
-func (m Capabilities) String() string {
-	var caps []string
-	for _, c := range m.Flags {
-		caps = append(caps, fmt.Sprintf("%02x:%v", c[0], pot.ToBin(c[2:])))
+func (m Capabilities) notify(c capability) {
+	if m.changeC != nil {
+		m.changeC <- c
 	}
-	return strings.Join(caps, ",")
 }
 
-func (m Capabilities) get(id uint8) capability {
-	if len(m.Flags) == 0 {
+func (c Capabilities) get(id uint8) capability {
+	if len(c.Flags) == 0 {
 		return nil
 	}
-	for _, cs := range m.Flags {
-		if cs[0] == id {
-			return cs
+	for _, caps := range c.Flags {
+		if caps[0] == id {
+			return caps
 		}
 	}
 	return nil
 }
 
-func (m *Capabilities) add(c capability) {
-	m.Flags = append(m.Flags, c)
+func (c *Capabilities) add(cap capability) {
+	c.Flags = append(c.Flags, cap)
 }
 
-func (m *Capabilities) SetCapability(id uint8, flags []byte) error {
+func (c *Capabilities) set(id uint8, flags []byte) error {
 	if len(flags) == 0 {
 		return errors.New("flag bytes cannot be empty")
 	}
-	c := m.get(id)
-	if c == nil {
+	cap := c.get(id)
+	if cap == nil {
 		return fmt.Errorf("capability id %d not registered", id)
 	}
-	m.mu.Lock()
-	err := c.set(flags)
-	ccopy := newCapability(c[0], c[1])
-	ccopy.set(c[2:])
-	m.mu.Unlock()
+	c.mu.Lock()
+	err := cap.set(flags)
+	ccopy := newCapability(cap[0], cap[1])
+	ccopy.set(cap[2:])
+	c.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	m.notify(ccopy)
+	c.notify(ccopy)
 	return nil
 }
 
-func (m *Capabilities) RemoveCapability(id uint8, flags []byte) error {
-	c := m.get(id)
-	if c == nil {
+func (c *Capabilities) unset(id uint8, flags []byte) error {
+	cap := c.get(id)
+	if cap == nil {
 		return fmt.Errorf("capability id %d not registered", id)
 	}
-	m.mu.Lock()
-	err := c.unset(flags)
-	ccopy := newCapability(c[0], c[1])
-	ccopy.set(c[2:])
-	m.mu.Unlock()
+	c.mu.Lock()
+	err := cap.unset(flags)
+	ccopy := newCapability(cap[0], cap[1])
+	ccopy.set(cap[2:])
+	c.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	m.notify(ccopy)
+	c.notify(ccopy)
 	return nil
 }
 
-func (m *Capabilities) RegisterCapabilityModule(id uint8, length uint8) error {
-	c := m.get(id)
-	if c != nil {
+func (c *Capabilities) registerModule(id uint8, length uint8) error {
+	cap := c.get(id)
+	if cap != nil {
 		return fmt.Errorf("capability %d already registered", id)
 	}
-	c = newCapability(id, length)
-	m.add(c)
+	cap = newCapability(id, length)
+	c.add(cap)
 	return nil
 }
 

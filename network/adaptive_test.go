@@ -2,11 +2,8 @@ package network
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -46,49 +43,49 @@ func TestCapabilitiesString(t *testing.T) {
 }
 
 // TestCapabilitiesAPI tests that the API alters the capabilities as they should, and throws errors when it should
-func TestCapabilitiesAPI(t *testing.T) {
+func TestCapabilitiesControl(t *testing.T) {
 
 	// Initialize capability
 	caps := NewCapabilities(nil)
 
 	// Register module. Should succeeed
-	err := caps.RegisterCapabilityModule(1, 2)
+	err := caps.registerModule(1, 2)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule fail: %v", err)
 	}
 
 	// Fail if capability id already exists
-	err = caps.RegisterCapabilityModule(1, 1)
+	err = caps.registerModule(1, 1)
 	if err == nil {
 		t.Fatalf("Expected RegisterCapabilityModule call with existing id to fail")
 	}
 
 	// Move than one capabilities flag vector should be possible
-	err = caps.RegisterCapabilityModule(2, 1)
+	err = caps.registerModule(2, 1)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule (second) fail: %v", err)
 	}
 
 	// Set on non-existing capability should fail
-	err = caps.SetCapability(0, []byte{0x12})
+	err = caps.set(0, []byte{0x12})
 	if err == nil {
 		t.Fatalf("Expected SetCapability call with non-existing id to fail")
 	}
 
 	// Set on non-existing capability should fail
-	err = caps.RemoveCapability(0, []byte{0x12})
+	err = caps.unset(0, []byte{0x12})
 	if err == nil {
 		t.Fatalf("Expected RemoveCapability call with non-existing id to fail")
 	}
 
 	// Wrong flag byte length should fail
-	err = caps.SetCapability(1, []byte{0x12, 0x34, 0x56})
+	err = caps.set(1, []byte{0x12, 0x34, 0x56})
 	if err == nil {
 		t.Fatalf("Expected SetCapability call with wrong length id to fail")
 	}
 
 	// Correct flag byte and capability id should succeed
-	err = caps.SetCapability(1, changes[0])
+	err = caps.set(1, changes[0])
 	if err != nil {
 		t.Fatalf("SetCapability (1) fail: %v", err)
 	}
@@ -99,7 +96,7 @@ func TestCapabilitiesAPI(t *testing.T) {
 	}
 
 	// Consecutive setcapability should only set specified bytes, leave others alone
-	err = caps.SetCapability(1, changes[1])
+	err = caps.set(1, changes[1])
 	if err != nil {
 		t.Fatalf("SetCapability (2) fail: %v", err)
 	}
@@ -108,7 +105,7 @@ func TestCapabilitiesAPI(t *testing.T) {
 	}
 
 	// Removecapability should only remove specified bytes, leave others alone
-	err = caps.RemoveCapability(1, changes[2])
+	err = caps.unset(1, changes[2])
 	if err != nil {
 		t.Fatalf("RemoveCapability fail: %v", err)
 	}
@@ -118,53 +115,24 @@ func TestCapabilitiesAPI(t *testing.T) {
 
 }
 
-func TestCapabilitiesNotification(t *testing.T) {
+func TestCapabilitiesNotifications(t *testing.T) {
 
 	// Initialize capability
-	changeLocalC := make(chan capability)
-	caps := NewCapabilities(changeLocalC)
+	changeC := make(chan capability)
+	caps := NewCapabilities(changeC)
 
-	rpcSrv := rpc.NewServer()
-	rpcSrv.RegisterName("cap", caps)
-	rpcClient := rpc.DialInProc(rpcSrv)
-
-	changeRemoteC := make(chan capability)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	sub, err := rpcClient.Subscribe(ctx, "cap", changeRemoteC, "subscribeChange")
-	if err != nil {
-		t.Fatalf("Capabilities change subscription fail: %v", err)
-	}
-
-	errLocalC := make(chan error)
-	errRemoteC := make(chan error)
+	errC := make(chan error)
 	go func() {
 		i := 0
 		for {
 			select {
-			case c, ok := <-changeRemoteC:
+			case c, ok := <-changeC:
 				if !ok {
-					close(errRemoteC)
+					close(errC)
 					return
 				}
 				if !bytes.Equal(c[2:], expects[i]) {
-					errRemoteC <- fmt.Errorf("subscribe remote return fail, got: %v, expected %v", c[2:], expects[i])
-				}
-			}
-			i = i + 1
-		}
-	}()
-	go func() {
-		i := 0
-		for {
-			select {
-			case c, ok := <-changeLocalC:
-				if !ok {
-					close(errLocalC)
-					return
-				}
-				if !bytes.Equal(c[2:], expects[i]) {
-					errLocalC <- fmt.Errorf("subscribe local return fail, got: %v, expected %v", c[2:], expects[i])
+					errC <- fmt.Errorf("subscribe local return fail, got: %v, expected %v", c[2:], expects[i])
 				}
 			}
 			i = i + 1
@@ -172,39 +140,32 @@ func TestCapabilitiesNotification(t *testing.T) {
 	}()
 
 	// register capability
-	err = rpcClient.Call(nil, "cap_registerCapabilityModule", 1, 2)
+	err := caps.registerModule(1, 2)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule fail: %v", err)
 	}
 
 	// Correct flag byte and capability id should succeed
-	err = caps.SetCapability(1, changes[0])
+	err = caps.set(1, changes[0])
 	if err != nil {
 		t.Fatalf("SetCapability (1) fail: %v", err)
 	}
 
 	// Consecutive setcapability should only set specified bytes, leave others alone
-	err = caps.SetCapability(1, changes[1])
+	err = caps.set(1, changes[1])
 	if err != nil {
 		t.Fatalf("SetCapability (2) fail: %v", err)
 	}
 
 	// Removecapability should only remove specified bytes, leave others alone
-	err = caps.RemoveCapability(1, changes[2])
+	err = caps.unset(1, changes[2])
 	if err != nil {
 		t.Fatalf("RemoveCapability fail: %v", err)
 	}
 
-	sub.Unsubscribe()
-	close(changeRemoteC)
-	close(changeLocalC)
-	err, ok := <-errRemoteC
+	close(changeC)
+	err, ok := <-errC
 	if ok {
 		t.Fatal(err)
 	}
-	err, ok = <-errLocalC
-	if ok {
-		t.Fatal(err)
-	}
-
 }
