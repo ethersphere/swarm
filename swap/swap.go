@@ -17,15 +17,32 @@
 package swap
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/contracts/chequebook"
+	"github.com/ethersphere/swarm/contracts/chequebook/contract"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+)
+
+const (
+	chequebookDeployRetries = 5
+	chequebookDeployDelay   = 1 * time.Second // delay between retries
+	defaultCashInDelay      = uint64(0)
 )
 
 // SwAP Swarm Accounting Protocol
@@ -37,15 +54,36 @@ type Swap struct {
 	lock       sync.RWMutex       //lock the balances
 	balances   map[enode.ID]int64 //map of balances for each peer
 	service    *SwapService
+	owner      *Owner
+}
+
+type Owner struct {
+	Contract   common.Address // address of chequebook contract
+	privateKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
+	address    common.Address
+	chbook     *chequebook.Chequebook
+	lock       sync.RWMutex
 }
 
 // New - swap constructor
-func New(stateStore state.Store) (swap *Swap) {
+func New(stateStore state.Store, contract common.Address, prvkey *ecdsa.PrivateKey) (swap *Swap) {
 	swap = &Swap{
 		stateStore: stateStore,
 		balances:   make(map[enode.ID]int64),
 	}
+	swap.owner = swap.initOwner(contract, prvkey)
 	return
+}
+
+func (s *Swap) initOwner(contract common.Address, prvkey *ecdsa.PrivateKey) *Owner {
+	pubkey := &prvkey.PublicKey
+	return &Owner{
+		Contract:   contract,
+		privateKey: prvkey,
+		publicKey:  pubkey,
+		address:    crypto.PubkeyToAddress(*pubkey),
+	}
 }
 
 //Swap implements the protocols.Balance interface
@@ -103,4 +141,88 @@ func (s *Swap) resetBalance(peer *protocols.Peer) {
 	defer s.lock.Unlock()
 
 	s.balances[peer.ID()] = 0
+}
+
+// SetChequebook wraps the chequebook initialiser and sets up autoDeposit to cover spending.
+func (s *Swap) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+
+	valid, err := chequebook.ValidateCode(ctx, backend, s.owner.Contract)
+	if err != nil {
+		return err
+	} else if valid {
+		return s.newChequebookFromContract(path, backend)
+	}
+	return s.deployChequebook(ctx, backend, path)
+}
+
+// deployChequebook deploys the localProfile Chequebook
+func (s *Swap) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	//TODO: opts.Value = lp.AutoDepositBuffer
+	opts.Context = ctx
+
+	log.Info(fmt.Sprintf("Deploying new chequebook (owner: %v)", opts.From.Hex()))
+	address, err := deployChequebookLoop(opts, backend)
+	if err != nil {
+		log.Error(fmt.Sprintf("unable to deploy new chequebook: %v", err))
+		return err
+	}
+	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", address.Hex(), opts.From.Hex()))
+
+	// need to save config at this point
+	s.owner.lock.Lock()
+	s.owner.Contract = address
+	err = s.newChequebookFromContract(path, backend)
+	s.owner.lock.Unlock()
+	if err != nil {
+		log.Warn(fmt.Sprintf("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err))
+	}
+	return err
+}
+
+// deployChequebookLoop repeatedly tries to deploy a chequebook.
+func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (addr common.Address, err error) {
+	var tx *types.Transaction
+	for try := 0; try < chequebookDeployRetries; try++ {
+		if try > 0 {
+			time.Sleep(chequebookDeployDelay)
+		}
+		if _, tx, _, err = contract.DeployChequebook(opts, backend); err != nil {
+			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
+			continue
+		}
+		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
+			log.Warn(fmt.Sprintf("chequebook deploy error (try %d): %v", try, err))
+			continue
+		}
+		return addr, nil
+	}
+	return addr, err
+}
+
+// newChequebookFromContract - initialise the chequebook from a persisted json file or create a new one
+// caller holds the lock
+func (s *Swap) newChequebookFromContract(path string, backend chequebook.Backend) error {
+	hexkey := common.Bytes2Hex(s.owner.Contract.Bytes())
+	err := os.MkdirAll(filepath.Join(path, "chequebooks"), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create directory for chequebooks: %v", err)
+	}
+
+	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
+	s.owner.chbook, err = chequebook.LoadChequebook(chbookpath, s.owner.privateKey, backend, true)
+
+	if err != nil {
+		s.owner.chbook, err = chequebook.NewChequebook(chbookpath, s.owner.Contract, s.owner.privateKey, backend)
+		if err != nil {
+			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", s.owner.address.Hex(), err))
+			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", s.owner.address.Hex(), err)
+		}
+	}
+
+	//TODO: initial topup contract
+	//TODO: automatic topup
+	//TODO: external topup?
+
+	return nil
 }

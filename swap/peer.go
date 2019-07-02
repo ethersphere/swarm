@@ -18,7 +18,9 @@ package swap
 
 import (
 	"context"
+	"encoding/binary"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -53,9 +55,30 @@ func (sp *SwapPeer) handleMsg(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{}) error {
+func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (err error) {
 	// emit cheque, send to peer
-	return sp.Send(ctx, &EmitChequeMsg{})
+	//var prvKey PrvKey
+	cheque := &Cheque{
+		Serial:  sp.getLastSerial(),
+		Amount:  sp.getSettleAmount(),
+		Timeout: defaultCashInDelay,
+	}
+	cheque.Sig, err = sp.signContent(cheque)
+	if err != nil {
+		return err
+	}
+	return sp.Send(ctx, msg)
+}
+
+func (sp *SwapPeer) signContent(cheque *Cheque) ([]byte, error) {
+	serialBytes := make([]byte, 32)
+	amountBytes := make([]byte, 32)
+	input := append(cheque.Contract.Bytes(), cheque.Beneficiary.Bytes()...)
+	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
+	binary.LittleEndian.PutUint64(serialBytes, cheque.Serial)
+	input = append(input, amountBytes[:]...)
+	input = append(input, serialBytes[:]...)
+	return crypto.Sign(crypto.Keccak256(input), sp.swap.owner.privateKey)
 }
 
 func (sp *SwapPeer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error {
@@ -72,4 +95,12 @@ func (sp *SwapPeer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 
 func (sp *SwapPeer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
 	return nil
+}
+
+func (sp *SwapPeer) getLastSerial() uint64 {
+	return 0
+}
+
+func (sp *SwapPeer) getSettleAmount() uint64 {
+	return 0
 }

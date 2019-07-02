@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -165,7 +167,11 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 	if err2 != nil {
 		t.Fatal(err2)
 	}
-	swap := New(stateStore)
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	swap := New(stateStore, common.Address{}, key)
 	return swap, dir
 }
 

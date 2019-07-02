@@ -99,15 +99,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, fmt.Errorf("empty bzz key")
 	}
 
-	var backend chequebook.Backend
-	if config.SwapAPI != "" && config.SwapEnabled {
-		log.Info("connecting to SWAP API", "url", config.SwapAPI)
-		backend, err = ethclient.Dial(config.SwapAPI)
-		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapAPI, err)
-		}
-	}
-
 	self = &Swarm{
 		config:       config,
 		backend:      backend,
@@ -115,6 +106,22 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		cleanupFuncs: []func() error{},
 	}
 	log.Debug("Setting up Swarm service components")
+
+	var backend chequebook.Backend
+	if config.SwapAPI != "" && config.SwapEnabled {
+		log.Info("connecting to SWAP API", "url", config.SwapAPI)
+		backend, err = ethclient.Dial(config.SwapAPI)
+		if err != nil {
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapAPI, err)
+		}
+
+		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
+		if err != nil {
+			return nil, err
+		}
+		self.swap = swap.New(balancesStore, self.privateKey)
+		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
+	}
 
 	config.HiveParams.Discovery = true
 
@@ -184,15 +191,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.netStore.RemoteGet = delivery.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
-
-	if config.SwapEnabled {
-		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
-		if err != nil {
-			return nil, err
-		}
-		self.swap = swap.New(balancesStore)
-		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
-	}
 
 	syncing := stream.SyncingAutoSubscribe
 	if !config.SyncEnabled || config.LightNodeEnabled {

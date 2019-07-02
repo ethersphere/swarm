@@ -16,7 +16,23 @@
 
 package swap
 
-type ChequeRequestMsg struct{}
-type EmitChequeMsg struct{}
+import (
+	"github.com/ethereum/go-ethereum/common"
+)
+
+type Cheque struct {
+	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
+	Beneficiary common.Address
+	Serial      uint64 // cumulative amount of all funds sent
+	Amount      uint64 // cumulative amount of all funds sent
+	Timeout     uint64
+	Sig         []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
+}
+
+type ChequeRequestMsg struct {
+}
+type EmitChequeMsg struct {
+	Cheque Cheque
+}
 type ErrorMsg struct{}
 type ConfirmMsg struct{}

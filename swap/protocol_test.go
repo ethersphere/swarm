@@ -40,7 +40,9 @@ func TestRequestCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ss := &SwapService{}
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+	ss := &SwapService{swap: swap}
 
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 2, ss.run)
 
