@@ -353,19 +353,38 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 
 func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	//an account is mandatory
-	if bzzaccount == "" {
-		utils.Fatalf(SwarmErrNoBZZAccount)
-	}
-	// Try to load the arg as a hex key file.
-	if key, err := crypto.LoadECDSA(bzzaccount); err == nil {
-		log.Info("Swarm account key loaded", "address", crypto.PubkeyToAddress(key.PublicKey))
-		return key
-	}
-	// Otherwise try getting it from the keystore.
 	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
+	if bzzaccount == "" {
+		// Check the local keystore for existing accounts
+		accounts := ks.Accounts()
+		if len(accounts) > 0 {
+			// Default to the first account if none was set
+			bzzaccount = accounts[0].Address.Hex()
+		} else {
+			// Create an account
+			account, err := ks.NewAccount("")
+			if err != nil {
+				utils.Fatalf("failed creating an account: %v", err)
+			}
+			bzzaccount = account.Address.Hex()
+		}
+	} else {
+		// Try to load the arg as a hex key file.
+		if key, err := crypto.LoadECDSA(bzzaccount); err == nil {
+			log.Info("Swarm account key loaded", "address", crypto.PubkeyToAddress(key.PublicKey))
+			return key
+		}
+	}
+	// Otherwise try getting it from the keystore
+	var passwords []string
+	if path := ctx.GlobalString(utils.PasswordFileFlag.Name); path == "" {
+		passwords = []string{""}
+	} else {
+		passwords = utils.MakePasswordList(ctx)
+	}
+	return decryptStoreAccount(ks, bzzaccount, passwords)
 }
 
 // getPrivKey returns the private key of the specified bzzaccount
