@@ -22,15 +22,20 @@ import (
 
 var errInvalidLength = errors.New("invalid length")
 
+// BitVector is a convenience object for manipulating and representing bit vectors
 type BitVector struct {
 	len int
 	b   []byte
 }
 
+// New creates a new bit vector with the given length
 func New(l int) (bv *BitVector, err error) {
 	return NewFromBytes(make([]byte, l/8+1), l)
 }
 
+// NewFromBytes creates a bit vector from the passed byte slice.
+//
+// Leftmost bit in byte slice becomes leftmost bit in bit vector
 func NewFromBytes(b []byte, l int) (bv *BitVector, err error) {
 	if l <= 0 {
 		return nil, errInvalidLength
@@ -44,11 +49,13 @@ func NewFromBytes(b []byte, l int) (bv *BitVector, err error) {
 	}, nil
 }
 
+// Get gets the corresponding bit, counted from left to right
 func (bv *BitVector) Get(i int) bool {
 	bi := i / 8
 	return bv.b[bi]&(0x1<<uint(i%8)) != 0
 }
 
+// Set sets the corresponding bit, counted from left to right, to the corresponding state of v
 func (bv *BitVector) Set(i int, v bool) {
 	bi := i / 8
 	cv := bv.Get(i)
@@ -57,6 +64,9 @@ func (bv *BitVector) Set(i int, v bool) {
 	}
 }
 
+// SetBytes sets all bits in the bitvector that are set in the argument
+//
+// The argument must be the same as the bitvector length
 func (bv *BitVector) SetBytes(bs []byte) error {
 	if len(bs) != bv.len {
 		return errors.New("invalid length")
@@ -70,6 +80,9 @@ func (bv *BitVector) SetBytes(bs []byte) error {
 	return nil
 }
 
+// UnsetBytes UNSETS all bits in the bitvector that are set in the argument
+//
+// The argument must be the same as the bitvector length
 func (bv *BitVector) UnsetBytes(bs []byte) error {
 	if len(bs) != bv.len {
 		return errors.New("invalid length")
@@ -95,6 +108,7 @@ func (bv *BitVector) String() (s string) {
 	return s
 }
 
+// Bytes retrieves the underlying bytes of the bitvector
 func (bv *BitVector) Bytes() []byte {
 	return bv.b
 }
