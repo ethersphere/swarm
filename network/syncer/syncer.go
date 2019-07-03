@@ -58,20 +58,22 @@ type SlipStream struct {
 	mtx            sync.RWMutex
 	intervalsStore state.Store //every protocol would make use of this
 	peers          map[enode.ID]*Peer
+	kad            *network.Kademlia
 
 	providers map[string]StreamProvider
-	spec      *protocols.Spec   //this protocol's spec
-	balance   protocols.Balance //implements protocols.Balance, for accounting
-	prices    protocols.Prices  //implements protocols.Prices, provides prices to accounting
+
+	spec    *protocols.Spec   //this protocol's spec
+	balance protocols.Balance //implements protocols.Balance, for accounting
+	prices  protocols.Prices  //implements protocols.Prices, provides prices to accounting
 
 	quit chan struct{} // terminates registry goroutines
 }
 
-func NewSlipStream(intervalsStore state.Store, providers ...StreamProvider) *SlipStream {
+func NewSlipStream(intervalsStore state.Store, kad *network.Kademlia, providers ...StreamProvider) *SlipStream {
 	slipStream := &SlipStream{
 		intervalsStore: intervalsStore,
-		peers:          make(map[enode.ID]*Peer),
 		kad:            kad,
+		peers:          make(map[enode.ID]*Peer),
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
 	}
@@ -114,7 +116,7 @@ func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	s.kad.On(np)
 	defer s.kad.Off(np)
 
-	sp := NewPeer(bp, s.providers)
+	sp := NewPeer(bp, s.intervalsStore, s.providers)
 	s.addPeer(sp)
 	defer s.removePeer(sp)
 	go sp.InitProviders()

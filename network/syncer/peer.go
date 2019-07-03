@@ -34,7 +34,6 @@ import (
 	"github.com/ethersphere/swarm/network/stream/intervals"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
-	"k8s.io/kubernetes/pkg/kubelet/util/store"
 )
 
 var ErrEmptyBatch = errors.New("empty batch")
@@ -60,7 +59,6 @@ type Want struct {
 	hashes    map[string]bool
 	bv        *bitvector.BitVector
 	requested time.Time
-	wg        *sync.WaitGroup
 	remaining uint64
 	chunks    chan chunk.Chunk
 	done      chan error
@@ -80,7 +78,7 @@ type Peer struct {
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer, i store.Store, providers map[string]StreamProvider) *Peer {
+func NewPeer(peer *network.BzzPeer, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
 		BzzPeer:        peer,
 		providers:      providers,
@@ -194,9 +192,9 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			if s.Cursor > 0 {
 				// fetch everything from beginning till  s.Cursor
 				go func(stream ID, cursor uint64) {
-					err := p.requestStreamRange(ctx, s, cursor)
+					err := p.requestStreamRange(ctx, s.Stream, cursor)
 					if err != nil {
-						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", name, "err", err)
+						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
 						p.Drop()
 					}
 				}(s.Stream, s.Cursor)
@@ -223,25 +221,19 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 			return err
 		}
 		from, to := interval.Next(cursor)
-		log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor, "from", from, "to", to)
+		log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "from", from, "to", to)
 		if from > cursor {
-			log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor)
+			log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
 			// stream finished. quit
 			return nil
 		}
-		//if to > cursor {
-		//log.Debug("adjusting cursor")
-		//to = cursor
-		//}
-		//if to == 0 {
-		//// todo: Next() should take a ceiling argument. it returns 0 if there's no upper bound in the interval (i.e. HEAD)
-		//to = cursor
-		//}
+
 		if from == 0 {
 			panic("no")
 		}
+
 		if to-from > BatchSize-1 {
-			log.Debug("limiting TO to HistoricalStreamPageSize", "to", to, "new to", from+HistoricalStreamPageSize)
+			log.Debug("limiting TO to HistoricalStreamPageSize", "to", to, "new to", from+BatchSize)
 			to = from + BatchSize - 1 //because the intervals are INCLUSIVE, it means we get also FROM and TO
 		}
 
@@ -267,15 +259,14 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 
 			hashes:    make(map[string]bool),
 			requested: time.Now(),
-			wg:        &sync.WaitGroup{},
 		}
 
 		p.openWants[w.ruid] = w
 		return nil
-
 	} else {
 		//got a message for an unsupported provider
 	}
+	return nil
 }
 
 // handleGetRange is handled by the SERVER and sends in response an OfferedHashes message
@@ -407,7 +398,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			p.Drop()
 		}
 		log.Debug("adding interval", "f", w.from, "t", w.to, "key", peerIntervalKey)
-		err = p.addInterval(provider, w.from, w.to, peerIntervalKey)
+		err = p.addInterval(w.from, w.to, peerIntervalKey)
 		if err != nil {
 			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
 		}
@@ -438,7 +429,7 @@ func (p *Peer) addInterval(start, end uint64, peerStreamKey string) (err error) 
 }
 
 func (p *Peer) nextInterval(peerStreamKey string, ceil uint64) (start, end uint64, err error) {
-	p.mtx.RLock()
+	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
 	i := &intervals.Intervals{}
@@ -459,7 +450,7 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 	case state.ErrNotFound:
 		// key interval values are ALWAYS > 0
 		i = intervals.NewIntervals(1)
-		if err := p.syncer.intervalsStore.Put(key, i); err != nil {
+		if err := p.intervalsStore.Put(key, i); err != nil {
 			return nil, err
 		}
 	default:
@@ -487,7 +478,7 @@ func (p *Peer) sealBatch(provider StreamProvider, ruid uint) <-chan error {
 				//}
 				go func() {
 					ctx := context.TODO()
-					seen, err := provider.Put(ctx, c.Address(), storage.NewChunk(c.Address(), c.Data()))
+					seen, err := provider.Put(ctx, c.Address(), c.Data())
 					if err != nil {
 						if err == storage.ErrChunkInvalid {
 							p.Drop()
@@ -613,7 +604,7 @@ func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
 }
 
 func (p *Peer) collectBatch(ctx context.Context, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, err error) {
-	log.Debug("collectBatch", "peer", p.ID(), "bin", bin, "from", from, "to", to)
+	log.Debug("collectBatch", "peer", p.ID(), "from", from, "to", to)
 	batchStart := time.Now()
 
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)

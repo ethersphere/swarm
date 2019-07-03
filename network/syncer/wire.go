@@ -38,13 +38,13 @@ type StreamProvider interface {
 	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not.
 	// Typically this will involve checking whether a certain chunk exists locally.
 	// In case a chunk does not exist locally - a `wait` function returns upon chunk delivery
-	NeedData(ctx context.Context, ctx chunk.Address) (bool, wait func(context.Context) error)
+	NeedData(ctx context.Context, key []byte) (need bool, wait func(context.Context) error)
 
 	// Get a particular chunk identified by addr from the local storage
 	Get(ctx context.Context, addr chunk.Address) ([]byte, error)
 
 	// Put a certain chunk into the local storage
-	Put(ctx context.Context, addr chunk.Address, data []byte) error
+	Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error)
 
 	// Subscribe to a data stream from an arbitrary data source
 	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
@@ -60,12 +60,12 @@ type StreamProvider interface {
 	StreamName() string
 
 	// ParseStream from a standard pipe-separated string and return the Stream Key
-	ParseKey(string) interface{}
+	ParseKey(string) (interface{}, error)
 
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
-	EncodeKey(interface{}) string
+	EncodeKey(interface{}) (string, error)
 
-	IntervalKey(ID) string
+	//IntervalKey(ID) string
 
 	Boundedness() bool
 }
@@ -136,7 +136,7 @@ type ID struct {
 }
 
 func NewID(name string, key string) ID {
-	return Stream{
+	return ID{
 		Name: name,
 		Key:  key,
 	}
