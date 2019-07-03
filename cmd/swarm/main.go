@@ -359,17 +359,29 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 	if bzzaccount == "" {
 		// Check the local keystore for existing accounts
 		accounts := ks.Accounts()
-		if len(accounts) > 0 {
-			// Default to the first account if none was set
-			bzzaccount = accounts[0].Address.Hex()
-		} else {
+
+		switch l := len(accounts); l {
+		case 0:
 			// Create an account
-			account, err := ks.NewAccount("")
+			log.Info("It seems like that you don't have a account yet. Creating one...")
+			password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+			account, err := ks.NewAccount(password)
 			if err != nil {
 				utils.Fatalf("failed creating an account: %v", err)
 			}
 			bzzaccount = account.Address.Hex()
+		case 1:
+			// Use existing account
+			bzzaccount = accounts[0].Address.Hex()
+		default:
+			// Inform user about multiple accounts
+			log.Info(fmt.Sprintf("Multiple (%d) accounts were found in your keystore.", l))
+			for _, a := range accounts {
+				log.Info(fmt.Sprintf("Account: %s", a.Address.Hex()))
+			}
+			utils.Fatalf(fmt.Sprintf("Please choose one of the accounts by runing swarm with the --%s flag.", SwarmAccountFlag.Name))
 		}
+
 	} else {
 		// Try to load the arg as a hex key file.
 		if key, err := crypto.LoadECDSA(bzzaccount); err == nil {
@@ -377,14 +389,9 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 			return key
 		}
 	}
+
 	// Otherwise try getting it from the keystore
-	var passwords []string
-	if path := ctx.GlobalString(utils.PasswordFileFlag.Name); path == "" {
-		passwords = []string{""}
-	} else {
-		passwords = utils.MakePasswordList(ctx)
-	}
-	return decryptStoreAccount(ks, bzzaccount, passwords)
+	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
 }
 
 // getPrivKey returns the private key of the specified bzzaccount
@@ -431,7 +438,7 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []stri
 		utils.Fatalf("Can't load swarm account key: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		password := getPassPhrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i+1), i, passwords)
+		password := getPassPhrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i+1), false, i, passwords)
 		key, err := keystore.DecryptKey(keyjson, password)
 		if err == nil {
 			return key.PrivateKey
@@ -441,24 +448,32 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []stri
 	return nil
 }
 
-// getPassPhrase retrieves the password associated with bzz account, either by fetching
-// from a list of pre-loaded passwords, or by requesting it interactively from user.
-func getPassPhrase(prompt string, i int, passwords []string) string {
-	// non-interactive
+// getPassPhrase retrieves the password associated with a bzzaccount, either fetched
+// from a list of preloaded passphrases, or requested interactively from the user.
+func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
+	// If a list of passwords was supplied, retrieve from them
 	if len(passwords) > 0 {
 		if i < len(passwords) {
 			return passwords[i]
 		}
 		return passwords[len(passwords)-1]
 	}
-
-	// fallback to interactive mode
+	// Otherwise prompt the user for the password
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
 	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
+	}
+	if confirmation {
+		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
+		if err != nil {
+			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
+		}
+		if password != confirm {
+			utils.Fatalf("Passphrases do not match")
+		}
 	}
 	return password
 }
