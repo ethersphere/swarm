@@ -364,7 +364,7 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) (string, 
 		switch l := len(accounts); l {
 		case 0:
 			// Create an account
-			log.Info("It seems like that you don't have a account yet. Creating one...")
+			log.Info("You don't have an account yet. Creating one...")
 			password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 			account, err := ks.NewAccount(password)
 			if err != nil {
