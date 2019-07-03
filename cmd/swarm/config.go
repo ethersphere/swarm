@@ -61,6 +61,7 @@ var (
 const (
 	SwarmEnvChequebookAddr       = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvAccount              = "SWARM_ACCOUNT"
+	SwarmEnvBzzKeyHex            = "SWARM_BZZ_KEY_HEX"
 	SwarmEnvListenAddr           = "SWARM_LISTEN_ADDR"
 	SwarmEnvPort                 = "SWARM_PORT"
 	SwarmEnvNetworkID            = "SWARM_NETWORK_ID"

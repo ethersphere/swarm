@@ -184,6 +184,7 @@ func init() {
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
+		SwarmBzzKeyHexFlag,
 		SwarmNetworkIdFlag,
 		ChequebookAddrFlag,
 		// upload flags
@@ -353,7 +354,19 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 
 //getAccount returns the bzzaddress and the private key associated to that address
 func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) (string, *ecdsa.PrivateKey) {
-	//an account is mandatory
+
+	// Handle bzzkeyhex
+	if hexkey := ctx.GlobalString(SwarmBzzKeyHexFlag.Name); hexkey != "" {
+		key, err := crypto.HexToECDSA(hexkey)
+		if err != nil {
+			utils.Fatalf("failed using %s: %v", SwarmBzzKeyHexFlag.Name, err)
+		}
+		bzzaccount := crypto.PubkeyToAddress(key.PublicKey).Hex()
+		log.Info(fmt.Sprintf("Swarm account key loaded from %s", SwarmBzzKeyHexFlag.Name), "address", bzzaccount)
+		return bzzaccount, key
+	}
+
+	// Handle bzzaccount
 	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
