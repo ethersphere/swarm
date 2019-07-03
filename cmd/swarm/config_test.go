@@ -76,7 +76,7 @@ func TestBzzKeyFlag(t *testing.T) {
 
 	conf := &node.Config{
 		DataDir: dir,
-		IPCPath: "bzzd.ipc",
+		IPCPath: fmt.Sprintf("bzzd-%s.ipc", bzzaccount),
 		NoUSB:   true,
 	}
 
@@ -87,6 +87,7 @@ func TestBzzKeyFlag(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		fmt.Sprintf("--%s", SwarmBzzKeyHexFlag.Name), hexKey,
 	}
 
@@ -159,6 +160,7 @@ func TestEmptyBzzAccountFlagSingleAccount(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 	}
 
 	node.Cmd = runSwarm(t, flags...)
