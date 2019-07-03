@@ -191,13 +191,13 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 			if s.Cursor > 0 {
 				// fetch everything from beginning till  s.Cursor
-				go func(stream ID, cursor uint64) {
-					err := p.requestStreamRange(ctx, s.Stream, cursor)
-					if err != nil {
-						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
-						p.Drop()
-					}
-				}(s.Stream, s.Cursor)
+				//go func(stream ID, cursor uint64) {
+				//err := p.requestStreamRange(ctx, s.Stream, cursor)
+				//if err != nil {
+				//log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
+				//p.Drop()
+				//}
+				//}(s.Stream, s.Cursor)
 			}
 
 			// handle stream unboundedness
@@ -292,9 +292,9 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 			Hashes:    h,
 			Requested: time.Now(),
 		}
-
+		p.mtx.Lock()
 		p.openOffers[msg.Ruid] = o
-
+		p.mtx.Unlock()
 		offered := OfferedHashes{
 			Ruid:      msg.Ruid,
 			LastIndex: uint(t),
@@ -402,6 +402,8 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		if err != nil {
 			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
 		}
+		p.mtx.Lock()
+		defer p.mtx.Unlock()
 		delete(p.openWants, msg.Ruid)
 
 		log.Debug("batch done", "from", w.from, "to", w.to)
