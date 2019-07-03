@@ -191,13 +191,13 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 			if s.Cursor > 0 {
 				// fetch everything from beginning till  s.Cursor
-				//go func(stream ID, cursor uint64) {
-				//err := p.requestStreamRange(ctx, s.Stream, cursor)
-				//if err != nil {
-				//log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
-				//p.Drop()
-				//}
-				//}(s.Stream, s.Cursor)
+				go func(stream ID, cursor uint64) {
+					err := p.requestStreamRange(ctx, s.Stream, cursor)
+					if err != nil {
+						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
+						p.Drop()
+					}
+				}(s.Stream, s.Cursor)
 			}
 
 			// handle stream unboundedness
@@ -283,7 +283,7 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, msg.To)
 		if err != nil {
 			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
-			p.Drop()
+			//p.Drop()
 		}
 
 		o := offer{
@@ -488,7 +488,7 @@ func (p *Peer) sealBatch(provider StreamProvider, ruid uint) <-chan error {
 					}
 					if seen {
 						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
-						panic("shouldnt happen") // this in fact could happen...
+						//panic("shouldnt happen") // this in fact could happen...
 					}
 					//want.hashes[c.Address().Hex()] = false //todo: should by sync map
 					atomic.AddUint64(&want.remaining, ^uint64(0))
