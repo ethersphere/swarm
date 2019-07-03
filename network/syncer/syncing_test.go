@@ -42,7 +42,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		chunkCount = 10000
 		syncTime   = 1 * time.Second
 	)
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()

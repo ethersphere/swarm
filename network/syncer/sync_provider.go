@@ -99,6 +99,9 @@ func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to 
 }
 
 func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
+	log.Error("wtf", "k", key)
+	fmt.Println(key.(uint8))
+
 	bin, ok := key.(uint8)
 	if !ok {
 		return 0, errors.New("error converting stream key to bin index")
@@ -281,7 +284,7 @@ func (s *syncProvider) ParseKey(streamKey string) (interface{}, error) {
 	if b < 0 || b > 16 {
 		return 0, errors.New("stream key out of range")
 	}
-	return b, nil
+	return uint8(b), nil
 }
 func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
 	v, ok := i.(uint8)

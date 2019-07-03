@@ -53,7 +53,7 @@ var (
 func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -104,7 +104,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	nodeCount := 8
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -167,7 +167,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 func TestNodesCorrectBinsDynamic(t *testing.T) {
 	nodeCount := 10
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -239,7 +239,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	nodeCount := 5
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -281,7 +281,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 				found = true
 				foundEnode = nodeIDs[i]
 				// check that we established some streams for this peer
-				pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].streamCursors
+				//pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].streamCursors
 				//pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].historicalStreams
 
 				//checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
