@@ -48,6 +48,7 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmSwapEnabledFlag.Name),
 	}
 
@@ -69,21 +70,16 @@ func TestEmptyBzzAccountFlagMultipleAccounts(t *testing.T) {
 
 	node := &testNode{Dir: dir}
 
-	// assign ports
-	httpPort, err := assignTCPPort()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 	}
 
 	node.Cmd = runSwarm(t, flags...)
 
-	node.Cmd.Expect(fmt.Sprintf("Fatal: Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
+	node.Cmd.ExpectRegexp(fmt.Sprintf("Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
 }
 
 func TestEmptyBzzAccountFlagSingleAccount(t *testing.T) {
@@ -96,25 +92,20 @@ func TestEmptyBzzAccountFlagSingleAccount(t *testing.T) {
 	conf, account := getTestAccount(t, dir)
 	node := &testNode{Dir: dir}
 
-	// assign ports
-	httpPort, err := assignTCPPort()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 	}
 
 	node.Cmd = runSwarm(t, flags...)
-	node.Cmd.InputLine(testPassphrase)
 	defer func() {
-		if t.Failed() {
-			node.Shutdown()
-		}
+		node.Shutdown()
 	}()
+
+	node.Cmd.InputLine(testPassphrase)
+
 	// wait for the node to start
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
 		node.Client, err = rpc.Dial(conf.IPCEndpoint())
@@ -147,15 +138,10 @@ func TestEmptyBzzAccountFlagNoAccountWrongPassword(t *testing.T) {
 
 	node := &testNode{Dir: dir}
 
-	// assign ports
-	httpPort, err := assignTCPPort()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 	}
 
@@ -166,7 +152,7 @@ func TestEmptyBzzAccountFlagNoAccountWrongPassword(t *testing.T) {
 	// Confirm password
 	node.Cmd.InputLine("wrongpassword")
 
-	node.Cmd.ExpectRegexp("Fatal: Passphrases do not match")
+	node.Cmd.ExpectRegexp("Passphrases do not match")
 }
 
 func TestConfigCmdLineOverrides(t *testing.T) {
@@ -188,6 +174,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
