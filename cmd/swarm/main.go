@@ -351,7 +351,8 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	}
 }
 
-func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
+//getAccount returns the bzzaddress and the private key associated to that address
+func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) (string, *ecdsa.PrivateKey) {
 	//an account is mandatory
 	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -379,19 +380,20 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 			for _, a := range accounts {
 				log.Info(fmt.Sprintf("Account: %s", a.Address.Hex()))
 			}
-			utils.Fatalf(fmt.Sprintf("Please choose one of the accounts by runing swarm with the --%s flag.", SwarmAccountFlag.Name))
+			utils.Fatalf(fmt.Sprintf("Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
 		}
 
 	} else {
 		// Try to load the arg as a hex key file.
 		if key, err := crypto.LoadECDSA(bzzaccount); err == nil {
-			log.Info("Swarm account key loaded", "address", crypto.PubkeyToAddress(key.PublicKey))
-			return key
+			bzzaccount := crypto.PubkeyToAddress(key.PublicKey).Hex()
+			log.Info("Swarm account key loaded", "address", bzzaccount)
+			return bzzaccount, key
 		}
 	}
 
 	// Otherwise try getting it from the keystore
-	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
+	return bzzaccount, decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
 }
 
 // getPrivKey returns the private key of the specified bzzaccount
@@ -413,7 +415,9 @@ func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	}
 	defer stack.Close()
 
-	return getAccount(bzzconfig.BzzAccount, ctx, stack)
+	bzzaccount, privkey := getAccount(bzzconfig.BzzAccount, ctx, stack)
+	bzzconfig.BzzAccount = bzzaccount
+	return privkey
 }
 
 func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []string) *ecdsa.PrivateKey {

@@ -126,7 +126,8 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context, nodeconfig *node.Config) error {
 	//at this point, all vars should be set in the Config
 	//get the account for the provided swarm account
-	prvkey := getAccount(config.BzzAccount, ctx, stack)
+	bzzaccount, prvkey := getAccount(config.BzzAccount, ctx, stack)
+	config.BzzAccount = bzzaccount
 	//set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration

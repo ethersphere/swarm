@@ -56,15 +56,117 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestConfigFailsNoBzzAccount(t *testing.T) {
-	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
+func TestEmptyBzzAccountFlagMultipleAccounts(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Create two accounts on disk
+	getTestAccount(t, dir)
+	getTestAccount(t, dir)
+
+	node := &testNode{Dir: dir}
+
+	// assign ports
+	httpPort, err := assignTCPPort()
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SwarmErrNoBZZAccount + "\n")
-	swarm.ExpectExit()
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+
+	node.Cmd.Expect(fmt.Sprintf("Fatal: Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
+}
+
+func TestEmptyBzzAccountFlagSingleAccount(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	conf, account := getTestAccount(t, dir)
+	node := &testNode{Dir: dir}
+
+	// assign ports
+	httpPort, err := assignTCPPort()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+	node.Cmd.InputLine(testPassphrase)
+	defer func() {
+		if t.Failed() {
+			node.Shutdown()
+		}
+	}()
+	// wait for the node to start
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
+		node.Client, err = rpc.Dial(conf.IPCEndpoint())
+		if err == nil {
+			break
+		}
+	}
+	if node.Client == nil {
+		t.Fatal(err)
+	}
+
+	// load info
+	var info swarm.Info
+	if err := node.Client.Call(&info, "bzz_info"); err != nil {
+		t.Fatal(err)
+	}
+
+	if info.BzzAccount != account.Address.Hex() {
+		t.Fatalf("Expected account to be %s, got %s", account.Address.Hex(), info.BzzAccount)
+	}
+
+}
+
+func TestEmptyBzzAccountFlagNoAccountWrongPassword(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztestlol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	node := &testNode{Dir: dir}
+
+	// assign ports
+	httpPort, err := assignTCPPort()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+
+	// Set password
+	node.Cmd.InputLine("goodpassword")
+	// Confirm password
+	node.Cmd.InputLine("wrongpassword")
+
+	node.Cmd.ExpectRegexp("Fatal: Passphrases do not match")
 }
 
 func TestConfigCmdLineOverrides(t *testing.T) {
