@@ -145,7 +145,7 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 			}
 			streamCursor, err := provider.Cursor(key)
 			if err != nil {
-				log.Error("error getting cursor for stream key", "peer", p.ID(), "name", v.Name, "key", key)
+				log.Error("error getting cursor for stream key", "peer", p.ID(), "name", v.Name, "key", key, "err", err)
 				panic("shouldnt happen")
 			}
 			descriptor := StreamDescriptor{
@@ -214,7 +214,7 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64) error {
 	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
-	if provider, ok := p.providers[stream.Name]; ok {
+	if _, ok := p.providers[stream.Name]; ok {
 		peerIntervalKey := p.peerStreamIntervalKey(stream)
 		interval, err := p.getOrCreateInterval(peerIntervalKey)
 		if err != nil {
