@@ -99,9 +99,6 @@ func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to 
 }
 
 func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
-	log.Error("wtf", "k", key)
-	fmt.Println(key.(uint8))
-
 	bin, ok := key.(uint8)
 	if !ok {
 		return 0, errors.New("error converting stream key to bin index")
