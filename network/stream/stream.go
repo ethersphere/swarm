@@ -537,7 +537,7 @@ func (c *client) NextInterval() (start, end uint64, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	start, end = i.Next()
+	start, end = i.Next(0)
 	return start, end, nil
 }
 

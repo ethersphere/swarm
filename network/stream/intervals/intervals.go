@@ -115,14 +115,25 @@ func (i *Intervals) Merge(m *Intervals) {
 
 // Next returns the first range interval that is not fulfilled. Returned
 // start and end values are both inclusive, meaning that the whole range
-// including start and end need to be added in order to full the gap
+// including start and end need to be added in order to fill the gap
 // in intervals.
 // Returned value for end is 0 if the next interval is after the whole
 // range that is stored in Intervals. Zero end value represents no limit
 // on the next interval length.
-func (i *Intervals) Next() (start, end uint64) {
+// Argument ceiling is the upper bound for the returned range.
+func (i *Intervals) Next(ceiling uint64) (start, end uint64) {
 	i.mu.RLock()
-	defer i.mu.RUnlock()
+	defer func() {
+		if ceiling > 0 {
+			if start > ceiling {
+				start = ceiling
+			}
+			if end == 0 || end > ceiling {
+				end = ceiling
+			}
+		}
+		i.mu.RUnlock()
+	}()
 
 	l := len(i.ranges)
 	if l == 0 {
