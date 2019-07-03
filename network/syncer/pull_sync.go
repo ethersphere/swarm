@@ -70,6 +70,8 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 }
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
+
+	//err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
 	ch, err := p.netStore.Store.Get(ctx, chunk.ModeGetSync, addr)
 	if err != nil {
 		return nil, err
@@ -86,16 +88,19 @@ func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte)
 	}
 	return err
 }
-func (s *syncProvider) Subscribe(interface{}) (<-chan Descriptor, func()) {
 
+func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func()) {
+	// convert the key to the actual value and call SubscribePull
+	bin := key.(uint8)
+	return s.netStore.SubscribePull(ctx, bin, from, to)
 }
 
 func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
-	v, ok := key.(uint8)
+	bin, ok := key.(uint8)
 	if !ok {
 		return 0, errors.New("error converting stream key to bin index")
 	}
-	return p.netStore.LastPullSubscriptionBinID(v)
+	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
 func (s *syncProvider) StreamUpdateTrigger() <-chan StreamUpdateOp {
@@ -288,9 +293,6 @@ func syncStreamToBin(stream string) (uint, error) {
 	return uint(bin), nil
 }
 
-func binToSyncStream(bin uint) string {
-	return fmt.Sprintf("SYNC|%d", bin)
-}
 func (s *syncProvider) ParseStream(string) interface{}  {}
 func (s *syncProvider) EncodeStream(interface{}) string {}
 func (s *syncProvider) StreamName() string              { return p.name }

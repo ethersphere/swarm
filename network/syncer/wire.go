@@ -47,7 +47,7 @@ type StreamProvider interface {
 	Put(ctx context.Context, addr chunk.Address, data []byte) error
 
 	// Subscribe to a data stream from an arbitrary data source
-	Subscribe(key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
+	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
 
 	// Cursor returns the last known Cursor for a given Stream Key
 	Cursor(interface{}) (uint64, error)
