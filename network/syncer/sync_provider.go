@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -32,27 +31,31 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
+const streamName = "SYNC"
+
 type syncProvider struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 
-	peerTriggers []chan StreamUpdateOp
-
 	name string
+	quit chan struct{}
 }
 
-func NewPullSyncProvider(ns *storage.NetStore, kad *network.Kademlia) *syncProvider {
-	p := &syncProvider{
+func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia) *syncProvider {
+	s := &syncProvider{
 		netStore: ns,
 		kad:      kad,
-		name:     "SYNC",
+		name:     streamName,
+
+		quit: make(chan struct{}),
 	}
+	return s
 }
 
 func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
 	start := time.Now()
 
-	fi, loaded, ok := p.netStore.GetOrCreateFetcher(ctx, key, "syncer")
+	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
 		return loaded, nil
 	}
@@ -72,21 +75,21 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
 
 	//err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
-	ch, err := p.netStore.Store.Get(ctx, chunk.ModeGetSync, addr)
+	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetSync, addr)
 	if err != nil {
 		return nil, err
 	}
 	return ch.Data(), nil
 }
 
-func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte) error {
+func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error) {
 	log.Debug("syncProvider.Put", "addr", addr)
 	ch := chunk.NewChunk(addr, data)
-	seen, err := p.netStore.Store.Put(ctx, chunk.ModePutSync, ch)
+	seen, err := s.netStore.Store.Put(ctx, chunk.ModePutSync, ch)
 	if seen {
 		log.Trace("syncProvider.Put - chunk already seen", "addr", addr)
 	}
-	return err
+	return seen, err
 }
 
 func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func()) {
@@ -101,12 +104,6 @@ func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
 		return 0, errors.New("error converting stream key to bin index")
 	}
 	return s.netStore.LastPullSubscriptionBinID(bin)
-}
-
-func (s *syncProvider) StreamUpdateTrigger() <-chan StreamUpdateOp {
-	updatec := make(chan StreamUpdateOp)
-
-	return updatec
 }
 
 // RunUpdateStreams creates and maintains the streams per peer.
@@ -181,7 +178,12 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 func doPeerSubUpdate(p *Peer, subs, quits []uint) {
 	if len(subs) > 0 {
 		log.Debug("getting cursors info from peer", "peer", p.ID(), "subs", subs)
-		streamsMsg := StreamInfoReq{Streams: subs}
+		streams := []ID{}
+		for _, v := range subs {
+			vv := NewID(streamName, fmt.Sprintf("%d", v))
+			streams = append(streams, vv)
+		}
+		streamsMsg := StreamInfoReq{Streams: streams}
 		if err := p.Send(context.TODO(), streamsMsg); err != nil {
 			log.Error("error establishing subsequent subscription", "err", err)
 			p.Drop()
@@ -189,29 +191,11 @@ func doPeerSubUpdate(p *Peer, subs, quits []uint) {
 	}
 	for _, v := range quits {
 		log.Debug("removing cursor info for peer", "peer", p.ID(), "bin", v, "cursors", p.streamCursors, "quits", quits)
-		delete(p.streamCursors, uint(v))
+
+		vv := NewID(streamName, fmt.Sprintf("%d", v))
+		delete(p.streamCursors, vv.String())
 
 	}
-}
-
-func (s *syncProvider) ParseStream(stream string) (bin uint, err error) {
-	arr := strings.Split(stream, "|")
-	b, err := strconv.Atoi(arr[1])
-
-	vals := strings.Split(stream, "|")
-	if len(vals) != 2 {
-		return 0, fmt.Errorf("error getting bin id from stream string: %s", stream)
-	}
-	bin, err := strconv.Atoi(vals[1])
-	if err != nil {
-		return 0, err
-	}
-
-	return uint(b), err
-}
-
-func (s *syncProvider) EncodeStream(bin uint) string {
-	return fmt.Sprintf("SYNC|%d", bin)
 }
 
 // syncSubscriptionsDiff calculates to which proximity order bins a peer
@@ -289,10 +273,23 @@ func intRange(start, end int) (r []uint) {
 	return r
 }
 
-func syncStreamToBin(stream string) (uint, error) {
-	return uint(bin), nil
+func (s *syncProvider) ParseKey(streamKey string) (interface{}, error) {
+	b, err := strconv.Atoi(streamKey)
+	if err != nil {
+		return 0, err
+	}
+	if b < 0 || b > 16 {
+		return 0, errors.New("stream key out of range")
+	}
+	return b, nil
 }
+func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
+	v, ok := i.(uint8)
+	if !ok {
+		return "", errors.New("error encoding key")
+	}
+	return fmt.Sprintf("%d", v), nil
+}
+func (s *syncProvider) StreamName() string { return s.name }
 
-func (s *syncProvider) ParseStream(string) interface{}  {}
-func (s *syncProvider) EncodeStream(interface{}) string {}
-func (s *syncProvider) StreamName() string              { return p.name }
+func (s *syncProvider) Boundedness() bool { return false }
