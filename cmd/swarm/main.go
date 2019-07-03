@@ -352,61 +352,62 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	}
 }
 
-//getAccount returns the bzzaddress and the private key associated to that address
-func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) (string, *ecdsa.PrivateKey) {
+// getOrCreateAccount returns the address and associated private key for a bzzaccount
+// If no account exists, it will create an account for you.
+func getOrCreateAccount(ctx *cli.Context, stack *node.Node) (string, *ecdsa.PrivateKey) {
+	var bzzaddr string
 
-	// Handle bzzkeyhex
+	// Check if a key was provided
 	if hexkey := ctx.GlobalString(SwarmBzzKeyHexFlag.Name); hexkey != "" {
 		key, err := crypto.HexToECDSA(hexkey)
 		if err != nil {
 			utils.Fatalf("failed using %s: %v", SwarmBzzKeyHexFlag.Name, err)
 		}
-		bzzaccount := crypto.PubkeyToAddress(key.PublicKey).Hex()
-		log.Info(fmt.Sprintf("Swarm account key loaded from %s", SwarmBzzKeyHexFlag.Name), "address", bzzaccount)
-		return bzzaccount, key
+		bzzaddr := crypto.PubkeyToAddress(key.PublicKey).Hex()
+		log.Info(fmt.Sprintf("Swarm account key loaded from %s", SwarmBzzKeyHexFlag.Name), "address", bzzaddr)
+		return bzzaddr, key
 	}
 
-	// Handle bzzaccount
 	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	if bzzaccount == "" {
-		// Check the local keystore for existing accounts
-		accounts := ks.Accounts()
-
-		switch l := len(accounts); l {
-		case 0:
-			// Create an account
-			log.Info("You don't have an account yet. Creating one...")
-			password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-			account, err := ks.NewAccount(password)
-			if err != nil {
-				utils.Fatalf("failed creating an account: %v", err)
-			}
-			bzzaccount = account.Address.Hex()
-		case 1:
-			// Use existing account
-			bzzaccount = accounts[0].Address.Hex()
-		default:
-			// Inform user about multiple accounts
-			log.Info(fmt.Sprintf("Multiple (%d) accounts were found in your keystore.", l))
-			for _, a := range accounts {
-				log.Info(fmt.Sprintf("Account: %s", a.Address.Hex()))
-			}
-			utils.Fatalf(fmt.Sprintf("Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
-		}
-
-	} else {
+	// Check if an address was provided
+	if bzzaddr = ctx.GlobalString(SwarmAccountFlag.Name); bzzaddr != "" {
 		// Try to load the arg as a hex key file.
-		if key, err := crypto.LoadECDSA(bzzaccount); err == nil {
-			bzzaccount := crypto.PubkeyToAddress(key.PublicKey).Hex()
-			log.Info("Swarm account key loaded", "address", bzzaccount)
-			return bzzaccount, key
+		if key, err := crypto.LoadECDSA(bzzaddr); err == nil {
+			bzzaddr := crypto.PubkeyToAddress(key.PublicKey).Hex()
+			log.Info("Swarm account key loaded", "address", bzzaddr)
+			return bzzaddr, key
 		}
+		return bzzaddr, decryptStoreAccount(ks, bzzaddr, utils.MakePasswordList(ctx))
 	}
 
-	// Otherwise try getting it from the keystore
-	return bzzaccount, decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
+	// No address or key were provided
+	accounts := ks.Accounts()
+
+	switch l := len(accounts); l {
+	case 0:
+		// Create an account
+		log.Info("You don't have an account yet. Creating one...")
+		password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+		account, err := ks.NewAccount(password)
+		if err != nil {
+			utils.Fatalf("failed creating an account: %v", err)
+		}
+		bzzaddr = account.Address.Hex()
+	case 1:
+		// Use existing account
+		bzzaddr = accounts[0].Address.Hex()
+	default:
+		// Inform user about multiple accounts
+		log.Info(fmt.Sprintf("Multiple (%d) accounts were found in your keystore.", l))
+		for _, a := range accounts {
+			log.Info(fmt.Sprintf("Account: %s", a.Address.Hex()))
+		}
+		utils.Fatalf(fmt.Sprintf("Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
+	}
+
+	return bzzaddr, decryptStoreAccount(ks, bzzaddr, utils.MakePasswordList(ctx))
 }
 
 // getPrivKey returns the private key of the specified bzzaccount
@@ -428,8 +429,8 @@ func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	}
 	defer stack.Close()
 
-	bzzaccount, privkey := getAccount(bzzconfig.BzzAccount, ctx, stack)
-	bzzconfig.BzzAccount = bzzaccount
+	var privkey *ecdsa.PrivateKey
+	bzzconfig.BzzAccount, privkey = getOrCreateAccount(ctx, stack)
 	return privkey
 }
 

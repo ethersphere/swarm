@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
@@ -125,10 +126,10 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 
 //finally, after the configuration build phase is finished, initialize
 func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context, nodeconfig *node.Config) error {
-	//at this point, all vars should be set in the Config
 	//get the account for the provided swarm account
-	bzzaccount, prvkey := getAccount(config.BzzAccount, ctx, stack)
-	config.BzzAccount = bzzaccount
+	var prvkey *ecdsa.PrivateKey
+	config.BzzAccount, prvkey = getOrCreateAccount(ctx, stack)
+	//config.BzzAccount = bzzaccount
 	//set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration

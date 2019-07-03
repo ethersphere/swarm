@@ -118,7 +118,6 @@ func TestBzzKeyFlag(t *testing.T) {
 	if info.BzzAccount != bzzaccount {
 		t.Fatalf("Expected account to be %s, got %s", bzzaccount, info.BzzAccount)
 	}
-
 }
 func TestEmptyBzzAccountFlagMultipleAccounts(t *testing.T) {
 	dir, err := ioutil.TempDir("", "bzztest")
