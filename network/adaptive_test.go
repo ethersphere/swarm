@@ -105,15 +105,13 @@ func TestCapabilitiesNotifications(t *testing.T) {
 	go func() {
 		i := 0
 		for {
-			select {
-			case c, ok := <-changeC:
-				if !ok {
-					close(errC)
-					return
-				}
-				if !bytes.Equal(c[2:], expects[i]) {
-					errC <- fmt.Errorf("subscribe local return fail, got: %v, expected %v", c[2:], expects[i])
-				}
+			c, ok := <-changeC
+			if !ok {
+				close(errC)
+				return
+			}
+			if !bytes.Equal(c[2:], expects[i]) {
+				errC <- fmt.Errorf("subscribe local return fail, got: %v, expected %v", c[2:], expects[i])
 			}
 			i = i + 1
 		}

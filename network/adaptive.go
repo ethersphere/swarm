@@ -171,8 +171,5 @@ func (c *capability) unset(flag []byte) error {
 
 // validate flag input against capability type length
 func (c *capability) validLength(flag []byte) bool {
-	if len(flag) != len(*c)-2 {
-		return false
-	}
-	return true
+	return len(flag) != len(*c)-2
 }
