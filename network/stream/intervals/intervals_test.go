@@ -30,6 +30,7 @@ func Test(t *testing.T) {
 		nextStart  uint64
 		nextEnd    uint64
 		last       uint64
+		ceiling    uint64
 	}{
 		{
 			initial:   nil,
@@ -316,6 +317,57 @@ func Test(t *testing.T) {
 			nextEnd:    119,
 			last:       130,
 		},
+		{
+			initial:   nil,
+			start:     0,
+			end:       0,
+			expected:  "[[0 0]]",
+			nextStart: 1,
+			nextEnd:   10,
+			last:      0,
+			ceiling:   10,
+		},
+		{
+			initial:   nil,
+			start:     0,
+			end:       10,
+			expected:  "[[0 10]]",
+			nextStart: 11,
+			nextEnd:   15,
+			last:      10,
+			ceiling:   15,
+		},
+		{
+			initial:   [][2]uint64{{0, 0}},
+			start:     5,
+			end:       15,
+			expected:  "[[0 0] [5 15]]",
+			nextStart: 1,
+			nextEnd:   3,
+			last:      15,
+			ceiling:   3,
+		},
+		{
+			initial:   [][2]uint64{{0, 0}},
+			start:     5,
+			end:       15,
+			expected:  "[[0 0] [5 15]]",
+			nextStart: 1,
+			nextEnd:   4,
+			last:      15,
+			ceiling:   20,
+		},
+		{
+			startLimit: 100,
+			initial:    nil,
+			start:      120,
+			end:        130,
+			expected:   "[[120 130]]",
+			nextStart:  100,
+			nextEnd:    110,
+			last:       130,
+			ceiling:    110,
+		},
 	} {
 		intervals := NewIntervals(tc.startLimit)
 		intervals.ranges = tc.initial
@@ -324,7 +376,7 @@ func Test(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("interval #%d: expected %s, got %s", i, tc.expected, got)
 		}
-		nextStart, nextEnd := intervals.Next()
+		nextStart, nextEnd := intervals.Next(tc.ceiling)
 		if nextStart != tc.nextStart {
 			t.Errorf("interval #%d, expected next start %d, got %d", i, tc.nextStart, nextStart)
 		}
