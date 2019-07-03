@@ -34,6 +34,7 @@ import (
 	"github.com/ethersphere/swarm/network/stream/intervals"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"k8s.io/kubernetes/pkg/kubelet/util/store"
 )
 
 var ErrEmptyBatch = errors.New("empty batch")
@@ -54,7 +55,7 @@ type Want struct {
 	ruid      uint
 	from      uint64
 	to        uint64
-	stream    string
+	stream    ID
 	hashes    map[string]bool
 	bv        *bitvector.BitVector
 	requested time.Time
@@ -67,8 +68,9 @@ type Want struct {
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
-	mtx       sync.Mutex
-	providers map[string]StreamProvider
+	mtx            sync.Mutex
+	providers      map[string]StreamProvider
+	intervalsStore state.Store
 
 	streamCursors map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
 	openWants     map[uint]*Want    // maintain open wants on the client side
@@ -77,14 +79,15 @@ type Peer struct {
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer, providers map[string]StreamProvider) *Peer {
+func NewPeer(peer *network.BzzPeer, i store.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
-		BzzPeer:       peer,
-		providers:     providers,
-		streamCursors: make(map[uint]uint64),
-		openWants:     make(map[uint]*Want),
-		openOffers:    make(map[uint]Offer),
-		quit:          make(chan struct{}),
+		BzzPeer:        peer,
+		providers:      providers,
+		intervalsStore: i,
+		streamCursors:  make(map[uint]uint64),
+		openWants:      make(map[uint]*Want),
+		openOffers:     make(map[uint]Offer),
+		quit:           make(chan struct{}),
 	}
 	return p
 }
@@ -189,13 +192,13 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 			if s.Cursor > 0 {
 				// fetch everything from beginning till  s.Cursor
-				go func(name string, k interface{}, cursor uint64) {
-					err := p.requestStreamRange(ctx, name, k, cursor)
+				go func(stream ID, cursor uint64) {
+					err := p.requestStreamRange(ctx, s, cursor)
 					if err != nil {
 						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", name, "err", err)
 						p.Drop()
 					}
-				}(s.Stream.Name, key, s.Cursor)
+				}(s.Stream, s.Cursor)
 			}
 
 			// handle stream unboundedness
@@ -210,28 +213,29 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	}
 }
 
-func (p *Peer) requestStreamRange(ctx context.Context, streamName string, key interface{}, cursor uint64) error {
-	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", streamName, "key", key, "cursor", cursor)
-	if provider, ok := p.providers[streamName]; ok {
-		interval, err := p.getOrCreateInterval(provider.EncodeKey(key))
+func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64) error {
+	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
+	if provider, ok := p.providers[stream.Name]; ok {
+		peerIntervalKey := p.peerStreamIntervalKey(stream)
+		interval, err := p.getOrCreateInterval(peerIntervalKey)
 		if err != nil {
 			return err
 		}
-		from, to := interval.Next()
+		from, to := interval.Next(cursor)
 		log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor, "from", from, "to", to)
 		if from > cursor {
 			log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream, "bin", bin, "cursor", cursor)
 			// stream finished. quit
 			return nil
 		}
-		if to > cursor {
-			log.Debug("adjusting cursor")
-			to = cursor
-		}
-		if to == 0 {
-			// todo: Next() should take a ceiling argument. it returns 0 if there's no upper bound in the interval (i.e. HEAD)
-			to = cursor
-		}
+		//if to > cursor {
+		//log.Debug("adjusting cursor")
+		//to = cursor
+		//}
+		//if to == 0 {
+		//// todo: Next() should take a ceiling argument. it returns 0 if there's no upper bound in the interval (i.e. HEAD)
+		//to = cursor
+		//}
 		if from == 0 {
 			panic("no")
 		}
@@ -242,13 +246,13 @@ func (p *Peer) requestStreamRange(ctx context.Context, streamName string, key in
 
 		g := GetRange{
 			Ruid:      uint(rand.Uint32()),
-			Stream:    streamName,
+			Stream:    stream,
 			From:      from,
 			To:        to,
-			BatchSize: 128,
+			BatchSize: BatchSize,
 			Roundtrip: true,
 		}
-		log.Debug("sending GetRange to peer", "peer", p.ID(), "bin", uint(bin), "cursor", cursor, "GetRange", g)
+		log.Debug("sending GetRange to peer", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "GetRange", g)
 
 		if err := p.Send(ctx, g); err != nil {
 			return err
@@ -278,36 +282,41 @@ func (p *Peer) requestStreamRange(ctx context.Context, streamName string, key in
 // message so that the client could seal the interval and request the next
 func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 	log.Debug("peer.handleGetRange", "peer", p.ID(), "msg", msg)
-	bin, err := ParseStream(msg.Stream)
-	if err != nil {
-		log.Error("erroring parsing stream", "err", err, "stream", msg.Stream)
-		p.Drop()
-	}
-	//TODO hard limit for BatchSize
-	//TODO check msg integrity
-	h, f, t, err := p.collectBatch(ctx, bin, msg.From, msg.To)
-	if err != nil {
-		log.Error("erroring getting batch for stream", "peer", p.ID(), "bin", bin, "stream", msg.Stream, "err", err)
-		p.Drop()
-	}
+	if provider, ok := p.providers[msg.Stream.Name]; ok {
+		key, err := provider.ParseKey(msg.Stream.Key)
+		if err != nil {
+			log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
+			p.Drop()
+		}
+		//TODO hard limit for BatchSize
+		//TODO check msg integrity
+		h, f, t, err := p.collectBatch(ctx, key, msg.From, msg.To)
+		if err != nil {
+			log.Error("erroring getting batch for stream", "peer", p.ID(), "bin", bin, "stream", msg.Stream, "err", err)
+			p.Drop()
+		}
 
-	o := Offer{
-		Ruid:      msg.Ruid,
-		Hashes:    h,
-		Requested: time.Now(),
-	}
+		o := Offer{
+			Ruid:      msg.Ruid,
+			Hashes:    h,
+			Requested: time.Now(),
+		}
 
-	p.openOffers[msg.Ruid] = o
+		p.openOffers[msg.Ruid] = o
 
-	offered := OfferedHashes{
-		Ruid:      msg.Ruid,
-		LastIndex: uint(t),
-		Hashes:    h,
-	}
-	l := len(h) / HashSize
-	log.Debug("server offering batch", "peer", p.ID(), "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "l", l)
-	if err := p.Send(ctx, offered); err != nil {
-		log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
+		offered := OfferedHashes{
+			Ruid:      msg.Ruid,
+			LastIndex: uint(t),
+			Hashes:    h,
+		}
+		l := len(h) / HashSize
+		log.Debug("server offering batch", "peer", p.ID(), "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "l", l)
+		if err := p.Send(ctx, offered); err != nil {
+			log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
+		}
+
+	} else {
+		// unsupported proto
 	}
 }
 
@@ -351,9 +360,6 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			w.hashes[c.Hex()] = false
 		}
 	}
-	//if len(w.hashes) == 0 {
-	//panic("should be larger than 0")
-	//}
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 	atomic.AddUint64(&w.remaining, ctr)
@@ -431,22 +437,21 @@ func (p *Peer) NextInterval(peerStreamKey string) (start, end uint64, err error)
 	return start, end, nil
 }
 
-func (p *Peer) getOrCreateInterval(bin uint) (*intervals.Intervals, error) {
-	key := p.getIntervalsKey(bin)
-
+func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 	// check that an interval entry exists
 	i := &intervals.Intervals{}
-	err := p.syncer.intervalsStore.Get(key, i)
+	err := p.intervalsStore.Get(key, i)
 	switch err {
 	case nil:
 	case state.ErrNotFound:
-		i = intervals.NewIntervals(1) // syncing bin indexes are ALWAYS > 0
+		// key interval values are ALWAYS > 0
+		i = intervals.NewIntervals(1)
 		if err := p.syncer.intervalsStore.Put(key, i); err != nil {
 			return nil, err
 		}
 	default:
 		log.Error("unknown error while getting interval for peer", "err", err)
-		panic(err)
+		return nil, err
 	}
 	return i, nil
 }
@@ -596,10 +601,11 @@ func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
 	log.Debug("done writing batch to chunks channel", "peer", p.ID())
 }
 
-func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (hashes []byte, f, t uint64, err error) {
+func (p *Peer) collectBatch(ctx context.Context, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, err error) {
 	log.Debug("collectBatch", "peer", p.ID(), "bin", bin, "from", from, "to", to)
 	batchStart := time.Now()
-	descriptors, stop := p.syncer.netStore.SubscribePull(ctx, uint8(bin), from, to)
+
+	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
 	const batchTimeout = 2 * time.Second
@@ -632,12 +638,12 @@ func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (has
 			// This is the most naive approach to label the chunk as synced
 			// allowing it to be garbage collected. A proper way requires
 			// validating that the chunk is successfully stored by the peer.
-			err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
-			if err != nil {
-				metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
-				//log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
-				return nil, 0, 0, err
-			}
+			//err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
+			//if err != nil {
+			//metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
+			////log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
+			//return nil, 0, 0, err
+			//}
 			batchSize++
 			if batchStartID == nil {
 				// set batch start id only if
@@ -666,7 +672,7 @@ func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (has
 			iterate = false
 			metrics.GetOrRegisterCounter("syncer.set-next-batch.timer-expire", nil).Inc(1)
 			//log.Trace("syncer pull subscription timer expired", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
-		case <-p.syncer.quit:
+		case <-p.quit:
 			iterate = false
 			//log.Trace("syncer pull subscription - quit received", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		}
@@ -677,4 +683,9 @@ func (p *Peer) collectBatch(ctx context.Context, bin uint, from, to uint64) (has
 	}
 	return batch, *batchStartID, batchEndID, nil
 
+}
+
+func (p *Peer) peerStreamIntervalKey(stream ID) string {
+	k := fmt.Sprintf("%s|%s", p.ID().String(), stream.String())
+	return k
 }
