@@ -45,8 +45,9 @@ const (
 	//DeliveryFrameSize        = 128
 )
 
-type Offer struct {
+type offer struct {
 	Ruid      uint
+	stream    ID
 	Hashes    []byte
 	Requested time.Time
 }
@@ -74,7 +75,7 @@ type Peer struct {
 
 	streamCursors map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
 	openWants     map[uint]*Want    // maintain open wants on the client side
-	openOffers    map[uint]Offer    // maintain open offers on the server side
+	openOffers    map[uint]offer    // maintain open offers on the server side
 	quit          chan struct{}     // closed when peer is going offline
 }
 
@@ -84,9 +85,9 @@ func NewPeer(peer *network.BzzPeer, i store.Store, providers map[string]StreamPr
 		BzzPeer:        peer,
 		providers:      providers,
 		intervalsStore: i,
-		streamCursors:  make(map[uint]uint64),
+		streamCursors:  make(map[string]uint64),
 		openWants:      make(map[uint]*Want),
-		openOffers:     make(map[uint]Offer),
+		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
 	}
 	return p
@@ -288,16 +289,15 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 			log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
 			p.Drop()
 		}
-		//TODO hard limit for BatchSize
-		//TODO check msg integrity
-		h, f, t, err := p.collectBatch(ctx, key, msg.From, msg.To)
+		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, msg.To)
 		if err != nil {
-			log.Error("erroring getting batch for stream", "peer", p.ID(), "bin", bin, "stream", msg.Stream, "err", err)
+			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
 			p.Drop()
 		}
 
-		o := Offer{
+		o := offer{
 			Ruid:      msg.Ruid,
+			stream:    msg.Stream,
 			Hashes:    h,
 			Requested: time.Now(),
 		}
@@ -314,7 +314,6 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		if err := p.Send(ctx, offered); err != nil {
 			log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
 		}
-
 	} else {
 		// unsupported proto
 	}
@@ -323,8 +322,7 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 // handleOfferedHashes handles the OfferedHashes wire protocol message.
 // this message is handled by the CLIENT.
 func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
-	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg", msg)
-	//TODO if ruid does not exist in state - drop the peer
+	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg.ruid", msg.Ruid)
 
 	hashes := msg.Hashes
 	lenHashes := len(hashes)
@@ -335,11 +333,20 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	w, ok := p.openWants[msg.Ruid]
 	if !ok {
 		log.Error("ruid not found, dropping peer")
+		panic("drop peer")
+		p.Drop()
+	}
+
+	provider, ok := p.providers[w.stream.Name]
+	if !ok {
+		log.Error("got offeredHashes for unsupported protocol, dropping peer", "peer", p.ID())
+		p.Drop()
 	}
 
 	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
 		log.Error("error initiaising bitvector", "len", lenHashes/HashSize, "err", err)
+		panic("drop later")
 		p.Drop()
 	}
 
@@ -350,7 +357,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		log.Trace("checking offered hash", "ref", fmt.Sprintf("%x", hash))
 		c := chunk.Address(hash)
 
-		if _, wait := p.syncer.NeedData(ctx, hash); wait != nil {
+		if _, wait := provider.NeedData(ctx, hash); wait != nil {
 			ctr++
 			w.hashes[c.Hex()] = true
 			// set the bit, so create a request
@@ -366,13 +373,10 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	w.bv = want
 	w.chunks = cc
 	w.done = dc
-	bin, err := syncStreamToBin(w.stream)
-	if err != nil {
-		panic(err)
-	}
+
 	var wantedHashesMsg WantedHashes
 
-	errc := p.sealBatch(msg.Ruid)
+	errc := p.sealBatch(provider, msg.Ruid)
 	if len(w.hashes) == 0 {
 		wantedHashesMsg = WantedHashes{
 			Ruid:      msg.Ruid,
@@ -394,16 +398,18 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	p.openWants[msg.Ruid] = w
 	log.Debug("open wants", "ow", p.openWants)
 	stream := w.stream
+	peerIntervalKey := p.peerStreamIntervalKey(w.stream)
 	select {
 	case err := <-errc:
 		if err != nil {
-			log.Error("Wtf", "err", err)
+			log.Error("got an error while sealing batch", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
 			panic(err)
+			p.Drop()
 		}
-		log.Debug("adding interval", "f", w.from, "t", w.to, "key", p.getIntervalsKey(bin))
-		err = p.AddInterval(w.from, w.to, p.getIntervalsKey(bin))
+		log.Debug("adding interval", "f", w.from, "t", w.to, "key", peerIntervalKey)
+		err = p.addInterval(provider, w.from, w.to, peerIntervalKey)
 		if err != nil {
-			panic(err)
+			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
 		}
 		delete(p.openWants, msg.Ruid)
 
@@ -411,29 +417,36 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		//TODO BATCH TIMEOUT?
 	}
 
-	f, t, err := p.NextInterval(p.getIntervalsKey(bin))
-	log.Error("next interval", "f", f, "t", t, "err", err, "intervalsKey", p.getIntervalsKey(bin))
-	if err := p.requestStreamRange(ctx, stream, uint(bin), p.streamCursors[bin]); err != nil {
+	f, t, err := p.nextInterval(peerIntervalKey, p.streamCursors[stream.String()])
+	log.Error("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey)
+	if err := p.requestStreamRange(ctx, stream, p.streamCursors[stream.String()]); err != nil {
 		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
+		p.Drop()
 	}
 }
 
-func (p *Peer) AddInterval(start, end uint64, peerStreamKey string) (err error) {
+func (p *Peer) addInterval(start, end uint64, peerStreamKey string) (err error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
 	i := &intervals.Intervals{}
-	if err = p.syncer.intervalsStore.Get(peerStreamKey, i); err != nil {
+	if err = p.intervalsStore.Get(peerStreamKey, i); err != nil {
 		return err
 	}
 	i.Add(start, end)
-	return p.syncer.intervalsStore.Put(peerStreamKey, i)
+	return p.intervalsStore.Put(peerStreamKey, i)
 }
 
-func (p *Peer) NextInterval(peerStreamKey string) (start, end uint64, err error) {
+func (p *Peer) nextInterval(peerStreamKey string, ceil uint64) (start, end uint64, err error) {
+	p.mtx.RLock()
+	defer p.mtx.Unlock()
+
 	i := &intervals.Intervals{}
-	err = p.syncer.intervalsStore.Get(peerStreamKey, i)
+	err = p.intervalsStore.Get(peerStreamKey, i)
 	if err != nil {
 		return 0, 0, err
 	}
-	start, end = i.Next()
+	start, end = i.Next(ceil)
 	return start, end, nil
 }
 
@@ -456,13 +469,7 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 	return i, nil
 }
 
-func (p *Peer) getIntervalsKey(bin uint) string {
-	key := fmt.Sprintf("%s|%s", p.ID().String(), binToSyncStream(bin))
-	log.Debug("peer.getIntervalsKey", "peer", p.ID(), "bin", bin, "key", key)
-	return key
-}
-
-func (p *Peer) sealBatch(ruid uint) <-chan error {
+func (p *Peer) sealBatch(provider StreamProvider, ruid uint) <-chan error {
 	want := p.openWants[ruid]
 	errc := make(chan error)
 	go func() {
@@ -480,7 +487,7 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 				//}
 				go func() {
 					ctx := context.TODO()
-					seen, err := p.syncer.netStore.Put(ctx, chunk.ModePutSync, storage.NewChunk(c.Address(), c.Data()))
+					seen, err := provider.Put(ctx, c.Address(), storage.NewChunk(c.Address(), c.Data()))
 					if err != nil {
 						if err == storage.ErrChunkInvalid {
 							p.Drop()
@@ -488,7 +495,7 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 					}
 					if seen {
 						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
-						panic("shouldnt happen")
+						panic("shouldnt happen") // this in fact could happen...
 					}
 					//want.hashes[c.Address().Hex()] = false //todo: should by sync map
 					atomic.AddUint64(&want.remaining, ^uint64(0))
@@ -499,12 +506,9 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 						close(errc)
 						return
 					}
-
 				}()
 			case <-p.quit:
-
-				break
-				//default:
+				return
 			}
 		}
 	}()
@@ -515,7 +519,7 @@ func (p *Peer) sealBatch(ruid uint) <-chan error {
 // the method is to ensure that all chunks in the requested batch is sent to the client
 func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	log.Debug("peer.handleWantedHashes", "peer", p.ID(), "ruid", msg.Ruid)
-	// Get the length of the original Offer from state
+	// Get the length of the original offer from state
 	// get the offered hashes themselves
 	offer, ok := p.openOffers[msg.Ruid]
 	if !ok {
@@ -523,6 +527,13 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 		log.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid, "peer", p.ID())
 		p.Drop()
 	}
+
+	provider, ok := p.providers[offer.stream.Name]
+	if !ok {
+		log.Error("no provider found for stream, dropping peer", "peer", p.ID(), "stream", offer.stream.String())
+		p.Drop()
+	}
+
 	l := len(offer.Hashes) / HashSize
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
@@ -543,7 +554,7 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
 			hash := offer.Hashes[i*HashSize : (i+1)*HashSize]
-			data, err := p.syncer.GetData(ctx, hash)
+			data, err := provider.Get(ctx, hash)
 			if err != nil {
 				log.Error("handleWantedHashesMsg", "hash", hash, "err", err)
 				p.Drop()
@@ -572,8 +583,8 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 		}
 	}
 
+	// send anything that we might have left in the batch
 	if frameSize > 0 {
-		//send the batch
 		if err := p.Send(ctx, cd); err != nil {
 			log.Error("error sending chunk delivery frame", "peer", p.ID(), "ruid", msg.Ruid, "error", err)
 		}
