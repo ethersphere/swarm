@@ -161,8 +161,6 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 // this message is handled by the SERVER (*Peer is the client in this case)
 func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 	log.Debug("handleStreamInfoReq", "peer", p.ID(), "msg", msg)
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
 	streamRes := StreamInfoRes{}
 	if len(msg.Streams) == 0 {
 		panic("nil streams msg requested")
@@ -333,9 +331,11 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 			Hashes:    h,
 			Requested: time.Now(),
 		}
+
 		p.mtx.Lock()
 		p.openOffers[msg.Ruid] = o
 		p.mtx.Unlock()
+
 		offered := OfferedHashes{
 			Ruid:      msg.Ruid,
 			LastIndex: uint(t),
@@ -470,8 +470,8 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
 		}
 		p.mtx.Lock()
-		defer p.mtx.Unlock()
 		delete(p.openWants, msg.Ruid)
+		p.mtx.Unlock()
 
 		log.Debug("batch done", "from", w.from, "to", w.to)
 		//TODO BATCH TIMEOUT?
