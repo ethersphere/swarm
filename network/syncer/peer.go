@@ -222,7 +222,7 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 					if s.Cursor == 0 {
 						panic("wtf")
 					}
-					// fetch everything from beginning till  s.Cursor
+					// fetch everything from beginning till s.Cursor
 					go func(stream ID, cursor uint64) {
 						err := p.requestStreamRange(ctx, stID, c)
 						if err != nil {
@@ -246,9 +246,6 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64) error {
 	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
-	if cursor == 0 {
-		panic("wtf")
-	}
 	if _, ok := p.providers[stream.Name]; ok {
 		peerIntervalKey := p.peerStreamIntervalKey(stream)
 		interval, err := p.getOrCreateInterval(peerIntervalKey)
