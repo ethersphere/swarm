@@ -75,16 +75,16 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		idOne := nodeIDs[0]
 		idOther := nodeIDs[1]
-		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].mtx.Lock()
-		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].streamCursors
-		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].mtx.Unlock()
+		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).mtx.Lock()
+		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).streamCursors
+		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).mtx.Unlock()
 
-		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].mtx.Lock()
-		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].streamCursors
-		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].mtx.Unlock()
+		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Lock()
+		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).streamCursors
+		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Unlock()
 
-		//onesHistoricalFetchers := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].historicalStreams
-		//othersHistoricalFetchers := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].historicalStreams
+		//onesHistoricalFetchers := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).historicalStreams
+		//othersHistoricalFetchers := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).historicalStreams
 
 		onesBins := sim.NodeItem(idOne, bucketKeyBinIndex).([]uint64)
 		othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
