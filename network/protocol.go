@@ -251,14 +251,12 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			return fmt.Errorf("%08x: %s protocol closed: %v", b.BaseAddr()[:4], spec.Name, handshake.err)
 		}
 
-		caps := handshake.Capabilities.fromMsg()
-
 		// the handshake has succeeded so construct the BzzPeer and run the protocol
 		peer := &BzzPeer{
 			Peer:       protocols.NewPeer(p, rw, spec),
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
-			LightNode:  isLightCapability(caps.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
+			LightNode:  isLightCapability(handshake.Capabilities.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -367,10 +365,9 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
-	caps := rhs.Capabilities.fromMsg()
 	// temporary check for valid capability settings, legacy full/light
-	if !isFullCapability(caps.get(0)) && !isLightCapability(caps.get(0)) {
-		return fmt.Errorf("invalid capabilities setting: %s", caps)
+	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
+		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}
 	return nil
 }

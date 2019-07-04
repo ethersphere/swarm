@@ -186,14 +186,8 @@ func (c Capabilities) toMsg() CapabilitiesMsg {
 	return m
 }
 
-func (m CapabilitiesMsg) fromMsg() Capabilities {
-	c := Capabilities{}
-	for _, entry := range m {
-		f := capability(make([]byte, len(entry)))
-		copy(f, entry)
-		c.add(f)
-	}
-	return c
+func (m CapabilitiesMsg) get(idx int) capability {
+	return m[idx]
 }
 
 func (m CapabilitiesMsg) String() string {

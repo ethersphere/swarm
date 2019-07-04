@@ -302,7 +302,7 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	node := s.Nodes[0]
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
-	msg.Capabilities[0][2] |= 0x40
+	msg.Capabilities.get(0)[2] |= 0x40
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
