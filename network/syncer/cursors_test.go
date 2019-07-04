@@ -76,11 +76,11 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		idOne := nodeIDs[0]
 		idOther := nodeIDs[1]
 		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).mtx.Lock()
-		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).streamCursors
+		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).getCursorsCopy()
 		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).mtx.Unlock()
 
 		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Lock()
-		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).streamCursors
+		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).getCursorsCopy()
 		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Unlock()
 
 		//onesHistoricalFetchers := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).historicalStreams
@@ -89,8 +89,12 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		onesBins := sim.NodeItem(idOne, bucketKeyBinIndex).([]uint64)
 		othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
-		compareNodeBinsToStreams(t, onesCursors, othersBins)
-		compareNodeBinsToStreams(t, othersCursors, onesBins)
+		if err := compareNodeBinsToStreams(t, onesCursors, othersBins); err != nil {
+			return err
+		}
+		if err := compareNodeBinsToStreams(t, othersCursors, onesBins); err != nil {
+			return err
+		}
 
 		// check that the stream fetchers were created on each node
 		//checkHistoricalStreams(t, onesCursors, onesHistoricalFetchers)
@@ -138,9 +142,9 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther)
 
 			// these are the cursors that the pivot node holds for the other peer
-			pivotCursors := peerRecord.getCursors()
+			pivotCursors := peerRecord.getCursorsCopy()
 			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idPivot)
-			otherCursors := otherSyncer.getCursors()
+			otherCursors := otherSyncer.getCursorsCopy()
 			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 
 			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
@@ -151,11 +155,15 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 			// if the peer is outside the depth - the pivot node should not request any streams
 			if po >= depth {
-				compareNodeBinsToStreams(t, pivotCursors, othersBins)
+				if err := compareNodeBinsToStreams(t, pivotCursors, othersBins); err != nil {
+					return err
+				}
 				//checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
 			}
 
-			compareNodeBinsToStreams(t, otherCursors, pivotBins)
+			if err := compareNodeBinsToStreams(t, otherCursors, pivotBins); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -217,12 +225,14 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 				otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 				po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 				depth := pivotKademlia.NeighbourhoodDepth()
-				pivotCursors := pivotSyncer.(*SlipStream).peers[idOther].streamCursors
+				pivotCursors := pivotSyncer.(*SlipStream).getPeer(idOther).getCursorsCopy()
 
 				// check that the pivot node is interested just in bins >= depth
 				if po >= depth {
 					othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
-					compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth)
+					if err := compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -285,8 +295,8 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 				found = true
 				foundEnode = nodeIDs[i]
 				// check that we established some streams for this peer
-				//pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].streamCursors
-				//pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].historicalStreams
+				//pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther).getCursorsCopy()
+				//pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther).historicalStreams
 
 				//checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
 				break
@@ -302,7 +312,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			nodeCount += 1
+			nodeCount++
 			nodeIDs = sim.UpNodeIDs()
 			if len(nodeIDs) != nodeCount {
 				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), nodeCount)
@@ -316,9 +326,9 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 			panic("did not find a node with po<=depth")
 		} else {
 			log.Debug("tracking enode", "enode", foundEnode)
-			pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).peers[nodeIDs[foundId]].streamCursors
-			if len(pivotCursors) == 0 {
-				panic("pivotCursors for node should not be empty")
+			cursorsCount := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).getPeer(nodeIDs[foundId]).cursorsCount()
+			if cursorsCount == 0 {
+				return errors.New("pivotCursors for node should not be empty")
 			}
 		}
 
@@ -332,7 +342,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			nodeCount += 1
+			nodeCount++
 			nodeIDs = sim.UpNodeIDs()
 			if len(nodeIDs) != nodeCount {
 				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), nodeCount)
@@ -341,11 +351,11 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 		log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "foundId", foundId, "nodeIDs", nodeIDs)
 
-		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).getPeer(nodeIDs[foundId]).streamCursors
+		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).getPeer(nodeIDs[foundId]).getCursorsCopy()
 		if len(pivotCursors) != 0 {
 			panic("pivotCursors for node should be empty")
 		}
-		//pvotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[nodeIDs[foundId]].historicalStreams
+		//pvotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(nodeIDs)foundId]].historicalStreams
 		//if len(pivotHistoricalFetchers) != 0 {
 		//log.Error("pivot fetcher length>0", "len", len(pivotHistoricalFetchers))
 		//panic("pivot historical fetchers for node should be empty")
@@ -368,9 +378,9 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 		// wait for cursors msg again
 		time.Sleep(100 * time.Millisecond)
-		pivotCursors = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode).streamCursors
-		if len(pivotCursors) == 0 {
-			panic("pivotCursors for node should no longer be empty")
+		peer := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode)
+		if peer.cursorsCount() == 0 {
+			return errors.New("pivotCursors for foundEnode should no longer be empty")
 		}
 		//pivotHistoricalFetchers = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode).historicalStreams
 		//if len(pivotHistoricalFetchers) == 0 {
@@ -388,23 +398,24 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 // onesCursors represents the stream cursors that node A knows about node B (i.e. they shoud reflect directly in this case
 // the values which node B retrieved from its local store)
 // othersBins is the array of bin indexes on node B's local store as they were inserted into the store
-func compareNodeBinsToStreams(t *testing.T, onesCursors map[string]uint64, othersBins []uint64) {
+func compareNodeBinsToStreams(t *testing.T, onesCursors map[string]uint64, othersBins []uint64) (err error) {
 	if len(onesCursors) == 0 {
-		panic("no cursors")
+		return errors.New("no cursors")
 	}
 	if len(othersBins) == 0 {
-		panic("no bins")
+		return errors.New("no bins")
 	}
 
 	for nameKey, cur := range onesCursors {
 		id, err := strconv.Atoi(parseID(nameKey).Key)
 		if err != nil {
-			(panic(err))
+			return err
 		}
 		if othersBins[id] != uint64(cur) {
-			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", id, cur, othersBins[id])
+			return fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", id, cur, othersBins[id])
 		}
 	}
+	return nil
 }
 
 func parseID(str string) ID {
@@ -415,22 +426,22 @@ func parseID(str string) ID {
 	return NewID(v[0], v[1])
 }
 
-func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint64, othersBins []uint64, depth uint) {
+func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint64, othersBins []uint64, depth uint) (err error) {
 	log.Debug("compareNodeBinsToStreamsWithDepth", "cursors", onesCursors, "othersBins", othersBins, "depth", depth)
 	if len(onesCursors) == 0 || len(othersBins) == 0 {
-		panic("no cursors")
+		return errors.New("no cursors")
 	}
 	// inclusive test
 	for nameKey, cur := range onesCursors {
 		bin, err := strconv.Atoi(parseID(nameKey).Key)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if uint(bin) < depth {
-			panic(fmt.Errorf("cursor at bin %d should not exist. depth %d", bin, depth))
+			return fmt.Errorf("cursor at bin %d should not exist. depth %d", bin, depth)
 		}
 		if othersBins[bin] != uint64(cur) {
-			panic(fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin]))
+			return fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
 		}
 	}
 
@@ -439,9 +450,10 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 		// should not have anything shallower than depth
 		id := NewID("SYNC", fmt.Sprintf("%d", i))
 		if _, ok := onesCursors[id.String()]; ok {
-			panic("should be nil")
+			return fmt.Errorf("oneCursors contains id %s, but it should not", id)
 		}
 	}
+	return nil
 }
 
 //func checkHistoricalStreams(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]*syncStreamFetch) {
