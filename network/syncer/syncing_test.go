@@ -43,7 +43,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),
 	})
 	defer sim.Close()
 

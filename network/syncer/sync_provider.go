@@ -37,17 +37,19 @@ type syncProvider struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 
-	name string
-	quit chan struct{}
+	name         string
+	initBehavior StreamInitBehavior
+	quit         chan struct{}
 }
 
-func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia) *syncProvider {
+func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, initBehavior StreamInitBehavior) *syncProvider {
 	s := &syncProvider{
 		netStore: ns,
 		kad:      kad,
 		name:     streamName,
 
-		quit: make(chan struct{}),
+		initBehavior: initBehavior,
+		quit:         make(chan struct{}),
 	}
 	return s
 }
@@ -317,3 +319,5 @@ func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
 func (s *syncProvider) StreamName() string { return s.name }
 
 func (s *syncProvider) Boundedness() bool { return false }
+
+func (s *syncProvider) StreamBehavior() StreamInitBehavior { return s.initBehavior }
