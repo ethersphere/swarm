@@ -75,12 +75,13 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 }
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
-
+	log.Debug("syncProvider.Get")
 	//err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
 	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetSync, addr)
 	if err != nil {
 		return nil, err
 	}
+	log.Debug("got chunk")
 	return ch.Data(), nil
 }
 
