@@ -9,27 +9,32 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 )
 
+// ExecAdapter can manage local exec nodes
 type ExecAdapter struct {
 	directory string
 	nodes     map[NodeID]*ExecNode
 }
 
+// ExecAdapterConfig is used to configure an ExecAdapter
 type ExecAdapterConfig struct {
 	// Directory stores all the nodes' data directories
 	Directory string
 }
 
+// ExecNode is a node that is executed locally
 type ExecNode struct {
 	adapter *ExecAdapter
 	config  NodeConfig
 	cmd     *exec.Cmd
+	status  NodeStatus
 }
 
+// NewExecAdapter creates an ExecAdapter by receiving a ExecAdapterConfig
 func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
 	if _, err := os.Stat(config.Directory); os.IsNotExist(err) {
 		return nil, fmt.Errorf("'%s' directory does not exist", config.Directory)
@@ -41,32 +46,26 @@ func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
 	return a, nil
 }
 
+// NewNode creates a new node
 func (a *ExecAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
-
+	status := NodeStatus{
+		ID: config.ID,
+	}
 	node := &ExecNode{
 		config:  config,
 		adapter: a,
+		status:  status,
 	}
-
 	a.nodes[config.ID] = node
-
 	return node, nil
-}
-
-func nodeDataDir(adapterDir string, id NodeID) string {
-	return filepath.Join(adapterDir, string(id))
 }
 
 // Status returns the node status
 func (n *ExecNode) Status() NodeStatus {
-	status := NodeStatus{
-		ID: n.config.ID,
-	}
-	// TODO: fill the rest
-	return status
+	return n.status
 }
 
 // Start starts the node
@@ -78,7 +77,6 @@ func (n *ExecNode) Start() error {
 
 	// Create command line arguments
 	args := []string{"swarm"}
-	args = append(args, n.config.Args...)
 
 	// Create data directory for this node
 	dir := n.dataDir()
@@ -97,6 +95,9 @@ func (n *ExecNode) Start() error {
 	args = append(args, "--bzzport", "0")
 	args = append(args, "--wsport", "0")
 	args = append(args, "--port", "0")
+
+	// Append user defined arguments
+	args = append(args, n.config.Args...)
 
 	// Start command
 	n.cmd = &exec.Cmd{
@@ -131,12 +132,27 @@ func (n *ExecNode) Start() error {
 		return fmt.Errorf("could not establish rpc connection. node %s: %v", n.config.ID, err)
 	}
 	defer client.Close()
-	var info swarm.Info
-	if err := client.Call(&info, "bzz_info"); err != nil {
+
+	var swarminfo swarm.Info
+	err = client.Call(&swarminfo, "bzz_info")
+	if err != nil {
 		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
 	}
 
-	spew.Dump(info)
+	var p2pinfo p2p.NodeInfo
+	err = client.Call(&p2pinfo, "admin_nodeInfo")
+	if err != nil {
+		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
+	}
+
+	n.status = NodeStatus{
+		ID:         n.config.ID,
+		Running:    true,
+		Enode:      p2pinfo.Enode,
+		BzzAddr:    swarminfo.BzzKey,
+		RPCListen:  n.ipcPath(),
+		HTTPListen: fmt.Sprintf("http://localhost:%s", swarminfo.Port),
+	}
 
 	return nil
 }
@@ -148,12 +164,14 @@ func (n *ExecNode) Stop() error {
 	}
 	defer func() {
 		n.cmd = nil
+		n.status.Running = false
 	}()
 	// Try to gracefully terminate the process
 	if err := n.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return n.cmd.Process.Kill()
 	}
 
+	// Wait for the process to terminate or timeout
 	waitErr := make(chan error)
 	go func() {
 		waitErr <- n.cmd.Wait()

@@ -24,16 +24,23 @@ func TestExecAdapter(t *testing.T) {
 		t.Fatalf("could not create exec adapter: %v", err)
 	}
 
-	key, err := crypto.GenerateKey()
+	bzzkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("could not generate key: %v", err)
 	}
-	hexKey := hex.EncodeToString(crypto.FromECDSA(key))
+	bzzkeyhex := hex.EncodeToString(crypto.FromECDSA(bzzkey))
+
+	nodekey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("could not generate key: %v", err)
+	}
+	nodekeyhex := hex.EncodeToString(crypto.FromECDSA(nodekey))
 
 	args := []string{
 		"--bootnodes", "",
-		"--bzzkeyhex", hexKey,
-		"--bzznetworkid", "49",
+		"--bzzkeyhex", bzzkeyhex,
+		"--nodekeyhex", nodekeyhex,
+		"--bzznetworkid", "499",
 	}
 	nodeconfig := NodeConfig{
 		ID:     "node1",
@@ -60,9 +67,19 @@ func TestExecAdapter(t *testing.T) {
 		t.Fatalf("node did not start: %v", err)
 	}
 
+	statusA := node.Status()
+
+	if !statusA.Running {
+		t.Errorf("node should be in running state")
+	}
+
 	err = node.Stop()
 	if err != nil {
 		t.Fatalf("node didn't stop: %v", err)
+	}
+
+	if node.Status().Running {
+		t.Errorf("node should not be in running state")
 	}
 
 	err = node.Start()
@@ -70,9 +87,14 @@ func TestExecAdapter(t *testing.T) {
 		t.Fatalf("node didn't start again: %v", err)
 	}
 
+	statusB := node.Status()
+
+	if statusA.BzzAddr != statusB.BzzAddr {
+		t.Errorf("bzzaddr should be the same: %s - %s", statusA.Enode, statusB.Enode)
+	}
+
 	err = node.Stop()
 	if err != nil {
 		t.Fatalf("node didn't stop: %v", err)
 	}
-
 }

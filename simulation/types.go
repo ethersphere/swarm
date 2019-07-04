@@ -35,12 +35,12 @@ type NodeConfig struct {
 type NodeStatus struct {
 	ID      NodeID
 	Running bool // True if the node is running
-	Enode   []byte
-	BzzAddr []byte
+	Enode   string
+	BzzAddr string
 
-	RPCAddr   string // RPC addr. Should ideally be a websocket address for remote RPC calls: e.g. ws://localhost:8501
-	HTTPAddr  string // HTTP addr: e.g. http://localhost:8500
-	PprofAddr string // pprof,metrics, etc ?
+	RPCListen   string // RPC listener address. Should be a valid ipc or websocket path
+	HTTPListen  string // HTTP listener address: e.g. http://localhost:8500
+	PprofListen string // PProf listener address: e.g http://localhost:6060
 }
 
 type NetworkSnapshot struct {
