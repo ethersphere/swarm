@@ -129,7 +129,6 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context, no
 	//get the account for the provided swarm account
 	var prvkey *ecdsa.PrivateKey
 	config.BzzAccount, prvkey = getOrCreateAccount(ctx, stack)
-	//config.BzzAccount = bzzaccount
 	//set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration
