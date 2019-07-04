@@ -75,8 +75,13 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		idOne := nodeIDs[0]
 		idOther := nodeIDs[1]
+		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].mtx.Lock()
 		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].streamCursors
+		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].mtx.Unlock()
+
+		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].mtx.Lock()
 		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].streamCursors
+		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].mtx.Unlock()
 
 		//onesHistoricalFetchers := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).peers[idOther].historicalStreams
 		//othersHistoricalFetchers := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).peers[idOne].historicalStreams
@@ -130,14 +135,13 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 		for i := 1; i < nodeCount; i++ {
 			idOther := nodeIDs[i]
-			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther]
+			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther)
 
 			// these are the cursors that the pivot node holds for the other peer
-			pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].streamCursors
-			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer)
-			otherCursors := otherSyncer.(*SlipStream).peers[idPivot].streamCursors
+			pivotCursors := peerRecord.getCursors()
+			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idPivot)
+			otherCursors := otherSyncer.getCursors()
 			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
-			//pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[idOther].historicalStreams
 
 			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
