@@ -70,6 +70,7 @@ type Peer struct {
 	providers      map[string]StreamProvider
 	intervalsStore state.Store
 
+	streamCursorsMu   sync.Mutex
 	streamCursors     map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
 	dirtyStreams      map[string]bool   // key: stream ID, value: whether cursors for a stream should be updated
 	activeBoundedGets map[string]chan struct{}
@@ -93,30 +94,41 @@ func NewPeer(peer *network.BzzPeer, i state.Store, providers map[string]StreamPr
 	return p
 }
 
-func (p *Peer) getCursors() map[string]uint64 {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+func (p *Peer) cursorsCount() int {
+	p.streamCursorsMu.Lock()
+	defer p.streamCursorsMu.Unlock()
 
-	return p.streamCursors
+	return len(p.streamCursors)
+}
+
+func (p *Peer) getCursorsCopy() map[string]uint64 {
+	p.streamCursorsMu.Lock()
+	defer p.streamCursorsMu.Unlock()
+
+	c := make(map[string]uint64, len(p.streamCursors))
+	for k, v := range p.streamCursors {
+		c[k] = v
+	}
+	return c
 }
 
 func (p *Peer) getCursor(stream ID) uint64 {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	p.streamCursorsMu.Lock()
+	defer p.streamCursorsMu.Unlock()
 
 	return p.streamCursors[stream.String()]
 }
 
 func (p *Peer) setCursor(stream ID, cursor uint64) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	p.streamCursorsMu.Lock()
+	defer p.streamCursorsMu.Unlock()
 
 	p.streamCursors[stream.String()] = cursor
 }
 
 func (p *Peer) deleteCursor(stream ID) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	p.streamCursorsMu.Lock()
+	defer p.streamCursorsMu.Unlock()
 
 	delete(p.streamCursors, stream.String())
 }
@@ -361,7 +373,9 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		log.Error("error invalid hashes length", "len", lenHashes, "msg.ruid", msg.Ruid)
 	}
 
+	p.mtx.Lock()
 	w, ok := p.openWants[msg.Ruid]
+	p.mtx.Unlock()
 	if !ok {
 		log.Error("ruid not found, dropping peer")
 		p.Drop()
@@ -641,7 +655,9 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 func (p *Peer) handleChunkDelivery(ctx context.Context, msg *ChunkDelivery) {
 	log.Debug("peer.handleChunkDelivery", "peer", p.ID(), "chunks", len(msg.Chunks))
 
+	p.mtx.Lock()
 	w, ok := p.openWants[msg.Ruid]
+	p.mtx.Unlock()
 	if !ok {
 		log.Error("no open offers for for ruid", "peer", p.ID(), "ruid", msg.Ruid)
 		panic("should not happen")
