@@ -95,6 +95,8 @@ func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte)
 func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func()) {
 	// convert the key to the actual value and call SubscribePull
 	bin := key.(uint8)
+	log.Debug("sync provider subscribing on key", "key", key, "bin", bin)
+
 	return s.netStore.SubscribePull(ctx, bin, from, to)
 }
 
