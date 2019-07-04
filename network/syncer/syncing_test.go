@@ -39,7 +39,7 @@ import (
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
 	var (
-		chunkCount = 10000
+		chunkCount = 1000
 		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{

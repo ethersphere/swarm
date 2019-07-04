@@ -252,9 +252,9 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 		if err != nil {
 			return err
 		}
-		from, to := interval.Next(cursor)
+		from, to, empty := interval.Next(cursor)
 		log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "from", from, "to", to)
-		if from > cursor {
+		if from > cursor || empty {
 			log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
 			// stream finished. quit
 			return nil
@@ -389,7 +389,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			ctr++
 			w.hashes[c.Hex()] = true
 			// set the bit, so create a request
-			want.Set(i/HashSize, true)
+			want.Set(i / HashSize)
 			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
 		} else {
 			w.hashes[c.Hex()] = false
@@ -450,8 +450,11 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		//TODO BATCH TIMEOUT?
 	}
 
-	f, t, err := p.nextInterval(peerIntervalKey, p.getCursor(stream))
-	log.Error("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey, "w", w)
+	f, t, empty, err := p.nextInterval(peerIntervalKey, p.getCursor(stream))
+	if empty {
+		log.Debug("range ended, quitting")
+	}
+	log.Debug("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey, "w", w)
 	if err := p.requestStreamRange(ctx, stream, p.getCursor(stream)); err != nil {
 		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 		p.Drop()
@@ -470,17 +473,17 @@ func (p *Peer) addInterval(start, end uint64, peerStreamKey string) (err error) 
 	return p.intervalsStore.Put(peerStreamKey, i)
 }
 
-func (p *Peer) nextInterval(peerStreamKey string, ceil uint64) (start, end uint64, err error) {
+func (p *Peer) nextInterval(peerStreamKey string, ceil uint64) (start, end uint64, empty bool, err error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
 	i := &intervals.Intervals{}
 	err = p.intervalsStore.Get(peerStreamKey, i)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
-	start, end = i.Next(ceil)
-	return start, end, nil
+	start, end, empty = i.Next(ceil)
+	return start, end, empty, nil
 }
 
 func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
