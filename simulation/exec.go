@@ -101,6 +101,7 @@ func (n *ExecNode) Start() error {
 
 	// Start command
 	n.cmd = &exec.Cmd{
+		// TODO: change this
 		Path:   "/home/rafael/go/bin/swarm",
 		Args:   args,
 		Dir:    dir,
@@ -153,7 +154,7 @@ func (n *ExecNode) Start() error {
 		RPCListen:  n.ipcPath(),
 		HTTPListen: fmt.Sprintf("http://localhost:%s", swarminfo.Port),
 	}
-
+	// TODO: What happens if the program exits unexpectatly ?
 	return nil
 }
 
