@@ -76,7 +76,7 @@ func TestBzzKeyFlag(t *testing.T) {
 
 	conf := &node.Config{
 		DataDir: dir,
-		IPCPath: fmt.Sprintf("bzzd-%s.ipc", bzzaccount),
+		IPCPath: "testbzzkeyflag.ipc",
 		NoUSB:   true,
 	}
 
