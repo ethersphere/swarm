@@ -121,31 +121,38 @@ func (i *Intervals) Merge(m *Intervals) {
 // range that is stored in Intervals. Zero end value represents no limit
 // on the next interval length.
 // Argument ceiling is the upper bound for the returned range.
-func (i *Intervals) Next(ceiling uint64) (start, end uint64) {
+// Returned empty boolean indicates if both start and end values have
+// reached the ceiling value which means that the returned range is empty,
+// not containing a single element.
+func (i *Intervals) Next(ceiling uint64) (start, end uint64, empty bool) {
 	i.mu.RLock()
 	defer func() {
 		if ceiling > 0 {
+			var ceilingHitStart, ceilingHitEnd bool
 			if start > ceiling {
 				start = ceiling
+				ceilingHitStart = true
 			}
 			if end == 0 || end > ceiling {
 				end = ceiling
+				ceilingHitEnd = true
 			}
+			empty = ceilingHitStart && ceilingHitEnd
 		}
 		i.mu.RUnlock()
 	}()
 
 	l := len(i.ranges)
 	if l == 0 {
-		return i.start, 0
+		return i.start, 0, false
 	}
 	if i.ranges[0][0] != i.start {
-		return i.start, i.ranges[0][0] - 1
+		return i.start, i.ranges[0][0] - 1, false
 	}
 	if l == 1 {
-		return i.ranges[0][1] + 1, 0
+		return i.ranges[0][1] + 1, 0, false
 	}
-	return i.ranges[0][1] + 1, i.ranges[1][0] - 1
+	return i.ranges[0][1] + 1, i.ranges[1][0] - 1, false
 }
 
 // Last returns the value that is at the end of the last interval.
