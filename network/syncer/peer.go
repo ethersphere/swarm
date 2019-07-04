@@ -71,10 +71,12 @@ type Peer struct {
 	providers      map[string]StreamProvider
 	intervalsStore state.Store
 
-	streamCursors map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
-	openWants     map[uint]*Want    // maintain open wants on the client side
-	openOffers    map[uint]offer    // maintain open offers on the server side
-	quit          chan struct{}     // closed when peer is going offline
+	streamCursors     map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
+	dirtyStreams      map[string]bool   // key: stream ID, value: whether cursors for a stream should be updated
+	activeBoundedGets map[string]chan struct{}
+	openWants         map[uint]*Want // maintain open wants on the client side
+	openOffers        map[uint]offer // maintain open offers on the server side
+	quit              chan struct{}  // closed when peer is going offline
 }
 
 // NewPeer is the constructor for Peer
@@ -84,11 +86,19 @@ func NewPeer(peer *network.BzzPeer, i state.Store, providers map[string]StreamPr
 		providers:      providers,
 		intervalsStore: i,
 		streamCursors:  make(map[string]uint64),
+		dirtyStreams:   make(map[string]bool),
 		openWants:      make(map[uint]*Want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
 	}
 	return p
+}
+
+func (p *Peer) getCursors() map[string]uint64 {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.streamCursors
 }
 
 func (p *Peer) Left() {
@@ -190,20 +200,20 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			p.streamCursors[s.Stream.String()] = s.Cursor
 
 			if s.Cursor > 0 {
-				log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
-				stID := NewID(s.Stream.Name, s.Stream.Key)
-				c := p.streamCursors[s.Stream.String()]
-				if s.Cursor == 0 {
-					panic("wtf")
-				}
-				// fetch everything from beginning till  s.Cursor
-				go func(stream ID, cursor uint64) {
-					err := p.requestStreamRange(ctx, stID, c)
-					if err != nil {
-						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
-						p.Drop()
-					}
-				}(stID, c)
+				//log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
+				//stID := NewID(s.Stream.Name, s.Stream.Key)
+				//c := p.streamCursors[s.Stream.String()]
+				//if s.Cursor == 0 {
+				//panic("wtf")
+				//}
+				//// fetch everything from beginning till  s.Cursor
+				//go func(stream ID, cursor uint64) {
+				//err := p.requestStreamRange(ctx, stID, c)
+				//if err != nil {
+				//log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
+				//p.Drop()
+				//}
+				//}(stID, c)
 			}
 
 			// handle stream unboundedness
@@ -223,9 +233,6 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 	if cursor == 0 {
 		panic("wtf")
 	}
-	//if stream.Key == "16" {
-	//panic("111")
-	//}
 	if _, ok := p.providers[stream.Name]; ok {
 		peerIntervalKey := p.peerStreamIntervalKey(stream)
 		interval, err := p.getOrCreateInterval(peerIntervalKey)

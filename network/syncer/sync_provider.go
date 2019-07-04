@@ -116,29 +116,43 @@ func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
 //  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 // peer connects and disconnects quickly
 func (s *syncProvider) RunUpdateStreams(p *Peer) {
-	defer log.Debug("createStreams closed", "peer", p.ID())
 
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
 	depth := s.kad.NeighbourhoodDepth()
 	withinDepth := peerPo >= depth
+	p.mtx.Lock()
+	p.dirtyStreams[s.StreamName()] = true
+	p.mtx.Unlock()
 
-	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
+	//run in the background:
+	/*
+		if the streams are dirty - request the streams (lets assume from -1 to depth and set dirty = false(!) that is because we just requested them. the bool is indicative of what should be requested
 
-	if withinDepth {
-		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
-		log.Debug("sending initial subscriptions message", "peer", p.ID(), "bins", sub)
-		time.Sleep(createStreamsDelay)
-		doPeerSubUpdate(p, sub, nil)
-		if len(sub) == 0 {
-			panic("w00t")
-		}
-	}
+		wait for the reply:
+		 - if the streams are still dirty when the reply comes in - it means they are now incorrect. dump the reply and request them again with the current depth
+		 - if the streams are not dirty, it means they are correct - store the cursors and request the streams according to logic
+		 - when we write the stream cursors - we must assume, that if an entry is already there - it probably means that there's a goroutine running and fetching the stream in the background
+			 so.... if we want to stop that goroutine - we must set the record to be nil. but that does no guaranty that the goroutine will actually stop
+	*/
+
+	log.Debug("create streams", "peer", p.BzzAddr.ID(), "base", fmt.Sprintf("%x", s.kad.BaseAddr()[:12]), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
+
+	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
+	log.Debug("sending initial subscriptions message", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:12]), "peer", p.ID(), "subs", sub)
+	doPeerSubUpdate(p, sub, nil)
+	//if len(sub) == 0 {
+	//panic("w00t")
+	//}
 
 	subscription, unsubscribe := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribe()
 	for {
 		select {
 		case <-subscription:
+			p.mtx.Lock()
+			p.dirtyStreams[s.StreamName()] = true
+			p.mtx.Unlock()
+
 			newDepth := s.kad.NeighbourhoodDepth()
 			log.Debug("got kademlia depth change sig", "peer", p.ID(), "peerPo", peerPo, "depth", depth, "newDepth", newDepth, "withinDepth", withinDepth)
 			switch {
@@ -149,6 +163,7 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 					withinDepth = true // peerPo >= newDepth
 					// previous depth is -1 because we did not have any streams with the client beforehand
 					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, true)
+					log.Debug("getting cursors info from peer", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:16]), "peer", p.ID(), "subs", sub)
 					doPeerSubUpdate(p, sub, nil)
 					if len(sub) == 0 {
 						panic("w00t")
@@ -159,17 +174,25 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 					// necessary bins and quit the unnecessary ones
 					sub, quits := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay, true)
 					log.Debug("peer was inside depth, checking if needs changes", "peer", p.ID(), "peerPo", peerPo, "depth", depth, "newDepth", newDepth, "subs", sub, "quits", quits)
+					log.Debug("getting cursors info from peer", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:16]), "peer", p.ID(), "subs", sub)
 					doPeerSubUpdate(p, sub, quits)
+					//p.mtx.Lock()
+					/////unset.../
+					//p.mtx.Unlock()
 					depth = newDepth
 				}
 			case peerPo < newDepth:
 				if withinDepth {
 					sub, quits := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay, true)
 					log.Debug("peer transitioned out of depth", "peer", p.ID(), "subs", sub, "quits", quits)
+					log.Debug("getting cursors info from peer", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:16]), "peer", p.ID(), "subs", sub)
 					doPeerSubUpdate(p, sub, quits)
 					withinDepth = false
 				}
 			}
+			p.mtx.Lock()
+			p.dirtyStreams[s.StreamName()] = false
+			p.mtx.Unlock()
 
 		case <-s.quit:
 			return
@@ -179,7 +202,6 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 
 func doPeerSubUpdate(p *Peer, subs, quits []uint) {
 	if len(subs) > 0 {
-		log.Debug("getting cursors info from peer", "peer", p.ID(), "subs", subs)
 		streams := []ID{}
 		for _, v := range subs {
 			vv := NewID(streamName, fmt.Sprintf("%d", v))
