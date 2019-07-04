@@ -39,8 +39,8 @@ import (
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
 	var (
-		chunkCount = 1000
-		syncTime   = 5 * time.Second
+		chunkCount = 10000
+		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),

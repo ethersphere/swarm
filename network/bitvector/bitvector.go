@@ -38,6 +38,7 @@ func New(l int) (bv *BitVector, err error) {
 // Leftmost bit in byte slice becomes leftmost bit in bit vector
 func NewFromBytes(b []byte, l int) (bv *BitVector, err error) {
 	if l <= 0 {
+		panic(l)
 		return nil, errInvalidLength
 	}
 	if len(b)*8 < l {
