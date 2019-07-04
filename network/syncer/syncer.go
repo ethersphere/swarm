@@ -87,6 +87,13 @@ func NewSlipStream(intervalsStore state.Store, kad *network.Kademlia, providers 
 	return slipStream
 }
 
+func (s *SlipStream) getPeer(id enode.ID) *Peer {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	p := s.peers[id]
+	return p
+}
+
 func (s *SlipStream) addPeer(p *Peer) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
