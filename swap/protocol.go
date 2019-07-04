@@ -45,7 +45,7 @@ func (s *Swap) Protocols() []p2p.Protocol {
 			Name:    SwapSpec.Name,
 			Version: SwapSpec.Version,
 			Length:  SwapSpec.Length(),
-			Run:     s.service.run,
+			Run:     s.Service.run,
 		},
 	}
 }
@@ -55,7 +55,7 @@ func (s *Swap) APIs() []rpc.API {
 		{
 			Namespace: "swap",
 			Version:   "1.0",
-			Service:   s.service,
+			Service:   s.Service,
 			Public:    false,
 		},
 	}

@@ -171,7 +171,7 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := New(stateStore, common.Address{}, key)
+	swap := New(stateStore, key, common.Address{})
 	return swap, dir
 }
 

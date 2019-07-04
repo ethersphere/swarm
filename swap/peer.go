@@ -19,7 +19,10 @@ package swap
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
@@ -73,27 +76,46 @@ func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{})
 func (sp *SwapPeer) signContent(cheque *Cheque) ([]byte, error) {
 	serialBytes := make([]byte, 32)
 	amountBytes := make([]byte, 32)
+	timeoutBytes := make([]byte, 32)
 	input := append(cheque.Contract.Bytes(), cheque.Beneficiary.Bytes()...)
-	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
 	binary.LittleEndian.PutUint64(serialBytes, cheque.Serial)
-	input = append(input, amountBytes[:]...)
+	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
+	binary.LittleEndian.PutUint64(timeoutBytes, cheque.Timeout)
 	input = append(input, serialBytes[:]...)
+	input = append(input, amountBytes[:]...)
+	input = append(input, timeoutBytes[:]...)
 	return crypto.Sign(crypto.Keccak256(input), sp.swap.owner.privateKey)
 }
 
 func (sp *SwapPeer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error {
+	chequeMsg, ok := msg.(*EmitChequeMsg)
+	if !ok {
+		return fmt.Errorf("Invalid message type, %v", msg)
+	}
+	cheque := chequeMsg.Cheque
 	// reset balance to zero
 	sp.swap.resetBalance(sp.Peer)
+	// send confirmation
+	sp.Send(ctx, &ConfirmMsg{})
 	// cash in cheque
+	//TODO: input parameter checks?
+
+	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
+	//TODO: ??????
+	opts.Value = big.NewInt(int64(cheque.Amount))
+	opts.Context = ctx
+	sp.swap.contractProxy.Wrapper.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 	return nil
 }
 
+// TODO: Error handling
 func (sp *SwapPeer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 	// maybe balance disagreement
 	return nil
 }
 
 func (sp *SwapPeer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
+	sp.swap.resetBalance(sp.Peer)
 	return nil
 }
 

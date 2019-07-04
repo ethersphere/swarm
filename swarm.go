@@ -44,8 +44,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
-	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -73,8 +73,8 @@ type Swarm struct {
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
-	bzz               *network.Bzz       // the logistic manager
-	backend           chequebook.Backend // simple blockchain Backend
+	bzz               *network.Bzz // the logistic manager
+	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
@@ -101,25 +101,26 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self = &Swarm{
 		config:       config,
-		backend:      backend,
 		privateKey:   config.ShiftPrivateKey(),
 		cleanupFuncs: []func() error{},
 	}
 	log.Debug("Setting up Swarm service components")
 
-	var backend chequebook.Backend
-	if config.SwapAPI != "" && config.SwapEnabled {
-		log.Info("connecting to SWAP API", "url", config.SwapAPI)
-		backend, err = ethclient.Dial(config.SwapAPI)
+	if config.SwapEnabled {
+		if self.config.SwapAPI == "" {
+			return nil, fmt.Errorf("Swap enabled but no contract address given; fatal error condition, aborting.")
+		}
+		log.Info("connecting to SWAP API", "url", self.config.SwapAPI)
+		self.backend, err = ethclient.Dial(self.config.SwapAPI)
 		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapAPI, err)
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapAPI, err)
 		}
 
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
 		if err != nil {
 			return nil, err
 		}
-		self.swap = swap.New(balancesStore, self.privateKey)
+		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract)
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
@@ -348,16 +349,20 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	// update uaddr to correct enode
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
-	// set chequebook
-	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
+
+	// set up Swap
+	//TODO: Currently if swap is enabled and no swap (or inexistent) contract is provided, the node would crash.
 	//Once we integrate back the contracts, this check MUST be revisited
-	if s.config.SwapEnabled && s.config.SwapAPI != "" {
-		ctx := context.Background() // The initial setup has no deadline.
-		err := s.SetChequebook(ctx)
-		if err != nil {
-			return fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
+	if s.config.SwapEnabled {
+		if s.config.SwapAPI == "" {
+			return fmt.Errorf("Swap enabled but no contract address given; fatal error condition, aborting.")
 		}
-		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", s.config.Swap.Chequebook()))
+		ctx := context.Background() // The initial setup has no deadline.
+		err := s.DeploySwap(ctx)
+		if err != nil {
+			return fmt.Errorf("Unable to deploy swap contract: %v", err)
+		}
+		log.Info(fmt.Sprintf("-> swap contract deployed: %v", s.swap.DeploySuccess()))
 	} else {
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
@@ -430,9 +435,9 @@ func (s *Swarm) Stop() error {
 	if s.ps != nil {
 		s.ps.Stop()
 	}
-	if ch := s.config.Swap.Chequebook(); ch != nil {
+	// TODO: NEEDED????
+	if ch := s.swap.Service; ch != nil {
 		ch.Stop()
-		ch.Save()
 	}
 	if s.swap != nil {
 		s.swap.Close()
@@ -485,7 +490,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   &Info{s.config, chequebook.ContractParams},
+			Service:   &Info{s.config, s.swap.GetParams()},
 			Public:    true,
 		},
 		// admin APIs
@@ -493,12 +498,6 @@ func (s *Swarm) APIs() []rpc.API {
 			Namespace: "bzz",
 			Version:   "3.0",
 			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
-			Public:    false,
-		},
-		{
-			Namespace: "chequebook",
-			Version:   chequebook.Version,
-			Service:   chequebook.NewAPI(s.config.Swap.Chequebook),
 			Public:    false,
 		},
 		{
@@ -526,13 +525,14 @@ func (s *Swarm) APIs() []rpc.API {
 	return apis
 }
 
-// SetChequebook ensures that the local checquebook is set up on chain.
-func (s *Swarm) SetChequebook(ctx context.Context) error {
-	err := s.config.Swap.SetChequebook(ctx, s.backend, s.config.Path)
+// DeploySwap ensures that Swap is set up on chain.
+func (s *Swarm) DeploySwap(ctx context.Context) error {
+	err := s.swap.Deploy(ctx, s.backend, s.config.Path)
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
+	//TODO: original message, what's this "resetting all connections in the hive"?
+	//log.Info(fmt.Sprintf("new swap contract deployed (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
 	return nil
 }
 
@@ -544,7 +544,7 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 // serialisable info about swarm
 type Info struct {
 	*api.Config
-	*chequebook.Params
+	*cswap.Params
 }
 
 func (s *Info) Info() *Info {
