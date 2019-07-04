@@ -101,6 +101,20 @@ func (p *Peer) getCursors() map[string]uint64 {
 	return p.streamCursors
 }
 
+func (p *Peer) getCursor(stream ID) uint64 {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.streamCursors[stream.String()]
+}
+
+func (p *Peer) setCursor(stream ID, cursor uint64) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	p.streamCursors[stream.String()] = cursor
+}
+
 func (p *Peer) Left() {
 	close(p.quit)
 }
@@ -179,8 +193,6 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 // this message is handled by the CLIENT (*Peer is the server in this case)
 func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	log.Debug("handleStreamInfoRes", "peer", p.ID(), "msg", msg)
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
 
 	if len(msg.Streams) == 0 {
 		log.Error("StreamInfo response is empty")
@@ -197,7 +209,7 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 				p.Drop()
 			}
 			log.Debug("setting stream cursor", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor)
-			p.streamCursors[s.Stream.String()] = s.Cursor
+			p.setCursor(s.Stream, s.Cursor)
 
 			if s.Cursor > 0 {
 				//log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
@@ -431,9 +443,9 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		//TODO BATCH TIMEOUT?
 	}
 
-	f, t, err := p.nextInterval(peerIntervalKey, p.streamCursors[stream.String()])
+	f, t, err := p.nextInterval(peerIntervalKey, p.getCursor(stream))
 	log.Error("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey)
-	if err := p.requestStreamRange(ctx, stream, p.streamCursors[stream.String()]); err != nil {
+	if err := p.requestStreamRange(ctx, stream, p.getCursor(stream)); err != nil {
 		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 		p.Drop()
 	}
