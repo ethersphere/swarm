@@ -28,11 +28,7 @@ func NewCapabilities(changeC chan<- capability) *Capabilities {
 
 // String implements Stringer interface
 func (c Capabilities) String() string {
-	var caps []string
-	for _, cap := range c.Flags {
-		caps = append(caps, fmt.Sprintf("%02x:%v", cap[0], pot.ToBin(cap[2:])))
-	}
-	return strings.Join(caps, ",")
+	return capArrayToString(c.Flags)
 }
 
 // close the internal notification channel if it exists
@@ -171,5 +167,43 @@ func (c *capability) unset(flag []byte) error {
 
 // validate flag input against capability type length
 func (c *capability) validLength(flag []byte) bool {
-	return len(flag) != len(*c)-2
+	return len(flag) == len(*c)-2
+}
+
+func (c *capability) String() string {
+	return fmt.Sprintf("%02x:%v", (*c)[0], pot.ToBin((*c)[2:]))
+}
+
+type CapabilitiesMsg []capability
+
+func (c Capabilities) toMsg() CapabilitiesMsg {
+	var m CapabilitiesMsg
+	for _, f := range c.Flags {
+		entry := make([]byte, len(f))
+		copy(entry, f)
+		m = append(m, entry)
+	}
+	return m
+}
+
+func (m CapabilitiesMsg) fromMsg() Capabilities {
+	c := Capabilities{}
+	for _, entry := range m {
+		f := capability(make([]byte, len(entry)))
+		copy(f, entry)
+		c.add(f)
+	}
+	return c
+}
+
+func (m CapabilitiesMsg) String() string {
+	return capArrayToString(m)
+}
+
+func capArrayToString(b []capability) string {
+	var caps []string
+	for _, cap := range b {
+		caps = append(caps, cap.String())
+	}
+	return strings.Join(caps, ",")
 }

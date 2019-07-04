@@ -86,7 +86,7 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		Version:      version,
 		NetworkID:    networkId,
 		Addr:         addr,
-		Capabilities: *capabilities,
+		Capabilities: capabilities.toMsg(),
 	}
 
 	return msg
@@ -302,8 +302,7 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	node := s.Nodes[0]
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
-
-	msg.Capabilities.get(0)[2] |= 0x40
+	msg.Capabilities[0][2] |= 0x40
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
@@ -379,9 +378,9 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for i, b := range pt.bzz.handshakes[node.ID()].Capabilities.Flags {
+				for i, b := range pt.bzz.handshakes[node.ID()].Capabilities {
 					if !bytes.Equal(b, nodeCapabilities.Flags[i]) {
-						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities.Flags, nodeCapabilities.Flags)
+						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities, nodeCapabilities.Flags)
 					}
 				}
 			case <-time.After(10 * time.Second):

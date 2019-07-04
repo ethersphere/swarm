@@ -251,12 +251,14 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			return fmt.Errorf("%08x: %s protocol closed: %v", b.BaseAddr()[:4], spec.Name, handshake.err)
 		}
 
+		caps := handshake.Capabilities.fromMsg()
+
 		// the handshake has succeeded so construct the BzzPeer and run the protocol
 		peer := &BzzPeer{
 			Peer:       protocols.NewPeer(p, rw, spec),
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
-			LightNode:  isLightCapability(handshake.Capabilities.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
+			LightNode:  isLightCapability(caps.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -341,7 +343,7 @@ type HandshakeMsg struct {
 	Version      uint64
 	NetworkID    uint64
 	Addr         *BzzAddr
-	Capabilities Capabilities
+	Capabilities CapabilitiesMsg
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -365,9 +367,10 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
+	caps := rhs.Capabilities.fromMsg()
 	// temporary check for valid capability settings, legacy full/light
-	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
-		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
+	if !isFullCapability(caps.get(0)) && !isLightCapability(caps.get(0)) {
+		return fmt.Errorf("invalid capabilities setting: %s", caps)
 	}
 	return nil
 }
@@ -390,7 +393,7 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			Version:      uint64(BzzSpec.Version),
 			NetworkID:    b.NetworkID,
 			Addr:         b.localAddr,
-			Capabilities: *b.capabilities,
+			Capabilities: b.capabilities.toMsg(),
 			init:         make(chan bool, 1),
 			done:         make(chan struct{}),
 		}
