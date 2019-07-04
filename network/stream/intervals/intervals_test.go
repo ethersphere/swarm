@@ -22,15 +22,16 @@ import "testing"
 // initial state.
 func Test(t *testing.T) {
 	for i, tc := range []struct {
-		startLimit uint64
-		initial    [][2]uint64
-		start      uint64
-		end        uint64
-		expected   string
-		nextStart  uint64
-		nextEnd    uint64
-		last       uint64
-		ceiling    uint64
+		startLimit     uint64
+		initial        [][2]uint64
+		start          uint64
+		end            uint64
+		expected       string
+		nextStart      uint64
+		nextEnd        uint64
+		nextEmptyRange bool
+		last           uint64
+		ceiling        uint64
 	}{
 		{
 			initial:   nil,
@@ -328,6 +329,28 @@ func Test(t *testing.T) {
 			ceiling:   10,
 		},
 		{
+			initial:        nil,
+			start:          0,
+			end:            9,
+			expected:       "[[0 9]]",
+			nextStart:      9,
+			nextEnd:        9,
+			nextEmptyRange: true,
+			last:           9,
+			ceiling:        9,
+		},
+		{
+			initial:        nil,
+			start:          0,
+			end:            9,
+			expected:       "[[0 9]]",
+			nextStart:      10,
+			nextEnd:        10,
+			nextEmptyRange: false,
+			last:           9,
+			ceiling:        10,
+		},
+		{
 			initial:   nil,
 			start:     0,
 			end:       10,
@@ -376,12 +399,15 @@ func Test(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("interval #%d: expected %s, got %s", i, tc.expected, got)
 		}
-		nextStart, nextEnd := intervals.Next(tc.ceiling)
+		nextStart, nextEnd, nextEmptyRange := intervals.Next(tc.ceiling)
 		if nextStart != tc.nextStart {
 			t.Errorf("interval #%d, expected next start %d, got %d", i, tc.nextStart, nextStart)
 		}
 		if nextEnd != tc.nextEnd {
 			t.Errorf("interval #%d, expected next end %d, got %d", i, tc.nextEnd, nextEnd)
+		}
+		if nextEmptyRange != tc.nextEmptyRange {
+			t.Errorf("interval #%d, expected empty range %v, got %v", i, tc.nextEmptyRange, nextEmptyRange)
 		}
 		last := intervals.Last()
 		if last != tc.last {
