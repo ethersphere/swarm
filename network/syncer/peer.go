@@ -190,14 +190,20 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			p.streamCursors[s.Stream.String()] = s.Cursor
 
 			if s.Cursor > 0 {
+				log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
+				stID := NewID(s.Stream.Name, s.Stream.Key)
+				c := p.streamCursors[s.Stream.String()]
+				if s.Cursor == 0 {
+					panic("wtf")
+				}
 				// fetch everything from beginning till  s.Cursor
 				go func(stream ID, cursor uint64) {
-					err := p.requestStreamRange(ctx, s.Stream, cursor)
+					err := p.requestStreamRange(ctx, stID, c)
 					if err != nil {
 						log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
 						p.Drop()
 					}
-				}(s.Stream, s.Cursor)
+				}(stID, c)
 			}
 
 			// handle stream unboundedness
@@ -214,6 +220,12 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64) error {
 	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
+	if cursor == 0 {
+		panic("wtf")
+	}
+	//if stream.Key == "16" {
+	//panic("111")
+	//}
 	if _, ok := p.providers[stream.Name]; ok {
 		peerIntervalKey := p.peerStreamIntervalKey(stream)
 		interval, err := p.getOrCreateInterval(peerIntervalKey)
@@ -283,6 +295,7 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, msg.To)
 		if err != nil {
 			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
+			panic("batch error")
 			//p.Drop()
 		}
 
@@ -301,6 +314,7 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 			Hashes:    h,
 		}
 		l := len(h) / HashSize
+		//if
 		log.Debug("server offering batch", "peer", p.ID(), "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "l", l)
 		if err := p.Send(ctx, offered); err != nil {
 			log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
@@ -313,12 +327,12 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 // handleOfferedHashes handles the OfferedHashes wire protocol message.
 // this message is handled by the CLIENT.
 func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
-	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg.ruid", msg.Ruid)
+	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg.ruid", msg.Ruid, "msg", msg)
 
 	hashes := msg.Hashes
 	lenHashes := len(hashes)
 	if lenHashes%HashSize != 0 {
-		log.Error("error invalid hashes length", "len", lenHashes)
+		log.Error("error invalid hashes length", "len", lenHashes, "msg.ruid", msg.Ruid)
 	}
 
 	w, ok := p.openWants[msg.Ruid]
@@ -336,7 +350,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 
 	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
-		log.Error("error initiaising bitvector", "len", lenHashes/HashSize, "err", err)
+		log.Error("error initiaising bitvector", "len", lenHashes/HashSize, "msg.ruid", msg.Ruid, "err", err)
 		panic("drop later")
 		p.Drop()
 	}
@@ -638,6 +652,7 @@ func (p *Peer) collectBatch(ctx context.Context, provider StreamProvider, key in
 				iterate = false
 				break
 			}
+			log.Debug("got a chunk on key", "key", key)
 			batch = append(batch, d.Address[:]...)
 			// This is the most naive approach to label the chunk as synced
 			// allowing it to be garbage collected. A proper way requires
