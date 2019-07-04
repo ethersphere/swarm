@@ -123,8 +123,9 @@ func (p *Peer) InitProviders() {
 	log.Debug("peer.InitProviders")
 
 	for _, sp := range p.providers {
-
-		go sp.RunUpdateStreams(p)
+		if sp.StreamBehavior() != StreamIdle {
+			go sp.RunUpdateStreams(p)
+		}
 	}
 }
 
@@ -178,9 +179,7 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 				Bounded: provider.Boundedness(),
 			}
 			streamRes.Streams = append(streamRes.Streams, descriptor)
-
 		} else {
-
 			// tell the other peer we dont support this stream. this is non fatal
 		}
 	}
@@ -211,27 +210,28 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			log.Debug("setting stream cursor", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor)
 			p.setCursor(s.Stream, s.Cursor)
 
-			if s.Cursor > 0 {
-				//log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
-				//stID := NewID(s.Stream.Name, s.Stream.Key)
-				//c := p.streamCursors[s.Stream.String()]
-				//if s.Cursor == 0 {
-				//panic("wtf")
-				//}
-				//// fetch everything from beginning till  s.Cursor
-				//go func(stream ID, cursor uint64) {
-				//err := p.requestStreamRange(ctx, stID, c)
-				//if err != nil {
-				//log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
-				//p.Drop()
-				//}
-				//}(stID, c)
-			}
+			if provider.StreamBehavior() == StreamAutostart {
+				if s.Cursor > 0 {
+					log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
+					stID := NewID(s.Stream.Name, s.Stream.Key)
+					c := p.streamCursors[s.Stream.String()]
+					if s.Cursor == 0 {
+						panic("wtf")
+					}
+					// fetch everything from beginning till  s.Cursor
+					go func(stream ID, cursor uint64) {
+						err := p.requestStreamRange(ctx, stID, c)
+						if err != nil {
+							log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
+							p.Drop()
+						}
+					}(stID, c)
+				}
 
-			// handle stream unboundedness
-			if !s.Bounded {
-				// constantly fetch the head of the stream
-
+				// handle stream unboundedness
+				if !s.Bounded {
+					// constantly fetch the head of the stream
+				}
 			}
 		} else {
 			log.Error("got a StreamInfoRes message for a provider which I dont support")

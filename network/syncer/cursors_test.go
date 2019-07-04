@@ -54,7 +54,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000, StreamGetCursors),
 	})
 	defer sim.Close()
 
@@ -110,7 +110,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	nodeCount := 8
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000, StreamGetCursors),
 	})
 	defer sim.Close()
 
@@ -172,7 +172,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	nodeCount := 10
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000, StreamGetCursors),
 	})
 	defer sim.Close()
 
@@ -244,7 +244,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	nodeCount := 5
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000, StreamGetCursors),
 	})
 	defer sim.Close()
 
@@ -466,7 +466,7 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 //}
 //}
 
-func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+func newBzzSyncWithLocalstoreDataInsertion(numChunks int, autostartBehavior StreamInitBehavior) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 		n := ctx.Config.Node()
 		addr := network.NewAddr(n)
@@ -512,7 +512,7 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 			return nil, nil, err
 		}
 
-		sp := NewSyncProvider(netStore, kad)
+		sp := NewSyncProvider(netStore, kad, autostartBehavior)
 		o := NewSlipStream(store, kad, sp)
 		bucket.Store(bucketKeyBinIndex, binIndexes)
 		bucket.Store(bucketKeyFileStore, fileStore)

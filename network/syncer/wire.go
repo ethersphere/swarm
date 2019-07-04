@@ -65,10 +65,18 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
-	//IntervalKey(ID) string
+	StreamBehavior() StreamInitBehavior
 
 	Boundedness() bool
 }
+
+type StreamInitBehavior int
+
+const (
+	StreamIdle StreamInitBehavior = iota
+	StreamGetCursors
+	StreamAutostart
+)
 
 type StreamInfoReq struct {
 	Streams []ID
