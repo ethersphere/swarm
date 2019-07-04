@@ -215,12 +215,13 @@ func doPeerSubUpdate(p *Peer, subs, quits []uint) {
 			p.Drop()
 		}
 	}
+
 	for _, v := range quits {
 		log.Debug("removing cursor info for peer", "peer", p.ID(), "bin", v, "cursors", p.streamCursors, "quits", quits)
 
 		vv := NewID(streamName, fmt.Sprintf("%d", v))
-		delete(p.streamCursors, vv.String())
 
+		p.deleteCursor(vv)
 	}
 }
 
