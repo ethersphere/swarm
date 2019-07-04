@@ -341,7 +341,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 		log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "foundId", foundId, "nodeIDs", nodeIDs)
 
-		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).peers[nodeIDs[foundId]].streamCursors
+		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).getPeer(nodeIDs[foundId]).streamCursors
 		if len(pivotCursors) != 0 {
 			panic("pivotCursors for node should be empty")
 		}
@@ -368,11 +368,11 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 		// wait for cursors msg again
 		time.Sleep(100 * time.Millisecond)
-		pivotCursors = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[foundEnode].streamCursors
+		pivotCursors = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode).streamCursors
 		if len(pivotCursors) == 0 {
 			panic("pivotCursors for node should no longer be empty")
 		}
-		//pivotHistoricalFetchers = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).peers[foundEnode].historicalStreams
+		//pivotHistoricalFetchers = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode).historicalStreams
 		//if len(pivotHistoricalFetchers) == 0 {
 		//log.Error("pivot fetcher length == 0", "len", len(pivotHistoricalFetchers))
 		//panic("pivot historical fetchers for node should not be empty")
