@@ -40,8 +40,7 @@ var ErrEmptyBatch = errors.New("empty batch")
 
 const (
 	HashSize  = 32
-	BatchSize = 50
-	//DeliveryFrameSize        = 128
+	BatchSize = 16
 )
 
 type offer struct {
@@ -209,7 +208,6 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			_, err := provider.ParseKey(s.Stream.Key)
 			if err != nil {
 				log.Error("error parsing stream", "stream", s.Stream)
-				panic("w00t")
 				p.Drop()
 			}
 			log.Debug("setting stream cursor", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor)
@@ -219,7 +217,8 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 				if s.Cursor > 0 {
 					log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
 					stID := NewID(s.Stream.Name, s.Stream.Key)
-					c := p.streamCursors[s.Stream.String()]
+
+					c := p.getCursor(s.Stream)
 					if s.Cursor == 0 {
 						panic("wtf")
 					}
@@ -281,7 +280,8 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 			BatchSize: BatchSize,
 			Roundtrip: true,
 		}
-		log.Debug("sending GetRange to peer", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "GetRange", g)
+
+		log.Debug("sending GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String(), "cursor", cursor, "GetRange", g)
 
 		if err := p.Send(ctx, g); err != nil {
 			return err
@@ -296,8 +296,9 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 			hashes:    make(map[string]bool),
 			requested: time.Now(),
 		}
-
+		p.mtx.Lock()
 		p.openWants[w.ruid] = w
+		p.mtx.Unlock()
 		return nil
 	} else {
 		panic("wtf")
@@ -361,33 +362,24 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	lenHashes := len(hashes)
 	if lenHashes%HashSize != 0 {
 		log.Error("error invalid hashes length", "len", lenHashes, "msg.ruid", msg.Ruid)
-		panic("w00t")
 	}
-	log.Debug("w00t112")
 
 	w, ok := p.openWants[msg.Ruid]
 	if !ok {
 		log.Error("ruid not found, dropping peer")
-		panic("drop peer")
 		p.Drop()
 	}
-	log.Debug("w00t113")
 
 	provider, ok := p.providers[w.stream.Name]
 	if !ok {
 		log.Error("got offeredHashes for unsupported protocol, dropping peer", "peer", p.ID())
-		panic("w00t")
 		p.Drop()
 	}
-	log.Debug("w00t114")
-
 	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
 		log.Error("error initiaising bitvector", "len", lenHashes/HashSize, "msg.ruid", msg.Ruid, "err", err)
-		panic("drop later")
 		p.Drop()
 	}
-	log.Debug("w00t115", "len", lenHashes, "hashes", lenHashes/HashSize)
 
 	var ctr uint64 = 0
 
@@ -395,40 +387,30 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		hash := hashes[i : i+HashSize]
 		log.Trace("checking offered hash", "ref", fmt.Sprintf("%x", hash))
 		c := chunk.Address(hash)
-		log.Debug("w00t116")
 
 		if _, wait := provider.NeedData(ctx, hash); wait != nil {
-			log.Debug("w00t117")
 			ctr++
 			w.hashes[c.Hex()] = true
 			// set the bit, so create a request
 			want.Set(i/HashSize, true)
 			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
 		} else {
-
-			log.Debug("w00t118")
 			w.hashes[c.Hex()] = false
 		}
 	}
-	log.Debug("w00t999")
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 
-	log.Debug("w00t998")
 	atomic.AddUint64(&w.remaining, ctr)
-	log.Debug("w00t997")
 	w.bv = want
-	log.Debug("w00t996")
 	w.chunks = cc
-	log.Debug("w00t995")
 	w.done = dc
 
 	var wantedHashesMsg WantedHashes
 
 	errc := p.sealBatch(provider, w)
 
-	log.Debug("w00t994")
-	if ctr == 0 {
+	if ctr == 0 && lenHashes == 0 {
 		log.Debug("setting msg to be with 0 hashes")
 		wantedHashesMsg = WantedHashes{
 			Ruid:      msg.Ruid,
@@ -442,8 +424,6 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		}
 	}
 
-	log.Debug("w00t993")
-
 	log.Debug("sending wanted hashes", "peer", p.ID(), "offered", lenHashes/HashSize, "want", ctr)
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		log.Error("error sending wanted hashes", "peer", p.ID(), "w", wantedHashesMsg)
@@ -454,17 +434,14 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	p.openWants[msg.Ruid] = w
 	p.mtx.Unlock()
 
-	log.Debug("open wants", "ow", p.openWants)
 	stream := w.stream
 	peerIntervalKey := p.peerStreamIntervalKey(w.stream)
 	select {
 	case err := <-errc:
 		if err != nil {
 			log.Error("got an error while sealing batch", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
-			panic(err)
 			p.Drop()
 		}
-		log.Debug("adding interval", "f", w.from, "t", w.to, "key", peerIntervalKey)
 		err = p.addInterval(w.from, w.to, peerIntervalKey)
 		if err != nil {
 			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
@@ -473,7 +450,6 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
 
-		log.Debug("batch done", "from", w.from, "to", w.to)
 		//TODO BATCH TIMEOUT?
 	}
 
@@ -583,7 +559,9 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	log.Debug("peer.handleWantedHashes", "peer", p.ID(), "ruid", msg.Ruid)
 	// Get the length of the original offer from state
 	// get the offered hashes themselves
+	p.mtx.Lock()
 	offer, ok := p.openOffers[msg.Ruid]
+	p.mtx.Unlock()
 	if !ok {
 		// ruid doesn't exist. error and drop peer
 		log.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid, "peer", p.ID())
@@ -599,9 +577,11 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	}
 
 	l := len(offer.Hashes) / HashSize
+	lll := len(msg.BitVector)
+	log.Debug("bitvector", "l", lll, "h", offer.Hashes)
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
-		log.Error("error initiaising bitvector", l, err)
+		log.Error("error initiaising bitvector", "l", l, "ll", len(offer.Hashes), "err", err)
 		panic("ww0000tt")
 	}
 	log.Debug("iterate over wanted hashes", "l", len(offer.Hashes))

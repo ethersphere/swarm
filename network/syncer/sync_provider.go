@@ -143,9 +143,6 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
 	log.Debug("sending initial subscriptions message", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:12]), "peer", p.ID(), "subs", sub)
 	doPeerSubUpdate(p, sub, nil)
-	//if len(sub) == 0 {
-	//panic("w00t")
-	//}
 
 	subscription, unsubscribe := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribe()
@@ -168,9 +165,6 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, true)
 					log.Debug("getting cursors info from peer", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:16]), "peer", p.ID(), "subs", sub)
 					doPeerSubUpdate(p, sub, nil)
-					if len(sub) == 0 {
-						panic("w00t")
-					}
 					depth = newDepth
 				} else {
 					// peer was within depth, but depth has changed. we should request the cursors for the
