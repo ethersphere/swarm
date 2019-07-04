@@ -115,6 +115,13 @@ func (p *Peer) setCursor(stream ID, cursor uint64) {
 	p.streamCursors[stream.String()] = cursor
 }
 
+func (p *Peer) deleteCursor(stream ID) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	delete(p.streamCursors, stream.String())
+}
+
 func (p *Peer) Left() {
 	close(p.quit)
 }
