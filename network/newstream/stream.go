@@ -119,6 +119,7 @@ func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	sp := NewPeer(bp, s.intervalsStore, s.providers)
 	s.addPeer(sp)
 	defer s.removePeer(sp)
+	go sp.InitProviders()
 	return peer.Run(sp.HandleMsg)
 }
 
