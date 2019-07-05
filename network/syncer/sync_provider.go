@@ -76,17 +76,24 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
 	log.Debug("syncProvider.Get")
-	//err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
 	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetSync, addr)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("got chunk")
+
+	// mark the chunk as Set in order to allow for garbage collection
+	// this can and at some point should be moved to a dedicated method that
+	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
+	err = s.netStore.Store.Set(context.Background(), chunk.ModeSetSync, addr)
+	if err != nil {
+		metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
+		return nil, err
+	}
 	return ch.Data(), nil
 }
 
 func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error) {
-	log.Debug("syncProvider.Put", "addr", addr)
+	log.Trace("syncProvider.Put", "addr", addr)
 	ch := chunk.NewChunk(addr, data)
 	seen, err := s.netStore.Store.Put(ctx, chunk.ModePutSync, ch)
 	if seen {
@@ -98,7 +105,7 @@ func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte)
 func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func()) {
 	// convert the key to the actual value and call SubscribePull
 	bin := key.(uint8)
-	log.Debug("sync provider subscribing on key", "key", key, "bin", bin)
+	log.Debug("syncProvider.Subscribe", "bin", bin, "from", from, "to", to)
 
 	return s.netStore.SubscribePull(ctx, bin, from, to)
 }

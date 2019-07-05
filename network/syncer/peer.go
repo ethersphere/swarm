@@ -331,7 +331,8 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, msg.To)
 		if err != nil {
 			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
-			panic("batch error")
+			s := fmt.Sprintf("erroring getting batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
+			panic(s)
 			//p.Drop()
 		}
 		log.Debug("collected hashes for requested range", "hashes", len(h)/HashSize, "msg", msg)
@@ -422,20 +423,18 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	errc := p.sealBatch(provider, w)
 
 	if ctr == 0 && lenHashes == 0 {
-		log.Debug("setting msg to be with 0 hashes")
 		wantedHashesMsg = WantedHashes{
 			Ruid:      msg.Ruid,
 			BitVector: []byte{},
 		}
 	} else {
-		log.Debug("setting on big msg")
 		wantedHashesMsg = WantedHashes{
 			Ruid:      msg.Ruid,
 			BitVector: want.Bytes(),
 		}
 	}
 
-	log.Debug("sending wanted hashes", "peer", p.ID(), "offered", lenHashes/HashSize, "want", ctr)
+	log.Debug("sending wanted hashes", "peer", p.ID(), "offered", lenHashes/HashSize, "want", ctr, "msg", wantedHashesMsg)
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		log.Error("error sending wanted hashes", "peer", p.ID(), "w", wantedHashesMsg)
 		p.Drop()
@@ -579,14 +578,12 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	if !ok {
 		// ruid doesn't exist. error and drop peer
 		log.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid, "peer", p.ID())
-		panic("wtf1")
 		p.Drop()
 	}
 
 	provider, ok := p.providers[offer.stream.Name]
 	if !ok {
 		log.Error("no provider found for stream, dropping peer", "peer", p.ID(), "stream", offer.stream.String())
-		panic("wtf2")
 		p.Drop()
 	}
 
@@ -596,7 +593,7 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
 		log.Error("error initiaising bitvector", "l", l, "ll", len(offer.Hashes), "err", err)
-		panic("ww0000tt")
+		panic("err")
 	}
 	log.Debug("iterate over wanted hashes", "l", len(offer.Hashes))
 
@@ -710,15 +707,6 @@ func (p *Peer) collectBatch(ctx context.Context, provider StreamProvider, key in
 			}
 			log.Debug("got a chunk on key", "key", key)
 			batch = append(batch, d.Address[:]...)
-			// This is the most naive approach to label the chunk as synced
-			// allowing it to be garbage collected. A proper way requires
-			// validating that the chunk is successfully stored by the peer.
-			//err := p.syncer.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
-			//if err != nil {
-			//metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
-			////log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
-			//return nil, 0, 0, err
-			//}
 			batchSize++
 			if batchStartID == nil {
 				// set batch start id only if
@@ -746,10 +734,10 @@ func (p *Peer) collectBatch(ctx context.Context, provider StreamProvider, key in
 			// received after some time
 			iterate = false
 			metrics.GetOrRegisterCounter("syncer.set-next-batch.timer-expire", nil).Inc(1)
-			//log.Trace("syncer pull subscription timer expired", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+			log.Trace("syncer pull subscription timer expired", "peer", p.ID(), "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-p.quit:
 			iterate = false
-			//log.Trace("syncer pull subscription - quit received", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+			log.Trace("syncer pull subscription - quit received", "peer", p.ID(), "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		}
 	}
 	if batchStartID == nil {
