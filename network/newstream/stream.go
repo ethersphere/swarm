@@ -107,10 +107,8 @@ func (s *SlipStream) removePeer(p *Peer) {
 		log.Error("removing peer", "id", p.ID())
 		delete(s.peers, p.ID())
 		p.Left()
-
 	} else {
-		log.Warn("peer was marked for removal but not found")
-		panic("shouldnt happen")
+		log.Warn("peer was marked for removal but not found", "peer", p.ID())
 	}
 }
 
@@ -126,7 +124,6 @@ func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	sp := NewPeer(bp, s.intervalsStore, s.providers)
 	s.addPeer(sp)
 	defer s.removePeer(sp)
-	go sp.InitProviders()
 	return peer.Run(sp.HandleMsg)
 }
 
