@@ -522,20 +522,18 @@ func (p *Peer) sealBatch(provider StreamProvider, w *Want) <-chan error {
 	log.Debug("peer.sealBatch", "ruid", w.ruid)
 	errc := make(chan error)
 	go func() {
+
 		for {
 			select {
 			case c, ok := <-w.chunks:
 				if !ok {
 					log.Error("want chanks rreturned on !ok")
-					panic("shouldnt happen")
 				}
 				//p.mtx.Lock()
 				//if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
 				//log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
-				//panic("shouldnt happen")
 				//}
 				cc := chunk.NewChunk(c.Address(), c.Data())
-				log.Debug("got a chunk from a chunk delivery msg")
 				go func() {
 					ctx := context.TODO()
 					seen, err := provider.Put(ctx, cc.Address(), cc.Data())
@@ -545,15 +543,12 @@ func (p *Peer) sealBatch(provider StreamProvider, w *Want) <-chan error {
 						}
 					}
 					if seen {
-						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address())
-						//panic("shouldnt happen") // this in fact could happen...
+						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
 					}
 					//want.hashes[c.Address().Hex()] = false //todo: should by sync map
-					atomic.AddUint64(&w.remaining, ^uint64(0))
+					v := atomic.AddUint64(&w.remaining, ^uint64(0))
 					//p.mtx.Unlock()
-					v := atomic.LoadUint64(&w.remaining)
 					if v == 0 {
-						log.Debug("batchdone")
 						close(errc)
 						return
 					}
@@ -576,7 +571,6 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 	offer, ok := p.openOffers[msg.Ruid]
 	p.mtx.Unlock()
 	if !ok {
-		// ruid doesn't exist. error and drop peer
 		log.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid, "peer", p.ID())
 		p.Drop()
 	}
