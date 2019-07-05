@@ -65,6 +65,7 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
+	// StreamBehavior defines how the stream behaves upon initialisation
 	StreamBehavior() StreamInitBehavior
 
 	Boundedness() bool
