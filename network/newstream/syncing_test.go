@@ -18,6 +18,7 @@ package newstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -131,6 +132,162 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+}
+
+func TestTwoNodesSyncWithGaps(t *testing.T) {
+
+	chunksCount := func(db chunk.Store) (c uint64, err error) {
+		for po := 0; po <= chunk.MaxPO; po++ {
+			last, err := db.LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				return 0, err
+			}
+			c += last
+		}
+		return c, nil
+	}
+
+	for _, tc := range []struct {
+		name       string
+		chunkCount uint64
+		gaps       [][2]uint64
+	}{
+		{
+			name:       "no gaps",
+			chunkCount: 100,
+			gaps:       nil,
+		},
+		{
+			name:       "first chunk removed",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{0, 1}},
+		},
+		{
+			name:       "one chunk removed",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{60, 61}},
+		},
+		{
+			name:       "single gap at start",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{0, 5}},
+		},
+		{
+			name:       "single gap",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{5, 10}},
+		},
+		{
+			name:       "multiple gaps",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{0, 1}, {10, 21}},
+		},
+		{
+			name:       "big gaps",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{0, 1}, {10, 21}, {50, 91}},
+		},
+		{
+			name:       "remove all",
+			chunkCount: 100,
+			gaps:       [][2]uint64{{0, 100}},
+		},
+		{
+			name:       "large db",
+			chunkCount: 4000,
+		},
+		{
+			name:       "large db with gap",
+			chunkCount: 4000,
+			gaps:       [][2]uint64{{1000, 3000}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),
+			})
+			defer sim.Close()
+
+			timeout := 30 * time.Second
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+
+			result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+				node1, err := sim.AddNode()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				db := sim.NodeItem(node1, bucketKeyFileStore).(chunk.Store)
+
+				chunks := make([]chunk.Address, tc.chunkCount)
+				for i := uint64(0); i < tc.chunkCount; i++ {
+					c := storage.GenerateRandomChunk(4096)
+					exists, err := db.Put(ctx, chunk.ModePutUpload, c)
+					if err != nil {
+						return err
+					}
+					if exists {
+						return errors.New("generated already existing chunk")
+					}
+					chunks[i] = c.Address()
+				}
+
+				uploadedChunkCount, err := chunksCount(db)
+				if err != nil {
+					return err
+				}
+
+				if uploadedChunkCount != tc.chunkCount {
+					return fmt.Errorf("uploaded %v chunks, want %v", uploadedChunkCount, tc.chunkCount)
+				}
+
+				var removedCount uint64
+				for _, gap := range tc.gaps {
+					for i := gap[0]; i < gap[1]; i++ {
+						c := chunks[i]
+						if err := db.Set(ctx, chunk.ModeSetRemove, c); err != nil {
+							return err
+						}
+						removedCount++
+					}
+				}
+
+				node2, err := sim.AddNode()
+				if err != nil {
+					return err
+				}
+				err = sim.Net.Connect(node1, node2)
+				if err != nil {
+					return err
+				}
+
+				for i := 99; i >= 0; i-- {
+					time.Sleep(100 * time.Millisecond)
+					syncedChunkCount, err := chunksCount(sim.NodeItem(node2, bucketKeyFileStore).(chunk.Store))
+					if err != nil {
+						return err
+					}
+
+					want := uploadedChunkCount - removedCount
+					if syncedChunkCount != want {
+						if i == 0 {
+							return fmt.Errorf("got synced chunks %d, want %d", syncedChunkCount, want)
+						} else {
+							continue
+						}
+					}
+					return nil
+				}
+
+				return nil
+			})
+
+			if result.Error != nil {
+				t.Fatal(result.Error)
+			}
+		})
 	}
 }
 
