@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package syncer
+package newstream
 
 import (
 	"sync"
@@ -38,7 +38,7 @@ var (
 )
 
 var SyncerSpec = &protocols.Spec{
-	Name:       "bzz-sync",
+	Name:       "bzz-stream",
 	Version:    8,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
@@ -133,7 +133,7 @@ func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 func (s *SlipStream) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    "bzz-sync",
+			Name:    "bzz-stream",
 			Version: 1,
 			Length:  10 * 1024 * 1024,
 			Run:     s.Run,
@@ -144,7 +144,7 @@ func (s *SlipStream) Protocols() []p2p.Protocol {
 func (s *SlipStream) APIs() []rpc.API {
 	return []rpc.API{
 		{
-			Namespace: "bzz-sync",
+			Namespace: "bzz-stream",
 			Version:   "1.0",
 			Service:   NewAPI(s),
 			Public:    false,

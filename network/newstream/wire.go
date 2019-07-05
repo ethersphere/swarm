@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package syncer
+package newstream
 
 import (
 	"context"
@@ -71,28 +71,42 @@ type StreamProvider interface {
 	Boundedness() bool
 }
 
+// StreamInitBehavior defines the stream behavior upon init
 type StreamInitBehavior int
 
 const (
+	// StreamIdle means that there is no initial automatic message exchange
+	// between the nodes when the protocol gets established
 	StreamIdle StreamInitBehavior = iota
+
+	// StreamGetCursors tells the two nodes to automatically fetch stream
+	// cursors from each other
 	StreamGetCursors
+
+	// StreamAutostart automatically starts fetching data from the streams
+	// once the cursors arrive
 	StreamAutostart
 )
 
+// StreamInfoReq is a request to get information about particular streams
 type StreamInfoReq struct {
 	Streams []ID
 }
 
+// StreamInfoRes is a response to StreamInfoReq with the corresponding stream descriptors
 type StreamInfoRes struct {
 	Streams []StreamDescriptor
 }
 
+// StreamDescriptor describes an arbitrary stream
 type StreamDescriptor struct {
 	Stream  ID
 	Cursor  uint64
 	Bounded bool
 }
 
+// GetRange is a message sent from the downstream peer to the upstream peer asking for chunks
+// within a particular interval for a certain stream
 type GetRange struct {
 	Ruid      uint
 	Stream    ID
@@ -102,33 +116,35 @@ type GetRange struct {
 	Roundtrip bool
 }
 
+// OfferedHashes is a message sent from the upstream peer to the downstream peer allowing the latter
+// to selectively ask for chunks within a particular requested interval
 type OfferedHashes struct {
 	Ruid      uint
 	LastIndex uint
 	Hashes    []byte
 }
 
+// WantedHashes is a message sent from the downstream peer to the upstream peer in response
+// to OfferedHashes in order to selectively ask for a particular chunks within an interval
 type WantedHashes struct {
 	Ruid      uint
 	BitVector []byte
 }
 
+// ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
 type ChunkDelivery struct {
 	Ruid      uint
 	LastIndex uint
 	Chunks    []DeliveredChunk
 }
 
+// DeliveredChunk encapsulates a particular chunk's underlying data within a ChunkDelivery message
 type DeliveredChunk struct {
 	Addr storage.Address //chunk address
 	Data []byte          //chunk data
 }
 
-type BatchDone struct {
-	Ruid uint
-	Last uint
-}
-
+// StreamState is a message exchanged between two nodes to notify of changes or errors in a stream's state
 type StreamState struct {
 	Stream  ID
 	Code    uint16
@@ -144,6 +160,7 @@ type ID struct {
 	Key string
 }
 
+// NewID returns a new Stream ID for a particular stream Name and Key
 func NewID(name string, key string) ID {
 	return ID{
 		Name: name,
