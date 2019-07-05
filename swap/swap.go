@@ -40,8 +40,8 @@ import (
 const (
 	deployRetries               = 5
 	deployDelay                 = 1 * time.Second // delay between retries
-	defaultCashInDelay          = uint64(0)
-	DefaultInitialDepositAmount = 100000000 // TODO: deliberate value for now; needs experimentation
+	defaultCashInDelay          = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment
+	DefaultInitialDepositAmount = 100000000       // TODO: deliberate value for now; needs experimentation
 )
 
 // SwAP Swarm Accounting Protocol
@@ -49,29 +49,31 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore    state.Store        //stateStore is needed in order to keep balances across sessions
-	lock          sync.RWMutex       //lock the balances
-	balances      map[enode.ID]int64 //map of balances for each peer
-	Service       *SwapService
-	owner         *Owner
-	params        *SwapParams
-	contractProxy *swap.Proxy
+	stateStore    state.Store          // stateStore is needed in order to keep balances across sessions
+	lock          sync.RWMutex         // lock the balances
+	balances      map[enode.ID]int64   // map of balances for each peer
+	cheques       map[enode.ID]*Cheque // map of balances for each peer
+	Service       *SwapService         // Service for running the procol
+	owner         *Owner               // contract access
+	params        *Params              // economic and operational parameters
+	contractProxy *swap.Proxy          // proxy for the contract, contract abstraction
 }
 
+// Owner encapsulates information related to accessing the contract
 type Owner struct {
-	Contract   common.Address // address of chequebook contract
-	privateKey *ecdsa.PrivateKey
-	publicKey  *ecdsa.PublicKey
-	address    common.Address
-	lock       sync.RWMutex
+	Contract   common.Address    // address of swap contract
+	address    common.Address    // owner address
+	privateKey *ecdsa.PrivateKey // private key
+	publicKey  *ecdsa.PublicKey  // public key
 }
 
-type SwapParams struct {
+// Params encapsulates param
+type Params struct {
 	InitialDepositAmount uint64 //
 }
 
-func NewDefaultSwapParams() *SwapParams {
-	return &SwapParams{
+func NewDefaultParams() *Params {
+	return &Params{
 		InitialDepositAmount: DefaultInitialDepositAmount,
 	}
 }
@@ -81,22 +83,26 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	swap = &Swap{
 		stateStore: stateStore,
 		balances:   make(map[enode.ID]int64),
-		params:     NewDefaultSwapParams(),
+		cheques:    make(map[enode.ID]*Cheque),
+		params:     NewDefaultParams(),
 	}
 	swap.contractProxy = swap.createProxy()
 	swap.owner = swap.createOwner(prvkey, contract)
 	return
 }
 
+// createOwner assings keys and addresses
 func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
 		privateKey: prvkey,
 		publicKey:  pubkey,
+		Contract:   contract,
 		address:    crypto.PubkeyToAddress(*pubkey),
 	}
 }
 
+// convenience log output
 func (s *Swap) DeploySuccess() string {
 	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.owner.Contract.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
 }
@@ -133,6 +139,17 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return 0, errors.New("Peer not found")
 }
 
+func (swap *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
+	swap.lock.RLock()
+	defer swap.lock.RUnlock()
+
+	if lc, ok := swap.cheques[peer]; ok {
+		return lc, nil
+	}
+
+	return nil, errors.New("Peer not found")
+}
+
 //load balances from the state store (persisted)
 func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	var peerBalance int64
@@ -146,11 +163,26 @@ func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	return
 }
 
+//load last cheque for a peer from the state store (persisted)
+func (s *Swap) loadCheque(peer enode.ID) (err error) {
+	//only load if the current instance doesn't already have this peer's
+	//last cheque in memory
+	var cheque *Cheque
+	if _, ok := s.cheques[peer]; !ok {
+		err = s.stateStore.Get(peer.String()+"_cheques", &cheque)
+		s.cheques[peer] = cheque
+	}
+	return
+}
+
 //Clean up Swap
 func (swap *Swap) Close() {
 	swap.stateStore.Close()
 }
 
+// resetBalance is called:
+// * for the creditor: on cheque receival
+// * for the debitor: on confirmation receival
 func (s *Swap) resetBalance(peer *protocols.Peer) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -159,10 +191,16 @@ func (s *Swap) resetBalance(peer *protocols.Peer) {
 	s.balances[peer.ID()] = 0
 }
 
+// createProxy instantiates the contract proxy;
+// currently we have SimpleSwap, but future iterations of
+// the Swap smart contract may have different contracts,
+// so we don't want to drag explicit contract references here
+// for abstraction
 func (s *Swap) createProxy() *swap.Proxy {
 	return swap.NewProxy()
 }
 
+// GetParams returns contract parameters (Bin, ABI) from the contract
 func (s *Swap) GetParams() *swap.Params {
 	return s.contractProxy.ContractParams()
 }
@@ -175,12 +213,15 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 	if err != nil {
 		return err
 	}
+
+	// TODO: What to do if the contract is already deployed?
 	return s.deploy(ctx, backend, path)
 }
 
 // deploy deploys the Swap contract
 func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 

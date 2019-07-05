@@ -106,7 +106,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	log.Debug("Setting up Swarm service components")
 
+	// Swap initialization
 	if config.SwapEnabled {
+		// if Swap is enabled, we MUST have a contract API
 		if self.config.SwapAPI == "" {
 			return nil, fmt.Errorf("Swap enabled but no contract address given; fatal error condition, aborting.")
 		}
@@ -116,11 +118,14 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapAPI, err)
 		}
 
+		// initialize the balances store
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
 		if err != nil {
 			return nil, err
 		}
+		// create the accounting objects
 		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract)
+		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
@@ -351,19 +356,20 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	// set up Swap
-	//TODO: Currently if swap is enabled and no swap (or inexistent) contract is provided, the node would crash.
-	//Once we integrate back the contracts, this check MUST be revisited
 	if s.config.SwapEnabled {
+		// check here again (maybe redundant): if enabled, we MUST have a contract API
 		if s.config.SwapAPI == "" {
 			return fmt.Errorf("Swap enabled but no contract address given; fatal error condition, aborting.")
 		}
 		ctx := context.Background() // The initial setup has no deadline.
+		// deploy the contract
 		err := s.DeploySwap(ctx)
 		if err != nil {
 			return fmt.Errorf("Unable to deploy swap contract: %v", err)
 		}
 		log.Info(fmt.Sprintf("-> swap contract deployed: %v", s.swap.DeploySuccess()))
 	} else {
+		// if Swap is disabled, do not error, just continue
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
@@ -435,11 +441,10 @@ func (s *Swarm) Stop() error {
 	if s.ps != nil {
 		s.ps.Stop()
 	}
-	// TODO: NEEDED????
-	if ch := s.swap.Service; ch != nil {
-		ch.Stop()
-	}
 	if s.swap != nil {
+		if svc := s.swap.Service; svc != nil {
+			svc.Stop()
+		}
 		s.swap.Close()
 	}
 	if s.accountingMetrics != nil {

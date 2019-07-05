@@ -28,19 +28,24 @@ import (
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 )
 
+// Simple wraps the SimpleSwap contract
+// It implements `Wrapper`
 type Simple struct {
 	Instance *contract.SimpleSwap
 }
 
+// Deploy a SimpleSwap contract
 func (s *Simple) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, tx *types.Transaction, err error) {
 	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner)
 	return addr, tx, err
 }
 
+// ContractDeployedCode returns the code of the deployed contract
 func (s *Simple) ContractDeployedCode() string {
 	return contract.ContractDeployedCode
 }
 
+// ContractParams returns contract information
 func (s *Simple) ContractParams() *Params {
 	return &Params{
 		ContractCode: contract.SimpleSwapBin,
@@ -48,6 +53,7 @@ func (s *Simple) ContractParams() *Params {
 	}
 }
 
+// SubmitChequeBeneficiary is used to cash in a cheque
 func (s *Simple) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error) {
 	return s.Instance.SubmitChequeBeneficiary(opts, serial, amount, timeout, ownerSig)
 }

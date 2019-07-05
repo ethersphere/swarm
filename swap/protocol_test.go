@@ -46,22 +46,28 @@ func TestRequestCheque(t *testing.T) {
 
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 2, ss.run)
 
-	node := protocolTester.Nodes[0]
+	creditor := protocolTester.Nodes[0]
+
+	swap.balances[creditor.ID()] = -43
 
 	err = protocolTester.TestExchanges(p2ptest.Exchange{
 		Label: "TestRequestCheque",
 		Triggers: []p2ptest.Trigger{
 			{
 				Code: 0,
-				Msg:  &ChequeRequestMsg{},
-				Peer: node.ID(),
+				Msg: &ChequeRequestMsg{
+					Peer:       creditor.ID(),
+					PubKey:     crypto.FromECDSAPub(creditor.Pubkey()),
+					LastCheque: &Cheque{},
+				},
+				Peer: creditor.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
 			{
 				Code: 1,
 				Msg:  &EmitChequeMsg{},
-				Peer: node.ID(),
+				Peer: creditor.ID(),
 			},
 		},
 	})

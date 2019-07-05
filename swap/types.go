@@ -18,8 +18,10 @@ package swap
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// Cheque encapsulates the cheque information
 type Cheque struct {
 	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
 	Beneficiary common.Address
@@ -29,10 +31,22 @@ type Cheque struct {
 	Sig         []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
 }
 
+// ChequeRequestMsg is sent from a creditor to the debitor to solicit a cheque
 type ChequeRequestMsg struct {
+	Peer       enode.ID
+	PubKey     []byte
+	LastCheque *Cheque
 }
+
+// EmitChequeMsg is sent from the debitor to the creditor with the actual check
 type EmitChequeMsg struct {
 	Cheque Cheque
 }
+
+// ErrorMsg is sent in case of an error TODO: specify error conditions and when this needs to be sent
 type ErrorMsg struct{}
-type ConfirmMsg struct{}
+
+// ConfirmMsg is sent from the creditor to the debitor to confirm cheque reception
+type ConfirmMsg struct {
+	Cheque Cheque
+}

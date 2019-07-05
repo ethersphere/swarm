@@ -54,6 +54,7 @@ type Config struct {
 	// Swap configs
 	SwapAPI     string
 	SwapEnabled bool
+	// TODO: Add swap.Params --> define! (economic parameters)
 
 	*network.HiveParams
 	Pss                  *pss.PssParams
