@@ -40,7 +40,7 @@ import (
 func TestTwoNodesFullSync(t *testing.T) {
 	var (
 		chunkCount = 1000
-		syncTime   = 1 * time.Second
+		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),
@@ -76,6 +76,11 @@ func TestTwoNodesFullSync(t *testing.T) {
 		if err := wait(cctx); err != nil {
 			return err
 		}
+
+		//1. to Set the chunk after its been sent to a peer with syncing -> doesnt get removed with gc now
+		//2. 1 ... 517, 2 1 .. 253
+		//
+
 		id, err := sim.AddNodes(1)
 		if err != nil {
 			return err
@@ -101,7 +106,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		}
 
 		// wait for syncing
-		time.Sleep(syncTime)
+		<-time.After(syncTime)
 
 		// check that the sum of bin indexes is equal
 
