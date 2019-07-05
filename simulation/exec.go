@@ -16,14 +16,16 @@ import (
 
 // ExecAdapter can manage local exec nodes
 type ExecAdapter struct {
-	directory string
-	nodes     map[NodeID]*ExecNode
+	config ExecAdapterConfig
+	nodes  map[NodeID]*ExecNode
 }
 
 // ExecAdapterConfig is used to configure an ExecAdapter
 type ExecAdapterConfig struct {
-	// Directory stores all the nodes' data directories
-	Directory string
+	// Path to the executable
+	ExecutablePath string
+	// BaseDataDirectory stores all the nodes' data directories
+	BaseDataDirectory string
 }
 
 // ExecNode is a node that is executed locally
@@ -36,12 +38,17 @@ type ExecNode struct {
 
 // NewExecAdapter creates an ExecAdapter by receiving a ExecAdapterConfig
 func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
-	if _, err := os.Stat(config.Directory); os.IsNotExist(err) {
-		return nil, fmt.Errorf("'%s' directory does not exist", config.Directory)
+	if _, err := os.Stat(config.BaseDataDirectory); os.IsNotExist(err) {
+		return nil, fmt.Errorf("'%s' directory does not exist", config.BaseDataDirectory)
 	}
+
+	if _, err := os.Stat(config.ExecutablePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("'%s' executable does not exist", config.ExecutablePath)
+	}
+
 	a := &ExecAdapter{
-		directory: config.Directory,
-		nodes:     make(map[NodeID]*ExecNode),
+		config: config,
+		nodes:  make(map[NodeID]*ExecNode),
 	}
 	return a, nil
 }
@@ -101,8 +108,7 @@ func (n *ExecNode) Start() error {
 
 	// Start command
 	n.cmd = &exec.Cmd{
-		// TODO: change this
-		Path:   "/home/rafael/go/bin/swarm",
+		Path:   n.adapter.config.ExecutablePath,
 		Args:   args,
 		Dir:    dir,
 		Env:    n.config.Env,
@@ -198,5 +204,5 @@ func (n *ExecNode) ipcPath() string {
 
 // dataDir returns the path to the data directory that the node should use
 func (n *ExecNode) dataDir() string {
-	return filepath.Join(n.adapter.directory, string(n.config.ID))
+	return filepath.Join(n.adapter.config.BaseDataDirectory, string(n.config.ID))
 }

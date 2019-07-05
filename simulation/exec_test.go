@@ -18,7 +18,9 @@ func TestExecAdapter(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adapter, err := NewExecAdapter(ExecAdapterConfig{
-		Directory: tmpdir,
+		// TODO: fix this
+		ExecutablePath:    "/home/rafael/go/bin/swarm",
+		BaseDataDirectory: tmpdir,
 	})
 	if err != nil {
 		t.Fatalf("could not create exec adapter: %v", err)

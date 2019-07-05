@@ -21,7 +21,9 @@ func TestAdapters(t *testing.T) {
 		}
 		defer os.RemoveAll(tmpdir)
 		adapter, err := NewExecAdapter(ExecAdapterConfig{
-			Directory: tmpdir,
+			// TODO: fix this
+			ExecutablePath:    "/home/rafael/go/bin/swarm",
+			BaseDataDirectory: tmpdir,
 		})
 		startSimulation(t, adapter, 10)
 	})
@@ -90,6 +92,7 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 	// Test some RPC calls
 	nodes := make([]Node, count)
 	rpcClients := make([]*rpc.Client, count)
+
 	for idx, id := range nodeIDs {
 		node, err := sim.Get(id)
 		nodes[idx] = node
@@ -99,6 +102,7 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 		client, err := sim.RPCClient(id)
 		if err != nil {
 			t.Errorf("failed to get an rpc client for node %s: %v", id, err)
+			continue
 		}
 		defer client.Close()
 		rpcClients[idx] = client
