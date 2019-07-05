@@ -16,30 +16,20 @@
 
 package simulation
 
-import (
-	"fmt"
-
-	"github.com/ethereum/go-ethereum/p2p/enode"
-)
+import "github.com/ethereum/go-ethereum/p2p/enode"
 
 // BucketKey is the type that should be used for keys in simulation buckets.
 type BucketKey string
 
 // NodeItem returns an item set in ServiceFunc function for a particular node.
-func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}) {
+func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, ok := s.buckets[id]; !ok {
-		e := fmt.Errorf("cannot find node id %s in bucket", id.String())
-		panic(e)
+		return nil, false
 	}
-	if v, ok := s.buckets[id].Load(key); ok {
-		return v
-	} else {
-		e := fmt.Errorf("cannot find key %s on node bucket", key.(string))
-		panic(e)
-	}
+	return s.buckets[id].Load(key)
 }
 
 // SetNodeItem sets a new item associated with the node with provided NodeID.

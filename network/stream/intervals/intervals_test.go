@@ -22,16 +22,14 @@ import "testing"
 // initial state.
 func Test(t *testing.T) {
 	for i, tc := range []struct {
-		startLimit     uint64
-		initial        [][2]uint64
-		start          uint64
-		end            uint64
-		expected       string
-		nextStart      uint64
-		nextEnd        uint64
-		nextEmptyRange bool
-		last           uint64
-		ceiling        uint64
+		startLimit uint64
+		initial    [][2]uint64
+		start      uint64
+		end        uint64
+		expected   string
+		nextStart  uint64
+		nextEnd    uint64
+		last       uint64
 	}{
 		{
 			initial:   nil,
@@ -318,79 +316,6 @@ func Test(t *testing.T) {
 			nextEnd:    119,
 			last:       130,
 		},
-		{
-			initial:   nil,
-			start:     0,
-			end:       0,
-			expected:  "[[0 0]]",
-			nextStart: 1,
-			nextEnd:   10,
-			last:      0,
-			ceiling:   10,
-		},
-		{
-			initial:        nil,
-			start:          0,
-			end:            9,
-			expected:       "[[0 9]]",
-			nextStart:      9,
-			nextEnd:        9,
-			nextEmptyRange: true,
-			last:           9,
-			ceiling:        9,
-		},
-		{
-			initial:        nil,
-			start:          0,
-			end:            9,
-			expected:       "[[0 9]]",
-			nextStart:      10,
-			nextEnd:        10,
-			nextEmptyRange: false,
-			last:           9,
-			ceiling:        10,
-		},
-		{
-			initial:   nil,
-			start:     0,
-			end:       10,
-			expected:  "[[0 10]]",
-			nextStart: 11,
-			nextEnd:   15,
-			last:      10,
-			ceiling:   15,
-		},
-		{
-			initial:   [][2]uint64{{0, 0}},
-			start:     5,
-			end:       15,
-			expected:  "[[0 0] [5 15]]",
-			nextStart: 1,
-			nextEnd:   3,
-			last:      15,
-			ceiling:   3,
-		},
-		{
-			initial:   [][2]uint64{{0, 0}},
-			start:     5,
-			end:       15,
-			expected:  "[[0 0] [5 15]]",
-			nextStart: 1,
-			nextEnd:   4,
-			last:      15,
-			ceiling:   20,
-		},
-		{
-			startLimit: 100,
-			initial:    nil,
-			start:      120,
-			end:        130,
-			expected:   "[[120 130]]",
-			nextStart:  100,
-			nextEnd:    110,
-			last:       130,
-			ceiling:    110,
-		},
 	} {
 		intervals := NewIntervals(tc.startLimit)
 		intervals.ranges = tc.initial
@@ -399,15 +324,12 @@ func Test(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("interval #%d: expected %s, got %s", i, tc.expected, got)
 		}
-		nextStart, nextEnd, nextEmptyRange := intervals.Next(tc.ceiling)
+		nextStart, nextEnd := intervals.Next()
 		if nextStart != tc.nextStart {
 			t.Errorf("interval #%d, expected next start %d, got %d", i, tc.nextStart, nextStart)
 		}
 		if nextEnd != tc.nextEnd {
 			t.Errorf("interval #%d, expected next end %d, got %d", i, tc.nextEnd, nextEnd)
-		}
-		if nextEmptyRange != tc.nextEmptyRange {
-			t.Errorf("interval #%d, expected empty range %v, got %v", i, tc.nextEmptyRange, nextEmptyRange)
 		}
 		last := intervals.Last()
 		if last != tc.last {

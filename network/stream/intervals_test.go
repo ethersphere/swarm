@@ -107,7 +107,10 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		storer := nodeIDs[0]
 		checker := nodeIDs[1]
 
-		item := sim.NodeItem(storer, bucketKeyFileStore)
+		item, ok := sim.NodeItem(storer, bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
 		fileStore := item.(*storage.FileStore)
 
 		size := chunkCount * chunkSize
@@ -121,7 +124,10 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			return fmt.Errorf("wait store: %v", err)
 		}
 
-		item = sim.NodeItem(checker, bucketKeyRegistry)
+		item, ok = sim.NodeItem(checker, bucketKeyRegistry)
+		if !ok {
+			return fmt.Errorf("No registry")
+		}
 		registry := item.(*Registry)
 
 		liveErrC := make(chan error)

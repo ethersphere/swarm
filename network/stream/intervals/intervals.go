@@ -36,7 +36,7 @@ type Intervals struct {
 
 // New creates a new instance of Intervals.
 // Start argument limits the lower bound of intervals.
-// No range below start bound will be added by Add method or
+// No range bellow start bound will be added by Add method or
 // returned by Next method. This limit may be used for
 // tracking "live" synchronization, where the sync session
 // starts from a specific value, and if "live" sync intervals
@@ -115,44 +115,26 @@ func (i *Intervals) Merge(m *Intervals) {
 
 // Next returns the first range interval that is not fulfilled. Returned
 // start and end values are both inclusive, meaning that the whole range
-// including start and end need to be added in order to fill the gap
+// including start and end need to be added in order to full the gap
 // in intervals.
 // Returned value for end is 0 if the next interval is after the whole
 // range that is stored in Intervals. Zero end value represents no limit
 // on the next interval length.
-// Argument ceiling is the upper bound for the returned range.
-// Returned empty boolean indicates if both start and end values have
-// reached the ceiling value which means that the returned range is empty,
-// not containing a single element.
-func (i *Intervals) Next(ceiling uint64) (start, end uint64, empty bool) {
+func (i *Intervals) Next() (start, end uint64) {
 	i.mu.RLock()
-	defer func() {
-		if ceiling > 0 {
-			var ceilingHitStart, ceilingHitEnd bool
-			if start > ceiling {
-				start = ceiling
-				ceilingHitStart = true
-			}
-			if end == 0 || end > ceiling {
-				end = ceiling
-				ceilingHitEnd = true
-			}
-			empty = ceilingHitStart && ceilingHitEnd
-		}
-		i.mu.RUnlock()
-	}()
+	defer i.mu.RUnlock()
 
 	l := len(i.ranges)
 	if l == 0 {
-		return i.start, 0, false
+		return i.start, 0
 	}
 	if i.ranges[0][0] != i.start {
-		return i.start, i.ranges[0][0] - 1, false
+		return i.start, i.ranges[0][0] - 1
 	}
 	if l == 1 {
-		return i.ranges[0][1] + 1, 0, false
+		return i.ranges[0][1] + 1, 0
 	}
-	return i.ranges[0][1] + 1, i.ranges[1][0] - 1, false
+	return i.ranges[0][1] + 1, i.ranges[1][0] - 1
 }
 
 // Last returns the value that is at the end of the last interval.

@@ -280,7 +280,10 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 	var err error
 	//for every node, generate a file and upload
 	for i, id := range nodes {
-		item := sim.NodeItem(id, bucketKeyFileStore)
+		item, ok := sim.NodeItem(id, bucketKeyFileStore)
+		if !ok {
+			return nil, nil, fmt.Errorf("Error accessing localstore")
+		}
 		fileStore := item.(*storage.FileStore)
 		//generate a file
 		rfiles[i], err = generateRandomFile()
