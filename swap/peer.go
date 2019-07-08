@@ -90,6 +90,7 @@ func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{})
 	}
 	// do we actually owe to the remote peer?
 	if peerBalance >= 0 {
+		// TODO: should we send a message to the peer?
 		return DontOwe
 	}
 

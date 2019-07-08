@@ -48,7 +48,7 @@ func TestRequestCheque(t *testing.T) {
 
 	creditor := protocolTester.Nodes[0]
 
-	swap.balances[creditor.ID()] = -43
+	swap.balances[creditor.ID()] = -42
 
 	err = protocolTester.TestExchanges(p2ptest.Exchange{
 		Label: "TestRequestCheque",
