@@ -80,6 +80,10 @@ func TestGetAllBalances(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
+	if len(swap.balances) != 0 {
+		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
+	}
+
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 808
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
@@ -92,7 +96,7 @@ func TestGetAllBalances(t *testing.T) {
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
 	balances := swap.GetAllBalances()
 	if !reflect.DeepEqual(balances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but is %d", expectedBalances, balances)
+		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
 	}
 }
 
