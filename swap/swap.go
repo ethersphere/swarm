@@ -80,6 +80,7 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return 0, errors.New("Peer not found")
 }
 
+//GetAllBalances returns the balances for all known peers
 func (swap *Swap) GetAllBalances() (map[enode.ID]int64, error) {
 
 }
