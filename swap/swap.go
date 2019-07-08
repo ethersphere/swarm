@@ -42,7 +42,7 @@ const (
 	deployRetries               = 5
 	deployDelay                 = 1 * time.Second // delay between retries
 	defaultCashInDelay          = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment
-	DefaultInitialDepositAmount = 100000000       // TODO: deliberate value for now; needs experimentation
+	DefaultInitialDepositAmount = 0               // TODO: deliberate value for now; needs experimentation
 )
 
 // SwAP Swarm Accounting Protocol
