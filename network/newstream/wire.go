@@ -76,15 +76,15 @@ type StreamInitBehavior int
 
 const (
 	// StreamIdle means that there is no initial automatic message exchange
-	// between the nodes when the protocol gets established
+	// between the nodes when the protocol gets established.
 	StreamIdle StreamInitBehavior = iota
 
 	// StreamGetCursors tells the two nodes to automatically fetch stream
-	// cursors from each other
+	// cursors from each other (for test purposes)
 	StreamGetCursors
 
 	// StreamAutostart automatically starts fetching data from the streams
-	// once the cursors arrive
+	// once the cursors arrive (default behavior for normal node)
 	StreamAutostart
 
 	// Retrieve everything, including future data from the HEAD of the stream
@@ -114,7 +114,7 @@ type GetRange struct {
 	Ruid      uint
 	Stream    ID
 	From      uint64
-	To        uint64 `rlp:nil`
+	To        *uint64 `rlp:"nil"`
 	BatchSize uint
 	Roundtrip bool
 }
