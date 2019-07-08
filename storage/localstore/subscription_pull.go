@@ -88,18 +88,18 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				iterStart := time.Now()
 				var count int
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+					// until chunk descriptor is sent
+					// break the iteration
+					if until > 0 && item.BinID > until {
+						log.Debug("breaking on reached bin ID")
+						return true, errStopSubscription
+					}
 					select {
 					case chunkDescriptors <- chunk.Descriptor{
 						Address: item.Address,
 						BinID:   item.BinID,
 					}:
 						count++
-						// until chunk descriptor is sent
-						// break the iteration
-						if until > 0 && item.BinID >= until {
-							log.Debug("breaking on reached bin ID")
-							return true, errStopSubscription
-						}
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
 						sinceItem = &item

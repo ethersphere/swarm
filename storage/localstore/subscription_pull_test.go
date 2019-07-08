@@ -423,6 +423,108 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
 
+// TestDB_SubscribePull_rangeOnRemovedChunks performs a test:
+// - uploads a number of chunks
+// - removes first half of chunks for every bin
+// - subscribes to a range that is within removed chunks,
+//   but before the chunks that are left
+// - validates that no chunks are received on subscription channel
+func TestDB_SubscribePull_rangeOnRemovedChunks(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	// keeps track of available chunks in the database
+	// per bin with their bin ids
+	chunks := make(map[uint8][]chunk.Descriptor)
+
+	// keeps track of latest bin id for every bin
+	binIDCounter := make(map[uint8]uint64)
+
+	// upload chunks to populate bins from start
+	// bin ids start from 1
+	const chunkCount = 1000
+	for i := 0; i < chunkCount; i++ {
+		ch := generateTestRandomChunk()
+
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		bin := db.po(ch.Address())
+
+		binIDCounter[bin]++
+		binID := binIDCounter[bin]
+
+		if _, ok := chunks[bin]; !ok {
+			chunks[bin] = make([]chunk.Descriptor, 0)
+		}
+		chunks[bin] = append(chunks[bin], chunk.Descriptor{
+			Address: ch.Address(),
+			BinID:   binID,
+		})
+	}
+
+	// remove first half of the chunks in every bin
+	for bin := range chunks {
+		count := len(chunks[bin])
+		for i := 0; i < count/2; i++ {
+			d := chunks[bin][0]
+			if err := db.Set(context.Background(), chunk.ModeSetRemove, d.Address); err != nil {
+				t.Fatal(err)
+			}
+			chunks[bin] = chunks[bin][1:]
+		}
+	}
+
+	// set a timeout on subscription
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// signals that there were valid bins for this check to ensure test validity
+	var checkedBins int
+	// subscribe to every bin and validate returned values
+	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
+		// do not subscribe to bins that do not have chunks
+		if len(chunks[bin]) == 0 {
+			continue
+		}
+		// subscribe from start of the bin index
+		var since uint64
+		// subscribe until the first available chunk in bin,
+		// but not for it
+		until := chunks[bin][0].BinID - 1
+		if until <= 0 {
+			// ignore this bin if it has only one chunk left
+			continue
+		}
+		ch, stop := db.SubscribePull(ctx, bin, since, until)
+		defer stop()
+
+		// the returned channel should be closed
+		// because no chunks should be provided
+		select {
+		case d, ok := <-ch:
+			if !ok {
+				// this is expected for successful case
+				break
+			}
+			if d.BinID > until {
+				t.Errorf("got %v for bin %v, subscribed until bin id %v", d.BinID, bin, until)
+			}
+		case <-ctx.Done():
+			t.Error(ctx.Err())
+		}
+
+		// mark that the check is performed
+		checkedBins++
+	}
+	// check that test performed at least one validation
+	if checkedBins == 0 {
+		t.Fatal("test did not perform any checks")
+	}
+}
+
 // uploadRandomChunksBin uploads random chunks to database and adds them to
 // the map of addresses ber bin.
 func uploadRandomChunksBin(t *testing.T, db *DB, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, wantedChunksCount *int, count int) {
