@@ -80,6 +80,10 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return 0, errors.New("Peer not found")
 }
 
+func (swap *Swap) GetAllBalances() (map[enode.ID]int64, error) {
+
+}
+
 //load balances from the state store (persisted)
 func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	var peerBalance int64
