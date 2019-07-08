@@ -22,11 +22,13 @@ import (
 	"io/ioutil"
 	mrand "math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -70,6 +72,21 @@ func TestGetPeerBalance(t *testing.T) {
 	}
 	if err.Error() != "Peer not found" {
 		t.Fatalf("Expected test to fail with %s, but is %s", "Peer not found", err.Error())
+	}
+}
+
+func TestGetAllBalances(t *testing.T) {
+	//create a test swap account
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	//test for correct value
+	testPeer := newDummyPeer()
+	swap.balances[testPeer.ID()] = 999
+	balances := swap.GetAllBalances()
+	expectedBalances := map[enode.ID]int64{testPeer.ID(): 999}
+	if !reflect.DeepEqual(balances, expectedBalances) {
+		t.Fatalf("Expected node's balances to be %d, but is %d", expectedBalances, balances)
 	}
 }
 
