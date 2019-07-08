@@ -14,6 +14,7 @@ import (
 
 func TestAdapters(t *testing.T) {
 
+	// Test exec adapter
 	t.Run("exec", func(t *testing.T) {
 		tmpdir, err := ioutil.TempDir("", "test-sim-exec")
 		if err != nil {
@@ -25,6 +26,23 @@ func TestAdapters(t *testing.T) {
 			ExecutablePath:    "/home/rafael/go/bin/swarm",
 			BaseDataDirectory: tmpdir,
 		})
+		if err != nil {
+			t.Fatalf("could not create exec adapter: %v", err)
+		}
+		startSimulation(t, adapter, 10)
+	})
+
+	// Test docker adapter
+	t.Run("docker", func(t *testing.T) {
+		config := DefaultDockerAdapterConfig()
+		config.BuildContext.Dockerfile = "Dockerfile"
+		config.BuildContext.Directory = "../"
+		config.BuildContext.Tag = "sim-docker-test:latest"
+
+		adapter, err := NewDockerAdapter(config)
+		if err != nil {
+			t.Fatalf("could not create docker adapter: %v", err)
+		}
 		startSimulation(t, adapter, 10)
 	})
 
@@ -94,14 +112,15 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 	rpcClients := make([]*rpc.Client, count)
 
 	for idx, id := range nodeIDs {
+
 		node, err := sim.Get(id)
 		nodes[idx] = node
 		if err != nil {
-			t.Errorf("could not get node %s: %v", id, err)
+			t.Fatalf("could not get node %s: %v", id, err)
 		}
 		client, err := sim.RPCClient(id)
 		if err != nil {
-			t.Errorf("failed to get an rpc client for node %s: %v", id, err)
+			t.Fatalf("failed to get an rpc client for node %s: %v", id, err)
 			continue
 		}
 		defer client.Close()

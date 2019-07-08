@@ -83,7 +83,7 @@ func (n *ExecNode) Start() error {
 	}
 
 	// Create command line arguments
-	args := []string{"swarm"}
+	args := []string{filepath.Base(n.adapter.config.ExecutablePath)}
 
 	// Create data directory for this node
 	dir := n.dataDir()
