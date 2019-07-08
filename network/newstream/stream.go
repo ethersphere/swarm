@@ -18,7 +18,6 @@ package newstream
 
 import (
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -32,10 +31,6 @@ import (
 
 // SlipStream implements node.Service
 var _ node.Service = (*SlipStream)(nil)
-var (
-	pollTime           = 1 * time.Second
-	createStreamsDelay = 50 * time.Millisecond //to avoid a race condition where we send a message to a server that hasnt set up yet
-)
 
 var SyncerSpec = &protocols.Spec{
 	Name:       "bzz-stream",

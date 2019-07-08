@@ -39,6 +39,7 @@ func init() {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
+
 func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.GlobalStorer) (localStore *localstore.DB, cleanup func(), err error) {
 	dir, err := ioutil.TempDir("", "swarm-stream-")
 	if err != nil {
