@@ -86,6 +86,9 @@ const (
 	// StreamAutostart automatically starts fetching data from the streams
 	// once the cursors arrive
 	StreamAutostart
+
+	// Retrieve everything, including future data from the HEAD of the stream
+	StreamPersistentAutostart
 )
 
 // StreamInfoReq is a request to get information about particular streams
