@@ -22,16 +22,8 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
-	"time"
-
-	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/bitvector"
-	"github.com/ethersphere/swarm/state"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
@@ -304,7 +296,7 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 			return err
 		}
 
-		w := &Want{
+		w := &want{
 			ruid:   g.Ruid,
 			stream: g.Stream,
 			from:   g.From,
@@ -345,10 +337,10 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 		}
 		log.Debug("collected hashes for requested range", "hashes", len(h)/HashSize, "msg", msg)
 		o := offer{
-			Ruid:      msg.Ruid,
+			ruid:      msg.Ruid,
 			stream:    msg.Stream,
-			Hashes:    h,
-			Requested: time.Now(),
+			hashes:    h,
+			requested: time.Now(),
 		}
 
 		p.mtx.Lock()
@@ -526,7 +518,7 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 	return i, nil
 }
 
-func (p *Peer) sealBatch(provider StreamProvider, w *Want) <-chan error {
+func (p *Peer) sealBatch(provider StreamProvider, w *want) <-chan error {
 	log.Debug("peer.sealBatch", "ruid", w.ruid)
 	errc := make(chan error)
 	go func() {
@@ -589,15 +581,15 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 		p.Drop()
 	}
 
-	l := len(offer.Hashes) / HashSize
+	l := len(offer.hashes) / HashSize
 	lll := len(msg.BitVector)
-	log.Debug("bitvector", "l", lll, "h", offer.Hashes)
+	log.Debug("bitvector", "l", lll, "h", offer.hashes)
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
-		log.Error("error initiaising bitvector", "l", l, "ll", len(offer.Hashes), "err", err)
+		log.Error("error initiaising bitvector", "l", l, "ll", len(offer.hashes), "err", err)
 		panic("err")
 	}
-	log.Debug("iterate over wanted hashes", "l", len(offer.Hashes))
+	log.Debug("iterate over wanted hashes", "l", len(offer.hashes))
 
 	frameSize := 0
 	const maxFrame = BatchSize
@@ -612,7 +604,7 @@ func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes) {
 
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
-			hash := offer.Hashes[i*HashSize : (i+1)*HashSize]
+			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
 			data, err := provider.Get(ctx, hash)
 			if err != nil {
 				log.Error("handleWantedHashesMsg", "hash", hash, "err", err)
