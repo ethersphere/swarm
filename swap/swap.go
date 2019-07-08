@@ -81,8 +81,10 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 }
 
 //GetAllBalances returns the balances for all known peers
-func (swap *Swap) GetAllBalances() (map[enode.ID]int64, error) {
-
+func (swap *Swap) GetAllBalances() map[enode.ID]int64 {
+	swap.lock.RLock()
+	defer swap.lock.RUnlock()
+	return swap.balances
 }
 
 //load balances from the state store (persisted)
