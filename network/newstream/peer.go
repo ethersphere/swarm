@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
+
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/bitvector"
@@ -135,7 +136,13 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	case *StreamInfoRes:
 		go p.handleStreamInfoRes(ctx, msg)
 	case *GetRange:
-		go p.handleGetRange(ctx, msg)
+		log.Error("wtf handling", "ccc", msg)
+		if msg.To == nil {
+			// handle live
+			go p.handleGetRangeHead(ctx, msg)
+		} else {
+			go p.handleGetRange(ctx, msg)
+		}
 	case *OfferedHashes:
 		go p.handleOfferedHashes(ctx, msg)
 	case *WantedHashes:
@@ -158,7 +165,7 @@ type offer struct {
 type want struct {
 	ruid      uint
 	from      uint64
-	to        uint64
+	to        *uint64
 	stream    ID
 	hashes    map[string]bool
 	bv        *bitvector.BitVector
@@ -215,6 +222,7 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	}
 
 	for _, s := range msg.Streams {
+		s := s
 		if provider, ok := p.providers[s.Stream.Name]; ok {
 			// check the stream integrity
 			_, err := provider.ParseKey(s.Stream.Key)
@@ -228,32 +236,68 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			if provider.StreamBehavior() == StreamAutostart {
 				if s.Cursor > 0 {
 					log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
-					stID := NewID(s.Stream.Name, s.Stream.Key)
 
-					c := p.getCursor(s.Stream)
-					if s.Cursor == 0 {
-						panic("wtf")
-					}
 					// fetch everything from beginning till s.Cursor
-					go func(stream ID, cursor uint64) {
-						err := p.requestStreamRange(ctx, stID, c)
+					go func() {
+						err := p.requestStreamRange(ctx, s.Stream, s.Cursor)
 						if err != nil {
 							log.Error("had an error sending initial GetRange for historical stream", "peer", p.ID(), "stream", s.Stream.String(), "err", err)
 							p.Drop()
 						}
-					}(stID, c)
+					}()
 				}
 
 				// handle stream unboundedness
-				if !s.Bounded {
-					// constantly fetch the head of the stream
-				}
+				//if !s.Bounded {
+				// constantly fetch the head of the stream
+				go func() {
+					// ask the tip (cursor + 1)
+					err := p.requestStreamHead(ctx, s.Stream, s.Cursor+1)
+					if err != nil {
+						log.Error("had an error with initial stream head fetch", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor+1, "err", err)
+						panic("dont panic")
+						p.Drop()
+					}
+				}()
+				//}
 			}
 		} else {
 			log.Error("got a StreamInfoRes message for a provider which I dont support")
 			panic("shouldn't happen, replace with p.Drop()")
 		}
 	}
+}
+
+func (p *Peer) requestStreamHead(ctx context.Context, stream ID, from uint64) error {
+	log.Debug("peer.requestStreamHead", "peer", p.ID(), "stream", stream, "from", from)
+	g := GetRange{
+		Ruid:      uint(rand.Uint32()),
+		Stream:    stream,
+		From:      from,
+		To:        nil,
+		BatchSize: BatchSize,
+		Roundtrip: true,
+	}
+
+	log.Debug("sending unbounded GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String(), "GetRange", g, "msg", g)
+
+	w := &want{
+		ruid:      g.Ruid,
+		stream:    g.Stream,
+		from:      g.From,
+		to:        nil,
+		hashes:    make(map[string]bool),
+		requested: time.Now(),
+	}
+	p.mtx.Lock()
+	p.openWants[w.ruid] = w
+	p.mtx.Unlock()
+
+	if err := p.Send(ctx, g); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64) error {
@@ -285,16 +329,12 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 			Ruid:      uint(rand.Uint32()),
 			Stream:    stream,
 			From:      from,
-			To:        to,
+			To:        &to,
 			BatchSize: BatchSize,
 			Roundtrip: true,
 		}
 
 		log.Debug("sending GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String(), "cursor", cursor, "GetRange", g)
-
-		if err := p.Send(ctx, g); err != nil {
-			return err
-		}
 
 		w := &want{
 			ruid:   g.Ruid,
@@ -308,12 +348,35 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 		p.mtx.Lock()
 		p.openWants[w.ruid] = w
 		p.mtx.Unlock()
+
+		if err := p.Send(ctx, g); err != nil {
+			return err
+		}
 		return nil
 	} else {
 		panic("wtf")
 		//got a message for an unsupported provider
 	}
 	return nil
+}
+
+func (p *Peer) handleGetRangeHead(ctx context.Context, msg *GetRange) {
+	log.Debug("peer.handleGetRangeHead", "peer", p.ID(), "msg", msg)
+	if provider, ok := p.providers[msg.Stream.Name]; ok {
+		key, err := provider.ParseKey(msg.Stream.Key)
+		if err != nil {
+			log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
+			p.Drop()
+		}
+		log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", *msg.To)
+		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, *msg.To)
+		if err != nil {
+			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
+			s := fmt.Sprintf("erroring getting batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
+			panic(s)
+			//p.Drop()
+		}
+	}
 }
 
 // handleGetRange is handled by the SERVER and sends in response an OfferedHashes message
@@ -327,8 +390,8 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 			log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
 			p.Drop()
 		}
-		log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", msg.To)
-		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, msg.To)
+		log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", *msg.To)
+		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, *msg.To)
 		if err != nil {
 			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
 			s := fmt.Sprintf("erroring getting batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
@@ -452,7 +515,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			log.Error("got an error while sealing batch", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
 			p.Drop()
 		}
-		err = p.addInterval(w.from, w.to, peerIntervalKey)
+		err = p.addInterval(w.from, *w.to, peerIntervalKey)
 		if err != nil {
 			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
 		}
@@ -468,7 +531,8 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		log.Debug("range ended, quitting")
 	}
 	log.Debug("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey, "w", w)
-	if err := p.requestStreamRange(ctx, stream, p.getCursor(stream)); err != nil {
+	cur := p.getCursor(stream)
+	if err := p.requestStreamRange(ctx, stream, cur); err != nil {
 		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 		p.Drop()
 	}
