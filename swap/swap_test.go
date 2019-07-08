@@ -84,10 +84,12 @@ func TestGetAllBalances(t *testing.T) {
 		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
 	}
 
+	//test balance change for peer
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 808
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
+	//test successive balance change for peer
 	testPeer2 := newDummyPeer()
 	swap.balances[testPeer2.ID()] = 909
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
