@@ -80,22 +80,17 @@ func TestGetAllBalances(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	var balances = make(map[enode.ID]int64)
-	var expectedBalances = make(map[enode.ID]int64)
-
-	//test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 808
-	balances = swap.GetAllBalances()
-	expectedBalances = map[enode.ID]int64{testPeer.ID(): 808}
-	if !reflect.DeepEqual(balances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but is %d", expectedBalances, balances)
-	}
+	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
 	testPeer2 := newDummyPeer()
 	swap.balances[testPeer2.ID()] = 909
-	balances = swap.GetAllBalances()
-	expectedBalances = map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909}
+	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
+}
+
+func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
+	balances := swap.GetAllBalances()
 	if !reflect.DeepEqual(balances, expectedBalances) {
 		t.Fatalf("Expected node's balances to be %d, but is %d", expectedBalances, balances)
 	}
