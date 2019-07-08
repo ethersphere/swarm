@@ -36,8 +36,8 @@ type DockerAdapter struct {
 }
 
 type DockerAdapterConfig struct {
-	// BuildContext can be used to be a docker image
-	// from a DockerFile and a context directory
+	// BuildContext can be used to build a docker image
+	// from a Dockerfile and a context directory
 	BuildContext DockerBuildContext
 	// DockerImage points to an existing docker image
 	// e.g. ethersphere/swarm:latest
@@ -178,6 +178,7 @@ func (n *DockerNode) Start() error {
 	resp, err := dockercli.ContainerCreate(ctx, &container.Config{
 		Image: n.adapter.image,
 		Cmd:   args,
+		Env:   n.config.Env,
 		ExposedPorts: nat.PortSet{
 			nat.Port(strconv.Itoa(dockerHTTPPort)):      struct{}{},
 			nat.Port(strconv.Itoa(dockerP2PPort)):       struct{}{},
@@ -333,9 +334,17 @@ func (n *DockerNode) containerName() string {
 	return fmt.Sprintf("sim-docker-%s", n.config.ID)
 }
 
-// buildImageFromExecutable builds a docker image based on an existing executable.
-// It returns the docker image identifier (tag).
+// buildImage builds a docker image and returns the image identifier (tag).
 func buildImage(buildContext DockerBuildContext) (string, error) {
+	// Connect to docker daemon
+	c, err := client.NewClientWithOpts(
+		client.WithHost(client.DefaultDockerHost),
+		client.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return "", fmt.Errorf("could not create docker client: %v", err)
+	}
+	defer c.Close()
 	// Use directory for build context
 	ctx, err := archive.TarWithOptions(buildContext.Directory, &archive.TarOptions{})
 	if err != nil {
@@ -346,7 +355,7 @@ func buildImage(buildContext DockerBuildContext) (string, error) {
 	imageTag := "sim-docker:latest"
 
 	// Use a tag if one is defined
-	if buildContext.Tag != "" {
+	if buildContext.Tag == "" {
 		imageTag = buildContext.Tag
 	}
 
@@ -357,15 +366,6 @@ func buildImage(buildContext DockerBuildContext) (string, error) {
 		Tags:           []string{imageTag},
 		Dockerfile:     buildContext.Dockerfile,
 	}
-
-	c, err := client.NewClientWithOpts(
-		client.WithHost(client.DefaultDockerHost),
-		client.WithAPIVersionNegotiation(),
-	)
-	if err != nil {
-		return "", fmt.Errorf("could not create docker client: %v", err)
-	}
-	defer c.Close()
 
 	buildResp, err := c.ImageBuild(context.Background(), ctx, opts)
 	if err != nil {

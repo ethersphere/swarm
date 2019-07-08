@@ -1,0 +1,282 @@
+package simulation
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
+	"github.com/ethersphere/swarm/log"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type KubernetesAdapter struct {
+	client    *kubernetes.Clientset
+	image     string
+	namespace string
+	nodes     map[NodeID]*KubernetesNode
+}
+
+type KubernetesAdapterConfig struct {
+	// KubeConfigPath is the path to your kubernetes configuration path
+	KubeConfigPath string
+	// Namespace is the kubernetes namespaces where the pods should be running
+	Namespace string
+	// BuildContext can be used to build a docker image
+	// from a Dockerfile and a context directory
+	BuildContext KubernetesBuildContext
+	// DockerImage points to an existing docker image
+	// e.g. ethersphere/swarm:latest
+	DockerImage string
+}
+
+type KubernetesBuildContext struct {
+	// Dockefile is the path to the dockerfile
+	Dockerfile string
+	// Directory is the directory that will be used
+	// in the context of a docker build
+	Directory string
+	// Tag is used to tag the image
+	Tag string
+	// Registry is the image registry where the image will be pushed to
+	Registry string
+	// Username is the user used to push the image to the registry
+	Username string
+	// Password is the password of the user that is used to push the image
+	// to the registry
+	Password string
+}
+
+// ImageTag is the full image tag, including the registry
+func (bc *KubernetesBuildContext) ImageTag() string {
+	return fmt.Sprintf("%s/%s", bc.Registry, bc.Tag)
+}
+
+type KubernetesNode struct {
+	config  NodeConfig
+	adapter *KubernetesAdapter
+	status  NodeStatus
+}
+
+func DefaultKubernetesAdapterConfig() KubernetesAdapterConfig {
+	kubeconfig := filepath.Join(homeDir(), ".kube", "config")
+	return KubernetesAdapterConfig{
+		KubeConfigPath: kubeconfig,
+		Namespace:      "default",
+	}
+}
+
+func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, error) {
+	if config.BuildContext.Dockerfile != "" && config.DockerImage != "" {
+		return nil, fmt.Errorf("only one can be defined: BuildContext (%v) or DockerImage(%s)",
+			config.BuildContext, config.DockerImage)
+	}
+
+	if config.BuildContext.Dockerfile == "" && config.DockerImage == "" {
+		return nil, errors.New("required: BuildContext or ExecutablePath")
+	}
+
+	// Define k8s client configuration
+	k8scfg, err := clientcmd.BuildConfigFromFlags("", config.KubeConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not start k8s client from config: %v", err)
+
+	}
+
+	// Create the clientset
+	clientset, err := kubernetes.NewForConfig(k8scfg)
+	if err != nil {
+		return nil, fmt.Errorf("coudl not create clientset: %v", err)
+	}
+
+	// Figure out which docker image should be used
+	image := config.DockerImage
+
+	// Build and push container image
+	if config.BuildContext.Dockerfile != "" {
+		var err error
+		// Build image
+		image, err = buildImage(DockerBuildContext{
+			Dockerfile: config.BuildContext.Dockerfile,
+			Directory:  config.BuildContext.Directory,
+			Tag:        config.BuildContext.ImageTag(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("could not build the docker image: %v", err)
+		}
+
+		// Push image
+		dockerClient, err := client.NewClientWithOpts(
+			client.WithHost(client.DefaultDockerHost),
+			client.WithAPIVersionNegotiation(),
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("could not create the docker client: %v", err)
+		}
+
+		authConfig := types.AuthConfig{
+			Username: config.BuildContext.Username,
+			Password: config.BuildContext.Password,
+		}
+		encodedJSON, err := json.Marshal(authConfig)
+		if err != nil {
+			return nil, errors.New("failed marshaling the authentication parameters")
+		}
+		authStr := base64.URLEncoding.EncodeToString(encodedJSON)
+
+		out, err := dockerClient.ImagePush(
+			context.Background(),
+			config.BuildContext.ImageTag(),
+			types.ImagePushOptions{
+				RegistryAuth: authStr,
+			})
+		if err != nil {
+			return nil, fmt.Errorf("failed to push image: %v", err)
+		}
+		defer out.Close()
+		io.Copy(os.Stdout, out)
+	}
+
+	return &KubernetesAdapter{
+		client:    clientset,
+		image:     image,
+		namespace: config.Namespace,
+		nodes:     make(map[NodeID]*KubernetesNode),
+	}, nil
+}
+
+func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
+	if _, ok := a.nodes[config.ID]; ok {
+		return nil, fmt.Errorf("node '%s' already exists", config.ID)
+	}
+	status := NodeStatus{
+		ID: config.ID,
+	}
+	node := &KubernetesNode{
+		config:  config,
+		adapter: a,
+		status:  status,
+	}
+	a.nodes[config.ID] = node
+	return node, nil
+}
+
+// Status returns the node status
+func (n *KubernetesNode) Status() NodeStatus {
+	return NodeStatus{}
+}
+
+// Start starts the node
+func (n *KubernetesNode) Start() error {
+	// Define arguments
+	args := []string{}
+
+	// Append user defined arguments
+	args = append(args, n.config.Args...)
+
+	// Append network ports arguments
+	args = append(args, "--pprofport", strconv.Itoa(dockerPProfPort))
+	args = append(args, "--bzzport", strconv.Itoa(dockerHTTPPort))
+	args = append(args, "--ws")
+	// TODO: Can we get the APIs from somewhere instead of hardcoding them here?
+	args = append(args, "--wsapi", "admin,net,debug,bzz,accounting")
+	args = append(args, "--wsport", strconv.Itoa(dockerWebsocketPort))
+	args = append(args, "--wsaddr", "0.0.0.0")
+	args = append(args, "--wsorigins", "*")
+	args = append(args, "--port", strconv.Itoa(dockerP2PPort))
+
+	adapter := n.adapter
+	podRequest := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: n.podName(),
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name:  n.podName(),
+					Image: adapter.image,
+					Args:  args,
+					// TODO: Are the port definitions needed?
+					/*Ports: []v1.ContainerPort{
+						v1.ContainerPort{
+							Name:          "p2p-tcp",
+							Protocol:      v1.ProtocolTCP,
+							ContainerPort: dockerP2PPort,
+						},
+						v1.ContainerPort{
+							Name:          "p2p-udp",
+							Protocol:      v1.ProtocolUDP,
+							ContainerPort: dockerP2PPort,
+						},
+					},*/
+					// TODO: convert Env vars
+					//Env:   n.config.Env,
+				},
+			},
+		},
+	}
+	pod, err := adapter.client.CoreV1().Pods(adapter.namespace).Create(podRequest)
+	if err != nil {
+		return fmt.Errorf("failed to create pod: %v", err)
+	}
+
+	logOpts := &v1.PodLogOptions{
+		Container: n.podName(),
+		Follow:    true,
+		Previous:  false,
+	}
+	req := adapter.client.CoreV1().Pods(adapter.namespace).GetLogs(n.podName(), logOpts)
+
+	go func() {
+		readCloser, err := req.Stream()
+		if err != nil {
+			log.Error("Error getting pod logs", "pod", pod.Name, "err", err)
+		}
+		defer readCloser.Close()
+
+		if _, err := io.Copy(n.config.Stderr, readCloser); err != nil && err != io.EOF {
+			log.Error("Error writing pod logs", "pod", pod.Name, "err", err)
+		}
+	}()
+
+	return nil
+}
+
+// Stop stops the node
+func (n *KubernetesNode) Stop() error {
+	adapter := n.adapter
+
+	gracePeriod := int64(30)
+
+	deleteOpts := &metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriod,
+	}
+	err := adapter.client.CoreV1().Pods(adapter.namespace).Delete(n.podName(), deleteOpts)
+	if err != nil {
+		return fmt.Errorf("could not delete pod: %v", err)
+	}
+	return nil
+}
+
+func (n *KubernetesNode) podName() string {
+	return fmt.Sprintf("sim-k8s-%s", n.config.ID)
+}
+
+func homeDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return os.Getenv("USERPROFILE") // windows
+}

@@ -46,6 +46,25 @@ func TestAdapters(t *testing.T) {
 		startSimulation(t, adapter, 10)
 	})
 
+	// Test kubernetes adapter
+	t.Run("kubernetes", func(t *testing.T) {
+		config := DefaultKubernetesAdapterConfig()
+		config.Namespace = "simulation-test"
+		config.DockerImage = "skylenet/swarm-test:why"
+		/*config.BuildContext.Dockerfile = "Dockerfile"
+		config.BuildContext.Directory = "../"
+		config.BuildContext.Tag = "swarm-test:why"
+		config.BuildContext.Registry = "skylenet"
+		config.BuildContext.Username = "skylenet"
+		config.BuildContext.Password = "xxxxxxxx"*/
+
+		adapter, err := NewKubernetesAdapter(config)
+		if err != nil {
+			t.Fatalf("could not create kubernetes adapter: %v", err)
+		}
+		startSimulation(t, adapter, 1)
+	})
+
 }
 
 func startSimulation(t *testing.T, adapter Adapter, count int) {
