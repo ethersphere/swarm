@@ -123,7 +123,7 @@ type GetRange struct {
 // to selectively ask for chunks within a particular requested interval
 type OfferedHashes struct {
 	Ruid      uint
-	LastIndex uint
+	LastIndex uint64
 	Hashes    []byte
 }
 

@@ -308,8 +308,8 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 		if err != nil {
 			return err
 		}
-		from, to, empty := interval.Next(cursor)
-		log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "from", from, "to", to)
+		from, _, empty := interval.Next(cursor)
+		log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "from", from)
 		if from > cursor || empty {
 			log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
 			// stream finished. quit
@@ -320,16 +320,16 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 			panic("no")
 		}
 
-		if to-from > BatchSize-1 {
-			log.Debug("limiting TO to HistoricalStreamPageSize", "to", to, "new to", from+BatchSize)
-			to = from + BatchSize - 1 //because the intervals are INCLUSIVE, it means we get also FROM and TO
-		}
+		//if to-from > BatchSize-1 {
+		//log.Debug("limiting TO to HistoricalStreamPageSize", "to", to, "new to", from+BatchSize)
+		//to = from + BatchSize - 1 //because the intervals are INCLUSIVE, it means we get also FROM and TO
+		//}
 
 		g := GetRange{
 			Ruid:      uint(rand.Uint32()),
 			Stream:    stream,
 			From:      from,
-			To:        &to,
+			To:        &cursor,
 			BatchSize: BatchSize,
 			Roundtrip: true,
 		}
@@ -337,11 +337,10 @@ func (p *Peer) requestStreamRange(ctx context.Context, stream ID, cursor uint64)
 		log.Debug("sending GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String(), "cursor", cursor, "GetRange", g)
 
 		w := &want{
-			ruid:   g.Ruid,
-			stream: g.Stream,
-			from:   g.From,
-			to:     g.To,
-
+			ruid:      g.Ruid,
+			stream:    g.Stream,
+			from:      g.From,
+			to:        nil,
 			hashes:    make(map[string]bool),
 			requested: time.Now(),
 		}
@@ -368,14 +367,39 @@ func (p *Peer) handleGetRangeHead(ctx context.Context, msg *GetRange) {
 			log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
 			p.Drop()
 		}
-		log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", *msg.To)
-		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, *msg.To)
+		log.Debug("peer.handleGetRangeHead collecting batch", "from", msg.From)
+		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, 0)
 		if err != nil {
-			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
-			s := fmt.Sprintf("erroring getting batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
+			log.Error("erroring getting live batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
+			s := fmt.Sprintf("erroring getting live batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
 			panic(s)
-			//p.Drop()
+			p.Drop()
 		}
+		if len(h) == 0 {
+			panic("no")
+		}
+		o := offer{
+			ruid:      msg.Ruid,
+			stream:    msg.Stream,
+			hashes:    h,
+			requested: time.Now(),
+		}
+
+		p.mtx.Lock()
+		p.openOffers[msg.Ruid] = o
+		p.mtx.Unlock()
+
+		offered := OfferedHashes{
+			Ruid:      msg.Ruid,
+			LastIndex: t,
+			Hashes:    h,
+		}
+		l := len(h) / HashSize
+		log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "l", l)
+		if err := p.Send(ctx, offered); err != nil {
+			log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
+		}
+
 	}
 }
 
@@ -412,7 +436,7 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 
 		offered := OfferedHashes{
 			Ruid:      msg.Ruid,
-			LastIndex: uint(t),
+			LastIndex: t,
 			Hashes:    h,
 		}
 		l := len(h) / HashSize
@@ -444,6 +468,8 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		log.Error("ruid not found, dropping peer")
 		p.Drop()
 	}
+
+	w.to = &msg.LastIndex
 
 	provider, ok := p.providers[w.stream.Name]
 	if !ok {
