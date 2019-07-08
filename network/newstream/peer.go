@@ -414,14 +414,15 @@ func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 			log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
 			p.Drop()
 		}
-		log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", *msg.To)
-		h, f, t, err := p.collectBatch(ctx, provider, key, msg.From, *msg.To)
-		if err != nil {
-			log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
-			s := fmt.Sprintf("erroring getting batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
-			panic(s)
-			//p.Drop()
-		}
+		log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", msg.To)
+		h, f, t, _ := p.collectBatch(ctx, provider, key, msg.From, *msg.To)
+		// empty batch can be legit, TODO: check which errors should be handled, if any
+		// if err != nil {
+		// 	log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
+		// 	s := fmt.Sprintf("erroring getting batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
+		// 	panic(s)
+		// 	//p.Drop()
+		// }
 		log.Debug("collected hashes for requested range", "hashes", len(h)/HashSize, "msg", msg)
 		o := offer{
 			ruid:      msg.Ruid,
@@ -469,7 +470,22 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		p.Drop()
 	}
 
-	w.to = &msg.LastIndex
+	if lenHashes == 0 {
+		// received zero hashes count, just fill the intervals, remove open want and request next range
+		peerIntervalKey := p.peerStreamIntervalKey(w.stream)
+		err := p.addInterval(w.from, *w.to, peerIntervalKey)
+		if err != nil {
+			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to)
+		}
+		p.mtx.Lock()
+		delete(p.openWants, msg.Ruid)
+		p.mtx.Unlock()
+		if err := p.requestStreamRange(ctx, w.stream, p.getCursor(w.stream)); err != nil {
+			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
+			p.Drop()
+		}
+		return
+	}
 
 	provider, ok := p.providers[w.stream.Name]
 	if !ok {
@@ -533,7 +549,6 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 	p.openWants[msg.Ruid] = w
 	p.mtx.Unlock()
 
-	stream := w.stream
 	peerIntervalKey := p.peerStreamIntervalKey(w.stream)
 	select {
 	case err := <-errc:
@@ -552,13 +567,12 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 		//TODO BATCH TIMEOUT?
 	}
 
-	f, t, empty, err := p.nextInterval(peerIntervalKey, p.getCursor(stream))
-	if empty {
-		log.Debug("range ended, quitting")
-	}
-	log.Debug("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey, "w", w)
-	cur := p.getCursor(stream)
-	if err := p.requestStreamRange(ctx, stream, cur); err != nil {
+	// f, t, empty, err := p.nextInterval(peerIntervalKey, p.getCursor(stream))
+	// if empty {
+	// 	log.Debug("range ended, quitting")
+	// }
+	// log.Debug("next interval", "f", f, "t", t, "err", err, "intervalsKey", peerIntervalKey, "w", w)
+	if err := p.requestStreamRange(ctx, w.stream, p.getCursor(w.stream)); err != nil {
 		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 		p.Drop()
 	}

@@ -91,7 +91,6 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					// until chunk descriptor is sent
 					// break the iteration
 					if until > 0 && item.BinID > until {
-						log.Debug("breaking on reached bin ID")
 						return true, errStopSubscription
 					}
 					select {
@@ -99,6 +98,10 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 						Address: item.Address,
 						BinID:   item.BinID,
 					}:
+						if until > 0 && item.BinID == until {
+							log.Debug("breaking on reached bin ID")
+							return true, errStopSubscription
+						}
 						count++
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
