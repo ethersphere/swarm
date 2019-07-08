@@ -78,10 +78,6 @@ func TestTwoNodesFullSync(t *testing.T) {
 			return err
 		}
 
-		//1. to Set the chunk after its been sent to a peer with syncing -> doesnt get removed with gc now
-		//2. 1 ... 517, 2 1 .. 253
-		//
-
 		id, err := sim.AddNodes(1)
 		if err != nil {
 			return err
@@ -291,7 +287,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	}
 }
 
-func TestTwoNodesFullSyncWithLive(t *testing.T) {
+func TestTwoNodesFullSyncLive(t *testing.T) {
 	var (
 		chunkCount = 1000
 		syncTime   = 3 * time.Second
@@ -313,17 +309,15 @@ func TestTwoNodesFullSyncWithLive(t *testing.T) {
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 
-		item := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
+		uploaderNodeStore := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
 
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
-		item = sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		store := item.(chunk.Store)
 
 		//put some data into just the first node
 		filesize := chunkCount * 4096
 		cctx := context.Background()
-		_, wait, err := item.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
 		if err != nil {
 			return err
 		}
@@ -340,13 +334,13 @@ func TestTwoNodesFullSyncWithLive(t *testing.T) {
 			return err
 		}
 		nodeIDs = sim.UpNodeIDs()
-		syncingNodeId := nodeIDs[1]
+		syncingNodeStore := sim.NodeItem(nodeIDs[1], bucketKeyFileStore)
 
 		uploaderNodeBinIDs := make([]uint64, 17)
 
 		log.Debug("checking pull subscription bin ids")
 		for po := 0; po <= 16; po++ {
-			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			until, err := uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
 				return err
 			}
@@ -360,13 +354,11 @@ func TestTwoNodesFullSyncWithLive(t *testing.T) {
 
 		// check that the sum of bin indexes is equal
 
-		log.Debug("compare to", "enode", syncingNodeId)
-		item = sim.NodeItem(syncingNodeId, bucketKeyFileStore)
-		db := item.(chunk.Store)
+		log.Debug("compare to", "enode", nodeIDs[1])
 
 		uploaderSum, otherNodeSum := 0, 0
 		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+			shouldUntil, err := syncingNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
 				return err
 			}
@@ -377,9 +369,11 @@ func TestTwoNodesFullSyncWithLive(t *testing.T) {
 			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 		}
 
+		log.Error("eeeeeeeeee", "e", uploaderNodeBinIDs)
+
 		// now add stuff so that we fetch it with live syncing
 
-		_, wait, err = item.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
+		_, wait, err = uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 		if err != nil {
 			return err
 		}
@@ -389,7 +383,7 @@ func TestTwoNodesFullSyncWithLive(t *testing.T) {
 
 		// count the content in the bins again
 		for po := 0; po <= 16; po++ {
-			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			until, err := uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
 				return err
 			}
@@ -397,12 +391,13 @@ func TestTwoNodesFullSyncWithLive(t *testing.T) {
 
 			uploaderNodeBinIDs[po] = until
 		}
+		log.Error("eeeeeeeeee", "e", uploaderNodeBinIDs)
 
 		// wait for live syncing
 		<-time.After(syncTime)
 
 		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+			shouldUntil, err := syncingNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
 				return err
 			}
