@@ -18,7 +18,6 @@ package swap
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -31,21 +30,21 @@ import (
 var SigDoesNotMatch = errors.New("signature does not match")
 var DontOwe = errors.New("no negative balance")
 
-// SwapPeer is a devp2p peer for the Swap protocol
-type SwapPeer struct {
+// Peer is a devp2p peer for the Swap protocol
+type Peer struct {
 	*protocols.Peer
 	swap *Swap
 }
 
-func NewPeer(p *protocols.Peer, s *Swap) *SwapPeer {
-	return &SwapPeer{
+func NewPeer(p *protocols.Peer, s *Swap) *Peer {
+	return &Peer{
 		Peer: p,
 		swap: s,
 	}
 }
 
 // handleMsg is for handling messages when receiving messages
-func (sp *SwapPeer) handleMsg(ctx context.Context, msg interface{}) error {
+func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 
 	case *ChequeRequestMsg:
@@ -71,10 +70,12 @@ func (sp *SwapPeer) handleMsg(ctx context.Context, msg interface{}) error {
 //   * check serial number
 //   * check amount
 //   * if all is ok, issue the cheque
-func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (err error) {
+func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (err error) {
 	// check we have indeed a negative balance with the peer
 	var req *ChequeRequestMsg
 	var ok bool
+	var peerBalance int64
+
 	if req, ok = msg.(*ChequeRequestMsg); !ok {
 		return fmt.Errorf("Unexpected message type: %v", err)
 	}
@@ -82,11 +83,10 @@ func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{})
 	peer := req.Peer
 
 	sp.swap.lock.Lock()
-	defer sp.swap.lock.Unlock() // TODO: do we really want to block so long?
+	defer sp.swap.lock.Unlock() //TODO: Do we really want to block so long?
 
-	peerBalance, err := sp.swap.GetPeerBalance(peer)
-	if err != nil {
-		return err
+	if peerBalance, ok = sp.swap.balances[peer]; !ok {
+		return fmt.Errorf("No exchanges with peer: %v", peer)
 	}
 	// do we actually owe to the remote peer?
 	if peerBalance >= 0 {
@@ -125,7 +125,7 @@ func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{})
 		return err
 	}
 	cheque.Beneficiary = crypto.PubkeyToAddress(*pk)
-	cheque.Sig, err = sp.signContent(cheque)
+	cheque.Sig, err = sp.swap.signContent(cheque)
 	if err != nil {
 		return err
 	}
@@ -138,39 +138,31 @@ func (sp *SwapPeer) handleChequeRequestMsg(ctx context.Context, msg interface{})
 		return err
 	}
 
+	emit := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
 	// TODO: reset balance here?
 	// if we don't, then multiple ChequeRequestMsg may be sent and multiple
 	// cheques will be generated
 	// If we do, then if something goes wrong and the remote does not reset the balance,
 	// we have issues as well.
-	return sp.Send(ctx, msg)
-}
+	// For now, reset the balance
+	sp.swap.resetBalance(peer)
 
-// signContent signs the cheque
-func (sp *SwapPeer) signContent(cheque *Cheque) ([]byte, error) {
-	serialBytes := make([]byte, 32)
-	amountBytes := make([]byte, 32)
-	timeoutBytes := make([]byte, 32)
-	input := append(cheque.Contract.Bytes(), cheque.Beneficiary.Bytes()...)
-	binary.LittleEndian.PutUint64(serialBytes, cheque.Serial)
-	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
-	binary.LittleEndian.PutUint64(timeoutBytes, cheque.Timeout)
-	input = append(input, serialBytes[:]...)
-	input = append(input, amountBytes[:]...)
-	input = append(input, timeoutBytes[:]...)
-	return crypto.Sign(crypto.Keccak256(input), sp.swap.owner.privateKey)
+	return sp.Send(ctx, emit)
 }
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a creditor
-func (sp *SwapPeer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error {
+func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error {
 	chequeMsg, ok := msg.(*EmitChequeMsg)
 	if !ok {
 		return fmt.Errorf("Invalid message type, %v", msg)
 	}
 	cheque := chequeMsg.Cheque
 	// reset balance to zero
-	sp.swap.resetBalance(sp.Peer)
+	sp.swap.resetBalance(sp.ID())
 	// send confirmation
 	sp.Send(ctx, &ConfirmMsg{})
 	// cash in cheque
@@ -185,13 +177,13 @@ func (sp *SwapPeer) handleEmitChequeMsg(ctx context.Context, msg interface{}) er
 }
 
 // TODO: Error handling
-func (sp *SwapPeer) handleErrorMsg(ctx context.Context, msg interface{}) error {
+func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 	// maybe balance disagreement
 	return nil
 }
 
-func (sp *SwapPeer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
+func (sp *Peer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
 	// TODO; correct here?
-	sp.swap.resetBalance(sp.Peer)
+	sp.swap.resetBalance(sp.ID())
 	return nil
 }

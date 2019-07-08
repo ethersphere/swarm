@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -53,7 +54,7 @@ type Swap struct {
 	lock          sync.RWMutex         // lock the balances
 	balances      map[enode.ID]int64   // map of balances for each peer
 	cheques       map[enode.ID]*Cheque // map of balances for each peer
-	Service       *SwapService         // Service for running the procol
+	Service       *Service             // Service for running the procol
 	owner         *Owner               // contract access
 	params        *Params              // economic and operational parameters
 	contractProxy *swap.Proxy          // proxy for the contract, contract abstraction
@@ -131,11 +132,15 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 //GetPeerBalance returns the balance for a given peer
 func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
+	fmt.Println("aa4aa")
 	swap.lock.RLock()
+	fmt.Println("aa1aa")
 	defer swap.lock.RUnlock()
+	fmt.Println("aa2aa")
 	if p, ok := swap.balances[peer]; ok {
 		return p, nil
 	}
+	fmt.Println("aa3aa")
 	return 0, errors.New("Peer not found")
 }
 
@@ -183,12 +188,24 @@ func (swap *Swap) Close() {
 // resetBalance is called:
 // * for the creditor: on cheque receival
 // * for the debitor: on confirmation receival
-func (s *Swap) resetBalance(peer *protocols.Peer) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
+func (s *Swap) resetBalance(peer enode.ID) {
 	//TODO: reset balance based on actual amount
-	s.balances[peer.ID()] = 0
+	s.balances[peer] = 0
+}
+
+// signContent signs the cheque
+func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
+	serialBytes := make([]byte, 32)
+	amountBytes := make([]byte, 32)
+	timeoutBytes := make([]byte, 32)
+	input := append(cheque.Contract.Bytes(), cheque.Beneficiary.Bytes()...)
+	binary.LittleEndian.PutUint64(serialBytes, cheque.Serial)
+	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
+	binary.LittleEndian.PutUint64(timeoutBytes, cheque.Timeout)
+	input = append(input, serialBytes[:]...)
+	input = append(input, amountBytes[:]...)
+	input = append(input, timeoutBytes[:]...)
+	return crypto.Sign(crypto.Keccak256(input), s.owner.privateKey)
 }
 
 // createProxy instantiates the contract proxy;
@@ -226,7 +243,7 @@ func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) er
 	opts.Context = ctx
 
 	log.Info(fmt.Sprintf("Deploying new swap (owner: %v)", opts.From.Hex()))
-	address, err := s.deployLoop(opts, backend, s.owner.Contract)
+	address, err := s.deployLoop(opts, backend, s.owner.address)
 	if err != nil {
 		log.Error(fmt.Sprintf("unable to deploy swap: %v", err))
 		return err

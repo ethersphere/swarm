@@ -40,7 +40,7 @@ type ChequeRequestMsg struct {
 
 // EmitChequeMsg is sent from the debitor to the creditor with the actual check
 type EmitChequeMsg struct {
-	Cheque Cheque
+	Cheque *Cheque
 }
 
 // ErrorMsg is sent in case of an error TODO: specify error conditions and when this needs to be sent

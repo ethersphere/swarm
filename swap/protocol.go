@@ -21,7 +21,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-var SwapSpec = &protocols.Spec{
+var Spec = &protocols.Spec{
 	Name:       "swap",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
@@ -33,16 +33,16 @@ var SwapSpec = &protocols.Spec{
 	},
 }
 
-type SwapService struct {
+type Service struct {
 	swap *Swap
 }
 
 func (s *Swap) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    SwapSpec.Name,
-			Version: SwapSpec.Version,
-			Length:  SwapSpec.Length(),
+			Name:    Spec.Name,
+			Version: Spec.Version,
+			Length:  Spec.Length(),
 			Run:     s.Service.run,
 		},
 	}
@@ -59,17 +59,17 @@ func (s *Swap) APIs() []rpc.API {
 	}
 }
 
-func (ss *SwapService) Start(server *p2p.Server) error {
+func (ss *Service) Start(server *p2p.Server) error {
 	log.Info("Swap service started")
 	return nil
 }
 
-func (ss *SwapService) Stop() error {
+func (ss *Service) Stop() error {
 	return nil
 }
 
-func (ss *SwapService) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	protoPeer := protocols.NewPeer(p, rw, SwapSpec)
+func (ss *Service) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	protoPeer := protocols.NewPeer(p, rw, Spec)
 	swapPeer := NewPeer(protoPeer, ss.swap)
 	return swapPeer.Run(swapPeer.handleMsg)
 }
