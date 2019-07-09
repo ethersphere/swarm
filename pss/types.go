@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -87,7 +88,7 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 }
 
 // holds the digest of a message used for caching
-type pssDigest [digestLength]byte
+type digest [digestLength]byte
 
 // conceals bitwise operations on the control flags byte
 type msgParams struct {
@@ -115,6 +116,18 @@ func (m *msgParams) Bytes() (paramBytes []byte) {
 	}
 	paramBytes = append(paramBytes, b)
 	return paramBytes
+}
+
+type OutboxMsg struct {
+	msg       *PssMsg
+	startedAt time.Time
+}
+
+func newOutboxMsg(msg *PssMsg) *OutboxMsg {
+	return &OutboxMsg{
+		msg:       msg,
+		startedAt: time.Now(),
+	}
 }
 
 // PssMsg encapsulates messages transported over pss.

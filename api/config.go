@@ -54,7 +54,7 @@ type Config struct {
 
 	*network.HiveParams
 	Swap                 *swap.LocalProfile
-	Pss                  *pss.PssParams
+	Pss                  *pss.Params
 	Contract             common.Address
 	EnsRoot              common.Address
 	EnsAPIs              []string
@@ -87,7 +87,7 @@ func NewConfig() (c *Config) {
 		FileStoreParams:      storage.NewFileStoreParams(),
 		HiveParams:           network.NewHiveParams(),
 		Swap:                 swap.NewDefaultSwapParams(),
-		Pss:                  pss.NewPssParams(),
+		Pss:                  pss.NewParams(),
 		ListenAddr:           DefaultHTTPListenAddr,
 		Port:                 DefaultHTTPPort,
 		Path:                 node.DefaultDataDir(),

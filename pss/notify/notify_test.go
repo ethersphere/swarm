@@ -238,7 +238,7 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			pssp := pss.NewPssParams().WithPrivateKey(privkey)
+			pssp := pss.NewParams().WithPrivateKey(privkey)
 			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
