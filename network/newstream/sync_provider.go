@@ -163,6 +163,16 @@ func (s *syncProvider) RunUpdateStreams(p *Peer) {
 	log.Debug("create streams", "peer", p.BzzAddr.ID(), "base", fmt.Sprintf("%x", s.kad.BaseAddr()[:12]), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
 
 	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
+	// get or create all intervals for all bins
+	for _, v := range sub {
+		stream := NewID(s.StreamName(), fmt.Sprintf("%d", v))
+		peerIntervalKey := p.peerStreamIntervalKey(stream)
+		_, err := p.getOrCreateInterval(peerIntervalKey)
+		if err != nil {
+			log.Error("got an error while trying to register initial streams", "peer", p.ID(), "stream", stream)
+		}
+	}
+
 	log.Debug("sending initial subscriptions message", "self", fmt.Sprintf("%x", s.kad.BaseAddr()[:12]), "peer", p.ID(), "subs", sub)
 	doPeerSubUpdate(p, sub, nil)
 

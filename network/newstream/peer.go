@@ -41,7 +41,7 @@ const (
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
-	mtx            sync.Mutex
+	mtx            sync.RWMutex
 	providers      map[string]StreamProvider
 	intervalsStore state.Store
 
@@ -142,10 +142,11 @@ type want struct {
 	done      chan error
 }
 
-func (p *Peer) addInterval(start, end uint64, peerStreamKey string) (err error) {
+func (p *Peer) addInterval(stream ID, start, end uint64) (err error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
+	peerStreamKey := p.peerStreamIntervalKey(stream)
 	i := &intervals.Intervals{}
 	if err = p.intervalsStore.Get(peerStreamKey, i); err != nil {
 		return err
@@ -154,20 +155,24 @@ func (p *Peer) addInterval(start, end uint64, peerStreamKey string) (err error) 
 	return p.intervalsStore.Put(peerStreamKey, i)
 }
 
-func (p *Peer) nextInterval(peerStreamKey string, ceil uint64) (start, end uint64, empty bool, err error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+func (p *Peer) nextInterval(stream ID, ceil uint64) (start, end uint64, empty bool, err error) {
+	p.mtx.RLock()
+	defer p.mtx.RUnlock()
 
 	i := &intervals.Intervals{}
-	err = p.intervalsStore.Get(peerStreamKey, i)
+	err = p.intervalsStore.Get(p.peerStreamIntervalKey(stream), i)
 	if err != nil {
 		return 0, 0, false, err
 	}
+
 	start, end, empty = i.Next(ceil)
 	return start, end, empty, nil
 }
 
 func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
 	// check that an interval entry exists
 	i := &intervals.Intervals{}
 	err := p.intervalsStore.Get(key, i)
