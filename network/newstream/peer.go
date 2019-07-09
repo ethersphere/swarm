@@ -108,10 +108,6 @@ func (p *Peer) deleteCursor(stream ID) {
 	delete(p.streamCursors, stream.String())
 }
 
-func (p *Peer) Left() {
-	close(p.quit)
-}
-
 func (p *Peer) InitProviders() {
 	log.Debug("peer.InitProviders")
 
