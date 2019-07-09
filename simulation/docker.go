@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -303,7 +304,7 @@ func (n *DockerNode) Start() error {
 	n.status = NodeStatus{
 		ID:          n.config.ID,
 		Running:     true,
-		Enode:       p2pinfo.Enode,
+		Enode:       strings.Replace(p2pinfo.Enode, "127.0.0.1", n.ipAddr, 1),
 		BzzAddr:     swarminfo.BzzKey,
 		RPCListen:   fmt.Sprintf("ws://%s", n.portmap[dockerWebsocketPort]),
 		HTTPListen:  fmt.Sprintf("http://%s", n.portmap[dockerHTTPPort]),
@@ -327,6 +328,7 @@ func (n *DockerNode) Stop() error {
 	if err != nil {
 		return fmt.Errorf("failed to remove container %s : %v", n.containerName(), err)
 	}
+	n.status.Running = false
 	return nil
 }
 

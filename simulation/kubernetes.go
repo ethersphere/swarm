@@ -7,15 +7,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/log"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +35,7 @@ type KubernetesAdapter struct {
 	image     string
 	namespace string
 	nodes     map[NodeID]*KubernetesNode
+	proxy     string
 }
 
 type KubernetesAdapterConfig struct {
@@ -149,11 +159,24 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 		io.Copy(os.Stdout, out)
 	}
 
+	// Setup proxy to access pods
+	server, err := NewProxyServer(k8scfg)
+
+	l, err := server.Listen("127.0.0.1", 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start proxy: %v", err)
+	}
+	go func() {
+		server.ServeOnListener(l)
+	}()
+
+	// Return adapter
 	return &KubernetesAdapter{
 		client:    clientset,
 		image:     image,
 		namespace: config.Namespace,
 		nodes:     make(map[NodeID]*KubernetesNode),
+		proxy:     l.Addr().String(),
 	}, nil
 }
 
@@ -175,7 +198,7 @@ func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 
 // Status returns the node status
 func (n *KubernetesNode) Status() NodeStatus {
-	return NodeStatus{}
+	return n.status
 }
 
 // Start starts the node
@@ -196,6 +219,7 @@ func (n *KubernetesNode) Start() error {
 	args = append(args, "--wsaddr", "0.0.0.0")
 	args = append(args, "--wsorigins", "*")
 	args = append(args, "--port", strconv.Itoa(dockerP2PPort))
+	args = append(args, "--nat", "ip:$(POD_IP)")
 
 	adapter := n.adapter
 	podRequest := &v1.Pod{
@@ -208,21 +232,17 @@ func (n *KubernetesNode) Start() error {
 					Name:  n.podName(),
 					Image: adapter.image,
 					Args:  args,
-					// TODO: Are the port definitions needed?
-					/*Ports: []v1.ContainerPort{
-						v1.ContainerPort{
-							Name:          "p2p-tcp",
-							Protocol:      v1.ProtocolTCP,
-							ContainerPort: dockerP2PPort,
+					// TODO: Add user env vars
+					Env: []v1.EnvVar{
+						v1.EnvVar{
+							Name: "POD_IP",
+							ValueFrom: &v1.EnvVarSource{
+								FieldRef: &v1.ObjectFieldSelector{
+									FieldPath: "status.podIP",
+								},
+							},
 						},
-						v1.ContainerPort{
-							Name:          "p2p-udp",
-							Protocol:      v1.ProtocolUDP,
-							ContainerPort: dockerP2PPort,
-						},
-					},*/
-					// TODO: convert Env vars
-					//Env:   n.config.Env,
+					},
 				},
 			},
 		},
@@ -232,24 +252,78 @@ func (n *KubernetesNode) Start() error {
 		return fmt.Errorf("failed to create pod: %v", err)
 	}
 
+	// Wait for pod
+	start := time.Now()
+	for {
+		pod, err := adapter.client.CoreV1().Pods(adapter.namespace).Get(n.podName(), metav1.GetOptions{})
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		if pod.Status.Phase == v1.PodRunning {
+			break
+		}
+		if time.Since(start) > 90*time.Second {
+			return errors.New("timeout waiting for pod")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Get logs
 	logOpts := &v1.PodLogOptions{
 		Container: n.podName(),
 		Follow:    true,
 		Previous:  false,
 	}
 	req := adapter.client.CoreV1().Pods(adapter.namespace).GetLogs(n.podName(), logOpts)
+	readCloser, err := req.Stream()
+	if err != nil {
+		return fmt.Errorf("could not get logs: %v", err)
+	}
 
 	go func() {
-		readCloser, err := req.Stream()
-		if err != nil {
-			log.Error("Error getting pod logs", "pod", pod.Name, "err", err)
-		}
 		defer readCloser.Close()
-
 		if _, err := io.Copy(n.config.Stderr, readCloser); err != nil && err != io.EOF {
 			log.Error("Error writing pod logs", "pod", pod.Name, "err", err)
 		}
 	}()
+
+	// Wait for the node to start
+	var client *rpc.Client
+	wsAddr := fmt.Sprintf("ws://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.namespace, n.podName(), dockerWebsocketPort)
+
+	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
+		client, err = rpc.Dial(wsAddr)
+		if err == nil {
+			break
+		}
+	}
+	if client == nil {
+		return fmt.Errorf("could not establish rpc connection. node %s: %v", n.config.ID, err)
+	}
+	defer client.Close()
+
+	var swarminfo swarm.Info
+	err = client.Call(&swarminfo, "bzz_info")
+	if err != nil {
+		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
+	}
+
+	var p2pinfo p2p.NodeInfo
+	err = client.Call(&p2pinfo, "admin_nodeInfo")
+	if err != nil {
+		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
+	}
+
+	n.status = NodeStatus{
+		ID:          n.config.ID,
+		Running:     true,
+		Enode:       p2pinfo.Enode,
+		BzzAddr:     swarminfo.BzzKey,
+		RPCListen:   wsAddr,
+		HTTPListen:  fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.namespace, n.podName(), dockerHTTPPort),
+		PprofListen: fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.namespace, n.podName(), dockerPProfPort),
+	}
 
 	return nil
 }
@@ -279,4 +353,47 @@ func homeDir() string {
 		return h
 	}
 	return os.Getenv("USERPROFILE") // windows
+}
+
+// ProxyServer is a http.Handler which proxies Kubernetes APIs to remote API server.
+type ProxyServer struct {
+	handler http.Handler
+}
+
+// Listen is a simple wrapper around net.Listen.
+func (s *ProxyServer) Listen(address string, port int) (net.Listener, error) {
+	return net.Listen("tcp", fmt.Sprintf("%s:%d", address, port))
+}
+
+// ServeOnListener starts the server using given listener, loops forever.
+func (s *ProxyServer) ServeOnListener(l net.Listener) error {
+	server := http.Server{
+		Handler: s.handler,
+	}
+	return server.Serve(l)
+}
+
+func (s *ProxyServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	s.handler.ServeHTTP(rw, req)
+}
+
+// NewProxyServer creates a proxy server
+func NewProxyServer(cfg *rest.Config) (*ProxyServer, error) {
+	target, err := url.Parse(cfg.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	transport, err := rest.TransportFor(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	proxy.Transport = transport
+
+	return &ProxyServer{
+		handler: proxy,
+	}, nil
 }

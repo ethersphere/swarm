@@ -14,6 +14,8 @@ import (
 
 func TestAdapters(t *testing.T) {
 
+	nodeCount := 10
+
 	// Test exec adapter
 	t.Run("exec", func(t *testing.T) {
 		tmpdir, err := ioutil.TempDir("", "test-sim-exec")
@@ -29,21 +31,22 @@ func TestAdapters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not create exec adapter: %v", err)
 		}
-		startSimulation(t, adapter, 10)
+		startSimulation(t, adapter, nodeCount)
 	})
 
 	// Test docker adapter
 	t.Run("docker", func(t *testing.T) {
 		config := DefaultDockerAdapterConfig()
-		config.BuildContext.Dockerfile = "Dockerfile"
+		config.DockerImage = "sim-docker-test:latest"
+		/*config.BuildContext.Dockerfile = "Dockerfile"
 		config.BuildContext.Directory = "../"
-		config.BuildContext.Tag = "sim-docker-test:latest"
+		config.BuildContext.Tag = "sim-docker-test:latest"*/
 
 		adapter, err := NewDockerAdapter(config)
 		if err != nil {
 			t.Fatalf("could not create docker adapter: %v", err)
 		}
-		startSimulation(t, adapter, 10)
+		startSimulation(t, adapter, nodeCount)
 	})
 
 	// Test kubernetes adapter
@@ -62,7 +65,7 @@ func TestAdapters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not create kubernetes adapter: %v", err)
 		}
-		startSimulation(t, adapter, 1)
+		startSimulation(t, adapter, nodeCount)
 	})
 
 }
