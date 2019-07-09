@@ -65,7 +65,7 @@ type Params struct {
 }
 
 // ValidateCode checks that the on-chain code at address matches the expected swap
-// contract code. This is used to detect suicided contracts.
+// contract code.
 func (a *Proxy) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) (bool, error) {
 	code, err := b.CodeAt(ctx, address, nil)
 	if err != nil {

@@ -222,9 +222,7 @@ func (s *Swap) GetParams() *swap.Params {
 	return s.contractProxy.ContractParams()
 }
 
-// SetChequebook wraps the chequebook initialiser and sets up autoDeposit to cover spending.
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
-
 	//TODO do we need this check?
 	_, err := s.contractProxy.ValidateCode(ctx, backend, s.owner.Contract)
 	if err != nil {
