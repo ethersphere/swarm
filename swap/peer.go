@@ -119,7 +119,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 		}
 	}
 	cheque.Timeout = defaultCashInDelay
-	cheque.Contract = sp.swap.owner.address
+	cheque.Contract = sp.swap.owner.Contract
 	pk, err := crypto.UnmarshalPubkey(req.PubKey)
 	if err != nil {
 		return err
