@@ -110,6 +110,21 @@ func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to 
 	return s.netStore.SubscribePull(ctx, bin, from, to)
 }
 
+func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
+	key, err := s.ParseKey(k)
+	if err != nil {
+		// error parsing the stream key,
+		log.Error("error parsing the stream key", "key", k)
+		return 0, err
+	}
+
+	bin, ok := key.(uint8)
+	if !ok {
+		return 0, errors.New("could not unmarshal key to uint8")
+	}
+	return s.netStore.LastPullSubscriptionBinID(bin)
+}
+
 func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
 	bin, ok := key.(uint8)
 	if !ok {

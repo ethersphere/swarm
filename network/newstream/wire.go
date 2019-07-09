@@ -51,6 +51,7 @@ type StreamProvider interface {
 
 	// Cursor returns the last known Cursor for a given Stream Key
 	Cursor(interface{}) (uint64, error)
+	CursorStr(string) (uint64, error)
 
 	// RunUpdateStreams is a provider specific implementation on how to maintain running streams with
 	// an arbitrary Peer. This method should always be run in a separate goroutine
@@ -136,9 +137,9 @@ type WantedHashes struct {
 
 // ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
 type ChunkDelivery struct {
-	Ruid      uint
-	LastIndex uint
-	Chunks    []DeliveredChunk
+	Ruid uint
+	//LastIndex uint
+	Chunks []DeliveredChunk
 }
 
 // DeliveredChunk encapsulates a particular chunk's underlying data within a ChunkDelivery message
