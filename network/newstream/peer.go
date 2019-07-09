@@ -536,6 +536,7 @@ func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {
 			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 			p.Drop()
 		}
+		return
 	}
 
 	provider, ok := p.providers[w.stream.Name]
