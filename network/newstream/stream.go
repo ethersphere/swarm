@@ -116,7 +116,8 @@ func (s *SlipStream) removePeer(p *Peer) {
 	if _, found := s.peers[p.ID()]; found {
 		log.Error("removing peer", "id", p.ID())
 		delete(s.peers, p.ID())
-		p.Left()
+		//p.Left()
+		close(p.quit)
 	} else {
 		log.Warn("peer was marked for removal but not found", "peer", p.ID())
 	}
@@ -168,7 +169,7 @@ func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error
 // handleStreamInfoReq handles the StreamInfoReq message.
 // this message is handled by the SERVER (*Peer is the client in this case)
 func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *StreamInfoReq) {
-	log.Debug("handleStreamInfoReq", "peer", p.ID(), "msg", msg)
+	log.Debug("handleStreamInfoReq", "peer", p.ID())
 	streamRes := StreamInfoRes{}
 	if len(msg.Streams) == 0 {
 		panic("nil streams msg requested")
@@ -180,6 +181,8 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 			log.Error("unsupported provider", "peer", p.ID(), "stream", v)
 			// tell the other peer we dont support this stream. this is non fatal
 			// this might not be fatal as we might not support all providers.
+			panic("for now")
+			return
 		}
 
 		streamCursor, err := provider.CursorStr(v.Key)
@@ -196,14 +199,14 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 		streamRes.Streams = append(streamRes.Streams, descriptor)
 	}
 	if err := p.Send(ctx, streamRes); err != nil {
-		log.Error("failed to send StreamInfoRes to client", "requested keys", msg.Streams)
+		log.Error("failed to send StreamInfoRes to client", "err", err)
 	}
 }
 
 // handleStreamInfoRes handles the StreamInfoRes message.
 // this message is handled by the CLIENT (*Peer is the server in this case)
 func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *StreamInfoRes) {
-	log.Debug("handleStreamInfoRes", "peer", p.ID(), "msg", msg)
+	log.Debug("handleStreamInfoRes", "peer", p.ID())
 
 	if len(msg.Streams) == 0 {
 		log.Error("StreamInfo response is empty")
@@ -263,7 +266,7 @@ func (s *SlipStream) createSendWant(ctx context.Context, p *Peer, stream ID, fro
 		Roundtrip: true,
 	}
 
-	log.Debug("sending unbounded GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String(), "GetRange", g, "msg", g)
+	log.Debug("sending GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String())
 
 	w := &want{
 		ruid:      g.Ruid,
@@ -312,7 +315,7 @@ func (s *SlipStream) requestStreamRange(ctx context.Context, p *Peer, stream ID,
 }
 
 func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange) {
-	log.Debug("peer.handleGetRangeHead", "peer", p.ID(), "msg", msg)
+	log.Debug("peer.handleGetRangeHead", "peer", p.ID(), "ruid", msg.Ruid)
 	provider := s.getProvider(msg.Stream)
 	if provider == nil {
 		// at this point of the message exchange unsupported providers are illegal. drop peer
@@ -326,7 +329,7 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		p.Drop()
 	}
 	log.Debug("peer.handleGetRangeHead collecting batch", "from", msg.From)
-	h, f, t, e, err := s.collectBatch(ctx, p, provider, key, msg.From, 0)
+	h, _, t, e, err := s.collectBatch(ctx, p, provider, key, msg.From, 0)
 	if err != nil {
 		log.Error("erroring getting live batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
 		s := fmt.Sprintf("erroring getting live batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
@@ -370,10 +373,13 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		LastIndex: t,
 		Hashes:    h,
 	}
-	l := len(h) / HashSize
-	log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestfrom", msg.From, "from", f, "requestto", msg.To, "l", l)
+	_ = len(h) / HashSize
+	log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestfrom", msg.From, "requestto", msg.To)
 	if err := p.Send(ctx, offered); err != nil {
 		log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
+		p.mtx.Lock()
+		delete(p.openOffers, msg.Ruid)
+		p.mtx.Unlock()
 	}
 }
 
@@ -381,7 +387,7 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 // in the case that for the specific interval no chunks exist - the server sends an empty OfferedHashes
 // message so that the client could seal the interval and request the next
 func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange) {
-	log.Debug("peer.handleGetRange", "peer", p.ID(), "msg", msg)
+	log.Debug("peer.handleGetRange", "peer", p.ID(), "ruid", msg.Ruid)
 	provider := s.getProvider(msg.Stream)
 	if provider == nil {
 		// at this point of the message exchange unsupported providers are illegal. drop peer
@@ -707,7 +713,7 @@ func (s *SlipStream) collectBatch(ctx context.Context, p *Peer, provider StreamP
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 1 * time.Second
+	const batchTimeout = 500 * time.Millisecond
 
 	var (
 		batch        []byte
@@ -809,12 +815,10 @@ func NewAPI(s *SlipStream) *API {
 }
 
 func (s *SlipStream) Start(server *p2p.Server) error {
-	log.Info("slip stream starting")
 	return nil
 }
 
 func (s *SlipStream) Stop() error {
-	log.Info("slip stream closing")
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	close(s.quit)
