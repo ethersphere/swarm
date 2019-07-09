@@ -51,7 +51,7 @@ const dataChunkCount = 1000
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) { //
 	var (
-		chunkCount = 5000 //~4mb
+		chunkCount = 10000 //~4mb
 		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -131,9 +131,13 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
 
-		_, _, err = fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		if err = wait(ctx); err != nil {
+			return err
 		}
 
 		//_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
@@ -191,7 +195,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			uploaderNodeBinIDs[po] = until
 		}
 		// wait for syncing
-		time.Sleep(syncTime)
+		<-time.After(syncTime)
 
 		// check that the sum of bin indexes is equal
 		for idx := range nodeIDs {

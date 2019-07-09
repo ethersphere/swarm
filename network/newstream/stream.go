@@ -253,13 +253,12 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 	}
 }
 
-func (s *SlipStream) requestStreamHead(ctx context.Context, p *Peer, stream ID, from uint64) error {
-	log.Debug("peer.requestStreamHead", "peer", p.ID(), "stream", stream, "from", from)
+func (s *SlipStream) createSendWant(ctx context.Context, p *Peer, stream ID, from uint64, to *uint64) error {
 	g := GetRange{
 		Ruid:      uint(rand.Uint32()),
 		Stream:    stream,
 		From:      from,
-		To:        nil,
+		To:        to,
 		BatchSize: BatchSize,
 		Roundtrip: true,
 	}
@@ -270,7 +269,7 @@ func (s *SlipStream) requestStreamHead(ctx context.Context, p *Peer, stream ID, 
 		ruid:      g.Ruid,
 		stream:    g.Stream,
 		from:      g.From,
-		to:        nil,
+		to:        to,
 		hashes:    make(map[string]bool),
 		requested: time.Now(),
 	}
@@ -278,35 +277,26 @@ func (s *SlipStream) requestStreamHead(ctx context.Context, p *Peer, stream ID, 
 	p.openWants[w.ruid] = w
 	p.mtx.Unlock()
 
-	if err := p.Send(ctx, g); err != nil {
-		return err
-	}
+	return p.Send(ctx, g)
+}
 
-	return nil
+func (s *SlipStream) requestStreamHead(ctx context.Context, p *Peer, stream ID, from uint64) error {
+	log.Debug("peer.requestStreamHead", "peer", p.ID(), "stream", stream, "from", from)
+	return s.createSendWant(ctx, p, stream, from, nil)
 }
 
 func (s *SlipStream) requestStreamRange(ctx context.Context, p *Peer, stream ID, cursor uint64) error {
 	log.Debug("peer.requestStreamRange", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
-	if cursor == 0 {
-		panic("shouldnt happen")
-	}
 	provider := s.getProvider(stream)
 	if provider == nil {
 		// at this point of the message exchange unsupported providers are illegal. drop peer
 		log.Error("unsupported provider", "peer", p.ID(), "stream", stream)
 		p.Drop()
 	}
-
-	peerIntervalKey := p.peerStreamIntervalKey(stream)
-	interval, err := p.getOrCreateInterval(peerIntervalKey)
+	from, _, empty, err := p.nextInterval(stream, 0)
 	if err != nil {
 		return err
 	}
-	var (
-		from  uint64
-		empty bool
-	)
-	from, _, empty = interval.Next(cursor)
 	log.Debug("peer.requestStreamRange nextInterval", "peer", p.ID(), "stream", stream.String(), "cursor", cursor, "from", from)
 	if from > cursor || empty {
 		log.Debug("peer.requestStreamRange stream finished", "peer", p.ID(), "stream", stream.String(), "cursor", cursor)
@@ -318,33 +308,7 @@ func (s *SlipStream) requestStreamRange(ctx context.Context, p *Peer, stream ID,
 		panic("no")
 	}
 
-	g := GetRange{
-		Ruid:      uint(rand.Uint32()),
-		Stream:    stream,
-		From:      from,
-		To:        &cursor,
-		BatchSize: BatchSize,
-		Roundtrip: true,
-	}
-
-	log.Debug("sending GetRange to peer", "peer", p.ID(), "ruid", g.Ruid, "stream", stream.String(), "cursor", cursor, "GetRange", g)
-
-	w := &want{
-		ruid:      g.Ruid,
-		stream:    g.Stream,
-		from:      g.From,
-		to:        nil,
-		hashes:    make(map[string]bool),
-		requested: time.Now(),
-	}
-	p.mtx.Lock()
-	p.openWants[w.ruid] = w
-	p.mtx.Unlock()
-
-	if err := p.Send(ctx, g); err != nil {
-		return err
-	}
-	return nil
+	return s.createSendWant(ctx, p, stream, from, &cursor)
 }
 
 func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange) {
@@ -356,8 +320,6 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		p.Drop()
 	}
 
-	peerIntervalKey := p.peerStreamIntervalKey(msg.Stream)
-	_, err := p.getOrCreateInterval(peerIntervalKey)
 	key, err := provider.ParseKey(msg.Stream.Key)
 	if err != nil {
 		log.Error("erroring parsing stream key", "err", err, "stream", msg.Stream.String())
@@ -398,7 +360,6 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		hashes:    h,
 		requested: time.Now(),
 	}
-	log.Debug("sending an offer for Head batch", "h", h, "f")
 
 	p.mtx.Lock()
 	p.openOffers[msg.Ruid] = o
@@ -410,11 +371,10 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		Hashes:    h,
 	}
 	l := len(h) / HashSize
-	log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestfrom", msg.From, "from", f, "requestto", msg.To, "hashes", h, "l", l)
+	log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestfrom", msg.From, "from", f, "requestto", msg.To, "l", l)
 	if err := p.Send(ctx, offered); err != nil {
 		log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
 	}
-
 }
 
 // handleGetRange is handled by the SERVER and sends in response an OfferedHashes message
@@ -496,9 +456,9 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		log.Error("error invalid hashes length", "len", lenHashes, "msg.ruid", msg.Ruid)
 	}
 
-	p.mtx.Lock()
+	p.mtx.RLock()
 	w, ok := p.openWants[msg.Ruid]
-	p.mtx.Unlock()
+	p.mtx.RUnlock()
 	if !ok {
 		log.Error("ruid not found, dropping peer")
 		p.Drop()
@@ -513,16 +473,10 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	w.to = &msg.LastIndex
 	if lenHashes == 0 {
 		// received zero hashes count, just fill the intervals, remove open want and request next range
-		peerIntervalKey := p.peerStreamIntervalKey(w.stream)
-		_, err := p.getOrCreateInterval(peerIntervalKey)
+		err := p.addInterval(w.stream, w.from, *w.to)
 		if err != nil {
-			// we are probably shutting down
+			log.Error("error persisting interval", "peer", p.ID(), "stream", w.stream, "from", w.from, "to", w.to, "err", err)
 			return
-		}
-		log.Debug("addinterval", "w.from", w.from, "to", *w.to, "pik", peerIntervalKey)
-		err = p.addInterval(w.from, *w.to, peerIntervalKey)
-		if err != nil {
-			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to, "err", err, "piv", peerIntervalKey)
 		}
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
@@ -587,17 +541,15 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		p.Drop()
 	}
 
-	peerIntervalKey := p.peerStreamIntervalKey(w.stream)
 	select {
 	case err := <-errc:
 		if err != nil {
 			log.Error("got an error while sealing batch", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
 			p.Drop()
 		}
-		log.Debug("addinterval", "f", w.from, "to", *w.to)
-		err = p.addInterval(w.from, *w.to, peerIntervalKey)
+		err = p.addInterval(w.stream, w.from, *w.to)
 		if err != nil {
-			log.Error("error persisting interval", "peer", p.ID(), "peerIntervalKey", peerIntervalKey, "from", w.from, "to", w.to, "err", err, "peerIntervalKey", peerIntervalKey)
+			log.Error("error persisting interval", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
 		}
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
@@ -633,27 +585,20 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 	}
 
 	l := len(offer.hashes) / HashSize
-	lll := len(msg.BitVector)
-	log.Debug("bitvector", "l", lll, "h", offer.hashes)
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
 		log.Error("error initiaising bitvector", "l", l, "ll", len(offer.hashes), "err", err)
 		panic("err")
 	}
-	log.Debug("iterate over wanted hashes", "l", len(offer.hashes))
 
 	frameSize := 0
 	const maxFrame = BatchSize
-	cd := ChunkDelivery{
+	cd := &ChunkDelivery{
 		Ruid: msg.Ruid,
 	}
-
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
-			frameSize++
-
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
-
 			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
 			data, err := provider.Get(ctx, hash)
 			if err != nil {
@@ -666,18 +611,19 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 				Data: data,
 			}
 			//collect the chunk into the batch
+			frameSize++
 
 			cd.Chunks = append(cd.Chunks, chunkD)
 			if frameSize == maxFrame {
 				//send the batch
-				go func(cd ChunkDelivery) {
+				go func(cd *ChunkDelivery) {
 					log.Debug("sending chunk delivery")
 					if err := p.Send(ctx, cd); err != nil {
 						log.Error("error sending chunk delivery frame", "peer", p.ID(), "ruid", msg.Ruid, "error", err)
 					}
 				}(cd)
 				frameSize = 0
-				cd = ChunkDelivery{
+				cd = &ChunkDelivery{
 					Ruid: msg.Ruid,
 				}
 			}
@@ -695,19 +641,14 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	log.Debug("peer.handleChunkDelivery", "peer", p.ID(), "chunks", len(msg.Chunks))
 
-	p.mtx.Lock()
+	p.mtx.RLock()
 	w, ok := p.openWants[msg.Ruid]
-	p.mtx.Unlock()
+	p.mtx.RUnlock()
 	if !ok {
 		log.Error("no open offers for for ruid", "peer", p.ID(), "ruid", msg.Ruid)
-		panic("should not happen")
 		p.Drop()
 	}
-	if len(msg.Chunks) == 0 {
-		log.Error("no chunks in msg!", "peer", p.ID(), "ruid", msg.Ruid)
-		panic("should not happen")
-		p.Drop()
-	}
+
 	log.Debug("delivering chunks for peer", "peer", p.ID(), "chunks", len(msg.Chunks))
 	for _, dc := range msg.Chunks {
 		c := chunk.NewChunk(dc.Addr, dc.Data)
