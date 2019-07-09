@@ -18,12 +18,10 @@ package newstream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/simulation"
@@ -133,21 +131,75 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 func TestTwoNodesSyncWithGaps(t *testing.T) {
 
-	chunksCount := func(db chunk.Store) (c uint64, err error) {
-		for po := 0; po <= chunk.MaxPO; po++ {
-			last, err := db.LastPullSubscriptionBinID(uint8(po))
+	uploadChunks := func(t *testing.T, ctx context.Context, store chunk.Store, count uint64) (chunks []chunk.Address) {
+		t.Helper()
+
+		for i := uint64(0); i < count; i++ {
+			c := storage.GenerateRandomChunk(4096)
+			exists, err := store.Put(ctx, chunk.ModePutUpload, c)
 			if err != nil {
-				return 0, err
+				t.Fatal(err)
+			}
+			if exists {
+				t.Fatal("generated already existing chunk")
+			}
+			chunks = append(chunks, c.Address())
+		}
+		return chunks
+	}
+
+	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
+		t.Helper()
+
+		for _, gap := range gaps {
+			for i := gap[0]; i < gap[1]; i++ {
+				c := chunks[i]
+				if err := store.Set(ctx, chunk.ModeSetRemove, c); err != nil {
+					t.Fatal(err)
+				}
+				removedCount++
+			}
+		}
+		return removedCount
+	}
+
+	chunkCount := func(t *testing.T, store chunk.Store) (c uint64) {
+		t.Helper()
+
+		for po := 0; po <= chunk.MaxPO; po++ {
+			last, err := store.LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				t.Fatal(err)
 			}
 			c += last
 		}
-		return c, nil
+		return c
+	}
+
+	waitChunks := func(t *testing.T, store chunk.Store, want uint64) {
+		t.Helper()
+
+		for i := 49; i >= 0; i-- {
+			time.Sleep(100 * time.Millisecond)
+
+			syncedChunkCount := chunkCount(t, store)
+			if syncedChunkCount != want {
+				if i == 0 {
+					t.Errorf("got synced chunks %d, want %d", syncedChunkCount, want)
+				} else {
+					continue
+				}
+			}
+			break
+		}
 	}
 
 	for _, tc := range []struct {
-		name       string
-		chunkCount uint64
-		gaps       [][2]uint64
+		name           string
+		chunkCount     uint64
+		gaps           [][2]uint64
+		liveChunkCount uint64
+		liveGaps       [][2]uint64
 	}{
 		{
 			name:       "no gaps",
@@ -198,6 +250,34 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			chunkCount: 4000,
 			gaps:       [][2]uint64{{1000, 3000}},
 		},
+		{
+			name:           "live",
+			liveChunkCount: 100,
+		},
+		{
+			name:           "live and history",
+			chunkCount:     100,
+			liveChunkCount: 100,
+		},
+		{
+			name:           "live and history with history gap",
+			chunkCount:     100,
+			gaps:           [][2]uint64{{5, 10}},
+			liveChunkCount: 100,
+		},
+		{
+			name:           "live and history with live gap",
+			chunkCount:     100,
+			liveChunkCount: 100,
+			liveGaps:       [][2]uint64{{105, 110}},
+		},
+		{
+			name:           "live and history with gaps",
+			chunkCount:     100,
+			gaps:           [][2]uint64{{5, 10}},
+			liveChunkCount: 100,
+			liveGaps:       [][2]uint64{{105, 110}},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -205,83 +285,51 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			})
 			defer sim.Close()
 
-			timeout := 30 * time.Second
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-				node1, err := sim.AddNode()
-				if err != nil {
-					t.Fatal(err)
+			uploadNode, err := sim.AddNode()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			uploadStore := sim.NodeItem(uploadNode, bucketKeyFileStore).(chunk.Store)
+
+			chunks := uploadChunks(t, ctx, uploadStore, tc.chunkCount)
+
+			totalChunkCount := chunkCount(t, uploadStore)
+
+			if totalChunkCount != tc.chunkCount {
+				t.Errorf("uploaded %v chunks, want %v", totalChunkCount, tc.chunkCount)
+			}
+
+			removedCount := removeChunks(t, ctx, uploadStore, tc.gaps, chunks)
+
+			syncNode, err := sim.AddNode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = sim.Net.Connect(uploadNode, syncNode)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			syncStore := sim.NodeItem(syncNode, bucketKeyFileStore).(chunk.Store)
+
+			waitChunks(t, syncStore, totalChunkCount-removedCount)
+
+			if tc.liveChunkCount > 0 {
+				chunks = append(chunks, uploadChunks(t, ctx, uploadStore, tc.liveChunkCount)...)
+
+				totalChunkCount = chunkCount(t, uploadStore)
+
+				if want := tc.chunkCount + tc.liveChunkCount; totalChunkCount != want {
+					t.Errorf("uploaded %v chunks, want %v", totalChunkCount, want)
 				}
 
-				db := sim.NodeItem(node1, bucketKeyFileStore).(chunk.Store)
+				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
 
-				chunks := make([]chunk.Address, tc.chunkCount)
-				for i := uint64(0); i < tc.chunkCount; i++ {
-					c := storage.GenerateRandomChunk(4096)
-					exists, err := db.Put(ctx, chunk.ModePutUpload, c)
-					if err != nil {
-						return err
-					}
-					if exists {
-						return errors.New("generated already existing chunk")
-					}
-					chunks[i] = c.Address()
-				}
-
-				uploadedChunkCount, err := chunksCount(db)
-				if err != nil {
-					return err
-				}
-
-				if uploadedChunkCount != tc.chunkCount {
-					return fmt.Errorf("uploaded %v chunks, want %v", uploadedChunkCount, tc.chunkCount)
-				}
-
-				var removedCount uint64
-				for _, gap := range tc.gaps {
-					for i := gap[0]; i < gap[1]; i++ {
-						c := chunks[i]
-						if err := db.Set(ctx, chunk.ModeSetRemove, c); err != nil {
-							return err
-						}
-						removedCount++
-					}
-				}
-
-				node2, err := sim.AddNode()
-				if err != nil {
-					return err
-				}
-				err = sim.Net.Connect(node1, node2)
-				if err != nil {
-					return err
-				}
-
-				for i := 99; i >= 0; i-- {
-					time.Sleep(100 * time.Millisecond)
-					syncedChunkCount, err := chunksCount(sim.NodeItem(node2, bucketKeyFileStore).(chunk.Store))
-					if err != nil {
-						return err
-					}
-
-					want := uploadedChunkCount - removedCount
-					if syncedChunkCount != want {
-						if i == 0 {
-							return fmt.Errorf("got synced chunks %d, want %d", syncedChunkCount, want)
-						} else {
-							continue
-						}
-					}
-					return nil
-				}
-
-				return nil
-			})
-
-			if result.Error != nil {
-				t.Fatal(result.Error)
+				waitChunks(t, syncStore, totalChunkCount-removedCount)
 			}
 		})
 	}
@@ -414,12 +462,4 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-}
-
-type chunkProxData struct {
-	addr            chunk.Address
-	uploaderNodePO  int
-	nodeProximities map[enode.ID]int
-	closestNode     enode.ID
-	closestNodePO   int
 }
