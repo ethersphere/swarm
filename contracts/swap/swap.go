@@ -16,7 +16,7 @@
 
 // Package swap package wraps the 'swap' Ethereum smart contract.
 // It is an abstraction layer to hide implementation details about the different
-// Swap contract iterations (SimpleSwap, Swap, etc.)
+// Swap contract iterations (Swap, Swap, etc.)
 package swap
 
 import (
@@ -27,7 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethersphere/swarm/contracts/swap/contract"
 )
+
+// Validator struct -> put validator in implementation of Swap. Make the validator a package level function and implement this in Swap
 
 // Backend wraps all methods required for contract deployment.
 type Backend interface {
@@ -36,27 +39,20 @@ type Backend interface {
 	//TODO: needed? BalanceAt(ctx context.Context, address common.Address, blockNum *big.Int) (*big.Int, error)
 }
 
-// Proxy is a proxy object for Swap contracts.
-// Currently we only have SimpleSwap, but full Swap may be a different contract.
-// To abstract contract references and not have to refactor too much code
-// for new Swap contracts, we use this proxy.
-type Proxy struct {
-	Wrapper Wrapper // This is the reference to the actual contract
-}
-
-// NewProxy instantiates the proxy and creates the concrete contract - SimpleSwap currently
-func NewProxy() *Proxy {
-	return &Proxy{
-		Wrapper: &Simple{}, // create a SimpleSwap
-	}
-}
-
-// Proxy wraps all methods required for swap contracts operation.
-type Wrapper interface {
+// SimpleSwap interface defines the simple swap's exposed methods
+type SimpleSwap interface {
 	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (common.Address, *types.Transaction, error)
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
-	ContractDeployedCode() string // TODO: needed?
+	ValidateCode() bool
 	ContractParams() *Params
+}
+
+// Proxy is a proxy object for Swap contracts.
+// Currently we only have Swap, but full Swap may be a different contract.
+// To abstract contract references and not have to refactor too much code
+// for new Swap contracts, we use this proxy.
+type Swap struct {
+	Instance *contract.SimpleSwap
 }
 
 // Params encapsulates some contract parameters (currently mostly informational)
@@ -64,28 +60,38 @@ type Params struct {
 	ContractCode, ContractAbi string
 }
 
+func New() *Swap {
+	return &Swap{}
+}
+
 // ValidateCode checks that the on-chain code at address matches the expected swap
 // contract code.
-func (a *Proxy) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) (bool, error) {
-	code, err := b.CodeAt(ctx, address, nil)
+// TODO: have this as a package level function and pass the ContractDeployedCode as argument
+func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) (bool, error) {
+	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
 		return false, err
 	}
+	referenceCode := common.FromHex(contract.ContractDeployedCode)
 	//TODO: which is ContractDeployedCode and how to set it?
-	return bytes.Equal(code, common.FromHex(a.Wrapper.ContractDeployedCode())), nil
+	return bytes.Equal(codeReadFromAddress, referenceCode), nil
 }
 
-// Deploy the contract
-func (a *Proxy) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (common.Address, *types.Transaction, error) {
-	return a.Wrapper.Deploy(auth, backend, owner)
+// Deploy a Swap contract
+func (s *Swap) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, tx *types.Transaction, err error) {
+	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner)
+	return addr, tx, err
 }
 
 // ContractParams returns contract information
-func (a *Proxy) ContractParams() *Params {
-	return a.Wrapper.ContractParams()
+func (s *Swap) ContractParams() *Params {
+	return &Params{
+		ContractCode: contract.SimpleSwapBin,
+		ContractAbi:  contract.SimpleSwapABI,
+	}
 }
 
-// SubmitCheque is used to cash in a cheque
-func (a *Proxy) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error) {
-	return a.Wrapper.SubmitChequeBeneficiary(opts, serial, amount, timeout, ownerSig)
+// SubmitChequeBeneficiary is used to cash in a cheque
+func (s *Swap) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error) {
+	return s.Instance.SubmitChequeBeneficiary(opts, serial, amount, timeout, ownerSig)
 }

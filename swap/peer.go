@@ -27,8 +27,8 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-var SigDoesNotMatch = errors.New("signature does not match")
-var DontOwe = errors.New("no negative balance")
+var ErrSigDoesNotMatch = errors.New("signature does not match")
+var ErrDontOwe = errors.New("no negative balance")
 
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
@@ -51,7 +51,9 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 		return sp.handleChequeRequestMsg(ctx, msg)
 
 	case *EmitChequeMsg:
-		return sp.handleEmitChequeMsg(ctx, msg)
+		//return sp.handleEmitChequeMsg(ctx, msg)
+		go sp.handleEmitChequeMsg(ctx, msg)
+		return nil
 
 	case *ErrorMsg:
 		return sp.handleErrorMsg(ctx, msg)
@@ -76,6 +78,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	var ok bool
 	var peerBalance int64
 
+	// FIXME probably not needed
 	if req, ok = msg.(*ChequeRequestMsg); !ok {
 		return fmt.Errorf("Unexpected message type: %v", err)
 	}
@@ -90,7 +93,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	}
 	// do we actually owe to the remote peer?
 	if peerBalance >= 0 {
-		return DontOwe
+		return ErrDontOwe
 	}
 
 	// balance is negative, send a cheque
@@ -108,17 +111,21 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	// emit cheque, send to peer
 	if lastCheque == nil {
 		cheque = &Cheque{
-			Serial: uint64(0),
-			Amount: uint64(amount),
+			ChequeParams: ChequeParams{
+				Serial: uint64(1),
+				Amount: uint64(amount),
+			},
 		}
 	} else {
 		cheque = &Cheque{
-			Serial: lastCheque.Serial + 1,
-			Amount: lastCheque.Amount + uint64(0-peerBalance),
+			ChequeParams: ChequeParams{
+				Serial: lastCheque.Serial + 1,
+				Amount: lastCheque.Amount + uint64(amount),
+			},
 		}
 	}
-	cheque.Timeout = defaultCashInDelay
-	cheque.Contract = sp.swap.owner.Contract
+	cheque.ChequeParams.Timeout = defaultCashInDelay
+	cheque.ChequeParams.Contract = sp.swap.owner.Contract
 	pk, err := crypto.UnmarshalPubkey(req.PubKey)
 	if err != nil {
 		return err
@@ -130,6 +137,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	}
 
 	sp.swap.cheques[peer] = cheque
+	// TODO: what if there is an error here; is the cheque persisted?
 	err = sp.swap.stateStore.Put(peer.String()+"_cheques", &cheque)
 
 	// TODO: error handling might be quite more complex
@@ -154,6 +162,8 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a creditor
+// TODO: validate the contract address in the cheque to match the address given at handshake
+// TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error {
 	chequeMsg, ok := msg.(*EmitChequeMsg)
 	if !ok {
@@ -171,7 +181,9 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	//TODO: ??????
 	opts.Value = big.NewInt(int64(cheque.Amount))
 	opts.Context = ctx
-	sp.swap.contractProxy.Wrapper.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	// handling error
+	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
+	sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 	return nil
 }
 

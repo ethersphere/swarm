@@ -22,4 +22,4 @@ package contract
 // ContractDeployedCode is used to detect suicides. This constant needs to be
 // updated when the contract code is changed.
 // **CURRENT: SIMPLESWAP**
-const ContractDeployedCode = ""
+const ContractDeployedCode = ECDSABin

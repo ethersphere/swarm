@@ -21,21 +21,29 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// Cheque encapsulates the cheque information
-type Cheque struct {
+// TODO: add handshake protocol where we exchange last cheque (this is useful if one node disconnects)
+// FIXME: Check the contract bytecode of the counterparty
+
+type ChequeParams struct {
 	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
 	Beneficiary common.Address
 	Serial      uint64 // cumulative amount of all funds sent
 	Amount      uint64 // cumulative amount of all funds sent
 	Timeout     uint64
-	Sig         []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
+}
+
+// TODO: There should be a request cheque struct that only gives the Serial
+// Cheque encapsulates the cheque information
+type Cheque struct {
+	ChequeParams
+	Sig []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
 }
 
 // ChequeRequestMsg is sent from a creditor to the debitor to solicit a cheque
 type ChequeRequestMsg struct {
-	Peer       enode.ID
-	PubKey     []byte
-	LastCheque *Cheque
+	Peer       enode.ID // TODO: Why is it here right now? Potentially not needed as everything goes through peer
+	PubKey     []byte   // TODO: Also probably not needed
+	LastCheque *Cheque  // TODO: maybe at most just a serial number rather than full cheque
 }
 
 // EmitChequeMsg is sent from the debitor to the creditor with the actual check
@@ -48,5 +56,5 @@ type ErrorMsg struct{}
 
 // ConfirmMsg is sent from the creditor to the debitor to confirm cheque reception
 type ConfirmMsg struct {
-	Cheque Cheque
+	Cheque Cheque // TODO: probably not needed and if so likely should not include the full cheque
 }

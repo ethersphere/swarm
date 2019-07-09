@@ -41,7 +41,7 @@ import (
 const (
 	deployRetries               = 5
 	deployDelay                 = 1 * time.Second // delay between retries
-	defaultCashInDelay          = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment
+	defaultCashInDelay          = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
 	DefaultInitialDepositAmount = 0               // TODO: deliberate value for now; needs experimentation
 )
 
@@ -50,14 +50,14 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore    state.Store          // stateStore is needed in order to keep balances across sessions
-	lock          sync.RWMutex         // lock the balances
-	balances      map[enode.ID]int64   // map of balances for each peer
-	cheques       map[enode.ID]*Cheque // map of balances for each peer
-	Service       *Service             // Service for running the procol
-	owner         *Owner               // contract access
-	params        *Params              // economic and operational parameters
-	contractProxy *swap.Proxy          // proxy for the contract, contract abstraction
+	stateStore        state.Store          // stateStore is needed in order to keep balances across sessions
+	lock              sync.RWMutex         // lock the balances
+	balances          map[enode.ID]int64   // map of balances for each peer
+	cheques           map[enode.ID]*Cheque // map of balances for each peer
+	Service           *Service             // Service for running the procol
+	owner             *Owner               // contract access
+	params            *Params              // economic and operational parameters
+	contractReference *swap.Swap
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -80,16 +80,16 @@ func NewDefaultParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address) (swap *Swap) {
-	swap = &Swap{
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address) *Swap {
+	sw := &Swap{
 		stateStore: stateStore,
 		balances:   make(map[enode.ID]int64),
 		cheques:    make(map[enode.ID]*Cheque),
 		params:     NewDefaultParams(),
 	}
-	swap.contractProxy = swap.createProxy()
-	swap.owner = swap.createOwner(prvkey, contract)
-	return
+	sw.contractReference = swap.New()
+	sw.owner = sw.createOwner(prvkey, contract)
+	return sw
 }
 
 // createOwner assings keys and addresses
@@ -208,23 +208,14 @@ func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 	return crypto.Sign(crypto.Keccak256(input), s.owner.privateKey)
 }
 
-// createProxy instantiates the contract proxy;
-// currently we have SimpleSwap, but future iterations of
-// the Swap smart contract may have different contracts,
-// so we don't want to drag explicit contract references here
-// for abstraction
-func (s *Swap) createProxy() *swap.Proxy {
-	return swap.NewProxy()
-}
-
 // GetParams returns contract parameters (Bin, ABI) from the contract
 func (s *Swap) GetParams() *swap.Params {
-	return s.contractProxy.ContractParams()
+	return s.contractReference.ContractParams()
 }
 
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
 	//TODO do we need this check?
-	_, err := s.contractProxy.ValidateCode(ctx, backend, s.owner.Contract)
+	_, err := s.contractReference.ValidateCode(ctx, backend, s.owner.Contract)
 	if err != nil {
 		return err
 	}
@@ -246,6 +237,7 @@ func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) er
 		log.Error(fmt.Sprintf("unable to deploy swap: %v", err))
 		return err
 	}
+	s.owner.Contract = address
 	log.Info(fmt.Sprintf("swap deployed at %v (owner: %v)", address.Hex(), opts.From.Hex()))
 
 	return err
@@ -258,7 +250,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-		if _, tx, err = s.contractProxy.Deploy(opts, backend, owner); err != nil {
+		if _, tx, err = s.contractReference.Deploy(opts, backend, owner); err != nil {
 			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
 			continue
 		}
