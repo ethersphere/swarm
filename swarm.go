@@ -501,13 +501,6 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 // APIs returns the RPC API descriptors the Swarm implementation offers
 func (s *Swarm) APIs() []rpc.API {
 	apis := []rpc.API{
-		// public APIs
-		{
-			Namespace: "bzz",
-			Version:   "3.0",
-			Service:   &Info{s.config, s.swap.GetParams()},
-			Public:    true,
-		},
 		// admin APIs
 		{
 			Namespace: "bzz",
@@ -537,6 +530,18 @@ func (s *Swarm) APIs() []rpc.API {
 		apis = append(apis, s.ps.APIs()...)
 	}
 
+	if s.config.SwapEnabled {
+		// TODO: Does this blong in the bzz protocol?
+		// Swap public API
+		swapPublicApi := rpc.API{
+			Namespace: "bzz",
+			Version:   "3.0",
+			Service:   &Info{s.config, s.swap.GetParams()},
+			Public:    true,
+		}
+
+		apis = append(apis, swapPublicApi)
+	}
 	return apis
 }
 
