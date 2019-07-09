@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
@@ -24,7 +25,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -61,6 +61,7 @@ var (
 const (
 	SwarmEnvChequebookAddr       = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvAccount              = "SWARM_ACCOUNT"
+	SwarmEnvBzzKeyHex            = "SWARM_BZZ_KEY_HEX"
 	SwarmEnvListenAddr           = "SWARM_LISTEN_ADDR"
 	SwarmEnvPort                 = "SWARM_PORT"
 	SwarmEnvNetworkID            = "SWARM_NETWORK_ID"
@@ -112,10 +113,8 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 	if err != nil {
 		return nil, err
 	}
-	//override settings provided by environment variables
-	config = envVarsOverride(config)
-	//override settings provided by command line
-	config = cmdLineOverride(config, ctx)
+	//override settings provided by flags
+	config = flagsOverride(config, ctx)
 	//validate configuration parameters
 	err = validateConfig(config)
 
@@ -124,9 +123,9 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 
 //finally, after the configuration build phase is finished, initialize
 func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context, nodeconfig *node.Config) error {
-	//at this point, all vars should be set in the Config
 	//get the account for the provided swarm account
-	prvkey := getAccount(config.BzzAccount, ctx, stack)
+	var prvkey *ecdsa.PrivateKey
+	config.BzzAccount, prvkey = getOrCreateAccount(ctx, stack)
 	//set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration
@@ -170,9 +169,9 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 	return config, err
 }
 
-// cmdLineOverride overrides the current config with whatever is provided through the command line
+// flagsOverride overrides the current config with whatever is provided through flags (cli or env vars)
 // most values are not allowed a zero value (empty string), if not otherwise noted
-func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Config {
+func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Config {
 	if keyid := ctx.GlobalString(SwarmAccountFlag.Name); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
@@ -273,122 +272,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	return currentConfig
 
-}
-
-// envVarsOverride overrides the current config with whatver is provided in environment variables
-// most values are not allowed a zero value (empty string), if not otherwise noted
-func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
-	if keyid := os.Getenv(SwarmEnvAccount); keyid != "" {
-		currentConfig.BzzAccount = keyid
-	}
-
-	if chbookaddr := os.Getenv(SwarmEnvChequebookAddr); chbookaddr != "" {
-		currentConfig.Contract = common.HexToAddress(chbookaddr)
-	}
-
-	if networkid := os.Getenv(SwarmEnvNetworkID); networkid != "" {
-		id, err := strconv.ParseUint(networkid, 10, 64)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvNetworkID, err)
-		}
-		if id != 0 {
-			currentConfig.NetworkID = id
-		}
-	}
-
-	if datadir := os.Getenv(GethEnvDataDir); datadir != "" {
-		currentConfig.Path = expandPath(datadir)
-	}
-
-	bzzport := os.Getenv(SwarmEnvPort)
-	if len(bzzport) > 0 {
-		currentConfig.Port = bzzport
-	}
-
-	if bzzaddr := os.Getenv(SwarmEnvListenAddr); bzzaddr != "" {
-		currentConfig.ListenAddr = bzzaddr
-	}
-
-	if swapenable := os.Getenv(SwarmEnvSwapEnable); swapenable != "" {
-		swap, err := strconv.ParseBool(swapenable)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvSwapEnable, err)
-		}
-		currentConfig.SwapEnabled = swap
-	}
-
-	if syncdisable := os.Getenv(SwarmEnvSyncDisable); syncdisable != "" {
-		sync, err := strconv.ParseBool(syncdisable)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvSyncDisable, err)
-		}
-		currentConfig.SyncEnabled = !sync
-	}
-
-	if v := os.Getenv(SwarmEnvDeliverySkipCheck); v != "" {
-		skipCheck, err := strconv.ParseBool(v)
-		if err != nil {
-			currentConfig.DeliverySkipCheck = skipCheck
-		}
-	}
-
-	if v := os.Getenv(SwarmEnvSyncUpdateDelay); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvSyncUpdateDelay, err)
-		}
-		currentConfig.SyncUpdateDelay = d
-	}
-
-	if max := os.Getenv(SwarmEnvMaxStreamPeerServers); max != "" {
-		m, err := strconv.Atoi(max)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvMaxStreamPeerServers, err)
-		}
-		currentConfig.MaxStreamPeerServers = m
-	}
-
-	if lne := os.Getenv(SwarmEnvLightNodeEnable); lne != "" {
-		lightnode, err := strconv.ParseBool(lne)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvLightNodeEnable, err)
-		}
-		currentConfig.LightNodeEnabled = lightnode
-	}
-
-	if swapapi := os.Getenv(SwarmEnvSwapAPI); swapapi != "" {
-		currentConfig.SwapAPI = swapapi
-	}
-
-	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
-		utils.Fatalf(SwarmErrSwapSetNoAPI)
-	}
-
-	if ensapi := os.Getenv(SwarmEnvENSAPI); ensapi != "" {
-		currentConfig.EnsAPIs = strings.Split(ensapi, ",")
-	}
-
-	if ensaddr := os.Getenv(SwarmEnvENSAddr); ensaddr != "" {
-		currentConfig.EnsRoot = common.HexToAddress(ensaddr)
-	}
-
-	if cors := os.Getenv(SwarmEnvCORS); cors != "" {
-		currentConfig.Cors = cors
-	}
-
-	if bm := os.Getenv(SwarmEnvBootnodeMode); bm != "" {
-		bootnodeMode, err := strconv.ParseBool(bm)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SwarmEnvBootnodeMode, err)
-		}
-		currentConfig.BootnodeMode = bootnodeMode
-	}
-
-	if api := os.Getenv(SwarmGlobalstoreAPI); api != "" {
-		currentConfig.GlobalStoreAPI = api
-	}
-
-	return currentConfig
 }
 
 // dumpConfig is the dumpconfig command.
