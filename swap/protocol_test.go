@@ -78,9 +78,8 @@ func TestRequestCheque(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &ChequeRequestMsg{
-					Peer:       creditor.ID(),
-					PubKey:     pubkey,
-					LastCheque: &Cheque{},
+					Peer:   creditor.ID(),
+					PubKey: pubkey,
 				},
 				Peer: creditor.ID(),
 			},
@@ -110,9 +109,8 @@ func TestRequestCheque(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &ChequeRequestMsg{
-					Peer:       creditor.ID(),
-					PubKey:     pubkey,
-					LastCheque: expectedCheque,
+					Peer:   creditor.ID(),
+					PubKey: pubkey,
 				},
 				Peer: creditor.ID(),
 			},

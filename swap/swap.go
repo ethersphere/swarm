@@ -146,6 +146,10 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	//check if balance with peer is over the payment threshold
 	if peerBalance >= s.paymentThreshold {
 		//if so, send cheque request message
+		chequeRequestMessage := &ChequeRequestMsg{
+			Beneficiary: s.owner.address,
+		}
+		return peer.Send(context.TODO(), chequeRequestMessage)
 	}
 
 	return
