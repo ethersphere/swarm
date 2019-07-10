@@ -630,7 +630,7 @@ func (ch *Cheque) Cash(session *contract.ChequebookSession) (string, error) {
 }
 
 // ValidateCode checks that the on-chain code at address matches the expected chequebook
-// contract code. This is used to detect suicided chequebooks.
+// contract code.
 func ValidateCode(ctx context.Context, b Backend, address common.Address) (bool, error) {
 	code, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
