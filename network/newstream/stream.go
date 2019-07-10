@@ -188,7 +188,7 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 		streamCursor, err := provider.CursorStr(v.Key)
 		if err != nil {
 			log.Error("error getting cursor for stream key", "peer", p.ID(), "name", v.Name, "key", v.Key, "err", err)
-			panic("shouldnt happen")
+			panic(fmt.Errorf("provider cursor str %q: %v", v.Key, err))
 			p.Drop()
 		}
 		descriptor := StreamDescriptor{
@@ -202,6 +202,9 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 		log.Error("failed to send StreamInfoRes to client", "err", err)
 	}
 }
+
+// TODO: provide this option value from StreamProvider?
+var streamAutostart = true
 
 // handleStreamInfoRes handles the StreamInfoRes message.
 // this message is handled by the CLIENT (*Peer is the server in this case)
@@ -226,7 +229,7 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 		log.Debug("setting stream cursor", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor)
 		p.setCursor(s.Stream, s.Cursor)
 
-		if provider.StreamBehavior() == StreamAutostart {
+		if streamAutostart {
 			if s.Cursor > 0 {
 				log.Debug("got cursor > 0 for stream. requesting history", "stream", s.Stream.String(), "cursor", s.Cursor)
 

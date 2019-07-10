@@ -42,7 +42,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
@@ -281,7 +281,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),
+				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 			})
 			defer sim.Close()
 
@@ -341,7 +341,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0, StreamAutostart),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
