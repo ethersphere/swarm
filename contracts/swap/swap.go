@@ -79,7 +79,7 @@ func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address
 
 // Deploy a Swap contract
 func (s *Swap) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, tx *types.Transaction, err error) {
-	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner)
+	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(0))
 	return addr, tx, err
 }
 
