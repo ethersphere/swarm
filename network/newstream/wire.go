@@ -53,9 +53,9 @@ type StreamProvider interface {
 	Cursor(interface{}) (uint64, error)
 	CursorStr(string) (uint64, error)
 
-	// RunUpdateStreams is a provider specific implementation on how to maintain running streams with
+	// InitPeer is a provider specific implementation on how to maintain running streams with
 	// an arbitrary Peer. This method should always be run in a separate goroutine
-	RunUpdateStreams(p *Peer)
+	InitPeer(p *Peer)
 
 	// StreamName returns the Name of the Stream (see ID)
 	StreamName() string
@@ -66,31 +66,8 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
-	// StreamBehavior defines how the stream behaves upon initialisation
-	StreamBehavior() StreamInitBehavior
-
 	Boundedness() bool
 }
-
-// StreamInitBehavior defines the stream behavior upon init
-type StreamInitBehavior int
-
-const (
-	// StreamIdle means that there is no initial automatic message exchange
-	// between the nodes when the protocol gets established.
-	StreamIdle StreamInitBehavior = iota
-
-	// StreamGetCursors tells the two nodes to automatically fetch stream
-	// cursors from each other (for test purposes)
-	StreamGetCursors
-
-	// StreamAutostart automatically starts fetching data from the streams
-	// once the cursors arrive (default behavior for normal node)
-	StreamAutostart
-
-	// Retrieve everything, including future data from the HEAD of the stream
-	StreamPersistentAutostart
-)
 
 // StreamInfoReq is a request to get information about particular streams
 type StreamInfoReq struct {

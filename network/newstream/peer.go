@@ -47,7 +47,6 @@ type Peer struct {
 
 	streamCursorsMu   sync.Mutex
 	streamCursors     map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
-	dirtyStreams      map[string]bool   // key: stream ID, value: whether cursors for a stream should be updated
 	activeBoundedGets map[string]chan struct{}
 	openWants         map[uint]*want // maintain open wants on the client side
 	openOffers        map[uint]offer // maintain open offers on the server side
@@ -61,7 +60,6 @@ func NewPeer(peer *network.BzzPeer, i state.Store, providers map[string]StreamPr
 		providers:      providers,
 		intervalsStore: i,
 		streamCursors:  make(map[string]uint64),
-		dirtyStreams:   make(map[string]bool),
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
@@ -112,9 +110,7 @@ func (p *Peer) InitProviders() {
 	log.Debug("peer.InitProviders")
 
 	for _, sp := range p.providers {
-		if sp.StreamBehavior() != StreamIdle {
-			go sp.RunUpdateStreams(p)
-		}
+		go sp.InitPeer(p)
 	}
 }
 
