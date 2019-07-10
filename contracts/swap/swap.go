@@ -47,10 +47,7 @@ type SimpleSwap interface {
 	ContractParams() *Params
 }
 
-// Proxy is a proxy object for Swap contracts.
-// Currently we only have Swap, but full Swap may be a different contract.
-// To abstract contract references and not have to refactor too much code
-// for new Swap contracts, we use this proxy.
+// Swap is a proxy object for Swap contracts.
 type Swap struct {
 	Instance *contract.SimpleSwap
 }
