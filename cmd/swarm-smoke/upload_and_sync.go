@@ -232,7 +232,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 	for i := range addrs {
 		var foundAt int
 		maxProx := -1
-		var maxProxHost string
+		var maxProxHosts []string
 		for host := range allHostChunks {
 			if allHostChunks[host][i] == '1' {
 				foundAt++
@@ -247,19 +247,44 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			prox := chunk.Proximity(addrs[i], ba)
 			if prox > maxProx {
 				maxProx = prox
-				maxProxHost = host
+				maxProxHosts = []string{host}
+			} else if prox == maxProx {
+				maxProxHosts = append(maxProxHosts, host)
 			}
 		}
 
-		if allHostChunks[maxProxHost][i] == '0' {
-			log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
-		} else {
-			log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+		log.Debug("sync mode", "sync mode", syncMode)
+
+		if syncMode == "pullsync" || syncMode == "both" {
+			for _, maxProxHost := range maxProxHosts {
+				if allHostChunks[maxProxHost][i] == '0' {
+					log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				} else {
+					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				}
+			}
+
+			// if chunk found at less than 2 hosts
+			if foundAt < 2 {
+				log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
+			}
 		}
 
-		// if chunk found at less than 2 hosts
-		if foundAt < 2 {
-			log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
+		if syncMode == "pushsync" {
+			var found bool
+			for _, maxProxHost := range maxProxHosts {
+				if allHostChunks[maxProxHost][i] == '0' {
+				} else {
+					found = true
+					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				}
+			}
+
+			if !found {
+				for _, maxProxHost := range maxProxHosts {
+					log.Error("chunk not found at any max prox host", "ref", addrs[i], "hosts", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				}
+			}
 		}
 	}
 }

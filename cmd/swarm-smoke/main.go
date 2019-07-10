@@ -37,18 +37,20 @@ var (
 )
 
 var (
-	allhosts   string
-	hosts      []string
-	filesize   int
-	syncDelay  bool
-	inputSeed  int
-	httpPort   int
-	wsPort     int
-	verbosity  int
-	timeout    int
-	single     bool
-	onlyUpload bool
-	debug      bool
+	allhosts      string
+	hosts         []string
+	filesize      int
+	syncDelay     bool
+	pushsyncDelay bool
+	syncMode      string
+	inputSeed     int
+	httpPort      int
+	wsPort        int
+	verbosity     int
+	timeout       int
+	single        bool
+	onlyUpload    bool
+	debug         bool
 )
 
 func main() {
@@ -87,6 +89,12 @@ func main() {
 			Value:       1024,
 			Usage:       "file size for generated random file in KB",
 			Destination: &filesize,
+		},
+		cli.StringFlag{
+			Name:        "sync-mode",
+			Value:       "pullsync",
+			Usage:       "sync mode - pushsync or pullsync or both",
+			Destination: &syncMode,
 		},
 		cli.BoolFlag{
 			Name:        "sync-delay",
