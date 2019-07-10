@@ -31,7 +31,6 @@ import (
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
-	"github.com/ethersphere/swarm/services/swap"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -52,8 +51,12 @@ type Config struct {
 	CacheCapacity uint
 	BaseKey       []byte
 
+	// Swap configs
+	SwapAPI     string
+	SwapEnabled bool
+	// TODO: Add swap.Params --> define! (economic parameters)
+
 	*network.HiveParams
-	Swap                 *swap.LocalProfile
 	Pss                  *pss.Params
 	Contract             common.Address
 	EnsRoot              common.Address
@@ -65,7 +68,6 @@ type Config struct {
 	BzzKey               string
 	Enode                *enode.Node `toml:"-"`
 	NetworkID            uint64
-	SwapEnabled          bool
 	SyncEnabled          bool
 	SyncingSkipCheck     bool
 	DeliverySkipCheck    bool
@@ -74,7 +76,6 @@ type Config struct {
 	BootnodeMode         bool
 	DisableAutoConnect   bool
 	SyncUpdateDelay      time.Duration
-	SwapAPI              string
 	Cors                 string
 	BzzAccount           string
 	GlobalStoreAPI       string
@@ -87,7 +88,6 @@ func NewConfig() (c *Config) {
 	c = &Config{
 		FileStoreParams:      storage.NewFileStoreParams(),
 		HiveParams:           network.NewHiveParams(),
-		Swap:                 swap.NewDefaultSwapParams(),
 		Pss:                  pss.NewParams(),
 		ListenAddr:           DefaultHTTPListenAddr,
 		Port:                 DefaultHTTPPort,
@@ -95,12 +95,12 @@ func NewConfig() (c *Config) {
 		EnsAPIs:              nil,
 		EnsRoot:              ens.TestNetAddress,
 		NetworkID:            network.DefaultNetworkID,
-		SwapEnabled:          false,
 		SyncEnabled:          true,
 		SyncingSkipCheck:     false,
 		MaxStreamPeerServers: 10000,
 		DeliverySkipCheck:    true,
 		SyncUpdateDelay:      15 * time.Second,
+		SwapEnabled:          false,
 		SwapAPI:              "",
 	}
 
@@ -129,11 +129,6 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey, nodeKey *ecdsa.PrivateKey) error
 	c.Enode, err = network.NewEnode(enodeParams)
 	if err != nil {
 		return fmt.Errorf("Error creating enode: %v", err)
-	}
-
-	// initialize components that depend on the swarm instance's private key
-	if c.SwapEnabled {
-		c.Swap.Init(c.Contract, prvKey)
 	}
 
 	c.privateKey = prvKey
