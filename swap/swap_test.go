@@ -28,7 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -233,7 +235,9 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := New(stateStore, key, common.Address{})
+
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
+	swap := New(stateStore, key, common.Address{}, contractBackend)
 	return swap, dir
 }
 
