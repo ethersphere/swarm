@@ -138,7 +138,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 	if err != nil {
-		return
+		return err
 	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
