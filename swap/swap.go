@@ -43,7 +43,7 @@ const (
 	deployDelay                       = 1 * time.Second // delay between retries
 	defaultCashInDelay                = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
 	DefaultInitialDepositAmount       = 0               // TODO: deliberate value for now; needs experimentation
-	DefaultHarddepositTimeoutDuration = int64(86400)    // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
+	DefaultHarddepositTimeoutDuration = 86400           // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
 )
 
 // SwAP Swarm Accounting Protocol
