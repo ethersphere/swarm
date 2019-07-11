@@ -23,7 +23,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -83,7 +82,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 		return fmt.Errorf("Unexpected message type: %v", err)
 	}
 
-	peer := req.Peer
+	peer := sp.ID()
 
 	sp.swap.lock.Lock()
 	defer sp.swap.lock.Unlock() //TODO: Do we really want to block so long?
@@ -126,11 +125,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	}
 	cheque.ChequeParams.Timeout = defaultCashInDelay
 	cheque.ChequeParams.Contract = sp.swap.owner.Contract
-	pk, err := crypto.UnmarshalPubkey(req.PubKey)
-	if err != nil {
-		return err
-	}
-	cheque.Beneficiary = crypto.PubkeyToAddress(*pk)
+	cheque.Beneficiary = req.Beneficiary
 	cheque.Sig, err = sp.swap.signContent(cheque)
 	if err != nil {
 		return err
