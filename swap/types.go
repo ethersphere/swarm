@@ -18,7 +18,6 @@ package swap
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // TODO: add handshake protocol where we exchange last cheque (this is useful if one node disconnects)
@@ -41,9 +40,7 @@ type Cheque struct {
 
 // ChequeRequestMsg is sent from a creditor to the debitor to solicit a cheque
 type ChequeRequestMsg struct {
-	Peer       enode.ID // TODO: Why is it here right now? Potentially not needed as everything goes through peer
-	PubKey     []byte   // TODO: Also probably not needed
-	LastCheque *Cheque  // TODO: maybe at most just a serial number rather than full cheque
+	Beneficiary common.Address
 }
 
 // EmitChequeMsg is sent from the debitor to the creditor with the actual check
