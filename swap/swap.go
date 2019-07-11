@@ -215,19 +215,43 @@ func (s *Swap) resetBalance(peerID enode.ID) {
 	s.balances[peerID] = 0
 }
 
-// signContent signs the cheque
-func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
+// encodeCheque encodes the cheque in the format used in the signing procedure
+func (s *Swap) encodeCheque(cheque *Cheque) []byte {
 	serialBytes := make([]byte, 32)
 	amountBytes := make([]byte, 32)
 	timeoutBytes := make([]byte, 32)
-	input := append(cheque.Contract.Bytes(), cheque.Beneficiary.Bytes()...)
-	binary.LittleEndian.PutUint64(serialBytes, cheque.Serial)
-	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
-	binary.LittleEndian.PutUint64(timeoutBytes, cheque.Timeout)
+	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
+	// encoded in BigEndian because EVM uses BigEndian encoding
+	binary.BigEndian.PutUint64(serialBytes[24:], cheque.Serial)
+	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
+	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
+	// construct the actual cheque
+	input := cheque.Contract.Bytes()
 	input = append(input, serialBytes[:]...)
+	input = append(input, cheque.Beneficiary.Bytes()...)
 	input = append(input, amountBytes[:]...)
 	input = append(input, timeoutBytes[:]...)
-	return crypto.Sign(crypto.Keccak256(input), s.owner.privateKey)
+
+	return input
+}
+
+// sigHashCheque hashes the cheque using the prefix that would be added by eth_Sign
+func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
+	input := crypto.Keccak256(s.encodeCheque(cheque))
+	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
+	return crypto.Keccak256([]byte(withPrefix))
+}
+
+// signContent signs the cheque
+func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
+	sig, err := crypto.Sign(s.sigHashCheque(cheque), s.owner.privateKey)
+	if err != nil {
+		return nil, err
+	}
+	// increase the v value by 27 as crypto.Sign produces 0 or 1 but the contract only accepts 27 or 28
+	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
+	sig[len(sig)-1] += 27
+	return sig, nil
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
