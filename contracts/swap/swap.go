@@ -45,6 +45,7 @@ type SimpleSwap interface {
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
 	ValidateCode() bool
 	ContractParams() *Params
+	InstanceAt(address common.Address, backend bind.ContractBackend)
 }
 
 // Swap is a proxy object for Swap contracts.
@@ -91,4 +92,8 @@ func (s *Swap) ContractParams() *Params {
 // SubmitChequeBeneficiary is used to cash in a cheque
 func (s *Swap) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error) {
 	return s.Instance.SubmitChequeBeneficiary(opts, serial, amount, timeout, ownerSig)
+}
+
+func (s *Swap) InstanceAt(address common.Address, backend bind.ContractBackend) {
+	s.Instance, _ = contract.NewSimpleSwap(address, backend)
 }

@@ -15,6 +15,7 @@
 package swap
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
@@ -34,7 +35,8 @@ var Spec = &protocols.Spec{
 }
 
 type Service struct {
-	swap *Swap
+	swap    *Swap
+	backend *bind.ContractBackend
 }
 
 func (s *Swap) Protocols() []p2p.Protocol {
@@ -70,6 +72,6 @@ func (ss *Service) Stop() error {
 
 func (ss *Service) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
-	swapPeer := NewPeer(protoPeer, ss.swap)
+	swapPeer := NewPeer(protoPeer, ss.swap, ss.backend)
 	return swapPeer.Run(swapPeer.handleMsg)
 }

@@ -32,13 +32,15 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap *Swap
+	swap    *Swap
+	backend *bind.ContractBackend
 }
 
-func NewPeer(p *protocols.Peer, s *Swap) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, backend *bind.ContractBackend) *Peer {
 	return &Peer{
-		Peer: p,
-		swap: s,
+		Peer:    p,
+		swap:    s,
+		backend: backend,
 	}
 }
 
@@ -173,9 +175,8 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	//TODO: input parameter checks?
 
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
-	//TODO: ??????
-	opts.Value = big.NewInt(int64(cheque.Amount))
 	opts.Context = ctx
+
 	// handling error
 	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
 	sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
