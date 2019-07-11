@@ -76,6 +76,9 @@ func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address
 
 // Deploy a Swap contract
 func (s *Swap) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, tx *types.Transaction, err error) {
+	// we deploy the Swap contract with parameters owner and 0,
+	//meaning that the issuer of the cheques will be the owner and
+	//the DEFAULT_HARDDEPOSIT_TIMEOUT_DURATION is set to 1 day (as hardcoded in the smart-contract).
 	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(0))
 	return addr, tx, err
 }
