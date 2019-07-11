@@ -530,30 +530,32 @@ func (s *Swarm) APIs() []rpc.API {
 		apis = append(apis, s.ps.APIs()...)
 	}
 
+	var swapService *Info
 	if s.config.SwapEnabled {
-		// TODO: Does this blong in the bzz protocol?
 		// Swap public API
-		swapPublicApi := rpc.API{
-			Namespace: "bzz",
-			Version:   "3.0",
-			Service:   &Info{s.config, s.swap.GetParams()},
-			Public:    true,
-		}
-
-		apis = append(apis, swapPublicApi)
+		swapService = &Info{s.config, s.swap.GetParams()}
+	} else {
+		swapService = &Info{s.config, nil}
 	}
+
+	swapPublicApi := rpc.API{
+		Namespace: "bzz",
+		Version:   "3.0",
+		Service:   swapService,
+		Public:    true,
+	}
+
+	apis = append(apis, swapPublicApi)
+
 	return apis
 }
 
 // DeploySwap ensures that Swap is set up on chain.
 func (s *Swarm) DeploySwap(ctx context.Context) error {
 	err := s.swap.Deploy(ctx, s.backend, s.config.Path)
-	if err != nil {
-		return err
-	}
+	return err
 	//TODO: original message, what's this "resetting all connections in the hive"?
 	//log.Info(fmt.Sprintf("new swap contract deployed (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
-	return nil
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance

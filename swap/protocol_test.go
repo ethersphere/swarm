@@ -55,11 +55,12 @@ func TestRequestCheque(t *testing.T) {
 	// code as in production
 	expectedCheque := swap.cheques[creditor.ID()]
 	expectedCheque = &Cheque{
-		Serial:      uint64(0),
-		Amount:      uint64(42),
-		Timeout:     defaultCashInDelay,
-		Contract:    swap.owner.address,
-		Beneficiary: crypto.PubkeyToAddress(*creditor.Pubkey()),
+		ChequeParams: ChequeParams{
+			Serial:      uint64(1),
+			Amount:      uint64(42),
+			Timeout:     defaultCashInDelay,
+			Beneficiary: crypto.PubkeyToAddress(*creditor.Pubkey()),
+		},
 	}
 
 	// sign the cheque
