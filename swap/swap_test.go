@@ -17,11 +17,13 @@
 package swap
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	mrand "math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -38,6 +41,14 @@ import (
 var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
+
+// booking represents an accounting movement in relation to a particular node: `peer`
+// if `amount` is positive, it means the node which adds this booking will be credited in respect to `peer`
+// otherwise it will be debited
+type booking struct {
+	amount int64
+	peer   *protocols.Peer
+}
 
 func init() {
 	flag.Parse()
@@ -81,44 +92,89 @@ func TestRepeatedBookings(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
+	var bookings []booking
+
+	// credits to peer 1
 	testPeer := newDummyPeer()
-	amount := mrand.Intn(100)
-	cnt := 1 + mrand.Intn(10)
-	for i := 0; i < cnt; i++ {
-		swap.Add(int64(amount), testPeer.Peer)
-	}
-	expectedBalance := int64(cnt * amount)
-	realBalance := swap.balances[testPeer.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d credits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
-	}
+	bookingAmount := int64(mrand.Intn(100))
+	bookingQuantity := 1 + mrand.Intn(10)
+	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer.Peer)
 
+	// debits to peer 2
 	testPeer2 := newDummyPeer()
-	amount = mrand.Intn(100)
-	cnt = 1 + mrand.Intn(10)
-	for i := 0; i < cnt; i++ {
-		swap.Add(0-int64(amount), testPeer2.Peer)
-	}
-	expectedBalance = int64(0 - (cnt * amount))
-	realBalance = swap.balances[testPeer2.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
-	}
+	bookingAmount = 0 - int64(mrand.Intn(100))
+	bookingQuantity = 1 + mrand.Intn(10)
+	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer2.Peer)
 
-	//mixed debits and credits
-	amount1 := mrand.Intn(100)
-	amount2 := mrand.Intn(55)
-	amount3 := mrand.Intn(999)
-	swap.Add(int64(amount1), testPeer2.Peer)
-	swap.Add(int64(0-amount2), testPeer2.Peer)
-	swap.Add(int64(0-amount3), testPeer2.Peer)
-
-	expectedBalance = expectedBalance + int64(amount1-amount2-amount3)
-	realBalance = swap.balances[testPeer2.ID()]
-
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
+	// credits and debits to peer 2
+	mixedBookings := []booking{
+		booking{int64(mrand.Intn(100)), testPeer2.Peer},
+		booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
 	}
+	addBookings(swap, mixedBookings)
+	verifyBookings(t, swap, append(bookings, mixedBookings...))
+}
+
+// generate bookings based on parameters, apply them to a Swap struct and verify the result
+// append generated bookings to slice pointer
+func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
+	*bookings = append(*bookings, peerBookings...)
+	addBookings(swap, peerBookings)
+	verifyBookings(t, swap, *bookings)
+}
+
+// generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
+func generateBookings(amount int64, quantity int, peer *protocols.Peer) (bookings []booking) {
+	for i := 0; i < quantity; i++ {
+		bookings = append(bookings, booking{amount, peer})
+	}
+	return
+}
+
+// take a Swap struct and a list of bookings, and call the accounting function for each of them
+func addBookings(swap *Swap, bookings []booking) {
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		swap.Add(booking.amount, booking.peer)
+	}
+}
+
+// take a Swap struct and a list of bookings, and verify the resulting balances are as expected
+func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
+	expectedBalances := calculateExpectedBalances(swap, bookings)
+	realBalances := swap.balances
+	if !reflect.DeepEqual(expectedBalances, realBalances) {
+		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances)))
+	}
+}
+
+// converts a balance map to a one-line string representation
+func stringifyBalance(balance map[enode.ID]int64) string {
+	marshaledBalance, err := json.Marshal(balance)
+	if err != nil {
+		return err.Error()
+	}
+	return string(marshaledBalance)
+}
+
+// take a swap struct and a list of bookings, and calculate the expected balances.
+// the result is a map which stores the balance for all the peers present in the bookings,
+// from the perspective of the node that loaded the Swap struct.
+func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int64 {
+	expectedBalances := make(map[enode.ID]int64)
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		peerID := booking.peer.ID()
+		peerBalance := expectedBalances[peerID]
+		// balance is not expected to be affected once past the disconnect threshold
+		if peerBalance < swap.disconnectThreshold {
+			peerBalance += booking.amount
+		}
+		expectedBalances[peerID] = peerBalance
+	}
+	return expectedBalances
 }
 
 //try restoring a balance from state store
