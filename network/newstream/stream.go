@@ -262,7 +262,7 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 	}
 }
 
-func (s *SlipStream) createSendWant(ctx context.Context, p *Peer, stream ID, from uint64, to *uint64) error {
+func (s *SlipStream) createSendWant(ctx context.Context, p *Peer, stream ID, from uint64, to *uint64, head bool) error {
 	g := GetRange{
 		Ruid:      uint(rand.Uint32()),
 		Stream:    stream,
@@ -279,6 +279,7 @@ func (s *SlipStream) createSendWant(ctx context.Context, p *Peer, stream ID, fro
 		stream:    g.Stream,
 		from:      g.From,
 		to:        to,
+		head:      head,
 		hashes:    make(map[string]bool),
 		requested: time.Now(),
 	}
@@ -291,7 +292,7 @@ func (s *SlipStream) createSendWant(ctx context.Context, p *Peer, stream ID, fro
 
 func (s *SlipStream) requestStreamHead(ctx context.Context, p *Peer, stream ID, from uint64) error {
 	log.Debug("peer.requestStreamHead", "peer", p.ID(), "stream", stream, "from", from)
-	return s.createSendWant(ctx, p, stream, from, nil)
+	return s.createSendWant(ctx, p, stream, from, nil, true)
 }
 
 func (s *SlipStream) requestStreamRange(ctx context.Context, p *Peer, stream ID, cursor uint64) error {
@@ -317,7 +318,7 @@ func (s *SlipStream) requestStreamRange(ctx context.Context, p *Peer, stream ID,
 		panic("no")
 	}
 
-	return s.createSendWant(ctx, p, stream, from, &cursor)
+	return s.createSendWant(ctx, p, stream, from, &cursor, false)
 }
 
 func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange) {
@@ -569,10 +570,17 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 
 		//TODO BATCH TIMEOUT?
 	}
+	if w.head {
+		if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
+			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
+			p.Drop()
+		}
 
-	if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
-		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
-		p.Drop()
+	} else {
+		if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
+			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
+			p.Drop()
+		}
 	}
 }
 
