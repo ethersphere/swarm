@@ -18,8 +18,11 @@ package newstream
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -41,7 +44,7 @@ func init() {
 }
 
 func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.GlobalStorer) (localStore *localstore.DB, cleanup func(), err error) {
-	dir, err := ioutil.TempDir("", "swarm-stream-")
+	dir, err := ioutil.TempDir(tmpDir, "localstore-")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,4 +65,41 @@ func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.Glob
 		return nil, nil, err
 	}
 	return localStore, cleanup, nil
+}
+
+// Test run global tmp dir. Please, use it as the first argument
+// to ioutil.TempDir function calls in this package tests.
+var tmpDir string
+
+func TestMain(m *testing.M) {
+	// Tests in this package generate a lot of temporary directories
+	// that may not be removed if tests are interrupted with SIGINT.
+	// This function constructs a single top-level directory to be used
+	// to store all data from a test execution. It removes the
+	// tmpDir with defer, or by catching keyboard interrupt signal,
+	// so that all data will be removed even on forced termination.
+
+	var err error
+	tmpDir, err = ioutil.TempDir("", "swarm-stream-")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	defer signal.Stop(c)
+
+	go func() {
+		first := true
+		for range c {
+			fmt.Fprintln(os.Stderr, "signal: interrupt")
+			if first {
+				fmt.Fprintln(os.Stderr, "removing swarm stream tmp directory", tmpDir)
+				os.RemoveAll(tmpDir)
+				os.Exit(1)
+			}
+		}
+	}()
+	os.Exit(m.Run())
 }

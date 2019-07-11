@@ -542,7 +542,7 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 
 		var store *state.DBStore
 		// Use on-disk DBStore to reduce memory consumption in race tests.
-		dir, err := ioutil.TempDir("", "swarm-stream-")
+		dir, err := ioutil.TempDir(tmpDir, "statestore-")
 		if err != nil {
 			return nil, nil, err
 		}
