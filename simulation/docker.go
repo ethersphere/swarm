@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -109,6 +110,15 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not build the docker image: %v", err)
 		}
+	}
+
+	// Pull docker image
+	if config.DockerImage != "" {
+		reader, err := cli.ImagePull(context.Background(), config.DockerImage, types.ImagePullOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("pull image error: %v", err)
+		}
+		io.Copy(os.Stdout, reader)
 	}
 
 	return &DockerAdapter{
