@@ -50,14 +50,16 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore        state.Store          // stateStore is needed in order to keep balances across sessions
-	lock              sync.RWMutex         // lock the balances
-	balances          map[enode.ID]int64   // map of balances for each peer
-	cheques           map[enode.ID]*Cheque // map of balances for each peer
-	Service           *Service             // Service for running the procol
-	owner             *Owner               // contract access
-	params            *Params              // economic and operational parameters
-	contractReference *swap.Swap
+	stateStore          state.Store          // stateStore is needed in order to keep balances across sessions
+	lock                sync.RWMutex         // lock the balances
+	balances            map[enode.ID]int64   // map of balances for each peer
+	cheques             map[enode.ID]*Cheque // map of balances for each peer
+	Service             *Service             // Service for running the procol
+	owner               *Owner               // contract access
+	params              *Params              // economic and operational parameters
+	contractReference   *swap.Swap
+	paymentThreshold    int64 // balance difference required for requesting cheque
+	disconnectThreshold int64 // balance difference required for dropping peer
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -82,10 +84,12 @@ func NewDefaultParams() *Params {
 // New - swap constructor
 func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address) *Swap {
 	sw := &Swap{
-		stateStore: stateStore,
-		balances:   make(map[enode.ID]int64),
-		cheques:    make(map[enode.ID]*Cheque),
-		params:     NewDefaultParams(),
+		stateStore:          stateStore,
+		balances:            make(map[enode.ID]int64),
+		cheques:             make(map[enode.ID]*Cheque),
+		params:              NewDefaultParams(),
+		paymentThreshold:    DefaultPaymentThreshold,
+		disconnectThreshold: DefaultDisconnectThreshold,
 	}
 	sw.contractReference = swap.New()
 	sw.owner = sw.createOwner(prvkey, contract)
@@ -119,15 +123,36 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if err != nil && err != state.ErrNotFound {
 		return
 	}
+
+	//check if balance with peer is over the disconnect threshold
+	if s.balances[peer.ID()] >= s.disconnectThreshold {
+		//if so, return error in order to abort the transfer
+		return fmt.Errorf("balance for peer %s went over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
+	}
+
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
+
 	//save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
+	if err != nil {
+		return err
+	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
-	return err
+
+	//check if balance with peer is over the payment threshold
+	if peerBalance >= s.paymentThreshold {
+		//if so, send cheque request message
+		chequeRequestMessage := &ChequeRequestMsg{
+			Beneficiary: s.owner.address,
+		}
+		return peer.Send(context.TODO(), chequeRequestMessage)
+	}
+
+	return
 }
 
 //GetPeerBalance returns the balance for a given peer
@@ -184,9 +209,10 @@ func (swap *Swap) Close() {
 // resetBalance is called:
 // * for the creditor: on cheque receival
 // * for the debitor: on confirmation receival
-func (s *Swap) resetBalance(peer enode.ID) {
+func (s *Swap) resetBalance(peerID enode.ID) {
 	//TODO: reset balance based on actual amount
-	s.balances[peer] = 0
+	//Lock() is not applied because it is expected to be done in the handleChequeRequestMsg call
+	s.balances[peerID] = 0
 }
 
 func (s *Swap) encodeCheque(cheque *Cheque) []byte {
