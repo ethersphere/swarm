@@ -403,7 +403,6 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		<-time.After(syncTime)
 
 		// check that the sum of bin indexes is equal
-
 		log.Debug("compare to", "enode", nodeIDs[1])
 
 		uploaderSum, otherNodeSum := 0, 0
@@ -418,8 +417,6 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		if uploaderSum != otherNodeSum {
 			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 		}
-
-		log.Error("eeeeeeeeee", "e", uploaderNodeBinIDs)
 
 		// now add stuff so that we fetch it with live syncing
 
@@ -441,7 +438,6 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 
 			uploaderNodeBinIDs[po] = until
 		}
-		log.Error("eeeeeeeeee", "e", uploaderNodeBinIDs)
 
 		// wait for live syncing
 		<-time.After(syncTime)
