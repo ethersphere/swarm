@@ -41,7 +41,7 @@ type Backend interface {
 
 // SimpleSwap interface defines the simple swap's exposed methods
 type SimpleSwap interface {
-	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (common.Address, *types.Transaction, error)
+	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout *big.Int) (common.Address, *types.Transaction, error)
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
 	ValidateCode() bool
 	ContractParams() *Params
@@ -63,20 +63,19 @@ func New() *Swap {
 
 // ValidateCode checks that the on-chain code at address matches the expected swap
 // contract code.
-// TODO: have this as a package level function and pass the ContractDeployedCode as argument
+// TODO: have this as a package level function and pass the SimpleSwapBin as argument
 func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) (bool, error) {
 	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
 		return false, err
 	}
-	referenceCode := common.FromHex(contract.ContractDeployedCode)
-	//TODO: which is ContractDeployedCode and how to set it?
+	referenceCode := common.FromHex(contract.SimpleSwapBin)
 	return bytes.Equal(codeReadFromAddress, referenceCode), nil
 }
 
 // Deploy a Swap contract
-func (s *Swap) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, tx *types.Transaction, err error) {
-	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(0))
+func (s *Swap) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout *big.Int) (addr common.Address, tx *types.Transaction, err error) {
+	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner, harddepositTimeout)
 	return addr, tx, err
 }
 
