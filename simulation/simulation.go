@@ -1,12 +1,14 @@
 package simulation
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/sync/errgroup"
 )
 
 type NodeMap struct {
@@ -27,6 +29,16 @@ func (nm *NodeMap) Load(key NodeID) (value Node, ok bool) {
 	return result, ok
 }
 
+func (nm *NodeMap) LoadAll() []Node {
+	nm.RLock()
+	v := []Node{}
+	for _, node := range nm.internal {
+		v = append(v, node)
+	}
+	nm.RUnlock()
+	return v
+}
+
 func (nm *NodeMap) Store(key NodeID, value Node) {
 	nm.Lock()
 	nm.internal[key] = value
@@ -38,6 +50,7 @@ type Simulation struct {
 	nodes   *NodeMap
 }
 
+// NewSimulation creates a new simulation given an adapter
 func NewSimulation(adapter Adapter) *Simulation {
 	sim := &Simulation{
 		adapter: adapter,
@@ -45,10 +58,13 @@ func NewSimulation(adapter Adapter) *Simulation {
 	}
 	return sim
 }
+
+// NewSimulationFromSnapshot creates aimulation given an adapter and a snapshot
 func NewSimulationFromSnapshot(adapter *Adapter, snapshot *NetworkSnapshot) (*Simulation, error) {
 	return nil, errors.New("not implemented")
 }
 
+// Get returns a node by ID
 func (s *Simulation) Get(id NodeID) (Node, error) {
 	node, ok := s.nodes.Load(id)
 	if !ok {
@@ -57,12 +73,13 @@ func (s *Simulation) Get(id NodeID) (Node, error) {
 	return node, nil
 }
 
-func (s *Simulation) GetAll() ([]Node, error) {
-	return nil, errors.New("not implemented")
+// GetAll returns all nodes
+func (s *Simulation) GetAll() []Node {
+	return s.nodes.LoadAll()
 }
 
-// Create creates a given node with the NodeConfig
-func (s *Simulation) Create(config NodeConfig) error {
+// Init initializes a node with the NodeConfig
+func (s *Simulation) Init(config NodeConfig) error {
 	if _, ok := s.nodes.Load(config.ID); ok {
 		return fmt.Errorf("a node with id %s already exists", config.ID)
 	}
@@ -88,7 +105,7 @@ func (s *Simulation) Start(id NodeID) error {
 	return nil
 }
 
-// Stop stops a given node
+// Stop stops a node by ID
 func (s *Simulation) Stop(id NodeID) error {
 	node, ok := s.nodes.Load(id)
 	if !ok {
@@ -100,13 +117,26 @@ func (s *Simulation) Stop(id NodeID) error {
 	}
 	return nil
 }
+
+// StartAll starts all nodes
 func (s *Simulation) StartAll() error {
-	return errors.New("not implemented")
-}
-func (s *Simulation) StopAll() error {
-	return errors.New("not implemented")
+	g, _ := errgroup.WithContext(context.Background())
+	for _, node := range s.nodes.LoadAll() {
+		g.Go(node.Start)
+	}
+	return g.Wait()
 }
 
+// StopAll stops all nodes
+func (s *Simulation) StopAll() error {
+	g, _ := errgroup.WithContext(context.Background())
+	for _, node := range s.nodes.LoadAll() {
+		g.Go(node.Stop)
+	}
+	return g.Wait()
+}
+
+// RPCClient returns an RPC Client for a given node
 func (s *Simulation) RPCClient(id NodeID) (*rpc.Client, error) {
 	node, ok := s.nodes.Load(id)
 	if !ok {
@@ -149,6 +179,7 @@ func (s *Simulation) HTTPBaseAddr(id NodeID) (string, error) {
 	return status.HTTPListen, nil
 }
 
+// Snapshot returns a snapshot of the simulation
 func (s *Simulation) Snapshot() (NetworkSnapshot, error) {
 	snap := NetworkSnapshot{}
 	return snap, errors.New("not implemented")
