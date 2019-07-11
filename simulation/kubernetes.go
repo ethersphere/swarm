@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -71,12 +73,6 @@ type KubernetesBuildContext struct {
 // ImageTag is the full image tag, including the registry
 func (bc *KubernetesBuildContext) ImageTag() string {
 	return fmt.Sprintf("%s/%s", bc.Registry, bc.Tag)
-}
-
-type KubernetesNode struct {
-	config  NodeConfig
-	adapter *KubernetesAdapter
-	status  NodeStatus
 }
 
 func DefaultKubernetesAdapterConfig() KubernetesAdapterConfig {
@@ -196,6 +192,12 @@ func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 	return node, nil
 }
 
+type KubernetesNode struct {
+	config  NodeConfig
+	adapter *KubernetesAdapter
+	status  NodeStatus
+}
+
 // Status returns the node status
 func (n *KubernetesNode) Status() NodeStatus {
 	return n.status
@@ -214,17 +216,47 @@ func (n *KubernetesNode) Start() error {
 	args = append(args, "--bzzport", strconv.Itoa(dockerHTTPPort))
 	args = append(args, "--ws")
 	// TODO: Can we get the APIs from somewhere instead of hardcoding them here?
-	args = append(args, "--wsapi", "admin,net,debug,bzz,accounting")
+	args = append(args, "--wsapi", "admin,net,debug,bzz,accounting,hive")
 	args = append(args, "--wsport", strconv.Itoa(dockerWebsocketPort))
 	args = append(args, "--wsaddr", "0.0.0.0")
 	args = append(args, "--wsorigins", "*")
 	args = append(args, "--port", strconv.Itoa(dockerP2PPort))
 	args = append(args, "--nat", "ip:$(POD_IP)")
 
+	// Build environment variables
+	env := []v1.EnvVar{
+		v1.EnvVar{
+			// POD_IP is useful for setting the NAT config: e.g. `--nat ip:$POD_IP`
+			Name: "POD_IP",
+			ValueFrom: &v1.EnvVarSource{
+				FieldRef: &v1.ObjectFieldSelector{
+					FieldPath: "status.podIP",
+				},
+			},
+		},
+	}
+	for _, e := range n.config.Env {
+		var name, value string
+		s := strings.SplitN(e, "=", 1)
+		name = s[0]
+		if len(s) > 1 {
+			value = s[1]
+		}
+		env = append(env, v1.EnvVar{
+			Name:  name,
+			Value: value,
+		})
+	}
+
 	adapter := n.adapter
+
+	// Create Kubernetes Pod
 	podRequest := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: n.podName(),
+			Labels: map[string]string{
+				"app": "simulation",
+			},
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
@@ -232,15 +264,10 @@ func (n *KubernetesNode) Start() error {
 					Name:  n.podName(),
 					Image: adapter.image,
 					Args:  args,
-					// TODO: Add user env vars
-					Env: []v1.EnvVar{
-						v1.EnvVar{
-							Name: "POD_IP",
-							ValueFrom: &v1.EnvVarSource{
-								FieldRef: &v1.ObjectFieldSelector{
-									FieldPath: "status.podIP",
-								},
-							},
+					Env:   env,
+					Resources: v1.ResourceRequirements{
+						Limits: v1.ResourceList{
+							v1.ResourceMemory: resource.MustParse("400Mi"),
 						},
 					},
 				},
@@ -255,6 +282,7 @@ func (n *KubernetesNode) Start() error {
 	// Wait for pod
 	start := time.Now()
 	for {
+		log.Debug("Waiting for pod", "pod", n.podName())
 		pod, err := adapter.client.CoreV1().Pods(adapter.namespace).Get(n.podName(), metav1.GetOptions{})
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
@@ -263,10 +291,10 @@ func (n *KubernetesNode) Start() error {
 		if pod.Status.Phase == v1.PodRunning {
 			break
 		}
-		if time.Since(start) > 90*time.Second {
+		if time.Since(start) > 5*time.Minute {
 			return errors.New("timeout waiting for pod")
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	// Get logs
