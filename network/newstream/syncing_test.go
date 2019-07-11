@@ -40,8 +40,8 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 	//defer profile.Start(profile.CPUProfile).Stop()
 	var (
-		chunkCount = 1000
-		syncTime   = 1 * time.Second
+		chunkCount = 20000
+		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),

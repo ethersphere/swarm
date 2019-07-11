@@ -35,7 +35,7 @@ var ErrEmptyBatch = errors.New("empty batch")
 
 const (
 	HashSize  = 32
-	BatchSize = 16
+	BatchSize = 64
 )
 
 // Peer is the Peer extension for the streaming protocol
