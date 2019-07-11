@@ -133,15 +133,11 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 //GetPeerBalance returns the balance for a given peer
 func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
-	fmt.Println("aa4aa")
 	swap.lock.RLock()
-	fmt.Println("aa1aa")
 	defer swap.lock.RUnlock()
-	fmt.Println("aa2aa")
 	if p, ok := swap.balances[peer]; ok {
 		return p, nil
 	}
-	fmt.Println("aa3aa")
 	return 0, errors.New("Peer not found")
 }
 
