@@ -48,8 +48,6 @@ func TestRequestCheque(t *testing.T) {
 	// set balance artifially
 	swap.balances[creditor.ID()] = -42
 
-	pubkey := crypto.FromECDSAPub(creditor.Pubkey())
-
 	// create the expected cheque to be received
 	// NOTE: this may be improved, as it is essentially running the same
 	// code as in production
@@ -78,9 +76,7 @@ func TestRequestCheque(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &ChequeRequestMsg{
-					Peer:       creditor.ID(),
-					PubKey:     pubkey,
-					LastCheque: &Cheque{},
+					crypto.PubkeyToAddress(*creditor.Pubkey()),
 				},
 				Peer: creditor.ID(),
 			},
@@ -110,9 +106,7 @@ func TestRequestCheque(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &ChequeRequestMsg{
-					Peer:       creditor.ID(),
-					PubKey:     pubkey,
-					LastCheque: expectedCheque,
+					crypto.PubkeyToAddress(*creditor.Pubkey()),
 				},
 				Peer: creditor.ID(),
 			},
