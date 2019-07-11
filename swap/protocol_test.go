@@ -37,7 +37,7 @@ func TestRequestCheque(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// dummy object so we can run the protocol
-	ss := &Service{swap: swap}
+	ss := swap
 
 	// setup the protocolTester, which will allow protocol testing by sending messages
 	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, ss.run)
