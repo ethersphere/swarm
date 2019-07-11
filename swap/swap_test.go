@@ -17,6 +17,7 @@
 package swap
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -36,7 +37,12 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel           = flag.Int("loglevel", 2, "verbosity of logs")
+	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
+	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
+	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
+	testSwapAdress     = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
 )
 
 func init() {
@@ -187,4 +193,79 @@ func newDummyPeer() *dummyPeer {
 		Peer: protoPeer,
 	}
 	return dummy
+}
+
+func newTestCheque() *Cheque {
+	contract := common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
+	cashInDelay := 10
+
+	cheque := &Cheque{
+		ChequeParams: ChequeParams{
+			Contract:    contract,
+			Serial:      uint64(1),
+			Amount:      uint64(42),
+			Timeout:     uint64(cashInDelay),
+			Beneficiary: beneficiaryAddress,
+		},
+	}
+
+	return cheque
+}
+
+func TestEncodeCheque(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	// encode the cheque
+	encoded := swap.encodeCheque(expectedCheque)
+	// expected value (computed through truffle/js)
+	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfedd0000000000000000000000000000000000000000000000000000000000000001b8d424e9662fe0837fb1d728f1ac97cebb1085fe000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000000a")
+	if !bytes.Equal(encoded, expected) {
+		t.Fatal(fmt.Sprintf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x",
+			expected, encoded))
+	}
+}
+
+func TestSigHashCheque(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	// compute the hash that will be signed
+	hash := swap.sigHashCheque(expectedCheque)
+	// expected value (computed through truffle/js)
+	expected := common.Hex2Bytes("305cf876a5c6a24430743695fa5a42d40f8d59e174921520c8efe2d01c9b2a6a")
+	if !bytes.Equal(hash, expected) {
+		t.Fatal(fmt.Sprintf("Unexpected sigHash of cheque. Expected: %x, result is: %x",
+			expected, hash))
+	}
+}
+
+func TestSignContent(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	var err error
+
+	swap.owner.privateKey, err = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+
+	// sign the cheque
+	sig, err := swap.signContent(expectedCheque)
+	// expected value (computed through truffle/js)
+	expected := common.Hex2Bytes("833ffa1515b545ce75f4cbe520e6d22bcd76f8e688920e82cf9800a2a7891dda7d4b9f702d6da1b026c3bd860b00028ecce0003daba887c22b5926c26452136b1c")
+	if err != nil {
+		t.Fatal(fmt.Sprintf("Error in signing: %s", err))
+	}
+	if !bytes.Equal(sig, expected) {
+		t.Fatal(fmt.Sprintf("Unexpected signature for cheque. Expected: %x, result is: %x",
+			expected, sig))
+	}
 }
