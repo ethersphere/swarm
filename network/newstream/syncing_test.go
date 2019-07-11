@@ -37,9 +37,11 @@ import (
 // 1. All subscriptions are created
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
+
+	//defer profile.Start(profile.CPUProfile).Stop()
 	var (
-		chunkCount = 10000
-		syncTime   = 3 * time.Second
+		chunkCount = 1000
+		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
@@ -67,14 +69,6 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 		//put some data into just the first node
 		filesize := chunkCount * 4096
-		id, err := sim.AddNodes(1)
-		if err != nil {
-			return err
-		}
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
-		if err != nil {
-			return err
-		}
 		cctx := context.Background()
 		_, wait, err := item.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
 		if err != nil {
@@ -84,6 +78,14 @@ func TestTwoNodesFullSync(t *testing.T) {
 			return err
 		}
 
+		id, err := sim.AddNodes(1)
+		if err != nil {
+			return err
+		}
+		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		if err != nil {
+			return err
+		}
 		nodeIDs = sim.UpNodeIDs()
 		syncingNodeId := nodeIDs[1]
 
