@@ -194,6 +194,7 @@ func (s *Swap) encodeCheque(cheque *Cheque) []byte {
 	amountBytes := make([]byte, 32)
 	timeoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
+	// encoded in BigEndian because EVM uses BigEndian encoding
 	binary.BigEndian.PutUint64(serialBytes[24:], cheque.Serial)
 	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
 	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
@@ -221,6 +222,7 @@ func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 		return sig, err
 	}
 	// increase the v value by 27 as crypto.Sign produces 0 or 1 but the contract only accepts 27 or 28
+	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
 	sig[len(sig)-1] += 27
 	return sig, nil
 }
