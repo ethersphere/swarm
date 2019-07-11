@@ -280,8 +280,8 @@ func TestEncodeCheque(t *testing.T) {
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfedd0000000000000000000000000000000000000000000000000000000000000001b8d424e9662fe0837fb1d728f1ac97cebb1085fe000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000000a")
 	if !bytes.Equal(encoded, expected) {
-		t.Fatal(fmt.Sprintf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x",
-			expected, encoded))
+		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x",
+			expected, encoded)
 	}
 }
 

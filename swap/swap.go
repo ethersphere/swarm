@@ -246,7 +246,7 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 	sig, err := crypto.Sign(s.sigHashCheque(cheque), s.owner.privateKey)
 	if err != nil {
-		return sig, err
+		return nil, err
 	}
 	// increase the v value by 27 as crypto.Sign produces 0 or 1 but the contract only accepts 27 or 28
 	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
