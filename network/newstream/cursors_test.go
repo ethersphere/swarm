@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -251,147 +252,172 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 // - start removing nodes from the simulation until that peer is again within depth
 // - check that the cursors are being re-established
 func TestNodeRemovesAndReestablishCursors(t *testing.T) {
-	nodeCount := 5
+	// These values are set only by the setupSimulation function.
+	var (
+		sim                    *simulation.Simulation
+		pivotKademlia          *network.Kademlia
+		pivotEnode, foundEnode enode.ID
+		foundPO, nodeCount     int
+	)
+	// Function setupSimulation is a closure to construct the simulation and
+	// to set the values declared above.
+	// There are conditions when simulation is not suitable for the test run
+	// that should be discarded and constructed a new one, but calling this function.
+	setupSimulation := func() {
+		// initial node count
+		nodeCount = 5
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
-	})
-	defer sim.Close()
+		sim = simulation.NewInProc(map[string]simulation.ServiceFunc{
+			"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
+		})
 
-	_, err := sim.AddNodesAndConnectStar(nodeCount)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
-	defer cancel()
-
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		nodeIDs := sim.UpNodeIDs()
-		if len(nodeIDs) != nodeCount {
-			return errors.New("not enough nodes up")
+		_, err := sim.AddNodesAndConnectStar(nodeCount)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
-		idPivot := nodeIDs[0]
-		log.Debug("simulation pivot node", "id", idPivot)
-		pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != nodeCount {
+			t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
+		}
+
+		pivotEnode = nodeIDs[0]
+		log.Debug("simulation pivot node", "id", pivotEnode)
+		pivotKademlia = sim.NodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
 		// make sure that we get an otherID with po <= depth
-		found := false
-		foundId := 0
-		foundPo := 0
-		var foundEnode enode.ID
-		//pivotPeerLen = len(sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers)
+		var found bool
 		for i := 1; i < nodeCount; i++ {
 			log.Debug("looking for a peer", "i", i, "nodecount", nodeCount)
 			idOther := nodeIDs[i]
 			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 			depth := pivotKademlia.NeighbourhoodDepth()
-			if po >= depth {
-				foundId = i
-				foundPo = po
+			if po > depth {
 				found = true
+				foundPO = po
 				foundEnode = nodeIDs[i]
-				// check that we established some streams for this peer
-				//pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther).getCursorsCopy()
-				//pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther).historicalStreams
-
-				//checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
 				break
 			}
 
 			// append a node to the simulation
 			id, err := sim.AddNodes(1)
 			if err != nil {
-				return err
+				t.Fatal(err)
 			}
-			log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", idPivot)
-			err = sim.Net.ConnectNodesStar(id, idPivot)
+			log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", pivotEnode)
+			err = sim.Net.ConnectNodesStar(id, pivotEnode)
 			if err != nil {
-				return err
+				t.Fatal(err)
 			}
 			nodeCount++
 			nodeIDs = sim.UpNodeIDs()
 			if len(nodeIDs) != nodeCount {
-				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), nodeCount)
+				t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
 			}
-
-			// allow the new node to exchange the stream info messages
-			time.Sleep(200 * time.Millisecond)
-		}
-
-		if !found {
-			panic("did not find a node with po<=depth")
-		} else {
-			log.Debug("tracking enode", "enode", foundEnode)
-			cursorsCount := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).getPeer(nodeIDs[foundId]).cursorsCount()
-			if cursorsCount == 0 {
-				return errors.New("pivotCursors for node should not be empty")
-			}
-		}
-
-		//append nodes to simulation until the node po moves out of the depth, then assert no subs from pivot to that node
-		for pivotKademlia.NeighbourhoodDepth() <= foundPo {
-			id, err := sim.AddNodes(1)
-			if err != nil {
-				return err
-			}
-			err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
-			if err != nil {
-				return err
-			}
-			nodeCount++
-			nodeIDs = sim.UpNodeIDs()
-			if len(nodeIDs) != nodeCount {
-				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), nodeCount)
-			}
-		}
-
-		log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "foundId", foundId, "nodeIDs", nodeIDs)
-
-		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SlipStream).getPeer(nodeIDs[foundId]).getCursorsCopy()
-		if len(pivotCursors) != 0 {
-			panic("pivotCursors for node should be empty")
-		}
-		//pvotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(nodeIDs)foundId]].historicalStreams
-		//if len(pivotHistoricalFetchers) != 0 {
-		//log.Error("pivot fetcher length>0", "len", len(pivotHistoricalFetchers))
-		//panic("pivot historical fetchers for node should be empty")
-		//}
-		removed := 0
-		// remove nodes from the simulation until the peer moves again into depth
-		log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "peerIndex", foundId)
-		for pivotKademlia.NeighbourhoodDepth() > foundPo {
-			_, err := sim.StopRandomNode(nodeIDs[0], foundEnode)
-			if err != nil {
-				panic(err)
-			}
-			removed++
+			// wait for node to be set
 			time.Sleep(100 * time.Millisecond)
-			log.Error("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo)
-
-			nodeIDs = sim.UpNodeIDs()
 		}
-		log.Error("done removing nodes", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "removed", removed)
-
-		// wait for cursors msg again
-		time.Sleep(100 * time.Millisecond)
-		peer := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode)
-		if peer.cursorsCount() == 0 {
-			return errors.New("pivotCursors for foundEnode should no longer be empty")
+		if !found {
+			t.Fatal("node with po<=depth not found")
 		}
-		//pivotHistoricalFetchers = sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(foundEnode).historicalStreams
-		//if len(pivotHistoricalFetchers) == 0 {
-		//log.Error("pivot fetcher length == 0", "len", len(pivotHistoricalFetchers))
-		//panic("pivot historical fetchers for node should not be empty")
-		//}
-		return nil
-	})
-	if result.Error != nil {
-		t.Fatal(result.Error)
+		return
 	}
+	// Try setting up the simulation until we get a shallow enough depth
+	// to reach afterwards. It is more likely to get a shallower depth
+	// so iteration count in this loop should be low and most likely only one.
+	for {
+		setupSimulation()
+		if foundPO > 4 { // accept depths only up to 4
+			log.Debug("too large depth to reach", "depth", foundPO)
+			// close the simulation as the new one will be created
+			sim.Close()
+		} else {
+			// depth to be reached is acceptable
+			// close the accepted simulation at the end
+			defer sim.Close()
+			break
+		}
+	}
+
+	log.Debug("tracking enode", "enode", foundEnode, "po", foundPO)
+
+	// waitForCursors checks if the pivot node has some cursors or not
+	// by periodically checking for them.
+	waitForCursors := func(t *testing.T, wantSome bool) {
+		t.Helper()
+
+		var got int
+		for i := 0; i < 1000; i++ { // 10s total wait
+			time.Sleep(10 * time.Millisecond)
+			s, ok := sim.NodeItem(pivotEnode, bucketKeySyncer).(*SlipStream)
+			if !ok {
+				continue
+			}
+			p := s.getPeer(foundEnode)
+			if p == nil {
+				continue
+			}
+			got = len(p.getCursorsCopy())
+			if got != 0 == wantSome {
+				return
+			}
+		}
+		if wantSome {
+			t.Fatalf("got %v cursors, but want some", got)
+		} else {
+			t.Fatalf("got %v cursors, but want none", got)
+		}
+	}
+
+	// expecting some cursors
+	waitForCursors(t, true)
+
+	//append nodes to simulation until the node po moves out of the depth, then assert no subs from pivot to that node
+	for i := float64(1); pivotKademlia.NeighbourhoodDepth() <= foundPO; i++ {
+		// calculate the number of nodes to add:
+		// - logarithmically increase by the number of itrations
+		//   - ensure that the logarithm is greater then 0 by starting the iteration from 1, not 0
+		//   - ensure that the logarithm is greater then 0 by adding 1
+		// - multiply by the difference between target and current depth
+		//   - ensure that is greater then 0 by adding 1
+		//   - multiply it by empirical constant 4
+		newNodeCount := int(math.Logb(i)+1) * ((foundPO-pivotKademlia.NeighbourhoodDepth())*4 + 1)
+		id, err := sim.AddNodes(newNodeCount)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = sim.Net.ConnectNodesStar(id, pivotEnode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodeCount += newNodeCount
+		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != nodeCount {
+			t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
+		}
+		log.Debug("added new nodes to reach depth", "new nodes", newNodeCount, "current depth", pivotKademlia.NeighbourhoodDepth(), "target depth", foundPO)
+	}
+
+	log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO, "foundEnode", foundEnode)
+
+	// no cursors should exist at this point
+	waitForCursors(t, false)
+
+	var removed int
+	// remove nodes from the simulation until the peer moves again into depth
+	log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO, "foundEnode", foundEnode)
+	for pivotKademlia.NeighbourhoodDepth() > foundPO {
+		_, err := sim.StopRandomNode(pivotEnode, foundEnode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		removed++
+		log.Debug("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO)
+	}
+	log.Debug("done removing nodes", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO, "removed", removed)
+
+	// expecting some new cursors
+	waitForCursors(t, true)
 }
 
 // compareNodeBinsToStreams checks that the values on `onesCursors` correlate to the values in `othersBins`
@@ -494,7 +520,8 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 		fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		if numChunks > 0 {
 			filesize := numChunks * 4096
-			cctx := context.Background()
+			cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
 			if err != nil {
 				return nil, nil, err
