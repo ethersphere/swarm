@@ -341,7 +341,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // and waits for another syncTime, then checks for the correct sync by bin indexes
 func TestTwoNodesFullSyncLive(t *testing.T) {
 	var (
-		chunkCount = 10000
+		chunkCount = 50000
 		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -368,13 +368,13 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		//put some data into just the first node
 		filesize := chunkCount * 4096
 		cctx := context.Background()
-		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
-		if err != nil {
-			return err
-		}
-		if err := wait(cctx); err != nil {
-			return err
-		}
+		//_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+		//if err != nil {
+		//return err
+		//}
+		//if err := wait(cctx); err != nil {
+		//return err
+		//}
 
 		id, err := sim.AddNodes(1)
 		if err != nil {
@@ -401,7 +401,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		}
 
 		// wait for syncing
-		<-time.After(syncTime)
+		//<-time.After(syncTime)
 
 		// check that the sum of bin indexes is equal
 		log.Debug("compare to", "enode", nodeIDs[1])
@@ -421,7 +421,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 
 		// now add stuff so that we fetch it with live syncing
 
-		_, wait, err = uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
+		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 		if err != nil {
 			return err
 		}
@@ -453,6 +453,97 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		}
 		if uploaderSum != otherNodeSum {
 			return fmt.Errorf("live sync bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+		}
+
+		return nil
+	})
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+// TestTwoNodesFullSyncLive brings up one node, adds chunkCount * 4096 bytes to its localstore, then connects to it another fresh node.
+// it then waits for syncTime and checks that they have both synced correctly. It then adds another chunkCount to the uploader node
+// and waits for another syncTime, then checks for the correct sync by bin indexes
+func TestTwoNodesJustLive(t *testing.T) {
+	var (
+		chunkCount = 30000
+		syncTime   = 1 * time.Second
+	)
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+	})
+	defer sim.Close()
+
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	_, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		nodeIDs := sim.UpNodeIDs()
+
+		uploaderNodeStore := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
+
+		log.Debug("uploader node", "enode", nodeIDs[0])
+
+		id, err := sim.AddNodes(1)
+		if err != nil {
+			return err
+		}
+		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		if err != nil {
+			return err
+		}
+		nodeIDs = sim.UpNodeIDs()
+		syncingNodeStore := sim.NodeItem(nodeIDs[1], bucketKeyFileStore)
+
+		// wait for syncing
+		//put some data into just the first node
+		filesize := chunkCount * 4096
+		cctx := context.Background()
+		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
+		if err != nil {
+			return err
+		}
+		if err = wait(cctx); err != nil {
+			return err
+		}
+
+		// check that the sum of bin indexes is equal
+		log.Debug("compare to", "enode", nodeIDs[1])
+		uploaderNodeBinIDs := make([]uint64, 17)
+
+		log.Debug("checking pull subscription bin ids")
+		for po := 0; po <= 16; po++ {
+			until, err := uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				return err
+			}
+			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
+
+			uploaderNodeBinIDs[po] = until
+		}
+
+		// wait for live syncing
+		<-time.After(syncTime)
+
+		uploaderSum, otherNodeSum := 0, 0
+		for po, uploaderUntil := range uploaderNodeBinIDs {
+			shouldUntil, err := syncingNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				return err
+			}
+			otherNodeSum += int(shouldUntil)
+			uploaderSum += int(uploaderUntil)
+		}
+		if uploaderSum != otherNodeSum {
+			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 		}
 
 		return nil
