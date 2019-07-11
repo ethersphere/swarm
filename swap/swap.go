@@ -215,6 +215,7 @@ func (s *Swap) resetBalance(peerID enode.ID) {
 	s.balances[peerID] = 0
 }
 
+// encodeCheque encodes the cheque in the format used in the signing procedure
 func (s *Swap) encodeCheque(cheque *Cheque) []byte {
 	serialBytes := make([]byte, 32)
 	amountBytes := make([]byte, 32)
@@ -234,7 +235,7 @@ func (s *Swap) encodeCheque(cheque *Cheque) []byte {
 	return input
 }
 
-// hashes the cheque using the prefix that would be added by eth_Sign
+// sigHashCheque hashes the cheque using the prefix that would be added by eth_Sign
 func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 	input := crypto.Keccak256(s.encodeCheque(cheque))
 	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
