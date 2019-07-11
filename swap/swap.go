@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -50,13 +51,14 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
+	api                 PublicAPI
 	stateStore          state.Store          // stateStore is needed in order to keep balances across sessions
 	lock                sync.RWMutex         // lock the balances
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of balances for each peer
-	Service             *Service             // Service for running the procol
-	owner               *Owner               // contract access
-	params              *Params              // economic and operational parameters
+	backend             cswap.Backend
+	owner               *Owner  // contract access
+	params              *Params // economic and operational parameters
 	contractReference   *swap.Swap
 	paymentThreshold    int64 // balance difference required for requesting cheque
 	disconnectThreshold int64 // balance difference required for dropping peer
@@ -82,10 +84,11 @@ func NewDefaultParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend cswap.Backend) *Swap {
 	sw := &Swap{
 		stateStore:          stateStore,
 		balances:            make(map[enode.ID]int64),
+		backend:             backend,
 		cheques:             make(map[enode.ID]*Cheque),
 		params:              NewDefaultParams(),
 		paymentThreshold:    DefaultPaymentThreshold,

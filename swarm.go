@@ -126,7 +126,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		// create the accounting objects
-		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract)
+		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
@@ -459,9 +459,9 @@ func (s *Swarm) Stop() error {
 		s.ps.Stop()
 	}
 	if s.swap != nil {
-		if svc := s.swap.Service; svc != nil {
-			svc.Stop()
-		}
+		//if svc := s.swap.Service; svc != nil {
+		//svc.Stop()
+		//}
 		s.swap.Close()
 	}
 	if s.accountingMetrics != nil {
@@ -498,6 +498,10 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
+		}
+
+		if s.swap != nil {
+			protos = append(protos, s.swap.Protocols()...)
 		}
 	}
 	return
