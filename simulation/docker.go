@@ -20,7 +20,6 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/docker/go-connections/nat"
 )
 
 const (
@@ -166,7 +165,7 @@ func (n *DockerNode) Start() error {
 	args = append(args, "--bzzport", strconv.Itoa(dockerHTTPPort))
 	args = append(args, "--ws")
 	// TODO: Can we get the APIs from somewhere instead of hardcoding them here?
-	args = append(args, "--wsapi", "admin,net,debug,bzz,accounting")
+	args = append(args, "--wsapi", "admin,net,debug,bzz,accounting,hive")
 	args = append(args, "--wsport", strconv.Itoa(dockerWebsocketPort))
 	args = append(args, "--wsaddr", "0.0.0.0")
 	args = append(args, "--wsorigins", "*")
@@ -180,20 +179,7 @@ func (n *DockerNode) Start() error {
 		Image: n.adapter.image,
 		Cmd:   args,
 		Env:   n.config.Env,
-		ExposedPorts: nat.PortSet{
-			nat.Port(strconv.Itoa(dockerHTTPPort)):      struct{}{},
-			nat.Port(strconv.Itoa(dockerP2PPort)):       struct{}{},
-			nat.Port(strconv.Itoa(dockerWebsocketPort)): struct{}{},
-			nat.Port(strconv.Itoa(dockerPProfPort)):     struct{}{},
-		},
-	}, &container.HostConfig{
-		PortBindings: map[nat.Port][]nat.PortBinding{
-			nat.Port(strconv.Itoa(dockerHTTPPort)):      {{HostIP: "127.0.0.1", HostPort: "0"}},
-			nat.Port(strconv.Itoa(dockerP2PPort)):       {{HostIP: "127.0.0.1", HostPort: "0"}},
-			nat.Port(strconv.Itoa(dockerWebsocketPort)): {{HostIP: "127.0.0.1", HostPort: "0"}},
-			nat.Port(strconv.Itoa(dockerPProfPort)):     {{HostIP: "127.0.0.1", HostPort: "0"}},
-		},
-	}, nil, n.containerName())
+	}, &container.HostConfig{}, nil, n.containerName())
 	if err != nil {
 		return fmt.Errorf("failed to create container %s: %v", n.containerName(), err)
 	}
@@ -235,7 +221,7 @@ func (n *DockerNode) Start() error {
 		}
 	}()
 
-	// Get the container network ports
+	// Get container info
 	cinfo := types.ContainerJSON{}
 
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
@@ -246,30 +232,6 @@ func (n *DockerNode) Start() error {
 	}
 	if err != nil {
 		return fmt.Errorf("could not get container info: %v", err)
-	}
-
-	if val, ok := cinfo.NetworkSettings.Ports[nat.Port(fmt.Sprintf("%d/tcp", dockerHTTPPort))]; ok {
-		n.portmap[dockerHTTPPort] = fmt.Sprintf("%s:%s", val[0].HostIP, val[0].HostPort)
-	} else {
-		return fmt.Errorf("could not get management port for %s", n.containerName())
-	}
-
-	if val, ok := cinfo.NetworkSettings.Ports[nat.Port(fmt.Sprintf("%d/tcp", dockerP2PPort))]; ok {
-		n.portmap[dockerP2PPort] = fmt.Sprintf("%s:%s", val[0].HostIP, val[0].HostPort)
-	} else {
-		return fmt.Errorf("could not get p2p port for %s", n.containerName())
-	}
-
-	if val, ok := cinfo.NetworkSettings.Ports[nat.Port(fmt.Sprintf("%d/tcp", dockerWebsocketPort))]; ok {
-		n.portmap[dockerWebsocketPort] = fmt.Sprintf("%s:%s", val[0].HostIP, val[0].HostPort)
-	} else {
-		return fmt.Errorf("could not get websocket port for %s", n.containerName())
-	}
-
-	if val, ok := cinfo.NetworkSettings.Ports[nat.Port(fmt.Sprintf("%d/tcp", dockerPProfPort))]; ok {
-		n.portmap[dockerPProfPort] = fmt.Sprintf("%s:%s", val[0].HostIP, val[0].HostPort)
-	} else {
-		return fmt.Errorf("could not get pprof port for %s", n.containerName())
 	}
 
 	// Get the container IP addr
@@ -306,9 +268,9 @@ func (n *DockerNode) Start() error {
 		Running:     true,
 		Enode:       strings.Replace(p2pinfo.Enode, "127.0.0.1", n.ipAddr, 1),
 		BzzAddr:     swarminfo.BzzKey,
-		RPCListen:   fmt.Sprintf("ws://%s", n.portmap[dockerWebsocketPort]),
-		HTTPListen:  fmt.Sprintf("http://%s", n.portmap[dockerHTTPPort]),
-		PprofListen: fmt.Sprintf("http://%s", n.portmap[dockerPProfPort]),
+		RPCListen:   fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort),
+		HTTPListen:  fmt.Sprintf("http://%s:%d", n.ipAddr, dockerHTTPPort),
+		PprofListen: fmt.Sprintf("http://%s:%d", n.ipAddr, dockerPProfPort),
 	}
 
 	return nil
@@ -357,7 +319,7 @@ func buildImage(buildContext DockerBuildContext) (string, error) {
 	imageTag := "sim-docker:latest"
 
 	// Use a tag if one is defined
-	if buildContext.Tag == "" {
+	if buildContext.Tag != "" {
 		imageTag = buildContext.Tag
 	}
 
