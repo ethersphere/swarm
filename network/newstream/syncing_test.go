@@ -38,7 +38,7 @@ import (
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
 	var (
-		chunkCount = 20000
+		chunkCount = 50000
 		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -341,8 +341,8 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // and waits for another syncTime, then checks for the correct sync by bin indexes
 func TestTwoNodesFullSyncLive(t *testing.T) {
 	var (
-		chunkCount = 50000
-		syncTime   = 3 * time.Second
+		chunkCount = 20000
+		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
@@ -468,7 +468,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 // and waits for another syncTime, then checks for the correct sync by bin indexes
 func TestTwoNodesJustLive(t *testing.T) {
 	var (
-		chunkCount = 30000
+		chunkCount = 80000
 		syncTime   = 1 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -487,7 +487,6 @@ func TestTwoNodesJustLive(t *testing.T) {
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
-
 		uploaderNodeStore := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
 
 		log.Debug("uploader node", "enode", nodeIDs[0])
@@ -503,15 +502,13 @@ func TestTwoNodesJustLive(t *testing.T) {
 		nodeIDs = sim.UpNodeIDs()
 		syncingNodeStore := sim.NodeItem(nodeIDs[1], bucketKeyFileStore)
 
-		// wait for syncing
 		//put some data into just the first node
 		filesize := chunkCount * 4096
-		cctx := context.Background()
-		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
+		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 		if err != nil {
 			return err
 		}
-		if err = wait(cctx); err != nil {
+		if err = wait(ctx); err != nil {
 			return err
 		}
 

@@ -36,6 +36,8 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
+const dataChunkCount = 1000
+
 func TestIntervalsLive(t *testing.T) {
 	testIntervals(t, true, nil, false)
 	testIntervals(t, true, nil, true)
