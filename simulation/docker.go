@@ -63,7 +63,6 @@ type DockerNode struct {
 	adapter *DockerAdapter
 	status  NodeStatus
 	ipAddr  string
-	portmap map[int]string
 }
 
 func DefaultDockerAdapterConfig() DockerAdapterConfig {
@@ -131,7 +130,6 @@ func (a *DockerAdapter) NewNode(config NodeConfig) (Node, error) {
 		config:  config,
 		adapter: a,
 		status:  status,
-		portmap: make(map[int]string),
 	}
 	a.nodes[config.ID] = node
 	return node, nil
@@ -170,6 +168,7 @@ func (n *DockerNode) Start() error {
 	args = append(args, "--wsaddr", "0.0.0.0")
 	args = append(args, "--wsorigins", "*")
 	args = append(args, "--port", strconv.Itoa(dockerP2PPort))
+	args = append(args, "--natif", "eth0")
 
 	// Start the node via a container
 	ctx := context.Background()
@@ -239,7 +238,7 @@ func (n *DockerNode) Start() error {
 
 	// Wait for the node to start
 	var client *rpc.Client
-	wsAddr := fmt.Sprintf("ws://%s", n.portmap[dockerWebsocketPort])
+	wsAddr := fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort)
 	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
 		client, err = rpc.Dial(wsAddr)
 		if err == nil {
@@ -268,7 +267,7 @@ func (n *DockerNode) Start() error {
 		Running:     true,
 		Enode:       strings.Replace(p2pinfo.Enode, "127.0.0.1", n.ipAddr, 1),
 		BzzAddr:     swarminfo.BzzKey,
-		RPCListen:   fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort),
+		RPCListen:   wsAddr,
 		HTTPListen:  fmt.Sprintf("http://%s:%d", n.ipAddr, dockerHTTPPort),
 		PprofListen: fmt.Sprintf("http://%s:%d", n.ipAddr, dockerPProfPort),
 	}
