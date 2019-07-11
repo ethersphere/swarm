@@ -153,3 +153,19 @@ func NewID(name string, key string) ID {
 func (s ID) String() string {
 	return fmt.Sprintf("%s|%s", s.Name, s.Key)
 }
+
+//////////////// Temporary ////////////////
+
+// RetrieveRequestMsg is the protocol msg for chunk retrieve requests
+type RetrieveRequest struct {
+	Addr storage.Address
+}
+
+//Chunk delivery always uses the same message type....
+type ChunkDeliveryMsg struct {
+	Addr  storage.Address
+	SData []byte // the stored chunk Data (incl size)
+	peer  *Peer  // set in handleChunkDeliveryMsg
+}
+
+//////////////// Temporary ////////////////

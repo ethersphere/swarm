@@ -34,6 +34,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	bv "github.com/ethersphere/swarm/network/bitvector"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -53,6 +54,7 @@ var SyncerSpec = &protocols.Spec{
 		OfferedHashes{},
 		ChunkDelivery{},
 		WantedHashes{},
+		RetrieveRequest{},
 	},
 }
 
@@ -160,6 +162,8 @@ func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error
 			go s.handleWantedHashes(ctx, p, msg)
 		case *ChunkDelivery:
 			go s.handleChunkDelivery(ctx, p, msg)
+		case *RetrieveRequest:
+			go s.handleRetrieveRequest(ctx, p, msg)
 		default:
 			return fmt.Errorf("unknown message type: %T", msg)
 		}
@@ -182,7 +186,6 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 			log.Error("unsupported provider", "peer", p.ID(), "stream", v)
 			// tell the other peer we dont support this stream. this is non fatal
 			// this might not be fatal as we might not support all providers.
-			panic("for now")
 			return
 		}
 
@@ -417,7 +420,7 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 		p.Drop()
 	}
 	if e {
-		log.Debug("interval is empty for requested range", "e", e, "hashes", len(h)/HashSize, "msg", msg)
+		log.Debug("interval is empty for requested range", "e", e, "hashes", len(h)/HashSize, "ruid", msg.Ruid)
 		select {
 		case <-p.quit:
 			// prevent sending an empty batch that resulted from db shutdown
@@ -795,6 +798,56 @@ func (s *SlipStream) collectBatch(ctx context.Context, p *Peer, provider StreamP
 	}
 	return batch, *batchStartID, batchEndID, false, nil
 
+}
+
+// Deliver sends a storeRequestMsg protocol message to the peer
+// Depending on the `syncing` parameter we send different message types
+// This is legacy code that needs to be refactored out of this protocol
+func (s *SlipStream) deliver(ctx context.Context, chunk storage.Chunk, p *Peer, syncing bool) error {
+	var msg interface{}
+
+	metrics.GetOrRegisterCounter("peer.deliver", nil).Inc(1)
+
+	//we send different types of messages if delivery is for syncing or retrievals,
+	//even if handling and content of the message are the same,
+	//because swap accounting decides which messages need accounting based on the message type
+	if syncing {
+		msg = &ChunkDeliveryMsgSyncing{
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
+		}
+	} else {
+		msg = &ChunkDeliveryMsgRetrieval{
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
+		}
+	}
+
+	return p.Send(ctx, msg)
+}
+
+func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *RetrieveRequest) error {
+	log.Trace("handle retrieve request", "peer", p.ID(), "hash", req.Addr)
+
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
+	r := &storage.Request{
+		Addr:   req.Addr,
+		Origin: p.ID(),
+	}
+
+	//KLUDGE
+	c, err := s.providers["SYNC"].Get(ctx, r)
+	log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", p.ID())
+	syncing := false
+	err = s.deliver(ctx, chunk, 0, syncing)
+	if err != nil {
+		log.Error("sp.Deliver errored", "err", err)
+	}
+	//KLUDGE
+
+	return nil
 }
 
 func (s *SlipStream) Protocols() []p2p.Protocol {
