@@ -15,7 +15,6 @@
 package swap
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
@@ -34,18 +33,13 @@ var Spec = &protocols.Spec{
 	},
 }
 
-type Service struct {
-	swap    *Swap
-	backend *bind.ContractBackend
-}
-
 func (s *Swap) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
 			Name:    Spec.Name,
 			Version: Spec.Version,
 			Length:  Spec.Length(),
-			Run:     s.Service.run,
+			Run:     s.run,
 		},
 	}
 }
@@ -55,23 +49,27 @@ func (s *Swap) APIs() []rpc.API {
 		{
 			Namespace: "swap",
 			Version:   "1.0",
-			Service:   s.Service,
+			Service:   s.api,
 			Public:    false,
 		},
 	}
 }
 
-func (ss *Service) Start(server *p2p.Server) error {
+func (s *Swap) Start(server *p2p.Server) error {
 	log.Info("Swap service started")
 	return nil
 }
 
-func (ss *Service) Stop() error {
+func (s *Swap) Stop() error {
 	return nil
 }
 
-func (ss *Service) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	panic("wtf")
 	protoPeer := protocols.NewPeer(p, rw, Spec)
-	swapPeer := NewPeer(protoPeer, ss.swap, ss.backend)
+	swapPeer := NewPeer(protoPeer, s, s.backend)
 	return swapPeer.Run(swapPeer.handleMsg)
+}
+
+type PublicAPI struct {
 }

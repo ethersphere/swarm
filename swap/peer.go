@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -33,10 +34,10 @@ var ErrDontOwe = errors.New("no negative balance")
 type Peer struct {
 	*protocols.Peer
 	swap    *Swap
-	backend *bind.ContractBackend
+	backend cswap.Backend
 }
 
-func NewPeer(p *protocols.Peer, s *Swap, backend *bind.ContractBackend) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend) *Peer {
 	return &Peer{
 		Peer:    p,
 		swap:    s,
@@ -179,7 +180,9 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 
 	// handling error
 	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
-	sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	ref := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
+	ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	//sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 	return nil
 }
 
