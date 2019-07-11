@@ -570,7 +570,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		//TODO BATCH TIMEOUT?
 	}
 
-	if err := s.requestStreamRange(ctx, p, w.stream, msg.LastIndex+1); err != nil {
+	if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
 		log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 		p.Drop()
 	}
