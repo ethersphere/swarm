@@ -37,8 +37,6 @@ import (
 // 1. All subscriptions are created
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
-
-	//defer profile.Start(profile.CPUProfile).Stop()
 	var (
 		chunkCount = 20000
 		syncTime   = 3 * time.Second
@@ -56,6 +54,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//defer profile.Start(profile.CPUProfile).Stop()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
@@ -337,9 +336,12 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	}
 }
 
+// TestTwoNodesFullSyncLive brings up one node, adds chunkCount * 4096 bytes to its localstore, then connects to it another fresh node.
+// it then waits for syncTime and checks that they have both synced correctly. It then adds another chunkCount to the uploader node
+// and waits for another syncTime, then checks for the correct sync by bin indexes
 func TestTwoNodesFullSyncLive(t *testing.T) {
 	var (
-		chunkCount = 1000
+		chunkCount = 10000
 		syncTime   = 3 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -361,7 +363,6 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 
 		uploaderNodeStore := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
 
-		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
 
 		//put some data into just the first node

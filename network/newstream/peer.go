@@ -125,6 +125,7 @@ type want struct {
 	ruid      uint
 	from      uint64
 	to        *uint64
+	head      bool
 	stream    ID
 	hashes    map[string]bool
 	bv        *bitvector.BitVector
