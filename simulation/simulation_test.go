@@ -42,7 +42,7 @@ func TestAdapters(t *testing.T) {
 		}
 		defer os.RemoveAll(tmpdir)
 		adapter, err := NewExecAdapter(ExecAdapterConfig{
-			// TODO: fix this
+			// TODO: fix this, build binary?
 			ExecutablePath:    "/home/rafael/go/bin/swarm",
 			BaseDataDirectory: tmpdir,
 		})
@@ -191,21 +191,18 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 
 	log.Info("Waiting for healthy kademlia...")
 
-outer:
-	for {
-		for i := 0; i < count; i++ {
-			healthy := &network.Health{}
-
-			if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Status().BzzAddr[2:]]); err != nil {
-				t.Errorf("failed to call hive_getHealthInfo")
-			}
-			if !healthy.Healthy() {
-				log.Info("Node isn't healthy, checking again all nodes...", "node", nodes[i].Status().ID)
-				time.Sleep(500 * time.Millisecond)
-				continue outer
-			}
+	for i := 0; i < count; {
+		healthy := &network.Health{}
+		if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Status().BzzAddr[2:]]); err != nil {
+			t.Errorf("failed to call hive_getHealthInfo")
 		}
-		break
+		if healthy.Healthy() {
+			i++
+		} else {
+			log.Info("Node isn't healthy, checking again all nodes...", "node", nodes[i].Status().ID)
+			time.Sleep(500 * time.Millisecond)
+			i = 0 // Start checking all nodes again
+		}
 	}
 
 	// Check hive output
