@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -249,9 +250,11 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 			go func() {
 				// ask the tip (cursor + 1)
 				err := st.requestStreamHead(ctx, p, s.Stream, s.Cursor+1)
-				if err != nil {
+				// https://github.com/golang/go/issues/4373 - use of closed network connection
+				if err != nil && err != p2p.ErrShuttingDown && !strings.Contains(err.Error(), "use of closed network connection") {
 					log.Error("had an error with initial stream head fetch", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor+1, "err", err)
-					panic("dont panic")
+					// TODO: maybe not to panic here, but just to log any error?
+					//panic(fmt.Errorf("request stream head peer %s stream %s from %v: %v", p, s.Stream, s.Cursor+1, err))
 					p.Drop()
 				}
 			}()
