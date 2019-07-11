@@ -149,6 +149,8 @@ func (swap *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 	}
 
 	return nil, errors.New("Peer not found")
+}
+
 //GetAllBalances returns the balances for all known peers
 func (swap *Swap) GetAllBalances() map[enode.ID]int64 {
 	swap.lock.RLock()
