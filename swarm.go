@@ -493,6 +493,10 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
 		}
+
+		if s.swap != nil {
+			protos = append(protos, s.swap.Protocols()...)
+		}
 	}
 	return
 }
