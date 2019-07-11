@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
@@ -544,9 +545,9 @@ func (s *Swarm) APIs() []rpc.API {
 	var swapService *Info
 	if s.config.SwapEnabled {
 		// Swap public API
-		swapService = &Info{s.config, s.swap.GetParams()}
+		swapService = &Info{s.config, s.swap.GetParams(), s.swap}
 	} else {
-		swapService = &Info{s.config, nil}
+		swapService = &Info{s.config, nil, nil}
 	}
 
 	swapPublicApi := rpc.API{
@@ -578,8 +579,13 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 type Info struct {
 	*api.Config
 	*cswap.Params
+	*swap.Swap
 }
 
-func (s *Info) Info() *Info {
-	return s
+func (i *Info) Info() *Info {
+	return i
+}
+
+func (i *Info) Balances() map[enode.ID]int64 {
+	return i.Swap.GetAllBalances()
 }
