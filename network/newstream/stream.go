@@ -54,7 +54,6 @@ var SyncerSpec = &protocols.Spec{
 		OfferedHashes{},
 		ChunkDelivery{},
 		WantedHashes{},
-		RetrieveRequest{},
 	},
 }
 
