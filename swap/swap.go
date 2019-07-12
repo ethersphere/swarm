@@ -44,7 +44,7 @@ const (
 	deployDelay                       = 1 * time.Second // delay between retries
 	defaultCashInDelay                = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
 	DefaultInitialDepositAmount       = 0               // TODO: deliberate value for now; needs experimentation
-	DefaultHarddepositTimeoutDuration = 24 * time.Hour  // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
+	defaultHarddepositTimeoutDuration = 24 * time.Hour  // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
 )
 
 // SwAP Swarm Accounting Protocol
@@ -289,7 +289,7 @@ func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) er
 	opts.Context = ctx
 
 	log.Info(fmt.Sprintf("Deploying new swap (owner: %v)", opts.From.Hex()))
-	address, err := s.deployLoop(opts, backend, s.owner.address, big.NewInt(int64(DefaultHarddepositTimeoutDuration)))
+	address, err := s.deployLoop(opts, backend, s.owner.address, defaultHarddepositTimeoutDuration))
 	if err != nil {
 		log.Error(fmt.Sprintf("unable to deploy swap: %v", err))
 		return err
@@ -301,13 +301,13 @@ func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) er
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
-func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner common.Address, harddepositTimeout *big.Int) (addr common.Address, err error) {
+func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-		if _, tx, err = s.contractReference.Deploy(opts, backend, owner, harddepositTimeout); err != nil {
+		if _, tx, err = s.contractReference.Deploy(opts, backend, owner, big.NewInt(int64(defaultHarddepositTimeoutDuration)); err != nil {
 			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
 			continue
 		}
