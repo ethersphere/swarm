@@ -124,13 +124,16 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	//load existing balances from the state store
 	err = s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
+		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.ID().String()))
 		return
 	}
 
 	//check if balance with peer is over the disconnect threshold
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
 		//if so, return error in order to abort the transfer
-		return fmt.Errorf("balance for peer %s went over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
+		disconnectMessage := fmt.Sprintf("balance for peer %s is over the disconnect threshold %v, disconnecting", peer.ID().String(), s.disconnectThreshold)
+		log.Warn(disconnectMessage)
+		return errors.New(disconnectMessage)
 	}
 
 	//adjust the balance
@@ -141,18 +144,23 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 	if err != nil {
+		log.Error(fmt.Sprintf("error while storing balance for peer %s", peer.ID().String()))
 		return err
 	}
 
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
+	log.Info(fmt.Sprintf("balance for peer %s after accounting: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 
 	//check if balance with peer is over the payment threshold
 	if peerBalance >= s.paymentThreshold {
 		//if so, send cheque request message
+		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, requesting cheque", peer.ID().String(), s.paymentThreshold))
 		chequeRequestMessage := &ChequeRequestMsg{
 			Beneficiary: s.owner.address,
 		}
-		return peer.Send(context.TODO(), chequeRequestMessage)
+		err = peer.Send(context.TODO(), chequeRequestMessage)
+		if err != nil {
+			log.Error(fmt.Sprintf("error while sending cheque request message to peer %s: %s", peer.ID().String(), err.Error()))
+		}
 	}
 
 	return
