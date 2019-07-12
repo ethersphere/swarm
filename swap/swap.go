@@ -56,6 +56,7 @@ type Swap struct {
 	lock                sync.RWMutex         // lock the balances
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of balances for each peer
+	peers               map[enode.ID]*Peer
 	backend             cswap.Backend
 	owner               *Owner  // contract access
 	params              *Params // economic and operational parameters
@@ -90,6 +91,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		balances:            make(map[enode.ID]int64),
 		backend:             backend,
 		cheques:             make(map[enode.ID]*Cheque),
+		peers:               make(map[enode.ID]*Peer),
 		params:              NewDefaultParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
@@ -120,6 +122,8 @@ func (s *Swap) DeploySuccess() string {
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	swapPeer := s.peers[peer.ID()]
 
 	//load existing balances from the state store
 	err = s.loadState(peer)
@@ -157,7 +161,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		chequeRequestMessage := &ChequeRequestMsg{
 			Beneficiary: s.owner.address,
 		}
-		err = peer.Send(context.TODO(), chequeRequestMessage)
+		err = swapPeer.Send(context.TODO(), chequeRequestMessage)
+
 		if err != nil {
 			log.Error(fmt.Sprintf("error while sending cheque request message to peer %s: %s", peer.ID().String(), err.Error()))
 		}
