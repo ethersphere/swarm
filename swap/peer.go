@@ -209,6 +209,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	case err := <-err:
 		if err != nil {
 			log.Error("Got error when calling submitChequeBeneficiary: ", err)
+			return err
 		}
 	case r := <-receipt:
 		log.Info("Transaction submitted to the blockchain", r)
