@@ -208,12 +208,15 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 
 // TODO: Error handling
 func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
+	log.Info("received error msg")
 	// maybe balance disagreement
 	return nil
 }
 
 func (sp *Peer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
 	// TODO; correct here?
+	log.Info("received confirm msg")
 	sp.swap.resetBalance(sp.ID())
+	log.Info(fmt.Sprintf("resetting balance for peer %s", sp.ID().String()))
 	return nil
 }
