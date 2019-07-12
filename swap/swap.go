@@ -148,7 +148,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return err
 	}
 
-	log.Info(fmt.Sprintf("balance for peer %s after accounting: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
+	log.Debug(fmt.Sprintf("balance for peer %s after accounting: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 
 	//check if balance with peer is over the payment threshold
 	if peerBalance >= s.paymentThreshold {
