@@ -130,6 +130,13 @@ func TestChunkDelivery(t *testing.T) {
 	}
 }
 
+/*
+more test cases:
+1. connect 3 nodes in chain and make sure that the retrieve request is being forwarded between the nodes
+2. make sure that the whole thing plays out with a root hash and an actual trie that needs to be retrieved
+3. make sure it works with manifests too
+*/
+
 func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	n := ctx.Config.Node()
 	addr := network.NewAddr(n)
