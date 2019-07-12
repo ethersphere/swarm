@@ -67,6 +67,7 @@ func (s *Swap) Stop() error {
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 	swapPeer := NewPeer(protoPeer, s, s.backend)
+	s.peers[p.ID()] = swapPeer
 	return swapPeer.Run(swapPeer.handleMsg)
 }
 
