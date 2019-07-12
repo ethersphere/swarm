@@ -29,6 +29,10 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
+//TODO:
+// - write test that brings up a bigger cluster, then tests all individual nodes with localstore get to get the chunks that were
+// uploaded to the first node
+
 // TestTwoNodesFullSync connects two nodes, uploads content to one node and expects the
 // uploader node's chunks to be synced to the second node. This is expected behaviour since although
 // both nodes might share address bits, due to kademlia depth=0 when under ProxBinSize - this will
