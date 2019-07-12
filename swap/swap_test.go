@@ -19,6 +19,7 @@ package swap
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -365,68 +367,64 @@ func TestSignContent(t *testing.T) {
 	}
 }
 
+// TestContractIntegration tests a end-to-end cheque interaction.
+// First we deploy both a issuer and a beneficiary contract,
+// we then send a cheque and try to cash this in.
 func TestContractIntegration(t *testing.T) {
-	// Generate a new random account and a funded backendulator
-	var beneficiaryKey, _ = crypto.GenerateKey()
-	var beneficiaryAddr = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
 
 	log.Debug("creating test swap")
-	swap, dir := createTestSwap(t)
+
+	issuerSwap, dir := createTestSwap(t)
 	defer os.RemoveAll(dir)
 
-	log.Debug("creating backendulated backend")
+	log.Debug("creating simulated backend")
 
-	gasLimit := uint64(100000000000000000)
+	gasLimit := uint64(10000000)
 	balance := new(big.Int)
-	balance.SetString("1000000000000000000000", 10)
+	balance.SetString("1000000000", 10)
 	backend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		swap.owner.address: {Balance: balance},
-		beneficiaryAddr:    {Balance: balance},
+		issuerSwap.owner.address: {Balance: balance},
+		beneficiaryAddress:       {Balance: balance},
 	}, gasLimit)
 
-	ctx := context.TODO()
-	err := testDeploy(ctx, backend, swap)
+	log.Debug("deploy issuer swap")
+
+	var addr common.Address
+	addr, ss, err := testDeploy(ctx, backend, issuerSwap.owner.privateKey, issuerSwap.owner.address)
 	if err != nil {
 		t.Fatal(err)
 	}
+	issuerSwap.owner.Contract = addr
 
-	log.Debug("deployed.")
+	log.Debug("deployed. signing cheque")
 
-	testAmount := 42
-
-	cheque := &Cheque{
-		ChequeParams: ChequeParams{
-			Serial:      uint64(1),
-			Amount:      uint64(testAmount),
-			Timeout:     defaultCashInDelay,
-			Contract:    swap.owner.Contract,
-			Beneficiary: beneficiaryAddr,
-		},
-	}
-
-	log.Debug("signing cheque")
-
-	cheque.Sig, err = swap.signContent(cheque)
+	cheque := newTestCheque()
+	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
+	cheque.Sig, err = issuerSwap.signContent(cheque)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Context = ctx
 
 	log.Debug("sending cheque...")
 
-	tx, err := swap.contractReference.SubmitChequeBeneficiary(
+	ctx := context.TODO()
+	opts := bind.NewKeyedTransactor(beneficiaryKey)
+	opts.Value = big.NewInt(0)
+	opts.Context = ctx
+
+	tx, err := issuerSwap.contractReference.SubmitChequeBeneficiary(
 		opts,
 		big.NewInt(int64(cheque.Serial)),
 		big.NewInt(int64(cheque.Amount)),
 		big.NewInt(int64(cheque.Timeout)),
 		cheque.Sig)
 
-	backend.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	backend.Commit()
+	log.Debug("getting receipt")
 
 	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
 
@@ -434,13 +432,15 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// check if success
 	if receipt.Status != 1 {
 		t.Fatalf("Wrong status %d", receipt.Status)
 	}
 
-	result, err := swap.contractReference.Instance.Cheques(nil, beneficiaryAddr)
+	// check state, check that cheque is indeed there
+	result, err := issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
 
-	fmt.Printf("%v\n", result)
+	log.Debug("cheques result", "result", result)
 
 	if result.Serial.Uint64() != cheque.Serial {
 		t.Fatalf("Wrong serial %d", result.Serial)
@@ -452,25 +452,21 @@ func TestContractIntegration(t *testing.T) {
 
 	backend.AdjustTime(30 * time.Second)
 
+	// test cash in, we need balance in the contract
 	depoTx := types.NewTransaction(
 		1,
-		swap.owner.Contract,
+		issuerSwap.owner.Contract,
 		big.NewInt(int64(20)),
 		50000,
 		big.NewInt(int64(0)),
 		[]byte{},
 	)
 
-	depoTxs, _ := types.SignTx(depoTx, types.HomesteadSigner{}, swap.owner.privateKey)
+	depoTxs, _ := types.SignTx(depoTx, types.HomesteadSigner{}, issuerSwap.owner.privateKey)
 
 	backend.SendTransaction(context.TODO(), depoTxs)
 
-	beneficiaryAgent := common.Address{}
-	requestPayout := big.NewInt(int64(cheque.Amount))
-	beneficiarySig := []byte{}
-	expiry := big.NewInt(int64(0))
-	calleePayout := big.NewInt(int64(cheque.Amount))
-	tx, err = swap.contractReference.Instance.CashCheque(opts, beneficiaryAddr, beneficiaryAgent, requestPayout, beneficiarySig, expiry, calleePayout)
+	tx, err = issuerSwap.contractReference.Instance.CashCheque(opts, beneficiaryAddress)
 
 	backend.Commit()
 
@@ -480,20 +476,21 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatalf("Wrong status %d", receipt.Status)
 	}
 
-	result, err = swap.contractReference.Instance.Cheques(nil, beneficiaryAddr)
+	// check again the status, check paid out is increase by amount
+	result, err = issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
 
 	fmt.Printf("%v\n", result)
 
 }
 
-func testDeploy(ctx context.Context, backend *backends.SimulatedBackend, swap *Swap) error {
-	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+func testDeploy(ctx context.Context, backend *backends.SimulatedBackend, prvKey *ecdsa.PrivateKey, address common.Address) (addr common.Address, ss *contract.SimpleSwap, err error) {
+	opts := bind.NewKeyedTransactor(prvKey)
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	if _, _, err := swap.contractReference.Deploy(opts, backend, swap.owner.address); err != nil {
-		return nil
+	if addr, _, ss, err = contract.DeploySimpleSwap(opts, backend, address); err != nil {
+		return common.Address{}, nil, err
 	}
 	backend.Commit()
-	return nil
+	return addr, ss, nil
 }
