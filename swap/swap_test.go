@@ -17,18 +17,24 @@
 package swap
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	mrand "math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -36,8 +42,21 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel           = flag.Int("loglevel", 2, "verbosity of logs")
+	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
+	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
+	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
+	testSwapAdress     = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
 )
+
+// booking represents an accounting movement in relation to a particular node: `peer`
+// if `amount` is positive, it means the node which adds this booking will be credited in respect to `peer`
+// otherwise it will be debited
+type booking struct {
+	amount int64
+	peer   *protocols.Peer
+}
 
 func init() {
 	flag.Parse()
@@ -75,50 +94,126 @@ func TestGetPeerBalance(t *testing.T) {
 	}
 }
 
+func TestGetAllBalances(t *testing.T) {
+	//create a test swap account
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	if len(swap.balances) != 0 {
+		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
+	}
+
+	//test balance addition for peer
+	testPeer := newDummyPeer()
+	swap.balances[testPeer.ID()] = 808
+	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
+
+	//test successive balance addition for peer
+	testPeer2 := newDummyPeer()
+	swap.balances[testPeer2.ID()] = 909
+	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
+
+	//test balance change for peer
+	swap.balances[testPeer.ID()] = 303
+	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
+}
+
+func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
+	balances := swap.GetAllBalances()
+	if !reflect.DeepEqual(balances, expectedBalances) {
+		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
+	}
+}
+
 //Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
+	var bookings []booking
+
+	// credits to peer 1
 	testPeer := newDummyPeer()
-	amount := mrand.Intn(100)
-	cnt := 1 + mrand.Intn(10)
-	for i := 0; i < cnt; i++ {
-		swap.Add(int64(amount), testPeer.Peer)
-	}
-	expectedBalance := int64(cnt * amount)
-	realBalance := swap.balances[testPeer.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d credits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
-	}
+	bookingAmount := int64(mrand.Intn(100))
+	bookingQuantity := 1 + mrand.Intn(10)
+	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer.Peer)
 
+	// debits to peer 2
 	testPeer2 := newDummyPeer()
-	amount = mrand.Intn(100)
-	cnt = 1 + mrand.Intn(10)
-	for i := 0; i < cnt; i++ {
-		swap.Add(0-int64(amount), testPeer2.Peer)
-	}
-	expectedBalance = int64(0 - (cnt * amount))
-	realBalance = swap.balances[testPeer2.ID()]
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
-	}
+	bookingAmount = 0 - int64(mrand.Intn(100))
+	bookingQuantity = 1 + mrand.Intn(10)
+	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer2.Peer)
 
-	//mixed debits and credits
-	amount1 := mrand.Intn(100)
-	amount2 := mrand.Intn(55)
-	amount3 := mrand.Intn(999)
-	swap.Add(int64(amount1), testPeer2.Peer)
-	swap.Add(int64(0-amount2), testPeer2.Peer)
-	swap.Add(int64(0-amount3), testPeer2.Peer)
-
-	expectedBalance = expectedBalance + int64(amount1-amount2-amount3)
-	realBalance = swap.balances[testPeer2.ID()]
-
-	if expectedBalance != realBalance {
-		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
+	// credits and debits to peer 2
+	mixedBookings := []booking{
+		booking{int64(mrand.Intn(100)), testPeer2.Peer},
+		booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
 	}
+	addBookings(swap, mixedBookings)
+	verifyBookings(t, swap, append(bookings, mixedBookings...))
+}
+
+// generate bookings based on parameters, apply them to a Swap struct and verify the result
+// append generated bookings to slice pointer
+func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
+	*bookings = append(*bookings, peerBookings...)
+	addBookings(swap, peerBookings)
+	verifyBookings(t, swap, *bookings)
+}
+
+// generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
+func generateBookings(amount int64, quantity int, peer *protocols.Peer) (bookings []booking) {
+	for i := 0; i < quantity; i++ {
+		bookings = append(bookings, booking{amount, peer})
+	}
+	return
+}
+
+// take a Swap struct and a list of bookings, and call the accounting function for each of them
+func addBookings(swap *Swap, bookings []booking) {
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		swap.Add(booking.amount, booking.peer)
+	}
+}
+
+// take a Swap struct and a list of bookings, and verify the resulting balances are as expected
+func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
+	expectedBalances := calculateExpectedBalances(swap, bookings)
+	realBalances := swap.balances
+	if !reflect.DeepEqual(expectedBalances, realBalances) {
+		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances)))
+	}
+}
+
+// converts a balance map to a one-line string representation
+func stringifyBalance(balance map[enode.ID]int64) string {
+	marshaledBalance, err := json.Marshal(balance)
+	if err != nil {
+		return err.Error()
+	}
+	return string(marshaledBalance)
+}
+
+// take a swap struct and a list of bookings, and calculate the expected balances.
+// the result is a map which stores the balance for all the peers present in the bookings,
+// from the perspective of the node that loaded the Swap struct.
+func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int64 {
+	expectedBalances := make(map[enode.ID]int64)
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		peerID := booking.peer.ID()
+		peerBalance := expectedBalances[peerID]
+		// balance is not expected to be affected once past the disconnect threshold
+		if peerBalance < swap.disconnectThreshold {
+			peerBalance += booking.amount
+		}
+		expectedBalances[peerID] = peerBalance
+	}
+	return expectedBalances
 }
 
 //try restoring a balance from state store
@@ -171,7 +266,9 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := New(stateStore, key, common.Address{})
+
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
+	swap := New(stateStore, key, common.Address{}, contractBackend)
 	return swap, dir
 }
 
@@ -187,4 +284,79 @@ func newDummyPeer() *dummyPeer {
 		Peer: protoPeer,
 	}
 	return dummy
+}
+
+func newTestCheque() *Cheque {
+	contract := common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
+	cashInDelay := 10
+
+	cheque := &Cheque{
+		ChequeParams: ChequeParams{
+			Contract:    contract,
+			Serial:      uint64(1),
+			Amount:      uint64(42),
+			Timeout:     uint64(cashInDelay),
+			Beneficiary: beneficiaryAddress,
+		},
+	}
+
+	return cheque
+}
+
+func TestEncodeCheque(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	// encode the cheque
+	encoded := swap.encodeCheque(expectedCheque)
+	// expected value (computed through truffle/js)
+	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfedd0000000000000000000000000000000000000000000000000000000000000001b8d424e9662fe0837fb1d728f1ac97cebb1085fe000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000000a")
+	if !bytes.Equal(encoded, expected) {
+		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x",
+			expected, encoded)
+	}
+}
+
+func TestSigHashCheque(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	// compute the hash that will be signed
+	hash := swap.sigHashCheque(expectedCheque)
+	// expected value (computed through truffle/js)
+	expected := common.Hex2Bytes("305cf876a5c6a24430743695fa5a42d40f8d59e174921520c8efe2d01c9b2a6a")
+	if !bytes.Equal(hash, expected) {
+		t.Fatal(fmt.Sprintf("Unexpected sigHash of cheque. Expected: %x, result is: %x",
+			expected, hash))
+	}
+}
+
+func TestSignContent(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	var err error
+
+	swap.owner.privateKey, err = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+
+	// sign the cheque
+	sig, err := swap.signContent(expectedCheque)
+	// expected value (computed through truffle/js)
+	expected := common.Hex2Bytes("833ffa1515b545ce75f4cbe520e6d22bcd76f8e688920e82cf9800a2a7891dda7d4b9f702d6da1b026c3bd860b00028ecce0003daba887c22b5926c26452136b1c")
+	if err != nil {
+		t.Fatal(fmt.Sprintf("Error in signing: %s", err))
+	}
+	if !bytes.Equal(sig, expected) {
+		t.Fatal(fmt.Sprintf("Unexpected signature for cheque. Expected: %x, result is: %x",
+			expected, sig))
+	}
 }

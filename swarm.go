@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
@@ -126,7 +127,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		// create the accounting objects
-		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract)
+		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
@@ -453,9 +454,9 @@ func (s *Swarm) Stop() error {
 		s.ps.Stop()
 	}
 	if s.swap != nil {
-		if svc := s.swap.Service; svc != nil {
-			svc.Stop()
-		}
+		//if svc := s.swap.Service; svc != nil {
+		//svc.Stop()
+		//}
 		s.swap.Close()
 	}
 	if s.accountingMetrics != nil {
@@ -492,6 +493,10 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
+		}
+
+		if s.swap != nil {
+			protos = append(protos, s.swap.Protocols()...)
 		}
 	}
 	return
@@ -533,9 +538,9 @@ func (s *Swarm) APIs() []rpc.API {
 	var swapService *Info
 	if s.config.SwapEnabled {
 		// Swap public API
-		swapService = &Info{s.config, s.swap.GetParams()}
+		swapService = &Info{s.config, s.swap.GetParams(), s.swap}
 	} else {
-		swapService = &Info{s.config, nil}
+		swapService = &Info{s.config, nil, nil}
 	}
 
 	swapPublicApi := rpc.API{
@@ -567,8 +572,13 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 type Info struct {
 	*api.Config
 	*cswap.Params
+	*swap.Swap
 }
 
-func (s *Info) Info() *Info {
-	return s
+func (i *Info) Info() *Info {
+	return i
+}
+
+func (i *Info) Balances() map[enode.ID]int64 {
+	return i.Swap.GetAllBalances()
 }

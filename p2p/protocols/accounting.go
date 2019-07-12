@@ -69,8 +69,8 @@ type Price struct {
 // This method then returns the correct signed amount,
 // depending on who pays, which is identified by the `payer` argument:
 // `Send` will pass a `Sender` payer, `Receive` will pass the `Receiver` argument.
-// Thus: If Sending and sender pays, amount positive, otherwise negative
-// If Receiving, and receiver pays, amount positive, otherwise negative
+// Thus: If Sending and sender pays, amount negative, otherwise positive
+// If Receiving, and receiver pays, amount negative, otherwise positive
 func (p *Price) For(payer Payer, size uint32) int64 {
 	price := p.Value
 	if p.PerByte {

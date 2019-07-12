@@ -23,7 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/crypto"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -33,13 +33,15 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap *Swap
+	swap    *Swap
+	backend cswap.Backend
 }
 
-func NewPeer(p *protocols.Peer, s *Swap) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend) *Peer {
 	return &Peer{
-		Peer: p,
-		swap: s,
+		Peer:    p,
+		swap:    s,
+		backend: backend,
 	}
 }
 
@@ -83,7 +85,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 		return fmt.Errorf("Unexpected message type: %v", err)
 	}
 
-	peer := req.Peer
+	peer := sp.ID()
 
 	sp.swap.lock.Lock()
 	defer sp.swap.lock.Unlock() //TODO: Do we really want to block so long?
@@ -126,11 +128,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	}
 	cheque.ChequeParams.Timeout = defaultCashInDelay
 	cheque.ChequeParams.Contract = sp.swap.owner.Contract
-	pk, err := crypto.UnmarshalPubkey(req.PubKey)
-	if err != nil {
-		return err
-	}
-	cheque.Beneficiary = crypto.PubkeyToAddress(*pk)
+	cheque.Beneficiary = req.Beneficiary
 	cheque.Sig, err = sp.swap.signContent(cheque)
 	if err != nil {
 		return err
@@ -178,12 +176,13 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	//TODO: input parameter checks?
 
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
-	//TODO: ??????
-	opts.Value = big.NewInt(int64(cheque.Amount))
 	opts.Context = ctx
+
 	// handling error
 	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
-	sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	ref := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
+	ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	//sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 	return nil
 }
 

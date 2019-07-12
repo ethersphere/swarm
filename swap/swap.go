@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -51,14 +52,17 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore        state.Store          // stateStore is needed in order to keep balances across sessions
-	lock              sync.RWMutex         // lock the balances
-	balances          map[enode.ID]int64   // map of balances for each peer
-	cheques           map[enode.ID]*Cheque // map of balances for each peer
-	Service           *Service             // Service for running the procol
-	owner             *Owner               // contract access
-	params            *Params              // economic and operational parameters
-	contractReference *swap.Swap
+	api                 PublicAPI
+	stateStore          state.Store          // stateStore is needed in order to keep balances across sessions
+	lock                sync.RWMutex         // lock the balances
+	balances            map[enode.ID]int64   // map of balances for each peer
+	cheques             map[enode.ID]*Cheque // map of balances for each peer
+	backend             cswap.Backend
+	owner               *Owner  // contract access
+	params              *Params // economic and operational parameters
+	contractReference   *swap.Swap
+	paymentThreshold    int64 // balance difference required for requesting cheque
+	disconnectThreshold int64 // balance difference required for dropping peer
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -81,12 +85,15 @@ func NewDefaultParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend cswap.Backend) *Swap {
 	sw := &Swap{
-		stateStore: stateStore,
-		balances:   make(map[enode.ID]int64),
-		cheques:    make(map[enode.ID]*Cheque),
-		params:     NewDefaultParams(),
+		stateStore:          stateStore,
+		balances:            make(map[enode.ID]int64),
+		backend:             backend,
+		cheques:             make(map[enode.ID]*Cheque),
+		params:              NewDefaultParams(),
+		paymentThreshold:    DefaultPaymentThreshold,
+		disconnectThreshold: DefaultDisconnectThreshold,
 	}
 	sw.contractReference = swap.New()
 	sw.owner = sw.createOwner(prvkey, contract)
@@ -120,15 +127,36 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if err != nil && err != state.ErrNotFound {
 		return
 	}
+
+	//check if balance with peer is over the disconnect threshold
+	if s.balances[peer.ID()] >= s.disconnectThreshold {
+		//if so, return error in order to abort the transfer
+		return fmt.Errorf("balance for peer %s went over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
+	}
+
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
+
 	//save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
+	if err != nil {
+		return err
+	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
-	return err
+
+	//check if balance with peer is over the payment threshold
+	if peerBalance >= s.paymentThreshold {
+		//if so, send cheque request message
+		chequeRequestMessage := &ChequeRequestMsg{
+			Beneficiary: s.owner.address,
+		}
+		return peer.Send(context.TODO(), chequeRequestMessage)
+	}
+
+	return
 }
 
 //GetPeerBalance returns the balance for a given peer
@@ -150,6 +178,13 @@ func (swap *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 	}
 
 	return nil, errors.New("Peer not found")
+}
+
+//GetAllBalances returns the balances for all known peers
+func (swap *Swap) GetAllBalances() map[enode.ID]int64 {
+	swap.lock.RLock()
+	defer swap.lock.RUnlock()
+	return swap.balances
 }
 
 //load balances from the state store (persisted)
@@ -185,24 +220,49 @@ func (swap *Swap) Close() {
 // resetBalance is called:
 // * for the creditor: on cheque receival
 // * for the debitor: on confirmation receival
-func (s *Swap) resetBalance(peer enode.ID) {
+func (s *Swap) resetBalance(peerID enode.ID) {
 	//TODO: reset balance based on actual amount
-	s.balances[peer] = 0
+	//Lock() is not applied because it is expected to be done in the handleChequeRequestMsg call
+	s.balances[peerID] = 0
+}
+
+// encodeCheque encodes the cheque in the format used in the signing procedure
+func (s *Swap) encodeCheque(cheque *Cheque) []byte {
+	serialBytes := make([]byte, 32)
+	amountBytes := make([]byte, 32)
+	timeoutBytes := make([]byte, 32)
+	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
+	// encoded in BigEndian because EVM uses BigEndian encoding
+	binary.BigEndian.PutUint64(serialBytes[24:], cheque.Serial)
+	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
+	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
+	// construct the actual cheque
+	input := cheque.Contract.Bytes()
+	input = append(input, serialBytes[:]...)
+	input = append(input, cheque.Beneficiary.Bytes()...)
+	input = append(input, amountBytes[:]...)
+	input = append(input, timeoutBytes[:]...)
+
+	return input
+}
+
+// sigHashCheque hashes the cheque using the prefix that would be added by eth_Sign
+func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
+	input := crypto.Keccak256(s.encodeCheque(cheque))
+	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
+	return crypto.Keccak256([]byte(withPrefix))
 }
 
 // signContent signs the cheque
 func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
-	serialBytes := make([]byte, 32)
-	amountBytes := make([]byte, 32)
-	timeoutBytes := make([]byte, 32)
-	input := append(cheque.Contract.Bytes(), cheque.Beneficiary.Bytes()...)
-	binary.LittleEndian.PutUint64(serialBytes, cheque.Serial)
-	binary.LittleEndian.PutUint64(amountBytes, cheque.Amount)
-	binary.LittleEndian.PutUint64(timeoutBytes, cheque.Timeout)
-	input = append(input, serialBytes[:]...)
-	input = append(input, amountBytes[:]...)
-	input = append(input, timeoutBytes[:]...)
-	return crypto.Sign(crypto.Keccak256(input), s.owner.privateKey)
+	sig, err := crypto.Sign(s.sigHashCheque(cheque), s.owner.privateKey)
+	if err != nil {
+		return nil, err
+	}
+	// increase the v value by 27 as crypto.Sign produces 0 or 1 but the contract only accepts 27 or 28
+	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
+	sig[len(sig)-1] += 27
+	return sig, nil
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
