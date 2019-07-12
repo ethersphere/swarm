@@ -51,14 +51,13 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api                 PublicAPI
 	stateStore          state.Store          // stateStore is needed in order to keep balances across sessions
 	lock                sync.RWMutex         // lock the balances
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of balances for each peer
-	backend             cswap.Backend
-	owner               *Owner  // contract access
-	params              *Params // economic and operational parameters
+	backend             cswap.Backend        // backend is needed to instantiate the counterparties contract reference
+	owner               *Owner               // contract access
+	params              *Params              // economic and operational parameters
 	contractReference   *swap.Swap
 	paymentThreshold    int64 // balance difference required for requesting cheque
 	disconnectThreshold int64 // balance difference required for dropping peer

@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -180,14 +181,20 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 
 	// handling error
 	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
-	ref := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
-	ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
-	//sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	ref, err := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
+	if err != nil {
+		return err
+	}
+	// TODO: verify wether at ref, there is actually a checkbook reference and if this reference would accept our cheque.
+	tx, _ := ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	//TODO: we get back a signed transaction if succesfull, but we have to await the tx here and then verify the result of the mined transaction.
+	log.Info(fmt.Sprintf("%x", tx.Hash()))
+	//bind.WaitMined(ctx, sp.backend, tx)
 	return nil
 }
 
 // TODO: Error handling
-func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
+func (sp *Peer) handleErrorMsg(ctxcreate a go channel here context.Context, msg interface{}) error {
 	// maybe balance disagreement
 	return nil
 }

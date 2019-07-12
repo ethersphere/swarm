@@ -94,7 +94,7 @@ func (s *Swap) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int,
 	return s.Instance.SubmitChequeBeneficiary(opts, serial, amount, timeout, ownerSig)
 }
 
-func (s *Swap) InstanceAt(address common.Address, backend bind.ContractBackend) *contract.SimpleSwap {
-	ref, _ := contract.NewSimpleSwap(address, backend)
-	return ref
+// InstanceAt returns a new simpleSwap instance at the address which is passed in
+func (s *Swap) InstanceAt(address common.Address, backend bind.ContractBackend) (*contract.SimpleSwap, error) {
+	return contract.NewSimpleSwap(address, backend)
 }

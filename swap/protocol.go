@@ -69,6 +69,3 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	swapPeer := NewPeer(protoPeer, s, s.backend)
 	return swapPeer.Run(swapPeer.handleMsg)
 }
-
-type PublicAPI struct {
-}
