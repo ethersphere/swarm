@@ -175,6 +175,8 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 // TODO: validate the contract address in the cheque to match the address given at handshake
 // TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error {
+	log.Info("received emit cheque message")
+
 	chequeMsg, ok := msg.(*EmitChequeMsg)
 	if !ok {
 		return fmt.Errorf("Invalid message type, %v", msg)
@@ -182,18 +184,24 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	cheque := chequeMsg.Cheque
 	// reset balance to zero
 	sp.swap.resetBalance(sp.ID())
+	log.Info(fmt.Sprintf("resetting balance for peer %s", sp.ID().String()))
 	// send confirmation
-	sp.Send(ctx, &ConfirmMsg{})
+	err := sp.Send(ctx, &ConfirmMsg{})
+	if err != nil {
+		log.Error(fmt.Sprintf("error while sending confirm msg to peer %s: %s", sp.ID().String(), err.Error()))
+	}
 	// cash in cheque
 	//TODO: input parameter checks?
-
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
 	opts.Context = ctx
 
 	// handling error
 	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
 	ref := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
-	ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	_, err = ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	if err != nil {
+		log.Error(fmt.Sprintf("error while calling submit cheque beneficiary: %s", err.Error()))
+	}
 	//sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 	return nil
 }
