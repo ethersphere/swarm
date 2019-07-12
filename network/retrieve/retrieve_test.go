@@ -17,24 +17,36 @@
 package retrieve
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/localstore"
+	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel = flag.Int("loglevel", 5, "verbosity of logs")
+	loglevel           = flag.Int("loglevel", 5, "verbosity of logs")
+	bucketKeyFileStore = simulation.BucketKey("filestore")
+	bucketKeyBinIndex  = simulation.BucketKey("bin-indexes")
+	bucketKeySyncer    = simulation.BucketKey("syncer")
 )
 
 func init() {
@@ -44,83 +56,156 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
-func tTestNodesCanTalk(t *testing.T) {
+// TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
+func TestChunkDelivery(t *testing.T) {
 	nodeCount := 2
+	chunkCount := 10
 
-	// create a standard sim
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-retrieve": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			addr := network.NewAddr(ctx.Config.Node())
-
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			o := NewRetrieval(enode.ID{}, kad, nil)
-			cleanup = func() {
-			}
-
-			return o, cleanup, nil
-		},
+		"bzz-retrieve": newBzzRetrieveWithLocalstore,
 	})
 	defer sim.Close()
 
-	// create context for simulation run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	// defer cancel should come before defer simulation teardown
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// setup the filter for SubscribeMsg
-	msgs := sim.PeerEvents(
-		context.Background(),
-		sim.UpNodeIDs(),
-		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("orb"),
-	)
-
-	// strategy: listen to all SubscribeMsg events; after every event we wait
-	// if after `waitDuration` no more messages are being received, we assume the
-	// subscription phase has terminated!
-
-	// the loop in this go routine will either wait for new message events
-	// or times out after 1 second, which signals that we are not receiving
-	// any new subscriptions any more
-	go func() {
-		//for long running sims, waiting 1 sec will not be enough
-		//waitDuration := 1 * time.Second
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case m := <-msgs: // just reset the loop
-				if m.Error != nil {
-					log.Error("orb message", "err", m.Error)
-					continue
-				}
-				log.Trace("orb message", "node", m.NodeID, "peer", m.PeerID)
-				//case <-time.After(waitDuration):
-				//// one second passed, don't assume more subscriptions
-				//log.Info("All subscriptions received")
-				//return
-
-			}
-		}
-	}()
-
-	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		log.Info("Simulation running")
-		_ = sim.Net.Nodes
+		nodeIDs := sim.UpNodeIDs()
 
-		//wait until all subscriptions are done
-		select {
-		case <-ctx.Done():
-			return errors.New("Context timed out")
+		item := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
+
+		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
+		log.Debug("uploader node", "enode", nodeIDs[0])
+		item = sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		store := item.(chunk.Store)
+
+		//put some data into just the first node
+		filesize := chunkCount * 4096
+		cctx := context.Background()
+		_, wait, err := item.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+		if err != nil {
+			return err
 		}
+		if err := wait(cctx); err != nil {
+			return err
+		}
+
+		id, err := sim.AddNodes(1)
+		if err != nil {
+			return err
+		}
+		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		if err != nil {
+			return err
+		}
+		nodeIDs = sim.UpNodeIDs()
+		syncingNodeId := nodeIDs[1]
+
+		uploaderNodeBinIDs := make([]uint64, 17)
+
+		log.Debug("checking pull subscription bin ids")
+		var uploaderSum uint64
+		for po := 0; po <= 16; po++ {
+			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				return err
+			}
+			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
+
+			uploaderNodeBinIDs[po] = until
+			uploaderSum += until
+		}
+
+		// check that the sum of bin indexes is equal
+		log.Debug("compare to", "enode", syncingNodeId)
+		//waitChunks(t, sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 
 		return nil
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
+}
+
+func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+	n := ctx.Config.Node()
+	addr := network.NewAddr(n)
+
+	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	netStore := storage.NewNetStore(localStore, enode.ID{})
+	lnetStore := storage.NewLNetStore(netStore)
+	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+
+	var store *state.DBStore
+	// Use on-disk DBStore to reduce memory consumption in race tests.
+	dir, err := ioutil.TempDir("", "statestore-")
+	if err != nil {
+		return nil, nil, err
+	}
+	store, err = state.NewDBStore(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r := NewRetrieval(enode.ID{}, kad, netStore)
+	bucket.Store(bucketKeyFileStore, fileStore)
+	bucket.Store(simulation.BucketKeyKademlia, kad)
+
+	cleanup = func() {
+		localStore.Close()
+		localStoreCleanup()
+		store.Close()
+		os.RemoveAll(dir)
+	}
+
+	return r, cleanup, nil
+}
+
+func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.GlobalStorer) (localStore *localstore.DB, cleanup func(), err error) {
+	dir, err := ioutil.TempDir("", "localstore-")
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup = func() {
+		os.RemoveAll(dir)
+	}
+
+	var mockStore *mock.NodeStore
+	if globalStore != nil {
+		mockStore = globalStore.NewNodeStore(common.BytesToAddress(id.Bytes()))
+	}
+
+	localStore, err = localstore.New(dir, addr.Over(), &localstore.Options{
+		MockStore: mockStore,
+	})
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	return localStore, cleanup, nil
+}
+
+func getAllRefs(testData []byte) (storage.AddressCollection, error) {
+	datadir, err := ioutil.TempDir("", "chunk-debug")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(datadir)
+	fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	reader := bytes.NewReader(testData)
+	return fileStore.GetAllReferences(context.Background(), reader, false)
 }
