@@ -23,7 +23,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -178,11 +180,25 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
 	opts.Context = ctx
 
-	// handling error
-	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
-	ref := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
-	ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
-	//sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	//TODO: make instanceAt to directly return a swap type
+	otherSwap := swap.New()
+	err := otherSwap.InstanceAt(cheque.Contract, sp.backend)
+	if err != nil {
+		log.Info("Could not get an instance of simpleSwap")
+		return err
+	}
+	tx, receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	log.Info(fmt.Sprintf("Got tx: %x", tx))
+	select {
+	case err := <-err:
+		if err != nil {
+			log.Error("Got error when calling submitChequeBeneficiary: ", err)
+		}
+	case r := <-receipt:
+		log.Info("Transaction submitted to the blockchain", r)
+		//TODO: set up gorouting which waits the timeout and then calls cashCheque
+		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
+	}
 	return nil
 }
 

@@ -89,12 +89,23 @@ func (s *Swap) ContractParams() *Params {
 	}
 }
 
-// SubmitChequeBeneficiary is used to cash in a cheque
-func (s *Swap) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error) {
-	return s.Instance.SubmitChequeBeneficiary(opts, serial, amount, timeout, ownerSig)
+// SubmitChequeBeneficiary is used to cash in a cheque. It returns directly the transactionHash, a channel on which can be listened for the transaction to be mined and a channel where we can send an error
+func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (common.Hash, <-chan *types.Receipt, <-chan error) {
+	errorCh := make(chan error)
+	receiptCh := make(chan *types.Receipt)
+	tx, err := s.Instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
+	if err != nil {
+		errorCh <- err
+	}
+	go func() {
+		receipt, err := bind.WaitMined(auth.Context, backend, tx)
+		errorCh <- err
+		receiptCh <- receipt
+	}()
+	return tx.Hash(), receiptCh, errorCh
 }
 
-func (s *Swap) InstanceAt(address common.Address, backend bind.ContractBackend) *contract.SimpleSwap {
-	ref, _ := contract.NewSimpleSwap(address, backend)
-	return ref
+func (s *Swap) InstanceAt(address common.Address, backend bind.ContractBackend) error {
+	s.Instance, err = contract.NewSimpleSwap(address, backend)
+	return err
 }
