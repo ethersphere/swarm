@@ -132,7 +132,7 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	}
 	// evaluate the price for sending messages
 	costToLocalNode := price.For(Sender, size)
-	log.Warn(fmt.Sprintf("Sending msg type %v, cost %v", reflect.TypeOf(msg), costToLocalNode))
+	log.Info(fmt.Sprintf("Sending msg type %v, cost %v", reflect.TypeOf(msg), costToLocalNode))
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
@@ -152,7 +152,7 @@ func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 	}
 	// evaluate the price for receiving messages
 	costToLocalNode := price.For(Receiver, size)
-	log.Warn(fmt.Sprintf("Receiving msg type %v, cost %v", reflect.TypeOf(msg), costToLocalNode))
+	log.Info(fmt.Sprintf("Receiving msg type %v, cost %v", reflect.TypeOf(msg), costToLocalNode))
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
