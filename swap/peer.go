@@ -194,7 +194,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 }
 
 // TODO: Error handling
-func (sp *Peer) handleErrorMsg(ctxcreate a go channel here context.Context, msg interface{}) error {
+func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 	// maybe balance disagreement
 	return nil
 }
