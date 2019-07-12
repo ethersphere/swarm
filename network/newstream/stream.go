@@ -797,6 +797,34 @@ func (s *SlipStream) collectBatch(ctx context.Context, p *Peer, provider StreamP
 		return nil, 0, 0, true, nil
 	}
 	return batch, *batchStartID, batchEndID, false, nil
+
+}
+
+// Deliver sends a storeRequestMsg protocol message to the peer
+// Depending on the `syncing` parameter we send different message types
+// This is legacy code that needs to be refactored out of this protocol
+func (s *SlipStream) deliver(ctx context.Context, chunk storage.Chunk, p *Peer, syncing bool) error {
+	var msg interface{}
+
+	metrics.GetOrRegisterCounter("peer.deliver", nil).Inc(1)
+
+	//TODO: should we send different types of messages if delivery is for syncing or retrievals,
+	//even if handling and content of the message are the same,
+	//because swap accounting decides which messages need accounting based on the message type?
+	if syncing {
+		msg = &ChunkDeliveryMsg{
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
+			peer:  p,
+		}
+	} else {
+		msg = &ChunkDeliveryMsg{
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
+			peer:  p,
+		}
+	}
+	return p.Send(ctx, msg)
 }
 
 func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *RetrieveRequest) error {
@@ -811,10 +839,10 @@ func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *Re
 	}
 
 	//KLUDGE
-	c, err := s.providers["SYNC"].Get(ctx, r)
+	data, err := s.providers["SYNC"].Get(ctx, r.Addr)
 	log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", p.ID())
 	syncing := false
-	err = s.deliver(ctx, chunk, 0, syncing)
+	err = s.deliver(ctx, chunk.NewChunk(req.Addr, data), p, syncing)
 	if err != nil {
 		log.Error("sp.Deliver errored", "err", err)
 	}
