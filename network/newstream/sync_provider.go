@@ -307,3 +307,5 @@ func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
 func (s *syncProvider) StreamName() string { return s.name }
 
 func (s *syncProvider) Boundedness() bool { return false }
+
+func (s *syncProvider) Close() { close(s.quit) }

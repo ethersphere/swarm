@@ -67,6 +67,8 @@ type StreamProvider interface {
 	EncodeKey(interface{}) (string, error)
 
 	Boundedness() bool
+
+	Close()
 }
 
 // StreamInfoReq is a request to get information about particular streams
