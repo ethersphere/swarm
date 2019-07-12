@@ -34,7 +34,6 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	bv "github.com/ethersphere/swarm/network/bitvector"
-	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -161,8 +160,6 @@ func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error
 			go s.handleWantedHashes(ctx, p, msg)
 		case *ChunkDelivery:
 			go s.handleChunkDelivery(ctx, p, msg)
-		case *RetrieveRequest:
-			go s.handleRetrieveRequest(ctx, p, msg)
 		default:
 			return fmt.Errorf("unknown message type: %T", msg)
 		}
@@ -824,30 +821,6 @@ func (s *SlipStream) deliver(ctx context.Context, chunk storage.Chunk, p *Peer, 
 		}
 	}
 	return p.Send(ctx, msg)
-}
-
-func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *RetrieveRequest) error {
-	log.Trace("handle retrieve request", "peer", p.ID(), "hash", req.Addr)
-
-	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-	defer cancel()
-
-	r := &storage.Request{
-		Addr:   req.Addr,
-		Origin: p.ID(),
-	}
-
-	//KLUDGE
-	data, err := s.providers["SYNC"].Get(ctx, r.Addr)
-	log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", p.ID())
-	syncing := false
-	err = s.deliver(ctx, chunk.NewChunk(req.Addr, data), p, syncing)
-	if err != nil {
-		log.Error("sp.Deliver errored", "err", err)
-	}
-	//KLUDGE
-
-	return nil
 }
 
 func (s *SlipStream) Protocols() []p2p.Protocol {
