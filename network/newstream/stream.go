@@ -797,33 +797,6 @@ func (s *SlipStream) collectBatch(ctx context.Context, p *Peer, provider StreamP
 		return nil, 0, 0, true, nil
 	}
 	return batch, *batchStartID, batchEndID, false, nil
-
-}
-
-// Deliver sends a storeRequestMsg protocol message to the peer
-// Depending on the `syncing` parameter we send different message types
-// This is legacy code that needs to be refactored out of this protocol
-func (s *SlipStream) deliver(ctx context.Context, chunk storage.Chunk, p *Peer, syncing bool) error {
-	var msg interface{}
-
-	metrics.GetOrRegisterCounter("peer.deliver", nil).Inc(1)
-
-	//we send different types of messages if delivery is for syncing or retrievals,
-	//even if handling and content of the message are the same,
-	//because swap accounting decides which messages need accounting based on the message type
-	if syncing {
-		msg = &ChunkDeliveryMsgSyncing{
-			Addr:  chunk.Address(),
-			SData: chunk.Data(),
-		}
-	} else {
-		msg = &ChunkDeliveryMsgRetrieval{
-			Addr:  chunk.Address(),
-			SData: chunk.Data(),
-		}
-	}
-
-	return p.Send(ctx, msg)
 }
 
 func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *RetrieveRequest) error {
