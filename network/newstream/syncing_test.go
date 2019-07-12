@@ -37,16 +37,14 @@ import (
 // 1. All subscriptions are created
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
-	var (
-		chunkCount = 50000
-		syncTime   = 3 * time.Second
-	)
+	chunkCount := 50000
+
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
-	timeout := 30 * time.Second
+	timeout := 90 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -91,6 +89,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		uploaderNodeBinIDs := make([]uint64, 17)
 
 		log.Debug("checking pull subscription bin ids")
+		var uploaderSum uint64
 		for po := 0; po <= 16; po++ {
 			until, err := store.LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
@@ -99,29 +98,12 @@ func TestTwoNodesFullSync(t *testing.T) {
 			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
 
 			uploaderNodeBinIDs[po] = until
+			uploaderSum += until
 		}
-
-		// wait for syncing
-		<-time.After(syncTime)
 
 		// check that the sum of bin indexes is equal
-
 		log.Debug("compare to", "enode", syncingNodeId)
-		item = sim.NodeItem(syncingNodeId, bucketKeyFileStore)
-		db := item.(chunk.Store)
-
-		uploaderSum, otherNodeSum := 0, 0
-		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
-			}
-			otherNodeSum += int(shouldUntil)
-			uploaderSum += int(uploaderUntil)
-		}
-		if uploaderSum != otherNodeSum {
-			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
-		}
+		waitChunks(t, sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum)
 		return nil
 	})
 
@@ -162,37 +144,6 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			}
 		}
 		return removedCount
-	}
-
-	chunkCount := func(t *testing.T, store chunk.Store) (c uint64) {
-		t.Helper()
-
-		for po := 0; po <= chunk.MaxPO; po++ {
-			last, err := store.LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				t.Fatal(err)
-			}
-			c += last
-		}
-		return c
-	}
-
-	waitChunks := func(t *testing.T, store chunk.Store, want uint64) {
-		t.Helper()
-
-		for i := 49; i >= 0; i-- {
-			time.Sleep(100 * time.Millisecond)
-
-			syncedChunkCount := chunkCount(t, store)
-			if syncedChunkCount != want {
-				if i == 0 {
-					t.Errorf("got synced chunks %d, want %d", syncedChunkCount, want)
-				} else {
-					continue
-				}
-			}
-			break
-		}
 	}
 
 	for _, tc := range []struct {
@@ -549,4 +500,67 @@ func TestTwoNodesJustLive(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
+}
+
+func waitChunks(t *testing.T, store chunk.Store, want uint64) {
+	t.Helper()
+
+	start := time.Now()
+	var (
+		count  uint64        // total number of chunks
+		prev   uint64        // total number of chunks in previous check
+		sleep  time.Duration // duration until the next check
+		staled time.Duration // duration for when the number of chunks is the same
+	)
+	for staled < time.Minute { // wait for one minute if staled
+		count = chunkCount(t, store)
+		if count >= want {
+			break
+		}
+		if count == prev {
+			staled += sleep
+		} else {
+			staled = 0
+		}
+		prev = count
+		if count > 0 {
+			// Calculate sleep time only if there is at least 1% of chunks available,
+			// less may produce unreliable result.
+			if count > want/100 {
+				// Calculate the time required to pass for missing chunks to be available,
+				// and divide it by half to perform a check earlier.
+				sleep = time.Duration(float64(time.Since(start)) * float64(want-count) / float64(count) / 2)
+				log.Debug("expecting all chunks", "in", sleep*2, "want", want, "have", count)
+			}
+		}
+		switch {
+		case sleep > time.Minute:
+			// next check and speed calculation in some shorter time
+			sleep = 500 * time.Millisecond
+		case sleep > 5*time.Second:
+			// upper limit for the check, do not check too slow
+			sleep = 5 * time.Second
+		case sleep < 50*time.Millisecond:
+			// lower limit for the check, do not check too frequently
+			sleep = 50 * time.Millisecond
+		}
+		time.Sleep(sleep)
+	}
+
+	if count != want {
+		t.Errorf("got synced chunks %d, want %d", count, want)
+	}
+}
+
+func chunkCount(t *testing.T, store chunk.Store) (c uint64) {
+	t.Helper()
+
+	for po := 0; po <= chunk.MaxPO; po++ {
+		last, err := store.LastPullSubscriptionBinID(uint8(po))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c += last
+	}
+	return c
 }
