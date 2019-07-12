@@ -238,8 +238,8 @@ func (s *Swap) encodeCheque(cheque *Cheque) []byte {
 	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
 	// construct the actual cheque
 	input := cheque.Contract.Bytes()
-	input = append(input, serialBytes[:]...)
 	input = append(input, cheque.Beneficiary.Bytes()...)
+	input = append(input, serialBytes[:]...)
 	input = append(input, amountBytes[:]...)
 	input = append(input, timeoutBytes[:]...)
 
