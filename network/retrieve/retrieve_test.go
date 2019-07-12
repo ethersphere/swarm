@@ -112,16 +112,16 @@ func TestChunkDelivery(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		log.Debug("fetching through node", "enode", nodeIDs[1])
 		ns := sim.NodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
+		ctr := 0
 		for _, ch := range refs {
-			r := storage.NewRequest(ch)
-
-			_, err := ns.Get(context.Background(), chunk.ModeGetRequest, r)
+			ctr++
+			_, err := ns.Get(context.Background(), chunk.ModeGetRequest, storage.NewRequest(ch))
 			if err != nil {
 				return err
 			}
-			//if len(chunkData.Data()) != 4096 {
-			//return fmt.Errorf("got len %d want %d", len(chunkData.Data()), 4096)
-			//}
+		}
+		if ctr != len(refs) {
+			return fmt.Errorf("did not process enough refs. got %d want %d", ctr, len(refs))
 		}
 		return nil
 	})
