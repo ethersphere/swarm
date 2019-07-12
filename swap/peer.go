@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -80,6 +81,8 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	var ok bool
 	var peerBalance int64
 
+	log.Info("received cheque request message")
+
 	// FIXME probably not needed
 	if req, ok = msg.(*ChequeRequestMsg); !ok {
 		return fmt.Errorf("Unexpected message type: %v", err)
@@ -91,17 +94,17 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	defer sp.swap.lock.Unlock() //TODO: Do we really want to block so long?
 
 	if peerBalance, ok = sp.swap.balances[peer]; !ok {
-		return fmt.Errorf("No exchanges with peer: %v", peer)
+		noExchangesMessage := fmt.Sprintf("No exchanges with peer: %v", peer)
+		log.Warn(noExchangesMessage)
+		return errors.New(noExchangesMessage)
 	}
 	// do we actually owe to the remote peer?
 	if peerBalance >= 0 {
+		log.Warn(ErrDontOwe.Error())
 		return ErrDontOwe
 	}
 
 	// balance is negative, send a cheque
-	// TODO: merge with thresholds; need to check for threshold?
-	// if not, any negative balance will result in a cheque at this point
-
 	var cheque *Cheque
 
 	_ = sp.swap.loadCheque(peer)
@@ -131,8 +134,11 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	cheque.Beneficiary = req.Beneficiary
 	cheque.Sig, err = sp.swap.signContent(cheque)
 	if err != nil {
+		log.Error("error while signing cheque: %s", err.Error())
 		return err
 	}
+
+	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
 
 	sp.swap.cheques[peer] = cheque
 	// TODO: what if there is an error here; is the cheque persisted?
@@ -140,6 +146,7 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 
 	// TODO: error handling might be quite more complex
 	if err != nil {
+		log.Error("error while storing the last cheque: %s", err.Error())
 		return err
 	}
 
@@ -154,8 +161,13 @@ func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (er
 	// we have issues as well.
 	// For now, reset the balance
 	sp.swap.resetBalance(peer)
+	log.Info(fmt.Sprintf("resetting balance for peer %s", peer.String()))
 
-	return sp.Send(ctx, emit)
+	err = sp.Send(ctx, emit)
+	if err != nil {
+		log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", peer.String(), err.Error()))
+	}
+	return err
 }
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
