@@ -215,8 +215,8 @@ func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 
 func (sp *Peer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
 	// TODO; correct here?
+	//log.Info(fmt.Sprintf("resetting balance for peer %s", sp.ID().String()))
+	//sp.swap.resetBalance(sp.ID())
 	log.Info("received confirm msg")
-	sp.swap.resetBalance(sp.ID())
-	log.Info(fmt.Sprintf("resetting balance for peer %s", sp.ID().String()))
 	return nil
 }
