@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -50,11 +51,8 @@ var spec = &protocols.Spec{
 }
 
 type Retrieval struct {
-	addr     enode.ID
 	netStore *storage.NetStore
-
-	kad   *network.Kademlia
-	peers map[enode.ID]*Peer
+	kad      *network.Kademlia
 
 	spec    *protocols.Spec   //this protocol's spec
 	balance protocols.Balance //implements protocols.Balance, for accounting
@@ -63,10 +61,8 @@ type Retrieval struct {
 	quit chan struct{} // termination
 }
 
-func NewRetrieval(me enode.ID, kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
+func NewRetrieval(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
 	ret := &Retrieval{
-		addr:     me,
-		peers:    make(map[enode.ID]*Peer),
 		kad:      kad,
 		netStore: ns,
 		quit:     make(chan struct{}),
@@ -85,7 +81,6 @@ func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	defer r.kad.Off(np)
 
 	sp := NewPeer(bp)
-
 	return peer.Run(r.HandleMsg(sp))
 }
 
@@ -315,6 +310,32 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		log.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
+}
+
+// RequestFromPeers sends a chunk retrieve request to the next found peer
+func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+	metrics.GetOrRegisterCounter("delivery.requestfrompeers", nil).Inc(1)
+
+	sp, err := r.findPeer(ctx, req)
+	if err != nil {
+		log.Trace(err.Error())
+		return nil, err
+	}
+
+	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
+	// this span will finish only when delivery is handled (or times out)
+	ret := &RetrieveRequest{
+		Addr: req.Addr,
+	}
+	log.Trace("sending retrieve request", "ref", ret.Addr, "peer", sp.ID().String(), "origin", localID)
+	err = sp.Send(ctx, ret)
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
+
+	spID := sp.ID()
+	return &spID, nil
 }
 
 func (r *Retrieval) Protocols() []p2p.Protocol {

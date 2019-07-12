@@ -44,7 +44,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 	})
 	defer sim.Close()
 
-	timeout := 90 * time.Second
+	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
