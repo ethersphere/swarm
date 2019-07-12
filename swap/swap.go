@@ -41,10 +41,10 @@ import (
 
 const (
 	deployRetries                     = 5
-	deployDelay                       = 1 * time.Second     // delay between retries
-	defaultCashInDelay                = uint64(0)           // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
-	DefaultInitialDepositAmount       = 0                   // TODO: deliberate value for now; needs experimentation
-	DefaultHarddepositTimeoutDuration = 86400 * time.Second // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
+	deployDelay                       = 1 * time.Second // delay between retries
+	defaultCashInDelay                = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
+	DefaultInitialDepositAmount       = 0               // TODO: deliberate value for now; needs experimentation
+	DefaultHarddepositTimeoutDuration = 24 * time.Hour  // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
 )
 
 // SwAP Swarm Accounting Protocol
