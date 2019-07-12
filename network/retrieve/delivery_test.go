@@ -48,54 +48,48 @@ func TestRequestFromPeers(t *testing.T) {
 		LightNode: false,
 		Peer:      protocolsPeer,
 	}, to)
+
 	to.On(peer)
+
 	s := NewRetrieval(addr.ID(), to, nil)
 
-	//sp := &Peer{
-	//BzzPeer: &network.BzzPeer{Peer: protocolsPeer, BzzAddr: addr},
-	//}
-	//s.addPeer(sp)
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.TODO(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if id.ID() != dummyPeerID {
 		t.Fatalf("Expected an id, got %v", id)
 	}
 }
 
 // RequestFromPeers should not return light nodes
-//func TestRequestFromPeersWithLightNode(t *testing.T) {
-//dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+func TestRequestFromPeersWithLightNode(t *testing.T) {
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
-//addr := network.RandomAddr()
-//to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 
-//protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
-//// setting up a lightnode
-//peer := network.NewPeer(&network.BzzPeer{
-//BzzAddr:   network.RandomAddr(),
-//LightNode: true,
-//Peer:      protocolsPeer,
-//}, to)
-//to.On(peer)
-//r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
-//// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
-//sp := &Peer{
-//BzzPeer:  &network.BzzPeer{Peer: protocolsPeer, BzzAddr: addr},
-//pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
-//streamer: r,
-//}
-//r.setPeer(sp)
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
 
-//req := storage.NewRequest(storage.Address(hash0[:]))
+	// setting up a lightnode
+	peer := network.NewPeer(&network.BzzPeer{
+		BzzAddr:   network.RandomAddr(),
+		LightNode: true,
+		Peer:      protocolsPeer,
+	}, to)
 
-//// making a request which should return with "no peer found"
-//_, err := delivery.FindPeer(context.TODO(), req)
+	to.On(peer)
 
-//expectedError := "no peer found"
-//if err.Error() != expectedError {
-//t.Fatalf("expected '%v', got %v", expectedError, err)
-//}
-//}
+	r := NewRetrieval(addr.ID(), to, nil)
+	req := storage.NewRequest(storage.Address(hash0[:]))
+
+	// making a request which should return with "no peer found"
+	_, err := r.findPeer(context.TODO(), req)
+
+	expectedError := "no peer found"
+	if err.Error() != expectedError {
+		t.Fatalf("expected '%v', got %v", expectedError, err)
+	}
+}

@@ -44,7 +44,7 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
-func TestNodesCanTalk(t *testing.T) {
+func tTestNodesCanTalk(t *testing.T) {
 	nodeCount := 2
 
 	// create a standard sim
