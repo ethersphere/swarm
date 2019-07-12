@@ -51,8 +51,8 @@ import (
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/newstream"
 	"github.com/ethersphere/swarm/network/retrieve"
-	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
@@ -75,7 +75,8 @@ type Swarm struct {
 	api               *api.API           // high level api layer (fs/manifest)
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	streamer          *stream.Registry
+	newstreamer       *newstream.SlipStream
+	retrieval         *retrieve.Retrieval
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
@@ -183,10 +184,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	delivery := stream.NewDelivery(to, self.netStore)
-
-	retrieval := retrieve.NewRetrieval(to, self.netStore)
-	self.netStore.RemoteGet = retrieval.RequestFromPeers
+	self.retrieval = retrieve.NewRetrieval(to, self.netStore)
+	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
 
@@ -199,18 +198,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
-	syncing := stream.SyncingAutoSubscribe
-	if !config.SyncEnabled || config.LightNodeEnabled {
-		syncing = stream.SyncingDisabled
-	}
+	//if !config.SyncEnabled || config.LightNodeEnabled {
+	//syncing = stream.SyncingDisabled
+	//}
 
-	registryOptions := &stream.RegistryOptions{
-		SkipCheck:       config.DeliverySkipCheck,
-		Syncing:         syncing,
-		SyncUpdateDelay: config.SyncUpdateDelay,
-		MaxPeerServers:  config.MaxStreamPeerServers,
-	}
-	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
+	syncProvider := newstream.NewSyncProvider(self.netStore, to)
+	self.newstreamer = newstream.NewSlipStream(self.stateStore, to, syncProvider)
 	tags := chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
@@ -456,13 +449,15 @@ func (s *Swarm) Stop() error {
 	if s.accountingMetrics != nil {
 		s.accountingMetrics.Close()
 	}
+
+	s.newstreamer.Stop()
+	s.retrieval.Stop()
+
 	if s.netStore != nil {
 		s.netStore.Close()
 	}
 	s.sfs.Stop()
 	stopCounter.Inc(1)
-	s.streamer.Stop()
-
 	err := s.bzz.Stop()
 	if s.stateStore != nil {
 		s.stateStore.Close()

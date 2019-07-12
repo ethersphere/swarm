@@ -117,7 +117,6 @@ func (s *SlipStream) removePeer(p *Peer) {
 	if _, found := s.peers[p.ID()]; found {
 		log.Error("removing peer", "id", p.ID())
 		delete(s.peers, p.ID())
-		//p.Left()
 		close(p.quit)
 	} else {
 		log.Warn("peer was marked for removal but not found", "peer", p.ID())
@@ -335,7 +334,8 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		p.Drop()
 	}
 	log.Debug("peer.handleGetRangeHead collecting batch", "from", msg.From)
-	h, _, t, e, err := s.collectBatch(ctx, p, provider, key, msg.From, 0)
+	h, f, t, e, err := s.collectBatch(ctx, p, provider, key, msg.From, 0)
+	log.Debug("peer.collectBatch", "peer", p.ID(), "stream", msg.Stream, "len(h)", len(h), "f", f, "t", t, "e", e, "err", err)
 	if err != nil {
 		log.Error("erroring getting live batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
 		s := fmt.Sprintf("erroring getting live batch for stream. peer %s, stream %s, error %v", p.ID().String(), msg.Stream.String(), err)
@@ -344,9 +344,9 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 	}
 
 	if e {
-		return
 		select {
 		case <-p.quit:
+			log.Debug("not sending batch due to shutdown")
 			// prevent sending an empty batch that resulted from db shutdown
 			return
 		default:
@@ -461,7 +461,7 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 // handleOfferedHashes handles the OfferedHashes wire protocol message.
 // this message is handled by the CLIENT.
 func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *OfferedHashes) {
-	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg.ruid", msg.Ruid, "msg", msg)
+	log.Debug("peer.handleOfferedHashes", "peer", p.ID(), "msg.ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	hashes := msg.Hashes
 	lenHashes := len(hashes)
 	if lenHashes%HashSize != 0 {
@@ -570,7 +570,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		//TODO BATCH TIMEOUT?
 	}
 	if w.head {
-		if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex); err != nil {
+		if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
 			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 			p.Drop()
 		}
@@ -726,7 +726,7 @@ func (s *SlipStream) collectBatch(ctx context.Context, p *Peer, provider StreamP
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 500 * time.Millisecond
+	const batchTimeout = 50 * time.Millisecond
 
 	var (
 		batch        []byte
@@ -855,12 +855,18 @@ func NewAPI(s *SlipStream) *API {
 }
 
 func (s *SlipStream) Start(server *p2p.Server) error {
+	log.Debug("slip stream starting")
+
 	return nil
 }
 
 func (s *SlipStream) Stop() error {
+	log.Debug("slip stream stopping")
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	close(s.quit)
+	for _, v := range s.providers {
+		v.Close()
+	}
 	return nil
 }
