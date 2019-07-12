@@ -19,8 +19,10 @@ package retrieve
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -39,14 +41,12 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
-	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
 	loglevel           = flag.Int("loglevel", 5, "verbosity of logs")
 	bucketKeyFileStore = simulation.BucketKey("filestore")
-	bucketKeyBinIndex  = simulation.BucketKey("bin-indexes")
-	bucketKeySyncer    = simulation.BucketKey("syncer")
+	bucketKeyNetstore  = simulation.BucketKey("netstore")
 )
 
 func init() {
@@ -58,8 +58,8 @@ func init() {
 
 // TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
 func TestChunkDelivery(t *testing.T) {
-	nodeCount := 2
 	chunkCount := 10
+	filesize := chunkCount * 4096
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
@@ -68,29 +68,32 @@ func TestChunkDelivery(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	_, err := sim.AddNodesAndConnectStar(nodeCount)
+	_, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
-
-		item := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
-
-		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
-		item = sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		store := item.(chunk.Store)
+
+		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 
 		//put some data into just the first node
-		filesize := chunkCount * 4096
-		cctx := context.Background()
-		_, wait, err := item.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+		data := make([]byte, filesize)
+		if _, err := io.ReadFull(rand.Reader, data); err != nil {
+			t.Fatalf("reading from crypto/rand failed: %v", err.Error())
+		}
+		refs, err := getAllRefs(data)
+		if err != nil {
+			return nil
+		}
+		log.Trace("got all refs", "refs", refs)
+		_, wait, err := item.(*storage.FileStore).Store(context.Background(), bytes.NewReader(data), int64(filesize), false)
 		if err != nil {
 			return err
 		}
-		if err := wait(cctx); err != nil {
+		if err := wait(context.Background()); err != nil {
 			return err
 		}
 
@@ -103,27 +106,23 @@ func TestChunkDelivery(t *testing.T) {
 			return err
 		}
 		nodeIDs = sim.UpNodeIDs()
-		syncingNodeId := nodeIDs[1]
+		if len(nodeIDs) != 2 {
+			return fmt.Errorf("wrong number of nodes, expected %d got %d", 2, len(nodeIDs))
+		}
+		time.Sleep(100 * time.Millisecond)
+		log.Debug("fetching through node", "enode", nodeIDs[1])
+		ns := sim.NodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
+		for _, ch := range refs {
+			r := storage.NewRequest(ch)
 
-		uploaderNodeBinIDs := make([]uint64, 17)
-
-		log.Debug("checking pull subscription bin ids")
-		var uploaderSum uint64
-		for po := 0; po <= 16; po++ {
-			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			_, err := ns.Get(context.Background(), chunk.ModeGetRequest, r)
 			if err != nil {
 				return err
 			}
-			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
-
-			uploaderNodeBinIDs[po] = until
-			uploaderSum += until
+			//if len(chunkData.Data()) != 4096 {
+			//return fmt.Errorf("got len %d want %d", len(chunkData.Data()), 4096)
+			//}
 		}
-
-		// check that the sum of bin indexes is equal
-		log.Debug("compare to", "enode", syncingNodeId)
-		//waitChunks(t, sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
-
 		return nil
 	})
 	if result.Error != nil {
@@ -156,8 +155,10 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := NewRetrieval(enode.ID{}, kad, netStore)
+	r := NewRetrieval(kad, netStore)
+	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
+	bucket.Store(bucketKeyNetstore, netStore)
 	bucket.Store(simulation.BucketKeyKademlia, kad)
 
 	cleanup = func() {

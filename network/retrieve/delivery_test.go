@@ -51,7 +51,7 @@ func TestRequestFromPeers(t *testing.T) {
 
 	to.On(peer)
 
-	s := NewRetrieval(addr.ID(), to, nil)
+	s := NewRetrieval(to, nil)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.TODO(), req)
@@ -82,7 +82,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 	to.On(peer)
 
-	r := NewRetrieval(addr.ID(), to, nil)
+	r := NewRetrieval(to, nil)
 	req := storage.NewRequest(storage.Address(hash0[:]))
 
 	// making a request which should return with "no peer found"
