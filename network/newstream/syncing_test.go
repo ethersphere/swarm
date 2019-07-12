@@ -103,7 +103,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 		// check that the sum of bin indexes is equal
 		log.Debug("compare to", "enode", syncingNodeId)
-		waitChunks(t, sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum)
+		waitChunks(t, sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 		return nil
 	})
 
@@ -268,7 +268,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 			syncStore := sim.NodeItem(syncNode, bucketKeyFileStore).(chunk.Store)
 
-			waitChunks(t, syncStore, totalChunkCount-removedCount)
+			waitChunks(t, syncStore, totalChunkCount-removedCount, 10*time.Second)
 
 			if tc.liveChunkCount > 0 {
 				chunks = append(chunks, uploadChunks(t, ctx, uploadStore, tc.liveChunkCount)...)
@@ -281,7 +281,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
 
-				waitChunks(t, syncStore, totalChunkCount-removedCount)
+				waitChunks(t, syncStore, totalChunkCount-removedCount, time.Minute)
 			}
 		})
 	}
@@ -291,16 +291,13 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // it then waits for syncTime and checks that they have both synced correctly. It then adds another chunkCount to the uploader node
 // and waits for another syncTime, then checks for the correct sync by bin indexes
 func TestTwoNodesFullSyncLive(t *testing.T) {
-	var (
-		chunkCount = 20000
-		syncTime   = 1 * time.Second
-	)
+	var chunkCount = 20000
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
-	timeout := 30 * time.Second
+	timeout := 90 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -381,6 +378,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		}
 
 		// count the content in the bins again
+		var want uint64
 		for po := 0; po <= 16; po++ {
 			until, err := uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
@@ -389,23 +387,10 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
 
 			uploaderNodeBinIDs[po] = until
+			want += until
 		}
 
-		// wait for live syncing
-		<-time.After(syncTime)
-
-		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := syncingNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
-			}
-			otherNodeSum += int(shouldUntil)
-			uploaderSum += int(uploaderUntil)
-		}
-		if uploaderSum != otherNodeSum {
-			return fmt.Errorf("live sync bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
-		}
-
+		waitChunks(t, syncingNodeStore.(chunk.Store), want, 10*time.Second)
 		return nil
 	})
 
@@ -502,7 +487,7 @@ func TestTwoNodesJustLive(t *testing.T) {
 	}
 }
 
-func waitChunks(t *testing.T, store chunk.Store, want uint64) {
+func waitChunks(t *testing.T, store chunk.Store, want uint64, staledTimeout time.Duration) {
 	t.Helper()
 
 	start := time.Now()
@@ -512,7 +497,7 @@ func waitChunks(t *testing.T, store chunk.Store, want uint64) {
 		sleep  time.Duration // duration until the next check
 		staled time.Duration // duration for when the number of chunks is the same
 	)
-	for staled < time.Minute { // wait for one minute if staled
+	for staled < staledTimeout { // wait for some time while staled
 		count = chunkCount(t, store)
 		if count >= want {
 			break
@@ -543,6 +528,10 @@ func waitChunks(t *testing.T, store chunk.Store, want uint64) {
 		case sleep < 50*time.Millisecond:
 			// lower limit for the check, do not check too frequently
 			sleep = 50 * time.Millisecond
+			if staled > 0 {
+				// slow down if chunks are stuck near the want value
+				sleep *= 10
+			}
 		}
 		time.Sleep(sleep)
 	}
