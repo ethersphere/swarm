@@ -482,28 +482,6 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 	return nil
 }
 
-//func checkHistoricalStreams(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]*syncStreamFetch) {
-//if len(onesCursors) == 0 {
-//}
-//if len(onesStreams) == 0 {
-//t.Fatal("zero length cursors")
-//}
-
-//for k, v := range onesCursors {
-//if v > 0 {
-//// there should be a matching stream state
-//if _, ok := onesStreams[k]; !ok {
-//t.Fatalf("stream for bin id %d should exist", k)
-//}
-//} else {
-//// index is zero -> no historical stream for this bin. check that it doesn't exist
-//if _, ok := onesStreams[k]; ok {
-//t.Fatalf("stream for bin id %d should not exist", k)
-//}
-//}
-//}
-//}
-
 func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 		n := ctx.Config.Node()
