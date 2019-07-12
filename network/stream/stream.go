@@ -679,11 +679,6 @@ func (r *Registry) createPriceOracle() {
 			PerByte: true,
 			Payer:   protocols.Receiver,
 		},
-		reflect.TypeOf(ChunkDeliveryMsgSyncing{}): {
-			Value:   sp.getChunkDeliveryMsgRetrievalPrice(), // arbitrary price for now
-			PerByte: true,
-			Payer:   protocols.Receiver,
-		},
 		reflect.TypeOf(RetrieveRequestMsg{}): {
 			Value:   sp.getRetrieveRequestMsgPrice(), // arbitrary price for now
 			PerByte: false,
