@@ -313,7 +313,7 @@ func TestEncodeCheque(t *testing.T) {
 	// encode the cheque
 	encoded := swap.encodeCheque(expectedCheque)
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfedd0000000000000000000000000000000000000000000000000000000000000001b8d424e9662fe0837fb1d728f1ac97cebb1085fe000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000000a")
+	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000000a")
 	if !bytes.Equal(encoded, expected) {
 		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x",
 			expected, encoded)
@@ -330,7 +330,7 @@ func TestSigHashCheque(t *testing.T) {
 	// compute the hash that will be signed
 	hash := swap.sigHashCheque(expectedCheque)
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("305cf876a5c6a24430743695fa5a42d40f8d59e174921520c8efe2d01c9b2a6a")
+	expected := common.Hex2Bytes("e431e83bed105cb66d9aa5878cb010bc21365d2e328ce7c36671f0cbd44070ae")
 	if !bytes.Equal(hash, expected) {
 		t.Fatal(fmt.Sprintf("Unexpected sigHash of cheque. Expected: %x, result is: %x",
 			expected, hash))
@@ -351,7 +351,7 @@ func TestSignContent(t *testing.T) {
 	// sign the cheque
 	sig, err := swap.signContent(expectedCheque)
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("833ffa1515b545ce75f4cbe520e6d22bcd76f8e688920e82cf9800a2a7891dda7d4b9f702d6da1b026c3bd860b00028ecce0003daba887c22b5926c26452136b1c")
+	expected := common.Hex2Bytes("d985613f7d8bfcf0f96f4bb00a21111beb9a675477f47e4d9b79c89f880cf99c5ab9ef4cdec7186debc51b898fe4d062a835de61fba6db390316db13d50d23941c")
 	if err != nil {
 		t.Fatal(fmt.Sprintf("Error in signing: %s", err))
 	}
