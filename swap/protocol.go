@@ -15,6 +15,8 @@
 package swap
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
@@ -26,6 +28,7 @@ var Spec = &protocols.Spec{
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
+		SwapHandshakeMsg{},
 		ChequeRequestMsg{},
 		EmitChequeMsg{},
 		ErrorMsg{},
@@ -66,7 +69,13 @@ func (s *Swap) Stop() error {
 
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
-	swapPeer := NewPeer(protoPeer, s, s.backend)
+
+	answer, _ := protoPeer.Handshake(context.TODO(), &SwapHandshakeMsg{
+		Beneficiary: s.owner.address,
+	}, nil)
+
+	swapPeer := NewPeer(protoPeer, s, s.backend, answer.(*SwapHandshakeMsg).Beneficiary)
+
 	s.peers[p.ID()] = swapPeer
 	return swapPeer.Run(swapPeer.handleMsg)
 }

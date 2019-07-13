@@ -171,6 +171,8 @@ func (s *Swap) sendCheque(beneficiary common.Address, peer enode.ID) error {
 
 	swapPeer := s.peers[peer]
 
+	beneficiary = swapPeer.beneficiary
+
 	_ = s.loadCheque(peer)
 	lastCheque := s.cheques[peer]
 

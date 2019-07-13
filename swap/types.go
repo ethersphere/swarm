@@ -43,6 +43,10 @@ type ChequeRequestMsg struct {
 	Beneficiary common.Address
 }
 
+type SwapHandshakeMsg struct {
+	Beneficiary common.Address
+}
+
 // EmitChequeMsg is sent from the debitor to the creditor with the actual check
 type EmitChequeMsg struct {
 	Cheque *Cheque

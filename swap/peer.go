@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
@@ -34,15 +36,17 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap    *Swap
-	backend cswap.Backend
+	swap        *Swap
+	backend     cswap.Backend
+	beneficiary common.Address
 }
 
-func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary common.Address) *Peer {
 	return &Peer{
-		Peer:    p,
-		swap:    s,
-		backend: backend,
+		Peer:        p,
+		swap:        s,
+		backend:     backend,
+		beneficiary: beneficiary,
 	}
 }
 
