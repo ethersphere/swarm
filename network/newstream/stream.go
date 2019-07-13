@@ -42,7 +42,7 @@ import (
 // SlipStream implements node.Service
 var _ node.Service = (*SlipStream)(nil)
 
-var SyncerSpec = &protocols.Spec{
+var Spec = &protocols.Spec{
 	Name:       "bzz-stream",
 	Version:    8,
 	MaxMsgSize: 10 * 1024 * 1024,
@@ -86,7 +86,7 @@ func NewSlipStream(intervalsStore state.Store, kad *network.Kademlia, providers 
 		slipStream.providers[p.StreamName()] = p
 	}
 
-	slipStream.spec = SyncerSpec
+	slipStream.spec = Spec
 
 	return slipStream
 }
