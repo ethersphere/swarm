@@ -156,7 +156,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if peerBalance <= -1*s.paymentThreshold {
 		//if so, send cheque
 		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, sending cheque", peer.ID().String(), s.paymentThreshold))
-		err = s.sendCheque(s.owner.address, peer.ID())
+		err = s.sendCheque(peer.ID())
 		if err != nil {
 			log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", peer.ID().String(), err.Error()))
 		}
@@ -165,13 +165,12 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return
 }
 
-func (s *Swap) sendCheque(beneficiary common.Address, peer enode.ID) error {
+func (s *Swap) sendCheque(peer enode.ID) error {
 	var cheque *Cheque
 	var err error
 
 	swapPeer := s.peers[peer]
-
-	beneficiary = swapPeer.beneficiary
+	beneficiary := swapPeer.beneficiary
 
 	_ = s.loadCheque(peer)
 	lastCheque := s.cheques[peer]
