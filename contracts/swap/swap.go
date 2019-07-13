@@ -32,6 +32,7 @@ import (
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 )
 
+var ErrNotASwapContract = errors.New("not a swap contract")
 var ErrTransactionReverted = errors.New("Transaction reverted")
 
 // Validator struct -> put validator in implementation of Swap. Make the validator a package level function and implement this in Swap
@@ -69,13 +70,16 @@ func new() *Swap {
 // ValidateCode checks that the on-chain code at address matches the expected swap
 // contract code.
 // TODO: have this as a package level function and pass the SimpleSwapBin as argument
-func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) (bool, error) {
+func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
 	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
-		return false, err
+		return err
 	}
 	referenceCode := common.FromHex(contract.ContractDeployedCode)
-	return bytes.Equal(codeReadFromAddress, referenceCode), nil
+	if !bytes.Equal(codeReadFromAddress, referenceCode) {
+		return ErrNotASwapContract
+	}
+	return nil
 }
 
 // Deploy a Swap contract
