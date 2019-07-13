@@ -30,6 +30,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
+var ErrWrongCheque = errors.New("wrong cheque parameters")
 var ErrSigDoesNotMatch = errors.New("signature does not match")
 var ErrDontOwe = errors.New("no negative balance")
 
@@ -82,12 +83,36 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 		return fmt.Errorf("Invalid message type, %v", msg)
 	}
 	cheque := chequeMsg.Cheque
+
+	if cheque.Contract != sp.contractAddress {
+		return ErrWrongCheque
+	}
+
+	// the beneficiary is the owner of the counterparty swap contract
+	err := sp.swap.verifyChequeSig(cheque, sp.beneficiary)
+
+	if cheque.Beneficiary != sp.swap.owner.address {
+		return ErrWrongCheque
+	}
+
+	if cheque.Timeout != 0 {
+		return ErrWrongCheque
+	}
+
+	// TODO: check serial and balance are higher
+
+	if err != nil {
+		log.Error(fmt.Sprintf("error invalid cheque from %s: %s", sp.ID().String(), err.Error()))
+		return err
+	}
+
 	// reset balance to zero, TODO: fix
 	sp.swap.resetBalance(sp.ID())
 	// send confirmation
-	err := sp.Send(ctx, &ConfirmMsg{})
+	err = sp.Send(ctx, &ConfirmMsg{})
 	if err != nil {
 		log.Error(fmt.Sprintf("error while sending confirm msg to peer %s: %s", sp.ID().String(), err.Error()))
+		return err
 	}
 	// cash in cheque
 	//TODO: input parameter checks?

@@ -425,7 +425,7 @@ func TestVerifyContract(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	opts := bind.NewKeyedTransactor(ownerKey)
-	addr, _, _, err := cswap.Deploy(opts, swap.backend, ownerAddress)
+	addr, _, _, err := cswap.Deploy(opts, swap.backend, ownerAddress, 0*time.Second)
 
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)

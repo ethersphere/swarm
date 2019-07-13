@@ -423,7 +423,7 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 		return common.Address{}, err
 	}
 
-	owner, err := swap.Instance.Owner(nil)
+	owner, err := swap.Instance.Issuer(nil)
 
 	if err != nil {
 		return common.Address{}, err
