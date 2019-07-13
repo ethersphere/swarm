@@ -72,9 +72,9 @@ func (s *Swap) Stop() error {
 }
 
 func (s *Swap) verifyHandshake(msg interface{}) error {
-	handshake := msg.(*SwapHandshakeMsg)
+	handshake, ok := msg.(*SwapHandshakeMsg)
 	var empty common.Address
-	if handshake.Beneficiary == empty {
+	if !ok || handshake.Beneficiary == empty {
 		return ErrEmptyAddressInSignature
 	}
 	return nil
