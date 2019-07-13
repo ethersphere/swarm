@@ -30,7 +30,6 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-var ErrWrongCheque = errors.New("wrong cheque parameters")
 var ErrSigDoesNotMatch = errors.New("signature does not match")
 var ErrDontOwe = errors.New("no negative balance")
 
@@ -85,24 +84,24 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	cheque := chequeMsg.Cheque
 
 	if cheque.Contract != sp.contractAddress {
-		return ErrWrongCheque
+		return fmt.Errorf("wrong cheque parameters: expected contract: %s, was: %s", sp.contractAddress, cheque.Contract)
 	}
 
 	// the beneficiary is the owner of the counterparty swap contract
 	err := sp.swap.verifyChequeSig(cheque, sp.beneficiary)
 
 	if cheque.Beneficiary != sp.swap.owner.address {
-		return ErrWrongCheque
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %s, was: %s", sp.swap.owner.address, cheque.Beneficiary)
 	}
 
 	if cheque.Timeout != 0 {
-		return ErrWrongCheque
+		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
 	}
 
 	// TODO: check serial and balance are higher
 
 	if err != nil {
-		log.Error(fmt.Sprintf("error invalid cheque from %s: %s", sp.ID().String(), err.Error()))
+		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
 		return err
 	}
 
@@ -111,7 +110,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	// send confirmation
 	err = sp.Send(ctx, &ConfirmMsg{})
 	if err != nil {
-		log.Error(fmt.Sprintf("error while sending confirm msg to peer %s: %s", sp.ID().String(), err.Error()))
+		log.Error("error while sending confirm msg to peer", sp.ID().String(), err.Error())
 		return err
 	}
 	// cash in cheque
@@ -135,7 +134,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 			log.Error("Got error when calling submitChequeBeneficiary: ", err)
 			//TODO: do something with the error
 		}
-		log.Info(fmt.Sprintf("tx minded: %v", receipt))
+		log.Info("tx minded:", receipt)
 		//TODO: cashCheque
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
