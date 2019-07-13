@@ -56,8 +56,7 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 	case *EmitChequeMsg:
 		//return sp.handleEmitChequeMsg(ctx, msg)
-		go sp.handleEmitChequeMsg(ctx, msg)
-		return nil
+		return sp.handleEmitChequeMsg(ctx, msg)
 
 	case *ErrorMsg:
 		return sp.handleErrorMsg(ctx, msg)
@@ -93,15 +92,28 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
 	opts.Context = ctx
 
-	// handling error
-	// asynchronous call to blockchain, might not get error back directly. If we get a txhash directly, we still have to check the result of this tx.
-	ref := sp.swap.contractReference.InstanceAt(cheque.Contract, sp.backend)
-	_, err = ref.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+	//TODO: make instanceAt to directly return a swap type
+
+	otherSwap, err := cswap.InstanceAt(cheque.Contract, sp.backend)
 	if err != nil {
-		log.Error(fmt.Sprintf("error while calling submit cheque beneficiary: %s", err.Error()))
+		log.Error("Could not get an instance of simpleSwap")
+		return err
 	}
-	//sp.swap.contractReference.SubmitChequeBeneficiary(opts, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
-	return nil
+
+	// submit cheque to the blockchain and cashes it directly
+	go func() {
+		// blocks here, as we are waiting for the transaction to be mined
+		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+		if err != nil {
+			log.Error("Got error when calling submitChequeBeneficiary: ", err)
+			//TODO: do something with the error
+		}
+		log.Info(fmt.Sprintf("tx minded: %v", receipt))
+		//TODO: cashCheque
+		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
+		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
+	}()
+	return err
 }
 
 // TODO: Error handling
