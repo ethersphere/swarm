@@ -134,7 +134,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 			log.Error("Got error when calling submitChequeBeneficiary: ", err)
 			//TODO: do something with the error
 		}
-		log.Info("tx minded:", receipt)
+		log.Info("tx minded:", "receipt", receipt)
 		//TODO: cashCheque
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
