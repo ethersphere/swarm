@@ -206,8 +206,6 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	// If we do, then if something goes wrong and the remote does not reset the balance,
 	// we have issues as well.
 	// For now, reset the balance
-
-	log.Info(fmt.Sprintf("resetting balance for peer %s", peer.String()))
 	s.resetBalance(peer)
 
 	err = swapPeer.Send(context.TODO(), emit)
@@ -321,6 +319,7 @@ func (swap *Swap) Close() {
 func (s *Swap) resetBalance(peerID enode.ID) {
 	//TODO: reset balance based on actual amount
 	//TODO: review the locks
+	log.Info(fmt.Sprintf("resetting balance for peer %s", peerID.String()))
 	s.balances[peerID] = 0
 }
 

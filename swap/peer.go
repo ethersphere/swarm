@@ -81,9 +81,8 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 		return fmt.Errorf("Invalid message type, %v", msg)
 	}
 	cheque := chequeMsg.Cheque
-	// reset balance to zero
+	// reset balance to zero, TODO: fix
 	sp.swap.resetBalance(sp.ID())
-	log.Info(fmt.Sprintf("resetting balance for peer %s", sp.ID().String()))
 	// send confirmation
 	err := sp.Send(ctx, &ConfirmMsg{})
 	if err != nil {
@@ -113,9 +112,6 @@ func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 }
 
 func (sp *Peer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
-	// TODO; correct here?
-	//log.Info(fmt.Sprintf("resetting balance for peer %s", sp.ID().String()))
-	//sp.swap.resetBalance(sp.ID())
 	log.Info("received confirm msg")
 	return nil
 }
