@@ -47,6 +47,8 @@ const (
 	defaultHarddepositTimeoutDuration = 24 * time.Hour  // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
 )
 
+var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
+
 // SwAP Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
@@ -344,6 +346,25 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 	input := crypto.Keccak256(s.encodeCheque(cheque))
 	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
 	return crypto.Keccak256([]byte(withPrefix))
+}
+
+// verifyCheque
+func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
+	sigHash := s.sigHashCheque(cheque)
+
+	sig := cheque.Sig[:]
+	sig[len(sig)-1] -= 27
+	pubKey, err := crypto.SigToPub(sigHash, sig)
+
+	if err != nil {
+		return err
+	}
+
+	if crypto.PubkeyToAddress(*pubKey) != expectedSigner {
+		return ErrInvalidChequeSignature
+	}
+
+	return err
 }
 
 // signContent signs the cheque

@@ -48,6 +48,7 @@ var (
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
 	testSwapAdress     = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
+	chequeSig          = common.Hex2Bytes("d985613f7d8bfcf0f96f4bb00a21111beb9a675477f47e4d9b79c89f880cf99c5ab9ef4cdec7186debc51b898fe4d062a835de61fba6db390316db13d50d23941c")
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -346,17 +347,67 @@ func TestSignContent(t *testing.T) {
 
 	var err error
 
-	swap.owner.privateKey, err = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	swap.owner.privateKey = ownerKey
 
 	// sign the cheque
 	sig, err := swap.signContent(expectedCheque)
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("d985613f7d8bfcf0f96f4bb00a21111beb9a675477f47e4d9b79c89f880cf99c5ab9ef4cdec7186debc51b898fe4d062a835de61fba6db390316db13d50d23941c")
+	expected := chequeSig
 	if err != nil {
 		t.Fatal(fmt.Sprintf("Error in signing: %s", err))
 	}
 	if !bytes.Equal(sig, expected) {
 		t.Fatal(fmt.Sprintf("Unexpected signature for cheque. Expected: %x, result is: %x",
 			expected, sig))
+	}
+}
+
+func TestVerifyChequeSig(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+	expectedCheque.Sig = chequeSig
+
+	err := swap.verifyChequeSig(expectedCheque, ownerAddress)
+
+	if err != nil {
+		t.Fatalf("Invalid signature: %v", err)
+	}
+
+}
+
+func TestVerifyChequeSigWrongSigner(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+	expectedCheque.Sig = chequeSig
+
+	err := swap.verifyChequeSig(expectedCheque, beneficiaryAddress)
+
+	if err == nil {
+		t.Fatalf("Valid signature, should have been invalid")
+	}
+}
+
+func TestVerifyChequeInvalidSignature(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	invalidSig := chequeSig[:]
+	// change one byte in the signature
+	invalidSig[27] += 2
+	expectedCheque.Sig = invalidSig
+
+	err := swap.verifyChequeSig(expectedCheque, ownerAddress)
+
+	if err == nil {
+		t.Fatalf("Valid signature, should have been invalid")
 	}
 }
