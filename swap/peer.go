@@ -90,6 +90,11 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	// the beneficiary is the owner of the counterparty swap contract
 	err := sp.swap.verifyChequeSig(cheque, sp.beneficiary)
 
+	if err != nil {
+		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
+		return err
+	}
+
 	if cheque.Beneficiary != sp.swap.owner.address {
 		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %s, was: %s", sp.swap.owner.address, cheque.Beneficiary)
 	}
@@ -99,11 +104,6 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	}
 
 	// TODO: check serial and balance are higher
-
-	if err != nil {
-		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
-		return err
-	}
 
 	// reset balance to zero, TODO: fix
 	sp.swap.resetBalance(sp.ID())

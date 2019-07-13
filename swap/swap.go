@@ -353,11 +353,12 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
 	sigHash := s.sigHashCheque(cheque)
 
+	// copy signature to avoid modifying the original
 	sig := make([]byte, len(cheque.Sig))
 	copy(sig, cheque.Sig)
+	// reduce the v value of the signature by 27 (see signContent)
 	sig[len(sig)-1] -= 27
 	pubKey, err := crypto.SigToPub(sigHash, sig)
-
 	if err != nil {
 		return err
 	}
@@ -366,7 +367,7 @@ func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) er
 		return ErrInvalidChequeSignature
 	}
 
-	return err
+	return nil
 }
 
 // signContent signs the cheque
@@ -399,13 +400,11 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 
 func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
 	swap, err := swap.InstanceAt(address, s.backend)
-
 	if err != nil {
 		return err
 	}
 
 	valid, err := swap.ValidateCode(ctx, s.backend, address)
-
 	if err != nil {
 		return err
 	}
