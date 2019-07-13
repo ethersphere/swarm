@@ -16,12 +16,17 @@ package swap
 
 import (
 	"context"
+	"errors"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
+
+var ErrEmptyAddressInSignature = errors.New("empty address in signature")
 
 var Spec = &protocols.Spec{
 	Name:       "swap",
@@ -67,12 +72,25 @@ func (s *Swap) Stop() error {
 	return nil
 }
 
+func (s *Swap) verifyHandshake(msg interface{}) error {
+	handshake := msg.(*SwapHandshakeMsg)
+	var empty common.Address
+	if handshake.Beneficiary == empty {
+		return ErrEmptyAddressInSignature
+	}
+	return nil
+}
+
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
-	answer, _ := protoPeer.Handshake(context.TODO(), &SwapHandshakeMsg{
+	answer, err := protoPeer.Handshake(context.TODO(), &SwapHandshakeMsg{
 		Beneficiary: s.owner.address,
-	}, nil)
+	}, s.verifyHandshake)
+
+	if err != nil {
+		return err
+	}
 
 	swapPeer := NewPeer(protoPeer, s, s.backend, answer.(*SwapHandshakeMsg).Beneficiary)
 
