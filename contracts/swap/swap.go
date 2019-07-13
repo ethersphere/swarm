@@ -74,7 +74,7 @@ func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address
 	if err != nil {
 		return false, err
 	}
-	referenceCode := common.FromHex(contract.SimpleSwapBin)
+	referenceCode := common.FromHex(contract.ContractDeployedCode)
 	return bytes.Equal(codeReadFromAddress, referenceCode), nil
 }
 
