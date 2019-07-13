@@ -165,6 +165,15 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return
 }
 
+func (s *Swap) logBalance(peer *protocols.Peer) {
+	err := s.loadState(peer)
+	if err != nil && err != state.ErrNotFound {
+		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.String()))
+	} else {
+		log.Info(fmt.Sprintf("balance for peer %s is %d", peer.ID(), s.balances[peer.ID()]))
+	}
+}
+
 func (s *Swap) sendCheque(peer enode.ID) error {
 	var cheque *Cheque
 	var err error

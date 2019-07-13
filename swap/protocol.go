@@ -92,8 +92,10 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	}
 
 	swapPeer := NewPeer(protoPeer, s, s.backend, answer.(*SwapHandshakeMsg).Beneficiary)
-
 	s.peers[p.ID()] = swapPeer
+
+	s.logBalance(protoPeer)
+
 	return swapPeer.Run(swapPeer.handleMsg)
 }
 
