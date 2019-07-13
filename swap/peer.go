@@ -54,9 +54,6 @@ func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary comm
 func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 
-	case *ChequeRequestMsg:
-		return sp.handleChequeRequestMsg(ctx, msg)
-
 	case *EmitChequeMsg:
 		//return sp.handleEmitChequeMsg(ctx, msg)
 		go sp.handleEmitChequeMsg(ctx, msg)
@@ -70,108 +67,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	}
 
 	return nil
-}
-
-// handleChequeRequestMsg runs when a peer receives a `ChequeRequestMsg`
-// It is thus run by the debitor
-// So the debitor needs to:
-//   * check that it indeed owes to the requestor (if not, ignore message)
-//   * check serial number
-//   * check amount
-//   * if all is ok, issue the cheque
-func (sp *Peer) handleChequeRequestMsg(ctx context.Context, msg interface{}) (err error) {
-	// check we have indeed a negative balance with the peer
-	var req *ChequeRequestMsg
-	var ok bool
-	var peerBalance int64
-
-	log.Info("received cheque request message")
-
-	// FIXME probably not needed
-	if req, ok = msg.(*ChequeRequestMsg); !ok {
-		return fmt.Errorf("Unexpected message type: %v", err)
-	}
-
-	peer := sp.ID()
-
-	sp.swap.lock.Lock()
-	defer sp.swap.lock.Unlock() //TODO: Do we really want to block so long?
-
-	if peerBalance, ok = sp.swap.balances[peer]; !ok {
-		noExchangesMessage := fmt.Sprintf("No exchanges with peer: %v", peer)
-		log.Warn(noExchangesMessage)
-		return errors.New(noExchangesMessage)
-	}
-	// do we actually owe to the remote peer?
-	if peerBalance >= 0 {
-		log.Warn(ErrDontOwe.Error())
-		return ErrDontOwe
-	}
-
-	// balance is negative, send a cheque
-	var cheque *Cheque
-
-	_ = sp.swap.loadCheque(peer)
-	lastCheque := sp.swap.cheques[peer]
-
-	amount := 0 - peerBalance
-
-	//TODO; need to have ChequeRequestMsg to contain last cheque and compare?
-	// emit cheque, send to peer
-	if lastCheque == nil {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: uint64(1),
-				Amount: uint64(amount),
-			},
-		}
-	} else {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: lastCheque.Serial + 1,
-				Amount: lastCheque.Amount + uint64(amount),
-			},
-		}
-	}
-	cheque.ChequeParams.Timeout = defaultCashInDelay
-	cheque.ChequeParams.Contract = sp.swap.owner.Contract
-	cheque.Beneficiary = req.Beneficiary
-	cheque.Sig, err = sp.swap.signContent(cheque)
-	if err != nil {
-		log.Error("error while signing cheque: %s", err.Error())
-		return err
-	}
-
-	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
-
-	sp.swap.cheques[peer] = cheque
-	// TODO: what if there is an error here; is the cheque persisted?
-	err = sp.swap.stateStore.Put(peer.String()+"_cheques", &cheque)
-
-	// TODO: error handling might be quite more complex
-	if err != nil {
-		log.Error("error while storing the last cheque: %s", err.Error())
-		return err
-	}
-
-	emit := &EmitChequeMsg{
-		Cheque: cheque,
-	}
-
-	// TODO: reset balance here?
-	// if we don't, then multiple ChequeRequestMsg may be sent and multiple
-	// cheques will be generated
-	// If we do, then if something goes wrong and the remote does not reset the balance,
-	// we have issues as well.
-	// For now, reset the balance
-	sp.swap.resetBalance(peer)
-	log.Info(fmt.Sprintf("resetting balance for peer %s", peer.String()))
-
-	err = sp.Send(ctx, emit)
-	if err != nil {
-		log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", peer.String(), err.Error()))
-	}
-	return err
 }
 
 // handleEmitChequeMsg should be handled by the creditor when it receives

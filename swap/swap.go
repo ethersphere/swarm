@@ -221,7 +221,7 @@ func (s *Swap) sendCheque(beneficiary common.Address, peer enode.ID) error {
 	}
 
 	// TODO: reset balance here?
-	// if we don't, then multiple ChequeRequestMsg may be sent and multiple
+	// if we don't, then multiple cheques may be sent and multiple
 	// cheques will be generated
 	// If we do, then if something goes wrong and the remote does not reset the balance,
 	// we have issues as well.
@@ -301,7 +301,7 @@ func (swap *Swap) Close() {
 // * for the debitor: on confirmation receival
 func (s *Swap) resetBalance(peerID enode.ID) {
 	//TODO: reset balance based on actual amount
-	//Lock() is not applied because it is expected to be done in the handleChequeRequestMsg call
+	//TODO: review the locks
 	s.balances[peerID] = 0
 }
 

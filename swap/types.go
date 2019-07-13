@@ -38,11 +38,6 @@ type Cheque struct {
 	Sig []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
 }
 
-// ChequeRequestMsg is sent from a creditor to the debitor to solicit a cheque
-type ChequeRequestMsg struct {
-	Beneficiary common.Address
-}
-
 type SwapHandshakeMsg struct {
 	Beneficiary common.Address
 }

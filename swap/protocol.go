@@ -34,7 +34,6 @@ var Spec = &protocols.Spec{
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		SwapHandshakeMsg{},
-		ChequeRequestMsg{},
 		EmitChequeMsg{},
 		ErrorMsg{},
 		ConfirmMsg{},
