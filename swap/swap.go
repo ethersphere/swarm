@@ -159,6 +159,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		err = s.sendCheque(peer.ID())
 		if err != nil {
 			log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", peer.ID().String(), err.Error()))
+		} else {
+			log.Info(fmt.Sprintf("successfully sent cheque to peer %s", peer.ID().String()))
 		}
 	}
 
@@ -175,9 +177,6 @@ func (s *Swap) logBalance(peer *protocols.Peer) {
 }
 
 func (s *Swap) sendCheque(peer enode.ID) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	swapPeer := s.peers[peer]
 	cheque, err := s.createCheque(peer)
 
@@ -209,11 +208,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	s.resetBalance(peer)
 
 	err = swapPeer.Send(context.TODO(), emit)
-	if err != nil {
-		log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", swapPeer.String(), err.Error()))
-		return err
-	}
-	return nil
+	return err
 }
 
 // Create a Cheque structure emitted to a specific peer as a beneficiary
