@@ -123,8 +123,6 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	swapPeer := s.peers[peer.ID()]
-
 	//load existing balances from the state store
 	err = s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
@@ -155,20 +153,106 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	log.Debug(fmt.Sprintf("balance for peer %s after accounting: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 
 	//check if balance with peer is over the payment threshold
-	if peerBalance >= s.paymentThreshold {
-		//if so, send cheque request message
-		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, requesting cheque", peer.ID().String(), s.paymentThreshold))
-		chequeRequestMessage := &ChequeRequestMsg{
-			Beneficiary: s.owner.address,
-		}
-		err = swapPeer.Send(context.TODO(), chequeRequestMessage)
-
+	if peerBalance <= -s.paymentThreshold {
+		//if so, send cheque
+		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, sending cheque", peer.ID().String(), s.paymentThreshold))
+		err = s.sendCheque(peer.ID())
 		if err != nil {
-			log.Error(fmt.Sprintf("error while sending cheque request message to peer %s: %s", peer.ID().String(), err.Error()))
+			log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", peer.ID().String(), err.Error()))
 		}
 	}
 
 	return
+}
+
+func (s *Swap) logBalance(peer *protocols.Peer) {
+	err := s.loadState(peer)
+	if err != nil && err != state.ErrNotFound {
+		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.String()))
+	} else {
+		log.Info(fmt.Sprintf("balance for peer %s is %d", peer.ID(), s.balances[peer.ID()]))
+	}
+}
+
+func (s *Swap) sendCheque(peer enode.ID) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	swapPeer := s.peers[peer]
+	cheque, err := s.createCheque(peer)
+
+	if err != nil {
+		log.Error("error while creating cheque: %s", err.Error())
+		return err
+	}
+
+	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
+	s.cheques[peer] = cheque
+
+	err = s.stateStore.Put(peer.String()+"_cheques", &cheque)
+
+	// TODO: error handling might be quite more complex
+	if err != nil {
+		log.Error("error while storing the last cheque: %s", err.Error())
+		return err
+	}
+
+	emit := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
+	// TODO: reset balance here?
+	// if we don't, then multiple cheques may be sent
+	// If we do, then if something goes wrong and the remote does not reset the balance,
+	// we have issues as well.
+	// For now, reset the balance
+	s.resetBalance(peer)
+
+	err = swapPeer.Send(context.TODO(), emit)
+	if err != nil {
+		log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", swapPeer.String(), err.Error()))
+		return err
+	}
+	return nil
+}
+
+// Create a Cheque structure emitted to a specific peer as a beneficiary
+// The serial and amount of the cheque will depend on the last cheque and current balance for this peer
+// The cheque will be signed and point to the issuer's contract
+func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
+	var cheque *Cheque
+	var err error
+
+	swapPeer := s.peers[peer]
+	beneficiary := swapPeer.beneficiary
+
+	peerBalance := s.balances[peer]
+	amount := -peerBalance
+
+	_ = s.loadCheque(peer)
+	lastCheque := s.cheques[peer]
+
+	if lastCheque == nil {
+		cheque = &Cheque{
+			ChequeParams: ChequeParams{
+				Serial: uint64(1),
+				Amount: uint64(amount),
+			},
+		}
+	} else {
+		cheque = &Cheque{
+			ChequeParams: ChequeParams{
+				Serial: lastCheque.Serial + 1,
+				Amount: lastCheque.Amount + uint64(amount),
+			},
+		}
+	}
+	cheque.ChequeParams.Timeout = defaultCashInDelay
+	cheque.ChequeParams.Contract = s.owner.Contract
+	cheque.Beneficiary = beneficiary
+	cheque.Sig, err = s.signContent(cheque)
+
+	return cheque, err
 }
 
 //GetPeerBalance returns the balance for a given peer
@@ -234,7 +318,8 @@ func (swap *Swap) Close() {
 // * for the debitor: on confirmation receival
 func (s *Swap) resetBalance(peerID enode.ID) {
 	//TODO: reset balance based on actual amount
-	//Lock() is not applied because it is expected to be done in the handleChequeRequestMsg call
+	//TODO: review the locks
+	log.Info(fmt.Sprintf("resetting balance for peer %s", peerID.String()))
 	s.balances[peerID] = 0
 }
 
