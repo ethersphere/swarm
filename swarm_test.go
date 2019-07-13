@@ -86,8 +86,11 @@ func TestNewSwarm(t *testing.T) {
 				if s.netStore == nil {
 					t.Error("netStore not initialized")
 				}
-				if s.streamer == nil {
+				if s.newstreamer == nil {
 					t.Error("streamer not initialized")
+				}
+				if s.retrieval == nil {
+					t.Error("retrieval not initialized")
 				}
 				if s.fileStore == nil {
 					t.Error("fileStore not initialized")
