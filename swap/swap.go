@@ -218,6 +218,9 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	return nil
 }
 
+// Create a Cheque structure emitted to a specific peer as a beneficiary
+// The serial and amount of the cheque will depend on the last cheque and current balance for this peer
+// The cheque will be signed and point to the issuer's contract
 func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
@@ -226,12 +229,11 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance := s.balances[peer]
-	amount := 0 - peerBalance
+	amount := -peerBalance
 
 	_ = s.loadCheque(peer)
 	lastCheque := s.cheques[peer]
 
-	// emit cheque, send to peer
 	if lastCheque == nil {
 		cheque = &Cheque{
 			ChequeParams: ChequeParams{
