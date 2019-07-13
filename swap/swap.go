@@ -175,20 +175,61 @@ func (s *Swap) logBalance(peer *protocols.Peer) {
 }
 
 func (s *Swap) sendCheque(peer enode.ID) error {
-	var cheque *Cheque
-	var err error
-
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	swapPeer := s.peers[peer]
-	beneficiary := swapPeer.beneficiary
+	cheque, err := s.createCheque(peer)
 
-	_ = s.loadCheque(peer)
-	lastCheque := s.cheques[peer]
+	if err != nil {
+		log.Error("error while creating cheque: %s", err.Error())
+		return err
+	}
+
+	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
+	s.cheques[peer] = cheque
+
+	err = s.stateStore.Put(peer.String()+"_cheques", &cheque)
+
+	// TODO: error handling might be quite more complex
+	if err != nil {
+		log.Error("error while storing the last cheque: %s", err.Error())
+		return err
+	}
+
+	emit := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
+	// TODO: reset balance here?
+	// if we don't, then multiple cheques may be sent
+	// If we do, then if something goes wrong and the remote does not reset the balance,
+	// we have issues as well.
+	// For now, reset the balance
+
+	log.Info(fmt.Sprintf("resetting balance for peer %s", peer.String()))
+	s.resetBalance(peer)
+
+	err = swapPeer.Send(context.TODO(), emit)
+	if err != nil {
+		log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", swapPeer.String(), err.Error()))
+		return err
+	}
+	return nil
+}
+
+func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
+	var cheque *Cheque
+	var err error
+
+	swapPeer := s.peers[peer]
+	beneficiary := swapPeer.beneficiary
 
 	peerBalance := s.balances[peer]
 	amount := 0 - peerBalance
+
+	_ = s.loadCheque(peer)
+	lastCheque := s.cheques[peer]
 
 	// emit cheque, send to peer
 	if lastCheque == nil {
@@ -210,43 +251,8 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	cheque.ChequeParams.Contract = s.owner.Contract
 	cheque.Beneficiary = beneficiary
 	cheque.Sig, err = s.signContent(cheque)
-	if err != nil {
-		log.Error("error while signing cheque: %s", err.Error())
-		return err
-	}
 
-	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
-
-	s.cheques[peer] = cheque
-	// TODO: what if there is an error here; is the cheque persisted?
-	err = s.stateStore.Put(peer.String()+"_cheques", &cheque)
-
-	// TODO: error handling might be quite more complex
-	if err != nil {
-		log.Error("error while storing the last cheque: %s", err.Error())
-		return err
-	}
-
-	emit := &EmitChequeMsg{
-		Cheque: cheque,
-	}
-
-	// TODO: reset balance here?
-	// if we don't, then multiple cheques may be sent and multiple
-	// cheques will be generated
-	// If we do, then if something goes wrong and the remote does not reset the balance,
-	// we have issues as well.
-	// For now, reset the balance
-
-	log.Info(fmt.Sprintf("resetting balance for peer %s", peer.String()))
-	s.resetBalance(peer)
-
-	err = swapPeer.Send(context.TODO(), emit)
-	if err != nil {
-		log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", swapPeer.String(), err.Error()))
-		return err
-	}
-	return nil
+	return cheque, err
 }
 
 //GetPeerBalance returns the balance for a given peer
