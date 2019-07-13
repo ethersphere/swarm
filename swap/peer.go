@@ -36,17 +36,19 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap        *Swap
-	backend     cswap.Backend
-	beneficiary common.Address
+	swap            *Swap
+	backend         cswap.Backend
+	beneficiary     common.Address
+	contractAddress common.Address
 }
 
-func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary common.Address) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary common.Address, contractAddress common.Address) *Peer {
 	return &Peer{
-		Peer:        p,
-		swap:        s,
-		backend:     backend,
-		beneficiary: beneficiary,
+		Peer:            p,
+		swap:            s,
+		backend:         backend,
+		beneficiary:     beneficiary,
+		contractAddress: contractAddress,
 	}
 }
 

@@ -48,6 +48,7 @@ const (
 )
 
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
+var ErrNotASwapContract = errors.New("not a swap contract")
 
 // SwAP Swarm Accounting Protocol
 // a peer to peer micropayment system
@@ -393,6 +394,26 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 
 	// TODO: What to do if the contract is already deployed?
 	return s.deploy(ctx, backend, path)
+}
+
+func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
+	swap, err := swap.InstanceAt(address, s.backend)
+
+	if err != nil {
+		return err
+	}
+
+	valid, err := swap.ValidateCode(ctx, s.backend, address)
+
+	if err != nil {
+		return err
+	}
+
+	if !valid {
+		return ErrNotASwapContract
+	}
+
+	return nil
 }
 
 // deploy deploys the Swap contract

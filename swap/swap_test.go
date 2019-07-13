@@ -18,15 +18,19 @@ package swap
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	mrand "math/rand"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,6 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
+	contracts "github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -268,7 +274,9 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 		t.Fatal(err)
 	}
 
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
+		ownerAddress: {Balance: big.NewInt(1000000000)},
+	}, 8000000)
 	swap := New(stateStore, key, common.Address{}, contractBackend)
 	return swap, dir
 }
@@ -409,5 +417,46 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("Valid signature, should have been invalid")
+	}
+}
+
+func TestVerifyContract(t *testing.T) {
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	opts := bind.NewKeyedTransactor(ownerKey)
+	addr, _, _, err := cswap.Deploy(opts, swap.backend, ownerAddress)
+
+	if err != nil {
+		t.Fatalf("Error in deploy: %v", err)
+	}
+
+	swap.backend.(*backends.SimulatedBackend).Commit()
+
+	err = swap.verifyContract(context.TODO(), addr)
+
+	if err != nil {
+		t.Fatalf("Contract verification failed: %v", err)
+	}
+}
+
+func TestVerifyContractWrongContract(t *testing.T) {
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	opts := bind.NewKeyedTransactor(ownerKey)
+
+	addr, _, _, err := contracts.DeployECDSA(opts, swap.backend)
+
+	if err != nil {
+		t.Fatalf("Error in deploy: %v", err)
+	}
+
+	swap.backend.(*backends.SimulatedBackend).Commit()
+
+	err = swap.verifyContract(context.TODO(), addr)
+
+	if err != ErrNotASwapContract {
+		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }
