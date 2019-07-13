@@ -74,18 +74,23 @@ func (s *Swap) Stop() error {
 func (s *Swap) verifyHandshake(msg interface{}) error {
 	handshake, ok := msg.(*SwapHandshakeMsg)
 	var empty common.Address
-	if !ok || handshake.Beneficiary == empty || handshake.ContractAddress == empty {
+	if !ok || handshake.ContractAddress == empty {
 		return ErrEmptyAddressInSignature
 	}
 
-	return s.verifyContract(context.TODO(), handshake.ContractAddress)
+	err := s.verifyContract(context.TODO(), handshake.ContractAddress)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
 	answer, err := protoPeer.Handshake(context.TODO(), &SwapHandshakeMsg{
-		Beneficiary:     s.owner.address,
 		ContractAddress: s.owner.Contract,
 	}, s.verifyHandshake)
 
@@ -93,7 +98,13 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return err
 	}
 
-	swapPeer := NewPeer(protoPeer, s, s.backend, answer.(*SwapHandshakeMsg).Beneficiary, answer.(*SwapHandshakeMsg).ContractAddress)
+	beneficiary, err := s.getContractOwner(context.TODO(), answer.(*SwapHandshakeMsg).ContractAddress)
+
+	if err != nil {
+		return err
+	}
+
+	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, answer.(*SwapHandshakeMsg).ContractAddress)
 	s.peers[p.ID()] = swapPeer
 
 	s.logBalance(protoPeer)

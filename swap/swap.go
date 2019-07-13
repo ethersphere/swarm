@@ -349,7 +349,7 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 	return crypto.Keccak256([]byte(withPrefix))
 }
 
-// verifyCheque
+// verifyChequeSig verifies the signature on the cheque
 func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
 	sigHash := s.sigHashCheque(cheque)
 
@@ -414,6 +414,22 @@ func (s *Swap) verifyContract(ctx context.Context, address common.Address) error
 	}
 
 	return nil
+}
+
+func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (common.Address, error) {
+	swap, err := swap.InstanceAt(address, s.backend)
+
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	owner, err := swap.Instance.Owner(nil)
+
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	return owner, nil
 }
 
 // deploy deploys the Swap contract

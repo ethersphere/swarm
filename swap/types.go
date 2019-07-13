@@ -39,7 +39,6 @@ type Cheque struct {
 }
 
 type SwapHandshakeMsg struct {
-	Beneficiary     common.Address
 	ContractAddress common.Address
 }
 
