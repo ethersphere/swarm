@@ -178,6 +178,9 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	var cheque *Cheque
 	var err error
 
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	swapPeer := s.peers[peer]
 	beneficiary := swapPeer.beneficiary
 
