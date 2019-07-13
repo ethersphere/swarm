@@ -22,6 +22,7 @@ package swap
 import (
 	"bytes"
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -29,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 )
+
+var ErrTransactionReverted = errors.New("Transaction reverted")
 
 // Validator struct -> put validator in implementation of Swap. Make the validator a package level function and implement this in Swap
 
@@ -58,7 +61,7 @@ type Params struct {
 	ContractCode, ContractAbi string
 }
 
-func New() *Swap {
+func new() *Swap {
 	return &Swap{}
 }
 
@@ -76,9 +79,10 @@ func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address
 }
 
 // Deploy a Swap contract
-func (s *Swap) Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, tx *types.Transaction, err error) {
+func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (addr common.Address, s *Swap, tx *types.Transaction, err error) {
+	s = new()
 	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner)
-	return addr, tx, err
+	return addr, s, tx, err
 }
 
 // ContractParams returns contract information
@@ -89,23 +93,27 @@ func (s *Swap) ContractParams() *Params {
 	}
 }
 
-// SubmitChequeBeneficiary is used to cash in a cheque. It returns directly the transactionHash, a channel on which can be listened for the transaction to be mined and a channel where we can send an error
-func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (common.Hash, <-chan *types.Receipt, <-chan error) {
-	errorCh := make(chan error)
-	receiptCh := make(chan *types.Receipt)
+// SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
+func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error) {
 	tx, err := s.Instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
 	if err != nil {
-		errorCh <- err
+		return nil, err
 	}
-	go func() {
-		receipt, err := bind.WaitMined(auth.Context, backend, tx)
-		errorCh <- err
-		receiptCh <- receipt
-	}()
-	return tx.Hash(), receiptCh, errorCh
+	// it blocks here until tx is mined
+	receipt, err := bind.WaitMined(auth.Context, backend, tx)
+	if err != nil {
+		return nil, err
+	}
+	// indicate wether the transaction did nnot revert
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, ErrTransactionReverted
+	}
+	return receipt, nil
 }
 
-func (s *Swap) InstanceAt(address common.Address, backend bind.ContractBackend) error {
+// InstanceAt returns a new instance of simpleSwap at the address which was given
+func InstanceAt(address common.Address, backend bind.ContractBackend) (s *Swap, err error) {
+	s = new()
 	s.Instance, err = contract.NewSimpleSwap(address, backend)
-	return err
+	return s, err
 }

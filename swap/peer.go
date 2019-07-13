@@ -23,7 +23,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -56,8 +55,7 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 	case *EmitChequeMsg:
 		//return sp.handleEmitChequeMsg(ctx, msg)
-		go sp.handleEmitChequeMsg(ctx, msg)
-		return nil
+		return sp.handleEmitChequeMsg(ctx, msg)
 
 	case *ErrorMsg:
 		return sp.handleErrorMsg(ctx, msg)
@@ -197,26 +195,27 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	opts.Context = ctx
 
 	//TODO: make instanceAt to directly return a swap type
-	otherSwap := swap.New()
-	err := otherSwap.InstanceAt(cheque.Contract, sp.backend)
+
+	otherSwap, err := cswap.InstanceAt(cheque.Contract, sp.backend)
 	if err != nil {
-		log.Info("Could not get an instance of simpleSwap")
+		log.Error("Could not get an instance of simpleSwap")
 		return err
 	}
-	tx, receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
-	log.Info(fmt.Sprintf("Got tx: %x", tx))
-	select {
-	case err := <-err:
+
+	// submit cheque to the blockchain and cashes it directly
+	go func() {
+		// blocks here, as we are waiting for the transaction to be mined
+		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 		if err != nil {
 			log.Error("Got error when calling submitChequeBeneficiary: ", err)
-			return err
+			//TODO: do something with the error
 		}
-	case r := <-receipt:
-		log.Info("Transaction submitted to the blockchain", r)
-		//TODO: set up gorouting which waits the timeout and then calls cashCheque
+		log.Info(fmt.Sprintf("tx minded: %v", receipt))
+		//TODO: cashCheque
+		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
-	}
-	return nil
+	}()
+	return err
 }
 
 // TODO: Error handling

@@ -93,8 +93,8 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		params:              NewDefaultParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
+		contractReference:   nil,
 	}
-	sw.contractReference = swap.New()
 	sw.owner = sw.createOwner(prvkey, contract)
 	return sw
 }
@@ -314,7 +314,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-		if _, tx, err = s.contractReference.Deploy(opts, backend, owner); err != nil {
+		if _, s.contractReference, tx, err = swap.Deploy(opts, backend, owner); err != nil {
 			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
 			continue
 		}
