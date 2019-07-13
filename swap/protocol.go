@@ -17,6 +17,7 @@ package swap
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -81,6 +82,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 	err := s.verifyContract(context.TODO(), handshake.ContractAddress)
 
 	if err != nil {
+		log.Warn(fmt.Sprintf("swap handshake failed: %v", err))
 		return err
 	}
 

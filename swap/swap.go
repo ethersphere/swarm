@@ -353,7 +353,8 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
 	sigHash := s.sigHashCheque(cheque)
 
-	sig := cheque.Sig[:]
+	sig := make([]byte, len(cheque.Sig))
+	copy(sig, cheque.Sig)
 	sig[len(sig)-1] -= 27
 	pubKey, err := crypto.SigToPub(sigHash, sig)
 
