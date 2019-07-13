@@ -15,18 +15,25 @@
 package swap
 
 import (
+	"context"
+	"errors"
+
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
+var ErrEmptyAddressInSignature = errors.New("empty address in signature")
+
 var Spec = &protocols.Spec{
 	Name:       "swap",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
-		ChequeRequestMsg{},
+		SwapHandshakeMsg{},
 		EmitChequeMsg{},
 		ErrorMsg{},
 		ConfirmMsg{},
@@ -64,10 +71,31 @@ func (s *Swap) Stop() error {
 	return nil
 }
 
+func (s *Swap) verifyHandshake(msg interface{}) error {
+	handshake, ok := msg.(*SwapHandshakeMsg)
+	var empty common.Address
+	if !ok || handshake.Beneficiary == empty {
+		return ErrEmptyAddressInSignature
+	}
+	return nil
+}
+
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
-	swapPeer := NewPeer(protoPeer, s, s.backend)
+
+	answer, err := protoPeer.Handshake(context.TODO(), &SwapHandshakeMsg{
+		Beneficiary: s.owner.address,
+	}, s.verifyHandshake)
+
+	if err != nil {
+		return err
+	}
+
+	swapPeer := NewPeer(protoPeer, s, s.backend, answer.(*SwapHandshakeMsg).Beneficiary)
 	s.peers[p.ID()] = swapPeer
+
+	s.logBalance(protoPeer)
+
 	return swapPeer.Run(swapPeer.handleMsg)
 }
 
