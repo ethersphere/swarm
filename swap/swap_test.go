@@ -19,7 +19,6 @@ package swap
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -76,7 +75,7 @@ func init() {
 //Test getting a peer's balance
 func TestGetPeerBalance(t *testing.T) {
 	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := createTestSwap(t, nil)
 	defer os.RemoveAll(testDir)
 
 	//test for correct value
@@ -103,7 +102,7 @@ func TestGetPeerBalance(t *testing.T) {
 
 func TestGetAllBalances(t *testing.T) {
 	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := createTestSwap(t, nil)
 	defer os.RemoveAll(testDir)
 
 	if len(swap.balances) != 0 {
@@ -135,7 +134,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 //Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := createTestSwap(t, nil)
 	defer os.RemoveAll(testDir)
 
 	var bookings []booking
@@ -231,7 +230,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 //the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := createTestSwap(t, nil)
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
@@ -260,7 +259,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 
 //create a test swap account
 //creates a stateStore for persistence and a Swap account
-func createTestSwap(t *testing.T) (*Swap, string) {
+func createTestSwap(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
 		t.Fatal(err)
@@ -274,9 +273,12 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 		t.Fatal(err)
 	}
 
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		ownerAddress: {Balance: big.NewInt(1000000000)},
-	}, 8000000)
+	var contractBackend *backends.SimulatedBackend
+	if backend != nil {
+		contractBackend = backend
+	} else {
+		contractBackend = backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
+	}
 	swap := New(stateStore, key, common.Address{}, contractBackend)
 	return swap, dir
 }
@@ -316,7 +318,7 @@ func newTestCheque() *Cheque {
 // tests if encodeCheque encodes the cheque as expected
 func TestEncodeCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := createTestSwap(t, nil)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -334,7 +336,7 @@ func TestEncodeCheque(t *testing.T) {
 // tests if sigHashCheque computes the correct hash to sign
 func TestSigHashCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := createTestSwap(t, nil)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -352,7 +354,7 @@ func TestSigHashCheque(t *testing.T) {
 // tests if signContent computes the correct signature
 func TestSignContent(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := createTestSwap(t, nil)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -467,30 +469,34 @@ func TestVerifyContractWrongContract(t *testing.T) {
 // we then send a cheque and try to cash this in.
 func TestContractIntegration(t *testing.T) {
 
-	log.Debug("creating test swap")
-
-	issuerSwap, dir := createTestSwap(t)
-	defer os.RemoveAll(dir)
-
 	log.Debug("creating simulated backend")
 
 	gasLimit := uint64(10000000)
 	balance := new(big.Int)
 	balance.SetString("1000000000", 10)
 	backend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		issuerSwap.owner.address: {Balance: balance},
-		beneficiaryAddress:       {Balance: balance},
+		ownerAddress:       {Balance: balance},
+		beneficiaryAddress: {Balance: balance},
 	}, gasLimit)
+
+	log.Debug("creating test swap")
+
+	issuerSwap, dir := createTestSwap(t, backend)
+	defer os.RemoveAll(dir)
+
+	backend.Commit()
+
+	issuerSwap.owner.address = ownerAddress
+	issuerSwap.owner.privateKey = ownerKey
 
 	log.Debug("deploy issuer swap")
 
 	ctx := context.TODO()
-	addr, ss, err := testDeploy(ctx, backend, issuerSwap.owner.privateKey, issuerSwap.owner.address)
+	err := testDeploy(ctx, backend, issuerSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuerSwap.owner.Contract = addr
-	issuerSwap.contractReference.Instance = ss
+	backend.Commit()
 
 	log.Debug("deployed. signing cheque")
 
@@ -507,7 +513,7 @@ func TestContractIntegration(t *testing.T) {
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	tx, err := issuerSwap.contractReference.SubmitChequeBeneficiary(
+	tx, err := issuerSwap.contractReference.Instance.SubmitChequeBeneficiary(
 		opts,
 		big.NewInt(int64(cheque.Serial)),
 		big.NewInt(int64(cheque.Amount)),
@@ -520,11 +526,11 @@ func TestContractIntegration(t *testing.T) {
 	}
 
 	log.Debug("getting receipt")
-
 	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	// check if success
 	if receipt.Status != 1 {
 		t.Fatalf("Bad status %d", receipt.Status)
@@ -567,7 +573,7 @@ func TestContractIntegration(t *testing.T) {
 	backend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	tx, err = issuerSwap.contractReference.Instance.CashCheque(opts, beneficiaryAddress)
+	tx, err = issuerSwap.contractReference.Instance.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(payoutAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -593,14 +599,13 @@ func TestContractIntegration(t *testing.T) {
 	}
 }
 
-func testDeploy(ctx context.Context, backend *backends.SimulatedBackend, prvKey *ecdsa.PrivateKey, address common.Address) (addr common.Address, ss *contract.SimpleSwap, err error) {
-	opts := bind.NewKeyedTransactor(prvKey)
-	opts.Value = big.NewInt(0)
+func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err error) {
+	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	if addr, _, ss, err = contract.DeploySimpleSwap(opts, backend, address); err != nil {
-		return common.Address{}, nil, err
+	if swap.owner.Contract, swap.contractReference, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration); err != nil {
+		return err
 	}
-	backend.Commit()
-	return addr, ss, nil
+	return nil
 }
