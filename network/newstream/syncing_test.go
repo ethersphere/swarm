@@ -89,7 +89,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 			return err
 		}
 		nodeIDs = sim.UpNodeIDs()
-		syncingNodeId := nodeIDs[1]
+		syncingNodeID := nodeIDs[1]
 
 		uploaderNodeBinIDs := make([]uint64, 17)
 
@@ -107,9 +107,9 @@ func TestTwoNodesFullSync(t *testing.T) {
 		}
 
 		// check that the sum of bin indexes is equal
-		log.Debug("compare to", "enode", syncingNodeId)
+		log.Debug("compare to", "enode", syncingNodeID)
 
-		return waitChunks(sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
+		return waitChunks(sim.NodeItem(syncingNodeID, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 	})
 
 	if result.Error != nil {
@@ -253,7 +253,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 			chunks := uploadChunks(t, ctx, uploadStore, tc.chunkCount)
 
-			totalChunkCount, err := chunkCount(uploadStore)
+			totalChunkCount, err := getChunkCount(uploadStore)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -283,7 +283,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			if tc.liveChunkCount > 0 {
 				chunks = append(chunks, uploadChunks(t, ctx, uploadStore, tc.liveChunkCount)...)
 
-				totalChunkCount, err = chunkCount(uploadStore)
+				totalChunkCount, err = getChunkCount(uploadStore)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -303,110 +303,90 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	}
 }
 
-// TestTwoNodesFullSyncLive brings up one node, adds chunkCount * 4096 bytes to its localstore, then connects to it another fresh node.
-// it then waits for syncTime and checks that they have both synced correctly. It then adds another chunkCount to the uploader node
-// and waits for another syncTime, then checks for the correct sync by bin indexes
+// TestTwoNodesFullSyncLive brings up two nodes, connects them, adds chunkCount
+// * 4096 bytes to its localstore, then validates that all chunks are synced.
 func TestTwoNodesFullSyncLive(t *testing.T) {
-	var chunkCount = 20000
+	var (
+		chunkCount = 20000
+		timeout    = 30 * time.Second
+	)
+
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
-	timeout := 90 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	_, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		nodeIDs := sim.UpNodeIDs()
-
-		uploaderNodeStore := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
-
-		log.Debug("uploader node", "enode", nodeIDs[0])
-
-		//put some data into just the first node
-		filesize := chunkCount * 4096
-		cctx := context.Background()
-		//_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
-		//if err != nil {
-		//return err
-		//}
-		//if err := wait(cctx); err != nil {
-		//return err
-		//}
-
-		id, err := sim.AddNodes(1)
+		uploaderNode, err := sim.AddNode()
 		if err != nil {
 			return err
 		}
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+
+		syncingNode, err := sim.AddNode()
 		if err != nil {
 			return err
 		}
-		nodeIDs = sim.UpNodeIDs()
-		syncingNodeStore := sim.NodeItem(nodeIDs[1], bucketKeyFileStore)
-
-		uploaderNodeBinIDs := make([]uint64, 17)
-
-		log.Debug("checking pull subscription bin ids")
-		for po := 0; po <= 16; po++ {
-			until, err := uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
-			}
-			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
-
-			uploaderNodeBinIDs[po] = until
+		err = sim.Net.Connect(syncingNode, uploaderNode)
+		if err != nil {
+			return err
 		}
 
-		// wait for syncing
-		//<-time.After(syncTime)
-
-		// check that the sum of bin indexes is equal
-		log.Debug("compare to", "enode", nodeIDs[1])
-
-		uploaderSum, otherNodeSum := 0, 0
-		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := syncingNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
-			}
-			otherNodeSum += int(shouldUntil)
-			uploaderSum += int(uploaderUntil)
+		uploaderSum, err := getChunkCount(uploaderNodeStore.ChunkStore)
+		if err != nil {
+			return err
 		}
-		if uploaderSum != otherNodeSum {
-			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+		if uploaderSum != 0 {
+			return fmt.Errorf("got not empty uploader chunk store")
 		}
 
 		// now add stuff so that we fetch it with live syncing
-
-		_, wait, err := uploaderNodeStore.(*storage.FileStore).Store(cctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
+		filesize := chunkCount * 4096
+		_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 		if err != nil {
 			return err
 		}
-		if err = wait(cctx); err != nil {
+		if err = wait(ctx); err != nil {
 			return err
 		}
 
 		// count the content in the bins again
-		var want uint64
-		for po := 0; po <= 16; po++ {
-			until, err := uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
-			}
-			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
-
-			uploaderNodeBinIDs[po] = until
-			want += until
+		uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
+		if err != nil {
+			return err
+		}
+		if len(uploadedChunks) == 0 {
+			return fmt.Errorf("got empty uploader chunk store after uploading")
 		}
 
-		return waitChunks(syncingNodeStore.(chunk.Store), want, 10*time.Second)
+		// wait for all chunks to be synced
+		syncingNodeStore := sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
+		if err := waitChunks(syncingNodeStore, uint64(len(uploadedChunks)), 10*time.Second); err != nil {
+			return err
+		}
+
+		// validate that all and only all chunks are synced
+		syncedChunks, err := getChunks(syncingNodeStore)
+		if err != nil {
+			return err
+		}
+		for c := range uploadedChunks {
+			if _, ok := syncedChunks[c]; !ok {
+				return fmt.Errorf("missing chunk %v", c)
+			}
+			delete(uploadedChunks, c)
+			delete(syncedChunks, c)
+		}
+		if len(uploadedChunks) != 0 {
+			return fmt.Errorf("some of the uploaded chunks are not synced")
+		}
+		if len(syncedChunks) != 0 {
+			return fmt.Errorf("some of the synced chunks are not of uploaded ones")
+		}
+		return nil
 	})
 
 	if result.Error != nil {
@@ -414,92 +394,147 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 	}
 }
 
-// TestTwoNodesFullSyncLive brings up one node, adds chunkCount * 4096 bytes to its localstore, then connects to it another fresh node.
-// it then waits for syncTime and checks that they have both synced correctly. It then adds another chunkCount to the uploader node
-// and waits for another syncTime, then checks for the correct sync by bin indexes
-func TestTwoNodesJustLive(t *testing.T) {
+// TestTwoNodesFullSyncHistoryAndLive brings up one node, adds chunkCount * 4096
+// bytes to its localstore for historical data, then validates that all chunks
+// are synced to the newly connected node. After that it adds another chunkCount
+// * 4096 bytes to its localstore and validates that all live chunks are synced.
+func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 	var (
-		chunkCount = 7000
-		syncTime   = 3 * time.Second
+		chunkCount = 10000 // per history and per live upload
+		timeout    = 30 * time.Second
 	)
+
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
-	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	_, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		nodeIDs := sim.UpNodeIDs()
-		uploaderNodeStore := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
-
-		log.Debug("uploader node", "enode", nodeIDs[0])
-
-		id, err := sim.AddNodes(1)
+		uploaderNode, err := sim.AddNode()
 		if err != nil {
 			return err
 		}
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
-		if err != nil {
-			return err
-		}
-		nodeIDs = sim.UpNodeIDs()
-		syncingNodeStore := sim.NodeItem(nodeIDs[1], bucketKeyFileStore)
-		uploaderNodeBinIDs := make([]uint64, 17)
+		uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
 
-		//put some data into just the first node
+		// add chunks for historical syncing before new node connection
 		filesize := chunkCount * 4096
-		go func() {
-			_, _, err = uploaderNodeStore.(*storage.FileStore).Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
-			if err != nil {
-				return
-			}
-		}()
-
-		// wait for live syncing
-		<-time.After(syncTime)
-
-		var until uint64
-		// check that the sum of bin indexes is equal
-		log.Debug("compare to", "enode", nodeIDs[1])
-
-		log.Debug("checking pull subscription bin ids")
-		for po := 0; po <= 16; po++ {
-			until, err = uploaderNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return
-			}
-			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
-
-			uploaderNodeBinIDs[po] = until
+		_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
+		if err != nil {
+			return err
+		}
+		if err = wait(ctx); err != nil {
+			return err
 		}
 
+		// add another node
+		syncingNode, err := sim.AddNode()
+		if err != nil {
+			return err
+		}
+		syncingNodeStore := sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
+		// and connect it with the uploading node
+		err = sim.Net.Connect(syncingNode, uploaderNode)
 		if err != nil {
 			return err
 		}
 
-		//todo change the check to see if the second localstore Has all of the chunks from the first one
+		// get total number of chunks
+		uploaderSum, err := getChunkCount(uploaderNodeStore.ChunkStore)
+		if err != nil {
+			return err
+		}
+		// and wait for them to be synced
+		if err := waitChunks(syncingNodeStore, uploaderSum, 10*time.Second); err != nil {
+			return err
+		}
 
-		uploaderSum, otherNodeSum := 0, 0
-		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := syncingNodeStore.(chunk.Store).LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
+		// get all chunks from the uploading node
+		uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
+		if err != nil {
+			return err
+		}
+		if len(uploadedChunks) == 0 {
+			return fmt.Errorf("got empty uploader chunk store after uploading")
+		}
+		// get all chunks from the syncing node
+		syncedChunks, err := getChunks(syncingNodeStore)
+		if err != nil {
+			return err
+		}
+		// validate that all and only all chunks are synced
+		// while keeping the record of them for live syncing validation
+		historicalChunks := make(map[string]struct{})
+		for c := range uploadedChunks {
+			if _, ok := syncedChunks[c]; !ok {
+				return fmt.Errorf("missing chunk %v", c)
 			}
-			otherNodeSum += int(shouldUntil)
-			uploaderSum += int(uploaderUntil)
+			delete(uploadedChunks, c)
+			delete(syncedChunks, c)
+			historicalChunks[c] = struct{}{}
 		}
-		if uploaderSum != otherNodeSum {
-			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+		if len(uploadedChunks) != 0 {
+			return fmt.Errorf("some of the uploaded historical chunks are not synced")
+		}
+		if len(syncedChunks) != 0 {
+			return fmt.Errorf("some of the synced historical chunks are not of uploaded ones")
 		}
 
+		// upload chunks for live syncing
+		_, wait, err = uploaderNodeStore.Store(ctx, testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
+		if err != nil {
+			return err
+		}
+		if err = wait(ctx); err != nil {
+			return err
+		}
+
+		// get all chunks from the uploader node
+		uploadedChunks, err = getChunks(uploaderNodeStore.ChunkStore)
+		if err != nil {
+			return err
+		}
+		if len(uploadedChunks) == 0 {
+			return fmt.Errorf("got empty uploader chunk store after uploading")
+		}
+
+		// wait for all chunks to be synced
+		if err := waitChunks(syncingNodeStore, uint64(len(uploadedChunks)), 10*time.Second); err != nil {
+			return err
+		}
+
+		// get all chunks from the syncing node
+		syncedChunks, err = getChunks(syncingNodeStore)
+		if err != nil {
+			return err
+		}
+		// remove historical chunks from total uploaded and synced chunks
+		for c := range historicalChunks {
+			if _, ok := uploadedChunks[c]; !ok {
+				return fmt.Errorf("missing uploaded historical chunk: %s", c)
+			}
+			delete(uploadedChunks, c)
+			if _, ok := syncedChunks[c]; !ok {
+				return fmt.Errorf("missing synced historical chunk: %s", c)
+			}
+			delete(syncedChunks, c)
+		}
+		// validate that all and only all live chunks are synced
+		for c := range uploadedChunks {
+			if _, ok := syncedChunks[c]; !ok {
+				return fmt.Errorf("missing chunk %v", c)
+			}
+			delete(uploadedChunks, c)
+			delete(syncedChunks, c)
+		}
+		if len(uploadedChunks) != 0 {
+			return fmt.Errorf("some of the uploaded live chunks are not synced")
+		}
+		if len(syncedChunks) != 0 {
+			return fmt.Errorf("some of the synced live chunks are not of uploaded ones")
+		}
 		return nil
 	})
 
@@ -517,7 +552,7 @@ func waitChunks(store chunk.Store, want uint64, staledTimeout time.Duration) (er
 		staled time.Duration // duration for when the number of chunks is the same
 	)
 	for staled < staledTimeout { // wait for some time while staled
-		count, err = chunkCount(store)
+		count, err = getChunkCount(store)
 		if err != nil {
 			return err
 		}
@@ -564,7 +599,7 @@ func waitChunks(store chunk.Store, want uint64, staledTimeout time.Duration) (er
 	return nil
 }
 
-func chunkCount(store chunk.Store) (c uint64, err error) {
+func getChunkCount(store chunk.Store) (c uint64, err error) {
 	for po := 0; po <= chunk.MaxPO; po++ {
 		last, err := store.LastPullSubscriptionBinID(uint8(po))
 		if err != nil {
@@ -573,4 +608,26 @@ func chunkCount(store chunk.Store) (c uint64, err error) {
 		c += last
 	}
 	return c, nil
+}
+
+func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
+	chunks = make(map[string]struct{})
+	for po := uint8(0); po <= chunk.MaxPO; po++ {
+		last, err := store.LastPullSubscriptionBinID(uint8(po))
+		if err != nil {
+			return nil, err
+		}
+		if last == 0 {
+			continue
+		}
+		ch, _ := store.SubscribePull(context.Background(), po, 0, last)
+		for c := range ch {
+			addr := c.Address.Hex()
+			if _, ok := chunks[addr]; ok {
+				return nil, fmt.Errorf("duplicate chunk %s", addr)
+			}
+			chunks[addr] = struct{}{}
+		}
+	}
+	return chunks, nil
 }
