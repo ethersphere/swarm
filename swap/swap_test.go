@@ -372,8 +372,9 @@ func TestSignContent(t *testing.T) {
 }
 
 // TestContractIntegration tests a end-to-end cheque interaction.
-// First we deploy both a issuer and a beneficiary contract,
-// we then send a cheque and try to cash this in.
+// First a simulated backend is created, then we deploy the issuer's swap contract.
+// We issue a test cheque with the beneficiary address and on the issuer's contract,
+// and immediately try to cash-in the cheque
 func TestContractIntegration(t *testing.T) {
 
 	log.Debug("creating simulated backend")
