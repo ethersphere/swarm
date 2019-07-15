@@ -27,18 +27,4 @@ type RetrieveRequest struct {
 type ChunkDelivery struct {
 	Addr  storage.Address
 	SData []byte // the stored chunk Data (incl size)
-	//peer  *Peer  // set in handleChunkDeliveryMsg
 }
-
-// ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
-//type ChunkDelivery struct {
-//Ruid uint
-//LastIndex uint
-//Chunks []DeliveredChunk
-//}
-
-// DeliveredChunk encapsulates a particular chunk's underlying data within a ChunkDelivery message
-//type DeliveredChunk struct {
-//Addr storage.Address //chunk address
-//Data []byte          //chunk data
-//}

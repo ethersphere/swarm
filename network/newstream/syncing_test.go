@@ -29,6 +29,9 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
+// more tests:
+// 1. bring up 3 nodes, on each of them different content, connect them all together and check that all 3 get the union of the 3 localstores
+
 //TODO:
 // - write test that brings up a bigger cluster, then tests all individual nodes with localstore get to get the chunks that were
 // uploaded to the first node
@@ -472,6 +475,8 @@ func TestTwoNodesJustLive(t *testing.T) {
 		if err != nil {
 			return err
 		}
+
+		//todo change the check to see if the second localstore Has all of the chunks from the first one
 
 		uploaderSum, otherNodeSum := 0, 0
 		for po, uploaderUntil := range uploaderNodeBinIDs {

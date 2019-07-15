@@ -92,9 +92,6 @@ func (r *Retrieval) HandleMsg(p *Peer) func(context.Context, interface{}) error 
 			go r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
 			go r.handleChunkDelivery(ctx, p, msg)
-
-		default:
-			return fmt.Errorf("unknown message type: %T", msg)
 		}
 		return nil
 	}
@@ -376,5 +373,6 @@ func (r *Retrieval) Start(server *p2p.Server) error {
 
 func (r *Retrieval) Stop() error {
 	log.Info("shutting down retrieval")
+	close(r.quit)
 	return nil
 }

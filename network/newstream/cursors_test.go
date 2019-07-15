@@ -84,9 +84,6 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).getCursorsCopy()
 		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Unlock()
 
-		//onesHistoricalFetchers := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).historicalStreams
-		//othersHistoricalFetchers := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).historicalStreams
-
 		onesBins := sim.NodeItem(idOne, bucketKeyBinIndex).([]uint64)
 		othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
@@ -159,7 +156,6 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 				if err := compareNodeBinsToStreams(t, pivotCursors, othersBins); err != nil {
 					return err
 				}
-				//checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
 			}
 
 			if err := compareNodeBinsToStreams(t, otherCursors, pivotBins); err != nil {
