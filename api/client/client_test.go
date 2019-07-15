@@ -41,34 +41,131 @@ func serverFunc(api *api.API) swarmhttp.TestServer {
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
 func TestClientUploadDownloadRaw(t *testing.T) {
-	testClientUploadDownloadRaw(false, t)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	data := []byte("foo123")
+	testClientUploadDownloadRaw(srv,false, t, data, false)
+
+	// check the tag was created successfully
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 1, 1, 0, 1)
 }
 
 func TestClientUploadDownloadRawEncrypted(t *testing.T) {
+
 	if testutil.RaceEnabled {
 		t.Skip("flaky with -race on Travis")
 		// See: https://github.com/ethersphere/go-ethereum/issues/1254
 	}
 
-	testClientUploadDownloadRaw(true, t)
-}
-
-func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
-	client := NewClient(srv.URL)
-
-	// upload some raw data
 	data := []byte("foo123")
-	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testClientUploadDownloadRaw(srv,true, t, data, false)
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
 	testutil.CheckTag(t, tag, 1, 1, 0, 1)
+}
+
+func TestPinWithRawUpload(t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	data := testutil.RandomBytes(1, 10000)
+	hash := testClientUploadDownloadRaw(srv,false, t, data, true)
+
+	// Check if the file is pinned
+	testutil.CheckIfPinned(t, srv , hash, data, 1, true)
+
+	// Unpin once again and see if the file is totally unpinned
+	srv.PinAPI.UnpinFiles(hash, "")
+	testutil.CheckIfUnpinned(t, srv , hash)
+}
+
+func TestPinAfterRawUpload(t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	//data := testutil.RandomBytes(1, 10000)
+	data := []byte("foo123")
+	hash := testClientUploadDownloadRaw(srv,false, t, data, false)
+
+	// Pin the file for first time and check if the file is pinned
+	srv.PinAPI.PinFiles(hash, true, "")
+	testutil.CheckIfPinned(t, srv , hash, data, 1, true)
+
+	// Unpin once again and see if the file is totally unpinned
+	srv.PinAPI.UnpinFiles(hash, "")
+	testutil.CheckIfUnpinned(t, srv , hash)
+}
+
+func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	data := testutil.RandomBytes(1, 10000)
+	hash := testClientUploadDownloadRaw(srv,false, t, data, false)
+
+	// Pin the file for first time and check if the file is pinned
+	srv.PinAPI.PinFiles(hash, true, "")
+	testutil.CheckIfPinned(t, srv , hash, data, 1, true)
+
+	// pin it once more and check if pin counter is increased by 2
+	srv.PinAPI.PinFiles(hash, true, "")
+	testutil.CheckIfPinned(t, srv , hash, data, 2, true)
+
+	// Unpin and check if the pin counter decrements to 1
+	srv.PinAPI.UnpinFiles(hash, "")
+	testutil.CheckIfPinned(t, srv , hash, data, 1, true)
+
+	// Unpin once again and see if the file is totally unpinned
+	srv.PinAPI.UnpinFiles(hash, "")
+	testutil.CheckIfUnpinned(t, srv , hash)
+}
+
+func TestPinUploadRawEncrypted(t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	data := testutil.RandomBytes(1, 10000)
+	hash := testClientUploadDownloadRaw(srv,true, t, data, true)
+
+	// Check if the file is pinned
+	testutil.CheckIfPinned(t, srv , hash, data, 1, true)
+
+	// Unpin once again and see if the file is totally unpinned
+	srv.PinAPI.UnpinFiles(hash, "")
+	testutil.CheckIfUnpinned(t, srv , hash)
+}
+
+
+func TestPinAfterUploadRawEncrypted(t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	data := testutil.RandomBytes(1, 10000)
+	hash := testClientUploadDownloadRaw(srv,true, t, data, false)
+
+	// Pin the file for first time and check if the file is pinned
+	srv.PinAPI.PinFiles(hash, true, "")
+	testutil.CheckIfPinned(t, srv , hash, data, 1, true)
+
+	// Unpin once again and see if the file is totally unpinned
+	srv.PinAPI.UnpinFiles(hash, "")
+	testutil.CheckIfUnpinned(t, srv , hash)
+}
+
+
+func testClientUploadDownloadRaw(srv *swarmhttp.TestSwarmServer, toEncrypt bool, t *testing.T, data []byte, toPin bool) string{
+	client := NewClient(srv.URL)
+
+	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt, toPin)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// check we can download the same data
 	res, isEncrypted, err := client.DownloadRaw(hash)
@@ -86,6 +183,8 @@ func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	if !bytes.Equal(gotData, data) {
 		t.Fatalf("expected downloaded data to be %q, got %q", data, gotData)
 	}
+
+	return hash
 }
 
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
@@ -103,7 +202,7 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
-	upload := func(manifest, path string, data []byte) string {
+	upload := func(manifest, path string, data []byte, toPin bool) string {
 		file := &File{
 			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 			ManifestEntry: api.ManifestEntry{
@@ -112,7 +211,7 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest, toEncrypt, false)
+		hash, err := client.Upload(file, manifest, toEncrypt, toPin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,23 +238,51 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 		}
 	}
 
+	//
+	//  Pinning related test on non-raw uploads
+	//
+	pinData := []byte("some-data")
+	pinRoot := upload("", "", pinData, false)
+
+	// None of the chunks should be pinned
+	testutil.IsNoChunksPinned(t,srv, pinRoot)
+
+	// Pin and check if the file is pinned
+	srv.PinAPI.PinFiles(pinRoot, false, "")
+	testutil.CheckIfPinned(t, srv , pinRoot, pinData, 1, false)
+
+	// Pin and check again
+	srv.PinAPI.PinFiles(pinRoot, false, "")
+	testutil.CheckIfPinned(t, srv , pinRoot, pinData, 2, false)
+
+	// Unpin and check again
+	srv.PinAPI.UnpinFiles(pinRoot, "")
+	testutil.CheckIfPinned(t, srv , pinRoot, pinData, 1, false)
+
+	// Unpin one last time and see if none of the chunks are pinned
+	srv.PinAPI.UnpinFiles(pinRoot, "")
+	testutil.IsNoChunksPinned(t,srv, pinRoot)
+
+
+
 	// upload a file to the root of a manifest
 	rootData := []byte("some-data")
-	rootHash := upload("", "", rootData)
+	rootHash := upload("", "", rootData, false)
 
 	// check we can download the root file
 	checkDownload(rootHash, "", rootData)
 
 	// upload another file to the same manifest
 	otherData := []byte("some-other-data")
-	newHash := upload(rootHash, "some/other/path", otherData)
+	newHash := upload(rootHash, "some/other/path", otherData,false)
 
 	// check we can download both files from the new manifest
 	checkDownload(newHash, "", rootData)
 	checkDownload(newHash, "some/other/path", otherData)
 
 	// replace the root file with different data
-	newHash = upload(newHash, "", otherData)
+	newHash = upload(newHash, "", otherData, true)
+	//testutil.CheckIfPinned(t, srv , newHash, otherData, 1, false)
 
 	// check both files have the other data
 	checkDownload(newHash, "", otherData)

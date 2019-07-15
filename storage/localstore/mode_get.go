@@ -17,7 +17,9 @@
 package localstore
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -158,12 +160,31 @@ func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 	return raw, nil
 }
 
+func (db *DB) IsFilePinned(hash []byte) bool{
+	isFilePinned := false
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	i, err := db.pinFilesIndex.Get(item)
+	if err != nil {
+		return false
+	}
+
+	if bytes.Equal(i.Address,hash) {
+		isFilePinned = true
+	}
+	return isFilePinned
+}
+
 func (db *DB) IsChunkPinned(hash []byte) bool {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
 	copy(item.Address[:], hash[:])
 	_, err := db.pinIndex.Get(item)
-	return (err != nil)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
@@ -177,6 +198,39 @@ func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 	return i.PinCounter, nil
 }
 
+
 // testHookUpdateGC is a hook that can provide
 // information when a garbage collection index is updated.
 var testHookUpdateGC func()
+
+
+// Used in Testing
+func (db *DB) GetPinFilesIndex() map[string]uint64 {
+	pinnedFiles := make(map[string]uint64)
+	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		pinnedFiles[hex.EncodeToString(item.Address)] = item.TreeSize
+		return false, nil
+	}, nil)
+	return pinnedFiles
+}
+
+
+func (db *DB) GetPinnedChunks() map[string]uint64 {
+	pinnedChunks := make(map[string]uint64)
+	_ = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		pinnedChunks[hex.EncodeToString(item.Address)] = item.PinCounter
+		return false, nil
+	}, nil)
+	return pinnedChunks
+}
+
+
+func (db *DB) GetAllChunksInDB() map[string]int {
+	chunksInDB := make(map[string]int)
+	_ = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		chunksInDB[hex.EncodeToString(item.Address)] = len(item.Data)
+		return false, nil
+	}, nil)
+	return chunksInDB
+}
+

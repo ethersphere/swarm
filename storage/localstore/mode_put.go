@@ -19,6 +19,7 @@ package localstore
 import (
 	"context"
 	"fmt"
+	"github.com/ethersphere/swarm/log"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -199,30 +200,7 @@ func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error {
 	return err
 }
 
-// decrements the pin counter by 1,
-// if the pincounter reached 0, the entry is removed from the pinIndex
-func (db *DB) UnpinChunk(hash []byte) error {
-
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
-
-	batch := new(leveldb.Batch)
-	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	if item.PinCounter > 0 {
-		item.PinCounter = item.PinCounter - 1
-		db.pinIndex.PutInBatch(batch, item)
-	} else {
-		db.pinIndex.DeleteInBatch(batch, item)
-	}
-
-	err := db.shed.WriteBatch(batch)
-
-	return err
-}
-
-func (db *DB) UnpinRootHash(hash []byte) error {
+func (db *DB) RemoveFromPinFileIndex(hash []byte) error {
 
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -237,3 +215,61 @@ func (db *DB) UnpinRootHash(hash []byte) error {
 
 	return err
 }
+
+// decrements the pin counter by 1,
+// if the pincounter reached 0, the entry is removed from the pinIndex
+func (db *DB) UnpinChunk(hash []byte) error {
+
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+	batch := new(leveldb.Batch)
+
+	// Get the existing pin counter of the chunk
+	existingPinCounter, err := db.GetPinCounterOfChunk(hash)
+	if err != nil{
+		logMsg := fmt.Sprintf("Could not unpin chunk %s . Hash does not exists in pinIndex.",
+			fmt.Sprintf("%0x", hash))
+		log.Info(logMsg)
+		return err
+	}
+
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	if existingPinCounter > 1 {
+		item.PinCounter = existingPinCounter - 1
+		db.pinIndex.PutInBatch(batch, item)
+	} else {
+		db.pinIndex.DeleteInBatch(batch, item)
+	}
+
+	err = db.shed.WriteBatch(batch)
+	return err
+}
+
+func (db *DB) PinChunk(hash []byte) error {
+
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	batch := new(leveldb.Batch)
+
+	// Get the existing pin counter of the chunk
+	existingPinCounter, err := db.GetPinCounterOfChunk(hash)
+	if err != nil{
+		existingPinCounter = 0
+	}
+
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	item.PinCounter = existingPinCounter + 1
+	db.pinIndex.PutInBatch(batch, item)
+
+	err = db.shed.WriteBatch(batch)
+
+	return err
+}
+
+
+

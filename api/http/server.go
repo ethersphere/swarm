@@ -291,11 +291,13 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add the root hash of the RAW file in the pinFilesIndex
-	err = s.api.PinApi.AddPinFile(addr, true)
-	if err != nil {
-		postRawFail.Inc(1)
-		respondError(w, r, err.Error(), http.StatusInternalServerError)
-		return
+	if pinCounter > 0 {
+		err = s.api.PinApi.AddPinFile(addr, true)
+		if err != nil {
+			postRawFail.Inc(1)
+			respondError(w, r, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	wait(r.Context())

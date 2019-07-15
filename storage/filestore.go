@@ -119,14 +119,14 @@ func (f *FileStore) HashSize() int {
 }
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
-func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
+func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader) (addrs AddressCollection, err error) {
 	tag := chunk.NewTag(0, "ephemeral-tag", 0) //this tag is just a mock ephemeral tag since we don't want to save these results
 
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
 		// Pinning doesn't matter when splitting file for getting hash
 		// The file is not stored in the chunk DB here
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag, 0),
+		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, false, tag, 0),
 	}
 	// do the actual splitting anyway, no way around it
 	_, wait, err := PyramidSplit(ctx, data, putter, putter, tag)
@@ -161,6 +161,7 @@ func (he *hashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference
 	if err != nil {
 		return nil, err
 	}
+
 	// internally store the reference
 	he.lock.Lock()
 	he.references = append(he.references, ref)

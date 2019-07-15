@@ -412,13 +412,6 @@ func (db *DB) po(addr chunk.Address) (bin uint8) {
 	return uint8(chunk.Proximity(db.baseKey, addr))
 }
 
-func (db *DB) ListPinnedFiles() {
-	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		log.Info("Pinned file", "Address", fmt.Sprintf("%0x", item.Address), "Size", item.TreeSize)
-		return false, nil
-	}, nil)
-}
-
 func (db *DB) ShowDatabaseInformation() {
 
 	schemaName, err := db.schemaName.Get()
@@ -555,3 +548,5 @@ func totalTimeMetric(name string, start time.Time) {
 	log.Trace(name+" total time", "time", totalTime)
 	metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 }
+
+
