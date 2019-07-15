@@ -64,11 +64,9 @@ func TestTwoNodesFullSync(t *testing.T) {
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 
-		item := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
-
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
-		item = sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 		store := item.(chunk.Store)
 
 		//put some data into just the first node
@@ -110,8 +108,8 @@ func TestTwoNodesFullSync(t *testing.T) {
 
 		// check that the sum of bin indexes is equal
 		log.Debug("compare to", "enode", syncingNodeId)
-		waitChunks(t, sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
-		return nil
+
+		return waitChunks(sim.NodeItem(syncingNodeId, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 	})
 
 	if result.Error != nil {
@@ -255,7 +253,10 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 			chunks := uploadChunks(t, ctx, uploadStore, tc.chunkCount)
 
-			totalChunkCount := chunkCount(t, uploadStore)
+			totalChunkCount, err := chunkCount(uploadStore)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if totalChunkCount != tc.chunkCount {
 				t.Errorf("uploaded %v chunks, want %v", totalChunkCount, tc.chunkCount)
@@ -274,12 +275,18 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 			syncStore := sim.NodeItem(syncNode, bucketKeyFileStore).(chunk.Store)
 
-			waitChunks(t, syncStore, totalChunkCount-removedCount, 10*time.Second)
+			err = waitChunks(syncStore, totalChunkCount-removedCount, 10*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if tc.liveChunkCount > 0 {
 				chunks = append(chunks, uploadChunks(t, ctx, uploadStore, tc.liveChunkCount)...)
 
-				totalChunkCount = chunkCount(t, uploadStore)
+				totalChunkCount, err = chunkCount(uploadStore)
+				if err != nil {
+					t.Fatal(err)
+				}
 
 				if want := tc.chunkCount + tc.liveChunkCount; totalChunkCount != want {
 					t.Errorf("uploaded %v chunks, want %v", totalChunkCount, want)
@@ -287,7 +294,10 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
 
-				waitChunks(t, syncStore, totalChunkCount-removedCount, time.Minute)
+				err = waitChunks(syncStore, totalChunkCount-removedCount, time.Minute)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 		})
 	}
@@ -396,8 +406,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 			want += until
 		}
 
-		waitChunks(t, syncingNodeStore.(chunk.Store), want, 10*time.Second)
-		return nil
+		return waitChunks(syncingNodeStore.(chunk.Store), want, 10*time.Second)
 	})
 
 	if result.Error != nil {
@@ -499,9 +508,7 @@ func TestTwoNodesJustLive(t *testing.T) {
 	}
 }
 
-func waitChunks(t *testing.T, store chunk.Store, want uint64, staledTimeout time.Duration) {
-	t.Helper()
-
+func waitChunks(store chunk.Store, want uint64, staledTimeout time.Duration) (err error) {
 	start := time.Now()
 	var (
 		count  uint64        // total number of chunks
@@ -510,7 +517,10 @@ func waitChunks(t *testing.T, store chunk.Store, want uint64, staledTimeout time
 		staled time.Duration // duration for when the number of chunks is the same
 	)
 	for staled < staledTimeout { // wait for some time while staled
-		count = chunkCount(t, store)
+		count, err = chunkCount(store)
+		if err != nil {
+			return err
+		}
 		if count >= want {
 			break
 		}
@@ -549,19 +559,18 @@ func waitChunks(t *testing.T, store chunk.Store, want uint64, staledTimeout time
 	}
 
 	if count != want {
-		t.Errorf("got synced chunks %d, want %d", count, want)
+		return fmt.Errorf("got synced chunks %d, want %d", count, want)
 	}
+	return nil
 }
 
-func chunkCount(t *testing.T, store chunk.Store) (c uint64) {
-	t.Helper()
-
+func chunkCount(store chunk.Store) (c uint64, err error) {
 	for po := 0; po <= chunk.MaxPO; po++ {
 		last, err := store.LastPullSubscriptionBinID(uint8(po))
 		if err != nil {
-			t.Fatal(err)
+			return 0, err
 		}
 		c += last
 	}
-	return c
+	return c, nil
 }
