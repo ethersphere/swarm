@@ -489,7 +489,7 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 		}
 
 		kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-		netStore := storage.NewNetStore(localStore, enode.ID{})
+		netStore := storage.NewNetStore(localStore, n.ID())
 		lnetStore := storage.NewLNetStore(netStore)
 		fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		if numChunks > 0 {
