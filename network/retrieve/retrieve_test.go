@@ -147,7 +147,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	}
 
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	netStore := storage.NewNetStore(localStore, enode.ID{})
+	netStore := storage.NewNetStore(localStore, n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
