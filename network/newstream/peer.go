@@ -43,14 +43,13 @@ type Peer struct {
 	*network.BzzPeer
 	mtx            sync.RWMutex
 	providers      map[string]StreamProvider
-	intervalsStore state.Store
+	intervalsStore state.Store //move to stream
 
-	streamCursorsMu   sync.Mutex
-	streamCursors     map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
-	activeBoundedGets map[string]chan struct{}
-	openWants         map[uint]*want // maintain open wants on the client side
-	openOffers        map[uint]offer // maintain open offers on the server side
-	quit              chan struct{}  // closed when peer is going offline
+	streamCursorsMu sync.Mutex
+	streamCursors   map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
+	openWants       map[uint]*want    // maintain open wants on the client side
+	openOffers      map[uint]offer    // maintain open offers on the server side
+	quit            chan struct{}     // closed when peer is going offline
 }
 
 // NewPeer is the constructor for Peer
