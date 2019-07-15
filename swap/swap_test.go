@@ -72,13 +72,13 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-//Test getting a peer's balance
+// Test getting a peer's balance
 func TestGetPeerBalance(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t, nil)
+	// create a test swap account
+	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	//test for correct value
+	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
 	b, err := swap.GetPeerBalance(testPeer.ID())
@@ -89,7 +89,7 @@ func TestGetPeerBalance(t *testing.T) {
 		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
 	}
 
-	//test for inexistent node
+	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
 	_, err = swap.GetPeerBalance(id)
 	if err == nil {
@@ -101,25 +101,25 @@ func TestGetPeerBalance(t *testing.T) {
 }
 
 func TestGetAllBalances(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t, nil)
+	// create a test swap account
+	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	if len(swap.balances) != 0 {
 		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
 	}
 
-	//test balance addition for peer
+	// test balance addition for peer
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 808
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
-	//test successive balance addition for peer
+	// test successive balance addition for peer
 	testPeer2 := newDummyPeer()
 	swap.balances[testPeer2.ID()] = 909
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
 
-	//test balance change for peer
+	// test balance change for peer
 	swap.balances[testPeer.ID()] = 303
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
@@ -131,10 +131,10 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 	}
 }
 
-//Test that repeated bookings do correct accounting
+// Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t, nil)
+	// create a test swap account
+	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	var bookings []booking
@@ -222,15 +222,15 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 	return expectedBalances
 }
 
-//try restoring a balance from state store
-//this is simulated by creating a node,
-//assigning it an arbitrary balance,
-//then closing the state store.
-//Then we re-open the state store and check that
-//the balance is still the same
+// try restoring a balance from state store
+// this is simulated by creating a node,
+// assigning it an arbitrary balance,
+// then closing the state store.
+// Then we re-open the state store and check that
+// the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t, nil)
+	// create a test swap account
+	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
@@ -250,16 +250,16 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	var newBalance int64
 	stateStore.Get(testPeer.ID().String(), &newBalance)
 
-	//compare the balances
+	// compare the balances
 	if tmpBalance != newBalance {
 		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d",
 			tmpBalance, newBalance))
 	}
 }
 
-//create a test swap account
-//creates a stateStore for persistence and a Swap account
-func createTestSwap(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
+// create a test swap account with a backend
+// creates a stateStore for persistence and a Swap account
+func createTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
 		t.Fatal(err)
@@ -273,21 +273,23 @@ func createTestSwap(t *testing.T, backend *backends.SimulatedBackend) (*Swap, st
 		t.Fatal(err)
 	}
 
-	var contractBackend *backends.SimulatedBackend
-	if backend != nil {
-		contractBackend = backend
-	} else {
-		contractBackend = backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
-	}
-	swap := New(stateStore, key, common.Address{}, contractBackend)
+	swap := New(stateStore, key, common.Address{}, backend)
 	return swap, dir
+}
+
+// create a test swap account
+// create a default empty backend
+// creates a stateStore for persistence and a Swap account
+func createTestSwap(t *testing.T) (*Swap, string) {
+	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
+	return createTestSwapWithBackend(t, defaultBackend)
 }
 
 type dummyPeer struct {
 	*protocols.Peer
 }
 
-//creates a dummy protocols.Peer with dummy MsgReadWriter
+// creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeer() *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
 	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
@@ -318,7 +320,7 @@ func newTestCheque() *Cheque {
 // tests if encodeCheque encodes the cheque as expected
 func TestEncodeCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t, nil)
+	swap, dir := createTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -336,7 +338,7 @@ func TestEncodeCheque(t *testing.T) {
 // tests if sigHashCheque computes the correct hash to sign
 func TestSigHashCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t, nil)
+	swap, dir := createTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -354,7 +356,7 @@ func TestSigHashCheque(t *testing.T) {
 // tests if signContent computes the correct signature
 func TestSignContent(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t, nil)
+	swap, dir := createTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -482,7 +484,7 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("creating test swap")
 
-	issuerSwap, dir := createTestSwap(t, backend)
+	issuerSwap, dir := createTestSwapWithBackend(t, backend)
 	defer os.RemoveAll(dir)
 
 	backend.Commit()
@@ -600,6 +602,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 }
 
+// deploy for testing (needs simulated backend commit)
 func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
