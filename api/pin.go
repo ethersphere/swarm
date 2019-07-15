@@ -197,48 +197,53 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, tag, DONT_PIN)
 
 
-	if !isRaw {
+	go func() {
+		if !isRaw {
 
-		// If it not a raw file... load the manifest and process the files inside one by one
-		walker, err := p.api.NewManifestWalker(context.TODO(), storage.Address(addr),
-			p.api.Decryptor(context.TODO(), credentials) , nil)
+			// If it not a raw file... load the manifest and process the files inside one by one
+			walker, err := p.api.NewManifestWalker(context.TODO(), storage.Address(addr),
+				p.api.Decryptor(context.TODO(), credentials), nil)
 
-		if err != nil {
-			log.Error("Could not decode manifest. Reason: " + err.Error())
-			return
-		}
-
-		err = walker.Walk(func(entry *ManifestEntry) error {
-
-			fileAddr, err := hex.DecodeString(entry.Hash)
 			if err != nil {
-				log.Error("Error decoding hash present in manifest" + err.Error())
-				return err
+				log.Error("Could not decode manifest. Reason: " + err.Error())
+				return
 			}
 
-			// send the file to file workers
-			fileWorkers <- storage.Reference(fileAddr)
-			return nil
-		})
+			err = walker.Walk(func(entry *ManifestEntry) error {
 
-		if err != nil {
-			log.Error("Error walking manifest. Reason: " + err.Error())
-			return
+				fileAddr, err := hex.DecodeString(entry.Hash)
+				if err != nil {
+					log.Error("Error decoding hash present in manifest" + err.Error())
+					return err
+				}
+
+				// send the file to file workers
+				fileWorkers <- storage.Reference(fileAddr)
+
+				return nil
+			})
+
+			if err != nil {
+				log.Error("Error walking manifest. Reason: " + err.Error())
+				return
+			}
+
+			// Finally, remove the manifest file too
+			fileWorkers <- storage.Reference(addr)
+
+			// Signal end of file stream
+			fileWorkers <- storage.Reference(nil)
+
+		} else {
+			// Its a raw file.. no manifest.. so process only this hash
+			fileWorkers <- storage.Reference(addr)
+
+			// Singal end of file stream
+			fileWorkers <- storage.Reference(nil)
 		}
+	}()
 
-		// Finally, remove the manifest file too
-		fileWorkers <- storage.Reference(addr)
 
-		// Signal end of file stream
-		fileWorkers <- storage.Reference(nil)
-
-	} else {
-		// Its a raw file.. no manifest.. so process only this hash
-		fileWorkers <- storage.Reference(addr)
-
-		// Singal end of file stream
-		fileWorkers <- storage.Reference(nil)
-	}
 
 	doneFileWorker := make(chan struct{})
 QuitFileFor:
@@ -391,8 +396,8 @@ func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[st
 			return err
 		}
 		lock.Lock()
+		defer lock.Unlock()
 		pinnedChunks[hex.EncodeToString(chunkAddr)] = pinCounter
-		lock.Unlock()
 		return nil
 	}
 	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)

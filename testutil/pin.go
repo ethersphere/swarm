@@ -17,6 +17,9 @@
 package testutil
 
 import (
+	"bytes"
+	"context"
+	"encoding/hex"
 	"fmt"
 	swarmhttp "github.com/ethersphere/swarm/api/http"
 	"testing"
@@ -27,28 +30,16 @@ import (
 func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string, data []byte, pinCounter uint64, isRaw bool) {
 
 
-	//fmt.Println(rootHash)
-	//pf := srv.PinAPI.GetPinnedFiles()
-	//for k,v := range pf {
-	//	fmt.Println(k,v)
-	//}
-
 	// Check if the root hash is in the pinFilesIndex
 	pinnedFiles := srv.PinAPI.GetPinnedFiles()
 	if _, ok := pinnedFiles[rootHash]; !ok {
 		t.Fatalf("File %s not pinned in pinFilesIndex", rootHash)
 	}
 
-	// Get all the chunks from DB
-	//chunksInDB, err := srv.FileStore.GetAllReferences(context.Background(), bytes.NewReader(data))
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
 	chunksInDB := srv.PinAPI.GetAllChunksFromDB()
 	//for k, _ := range chunksInDB {
 	//	fmt.Println("Chunks in DB", k)
 	//}
-
 
 	// Get pinned chunks details from pinning indexes
 	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash,"")
@@ -61,33 +52,50 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 		pinnedChunks["8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731"] = pinCounter
 	}
 
-
 	// Check if number of chunk hashes are same
 	if len(chunksInDB) != len(pinnedChunks) {
 		t.Fatalf("Expected number of chunks to be %d, but is %d", len(chunksInDB), len(pinnedChunks))
 	}
 
-
-	// don't check for chunk correctness for encrypted files as the encryption key is random
-	//if !isEncrypted {
-		// Check if all the chunk address are same
-		noOfChunksMissing := 0
-		for hash,_ := range chunksInDB {
-			if _, ok := pinnedChunks[hash]; !ok {
-				if !isRaw && noOfChunksMissing == 0{
-					noOfChunksMissing = 1
-					continue
-				}
-				t.Fatalf("Expected chunk %s not present", hash)
+	// Check if all the chunk address are same
+	noOfChunksMissing := 0
+	for hash,_ := range chunksInDB {
+		if _, ok := pinnedChunks[hash]; !ok {
+			if !isRaw && noOfChunksMissing == 0{
+				noOfChunksMissing = 1
+				continue
 			}
+			t.Fatalf("Expected chunk %s not present", hash)
 		}
-	//}
+	}
 
 	// Check for pin counter correctness
 	if pinCounter != 0 {
-		for _, pc := range pinnedChunks {
+		for hash, pc := range pinnedChunks {
 			if pc != pinCounter {
-				t.Fatalf("Expected pin counter %d got %d", pinCounter, pc)
+
+				foundChunk := false
+
+				// If "default path" is pointing to a file in the manifest...
+				// that file's chunks would have been pinned twice
+				if data != nil {
+
+					defaultFilehash, err := srv.FileStore.GetAllReferences(context.Background(), bytes.NewReader(data))
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					for _, defaultFileChunk := range defaultFilehash {
+						if hash == hex.EncodeToString(defaultFileChunk) && pc == pinCounter+1  {
+							foundChunk = true
+							break
+						}
+					}
+				}
+
+				if !foundChunk {
+					t.Fatalf("Expected pin counter %d got %d", pinCounter, pc)
+				}
 			}
 		}
 	}
