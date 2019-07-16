@@ -30,6 +30,11 @@ var (
 		Usage:  "Swarm account key file",
 		EnvVar: SwarmEnvAccount,
 	}
+	SwarmBzzKeyHexFlag = cli.StringFlag{
+		Name:   "bzzkeyhex",
+		Usage:  "BzzAccount key in hex (for testing)",
+		EnvVar: SwarmEnvBzzKeyHex,
+	}
 	SwarmListenAddrFlag = cli.StringFlag{
 		Name:   "httpaddr",
 		Usage:  "Swarm HTTP API listening interface",
@@ -39,6 +44,11 @@ var (
 		Name:   "bzzport",
 		Usage:  "Swarm local http api port",
 		EnvVar: SwarmEnvPort,
+	}
+	SwarmNATInterfaceFlag = cli.StringFlag{
+		Name:   "natif",
+		Usage:  "Announce the IP address of a given network interface (e.g. eth0)",
+		EnvVar: SwarmEnvNATInterface,
 	}
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:   "bzznetworkid",
