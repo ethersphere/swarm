@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -99,9 +100,18 @@ func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte)
 	seen, err := s.netStore.Store.Put(ctx, chunk.ModePutSync, ch)
 	if seen {
 		log.Trace("syncProvider.Put - chunk already seen", "addr", addr)
+		if putSeenTestHook != nil {
+			// call the test function if it is set
+			putSeenTestHook(addr, s.netStore.LocalID)
+		}
 	}
 	return seen, err
 }
+
+// Function used only in tests to detect chunks that are synced
+// multiple times within the same stream. This function pointer must be
+// nil in production.
+var putSeenTestHook func(addr chunk.Address, id enode.ID)
 
 func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func()) {
 	// convert the key to the actual value and call SubscribePull

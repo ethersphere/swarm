@@ -19,6 +19,7 @@ package newstream
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,6 +54,11 @@ func TestTwoNodesFullSync(t *testing.T) {
 	})
 
 	defer sim.Close()
+	defer catchDuplicateChunkSync(t)()
+
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
 	id, err := sim.AddNode()
 	if err != nil {
@@ -232,6 +238,8 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			})
 			defer sim.Close()
 
+			defer catchDuplicateChunkSync(t)()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -300,6 +308,8 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 	var (
 		chunkCount = 20000
 	)
+
+	defer catchDuplicateChunkSync(t)()
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
@@ -397,6 +407,8 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
+
+	defer catchDuplicateChunkSync(t)()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -671,6 +683,33 @@ func benchmarkHistoricalStream(b *testing.B, chunks int) {
 		err = sim.Net.Disconnect(syncingNode, uploaderNode)
 		if err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// Function that uses putSeenTestHook to record and report
+// if there were duplicate chunk synced between Node id
+func catchDuplicateChunkSync(t *testing.T) (validate func()) {
+	m := make(map[enode.ID]map[string]int)
+	var mu sync.Mutex
+	putSeenTestHook = func(addr chunk.Address, id enode.ID) {
+		mu.Lock()
+		defer mu.Unlock()
+		if _, ok := m[id]; !ok {
+			m[id] = make(map[string]int)
+		}
+		m[id][addr.Hex()]++
+	}
+	return func() {
+		// reset the test hook
+		putSeenTestHook = nil
+		// do the validation
+		mu.Lock()
+		defer mu.Unlock()
+		for nodeID, addrs := range m {
+			for addr, count := range addrs {
+				t.Errorf("chunk synced %v times to node %s: %v", count, nodeID, addr)
+			}
 		}
 	}
 }
