@@ -526,7 +526,7 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 		}
 
 		sp := NewSyncProvider(netStore, kad)
-		o := NewSlipStream(store, kad, sp)
+		o := NewSlipStream(store, sp)
 		bucket.Store(bucketKeyBinIndex, binIndexes)
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(simulation.BucketKeyKademlia, kad)
