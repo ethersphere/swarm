@@ -360,9 +360,9 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 func (r *Retrieval) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    "bzz-retrieve",
-			Version: 1,
-			Length:  10 * 1024 * 1024,
+			Name:    r.spec.Name,
+			Version: r.spec.Version,
+			Length:  r.spec.Length(),
 			Run:     r.Run,
 		},
 	}
