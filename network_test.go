@@ -393,7 +393,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 			// or until the timeout is reached.
 			for {
-				if retrieveF(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
+				if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
 					return nil
 				}
 			}
@@ -428,9 +428,9 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 	return k, data, err
 }
 
-// retrieveF is the function that is used for checking the availability of
+// retrieve is the function that is used for checking the availability of
 // uploaded files in testSwarmNetwork test helper function.
-func retrieveF(
+func retrieve(
 	sim *simulation.Simulation,
 	files []file,
 	checkStatusM *sync.Map,

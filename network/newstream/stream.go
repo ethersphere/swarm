@@ -128,10 +128,6 @@ func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, s.spec)
 	bp := network.NewBzzPeer(peer)
 
-	np := network.NewPeer(bp, s.kad)
-	s.kad.On(np)
-	defer s.kad.Off(np)
-
 	sp := NewPeer(bp, s.intervalsStore, s.providers)
 	s.addPeer(sp)
 	defer s.removePeer(sp)

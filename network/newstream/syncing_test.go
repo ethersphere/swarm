@@ -42,7 +42,7 @@ var timeout = 30 * time.Second
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
 	chunkCount := 10000
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunkCount),
 	})
 
@@ -210,7 +210,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+			sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 			})
 			defer sim.Close()
@@ -287,7 +287,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 
 	defer catchDuplicateChunkSync(t)()
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
@@ -379,7 +379,7 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 		chunkCount = 10000 // per history and per live upload
 	)
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
@@ -629,7 +629,7 @@ func BenchmarkHistoricalStream_20000(b *testing.B) { benchmarkHistoricalStream(b
 
 func benchmarkHistoricalStream(b *testing.B, chunks int) {
 	b.StopTimer()
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunks),
 	})
 
