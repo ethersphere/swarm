@@ -523,6 +523,201 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 	}
 }
 
+// TestFullSync performs a series of subtests where a number of nodes are
+// connected to the single (chunk uploading) node.
+func TestFullSync(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		chunkCount    int
+		syncNodeCount int
+		history       bool
+		live          bool
+	}{
+		{
+			name:          "sync to two nodes history",
+			chunkCount:    5000,
+			syncNodeCount: 2,
+			history:       true,
+		},
+		{
+			name:          "sync to two nodes live",
+			chunkCount:    5000,
+			syncNodeCount: 2,
+			live:          true,
+		},
+		{
+			name:          "sync to two nodes history and live",
+			chunkCount:    2500,
+			syncNodeCount: 2,
+			history:       true,
+			live:          true,
+		},
+		{
+			name:          "sync to 100 nodes history",
+			chunkCount:    500,
+			syncNodeCount: 100,
+			history:       true,
+		},
+		{
+			name:          "sync to 100 nodes live",
+			chunkCount:    500,
+			syncNodeCount: 100,
+			live:          true,
+		},
+		{
+			name:          "sync to 100 nodes history and live",
+			chunkCount:    250,
+			syncNodeCount: 100,
+			history:       true,
+			live:          true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+			})
+			defer sim.Close()
+
+			defer catchDuplicateChunkSync(t)()
+
+			uploaderNode, err := sim.AddNode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+
+			if tc.history {
+				filesize := tc.chunkCount * 4096
+				_, wait, err := uploaderNodeStore.Store(context.Background(), testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = wait(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// add nodes to sync to
+			ids, err := sim.AddNodes(tc.syncNodeCount)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// connect every new node to the uploading one, so
+			// every node will have depth 0 as only uploading node
+			// will be in their kademlia tables
+			err = sim.Net.ConnectNodesStar(ids, uploaderNode)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// count the content in the bins again
+			uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.history && len(uploadedChunks) == 0 {
+				t.Errorf("got empty uploader chunk store")
+			}
+			if !tc.history && len(uploadedChunks) != 0 {
+				t.Errorf("got non empty uploader chunk store")
+			}
+
+			historicalChunks := make(map[enode.ID]map[string]struct{})
+			for _, id := range ids {
+				wantChunks := make(map[string]struct{}, len(uploadedChunks))
+				for k, v := range uploadedChunks {
+					wantChunks[k] = v
+				}
+				// wait for all chunks to be synced
+				store := sim.NodeItem(id, bucketKeyFileStore).(chunk.Store)
+				if err := waitChunks(store, uint64(len(wantChunks)), 10*time.Second); err != nil {
+					t.Fatal(err)
+				}
+
+				// validate that all and only all chunks are synced
+				syncedChunks, err := getChunks(store)
+				if err != nil {
+					t.Fatal(err)
+				}
+				historicalChunks[id] = make(map[string]struct{})
+				for c := range wantChunks {
+					if _, ok := syncedChunks[c]; !ok {
+						t.Errorf("missing chunk %v", c)
+					}
+					delete(wantChunks, c)
+					delete(syncedChunks, c)
+					historicalChunks[id][c] = struct{}{}
+				}
+				if len(wantChunks) != 0 {
+					t.Errorf("some of the uploaded chunks are not synced")
+				}
+				if len(syncedChunks) != 0 {
+					t.Errorf("some of the synced chunks are not of uploaded ones")
+				}
+			}
+
+			if tc.live {
+				filesize := tc.chunkCount * 4096
+				_, wait, err := uploaderNodeStore.Store(context.Background(), testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = wait(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			uploadedChunks, err = getChunks(uploaderNodeStore.ChunkStore)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, id := range ids {
+				wantChunks := make(map[string]struct{}, len(uploadedChunks))
+				for k, v := range uploadedChunks {
+					wantChunks[k] = v
+				}
+				store := sim.NodeItem(id, bucketKeyFileStore).(chunk.Store)
+				// wait for all chunks to be synced
+				if err := waitChunks(store, uint64(len(wantChunks)), 10*time.Second); err != nil {
+					t.Fatal(err)
+				}
+
+				// get all chunks from the syncing node
+				syncedChunks, err := getChunks(store)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// remove historical chunks from total uploaded and synced chunks
+				for c := range historicalChunks[id] {
+					if _, ok := wantChunks[c]; !ok {
+						t.Errorf("missing uploaded historical chunk: %s", c)
+					}
+					delete(wantChunks, c)
+					if _, ok := syncedChunks[c]; !ok {
+						t.Errorf("missing synced historical chunk: %s", c)
+					}
+					delete(syncedChunks, c)
+				}
+				// validate that all and only all live chunks are synced
+				for c := range wantChunks {
+					if _, ok := syncedChunks[c]; !ok {
+						t.Errorf("missing chunk %v", c)
+					}
+					delete(wantChunks, c)
+					delete(syncedChunks, c)
+				}
+				if len(wantChunks) != 0 {
+					t.Errorf("some of the uploaded live chunks are not synced")
+				}
+				if len(syncedChunks) != 0 {
+					t.Errorf("some of the synced live chunks are not of uploaded ones")
+				}
+			}
+		})
+	}
+}
+
 func waitChunks(store chunk.Store, want uint64, staledTimeout time.Duration) (err error) {
 	start := time.Now()
 	var (

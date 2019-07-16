@@ -326,7 +326,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	// so iteration count in this loop should be low and most likely only one.
 	for {
 		setupSimulation()
-		if foundPO > 4 { // accept depths only up to 4
+		if foundPO > 3 { // accept depths only up to 3
 			log.Debug("too large depth to reach", "depth", foundPO)
 			// close the simulation as the new one will be created
 			sim.Close()
