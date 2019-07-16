@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -42,7 +43,7 @@ var _ node.Service = &Retrieval{}
 
 var spec = &protocols.Spec{
 	Name:       "bzz-retrieve",
-	Version:    8,
+	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		ChunkDelivery{},
@@ -51,12 +52,13 @@ var spec = &protocols.Spec{
 }
 
 type Retrieval struct {
+	mtx      sync.Mutex
 	netStore *storage.NetStore
 	kad      *network.Kademlia
-
-	spec    *protocols.Spec   //this protocol's spec
-	balance protocols.Balance //implements protocols.Balance, for accounting
-	prices  protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	peers    map[enode.ID]*Peer //this protocols peers
+	spec     *protocols.Spec    //this protocol's spec
+	balance  protocols.Balance  //implements protocols.Balance, for accounting
+	prices   protocols.Prices   //implements protocols.Prices, provides prices to accounting
 
 	quit chan struct{} // termination
 }
@@ -64,6 +66,7 @@ type Retrieval struct {
 func NewRetrieval(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
 	ret := &Retrieval{
 		kad:      kad,
+		peers:    make(map[enode.ID]*Peer),
 		netStore: ns,
 		quit:     make(chan struct{}),
 	}
@@ -73,14 +76,31 @@ func NewRetrieval(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
 	return ret
 }
 
+func (r *Retrieval) addPeer(p *Peer) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.peers[p.ID()] = p
+}
+
+func (r *Retrieval) removePeer(p *Peer) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	delete(r.peers, p.ID())
+}
+
+func (r *Retrieval) getPeer(id enode.ID) *Peer {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	return r.peers[id]
+}
+
 func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
-	np := network.NewPeer(bp, r.kad)
-	r.kad.On(np)
-	defer r.kad.Off(np)
-
 	sp := NewPeer(bp)
+	r.addPeer(sp)
+	defer r.removePeer(sp)
 	return peer.Run(r.HandleMsg(sp))
 }
 
@@ -319,19 +339,21 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 		return nil, err
 	}
 
+	protoPeer := r.getPeer(sp.ID())
+
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
-	ret := &RetrieveRequest{
+	ret := RetrieveRequest{
 		Addr: req.Addr,
 	}
 	log.Trace("sending retrieve request", "ref", ret.Addr, "peer", sp.ID().String(), "origin", localID)
-	err = sp.Send(ctx, ret)
+	err = protoPeer.Send(ctx, ret)
 	if err != nil {
 		log.Error(err.Error())
 		return nil, err
 	}
 
-	spID := sp.ID()
+	spID := protoPeer.ID()
 	return &spID, nil
 }
 
@@ -350,7 +372,7 @@ func (r *Retrieval) APIs() []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "bzz-retrieve",
-			Version:   "1.0",
+			Version:   "1",
 			Service:   NewAPI(r),
 			Public:    false,
 		},
