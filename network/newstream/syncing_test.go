@@ -31,13 +31,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
-// more tests:
-// 1. bring up 3 nodes, on each of them different content, connect them all together and check that all 3 get the union of the 3 localstores
-
-//TODO:
-// - write test that brings up a bigger cluster, then tests all individual nodes with localstore get to get the chunks that were
-// uploaded to the first node
-
 var timeout = 30 * time.Second
 
 // TestTwoNodesFullSync connects two nodes, uploads content to one node and expects the
@@ -60,53 +53,37 @@ func TestTwoNodesFullSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	id, err := sim.AddNode()
+	uploaderNode, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	nodeIDs := id
-
-	log.Debug("pivot node", "enode", nodeIDs[0])
-
-	//defer profile.Start(profile.CPUProfile).Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	log.Debug("pivot node", "enode", uploaderNode)
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		id, err := sim.AddNodes(1)
+		syncingNode, err := sim.AddNode()
 		if err != nil {
 			return err
 		}
+		log.Debug("syncing node", "enode", syncingNode)
 
-		nodeIDs := sim.UpNodeIDs()
-
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		err = sim.Net.ConnectNodesStar([]enode.ID{syncingNode}, uploaderNode)
 		if err != nil {
 			return err
 		}
-		syncingNodeID := nodeIDs[1]
-		uploaderNodeID := nodeIDs[0]
 
 		uploaderNodeBinIDs := make([]uint64, 17)
-		uploaderStore := sim.NodeItem(uploaderNodeID, bucketKeyFileStore).(chunk.Store)
-		log.Debug("checking pull subscription bin ids")
+		uploaderStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
 		var uploaderSum uint64
 		for po := 0; po <= 16; po++ {
 			until, err := uploaderStore.LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
 				return err
 			}
-			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
-
 			uploaderNodeBinIDs[po] = until
 			uploaderSum += until
 		}
 
-		// check that the sum of bin indexes is equal
-		log.Debug("compare to", "enode", syncingNodeID)
-
-		return waitChunks(sim.NodeItem(syncingNodeID, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
+		return waitChunks(sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 	})
 
 	if result.Error != nil {
