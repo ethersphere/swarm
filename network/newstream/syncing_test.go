@@ -17,8 +17,11 @@
 package newstream
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -697,4 +700,199 @@ func catchDuplicateChunkSync(t *testing.T) (validate func()) {
 			}
 		}
 	}
+}
+
+// TestStarNetworkSync tests that syncing works on a more elaborate network topology
+// the test creates a network of 10 nodes and connects them in a star topology, this causes
+// the pivot node to have neighbourhood depth > 0, which in turn means that each individual node
+// will only get SOME of the chunks that exist on the uploader node (the pivot node).
+// The test checks that EVERY chunk that exists on the pivot node:
+//	a. exists on the most proximate node
+//	b. exists on the nodes subscribed on the corresponding chunk PO
+//	c. does not exist on the peers that do not have that PO subscription
+func TestStarNetworkSync(t *testing.T) {
+	//t.Skip("flaky test https://github.com/ethersphere/swarm/issues/1457")
+	if testutil.RaceEnabled {
+		return
+	}
+	var (
+		chunkCount = 500
+		nodeCount  = 6
+		chunkSize  = 4096
+		simTimeout = 60 * time.Second
+		syncTime   = 30 * time.Second
+		filesize   = chunkCount * chunkSize
+	)
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+	})
+	defer sim.Close()
+
+	// create context for simulation run
+	ctx, cancel := context.WithTimeout(context.Background(), simTimeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+	_, err := sim.AddNodesAndConnectStar(nodeCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		nodeIDs := sim.UpNodeIDs()
+
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+		seed := int(time.Now().Unix())
+		randomBytes := testutil.RandomBytes(seed, filesize)
+
+		chunkAddrs, err := getAllRefs(randomBytes[:])
+		if err != nil {
+			return err
+		}
+		chunksProx := make([]chunkProxData, 0)
+		for _, chunkAddr := range chunkAddrs {
+			chunkInfo := chunkProxData{
+				addr:            chunkAddr,
+				uploaderNodePO:  chunk.Proximity(nodeIDs[0].Bytes(), chunkAddr),
+				nodeProximities: make(map[enode.ID]int),
+			}
+			closestNodePO := 0
+			for nodeAddr := range nodeIndex {
+				po := chunk.Proximity(nodeAddr.Bytes(), chunkAddr)
+
+				chunkInfo.nodeProximities[nodeAddr] = po
+				if po > closestNodePO {
+					chunkInfo.closestNodePO = po
+					chunkInfo.closestNode = nodeAddr
+				}
+				log.Trace("processed chunk", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
+			}
+			chunksProx = append(chunksProx, chunkInfo)
+		}
+
+		// get the pivot node and pump some data
+		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		fileStore := item.(*storage.FileStore)
+		reader := bytes.NewReader(randomBytes[:])
+		_, wait1, err := fileStore.Store(ctx, reader, int64(len(randomBytes)), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		wait1(ctx)
+
+		// check that chunks with a marked proximate host are where they should be
+		count := 0
+
+		// wait to sync
+		time.Sleep(syncTime)
+
+		log.Info("checking if chunks are on prox hosts")
+		for _, c := range chunksProx {
+			// if the most proximate host is set - check that the chunk is there
+			if c.closestNodePO > 0 {
+				count++
+				log.Trace("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
+				item = sim.NodeItem(c.closestNode, bucketKeyFileStore)
+				store := item.(chunk.Store)
+
+				_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
+		if count != len(chunksProx) {
+			return fmt.Errorf("checked chunks dont match numer of chunks. got %d want %d", count, len(chunksProx))
+		}
+		// clients are interested in streams according ot their own kademlia depth and not according to the server's kademlia depth
+		// this is a major change in comparison to what was in the previous streamer
+		// we can possibly maintain this same test vector, but we would have to manually fiddle with the individual nodes (everyone else except the pivot) kademlia
+		// by adding artificial nodes -> this way the depth changes and we would be interested in only certain streams from the server, all while preserving the previous test vector
+		// another option would be to bring up a cluster (although it might have to be a relatively big one) and make sure that all nodes have depth > 0
+		// then measure each node po to each chunk, similarly like in this test vector, then assert on which node it is supposed to be stored. first option seems more feasible
+		//uploaderStream := sim.NodeItem(nodeIDs[0], bucketKeyStream)
+		//client, err := node.Client()
+		//if err != nil {
+		//return fmt.Errorf("create node 1 rpc client fail: %v", err)
+		//}
+
+		////ask it for subscriptions
+		//pstreams := make(map[string][]string)
+		//err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+		//if err != nil {
+		//return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+		//}
+
+		//create a map of no-subs for a node
+		//noSubMap := make(map[enode.ID]map[int]bool)
+
+		//for subscribedNode, streams := range pstreams {
+		//id := enode.HexID(subscribedNode)
+		//b := make([]bool, 17)
+		//for _, sub := range streams {
+		//subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
+		//if err != nil {
+		//return err
+		//}
+		//b[int(subPO)] = true
+		//}
+		//noMapMap := make(map[int]bool)
+		//for i, v := range b {
+		//if !v {
+		//noMapMap[i] = true
+		//}
+		//}
+		//noSubMap[id] = noMapMap
+		//}
+
+		// iterate over noSubMap, for each node check if it has any of the chunks it shouldn't have
+		//for nodeId, nodeNoSubs := range noSubMap {
+		//for _, c := range chunksProx {
+		//// if the chunk PO is equal to the sub that the node shouldnt have - check if the node has the chunk!
+		//if _, ok := nodeNoSubs[c.uploaderNodePO]; ok {
+		//count++
+		//item = sim.NodeItem(nodeId, bucketKeyFileStore)
+		//store := item.(chunk.Store)
+
+		//_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
+		//if err == nil {
+		//return fmt.Errorf("got a chunk where it shouldn't be! addr %s, nodeId %s", c.addr, nodeId)
+		//}
+		//}
+		//}
+		//}
+		return nil
+	})
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+type chunkProxData struct {
+	addr            chunk.Address
+	uploaderNodePO  int
+	nodeProximities map[enode.ID]int
+	closestNode     enode.ID
+	closestNodePO   int
+}
+
+func getAllRefs(testData []byte) (storage.AddressCollection, error) {
+	datadir, err := ioutil.TempDir("", "chunk-debug")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(datadir)
+	fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	reader := bytes.NewReader(testData)
+	return fileStore.GetAllReferences(context.Background(), reader, false)
 }

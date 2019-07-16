@@ -44,7 +44,7 @@ import (
 var (
 	bucketKeyFileStore = simulation.BucketKey("filestore")
 	bucketKeyBinIndex  = simulation.BucketKey("bin-indexes")
-	bucketKeySyncer    = simulation.BucketKey("syncer")
+	bucketKeyStream    = simulation.BucketKey("stream")
 
 	simContextTimeout = 20 * time.Second
 )
@@ -76,13 +76,13 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		idOne := nodeIDs[0]
 		idOther := nodeIDs[1]
-		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).mtx.Lock()
-		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).getCursorsCopy()
-		sim.NodeItem(idOne, bucketKeySyncer).(*SlipStream).getPeer(idOther).mtx.Unlock()
+		sim.NodeItem(idOne, bucketKeyStream).(*SlipStream).getPeer(idOther).mtx.Lock()
+		onesCursors := sim.NodeItem(idOne, bucketKeyStream).(*SlipStream).getPeer(idOther).getCursorsCopy()
+		sim.NodeItem(idOne, bucketKeyStream).(*SlipStream).getPeer(idOther).mtx.Unlock()
 
-		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Lock()
-		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).getCursorsCopy()
-		sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idOne).mtx.Unlock()
+		sim.NodeItem(idOther, bucketKeyStream).(*SlipStream).getPeer(idOne).mtx.Lock()
+		othersCursors := sim.NodeItem(idOther, bucketKeyStream).(*SlipStream).getPeer(idOne).getCursorsCopy()
+		sim.NodeItem(idOther, bucketKeyStream).(*SlipStream).getPeer(idOne).mtx.Unlock()
 
 		onesBins := sim.NodeItem(idOne, bucketKeyBinIndex).([]uint64)
 		othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
@@ -137,11 +137,11 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 		for i := 1; i < nodeCount; i++ {
 			idOther := nodeIDs[i]
-			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SlipStream).getPeer(idOther)
+			peerRecord := sim.NodeItem(idPivot, bucketKeyStream).(*SlipStream).getPeer(idOther)
 
 			// these are the cursors that the pivot node holds for the other peer
 			pivotCursors := peerRecord.getCursorsCopy()
-			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer).(*SlipStream).getPeer(idPivot)
+			otherSyncer := sim.NodeItem(idOther, bucketKeyStream).(*SlipStream).getPeer(idPivot)
 			otherCursors := otherSyncer.getCursorsCopy()
 			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 
@@ -197,7 +197,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
-		pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
+		pivotSyncer := sim.NodeItem(idPivot, bucketKeyStream)
 		pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 		pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
 
@@ -345,7 +345,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 		var got int
 		for i := 0; i < 1000; i++ { // 10s total wait
 			time.Sleep(10 * time.Millisecond)
-			s, ok := sim.NodeItem(pivotEnode, bucketKeySyncer).(*SlipStream)
+			s, ok := sim.NodeItem(pivotEnode, bucketKeyStream).(*SlipStream)
 			if !ok {
 				continue
 			}
@@ -530,7 +530,7 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 		bucket.Store(bucketKeyBinIndex, binIndexes)
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(simulation.BucketKeyKademlia, kad)
-		bucket.Store(bucketKeySyncer, o)
+		bucket.Store(bucketKeyStream, o)
 
 		cleanup = func() {
 			localStore.Close()
