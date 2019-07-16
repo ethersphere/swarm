@@ -81,18 +81,19 @@ func (p *PinApi) ListPinFiles() {
 
 
 
-func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) {
+func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error{
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
 		log.Error("Error decoding root hash" + err.Error())
-		return
+		return err
 	}
 
 	// Walk the root hash and pin all the chunks
 	walkerFunction := func(ref storage.Reference)(error) {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.PinChunk(chunkAddr)
+		chunkToPin := chunk.NewChunk(chunkAddr,nil)
+		_,err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
 		if err != nil {
 			log.Error("Could not pin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -107,13 +108,22 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) {
 	// Check if the root hash is already pinned
 	isFilePinned := p.db.IsFilePinned(addr)
 	if  !isFilePinned {
-		err = p.db.AddToPinFileIndex(addr, isRaw)
+
+		// Hack: If data is not nil, then this is a root chunk
+		// also send the isRaw information in the data field
+		data := []byte{0}
+		if isRaw {
+			data = []byte{1}
+		}
+		chunkToPin := chunk.NewChunk(addr,data)
+		_,err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
+			return err
 		}
 	}
-
+	return nil
 }
 
 func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
@@ -133,7 +143,8 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	// Walk the root hash and unpin all the chunks
 	walkerFunction := func(ref storage.Reference)(error) {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.UnpinChunk(chunkAddr)
+		chunkToPin := chunk.NewChunk(chunkAddr,nil)
+		_,err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToPin)
 		if err != nil {
 			log.Error("Could not unpin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -150,7 +161,10 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	// so remove the root hash from pinFilesIndex
 	isRootChunkPinned := p.db.IsChunkPinned(p.removeDecryptionKeyFromChunkHash(addr))
 	if  !isRootChunkPinned {
-		err = p.db.RemoveFromPinFileIndex(addr)
+		// Hack: If data is not nil, then this is a root chunk
+		data := []byte{0}
+		chunkToUnpin := chunk.NewChunk(addr,data)
+		_,err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToUnpin)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -194,7 +208,7 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 	hashSize := len(addr)
 	isEncrypted := len(addr) > hashFunc().Size()
 	tag := chunk.NewTag(0, "show-chunks-tag", 0)
-	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, tag, DONT_PIN)
+	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, tag)
 
 
 	go func() {
@@ -240,6 +254,7 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 
 			// Singal end of file stream
 			fileWorkers <- storage.Reference(nil)
+
 		}
 	}()
 
@@ -253,8 +268,6 @@ QuitFileFor:
 			break QuitFileFor
 
 		case fileRef := <-fileWorkers:
-
-			log.Info("UnPinning file from manifest", "Address", fmt.Sprintf("%0x", fileRef))
 
 			if fileRef == nil {
 				close(doneFileWorker)
@@ -280,16 +293,21 @@ QuitFileFor:
 
 					go func() {
 
+						//fmt.Println("Inside chunk pinner")
 						chunkData, err := getter.Get(context.TODO(), ref)
 						if err != nil {
 							log.Error("Error getting chunk data from localstore.")
 							close(doneChunkWorker)
+							return
 						}
+
+						//fmt.Println("read chunkData")
 
 						datalen := len(chunkData)
 						if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
 							log.Error("Invalid chunk data from localstore.")
 							close(doneChunkWorker)
+							return
 						}
 
 						subTreeSize := chunkData.Size()
@@ -340,11 +358,6 @@ func (p *PinApi) ShowDatabase() string {
 	p.db.ShowDatabaseInformation()
 	return "Check the swarm log file for the output"
 }
-
-func (p *PinApi) AddPinFile(hash []byte, isRaw bool) error {
-	return p.db.AddToPinFileIndex(hash, isRaw)
-}
-
 
 func (p *PinApi) removeDecryptionKeyFromChunkHash(ref []byte) []byte{
 

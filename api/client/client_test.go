@@ -468,9 +468,10 @@ func TestClientMultipartUpload(t *testing.T) {
 
 	// define an uploader which uploads testDirFiles with some data
 	// note: this test should result in SEEN chunks. assert accordingly
-	data := []byte("some-data")
+	//data := []byte("some-data")
 	uploader := UploaderFunc(func(upload UploadFn) error {
 		for _, name := range testDirFiles {
+			data := []byte(name)
 			file := &File{
 				ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 				ManifestEntry: api.ManifestEntry{
@@ -495,7 +496,7 @@ func TestClientMultipartUpload(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 9, 9, 7, 9)
+	testutil.CheckTag(t, tag, 9, 9, 0, 9)
 
 	// File pinned during upload.. check if this is pinned properly
 	testutil.CheckIfPinned(t, srv , hash, nil, 1, false)
@@ -511,8 +512,8 @@ func TestClientMultipartUpload(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(gotData, data) {
-			t.Fatalf("expected data to be %q, got %q", data, gotData)
+		if !bytes.Equal(gotData, []byte(path)) {
+			t.Fatalf("expected data to be %q, got %q", path, gotData)
 		}
 	}
 	for _, file := range testDirFiles {

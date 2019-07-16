@@ -40,7 +40,6 @@ type hasherStore struct {
 	store      ChunkStore
 	tag        *chunk.Tag
 	toEncrypt  bool
-	pinCounter uint8
 	doWait     sync.Once
 	hashFunc   SwarmHasher
 	hashSize   int           // content hash size
@@ -55,7 +54,7 @@ type hasherStore struct {
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
 // With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
 // and the hasherStore will take core of encryption/decryption of data if necessary
-func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag *chunk.Tag, pinCounter uint8) *hasherStore {
+func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag *chunk.Tag) *hasherStore {
 	hashSize := hashFunc().Size()
 	refSize := int64(hashSize)
 	if toEncrypt {
@@ -66,7 +65,6 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag 
 		store:      store,
 		tag:        tag,
 		toEncrypt:  toEncrypt,
-		pinCounter: pinCounter,
 		hashFunc:   hashFunc,
 		hashSize:   hashSize,
 		refSize:    refSize,
@@ -273,7 +271,7 @@ func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 		defer func() {
 			<-h.workers
 		}()
-		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch, h.pinCounter)
+		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
 		h.tag.Inc(chunk.StateStored)
 		if seen {
 			h.tag.Inc(chunk.StateSeen)

@@ -19,7 +19,6 @@ package localstore
 import (
 	"context"
 	"fmt"
-	"github.com/ethersphere/swarm/log"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -32,13 +31,13 @@ import (
 // on the Putter mode, it updates required indexes.
 // Put is required to implement chunk.Store
 // interface.
-func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk, pinCounter uint8) (exists bool, err error) {
+func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk) (exists bool, err error) {
 	metricName := fmt.Sprintf("localstore.Put.%s", mode)
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
-	exists, err = db.put(mode, chunkToItem(ch), pinCounter)
+	exists, err = db.put(mode, chunkToItem(ch))
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 	}
@@ -50,7 +49,7 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk, pinCo
 // of this function for the same address in parallel.
 // Item fields Address and Data must not be
 // with their nil values.
-func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists bool, err error) {
+func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -125,7 +124,6 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 		}
 		if !exists {
 			item.StoreTimestamp = now()
-			item.PinCounter = uint64(pinCounter)
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
 				return false, err
@@ -135,11 +133,6 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 			triggerPullFeed = true
 			db.pushIndex.PutInBatch(batch, item)
 			triggerPushFeed = true
-
-			// Index in the pinIndex only if the chunk is pinned
-			if item.PinCounter > 0 {
-				db.pinIndex.PutInBatch(batch, item)
-			}
 		}
 
 	case chunk.ModePutSync:
@@ -159,6 +152,51 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 			db.pullIndex.PutInBatch(batch, item)
 			triggerPullFeed = true
 		}
+
+	case chunk.ModePin:
+
+		// Handle root chunk differently
+		if item.Data == nil {
+
+			// Get the existing pin counter of the chunk
+			existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
+			if err != nil {
+				existingPinCounter = 0
+			}
+
+			item.PinCounter = existingPinCounter + 1
+			db.pinIndex.PutInBatch(batch, item)
+		} else {
+			item.IsRaw = 0
+			if item.Data[0] == 1 {
+				item.IsRaw = 1
+			}
+			db.pinFilesIndex.PutInBatch(batch, item)
+		}
+
+	case chunk.ModeUnpin:
+
+		if item.Data == nil {
+			// Get the existing pin counter of the chunk
+			existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
+			if err != nil {
+				return false, ErrChunkNotPinned
+			}
+
+			// Decrement the pin counter or
+			// delete it from pin index if the oin counter has reached 0
+			if existingPinCounter > 1 {
+				item.PinCounter = existingPinCounter - 1
+				db.pinIndex.PutInBatch(batch, item)
+			} else {
+				db.pinIndex.DeleteInBatch(batch, item)
+			}
+		} else {
+			db.pinFilesIndex.DeleteInBatch(batch, item)
+		}
+
+	case chunk.ModeStorePinRootHash:
+
 
 	default:
 		return false, ErrInvalidMode
@@ -181,95 +219,3 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 	}
 	return exists, nil
 }
-
-// Adds a entry in the pinFilesIndex, used to list all pinned files
-func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error {
-
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
-
-	batch := new(leveldb.Batch)
-	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	if isRaw {
-		item.IsRaw = 1
-	}
-	db.pinFilesIndex.PutInBatch(batch, item)
-	err := db.shed.WriteBatch(batch)
-	return err
-}
-
-func (db *DB) RemoveFromPinFileIndex(hash []byte) error {
-
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
-
-	batch := new(leveldb.Batch)
-	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-
-	db.pinFilesIndex.DeleteInBatch(batch, item)
-	err := db.shed.WriteBatch(batch)
-
-	return err
-}
-
-// decrements the pin counter by 1,
-// if the pincounter reached 0, the entry is removed from the pinIndex
-func (db *DB) UnpinChunk(hash []byte) error {
-
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
-	batch := new(leveldb.Batch)
-
-	// Get the existing pin counter of the chunk
-	existingPinCounter, err := db.GetPinCounterOfChunk(hash)
-	if err != nil{
-		logMsg := fmt.Sprintf("Could not unpin chunk %s . Hash does not exists in pinIndex.",
-			fmt.Sprintf("%0x", hash))
-		log.Info(logMsg)
-		return err
-	}
-
-	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	if existingPinCounter > 1 {
-		item.PinCounter = existingPinCounter - 1
-		db.pinIndex.PutInBatch(batch, item)
-	} else {
-		db.pinIndex.DeleteInBatch(batch, item)
-	}
-
-	err = db.shed.WriteBatch(batch)
-	return err
-}
-
-func (db *DB) PinChunk(hash []byte) error {
-
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
-
-	batch := new(leveldb.Batch)
-
-	// Get the existing pin counter of the chunk
-	existingPinCounter, err := db.GetPinCounterOfChunk(hash)
-	if err != nil{
-		existingPinCounter = 0
-	}
-
-	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	item.PinCounter = existingPinCounter + 1
-	db.pinIndex.PutInBatch(batch, item)
-
-	err = db.shed.WriteBatch(batch)
-
-	return err
-}
-
-
-

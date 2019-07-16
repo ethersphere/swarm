@@ -93,14 +93,14 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 	}
 
 	// Pinning doesn't matter when retrieving a file
-	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag, 0)
+	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag)
 	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
 
 // Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool, pinCounter uint8) (addr Address, wait func(context.Context) error, err error) {
+func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	tag, err := f.tags.GetFromContext(ctx)
 	if err != nil {
 		// some of the parts of the codebase, namely the manifest trie, do not store the context
@@ -110,7 +110,7 @@ func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEnc
 		tag = chunk.NewTag(0, "", 0)
 		//return nil, nil, err
 	}
-	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag, pinCounter)
+	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag)
 	return PyramidSplit(ctx, data, putter, putter, tag)
 }
 
@@ -126,7 +126,7 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader) (addrs
 	putter := &hashExplorer{
 		// Pinning doesn't matter when splitting file for getting hash
 		// The file is not stored in the chunk DB here
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, false, tag, 0),
+		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, false, tag),
 	}
 	// do the actual splitting anyway, no way around it
 	_, wait, err := PyramidSplit(ctx, data, putter, putter, tag)

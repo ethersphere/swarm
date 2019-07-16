@@ -213,9 +213,9 @@ func (a *API) Retrieve(ctx context.Context, addr storage.Address) (reader storag
 }
 
 // Store wraps the Store API call of the embedded FileStore
-func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool, pinCounter uint8) (addr storage.Address, wait func(ctx context.Context) error, err error) {
+func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(ctx context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
-	return a.fileStore.Store(ctx, data, size, toEncrypt, pinCounter)
+	return a.fileStore.Store(ctx, data, size, toEncrypt)
 }
 
 // Resolve a name into a content-addressed hash
@@ -402,7 +402,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 	return
 }
 
-func (a *API) Delete(ctx context.Context, addr string, path string, pinCounter uint8) (storage.Address, error) {
+func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
 	apiDeleteCount.Inc(1)
 	uri, err := Parse("bzz:/" + addr)
 	if err != nil {
@@ -417,7 +417,7 @@ func (a *API) Delete(ctx context.Context, addr string, path string, pinCounter u
 	newKey, err := a.UpdateManifest(ctx, key, func(mw *ManifestWriter) error {
 		log.Debug(fmt.Sprintf("removing %s from manifest %s", path, key.Log()))
 		return mw.RemoveEntry(path)
-	}, pinCounter)
+	})
 	if err != nil {
 		apiDeleteFail.Inc(1)
 		return nil, err
@@ -563,7 +563,7 @@ func (a *API) GetManifestList(ctx context.Context, decryptor DecryptFunc, addr s
 	return list, nil
 }
 
-func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error, pinCounter uint8) (storage.Address, error) {
+func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error) (storage.Address, error) {
 	apiManifestUpdateCount.Inc(1)
 	mw, err := a.NewManifestWriter(ctx, addr, nil)
 	if err != nil {
@@ -576,7 +576,7 @@ func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update f
 		return nil, err
 	}
 
-	addr, err = mw.Store(pinCounter)
+	addr, err = mw.Store()
 	if err != nil {
 		apiManifestUpdateFail.Inc(1)
 		return nil, err
@@ -606,7 +606,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 	}
 
 	// Dont pin manifest as this is used only in test cases
-	if err := trie.recalcAndStore(DONT_PIN); err != nil {
+	if err := trie.recalcAndStore(); err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
@@ -649,7 +649,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 
 	// TODO_PIN: support pinning when creating a file in fuse
 	// For now, don't pin it
-	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry, DONT_PIN)
+	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -658,7 +658,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	// TODO_PIN: support pinning manifests when creating a file in fuse
 	// For now, don't pin it
 	// care should be taken to unpin the old manifest
-	newMkey, err := mw.Store(DONT_PIN)
+	newMkey, err := mw.Store()
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -668,7 +668,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	return fkey, newMkey.String(), nil
 }
 
-func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter, pinCounter uint8) (storage.Address, error) {
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter) (storage.Address, error) {
 	apiUploadTarCount.Inc(1)
 	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
@@ -702,7 +702,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
 		}
-		contentKey, err = mw.AddEntry(ctx, tr, entry, pinCounter)
+		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
 			apiUploadTarFail.Inc(1)
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
@@ -721,7 +721,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
 			}
-			contentKey, err = mw.AddEntry(ctx, nil, entry, pinCounter)
+			contentKey, err = mw.AddEntry(ctx, nil, entry)
 			if err != nil {
 				apiUploadTarFail.Inc(1)
 				return nil, fmt.Errorf("error adding default manifest entry from tar stream: %s", err)
@@ -769,7 +769,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 
 	// TODO_PIN: If a pinned manifest is modified then it needs to pinned too
 	// care should be taken to unpin the old manifest
-	newMkey, err := mw.Store(DONT_PIN)
+	newMkey, err := mw.Store()
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -846,7 +846,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	// TODO_PIN: If a pinned file is modified in fuse, pin it here too
 	// For now, this is ignored
-	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry, DONT_PIN)
+	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -854,7 +854,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	// TODO_PIN: If a pinned file is modified in fuse, pin the new manifest too
 	// For now, this is ignored
-	newMkey, err := mw.Store(DONT_PIN)
+	newMkey, err := mw.Store()
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err

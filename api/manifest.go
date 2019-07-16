@@ -74,7 +74,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	}
 
 	// Dont pin this manifest because this function is used only to create a empty manifest
-	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt, DONT_PIN)
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (a *API) NewFeedManifest(ctx context.Context, feed *feed.Feed) (storage.Add
 	}
 
 	// TODO_PIN: take care of pinned feeds
-	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false, DONT_PIN)
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
 	if err != nil {
 		return nil, err
 	}
@@ -121,11 +121,11 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 }
 
 // AddEntry stores the given data and adds the resulting address to the manifest
-func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry, pinCounter uint8) (addr storage.Address, err error) {
+func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (addr storage.Address, err error) {
 	entry := newManifestTrieEntry(e, nil)
 	if data != nil {
 		var wait func(context.Context) error
-		addr, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted, pinCounter)
+		addr, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
 		if err != nil {
 			return nil, err
 		}
@@ -149,8 +149,8 @@ func (m *ManifestWriter) RemoveEntry(path string) error {
 }
 
 // Store stores the manifest, returning the resulting storage address
-func (m *ManifestWriter) Store(pinCounter uint8) (storage.Address, error) {
-	return m.trie.ref, m.trie.recalcAndStore(pinCounter)
+func (m *ManifestWriter) Store() (storage.Address, error) {
+	return m.trie.ref, m.trie.recalcAndStore()
 }
 
 // ManifestWalker is used to recursively walk the entries in the manifest and
@@ -394,7 +394,7 @@ func (mt *manifestTrie) deleteEntry(path string, quitC chan bool) {
 	}
 }
 
-func (mt *manifestTrie) recalcAndStore(pinCounter uint8) error {
+func (mt *manifestTrie) recalcAndStore() error {
 	if mt.ref != nil {
 		return nil
 	}
@@ -406,7 +406,7 @@ func (mt *manifestTrie) recalcAndStore(pinCounter uint8) error {
 	for _, entry := range &mt.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
-				err := entry.subtrie.recalcAndStore(pinCounter)
+				err := entry.subtrie.recalcAndStore()
 				if err != nil {
 					return err
 				}
@@ -424,7 +424,7 @@ func (mt *manifestTrie) recalcAndStore(pinCounter uint8) error {
 
 	sr := bytes.NewReader(manifest)
 	ctx := context.TODO()
-	addr, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted, pinCounter)
+	addr, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
 	if err2 != nil {
 		return err2
 	}

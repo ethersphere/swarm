@@ -610,6 +610,8 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 		return "", err
 	}
 
+
+
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
 	req.Header.Set("Expect", "100-continue")
@@ -617,6 +619,9 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 	mw := multipart.NewWriter(reqW)
 	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%q", mw.Boundary()))
 	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
+	if toPin {
+		req.Header.Set(swarmhttp.SwarmPinContent, fmt.Sprintf("pin_time_%d", time.Now().Unix()))
+	}
 
 	// define an UploadFn which adds files to the multipart form
 	uploadFn := func(file *File) error {
@@ -632,10 +637,6 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 		return err
 	}
 
-	// Set the pinning header if the file is to be pinned
-	if toPin {
-		req.Header.Set(swarmhttp.SwarmPinContent, fmt.Sprintf("pin_time_%d", time.Now().Unix()))
-	}
 
 	// run the upload in a goroutine so we can send the request headers and
 	// wait for a '100 Continue' response before sending the multipart form

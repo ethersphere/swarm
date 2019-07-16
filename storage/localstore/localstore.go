@@ -42,6 +42,9 @@ var (
 	// is updated in parallel and one of the updates
 	// takes longer then the configured timeout duration.
 	ErrAddressLockTimeout = errors.New("address lock timeout")
+
+	// This is returned when a chunk is unpinned without it being pinned
+	ErrChunkNotPinned = errors.New("chunk not pinned")
 )
 
 var (
