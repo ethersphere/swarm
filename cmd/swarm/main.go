@@ -196,6 +196,7 @@ func init() {
 		SwarmUploadMimeType,
 		// bootnode mode
 		SwarmBootnodeModeFlag,
+		SwarmDisableAutoConnectFlag,
 		// storage flags
 		SwarmStorePath,
 		SwarmStoreCapacity,

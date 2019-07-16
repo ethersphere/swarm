@@ -120,6 +120,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	config.HiveParams.Discovery = true
 
+	if config.DisableAutoConnect {
+		config.HiveParams.DisableAutoConnect = true
+	}
+
 	bzzconfig := &network.BzzConfig{
 		NetworkID:    config.NetworkID,
 		OverlayAddr:  common.FromHex(config.BzzKey),

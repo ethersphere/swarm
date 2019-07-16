@@ -266,6 +266,10 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(SwarmDisableAutoConnectFlag.Name) {
+		currentConfig.DisableAutoConnect = ctx.GlobalBool(SwarmDisableAutoConnectFlag.Name)
+	}
+
 	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
 		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
 	}
