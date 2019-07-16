@@ -63,7 +63,6 @@ type SlipStream struct {
 	mtx            sync.RWMutex
 	intervalsStore state.Store //every protocol would make use of this
 	peers          map[enode.ID]*Peer
-	kad            *network.Kademlia
 
 	providers map[string]StreamProvider
 
@@ -74,10 +73,9 @@ type SlipStream struct {
 	quit chan struct{} // terminates registry goroutines
 }
 
-func NewSlipStream(intervalsStore state.Store, kad *network.Kademlia, providers ...StreamProvider) *SlipStream {
+func NewSlipStream(intervalsStore state.Store, providers ...StreamProvider) *SlipStream {
 	slipStream := &SlipStream{
 		intervalsStore: intervalsStore,
-		kad:            kad,
 		peers:          make(map[enode.ID]*Peer),
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
