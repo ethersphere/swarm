@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -29,7 +30,6 @@ import (
 
 const (
 	PinVersion     = "1.0"
-	DONT_PIN       = 0
 	WorkerChanSize = 8
 )
 
@@ -66,7 +66,7 @@ func (p *PinApi) SetApi(api *API) {
 
 func (p *PinApi) ListPinFiles() {
 	pinnedFiles := p.db.GetPinFilesIndex()
-	for k,v := range  pinnedFiles {
+	for k, v := range pinnedFiles {
 
 		addr, err := hex.DecodeString(k)
 		if err != nil {
@@ -79,9 +79,7 @@ func (p *PinApi) ListPinFiles() {
 	}
 }
 
-
-
-func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error{
+func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error {
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
@@ -90,10 +88,10 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 	}
 
 	// Walk the root hash and pin all the chunks
-	walkerFunction := func(ref storage.Reference)(error) {
+	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		chunkToPin := chunk.NewChunk(chunkAddr,nil)
-		_,err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
+		chunkToPin := chunk.NewChunk(chunkAddr, nil)
+		_, err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
 		if err != nil {
 			log.Error("Could not pin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -104,10 +102,9 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 	}
 	p.WalkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
 
-
 	// Check if the root hash is already pinned
 	isFilePinned := p.db.IsFilePinned(addr)
-	if  !isFilePinned {
+	if !isFilePinned {
 
 		// Hack: If data is not nil, then this is a root chunk
 		// also send the isRaw information in the data field
@@ -115,8 +112,8 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 		if isRaw {
 			data = []byte{1}
 		}
-		chunkToPin := chunk.NewChunk(addr,data)
-		_,err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
+		chunkToPin := chunk.NewChunk(addr, data)
+		_, err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -141,10 +138,10 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	}
 
 	// Walk the root hash and unpin all the chunks
-	walkerFunction := func(ref storage.Reference)(error) {
+	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		chunkToPin := chunk.NewChunk(chunkAddr,nil)
-		_,err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToPin)
+		chunkToPin := chunk.NewChunk(chunkAddr, nil)
+		_, err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToPin)
 		if err != nil {
 			log.Error("Could not unpin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -155,16 +152,15 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	}
 	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
 
-
 	// Check if the root chunk exists in pinIndex
 	// If it is not.. then the pin counter became 0
 	// so remove the root hash from pinFilesIndex
 	isRootChunkPinned := p.db.IsChunkPinned(p.removeDecryptionKeyFromChunkHash(addr))
-	if  !isRootChunkPinned {
+	if !isRootChunkPinned {
 		// Hack: If data is not nil, then this is a root chunk
 		data := []byte{0}
-		chunkToUnpin := chunk.NewChunk(addr,data)
-		_,err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToUnpin)
+		chunkToUnpin := chunk.NewChunk(addr, data)
+		_, err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToUnpin)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -186,7 +182,7 @@ func (p *PinApi) LogPinnedChunks(rootHash string, credentials string) {
 		return
 	}
 
-	walkerFunction := func(ref storage.Reference) (error) {
+	walkerFunction := func(ref storage.Reference) error {
 		log.Info("Chunk", "Address", fmt.Sprintf("%0x", ref))
 		return nil
 	}
@@ -209,7 +205,6 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 	isEncrypted := len(addr) > hashFunc().Size()
 	tag := chunk.NewTag(0, "show-chunks-tag", 0)
 	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, tag)
-
 
 	go func() {
 		if !isRaw {
@@ -258,8 +253,6 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 		}
 	}()
 
-
-
 	doneFileWorker := make(chan struct{})
 QuitFileFor:
 	for {
@@ -280,7 +273,7 @@ QuitFileFor:
 			actualFileSize := uint64(0)
 			rcvdFileSize := uint64(0)
 			doneChunkWorker := make(chan struct{})
-			var cwg sync.WaitGroup  // Wait group to wait for chunk processing to complete
+			var cwg sync.WaitGroup // Wait group to wait for chunk processing to complete
 
 		QuitChunkFor:
 			for {
@@ -353,24 +346,22 @@ QuitFileFor:
 	}
 }
 
-
 func (p *PinApi) ShowDatabase() string {
 	p.db.ShowDatabaseInformation()
 	return "Check the swarm log file for the output"
 }
 
-func (p *PinApi) removeDecryptionKeyFromChunkHash(ref []byte) []byte{
+func (p *PinApi) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
 
 	// remove the decryption key from the encrypted file hash
 	isEncrypted := len(ref) > p.hashSize
 	if isEncrypted {
-		chunkAddr := make([]byte,p.hashSize)
+		chunkAddr := make([]byte, p.hashSize)
 		copy(chunkAddr, ref[0:p.hashSize])
 		return chunkAddr
 	}
 	return ref
 }
-
 
 // Used in testing
 func (p *PinApi) GetPinnedFiles() map[string]uint64 {
@@ -385,7 +376,11 @@ func (p *PinApi) GetAllChunksFromDB() map[string]int {
 	return p.db.GetAllChunksInDB()
 }
 
-func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64{
+func (p *PinApi) GetAllChunksInGCIndex() map[string]string {
+	return p.db.GetAllChunksInGCIndex()
+}
+
+func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
 
 	var lock = sync.RWMutex{}
 
@@ -402,7 +397,7 @@ func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[st
 	}
 
 	pinnedChunks := make(map[string]uint64)
-	walkerFunction := func(ref storage.Reference) (error) {
+	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
 		pinCounter, err := p.db.GetPinCounterOfChunk(chunkAddr)
 		if err != nil {
@@ -417,4 +412,3 @@ func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[st
 
 	return pinnedChunks
 }
-

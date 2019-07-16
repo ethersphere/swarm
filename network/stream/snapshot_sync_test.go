@@ -302,7 +302,7 @@ func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, store chunk.Store)
 	size := chunkSize
 	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {
-		rk, wait, err := fileStore.Store(context.TODO(), testutil.RandomReader(i, size), int64(size), false, 0)
+		rk, wait, err := fileStore.Store(context.TODO(), testutil.RandomReader(i, size), int64(size), false)
 		if err != nil {
 			return nil, err
 		}

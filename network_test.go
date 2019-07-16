@@ -541,13 +541,13 @@ func putString(ctx context.Context, a *api.API, content string, contentType stri
 	log.Trace("created new tag", "uid", tag.Uid)
 
 	cCtx := sctx.SetTag(ctx, tag.Uid)
-	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt, 0)
+	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt, 0)
+	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		return nil, nil, err
 	}

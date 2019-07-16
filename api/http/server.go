@@ -287,12 +287,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	wait(r.Context())
 	tag.DoneSplit(addr)
 
 	log.Debug("stored content", "ruid", ruid, "key", addr)
-
 
 	// Add the root hash of the RAW file in the pinFilesIndex
 	if headerPin != "" {

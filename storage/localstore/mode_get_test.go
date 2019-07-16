@@ -37,7 +37,7 @@ func TestModeGetRequest(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestModeGetSync(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}

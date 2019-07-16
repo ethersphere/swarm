@@ -115,7 +115,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 		size := chunkCount * chunkSize
 
-		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false, 0)
+		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
 			return fmt.Errorf("store: %v", err)
 		}

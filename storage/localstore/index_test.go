@@ -44,7 +44,7 @@ func TestDB_pullIndex(t *testing.T) {
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -89,7 +89,7 @@ func TestDB_gcIndex(t *testing.T) {
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}

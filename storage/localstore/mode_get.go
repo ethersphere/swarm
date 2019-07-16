@@ -160,7 +160,7 @@ func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 	return raw, nil
 }
 
-func (db *DB) IsFilePinned(hash []byte) bool{
+func (db *DB) IsFilePinned(hash []byte) bool {
 	isFilePinned := false
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
@@ -170,7 +170,7 @@ func (db *DB) IsFilePinned(hash []byte) bool{
 		return false
 	}
 
-	if bytes.Equal(i.Address,hash) {
+	if bytes.Equal(i.Address, hash) {
 		isFilePinned = true
 	}
 	return isFilePinned
@@ -198,11 +198,9 @@ func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 	return i.PinCounter, nil
 }
 
-
 // testHookUpdateGC is a hook that can provide
 // information when a garbage collection index is updated.
 var testHookUpdateGC func()
-
 
 // Used in Testing
 func (db *DB) GetPinFilesIndex() map[string]uint64 {
@@ -214,7 +212,6 @@ func (db *DB) GetPinFilesIndex() map[string]uint64 {
 	return pinnedFiles
 }
 
-
 func (db *DB) GetPinnedChunks() map[string]uint64 {
 	pinnedChunks := make(map[string]uint64)
 	_ = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
@@ -223,7 +220,6 @@ func (db *DB) GetPinnedChunks() map[string]uint64 {
 	}, nil)
 	return pinnedChunks
 }
-
 
 func (db *DB) GetAllChunksInDB() map[string]int {
 	chunksInDB := make(map[string]int)
@@ -234,3 +230,11 @@ func (db *DB) GetAllChunksInDB() map[string]int {
 	return chunksInDB
 }
 
+func (db *DB) GetAllChunksInGCIndex() map[string]string {
+	chunksInGC := make(map[string]string)
+	_ = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		chunksInGC[hex.EncodeToString(item.Address)] = time.Unix(item.AccessTimestamp, 0).Format(time.RFC822Z)
+		return false, nil
+	}, nil)
+	return chunksInGC
+}

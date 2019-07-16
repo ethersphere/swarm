@@ -61,9 +61,9 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 
 		hdr := &tar.Header{
-			Name:       hex.EncodeToString(item.Address),
-			Mode:       0644,
-			Size:       int64(len(item.Data)),
+			Name: hex.EncodeToString(item.Address),
+			Mode: 0644,
+			Size: int64(len(item.Data)),
 		}
 
 		if err := tw.WriteHeader(hdr); err != nil {

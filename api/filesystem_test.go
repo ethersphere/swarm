@@ -19,6 +19,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -111,7 +112,7 @@ func TestApiDirUploadModify(t *testing.T) {
 			return
 		}
 		ctx := context.TODO()
-		hash, wait, err := api.Store(ctx, bytes.NewReader(index), int64(len(index)), toEncrypt, DONT_PIN)
+		hash, wait, err := api.Store(ctx, bytes.NewReader(index), int64(len(index)), toEncrypt)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return

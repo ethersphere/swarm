@@ -44,7 +44,7 @@ func TestDB_SubscribePush(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +130,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}

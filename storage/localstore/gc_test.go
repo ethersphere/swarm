@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -70,7 +71,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,6 +82,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 		}
 
 		addrs = append(addrs, ch.Address())
+
 	}
 
 	gcTarget := db.gcTarget()
@@ -123,6 +125,93 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	})
 }
 
+func TestPinGC(t *testing.T) {
+
+	t.Helper()
+
+	chunkCount := 150
+	pinChunksCount := 50
+
+	db, cleanupFunc := newTestDB(t, &Options{
+		Capacity: 100,
+	})
+	testHookCollectGarbageChan := make(chan uint64)
+	defer setTestHookCollectGarbage(func(collectedCount uint64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-db.close:
+		}
+	})()
+	defer cleanupFunc()
+
+	addrs := make([]chunk.Address, 0)
+	pinAddrs := make([]chunk.Address, 0)
+
+	// upload random chunks
+	for i := 0; i < chunkCount; i++ {
+		ch := generateChunkForPinning()
+
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		addrs = append(addrs, ch.Address())
+
+		// Pin the chunks at the end so that the access time is at the end
+		if i >= (chunkCount - pinChunksCount) {
+			_, err = db.Put(context.Background(), chunk.ModePin, ch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pinAddrs = append(pinAddrs, ch.Address())
+		}
+	}
+
+	gcTarget := db.gcTarget()
+
+	for {
+		select {
+		case <-testHookCollectGarbageChan:
+		case <-time.After(10 * time.Second):
+			t.Error("collect garbage timeout")
+		}
+		gcSize, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if gcSize == gcTarget {
+			break
+		}
+	}
+
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, int(pinChunksCount)))
+
+	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
+
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
+
+	t.Run("gc size", newIndexGCSizeTest(db))
+
+	for _, hash := range pinAddrs {
+		_, err := db.Get(context.Background(), chunk.ModeGetRequest, hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func generateChunkForPinning() chunk.Chunk {
+	key := make([]byte, 32)
+	rand.Read(key)
+	return chunk.NewChunk(key, nil)
+}
+
 // TestDB_collectGarbageWorker_withRequests is a helper test function
 // to test garbage collection runs by uploading, syncing and
 // requesting a number of chunks.
@@ -143,7 +232,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	for i := 0; i < int(db.capacity)-1; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +275,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// upload and sync another chunk to trigger
 	// garbage collection
 	ch := generateTestRandomChunk()
-	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +364,7 @@ func TestDB_gcSize(t *testing.T) {
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}

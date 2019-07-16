@@ -551,5 +551,3 @@ func totalTimeMetric(name string, start time.Time) {
 	log.Trace(name+" total time", "time", totalTime)
 	metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 }
-
-

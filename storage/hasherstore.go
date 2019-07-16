@@ -36,19 +36,19 @@ type hasherStore struct {
 	// nrChunks is used with atomic functions
 	// it is required to be at the start of the struct to ensure 64bit alignment for ARM, x86-32, and 32-bit MIPS architectures
 	// see: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	nrChunks   uint64 // number of chunks to store
-	store      ChunkStore
-	tag        *chunk.Tag
-	toEncrypt  bool
-	doWait     sync.Once
-	hashFunc   SwarmHasher
-	hashSize   int           // content hash size
-	refSize    int64         // reference size (content hash + possibly encryption key)
-	errC       chan error    // global error channel
-	waitC      chan error    // global wait channel
-	doneC      chan struct{} // closed by Close() call to indicate that count is the final number of chunks
-	quitC      chan struct{} // closed to quit unterminated routines
-	workers    chan Chunk    // back pressure for limiting storage workers goroutines
+	nrChunks  uint64 // number of chunks to store
+	store     ChunkStore
+	tag       *chunk.Tag
+	toEncrypt bool
+	doWait    sync.Once
+	hashFunc  SwarmHasher
+	hashSize  int           // content hash size
+	refSize   int64         // reference size (content hash + possibly encryption key)
+	errC      chan error    // global error channel
+	waitC     chan error    // global wait channel
+	doneC     chan struct{} // closed by Close() call to indicate that count is the final number of chunks
+	quitC     chan struct{} // closed to quit unterminated routines
+	workers   chan Chunk    // back pressure for limiting storage workers goroutines
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
@@ -62,17 +62,17 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag 
 	}
 
 	h := &hasherStore{
-		store:      store,
-		tag:        tag,
-		toEncrypt:  toEncrypt,
-		hashFunc:   hashFunc,
-		hashSize:   hashSize,
-		refSize:    refSize,
-		errC:       make(chan error),
-		waitC:      make(chan error),
-		doneC:      make(chan struct{}),
-		quitC:      make(chan struct{}),
-		workers:    make(chan Chunk, noOfStorageWorkers),
+		store:     store,
+		tag:       tag,
+		toEncrypt: toEncrypt,
+		hashFunc:  hashFunc,
+		hashSize:  hashSize,
+		refSize:   refSize,
+		errC:      make(chan error),
+		waitC:     make(chan error),
+		doneC:     make(chan struct{}),
+		quitC:     make(chan struct{}),
+		workers:   make(chan Chunk, noOfStorageWorkers),
 	}
 	return h
 }

@@ -197,7 +197,6 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 
 	case chunk.ModeStorePinRootHash:
 
-
 	default:
 		return false, ErrInvalidMode
 	}

@@ -218,7 +218,7 @@ type FakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk, pinCounter uint8) (bool, error) {
+func (f *FakeChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) (bool, error) {
 	return false, nil
 }
 

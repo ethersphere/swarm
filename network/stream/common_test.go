@@ -230,7 +230,7 @@ func (rrs *roundRobinStore) Get(_ context.Context, _ chunk.ModeGet, _ storage.Ad
 func (rrs *roundRobinStore) Put(ctx context.Context, mode chunk.ModePut, ch storage.Chunk) (bool, error) {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	return rrs.stores[idx].Put(ctx, mode, ch, 0)
+	return rrs.stores[idx].Put(ctx, mode, ch)
 }
 
 func (rrs *roundRobinStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
@@ -292,7 +292,7 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 		}
 		//store it (upload it) on the FileStore
 		ctx := context.TODO()
-		rk, wait, err := fileStore.Store(ctx, strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false, 0)
+		rk, wait, err := fileStore.Store(ctx, strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
 		log.Debug("Uploaded random string file to node")
 		if err != nil {
 			return nil, nil, err
@@ -403,5 +403,5 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	defer cleanup()
 
 	reader := bytes.NewReader(testData)
-	return fileStore.GetAllReferences(context.Background(), reader, false)
+	return fileStore.GetAllReferences(context.Background(), reader)
 }

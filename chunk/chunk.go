@@ -183,13 +183,13 @@ const (
 	ModePutSync
 	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
-
+	// ModePin: when a chunk is pinned during upload or separately
 	ModePin
-
+	// ModeUnpin: when a chunk is unpinned using a command locally
 	ModeUnpin
-
+	// ModeStorePinRootHash: When a root hash of a file needs to be stored (to display later using list pins command)
 	ModeStorePinRootHash
-
+	// ModeRemovePinRootHash: When a root hash of a file is unpinned
 	ModeRemovePinRootHash
 )
 

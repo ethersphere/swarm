@@ -34,12 +34,15 @@ type TestServer interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver) *TestSwarmServer {
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver,
+	o *localstore.Options) *TestSwarmServer {
+
 	swarmDir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	localStore, err := localstore.New(swarmDir, make([]byte, 32), nil)
+
+	localStore, err := localstore.New(swarmDir, make([]byte, 32), o)
 	if err != nil {
 		os.RemoveAll(swarmDir)
 		t.Fatal(err)

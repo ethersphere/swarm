@@ -254,7 +254,7 @@ func runPureRetrievalTest(t *testing.T, nodeCount int, chunkCount int) {
 				for _, chnk := range chunks {
 					if bytes.Equal(chnk.Address(), conf.hashes[ch]) {
 						// ...and store it in the localstore
-						if _, err = lstore.Put(ctx, chunk.ModePutUpload, chnk, 0); err != nil {
+						if _, err = lstore.Put(ctx, chunk.ModePutUpload, chnk); err != nil {
 							return err
 						}
 					}

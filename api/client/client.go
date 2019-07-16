@@ -610,8 +610,6 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 		return "", err
 	}
 
-
-
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
 	req.Header.Set("Expect", "100-continue")
@@ -636,7 +634,6 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 		_, err = io.Copy(w, file)
 		return err
 	}
-
 
 	// run the upload in a goroutine so we can send the request headers and
 	// wait for a '100 Continue' response before sending the multipart form

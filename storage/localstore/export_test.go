@@ -37,7 +37,7 @@ func TestExportImport(t *testing.T) {
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db1.Put(context.Background(), chunk.ModePutUpload, ch, 0)
+		_, err := db1.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}

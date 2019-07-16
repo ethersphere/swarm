@@ -37,8 +37,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/swarm/storage/feed/lookup"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -46,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -78,7 +77,7 @@ func TestBzzWithFeed(t *testing.T) {
 	signer, _ := newTestSigner()
 
 	// Initialize Swarm test server
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	// put together some data for our test:
@@ -196,7 +195,7 @@ func TestBzzWithFeed(t *testing.T) {
 
 // Test Swarm feeds using the raw update methods
 func TestBzzFeed(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	signer, _ := newTestSigner()
 
 	defer srv.Close()
@@ -473,14 +472,14 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	addr := [3]storage.Address{}
 
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func(context.Context) error
 		ctx := context.TODO()
-		addr[i], wait, err = srv.FileStore.Store(ctx, reader[i], int64(len(mf)), encrypted, api.DONT_PIN)
+		addr[i], wait, err = srv.FileStore.Store(ctx, reader[i], int64(len(mf)), encrypted)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -711,7 +710,7 @@ func TestBzzTar(t *testing.T) {
 }
 
 func testBzzTar(encrypted bool, t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 	fileNames := []string{"tmp1.txt", "tmp2.lock", "tmp3.rtf"}
 	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
@@ -848,7 +847,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 // by chunk size (4096). It is needed to be checked BEFORE chunking is done, therefore
 // concurrency was introduced to slow down the HTTP request
 func TestBzzCorrectTagEstimate(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	for _, v := range []struct {
@@ -921,7 +920,7 @@ func TestBzzRootRedirectEncrypted(t *testing.T) {
 }
 
 func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
@@ -968,7 +967,7 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 }
 
 func TestMethodsNotAllowed(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 	databytes := "bar"
 	for _, c := range []struct {
@@ -1027,7 +1026,7 @@ func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string
 }
 
 func TestGet(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	for _, testCase := range []struct {
@@ -1110,7 +1109,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestModify(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 	headers := map[string]string{"Content-Type": "text/plain"}
 	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader([]byte("data")), headers, false, t)
@@ -1200,7 +1199,7 @@ func TestMultiPartUpload(t *testing.T) {
 	// POST /bzz:/ Content-Type: multipart/form-data
 	verbose := false
 	// Setup Swarm
-	srv := NewTestSwarmServer(t, serverFunc, nil)
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	url := fmt.Sprintf("%s/bzz:/", srv.URL)
@@ -1231,7 +1230,7 @@ func TestMultiPartUpload(t *testing.T) {
 // TestBzzGetFileWithResolver tests fetching a file using a mocked ENS resolver
 func TestBzzGetFileWithResolver(t *testing.T) {
 	resolver := newTestResolveValidator("")
-	srv := NewTestSwarmServer(t, serverFunc, resolver)
+	srv := NewTestSwarmServer(t, serverFunc, resolver, nil)
 	defer srv.Close()
 	fileNames := []string{"dir1/tmp1.txt", "dir2/tmp2.lock", "dir3/tmp3.rtf"}
 	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}

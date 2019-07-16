@@ -20,15 +20,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
-	swarmhttp "github.com/ethersphere/swarm/api/http"
 	"testing"
+
+	swarmhttp "github.com/ethersphere/swarm/api/http"
 )
 
-
-
 func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string, data []byte, pinCounter uint64, isRaw bool) {
-
 
 	// Check if the root hash is in the pinFilesIndex
 	pinnedFiles := srv.PinAPI.GetPinnedFiles()
@@ -42,7 +39,7 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 	//}
 
 	// Get pinned chunks details from pinning indexes
-	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash,"")
+	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash, "")
 	//for k,v := range pinnedChunks {
 	//	fmt.Println("Pinned chunks", k,v)
 	//}
@@ -59,9 +56,9 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 
 	// Check if all the chunk address are same
 	noOfChunksMissing := 0
-	for hash,_ := range chunksInDB {
+	for hash, _ := range chunksInDB {
 		if _, ok := pinnedChunks[hash]; !ok {
-			if !isRaw && noOfChunksMissing == 0{
+			if !isRaw && noOfChunksMissing == 0 {
 				noOfChunksMissing = 1
 				continue
 			}
@@ -86,7 +83,7 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 					}
 
 					for _, defaultFileChunk := range defaultFilehash {
-						if hash == hex.EncodeToString(defaultFileChunk) && pc == pinCounter+1  {
+						if hash == hex.EncodeToString(defaultFileChunk) && pc == pinCounter+1 {
 							foundChunk = true
 							break
 						}
@@ -105,14 +102,13 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 func IsNoChunksPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string) {
 
 	// Get pinned chunks details from pinning indexes
-	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash,"")
+	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash, "")
 
 	// Check if number of chunk hashes are same
 	if len(pinnedChunks) != 0 {
 		t.Fatalf("Expected empty pinIndex but %d chunks found", len(pinnedChunks))
 	}
 }
-
 
 func CheckIfUnpinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string) {
 
@@ -123,23 +119,8 @@ func CheckIfUnpinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash stri
 	}
 
 	// The chunks of this file should not be in pinIndex too
-	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash,"")
-	if pinnedChunks!= nil  && len(pinnedChunks) != 0 {
+	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash, "")
+	if pinnedChunks != nil && len(pinnedChunks) != 0 {
 		t.Fatalf("Chunks of this file present in pinIndex")
 	}
-}
-
-
-func PrintPinIndexes(srv *swarmhttp.TestSwarmServer) {
-
-	pinnedFiles := srv.PinAPI.GetPinnedFiles()
-	for fileName,treeSize := range pinnedFiles {
-		fmt.Println("roothash = ", fileName,"treeSize = ", treeSize)
-	}
-
-	pinnedChunks := srv.PinAPI.GetPinnedChunks()
-	for chunkHash, pinCounter := range pinnedChunks {
-		fmt.Println("chunkHash = ", chunkHash, "pinCounter = ", pinCounter)
-	}
-
 }
