@@ -62,7 +62,7 @@ type DockerBuildContext struct {
 type DockerNode struct {
 	config  NodeConfig
 	adapter *DockerAdapter
-	status  NodeStatus
+	info    NodeInfo
 	ipAddr  string
 }
 
@@ -77,6 +77,23 @@ func DefaultDockerBuildContext() DockerBuildContext {
 		Dockerfile: "Dockerfile",
 		Directory:  ".",
 	}
+}
+
+// IsDockerAvailable can be used to check the connectivity to the docker daemon
+func IsDockerAvailable(daemonAddr string) bool {
+	cli, err := client.NewClientWithOpts(
+		client.WithHost(daemonAddr),
+		client.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return false
+	}
+	_, err = cli.ServerVersion(context.Background())
+	if err != nil {
+		return false
+	}
+	cli.Close()
+	return true
 }
 
 // NewDockerAdapter creates an ExecAdapter by receiving a DockerAdapterConfig
@@ -106,7 +123,7 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 	// Build docker image
 	if config.BuildContext.Dockerfile != "" {
 		var err error
-		image, err = buildImage(config.BuildContext)
+		image, err = buildImage(config.BuildContext, config.DaemonAddr)
 		if err != nil {
 			return nil, fmt.Errorf("could not build the docker image: %v", err)
 		}
@@ -133,21 +150,21 @@ func (a *DockerAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
-	status := NodeStatus{
+	info := NodeInfo{
 		ID: config.ID,
 	}
 	node := &DockerNode{
 		config:  config,
 		adapter: a,
-		status:  status,
+		info:    info,
 	}
 	a.nodes[config.ID] = node
 	return node, nil
 }
 
-// Status returns the node status
-func (n *DockerNode) Status() NodeStatus {
-	return n.status
+// Info returns the node status
+func (n *DockerNode) Info() NodeInfo {
+	return n.info
 }
 
 // Start starts the node
@@ -272,9 +289,8 @@ func (n *DockerNode) Start() error {
 		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
 	}
 
-	n.status = NodeStatus{
+	n.info = NodeInfo{
 		ID:          n.config.ID,
-		Running:     true,
 		Enode:       strings.Replace(p2pinfo.Enode, "127.0.0.1", n.ipAddr, 1),
 		BzzAddr:     swarminfo.BzzKey,
 		RPCListen:   wsAddr,
@@ -299,7 +315,6 @@ func (n *DockerNode) Stop() error {
 	if err != nil {
 		return fmt.Errorf("failed to remove container %s : %v", n.containerName(), err)
 	}
-	n.status.Running = false
 	return nil
 }
 
@@ -308,10 +323,10 @@ func (n *DockerNode) containerName() string {
 }
 
 // buildImage builds a docker image and returns the image identifier (tag).
-func buildImage(buildContext DockerBuildContext) (string, error) {
+func buildImage(buildContext DockerBuildContext, deamonAddr string) (string, error) {
 	// Connect to docker daemon
 	c, err := client.NewClientWithOpts(
-		client.WithHost(client.DefaultDockerHost),
+		client.WithHost(deamonAddr),
 		client.WithAPIVersionNegotiation(),
 	)
 	if err != nil {

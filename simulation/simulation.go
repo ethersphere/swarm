@@ -143,16 +143,12 @@ func (s *Simulation) RPCClient(id NodeID) (*rpc.Client, error) {
 		return nil, fmt.Errorf("a node with id %s does not exists", id)
 	}
 
-	status := node.Status()
-
-	if !status.Running {
-		return nil, fmt.Errorf("node %s is not running", id)
-	}
+	info := node.Info()
 
 	var client *rpc.Client
 	var err error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
-		client, err = rpc.Dial(status.RPCListen)
+		client, err = rpc.Dial(info.RPCListen)
 		if err == nil {
 			break
 		}
@@ -164,19 +160,14 @@ func (s *Simulation) RPCClient(id NodeID) (*rpc.Client, error) {
 	return client, nil
 }
 
+// HTTPBaseAddr returns the address for the HTTP API
 func (s *Simulation) HTTPBaseAddr(id NodeID) (string, error) {
 	node, ok := s.nodes.Load(id)
 	if !ok {
 		return "", fmt.Errorf("a node with id %s does not exists", id)
 	}
-
-	status := node.Status()
-
-	if !status.Running {
-		return "", fmt.Errorf("node %s is not running", id)
-	}
-
-	return status.HTTPListen, nil
+	info := node.Info()
+	return info.HTTPListen, nil
 }
 
 // Snapshot returns a snapshot of the simulation

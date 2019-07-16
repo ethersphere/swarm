@@ -9,10 +9,14 @@ import (
 )
 
 func TestDockerAdapterBuild(t *testing.T) {
+	if !IsDockerAvailable(client.DefaultDockerHost) {
+		t.Skip("could not connect to the docker daemon")
+	}
+
 	// Create a docker client
 	c, err := dockerClient()
 	if err != nil {
-		t.Fatalf("could not create a docker client: %v", err)
+		t.Fatalf("could not create docker client: %v", err)
 	}
 	defer c.Close()
 

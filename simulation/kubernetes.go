@@ -90,7 +90,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 	}
 
 	if config.BuildContext.Dockerfile == "" && config.DockerImage == "" {
-		return nil, errors.New("required: BuildContext or ExecutablePath")
+		return nil, errors.New("required: Dockerfile or DockerImage")
 	}
 
 	// Define k8s client configuration
@@ -103,7 +103,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 	// Create the clientset
 	clientset, err := kubernetes.NewForConfig(k8scfg)
 	if err != nil {
-		return nil, fmt.Errorf("coudl not create clientset: %v", err)
+		return nil, fmt.Errorf("could not create clientset: %v", err)
 	}
 
 	// Figure out which docker image should be used
@@ -117,7 +117,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 			Dockerfile: config.BuildContext.Dockerfile,
 			Directory:  config.BuildContext.Directory,
 			Tag:        config.BuildContext.ImageTag(),
-		})
+		}, DefaultDockerAdapterConfig().DaemonAddr)
 		if err != nil {
 			return nil, fmt.Errorf("could not build the docker image: %v", err)
 		}
@@ -180,13 +180,13 @@ func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
-	status := NodeStatus{
+	info := NodeInfo{
 		ID: config.ID,
 	}
 	node := &KubernetesNode{
 		config:  config,
 		adapter: a,
-		status:  status,
+		info:    info,
 	}
 	a.nodes[config.ID] = node
 	return node, nil
@@ -195,12 +195,12 @@ func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 type KubernetesNode struct {
 	config  NodeConfig
 	adapter *KubernetesAdapter
-	status  NodeStatus
+	info    NodeInfo
 }
 
-// Status returns the node status
-func (n *KubernetesNode) Status() NodeStatus {
-	return n.status
+// Info returns the node info
+func (n *KubernetesNode) Info() NodeInfo {
+	return n.info
 }
 
 // Start starts the node
@@ -343,9 +343,8 @@ func (n *KubernetesNode) Start() error {
 		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
 	}
 
-	n.status = NodeStatus{
+	n.info = NodeInfo{
 		ID:          n.config.ID,
-		Running:     true,
 		Enode:       p2pinfo.Enode,
 		BzzAddr:     swarminfo.BzzKey,
 		RPCListen:   wsAddr,

@@ -33,7 +33,7 @@ type ExecNode struct {
 	adapter *ExecAdapter
 	config  NodeConfig
 	cmd     *exec.Cmd
-	status  NodeStatus
+	info    NodeInfo
 }
 
 // NewExecAdapter creates an ExecAdapter by receiving a ExecAdapterConfig
@@ -58,21 +58,21 @@ func (a *ExecAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
-	status := NodeStatus{
+	info := NodeInfo{
 		ID: config.ID,
 	}
 	node := &ExecNode{
 		config:  config,
 		adapter: a,
-		status:  status,
+		info:    info,
 	}
 	a.nodes[config.ID] = node
 	return node, nil
 }
 
-// Status returns the node status
-func (n *ExecNode) Status() NodeStatus {
-	return n.status
+// Info returns the node info
+func (n *ExecNode) Info() NodeInfo {
+	return n.info
 }
 
 // Start starts the node
@@ -152,9 +152,8 @@ func (n *ExecNode) Start() error {
 		return fmt.Errorf("could not get info via rpc call. node %s: %v", n.config.ID, err)
 	}
 
-	n.status = NodeStatus{
+	n.info = NodeInfo{
 		ID:         n.config.ID,
-		Running:    true,
 		Enode:      p2pinfo.Enode,
 		BzzAddr:    swarminfo.BzzKey,
 		RPCListen:  n.ipcPath(),
@@ -171,7 +170,6 @@ func (n *ExecNode) Stop() error {
 	}
 	defer func() {
 		n.cmd = nil
-		n.status.Running = false
 	}()
 	// Try to gracefully terminate the process
 	if err := n.cmd.Process.Signal(syscall.SIGTERM); err != nil {

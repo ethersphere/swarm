@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -36,14 +37,26 @@ func TestAdapters(t *testing.T) {
 
 	// Test exec adapter
 	t.Run("exec", func(t *testing.T) {
+		execPath := "../build/bin/swarm"
+
+		execPath, err := filepath.Abs(execPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := os.Stat(execPath); err != nil {
+			if os.IsNotExist(err) {
+				t.Skip("swarm binary not found. build it before running the test")
+			}
+		}
+
 		tmpdir, err := ioutil.TempDir("", "test-sim-exec")
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer os.RemoveAll(tmpdir)
 		adapter, err := NewExecAdapter(ExecAdapterConfig{
-			// TODO: fix this, build binary?
-			ExecutablePath:    "/home/rafael/go/bin/swarm",
+			ExecutablePath:    execPath,
 			BaseDataDirectory: tmpdir,
 		})
 		if err != nil {
@@ -55,7 +68,10 @@ func TestAdapters(t *testing.T) {
 	// Test docker adapter
 	t.Run("docker", func(t *testing.T) {
 		config := DefaultDockerAdapterConfig()
-		config.DockerImage = "ethersphere/swarm:edge"
+		if !IsDockerAvailable(config.DaemonAddr) {
+			t.Skip("docker is not available, skipping test")
+		}
+		config.DockerImage = "skylenet/swarm-test:natflag"
 		adapter, err := NewDockerAdapter(config)
 		if err != nil {
 			t.Fatalf("could not create docker adapter: %v", err)
@@ -74,7 +90,6 @@ func TestAdapters(t *testing.T) {
 		}
 		startSimulation(t, adapter, nodeCount)
 	})
-
 }
 
 func startSimulation(t *testing.T, adapter Adapter, count int) {
@@ -153,7 +168,7 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 	for idx, node := range nodes {
 		go func(node Node, idx int) {
 			defer wg.Done()
-			id := node.Status().ID
+			id := node.Info().ID
 			log.Info("getting rpc client", "node", id)
 			client, err := sim.RPCClient(id)
 			if err != nil {
@@ -169,9 +184,9 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 	log.Info("Adding peers...")
 	for i := 0; i < count-1; i++ {
 		go func(idx int) {
-			err := clients.RPC[idx].Call(nil, "admin_addPeer", nodes[idx+1].Status().Enode)
+			err := clients.RPC[idx].Call(nil, "admin_addPeer", nodes[idx+1].Info().Enode)
 			if err != nil {
-				t.Errorf("could not add peer %s: %v", nodes[idx+1].Status().ID, err)
+				t.Errorf("could not add peer %s: %v", nodes[idx+1].Info().ID, err)
 			}
 		}(i)
 	}
@@ -180,7 +195,7 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 	addrs := [][]byte{}
 
 	for _, node := range nodes {
-		byteaddr, err := hexutil.Decode(node.Status().BzzAddr)
+		byteaddr, err := hexutil.Decode(node.Info().BzzAddr)
 		if err != nil {
 			t.Fatalf("failed to decode hex")
 		}
@@ -193,13 +208,13 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 
 	for i := 0; i < count; {
 		healthy := &network.Health{}
-		if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Status().BzzAddr[2:]]); err != nil {
+		if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Info().BzzAddr[2:]]); err != nil {
 			t.Errorf("failed to call hive_getHealthInfo")
 		}
 		if healthy.Healthy() {
 			i++
 		} else {
-			log.Info("Node isn't healthy, checking again all nodes...", "node", nodes[i].Status().ID)
+			log.Info("Node isn't healthy, checking again all nodes...", "node", nodes[i].Info().ID)
 			time.Sleep(500 * time.Millisecond)
 			i = 0 // Start checking all nodes again
 		}

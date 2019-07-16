@@ -4,12 +4,27 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestExecAdapter(t *testing.T) {
+
+	execPath := "../build/bin/swarm"
+
+	execPath, err := filepath.Abs(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Skip test if binary doesn't exist
+	if _, err := os.Stat(execPath); err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("swarm binary not found. build it before running the test")
+		}
+	}
 
 	tmpdir, err := ioutil.TempDir("", "test-adapter-exec")
 	if err != nil {
@@ -18,8 +33,7 @@ func TestExecAdapter(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adapter, err := NewExecAdapter(ExecAdapterConfig{
-		// TODO: fix this
-		ExecutablePath:    "/home/rafael/go/bin/swarm",
+		ExecutablePath:    execPath,
 		BaseDataDirectory: tmpdir,
 	})
 	if err != nil {
@@ -54,8 +68,8 @@ func TestExecAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status := node.Status()
-	if status.ID != "node1" {
+	info := node.Info()
+	if info.ID != "node1" {
 		t.Fatal("node id is different")
 	}
 
@@ -69,19 +83,11 @@ func TestExecAdapter(t *testing.T) {
 		t.Fatalf("node did not start: %v", err)
 	}
 
-	statusA := node.Status()
-
-	if !statusA.Running {
-		t.Errorf("node should be in running state")
-	}
+	infoA := node.Info()
 
 	err = node.Stop()
 	if err != nil {
 		t.Fatalf("node didn't stop: %v", err)
-	}
-
-	if node.Status().Running {
-		t.Errorf("node should not be in running state")
 	}
 
 	err = node.Start()
@@ -89,10 +95,10 @@ func TestExecAdapter(t *testing.T) {
 		t.Fatalf("node didn't start again: %v", err)
 	}
 
-	statusB := node.Status()
+	infoB := node.Info()
 
-	if statusA.BzzAddr != statusB.BzzAddr {
-		t.Errorf("bzzaddr should be the same: %s - %s", statusA.Enode, statusB.Enode)
+	if infoA.BzzAddr != infoB.BzzAddr {
+		t.Errorf("bzzaddr should be the same: %s - %s", infoA.Enode, infoB.Enode)
 	}
 
 	err = node.Stop()
