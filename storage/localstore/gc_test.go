@@ -165,7 +165,7 @@ func TestPinGC(t *testing.T) {
 
 		// Pin the chunks at the end so that the access time is at the end
 		if i >= (chunkCount - pinChunksCount) {
-			_, err = db.Put(context.Background(), chunk.ModePin, ch)
+			err = db.Set(context.Background(), chunk.ModePinChunk, ch.Address())
 			if err != nil {
 				t.Fatal(err)
 			}
