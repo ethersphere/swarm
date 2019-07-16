@@ -54,7 +54,7 @@ var (
 func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -111,7 +111,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	nodeCount := 8
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -176,7 +176,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 func TestNodesCorrectBinsDynamic(t *testing.T) {
 	nodeCount := 10
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
@@ -263,7 +263,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 		// initial node count
 		nodeCount = 5
 
-		sim = simulation.NewInProc(map[string]simulation.ServiceFunc{
+		sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 			"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 		})
 

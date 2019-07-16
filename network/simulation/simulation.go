@@ -103,6 +103,7 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 		addr := network.NewAddr(ctx.Config.Node())
+
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
