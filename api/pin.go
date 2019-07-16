@@ -223,108 +223,93 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 			fileWorkers <- storage.Reference(addr)
 
 			// Signal end of file stream
-			fileWorkers <- storage.Reference(nil)
+			close(fileWorkers)
 
 		} else {
 			// Its a raw file.. no manifest.. so process only this hash
 			fileWorkers <- storage.Reference(addr)
 
-			// Singal end of file stream
-			fileWorkers <- storage.Reference(nil)
+			// Signal end of file stream
+			close(fileWorkers)
 
 		}
 	}()
 
-	doneFileWorker := make(chan struct{})
-QuitFileFor:
-	for {
-		select {
-		case <-doneFileWorker:
-			break QuitFileFor
+	for fileRef := range fileWorkers {
 
-		case fileRef := <-fileWorkers:
+		// Send the file to chunk workers
+		chunkWorkers <- fileRef
 
-			if fileRef == nil {
-				close(doneFileWorker)
-				break
-			}
+		actualFileSize := uint64(0)
+		rcvdFileSize := uint64(0)
+		doneChunkWorker := make(chan struct{})
+		var cwg sync.WaitGroup // Wait group to wait for chunk processing to complete
 
-			// Send the file to chunk workers
-			chunkWorkers <- fileRef
+	QuitChunkFor:
+		for {
+			select {
+			case <-doneChunkWorker:
+				break QuitChunkFor
 
-			actualFileSize := uint64(0)
-			rcvdFileSize := uint64(0)
-			doneChunkWorker := make(chan struct{})
-			var cwg sync.WaitGroup // Wait group to wait for chunk processing to complete
+			case ref := <-chunkWorkers:
+				cwg.Add(1)
 
-		QuitChunkFor:
-			for {
-				select {
-				case <-doneChunkWorker:
-					break QuitChunkFor
+				go func() {
 
-				case ref := <-chunkWorkers:
-					cwg.Add(1)
+					chunkData, err := getter.Get(context.TODO(), ref)
+					if err != nil {
+						log.Error("Error getting chunk data from localstore.")
+						close(doneChunkWorker)
+						return
+					}
 
-					go func() {
+					datalen := len(chunkData)
+					if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
+						log.Error("Invalid chunk data from localstore.")
+						close(doneChunkWorker)
+						return
+					}
 
-						//fmt.Println("Inside chunk pinner")
-						chunkData, err := getter.Get(context.TODO(), ref)
-						if err != nil {
-							log.Error("Error getting chunk data from localstore.")
+					subTreeSize := chunkData.Size()
+					if actualFileSize < subTreeSize {
+						actualFileSize = subTreeSize
+						log.Info("File size ", "Size", actualFileSize)
+					}
+
+					if subTreeSize > chunk.DefaultSize {
+						// this is a tree chunk
+						// load the tree's branches
+						branches := (datalen - 8) / hashSize
+						for i := 0; i < branches; i++ {
+							brAddr := make([]byte, hashSize)
+							start := (i * hashSize) + 8
+							end := ((i + 1) * hashSize) + 8
+							copy(brAddr[:], chunkData[start:end])
+							chunkWorkers <- storage.Reference(brAddr)
+						}
+
+					} else {
+						// this is a data chunk
+						rcvdFileSize = rcvdFileSize + chunk.DefaultSize
+						if rcvdFileSize > actualFileSize {
 							close(doneChunkWorker)
-							return
 						}
+					}
 
-						//fmt.Println("read chunkData")
-
-						datalen := len(chunkData)
-						if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
-							log.Error("Invalid chunk data from localstore.")
-							close(doneChunkWorker)
-							return
-						}
-
-						subTreeSize := chunkData.Size()
-						if actualFileSize < subTreeSize {
-							actualFileSize = subTreeSize
-							log.Info("File size ", "Size", actualFileSize)
-						}
-
-						if subTreeSize > chunk.DefaultSize {
-							// this is a tree chunk
-							// load the tree's branches
-							branches := (datalen - 8) / hashSize
-							for i := 0; i < branches; i++ {
-								brAddr := make([]byte, hashSize)
-								start := (i * hashSize) + 8
-								end := ((i + 1) * hashSize) + 8
-								copy(brAddr[:], chunkData[start:end])
-								chunkWorkers <- storage.Reference(brAddr)
-							}
-
-						} else {
-							// this is a data chunk
-							rcvdFileSize = rcvdFileSize + chunk.DefaultSize
-							if rcvdFileSize > actualFileSize {
-								close(doneChunkWorker)
-							}
-						}
-
-						// process the chunk (pin / unpin / display)
-						err = executeFunc(ref)
-						if err != nil {
-							// TODO: if this happens, we should go back and revert the entire file's chunks
-							log.Error("Could not unpin chunk. Address " + fmt.Sprintf("%0x", ref))
-						}
-						cwg.Done()
-					}()
-				}
+					// process the chunk (pin / unpin / display)
+					err = executeFunc(ref)
+					if err != nil {
+						// TODO: if this happens, we should go back and revert the entire file's chunks
+						log.Error("Could not unpin chunk. Address " + fmt.Sprintf("%0x", ref))
+					}
+					cwg.Done()
+				}()
 			}
-
-			// Wait for all the chunks to finish execution
-			cwg.Wait()
 		}
+
+		// Wait for all the chunks to finish execution
+		cwg.Wait()
+
 	}
 }
 
