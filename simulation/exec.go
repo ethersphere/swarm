@@ -46,6 +46,13 @@ func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
 		return nil, fmt.Errorf("'%s' executable does not exist", config.ExecutablePath)
 	}
 
+	absPath, err := filepath.Abs(config.ExecutablePath)
+	if err != nil {
+		return nil, fmt.Errorf("could not get absolute path for %s: %v", config.ExecutablePath, err)
+	}
+
+	config.ExecutablePath = absPath
+
 	a := &ExecAdapter{
 		config: config,
 		nodes:  make(map[NodeID]*ExecNode),

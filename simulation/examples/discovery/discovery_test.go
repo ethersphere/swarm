@@ -1,4 +1,4 @@
-package simulation
+package discovery
 
 import (
 	"encoding/hex"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -16,7 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/network"
-	"github.com/mattn/go-colorable"
+	"github.com/ethersphere/swarm/simulation"
+	colorable "github.com/mattn/go-colorable"
 )
 
 var (
@@ -31,18 +31,13 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }
 
-func TestAdapters(t *testing.T) {
+func TestDiscovery(t *testing.T) {
 
 	nodeCount := *nodes
 
 	// Test exec adapter
 	t.Run("exec", func(t *testing.T) {
-		execPath := "../build/bin/swarm"
-
-		execPath, err := filepath.Abs(execPath)
-		if err != nil {
-			t.Fatal(err)
-		}
+		execPath := "../../../build/bin/swarm"
 
 		if _, err := os.Stat(execPath); err != nil {
 			if os.IsNotExist(err) {
@@ -55,7 +50,7 @@ func TestAdapters(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer os.RemoveAll(tmpdir)
-		adapter, err := NewExecAdapter(ExecAdapterConfig{
+		adapter, err := simulation.NewExecAdapter(simulation.ExecAdapterConfig{
 			ExecutablePath:    execPath,
 			BaseDataDirectory: tmpdir,
 		})
@@ -67,12 +62,12 @@ func TestAdapters(t *testing.T) {
 
 	// Test docker adapter
 	t.Run("docker", func(t *testing.T) {
-		config := DefaultDockerAdapterConfig()
-		if !IsDockerAvailable(config.DaemonAddr) {
+		config := simulation.DefaultDockerAdapterConfig()
+		if !simulation.IsDockerAvailable(config.DaemonAddr) {
 			t.Skip("docker is not available, skipping test")
 		}
-		config.DockerImage = "skylenet/swarm-test:natflag"
-		adapter, err := NewDockerAdapter(config)
+		config.DockerImage = "ethersphere/swarm:edge"
+		adapter, err := simulation.NewDockerAdapter(config)
 		if err != nil {
 			t.Fatalf("could not create docker adapter: %v", err)
 		}
@@ -81,10 +76,10 @@ func TestAdapters(t *testing.T) {
 
 	// Test kubernetes adapter
 	t.Run("kubernetes", func(t *testing.T) {
-		config := DefaultKubernetesAdapterConfig()
+		config := simulation.DefaultKubernetesAdapterConfig()
 		config.Namespace = "simulation-test"
 		config.DockerImage = "ethersphere/swarm:edge"
-		adapter, err := NewKubernetesAdapter(config)
+		adapter, err := simulation.NewKubernetesAdapter(config)
 		if err != nil {
 			t.Fatalf("could not create kubernetes adapter: %v", err)
 		}
@@ -92,13 +87,13 @@ func TestAdapters(t *testing.T) {
 	})
 }
 
-func startSimulation(t *testing.T, adapter Adapter, count int) {
-	nodeIDs := make([]NodeID, count)
-	sim := NewSimulation(adapter)
+func startSimulation(t *testing.T, adapter simulation.Adapter, count int) {
+	nodeIDs := make([]simulation.NodeID, count)
+	sim := simulation.NewSimulation(adapter)
 
 	// Create nodes
 	for i := 0; i < count; i++ {
-		nodeIDs[i] = NodeID(fmt.Sprintf("node%d", i))
+		nodeIDs[i] = simulation.NodeID(fmt.Sprintf("node%d", i))
 		// Generate keys
 		bzzkey, err := crypto.GenerateKey()
 		if err != nil {
@@ -120,7 +115,7 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 			"--bzznetworkid", "499",
 		}
 
-		cfg := NodeConfig{
+		cfg := simulation.NodeConfig{
 			ID:     nodeIDs[i],
 			Args:   args,
 			Stdout: ioutil.Discard,
@@ -166,7 +161,7 @@ func startSimulation(t *testing.T, adapter Adapter, count int) {
 	wg.Add(len(nodes))
 
 	for idx, node := range nodes {
-		go func(node Node, idx int) {
+		go func(node simulation.Node, idx int) {
 			defer wg.Done()
 			id := node.Info().ID
 			log.Info("getting rpc client", "node", id)

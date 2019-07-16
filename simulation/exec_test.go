@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -13,11 +12,6 @@ import (
 func TestExecAdapter(t *testing.T) {
 
 	execPath := "../build/bin/swarm"
-
-	execPath, err := filepath.Abs(execPath)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Skip test if binary doesn't exist
 	if _, err := os.Stat(execPath); err != nil {
