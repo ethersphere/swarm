@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/ethersphere/swarm/storage/localstore"
 	"io"
 	"io/ioutil"
 	"math/big"

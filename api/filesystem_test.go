@@ -19,7 +19,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"github.com/ethersphere/swarm/storage/localstore"
 	"io/ioutil"
 	"os"
 	"path/filepath"
