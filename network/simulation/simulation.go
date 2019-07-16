@@ -103,13 +103,18 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 		addr := network.NewAddr(ctx.Config.Node())
-		kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false // discovery must be enabled when creating a snapshot
+		var kad *network.Kademlia
 
-		// store the kademlia in the bucket, needed later in the WaitTillHealthy function
-		bucket.Store(BucketKeyKademlia, kad)
+		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
+		if kv, ok := bucket.Load(BucketKeyKademlia); ok {
+			kad = kv.(*network.Kademlia)
+		} else {
+			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
+			bucket.Store(BucketKeyKademlia, kad)
+		}
 
 		config := &network.BzzConfig{
 			OverlayAddr:  addr.Over(),

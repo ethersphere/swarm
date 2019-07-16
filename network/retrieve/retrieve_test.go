@@ -61,7 +61,7 @@ func TestChunkDelivery(t *testing.T) {
 	chunkCount := 10
 	filesize := chunkCount * 4096
 
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
 	})
 	defer sim.Close()
@@ -146,7 +146,14 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	var kad *network.Kademlia
+	if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
+		kad = kv.(*network.Kademlia)
+	} else {
+		kad = network.NewKademlia(addr.Over(), network.NewKadParams())
+		bucket.Store(simulation.BucketKeyKademlia, kad)
+	}
+
 	netStore := storage.NewNetStore(localStore, n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
