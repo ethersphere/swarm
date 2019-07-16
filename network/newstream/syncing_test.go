@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/simulation"
@@ -36,6 +37,8 @@ import (
 // - write test that brings up a bigger cluster, then tests all individual nodes with localstore get to get the chunks that were
 // uploaded to the first node
 
+var timeout = 30 * time.Second
+
 // TestTwoNodesFullSync connects two nodes, uploads content to one node and expects the
 // uploader node's chunks to be synced to the second node. This is expected behaviour since although
 // both nodes might share address bits, due to kademlia depth=0 when under ProxBinSize - this will
@@ -45,58 +48,46 @@ import (
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
 	chunkCount := 10000
-
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunkCount),
 	})
+
 	defer sim.Close()
 
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	_, err := sim.AddNode()
+	id, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
+	nodeIDs := id
+
+	log.Debug("pivot node", "enode", nodeIDs[0])
+
 	//defer profile.Start(profile.CPUProfile).Stop()
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		nodeIDs := sim.UpNodeIDs()
-
-		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
-		log.Debug("uploader node", "enode", nodeIDs[0])
-		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		store := item.(chunk.Store)
-
-		//put some data into just the first node
-		filesize := chunkCount * 4096
-		cctx := context.Background()
-		_, wait, err := item.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
-		if err != nil {
-			return err
-		}
-		if err := wait(cctx); err != nil {
-			return err
-		}
-
 		id, err := sim.AddNodes(1)
 		if err != nil {
 			return err
 		}
+
+		nodeIDs := sim.UpNodeIDs()
+
 		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
 		if err != nil {
 			return err
 		}
-		nodeIDs = sim.UpNodeIDs()
 		syncingNodeID := nodeIDs[1]
+		uploaderNodeID := nodeIDs[0]
 
 		uploaderNodeBinIDs := make([]uint64, 17)
-
+		uploaderStore := sim.NodeItem(uploaderNodeID, bucketKeyFileStore).(chunk.Store)
 		log.Debug("checking pull subscription bin ids")
 		var uploaderSum uint64
 		for po := 0; po <= 16; po++ {
-			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			until, err := uploaderStore.LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
 				return err
 			}
@@ -308,7 +299,6 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 func TestTwoNodesFullSyncLive(t *testing.T) {
 	var (
 		chunkCount = 20000
-		timeout    = 30 * time.Second
 	)
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -401,7 +391,6 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 	var (
 		chunkCount = 10000 // per history and per live upload
-		timeout    = 30 * time.Second
 	)
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -630,4 +619,58 @@ func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
 		}
 	}
 	return chunks, nil
+}
+
+func BenchmarkHistoricalStream_1000(b *testing.B)  { benchmarkHistoricalStream(b, 1000) }
+func BenchmarkHistoricalStream_2000(b *testing.B)  { benchmarkHistoricalStream(b, 2000) }
+func BenchmarkHistoricalStream_3000(b *testing.B)  { benchmarkHistoricalStream(b, 3000) }
+func BenchmarkHistoricalStream_5000(b *testing.B)  { benchmarkHistoricalStream(b, 5000) }
+func BenchmarkHistoricalStream_10000(b *testing.B) { benchmarkHistoricalStream(b, 10000) }
+func BenchmarkHistoricalStream_15000(b *testing.B) { benchmarkHistoricalStream(b, 15000) }
+func BenchmarkHistoricalStream_20000(b *testing.B) { benchmarkHistoricalStream(b, 20000) }
+
+func benchmarkHistoricalStream(b *testing.B, chunks int) {
+	b.StopTimer()
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunks),
+	})
+
+	defer sim.Close()
+	uploaderNode, err := sim.AddNode()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+	uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		syncingNode, err := sim.AddNode()
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.StartTimer()
+
+		err = sim.Net.ConnectNodesStar([]enode.ID{syncingNode}, uploaderNode)
+		if err != nil {
+			b.Fatal(err)
+		}
+		syncingNodeStore := sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
+		if err := waitChunks(syncingNodeStore, uint64(len(uploadedChunks)), 10*time.Second); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		err = sim.Net.Disconnect(syncingNode, uploaderNode)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }

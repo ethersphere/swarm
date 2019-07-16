@@ -496,7 +496,7 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 			filesize := numChunks * 4096
 			cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(int(time.Now().Unix()), filesize), int64(filesize), false)
 			if err != nil {
 				return nil, nil, err
 			}
