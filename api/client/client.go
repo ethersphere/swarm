@@ -602,7 +602,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 
 // MultipartUpload uses the given Uploader to upload files to swarm as a
 // multipart form, returning the resulting manifest hash
-func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error) {
+func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (string, error) {
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
 	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+hash, reqR)
@@ -630,6 +630,11 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 		}
 		_, err = io.Copy(w, file)
 		return err
+	}
+
+	// Set the pinning header if the file is to be pinned
+	if toPin {
+		req.Header.Set(swarmhttp.SwarmPinContent, fmt.Sprintf("pin_time_%d", time.Now().Unix()))
 	}
 
 	// run the upload in a goroutine so we can send the request headers and

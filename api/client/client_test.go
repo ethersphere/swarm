@@ -404,10 +404,18 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "", toEncrypt, false)
+	hash, err := client.UploadDirectory(dir, "", "", toEncrypt, true)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
+
+	// File pinned during upload.. check if this is pinned properly
+	testutil.CheckIfPinned(t, srv , hash, nil, 1, false)
+
+	// Pin the file for second time and check if this is pinned
+	srv.PinAPI.PinFiles(hash, false, "")
+	testutil.CheckIfPinned(t, srv , hash, nil, 2, false)
+
 
 	ls := func(prefix string) []string {
 		list, err := client.List(hash, prefix, "")
@@ -480,7 +488,7 @@ func TestClientMultipartUpload(t *testing.T) {
 
 	// upload the files as a multipart upload
 	client := NewClient(srv.URL)
-	hash, err := client.MultipartUpload("", uploader)
+	hash, err := client.MultipartUpload("", uploader, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,6 +496,9 @@ func TestClientMultipartUpload(t *testing.T) {
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
 	testutil.CheckTag(t, tag, 9, 9, 7, 9)
+
+	// File pinned during upload.. check if this is pinned properly
+	testutil.CheckIfPinned(t, srv , hash, nil, 1, false)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {
