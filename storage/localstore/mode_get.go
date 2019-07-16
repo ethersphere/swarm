@@ -181,7 +181,7 @@ func (db *DB) IsChunkPinned(hash []byte) bool {
 	item.Address = make([]byte, len(hash))
 	copy(item.Address[:], hash[:])
 	_, err := db.pinIndex.Get(item)
-	return err!= nil
+	return err != nil
 }
 
 func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
