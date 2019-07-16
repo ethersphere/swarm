@@ -174,6 +174,44 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			gcSizeChange = -1
 		}
 
+	case chunk.ModePinChunk:
+
+		// Get the existing pin counter of the chunk
+		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
+		if err != nil {
+			existingPinCounter = 0
+		}
+
+		item.PinCounter = existingPinCounter + 1
+		db.pinIndex.PutInBatch(batch, item)
+
+	case chunk.ModeUnPinChunk:
+		// Get the existing pin counter of the chunk
+		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
+		if err != nil {
+			return ErrChunkNotPinned
+		}
+
+		// Decrement the pin counter or
+		// delete it from pin index if the oin counter has reached 0
+		if existingPinCounter > 1 {
+			item.PinCounter = existingPinCounter - 1
+			db.pinIndex.PutInBatch(batch, item)
+		} else {
+			db.pinIndex.DeleteInBatch(batch, item)
+		}
+
+	case chunk.ModeStoreRootHashForRawFile:
+		item.IsRaw = 1
+		db.pinFilesIndex.PutInBatch(batch, item)
+
+	case chunk.ModeStoreRootHashForNormalFile:
+		item.IsRaw = 0
+		db.pinFilesIndex.PutInBatch(batch, item)
+
+	case chunk.ModeRemoveRootHash:
+		db.pinFilesIndex.DeleteInBatch(batch, item)
+
 	default:
 		return ErrInvalidMode
 	}

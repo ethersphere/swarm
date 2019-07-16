@@ -153,50 +153,6 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 			triggerPullFeed = true
 		}
 
-	case chunk.ModePin:
-
-		// Handle root chunk differently
-		if item.Data == nil {
-
-			// Get the existing pin counter of the chunk
-			existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
-			if err != nil {
-				existingPinCounter = 0
-			}
-
-			item.PinCounter = existingPinCounter + 1
-			db.pinIndex.PutInBatch(batch, item)
-		} else {
-			item.IsRaw = 0
-			if item.Data[0] == 1 {
-				item.IsRaw = 1
-			}
-			db.pinFilesIndex.PutInBatch(batch, item)
-		}
-
-	case chunk.ModeUnpin:
-
-		if item.Data == nil {
-			// Get the existing pin counter of the chunk
-			existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
-			if err != nil {
-				return false, ErrChunkNotPinned
-			}
-
-			// Decrement the pin counter or
-			// delete it from pin index if the oin counter has reached 0
-			if existingPinCounter > 1 {
-				item.PinCounter = existingPinCounter - 1
-				db.pinIndex.PutInBatch(batch, item)
-			} else {
-				db.pinIndex.DeleteInBatch(batch, item)
-			}
-		} else {
-			db.pinFilesIndex.DeleteInBatch(batch, item)
-		}
-
-	case chunk.ModeStorePinRootHash:
-
 	default:
 		return false, ErrInvalidMode
 	}

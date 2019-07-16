@@ -33,9 +33,6 @@ const (
 	WorkerChanSize = 8
 )
 
-var PinApiInstance *PinApi
-var once sync.Once
-
 type PinApi struct {
 	db         *localstore.DB
 	api        *API
@@ -53,9 +50,6 @@ func NewPinApi(lstore *localstore.DB, params *storage.FileStoreParams, tags *chu
 		tag:        tags,
 		hashSize:   hashFunc().Size(),
 	}
-	once.Do(func() {
-		PinApiInstance = pinApi
-	})
 
 	return pinApi
 }
@@ -64,21 +58,14 @@ func (p *PinApi) SetApi(api *API) {
 	p.api = api
 }
 
-func (p *PinApi) ListPinFiles() {
-	pinnedFiles := p.db.GetPinFilesIndex()
-	for k, v := range pinnedFiles {
-
-		addr, err := hex.DecodeString(k)
-		if err != nil {
-			log.Error("Error decoding root hash" + err.Error())
-			return
-		}
-		pinCounter, err := p.db.GetPinCounterOfChunk(p.removeDecryptionKeyFromChunkHash(addr))
-
-		log.Info("Pinned file", "Address", k, "Size", v, "pinCounter", pinCounter)
-	}
-}
-
+// PinFiles is used to pin a RAW file or a collection (which hash manifest's)
+// to the local Swarm node. It takes the root hash as the argument and walks
+// down the merkle tree and pin's all the chunks that are encountered on the
+// way. It pins both the data chunk and tree chunks. The pre-requisite is that
+// the file should be present in the local database. This function is called
+// from two places 1) Just after the file is uploaded 2) anytime after
+// uploading the file using the pin command. This function can pin both
+// encrypted and non-encrypted files.
 func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error {
 
 	addr, err := hex.DecodeString(rootHash)
@@ -90,8 +77,7 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 	// Walk the root hash and pin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		chunkToPin := chunk.NewChunk(chunkAddr, nil)
-		_, err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
+		err := p.db.Set(context.TODO(), chunk.ModePinChunk, chunkAddr)
 		if err != nil {
 			log.Error("Could not pin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -105,15 +91,11 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 	// Check if the root hash is already pinned
 	isFilePinned := p.db.IsFilePinned(addr)
 	if !isFilePinned {
-
-		// Hack: If data is not nil, then this is a root chunk
-		// also send the isRaw information in the data field
-		data := []byte{0}
 		if isRaw {
-			data = []byte{1}
+			err = p.db.Set(context.TODO(), chunk.ModeStoreRootHashForRawFile, addr)
+		} else {
+			err = p.db.Set(context.TODO(), chunk.ModeStoreRootHashForNormalFile, addr)
 		}
-		chunkToPin := chunk.NewChunk(addr, data)
-		_, err := p.db.Put(context.TODO(), chunk.ModePin, chunkToPin)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -123,6 +105,11 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 	return nil
 }
 
+// UnPinFiles is used to unpin an already pinned file. It takes the root
+// hash of the file and walks down the merkle tree unpinning all the chunks
+// that are encountered on the way. The pre-requisite is that the file should
+// have been already pinned using the PinFiles function. This function can
+// be called only from an external command.
 func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 
 	addr, err := hex.DecodeString(rootHash)
@@ -140,8 +127,7 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	// Walk the root hash and unpin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		chunkToPin := chunk.NewChunk(chunkAddr, nil)
-		_, err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToPin)
+		err := p.db.Set(context.TODO(), chunk.ModeUnPinChunk, chunkAddr)
 		if err != nil {
 			log.Error("Could not unpin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -157,10 +143,7 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	// so remove the root hash from pinFilesIndex
 	isRootChunkPinned := p.db.IsChunkPinned(p.removeDecryptionKeyFromChunkHash(addr))
 	if !isRootChunkPinned {
-		// Hack: If data is not nil, then this is a root chunk
-		data := []byte{0}
-		chunkToUnpin := chunk.NewChunk(addr, data)
-		_, err := p.db.Put(context.TODO(), chunk.ModeUnpin, chunkToUnpin)
+		err := p.db.Set(context.TODO(), chunk.ModeRemoveRootHash, addr)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -168,25 +151,24 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	}
 }
 
-func (p *PinApi) LogPinnedChunks(rootHash string, credentials string) {
+// ListPinFiles functions logs information of all the files that are pinned
+// in the current local node. It displays the root hash of the pinned file
+// or collection. It also display two vital information
+//     1) Size of the pinned file or collection
+//     2) the number of times that particular file or collection is pinned.
+func (p *PinApi) ListPinFiles() {
+	pinnedFiles := p.db.GetPinFilesIndex()
+	for k, v := range pinnedFiles {
 
-	addr, err := hex.DecodeString(rootHash)
-	if err != nil {
-		log.Error("Error decoding root hash" + err.Error())
-		return
-	}
+		addr, err := hex.DecodeString(k)
+		if err != nil {
+			log.Error("Error decoding root hash" + err.Error())
+			return
+		}
+		pinCounter, err := p.db.GetPinCounterOfChunk(p.removeDecryptionKeyFromChunkHash(addr))
 
-	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
-	if err != nil {
-		log.Error("Root hash is not pinned" + err.Error())
-		return
+		log.Info("Pinned file", "Address", k, "Size", v, "pinCounter", pinCounter)
 	}
-
-	walkerFunction := func(ref storage.Reference) error {
-		log.Info("Chunk", "Address", fmt.Sprintf("%0x", ref))
-		return nil
-	}
-	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
 }
 
 func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials string, executeFunc func(storage.Reference) error) {
@@ -344,6 +326,27 @@ QuitFileFor:
 			cwg.Wait()
 		}
 	}
+}
+
+func (p *PinApi) LogPinnedChunks(rootHash string, credentials string) {
+
+	addr, err := hex.DecodeString(rootHash)
+	if err != nil {
+		log.Error("Error decoding root hash" + err.Error())
+		return
+	}
+
+	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
+	if err != nil {
+		log.Error("Root hash is not pinned" + err.Error())
+		return
+	}
+
+	walkerFunction := func(ref storage.Reference) error {
+		log.Info("Chunk", "Address", fmt.Sprintf("%0x", ref))
+		return nil
+	}
+	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
 }
 
 func (p *PinApi) ShowDatabase() string {

@@ -162,14 +162,6 @@ func (m ModePut) String() string {
 		return "Sync"
 	case ModePutUpload:
 		return "Upload"
-	case ModePin:
-		return "Pin"
-	case ModeUnpin:
-		return "Unpin"
-	case ModeStorePinRootHash:
-		return "StorePinRootHash"
-	case ModeRemovePinRootHash:
-		return "RemovePinRootHash"
 	default:
 		return "Unknown"
 	}
@@ -183,14 +175,6 @@ const (
 	ModePutSync
 	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
-	// ModePin: when a chunk is pinned during upload or separately
-	ModePin
-	// ModeUnpin: when a chunk is unpinned using a command locally
-	ModeUnpin
-	// ModeStorePinRootHash: When a root hash of a file needs to be stored (to display later using list pins command)
-	ModeStorePinRootHash
-	// ModeRemovePinRootHash: When a root hash of a file is unpinned
-	ModeRemovePinRootHash
 )
 
 // ModeSet enumerates different Setter modes.
@@ -204,6 +188,16 @@ func (m ModeSet) String() string {
 		return "Sync"
 	case ModeSetRemove:
 		return "Remove"
+	case ModePinChunk:
+		return "ModePinChunk"
+	case ModeUnPinChunk:
+		return "ModeUnPinChunk"
+	case ModeStoreRootHashForRawFile:
+		return "ModeStoreRootHashForRawFile"
+	case ModeStoreRootHashForNormalFile:
+		return "ModeStoreRootHashForNormalFile"
+	case ModeRemoveRootHash:
+		return "ModeRemoveRootHash"
 	default:
 		return "Unknown"
 	}
@@ -217,6 +211,18 @@ const (
 	ModeSetSync
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove
+	// ModePinChunk: when a chunk is pinned during upload or separately
+	ModePinChunk
+	// ModeUnPinChunk: when a chunk is unpinned using a command locally
+	ModeUnPinChunk
+	// ModeStoreRootHashForRawFile: When a root hash of a RAW file needs to be stored
+	// (to display later using list pins command)
+	ModeStoreRootHashForRawFile
+	// ModeStoreRootHashForNormalFile: When a root hash of a manifest based file needs to be stored
+	// (to display later using list pins command)
+	ModeStoreRootHashForNormalFile
+	// ModeRemoveRootHash: When a root hash of a file is unpinned
+	ModeRemoveRootHash
 )
 
 // Descriptor holds information required for Pull syncing. This struct

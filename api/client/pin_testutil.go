@@ -34,15 +34,9 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 	}
 
 	chunksInDB := srv.PinAPI.GetAllChunksFromDB()
-	//for k, _ := range chunksInDB {
-	//	fmt.Println("Chunks in DB", k)
-	//}
 
 	// Get pinned chunks details from pinning indexes
 	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash, "")
-	//for k,v := range pinnedChunks {
-	//	fmt.Println("Pinned chunks", k,v)
-	//}
 
 	if !isRaw {
 		// Add the empty manifest chunk
@@ -56,7 +50,7 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 
 	// Check if all the chunk address are same
 	noOfChunksMissing := 0
-	for hash, _ := range chunksInDB {
+	for hash := range chunksInDB {
 		if _, ok := pinnedChunks[hash]; !ok {
 			if !isRaw && noOfChunksMissing == 0 {
 				noOfChunksMissing = 1
