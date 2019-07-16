@@ -214,7 +214,6 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 			})
 			defer sim.Close()
-
 			defer catchDuplicateChunkSync(t)()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -610,6 +609,16 @@ func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
 	return chunks, nil
 }
 
+/*
+ go test -v -bench . -run BenchmarkHistoricalStream -loglevel 0 -benchtime 10x
+BenchmarkHistoricalStream_1000-4    	      10	 119487009 ns/op
+BenchmarkHistoricalStream_2000-4    	      10	 236469752 ns/op
+BenchmarkHistoricalStream_3000-4    	      10	 371934729 ns/op
+BenchmarkHistoricalStream_5000-4    	      10	 638317966 ns/op
+BenchmarkHistoricalStream_10000-4   	      10	1359858063 ns/op
+BenchmarkHistoricalStream_15000-4   	      10	2485790336 ns/op
+BenchmarkHistoricalStream_20000-4   	      10	3382260295 ns/op
+*/
 func BenchmarkHistoricalStream_1000(b *testing.B)  { benchmarkHistoricalStream(b, 1000) }
 func BenchmarkHistoricalStream_2000(b *testing.B)  { benchmarkHistoricalStream(b, 2000) }
 func BenchmarkHistoricalStream_3000(b *testing.B)  { benchmarkHistoricalStream(b, 3000) }
@@ -641,14 +650,13 @@ func benchmarkHistoricalStream(b *testing.B, chunks int) {
 	}
 
 	for i := 0; i < b.N; i++ {
+		b.StartTimer()
 		syncingNode, err := sim.AddNode()
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		b.StartTimer()
-
-		err = sim.Net.ConnectNodesStar([]enode.ID{syncingNode}, uploaderNode)
+		err = sim.Net.Connect(syncingNode, uploaderNode)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -657,7 +665,7 @@ func benchmarkHistoricalStream(b *testing.B, chunks int) {
 			b.Fatal(err)
 		}
 		b.StopTimer()
-		err = sim.Net.Disconnect(syncingNode, uploaderNode)
+		err = sim.Net.Stop(syncingNode)
 		if err != nil {
 			b.Fatal(err)
 		}
