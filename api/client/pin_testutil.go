@@ -114,7 +114,7 @@ func CheckIfUnpinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash stri
 
 	// The chunks of this file should not be in pinIndex too
 	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash, "")
-	if pinnedChunks != nil && len(pinnedChunks) != 0 {
+	if len(pinnedChunks) != 0 {
 		t.Fatalf("Chunks of this file present in pinIndex")
 	}
 }
