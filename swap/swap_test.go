@@ -52,7 +52,6 @@ var (
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
-	testSwapAdress     = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
 	chequeSig          = common.Hex2Bytes("d985613f7d8bfcf0f96f4bb00a21111beb9a675477f47e4d9b79c89f880cf99c5ab9ef4cdec7186debc51b898fe4d062a835de61fba6db390316db13d50d23941c")
 )
 
@@ -153,9 +152,9 @@ func TestRepeatedBookings(t *testing.T) {
 
 	// credits and debits to peer 2
 	mixedBookings := []booking{
-		booking{int64(mrand.Intn(100)), testPeer2.Peer},
-		booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
-		booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
+		{int64(mrand.Intn(100)), testPeer2.Peer},
+		{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		{int64(0 - mrand.Intn(999)), testPeer2.Peer},
 	}
 	addBookings(swap, mixedBookings)
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
