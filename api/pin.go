@@ -73,7 +73,7 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 		return err
 	}
 
-	if !p.db.IsHashPresentInRetrievalDataIndex(addr) {
+	if !p.db.IsHashPresentInRetrievalDataIndex(p.removeDecryptionKeyFromChunkHash(addr)) {
 		log.Error("Could not pin hash. File not uploaded", "Hash", rootHash)
 		return err
 	}
