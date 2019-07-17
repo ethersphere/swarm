@@ -18,6 +18,7 @@ package newstream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -28,6 +29,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -240,8 +243,9 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	}
 }
 
-// TestNodesRemovesCursors creates a simulation with 1 pivot node then gradually adds nodes, picks one and tries to push it out of the
-// pivot depth, asserts cursors change and then removes peers from the simulation to move the peer again into depth
+var reestablishCursorsSnapshotFilename = "testdata/reestablish-cursors-snapshot.json"
+
+// TestNodesRemovesCursors creates a pivot network of 2 nodes where the pivot's depth = 0.
 // test sequence:
 // - select another node with po >= depth (of the pivot's kademlia)
 // - add other nodes to the pivot until the depth goes above that peer's po (depth > peerPo)
@@ -249,138 +253,49 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 // - start removing nodes from the simulation until that peer is again within depth
 // - check that the cursors are being re-established
 func TestNodeRemovesAndReestablishCursors(t *testing.T) {
-	// These values are set only by the setupSimulation function.
-	var (
-		sim                    *simulation.Simulation
-		pivotKademlia          *network.Kademlia
-		pivotEnode, foundEnode enode.ID
-		foundPO, nodeCount     int
-		simHardLimit           = 5
-	)
-	// Function setupSimulation is a closure to construct the simulation and
-	// to set the values declared above.
-	// There are conditions when simulation is not suitable for the test run
-	// that should be discarded and constructed a new one, but calling this function.
-	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-stream": newBzzSyncWithLocalstoreDataInsertion(0),
+	if *update {
+		generateReestablishCursorsSnapshot(t, 2)
+	}
+
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 
-	pivotNode, err := sim.AddNode()
+	// load the snapshot
+	if err := sim.UploadSnapshot(context.Background(), reestablishCursorsSnapshotFilename); err != nil {
+		t.Fatal(err)
+	}
+	// load additional test specific data from the snapshot
+	d, err := ioutil.ReadFile(reestablishCursorsSnapshotFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	log.Debug("simulation pivot node", "id", pivotNode)
-	pivotKademlia = sim.NodeItem(pivotNode, simulation.BucketKeyKademlia).(*network.Kademlia)
-	// make sure that we get an otherID with po <= depth
-	var found bool
-	for {
-		newNode, err := sim.AddNode()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err := sim.Net.Connect()
-		err = s.Net.ConnectNodesStar(newNode, pivotNode)
-		if err != nil {
-			return nil, err
-		}
-
-		otherKademlia := sim.NodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia)
-		po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
-
-		// find someone with po which is minimum but still > 0
-
-		idOther := nodeIDs[i]
-		depth := pivotKademlia.NeighbourhoodDepth()
-		if po > depth {
-			found = true
-			foundPO = po
-			foundEnode = nodeIDs[i]
-			break
-		}
-
-		// append a node to the simulation
-		id, err := sim.AddNodes(1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", pivotEnode)
-		err = sim.Net.ConnectNodesStar(id, pivotEnode)
-		if err != nil {
-			t.Fatal(err)
-		}
-		nodeCount++
-		nodeIDs = sim.UpNodeIDs()
-		if len(nodeIDs) != nodeCount {
-			t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
-		}
-		// wait for node to be set
-		time.Sleep(100 * time.Millisecond)
-	}
-	if !found {
-		t.Fatal("node with po<=depth not found")
-	}
-	// Try setting up the simulation until we get a shallow enough depth
-	// to reach afterwards. It is more likely to get a shallower depth
-	// so iteration count in this loop should be low and most likely only one.
-	for {
-		setupSimulation()
-		if foundPO > 3 { // accept depths only up to 3
-			log.Debug("too large depth to reach", "depth", foundPO)
-			// close the simulation as the new one will be created
-			sim.Close()
-		} else {
-			// depth to be reached is acceptable
-			// close the accepted simulation at the end
-			defer sim.Close()
-			break
-		}
+	var s reestablishCursorsState
+	if err := json.Unmarshal(d, &s); err != nil {
+		t.Fatal(err)
 	}
 
-	log.Debug("tracking enode", "enode", foundEnode, "po", foundPO)
+	pivotEnode := s.PivotEnode
+	pivotKademlia := sim.NodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
+	lookupEnode := s.LookupEnode
+	lookupPO := s.PO
+	nodeCount := len(sim.UpNodeIDs())
 
-	// waitForCursors checks if the pivot node has some cursors or not
-	// by periodically checking for them.
-	waitForCursors := func(t *testing.T, wantSome bool) {
-		t.Helper()
-
-		var got int
-		for i := 0; i < 1000; i++ { // 10s total wait
-			time.Sleep(10 * time.Millisecond)
-			s, ok := sim.NodeItem(pivotEnode, bucketKeyStream).(*SlipStream)
-			if !ok {
-				continue
-			}
-			p := s.getPeer(foundEnode)
-			if p == nil {
-				continue
-			}
-			got = len(p.getCursorsCopy())
-			if got != 0 == wantSome {
-				return
-			}
-		}
-		if wantSome {
-			t.Fatalf("got %v cursors, but want some", got)
-		} else {
-			t.Fatalf("got %v cursors, but want none", got)
-		}
-	}
+	log.Debug("tracking enode", "enode", lookupEnode, "po", lookupPO)
 
 	// expecting some cursors
-	waitForCursors(t, true)
+	waitForCursors(t, sim, pivotEnode, lookupEnode, true)
 
 	//append nodes to simulation until the node po moves out of the depth, then assert no subs from pivot to that node
-	for i := float64(1); pivotKademlia.NeighbourhoodDepth() <= foundPO; i++ {
+	for i := float64(1); pivotKademlia.NeighbourhoodDepth() <= lookupPO; i++ {
 		// calculate the number of nodes to add:
-		// - logarithmically increase by the number of itrations
+		// - logarithmically increase by the number of iterations
 		//   - ensure that the logarithm is greater then 0 by starting the iteration from 1, not 0
 		//   - ensure that the logarithm is greater then 0 by adding 1
 		// - multiply by the difference between target and current depth
 		//   - ensure that is greater then 0 by adding 1
 		//   - multiply it by empirical constant 4
-		newNodeCount := int(math.Logb(i)+1) * ((foundPO-pivotKademlia.NeighbourhoodDepth())*4 + 1)
+		newNodeCount := int(math.Logb(i)+1) * ((lookupPO-pivotKademlia.NeighbourhoodDepth())*4 + 1)
 		id, err := sim.AddNodes(newNodeCount)
 		if err != nil {
 			t.Fatal(err)
@@ -394,29 +309,29 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 		if len(nodeIDs) != nodeCount {
 			t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
 		}
-		log.Debug("added new nodes to reach depth", "new nodes", newNodeCount, "current depth", pivotKademlia.NeighbourhoodDepth(), "target depth", foundPO)
+		log.Debug("added new nodes to reach depth", "new nodes", newNodeCount, "current depth", pivotKademlia.NeighbourhoodDepth(), "target depth", lookupPO)
 	}
 
-	log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO, "foundEnode", foundEnode)
+	log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", lookupPO, "lookupEnode", lookupEnode)
 
 	// no cursors should exist at this point
-	waitForCursors(t, false)
+	waitForCursors(t, sim, pivotEnode, lookupEnode, false)
 
 	var removed int
 	// remove nodes from the simulation until the peer moves again into depth
-	log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO, "foundEnode", foundEnode)
-	for pivotKademlia.NeighbourhoodDepth() > foundPO {
-		_, err := sim.StopRandomNode(pivotEnode, foundEnode)
+	log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", lookupPO, "lookupEnode", lookupEnode)
+	for pivotKademlia.NeighbourhoodDepth() > lookupPO {
+		_, err := sim.StopRandomNode(pivotEnode, lookupEnode)
 		if err != nil {
 			t.Fatal(err)
 		}
 		removed++
-		log.Debug("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO)
+		log.Debug("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", lookupPO)
 	}
-	log.Debug("done removing nodes", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPO, "removed", removed)
+	log.Debug("done removing nodes", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", lookupPO, "removed", removed)
 
 	// expecting some new cursors
-	waitForCursors(t, true)
+	waitForCursors(t, sim, pivotEnode, lookupEnode, true)
 }
 
 // compareNodeBinsToStreams checks that the values on `onesCursors` correlate to the values in `othersBins`
@@ -543,5 +458,124 @@ func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.Ser
 		}
 
 		return o, cleanup, nil
+	}
+}
+
+// data appended to reestablish cursors snapshot
+type reestablishCursorsState struct {
+	PivotEnode  enode.ID `json:"pivotEnode"`
+	LookupEnode enode.ID `json:"lookupEnode"`
+	PO          int      `json:"po"`
+}
+
+// function that generates a simulation and saves its snapshot for
+// TestNodeRemovesAndReestablishCursors test.
+func generateReestablishCursorsSnapshot(t *testing.T, tagetPO int) {
+	sim, pivotEnode, lookupEnode := setupReestablishCursorsSimulation(t, tagetPO)
+	defer sim.Close()
+
+	waitForCursors(t, sim, pivotEnode, lookupEnode, true)
+
+	s, err := sim.Net.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := json.Marshal(struct {
+		*simulations.Snapshot
+		reestablishCursorsState
+	}{
+		Snapshot: s,
+		reestablishCursorsState: reestablishCursorsState{
+			PivotEnode:  pivotEnode,
+			LookupEnode: lookupEnode,
+			PO:          tagetPO,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("save snapshot file")
+
+	err = ioutil.WriteFile(reestablishCursorsSnapshotFilename, d, 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// function that generates a simulation that can be used in TestNodeRemovesAndReestablishCursors
+// test with a provided target po which is a depth to reach in the test by adding new nodes.
+func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID) {
+	// initial node count
+	nodeCount := 5
+
+	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
+	})
+
+	nodeIDs, err := sim.AddNodesAndConnectStar(nodeCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pivotEnode = nodeIDs[0]
+	log.Debug("simulation pivot node", "id", pivotEnode)
+	pivotKademlia := sim.NodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
+
+	// make sure that we get a node with po <= depth
+	for i := 1; i < nodeCount; i++ {
+		log.Debug("looking for a peer", "i", i, "nodecount", nodeCount)
+		otherKademlia := sim.NodeItem(nodeIDs[i], simulation.BucketKeyKademlia).(*network.Kademlia)
+		po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
+		depth := pivotKademlia.NeighbourhoodDepth()
+		if po > depth {
+			if po != tagetPO {
+				log.Debug("wrong depth to reach, generating new simulation", "depth", po)
+				return setupReestablishCursorsSimulation(t, tagetPO)
+			}
+			lookupEnode = nodeIDs[i]
+			return
+		}
+		// append a node to the simulation
+		id, err := sim.AddNode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", pivotEnode)
+		if err = sim.Net.Connect(id, pivotEnode); err != nil {
+			t.Fatal(err)
+		}
+		nodeCount++
+		// wait for node to be set
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("node with po<=depth not found")
+	return
+}
+
+// waitForCursors checks if the pivot node has some cursors or not
+// by periodically checking for them.
+func waitForCursors(t *testing.T, sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID, wantSome bool) {
+	t.Helper()
+
+	var got int
+	for i := 0; i < 1000; i++ { // 10s total wait
+		time.Sleep(10 * time.Millisecond)
+		s, ok := sim.NodeItem(pivotEnode, bucketKeyStream).(*SlipStream)
+		if !ok {
+			continue
+		}
+		p := s.getPeer(lookupEnode)
+		if p == nil {
+			continue
+		}
+		got = len(p.getCursorsCopy())
+		if got != 0 == wantSome {
+			return
+		}
+	}
+	if wantSome {
+		t.Fatalf("got %v cursors, but want some", got)
+	} else {
+		t.Fatalf("got %v cursors, but want none", got)
 	}
 }
