@@ -71,6 +71,7 @@ func (b *Bzz) IsSyncing() (bool, error) {
 	return isSyncing, nil
 }
 
+// IsPushSynced checks if the given `tag` is done syncing, i.e. we've received receipts for all chunks
 func (b *Bzz) IsPushSynced(tagname string) (bool, error) {
 	var isSynced bool
 

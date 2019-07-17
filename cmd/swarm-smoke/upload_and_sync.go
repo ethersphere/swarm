@@ -334,13 +334,14 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 func waitToPushSynced(tagname string) {
 	for {
+		time.Sleep(200 * time.Millisecond)
+
 		rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
 		if rpcClient != nil {
 			defer rpcClient.Close()
 		}
 		if err != nil {
 			log.Error("error dialing host", "err", err)
-			time.Sleep(200 * time.Millisecond)
 			continue
 		}
 
@@ -349,14 +350,12 @@ func waitToPushSynced(tagname string) {
 		synced, err := bzzClient.IsPushSynced(tagname)
 		if err != nil {
 			log.Error(err.Error())
-			time.Sleep(200 * time.Millisecond)
 			continue
 		}
 
 		if synced {
 			return
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
 }
 
