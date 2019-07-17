@@ -30,23 +30,26 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-var ErrSigDoesNotMatch = errors.New("signature does not match")
+// ErrDontOwe indictates that no balance is actially owned
 var ErrDontOwe = errors.New("no negative balance")
 
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap        *Swap
-	backend     cswap.Backend
-	beneficiary common.Address
+	swap            *Swap
+	backend         cswap.Backend
+	beneficiary     common.Address
+	contractAddress common.Address
 }
 
-func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary common.Address) *Peer {
+// NewPeer creates a new swap Peer instance
+func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary common.Address, contractAddress common.Address) *Peer {
 	return &Peer{
-		Peer:        p,
-		swap:        s,
-		backend:     backend,
-		beneficiary: beneficiary,
+		Peer:            p,
+		swap:            s,
+		backend:         backend,
+		beneficiary:     beneficiary,
+		contractAddress: contractAddress,
 	}
 }
 
@@ -55,7 +58,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 
 	case *EmitChequeMsg:
-		//return sp.handleEmitChequeMsg(ctx, msg)
 		return sp.handleEmitChequeMsg(ctx, msg)
 
 	case *ErrorMsg:
@@ -79,13 +81,34 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 	if !ok {
 		return fmt.Errorf("Invalid message type, %v", msg)
 	}
+
 	cheque := chequeMsg.Cheque
+	if cheque.Contract != sp.contractAddress {
+		return fmt.Errorf("wrong cheque parameters: expected contract: %s, was: %s", sp.contractAddress, cheque.Contract)
+	}
+
+	// the beneficiary is the owner of the counterparty swap contract
+	if err := sp.swap.verifyChequeSig(cheque, sp.beneficiary); err != nil {
+		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
+		return err
+	}
+
+	if cheque.Beneficiary != sp.swap.owner.address {
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %s, was: %s", sp.swap.owner.address, cheque.Beneficiary)
+	}
+
+	if cheque.Timeout != 0 {
+		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
+	}
+
+	// TODO: check serial and balance are higher
+
 	// reset balance to zero, TODO: fix
 	sp.swap.resetBalance(sp.ID())
 	// send confirmation
-	err := sp.Send(ctx, &ConfirmMsg{})
-	if err != nil {
-		log.Error(fmt.Sprintf("error while sending confirm msg to peer %s: %s", sp.ID().String(), err.Error()))
+	if err := sp.Send(ctx, &ConfirmMsg{}); err != nil {
+		log.Error("error while sending confirm msg", "peer", sp.ID().String(), "err", err.Error())
+		return err
 	}
 	// cash in cheque
 	//TODO: input parameter checks?
@@ -105,10 +128,10 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 		// blocks here, as we are waiting for the transaction to be mined
 		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 		if err != nil {
-			log.Error("Got error when calling submitChequeBeneficiary: ", err)
+			log.Error("Got error when calling submitChequeBeneficiary", "err", err)
 			//TODO: do something with the error
 		}
-		log.Info(fmt.Sprintf("tx minded: %v", receipt))
+		log.Info("tx minded", "receipt", receipt)
 		//TODO: cashCheque
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
@@ -117,12 +140,14 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 }
 
 // TODO: Error handling
+// handleErrorMsg is called when an ErrorMsg is received
 func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 	log.Info("received error msg")
 	// maybe balance disagreement
 	return nil
 }
 
+// handleConfirmMsg is called when a ConfirmMsg is received
 func (sp *Peer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
 	log.Info("received confirm msg")
 	return nil

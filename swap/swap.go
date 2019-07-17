@@ -47,6 +47,9 @@ const (
 	defaultHarddepositTimeoutDuration = 24 * time.Hour  // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
 )
 
+// ErrInvalidChequeSignature indicates the signature on the cheque was invalid
+var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
+
 // SwAP Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
@@ -79,6 +82,7 @@ type Params struct {
 	InitialDepositAmount uint64 //
 }
 
+// NewDefaultParams returns a Params struct filled with default values
 func NewDefaultParams() *Params {
 	return &Params{
 		InitialDepositAmount: DefaultInitialDepositAmount,
@@ -113,13 +117,13 @@ func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *O
 	}
 }
 
-// convenience log output
+// DeploySuccess is for convenience log output
 func (s *Swap) DeploySuccess() string {
 	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.owner.Contract.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
 }
 
-//Swap implements the protocols.Balance interface
-//Add is the (sole) accounting function
+// Add is the (sole) accounting function
+// Swap implements the protocols.Balance interface
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -127,7 +131,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	//load existing balances from the state store
 	err = s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
-		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.ID().String()))
+		log.Error("error while loading balance for peer", "peer", peer.ID().String())
 		return
 	}
 
@@ -168,6 +172,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return
 }
 
+// logBalance is a helper function to log the current balance of a peer
 func (s *Swap) logBalance(peer *protocols.Peer) {
 	err := s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
@@ -177,10 +182,10 @@ func (s *Swap) logBalance(peer *protocols.Peer) {
 	}
 }
 
+// sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
 	swapPeer := s.peers[peer]
 	cheque, err := s.createCheque(peer)
-
 	if err != nil {
 		log.Error("error while creating cheque: %s", err.Error())
 		return err
@@ -190,7 +195,6 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	s.cheques[peer] = cheque
 
 	err = s.stateStore.Put(peer.String()+"_cheques", &cheque)
-
 	// TODO: error handling might be quite more complex
 	if err != nil {
 		log.Error("error while storing the last cheque: %s", err.Error())
@@ -261,6 +265,7 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return 0, errors.New("Peer not found")
 }
 
+// GetLastCheque returns the last cheque for a given peer
 func (swap *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 	swap.lock.RLock()
 	defer swap.lock.RUnlock()
@@ -279,7 +284,7 @@ func (swap *Swap) GetAllBalances() map[enode.ID]int64 {
 	return swap.balances
 }
 
-//load balances from the state store (persisted)
+// loadStates loads balances from the state store (persisted)
 func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	var peerBalance int64
 	peerID := peer.ID()
@@ -292,7 +297,7 @@ func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	return
 }
 
-//load last cheque for a peer from the state store (persisted)
+//loadCheque loads the last cheque for a peer from the state store (persisted)
 func (s *Swap) loadCheque(peer enode.ID) (err error) {
 	//only load if the current instance doesn't already have this peer's
 	//last cheque in memory
@@ -346,6 +351,27 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 	return crypto.Keccak256([]byte(withPrefix))
 }
 
+// verifyChequeSig verifies the signature on the cheque
+func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
+	sigHash := s.sigHashCheque(cheque)
+
+	// copy signature to avoid modifying the original
+	sig := make([]byte, len(cheque.Sig))
+	copy(sig, cheque.Sig)
+	// reduce the v value of the signature by 27 (see signContent)
+	sig[len(sig)-1] -= 27
+	pubKey, err := crypto.SigToPub(sigHash, sig)
+	if err != nil {
+		return err
+	}
+
+	if crypto.PubkeyToAddress(*pubKey) != expectedSigner {
+		return ErrInvalidChequeSignature
+	}
+
+	return nil
+}
+
 // signContent signs the cheque
 func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 	sig, err := crypto.Sign(s.sigHashCheque(cheque), s.owner.privateKey)
@@ -363,15 +389,30 @@ func (s *Swap) GetParams() *swap.Params {
 	return s.contractReference.ContractParams()
 }
 
+// Deploy deploys a new swap contract
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
-	//TODO do we need this check?
-	_, err := s.contractReference.ValidateCode(ctx, backend, s.owner.Contract)
+	// TODO: What to do if the contract is already deployed?
+	return s.deploy(ctx, backend, path)
+}
+
+// verifyContract checks if the bytecode found at address matches the expected bytecode
+func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
+	swap, err := swap.InstanceAt(address, s.backend)
 	if err != nil {
 		return err
 	}
 
-	// TODO: What to do if the contract is already deployed?
-	return s.deploy(ctx, backend, path)
+	return swap.ValidateCode(ctx, s.backend, address)
+}
+
+// getContractOwner retrieve the owner of the chequebook at address from the blockchain
+func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (common.Address, error) {
+	swap, err := swap.InstanceAt(address, s.backend)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	return swap.Instance.Issuer(nil)
 }
 
 // deploy deploys the Swap contract
