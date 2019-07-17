@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -378,12 +377,9 @@ func TestVerifyChequeSig(t *testing.T) {
 	expectedCheque := newTestCheque()
 	expectedCheque.Sig = chequeSig
 
-	err := swap.verifyChequeSig(expectedCheque, ownerAddress)
-
-	if err != nil {
+	if err := swap.verifyChequeSig(expectedCheque, ownerAddress); err != nil {
 		t.Fatalf("Invalid signature: %v", err)
 	}
-
 }
 
 func TestVerifyChequeSigWrongSigner(t *testing.T) {
@@ -394,10 +390,8 @@ func TestVerifyChequeSigWrongSigner(t *testing.T) {
 	expectedCheque := newTestCheque()
 	expectedCheque.Sig = chequeSig
 
-	err := swap.verifyChequeSig(expectedCheque, beneficiaryAddress)
-
-	if err == nil {
-		t.Fatalf("Valid signature, should have been invalid")
+	if err := swap.verifyChequeSig(expectedCheque, beneficiaryAddress); err == nil {
+		t.Fatal("Valid signature, should have been invalid")
 	}
 }
 
@@ -413,10 +407,8 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 	invalidSig[27] += 2
 	expectedCheque.Sig = invalidSig
 
-	err := swap.verifyChequeSig(expectedCheque, ownerAddress)
-
-	if err == nil {
-		t.Fatalf("Valid signature, should have been invalid")
+	if err := swap.verifyChequeSig(expectedCheque, ownerAddress); err == nil {
+		t.Fatal("Valid signature, should have been invalid")
 	}
 }
 
@@ -426,16 +418,13 @@ func TestVerifyContract(t *testing.T) {
 
 	opts := bind.NewKeyedTransactor(ownerKey)
 	addr, _, _, err := cswap.Deploy(opts, swap.backend, ownerAddress, 0*time.Second)
-
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
 	swap.backend.(*backends.SimulatedBackend).Commit()
 
-	err = swap.verifyContract(context.TODO(), addr)
-
-	if err != nil {
+	if err = swap.verifyContract(context.TODO(), addr); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
@@ -447,16 +436,13 @@ func TestVerifyContractWrongContract(t *testing.T) {
 	opts := bind.NewKeyedTransactor(ownerKey)
 
 	addr, _, _, err := contracts.DeployECDSA(opts, swap.backend)
-
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
 	swap.backend.(*backends.SimulatedBackend).Commit()
 
-	err = swap.verifyContract(context.TODO(), addr)
-
-	if err != ErrNotASwapContract {
+	if err = swap.verifyContract(context.TODO(), addr); err != cswap.ErrNotASwapContract {
 		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }
