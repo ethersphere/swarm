@@ -240,7 +240,8 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	}
 }
 
-// TestNodesRemovesCursors creates a pivot network of 2 nodes where the pivot's depth = 0.
+// TestNodesRemovesCursors creates a simulation with 1 pivot node then gradually adds nodes, picks one and tries to push it out of the
+// pivot depth, asserts cursors change and then removes peers from the simulation to move the peer again into depth
 // test sequence:
 // - select another node with po >= depth (of the pivot's kademlia)
 // - add other nodes to the pivot until the depth goes above that peer's po (depth > peerPo)
@@ -254,69 +255,71 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 		pivotKademlia          *network.Kademlia
 		pivotEnode, foundEnode enode.ID
 		foundPO, nodeCount     int
+		simHardLimit           = 5
 	)
 	// Function setupSimulation is a closure to construct the simulation and
 	// to set the values declared above.
 	// There are conditions when simulation is not suitable for the test run
 	// that should be discarded and constructed a new one, but calling this function.
-	setupSimulation := func() {
-		// initial node count
-		nodeCount = 5
+	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-stream": newBzzSyncWithLocalstoreDataInsertion(0),
+	})
 
-		sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-			"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
-		})
+	pivotNode, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		_, err := sim.AddNodesAndConnectStar(nodeCount)
+	log.Debug("simulation pivot node", "id", pivotNode)
+	pivotKademlia = sim.NodeItem(pivotNode, simulation.BucketKeyKademlia).(*network.Kademlia)
+	// make sure that we get an otherID with po <= depth
+	var found bool
+	for {
+		newNode, err := sim.AddNode()
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		nodeIDs := sim.UpNodeIDs()
+		err := sim.Net.Connect()
+		err = s.Net.ConnectNodesStar(newNode, pivotNode)
+		if err != nil {
+			return nil, err
+		}
+
+		otherKademlia := sim.NodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia)
+		po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
+
+		// find someone with po which is minimum but still > 0
+
+		idOther := nodeIDs[i]
+		depth := pivotKademlia.NeighbourhoodDepth()
+		if po > depth {
+			found = true
+			foundPO = po
+			foundEnode = nodeIDs[i]
+			break
+		}
+
+		// append a node to the simulation
+		id, err := sim.AddNodes(1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", pivotEnode)
+		err = sim.Net.ConnectNodesStar(id, pivotEnode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodeCount++
+		nodeIDs = sim.UpNodeIDs()
 		if len(nodeIDs) != nodeCount {
 			t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
 		}
-
-		pivotEnode = nodeIDs[0]
-		log.Debug("simulation pivot node", "id", pivotEnode)
-		pivotKademlia = sim.NodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
-		// make sure that we get an otherID with po <= depth
-		var found bool
-		for i := 1; i < nodeCount; i++ {
-			log.Debug("looking for a peer", "i", i, "nodecount", nodeCount)
-			idOther := nodeIDs[i]
-			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
-			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
-			depth := pivotKademlia.NeighbourhoodDepth()
-			if po > depth {
-				found = true
-				foundPO = po
-				foundEnode = nodeIDs[i]
-				break
-			}
-
-			// append a node to the simulation
-			id, err := sim.AddNodes(1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", pivotEnode)
-			err = sim.Net.ConnectNodesStar(id, pivotEnode)
-			if err != nil {
-				t.Fatal(err)
-			}
-			nodeCount++
-			nodeIDs = sim.UpNodeIDs()
-			if len(nodeIDs) != nodeCount {
-				t.Fatalf("got %v up nodes, want %v", len(nodeIDs), nodeCount)
-			}
-			// wait for node to be set
-			time.Sleep(100 * time.Millisecond)
-		}
-		if !found {
-			t.Fatal("node with po<=depth not found")
-		}
-		return
+		// wait for node to be set
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !found {
+		t.Fatal("node with po<=depth not found")
 	}
 	// Try setting up the simulation until we get a shallow enough depth
 	// to reach afterwards. It is more likely to get a shallower depth
