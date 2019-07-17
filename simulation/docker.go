@@ -33,6 +33,7 @@ const (
 type DockerAdapter struct {
 	client *client.Client
 	image  string
+	config DockerAdapterConfig
 	nodes  map[NodeID]*DockerNode
 }
 
@@ -141,25 +142,34 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 	return &DockerAdapter{
 		image:  image,
 		client: cli,
+		config: config,
 		nodes:  make(map[NodeID]*DockerNode),
 	}, nil
 }
 
 // NewNode creates a new node
-func (a *DockerAdapter) NewNode(config NodeConfig) (Node, error) {
+func (a DockerAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
 	info := NodeInfo{
 		ID: config.ID,
 	}
+
 	node := &DockerNode{
 		config:  config,
-		adapter: a,
+		adapter: &a,
 		info:    info,
 	}
 	a.nodes[config.ID] = node
 	return node, nil
+}
+
+func (a DockerAdapter) Snapshot() (AdapterSnapshot, error) {
+	return AdapterSnapshot{
+		Type:   "docker",
+		Config: a.config,
+	}, nil
 }
 
 // Info returns the node status
@@ -216,36 +226,40 @@ func (n *DockerNode) Start() error {
 
 	// Get container logs
 
-	go func() {
-		// Stderr
-		stderr, err := dockercli.ContainerLogs(context.Background(), n.containerName(), types.ContainerLogsOptions{
-			ShowStderr: true,
-			ShowStdout: false,
-			Follow:     true,
-		})
-		if err != nil && err != io.EOF {
-			log.Error("Error getting stderr container logs", "err", err)
-		}
-		defer stderr.Close()
-		if _, err := io.Copy(n.config.Stderr, stderr); err != nil && err != io.EOF {
-			log.Error("Error writing stderr container logs", "err", err)
-		}
-	}()
-	go func() {
-		// Stdout
-		stdout, err := dockercli.ContainerLogs(context.Background(), n.containerName(), types.ContainerLogsOptions{
-			ShowStderr: false,
-			ShowStdout: true,
-			Follow:     true,
-		})
-		if err != nil && err != io.EOF {
-			log.Error("Error getting stdout container logs", "err", err)
-		}
-		defer stdout.Close()
-		if _, err := io.Copy(n.config.Stdout, stdout); err != nil && err != io.EOF {
-			log.Error("Error writing stdout container logs", "err", err)
-		}
-	}()
+	if n.config.Stderr != nil {
+		go func() {
+			// Stderr
+			stderr, err := dockercli.ContainerLogs(context.Background(), n.containerName(), types.ContainerLogsOptions{
+				ShowStderr: true,
+				ShowStdout: false,
+				Follow:     true,
+			})
+			if err != nil && err != io.EOF {
+				log.Error("Error getting stderr container logs", "err", err)
+			}
+			defer stderr.Close()
+			if _, err := io.Copy(n.config.Stderr, stderr); err != nil && err != io.EOF {
+				log.Error("Error writing stderr container logs", "err", err)
+			}
+		}()
+	}
+	if n.config.Stdout != nil {
+		go func() {
+			// Stdout
+			stdout, err := dockercli.ContainerLogs(context.Background(), n.containerName(), types.ContainerLogsOptions{
+				ShowStderr: false,
+				ShowStdout: true,
+				Follow:     true,
+			})
+			if err != nil && err != io.EOF {
+				log.Error("Error getting stdout container logs", "err", err)
+			}
+			defer stdout.Close()
+			if _, err := io.Copy(n.config.Stdout, stdout); err != nil && err != io.EOF {
+				log.Error("Error writing stdout container logs", "err", err)
+			}
+		}()
+	}
 
 	// Get container info
 	cinfo := types.ContainerJSON{}
@@ -316,6 +330,12 @@ func (n *DockerNode) Stop() error {
 		return fmt.Errorf("failed to remove container %s : %v", n.containerName(), err)
 	}
 	return nil
+}
+
+func (n *DockerNode) Snapshot() (NodeSnapshot, error) {
+	return NodeSnapshot{
+		Config: n.config,
+	}, nil
 }
 
 func (n *DockerNode) containerName() string {

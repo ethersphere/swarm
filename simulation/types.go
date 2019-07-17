@@ -10,11 +10,15 @@ type Node interface {
 	Start() error
 	// Stop stops the node
 	Stop() error
+	// Snapshot returns a snapshot of the node
+	Snapshot() (NodeSnapshot, error)
 }
 
 type Adapter interface {
 	// NewNode creates a new node based on the NodeConfig
 	NewNode(config NodeConfig) (Node, error)
+	// Snapshot returns a snapshot of the adapter
+	Snapshot() (AdapterSnapshot, error)
 	// InfluxAddr() string
 	// JaegerAddr() string
 }
@@ -23,14 +27,14 @@ type NodeID string
 
 type NodeConfig struct {
 	// Arbitrary string used to identify a node
-	ID NodeID
+	ID NodeID `json:"id"`
 	// Command line arguments
-	Args []string
+	Args []string `json:"args"`
 	// Environment variables
-	Env []string
+	Env []string `json:"env"`
 	// Stdout and Stderr specify the nodes' standard output and error
-	Stdout io.Writer
-	Stderr io.Writer
+	Stdout io.Writer `json:"-"`
+	Stderr io.Writer `json:"-"`
 }
 
 // TODO: All the fields of NodeInfo should probably just be Getter functions
@@ -47,10 +51,16 @@ type NodeInfo struct {
 	PprofListen string // PProf listener address: e.g http://localhost:6060
 }
 
-type NetworkSnapshot struct {
-	Nodes []NodeSnapshot
+type SimulationSnapshot struct {
+	Adapter AdapterSnapshot `json:"adapter"`
+	Nodes   []NodeSnapshot  `json:"nodes"`
 }
 
 type NodeSnapshot struct {
-	Config NodeConfig
+	Config NodeConfig `json:"config"`
+}
+
+type AdapterSnapshot struct {
+	Type   string      `json:"type"`
+	Config interface{} `json:"config"`
 }

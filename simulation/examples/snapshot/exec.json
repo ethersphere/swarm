@@ -1,0 +1,91 @@
+{
+  "adapter": {
+    "type": "exec",
+    "config": {
+      "executable": "../../../build/bin/swarm",
+      "basedir": "test-simsnap-exec648506552"
+    }
+  },
+  "nodes": [
+    {
+      "config": {
+        "id": "snap-node0",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "352134afa5c0779f9c84aba357ff39bb4c30433d0f3fefc505ab8de437a2c198",
+          "--nodekeyhex",
+          "dc4e5d75da51b22271317ef95df64b93f47bb870a515782eabf6a974ab57936a",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "snap-node1",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "da4aceca023833ad92f42606f37526bc057e9e799063ea6313105da798b5aa2d",
+          "--nodekeyhex",
+          "d90bbbd68985195abf7d96119bcb85feb1cf545f4adb8c09cd42ebbbbba9ddb4",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "snap-node2",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "f3802ad281038be51e406c5b37bea2c1353dab1ea018c0a5f2dc8c47d62f3d87",
+          "--nodekeyhex",
+          "d74da37108044ca4e09a06e2fe61a3a12057bb5c905596da7a61d60af3c43957",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "snap-node3",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "bb76a39aad56db45b70a4f19f754bb7767e6fd8f31d7f2becd211ef7c74b69a3",
+          "--nodekeyhex",
+          "0c05ba472f2a7a3dedbad9b09bb4dbe9c448238d47113623212560b5c6b4daa0",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "snap-node4",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "721e3de4882ae16869d49334ce884f1fe35cf86c05c7a853853709680ec7879f",
+          "--nodekeyhex",
+          "280ef6e5227dbe174d686f461bbbd4e226d2461f7f74277a69a6d17ac69201c6",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    }
+  ]
+}

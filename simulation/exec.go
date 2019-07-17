@@ -23,9 +23,9 @@ type ExecAdapter struct {
 // ExecAdapterConfig is used to configure an ExecAdapter
 type ExecAdapterConfig struct {
 	// Path to the executable
-	ExecutablePath string
+	ExecutablePath string `json:"executable"`
 	// BaseDataDirectory stores all the nodes' data directories
-	BaseDataDirectory string
+	BaseDataDirectory string `json:"basedir"`
 }
 
 // ExecNode is a node that is executed locally
@@ -46,12 +46,17 @@ func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
 		return nil, fmt.Errorf("'%s' executable does not exist", config.ExecutablePath)
 	}
 
-	absPath, err := filepath.Abs(config.ExecutablePath)
+	absExec, err := filepath.Abs(config.ExecutablePath)
 	if err != nil {
 		return nil, fmt.Errorf("could not get absolute path for %s: %v", config.ExecutablePath, err)
 	}
+	config.ExecutablePath = absExec
 
-	config.ExecutablePath = absPath
+	absDir, err := filepath.Abs(config.BaseDataDirectory)
+	if err != nil {
+		return nil, fmt.Errorf("could not get absolute path for %s: %v", config.BaseDataDirectory, err)
+	}
+	config.BaseDataDirectory = absDir
 
 	a := &ExecAdapter{
 		config: config,
@@ -61,7 +66,7 @@ func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
 }
 
 // NewNode creates a new node
-func (a *ExecAdapter) NewNode(config NodeConfig) (Node, error) {
+func (a ExecAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
@@ -70,11 +75,18 @@ func (a *ExecAdapter) NewNode(config NodeConfig) (Node, error) {
 	}
 	node := &ExecNode{
 		config:  config,
-		adapter: a,
+		adapter: &a,
 		info:    info,
 	}
 	a.nodes[config.ID] = node
 	return node, nil
+}
+
+func (a ExecAdapter) Snapshot() (AdapterSnapshot, error) {
+	return AdapterSnapshot{
+		Type:   "exec",
+		Config: a.config,
+	}, nil
 }
 
 // Info returns the node info
@@ -194,7 +206,12 @@ func (n *ExecNode) Stop() error {
 	case <-time.After(20 * time.Second):
 		return n.cmd.Process.Kill()
 	}
+}
 
+func (n *ExecNode) Snapshot() (NodeSnapshot, error) {
+	return NodeSnapshot{
+		Config: n.config,
+	}, nil
 }
 
 // ipcPath returns the path to the ipc socket

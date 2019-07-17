@@ -1,0 +1,176 @@
+{
+  "adapter": {
+    "type": "docker",
+    "config": {
+      "BuildContext": {
+        "Dockerfile": "",
+        "Directory": "",
+        "Tag": ""
+      },
+      "DockerImage": "ethersphere/swarm:edge",
+      "DaemonAddr": "unix:///var/run/docker.sock"
+    }
+  },
+  "nodes": [
+    {
+      "config": {
+        "id": "node5",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "7f175046e8dac798e17e05372a9b84cf4bcc4e817ef5046eb797294a93edd054",
+          "--nodekeyhex",
+          "a722de21ed376f80bff4a4f2347141ec00b95479d91b43575cad212fdc5fb2f4",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node7",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "6254f9d4178cf8ad5856d0f90684123977a0c0cd3a921c68fb708201ab3dd3e0",
+          "--nodekeyhex",
+          "5c4ce0657e3d3a88698dfb3b102bdb30acaf995bef99181152ce164031f705ae",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node8",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "03f6445a016a1b8fef71c666cb437f0725280e1fb792c191303364379a1fa85c",
+          "--nodekeyhex",
+          "fbcf3f19efbd534e58cda5a62cb8f579b3391ab3d3c36300ed1a16ea21d02d2e",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node0",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "7b5ae05f33e96ced76f33c32ccf68c4f847e5661b3b7dfaae606ba1fbde33c80",
+          "--nodekeyhex",
+          "6aaaf419343b70d3e851fb57b881473a602a06feed6cc198133c26da801bfb4b",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node1",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "dacdf089032691b104d8e969a848930ca3eefe0f347bb789015b9517d046ce3d",
+          "--nodekeyhex",
+          "3b0468751adedc17829b174f58ac549f6784c7605afd870915e68d9dbc31ae55",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node3",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "a7ddf6c02fb3fd6dbc09d2c39f77e5c711a856e4556787fcf04ac3cfdd84937c",
+          "--nodekeyhex",
+          "9b8d4ae3f629dfcca389cf1ba17c0cadeae90e4c971f159d293505e5cd9c445c",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node9",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "3a5949ba14e5c8c4bef40ce04c3469158df1673c9d1ff590422ddfe75385e373",
+          "--nodekeyhex",
+          "0c9f25abd12ccd221ed0f3ee08e2d6d9437032448da0409297a6620faff35749",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node2",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "66dc50fd6e8e9699007714056017355f1f0ea520e4e8c98bec30f4e38312f3c7",
+          "--nodekeyhex",
+          "d2c1bc3084bfd19cc28001950fbdaa8b04ed29e818ed2596ab201277e2da90b7",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node4",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "a825da362fc24aaeced150166d167d2ba849d58ce305d752403129df034d9fee",
+          "--nodekeyhex",
+          "bea7c2111e4e3b5d1a1c35087e6152bd144ed2dd981be6bdb6ae48f85aeae2db",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    },
+    {
+      "config": {
+        "id": "node6",
+        "args": [
+          "--bootnodes",
+          "",
+          "--bzzkeyhex",
+          "0238a55f01e672f09fe5aaeef99b66cf4a733a5d540c86450dd3d438e1b32a6b",
+          "--nodekeyhex",
+          "63e1de05bdd0cf4e478445a39d54da2cec044410b1726ffa4e5abe4d9a0bb8f5",
+          "--bzznetworkid",
+          "499"
+        ],
+        "env": null
+      }
+    }
+  ]
+}

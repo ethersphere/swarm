@@ -33,41 +33,41 @@ import (
 )
 
 type KubernetesAdapter struct {
-	client    *kubernetes.Clientset
-	image     string
-	namespace string
-	nodes     map[NodeID]*KubernetesNode
-	proxy     string
+	client *kubernetes.Clientset
+	config KubernetesAdapterConfig
+	image  string
+	nodes  map[NodeID]*KubernetesNode
+	proxy  string
 }
 
 type KubernetesAdapterConfig struct {
 	// KubeConfigPath is the path to your kubernetes configuration path
-	KubeConfigPath string
+	KubeConfigPath string `json:"kubeConfigPath"`
 	// Namespace is the kubernetes namespaces where the pods should be running
-	Namespace string
+	Namespace string `json:"namespace"`
 	// BuildContext can be used to build a docker image
 	// from a Dockerfile and a context directory
-	BuildContext KubernetesBuildContext
+	BuildContext KubernetesBuildContext `json:"build"`
 	// DockerImage points to an existing docker image
 	// e.g. ethersphere/swarm:latest
-	DockerImage string
+	DockerImage string `json:"image"`
 }
 
 type KubernetesBuildContext struct {
 	// Dockefile is the path to the dockerfile
-	Dockerfile string
+	Dockerfile string `json:"dockerfile"`
 	// Directory is the directory that will be used
 	// in the context of a docker build
-	Directory string
+	Directory string `json:"dir"`
 	// Tag is used to tag the image
-	Tag string
+	Tag string `json:"tag"`
 	// Registry is the image registry where the image will be pushed to
-	Registry string
+	Registry string `json:"registry"`
 	// Username is the user used to push the image to the registry
-	Username string
+	Username string `json:"username"`
 	// Password is the password of the user that is used to push the image
 	// to the registry
-	Password string
+	Password string `json:"-"`
 }
 
 // ImageTag is the full image tag, including the registry
@@ -168,15 +168,15 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 
 	// Return adapter
 	return &KubernetesAdapter{
-		client:    clientset,
-		image:     image,
-		namespace: config.Namespace,
-		nodes:     make(map[NodeID]*KubernetesNode),
-		proxy:     l.Addr().String(),
+		client: clientset,
+		image:  image,
+		config: config,
+		nodes:  make(map[NodeID]*KubernetesNode),
+		proxy:  l.Addr().String(),
 	}, nil
 }
 
-func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
+func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 	if _, ok := a.nodes[config.ID]; ok {
 		return nil, fmt.Errorf("node '%s' already exists", config.ID)
 	}
@@ -185,11 +185,18 @@ func (a *KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 	}
 	node := &KubernetesNode{
 		config:  config,
-		adapter: a,
+		adapter: &a,
 		info:    info,
 	}
 	a.nodes[config.ID] = node
 	return node, nil
+}
+
+func (a KubernetesAdapter) Snapshot() (AdapterSnapshot, error) {
+	return AdapterSnapshot{
+		Type:   "kubernetes",
+		Config: a.config,
+	}, nil
 }
 
 type KubernetesNode struct {
@@ -274,7 +281,7 @@ func (n *KubernetesNode) Start() error {
 			},
 		},
 	}
-	pod, err := adapter.client.CoreV1().Pods(adapter.namespace).Create(podRequest)
+	pod, err := adapter.client.CoreV1().Pods(adapter.config.Namespace).Create(podRequest)
 	if err != nil {
 		return fmt.Errorf("failed to create pod: %v", err)
 	}
@@ -283,7 +290,7 @@ func (n *KubernetesNode) Start() error {
 	start := time.Now()
 	for {
 		log.Debug("Waiting for pod", "pod", n.podName())
-		pod, err := adapter.client.CoreV1().Pods(adapter.namespace).Get(n.podName(), metav1.GetOptions{})
+		pod, err := adapter.client.CoreV1().Pods(adapter.config.Namespace).Get(n.podName(), metav1.GetOptions{})
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -303,7 +310,7 @@ func (n *KubernetesNode) Start() error {
 		Follow:    true,
 		Previous:  false,
 	}
-	req := adapter.client.CoreV1().Pods(adapter.namespace).GetLogs(n.podName(), logOpts)
+	req := adapter.client.CoreV1().Pods(adapter.config.Namespace).GetLogs(n.podName(), logOpts)
 	readCloser, err := req.Stream()
 	if err != nil {
 		return fmt.Errorf("could not get logs: %v", err)
@@ -318,7 +325,7 @@ func (n *KubernetesNode) Start() error {
 
 	// Wait for the node to start
 	var client *rpc.Client
-	wsAddr := fmt.Sprintf("ws://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.namespace, n.podName(), dockerWebsocketPort)
+	wsAddr := fmt.Sprintf("ws://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.config.Namespace, n.podName(), dockerWebsocketPort)
 
 	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
 		client, err = rpc.Dial(wsAddr)
@@ -348,8 +355,8 @@ func (n *KubernetesNode) Start() error {
 		Enode:       p2pinfo.Enode,
 		BzzAddr:     swarminfo.BzzKey,
 		RPCListen:   wsAddr,
-		HTTPListen:  fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.namespace, n.podName(), dockerHTTPPort),
-		PprofListen: fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.namespace, n.podName(), dockerPProfPort),
+		HTTPListen:  fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.config.Namespace, n.podName(), dockerHTTPPort),
+		PprofListen: fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.config.Namespace, n.podName(), dockerPProfPort),
 	}
 
 	return nil
@@ -364,11 +371,17 @@ func (n *KubernetesNode) Stop() error {
 	deleteOpts := &metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriod,
 	}
-	err := adapter.client.CoreV1().Pods(adapter.namespace).Delete(n.podName(), deleteOpts)
+	err := adapter.client.CoreV1().Pods(adapter.config.Namespace).Delete(n.podName(), deleteOpts)
 	if err != nil {
 		return fmt.Errorf("could not delete pod: %v", err)
 	}
 	return nil
+}
+
+func (n *KubernetesNode) Snapshot() (NodeSnapshot, error) {
+	return NodeSnapshot{
+		Config: n.config,
+	}, nil
 }
 
 func (n *KubernetesNode) podName() string {

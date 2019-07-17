@@ -125,7 +125,6 @@ func startSimulation(t *testing.T, adapter simulation.Adapter, count int) {
 		if err := sim.Init(cfg); err != nil {
 			t.Fatalf("failed to create node %s: %v", cfg.ID, err)
 		}
-
 	}
 
 	// Start nodes

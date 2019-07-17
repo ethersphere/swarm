@@ -2,8 +2,10 @@ package simulation
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -59,9 +61,90 @@ func NewSimulation(adapter Adapter) *Simulation {
 	return sim
 }
 
-// NewSimulationFromSnapshot creates aimulation given an adapter and a snapshot
-func NewSimulationFromSnapshot(adapter *Adapter, snapshot *NetworkSnapshot) (*Simulation, error) {
-	return nil, errors.New("not implemented")
+func Adapters() {
+
+}
+
+// NewSimulationFromSnapshot creates a simulation from a snapshot
+func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error) {
+	// Create adapter
+	var adapter Adapter
+	var err error
+	switch t := snapshot.Adapter.Type; t {
+	case "exec":
+		adapter, err = NewExecAdapter(snapshot.Adapter.Config.(ExecAdapterConfig))
+	case "docker":
+		adapter, err = NewDockerAdapter(snapshot.Adapter.Config.(DockerAdapterConfig))
+	case "kubernetes":
+		adapter, err = NewKubernetesAdapter(snapshot.Adapter.Config.(KubernetesAdapterConfig))
+	default:
+		return nil, fmt.Errorf("unknown adapter type: %s", t)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize %s adapter: %v", snapshot.Adapter.Type, err)
+	}
+	sim := &Simulation{
+		adapter: adapter,
+		nodes:   NewNodeMap(),
+	}
+
+	// Loop over nodes and add them
+	for _, n := range snapshot.Nodes {
+		if err := sim.Init(n.Config); err != nil {
+			return nil, fmt.Errorf("failed to initialize node %v", err)
+		}
+	}
+	return sim, nil
+}
+
+func LoadSnapshotFromFile(filePath string) (*SimulationSnapshot, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	bytes, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	var snapshot SimulationSnapshot
+	err = json.Unmarshal(bytes, &snapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	// snapshot.Adapter.Config will be of type map[string]interface{}
+	// we have to unmarshal it to the correct adapter configuration struct
+	adapterconfig, _ := json.Marshal(snapshot.Adapter.Config)
+	switch t := snapshot.Adapter.Type; t {
+	case "exec":
+		var config ExecAdapterConfig
+		err := json.Unmarshal(adapterconfig, &config)
+		if err != nil {
+			return nil, err
+		}
+		snapshot.Adapter.Config = config
+	case "docker":
+		var config DockerAdapterConfig
+		err := json.Unmarshal(adapterconfig, &config)
+		if err != nil {
+			return nil, err
+		}
+		snapshot.Adapter.Config = config
+	case "kubernetes":
+		var config KubernetesAdapterConfig
+		err := json.Unmarshal(adapterconfig, &config)
+		if err != nil {
+			return nil, err
+		}
+		snapshot.Adapter.Config = config
+	default:
+		return nil, fmt.Errorf("unknown adapter type: %s", t)
+	}
+
+	return &snapshot, nil
 }
 
 // Get returns a node by ID
@@ -171,7 +254,27 @@ func (s *Simulation) HTTPBaseAddr(id NodeID) (string, error) {
 }
 
 // Snapshot returns a snapshot of the simulation
-func (s *Simulation) Snapshot() (NetworkSnapshot, error) {
-	snap := NetworkSnapshot{}
-	return snap, errors.New("not implemented")
+func (s *Simulation) Snapshot() (*SimulationSnapshot, error) {
+	snap := SimulationSnapshot{}
+
+	// Adapter snapshot
+	asnap, err := s.adapter.Snapshot()
+	if err != nil {
+		return nil, fmt.Errorf("could not get adapter snapshot: %v", err)
+	}
+	snap.Adapter = asnap
+
+	// Nodes snapshot
+	nodes := s.GetAll()
+	snap.Nodes = make([]NodeSnapshot, len(nodes))
+
+	for idx, n := range nodes {
+		ns, err := n.Snapshot()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nodes snapshot %s: %v", n.Info().ID, err)
+		}
+		snap.Nodes[idx] = ns
+	}
+
+	return &snap, nil
 }
