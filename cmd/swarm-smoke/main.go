@@ -54,7 +54,6 @@ var (
 )
 
 func main() {
-
 	app := cli.NewApp()
 	app.Name = "smoke-test"
 	app.Usage = ""
@@ -95,6 +94,11 @@ func main() {
 			Value:       "pullsync",
 			Usage:       "sync mode - pushsync or pullsync or both",
 			Destination: &syncMode,
+		},
+		cli.BoolFlag{
+			Name:        "pushsync-delay",
+			Usage:       "wait for content to be push synced",
+			Destination: &pushsyncDelay,
 		},
 		cli.BoolFlag{
 			Name:        "sync-delay",
