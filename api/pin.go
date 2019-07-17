@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -71,6 +70,11 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
 		log.Error("Error decoding root hash" + err.Error())
+		return err
+	}
+
+	if !p.db.IsHashPresentInRetrievalDataIndex(addr) {
+		log.Error("Could not pin hash. File not uploaded", "Hash", rootHash)
 		return err
 	}
 
@@ -167,7 +171,13 @@ func (p *PinApi) ListPinFiles() {
 		}
 		pinCounter, err := p.db.GetPinCounterOfChunk(p.removeDecryptionKeyFromChunkHash(addr))
 
-		log.Info("Pinned file", "Address", k, "Size", v, "pinCounter", pinCounter)
+		isRaw := false
+		if v > 0 {
+			isRaw = true
+		}
+		noOfChunks := p.GetNoOfChunks(k, isRaw, "")
+
+		log.Info("Pinned file", "Address", k, "NoOfChunks", noOfChunks, "pinCounter", pinCounter)
 	}
 }
 
@@ -273,7 +283,6 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 					subTreeSize := chunkData.Size()
 					if actualFileSize < subTreeSize {
 						actualFileSize = subTreeSize
-						log.Info("File size ", "Size", actualFileSize)
 					}
 
 					if subTreeSize > chunk.DefaultSize {
@@ -351,8 +360,20 @@ func (p *PinApi) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
 	return ref
 }
 
+func (p *PinApi) GetNoOfChunks(rootHash string, isRaw bool, credentials string) uint64 {
+
+	noOfChunks := uint64(0)
+	walkerFunction := func(ref storage.Reference) error {
+		noOfChunks += 1
+		return nil
+	}
+	p.WalkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+
+	return noOfChunks
+}
+
 // Used in testing
-func (p *PinApi) GetPinnedFiles() map[string]uint64 {
+func (p *PinApi) GetPinnedFiles() map[string]uint8 {
 	return p.db.GetPinFilesIndex()
 }
 

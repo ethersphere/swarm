@@ -145,6 +145,14 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	return db.shed.WriteBatch(batch)
 }
 
+func (db *DB) IsHashPresentInRetrievalDataIndex(hash []byte) bool {
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	_, err := db.retrievalDataIndex.Get(item)
+	return !(err != nil)
+}
+
 func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
@@ -199,16 +207,16 @@ func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 // information when a garbage collection index is updated.
 var testHookUpdateGC func()
 
-// Used in Testing
-func (db *DB) GetPinFilesIndex() map[string]uint64 {
-	pinnedFiles := make(map[string]uint64)
+func (db *DB) GetPinFilesIndex() map[string]uint8 {
+	pinnedFiles := make(map[string]uint8)
 	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		pinnedFiles[hex.EncodeToString(item.Address)] = item.TreeSize
+		pinnedFiles[hex.EncodeToString(item.Address)] = item.IsRaw
 		return false, nil
 	}, nil)
 	return pinnedFiles
 }
 
+// Used in Testing
 func (db *DB) GetPinnedChunks() map[string]uint64 {
 	pinnedChunks := make(map[string]uint64)
 	_ = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
