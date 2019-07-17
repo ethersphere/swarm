@@ -39,7 +39,7 @@ type Cheque struct {
 }
 
 type SwapHandshakeMsg struct {
-	Beneficiary common.Address
+	ContractAddress common.Address
 }
 
 // EmitChequeMsg is sent from the debitor to the creditor with the actual check
