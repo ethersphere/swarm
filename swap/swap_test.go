@@ -75,7 +75,7 @@ func init() {
 // Test getting a peer's balance
 func TestGetPeerBalance(t *testing.T) {
 	// create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	// test for correct value
@@ -102,7 +102,7 @@ func TestGetPeerBalance(t *testing.T) {
 
 func TestGetAllBalances(t *testing.T) {
 	// create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	if len(swap.balances) != 0 {
@@ -134,7 +134,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 // Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	// create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	var bookings []booking
@@ -230,7 +230,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	// create a test swap account
-	swap, testDir := createTestSwap(t)
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
@@ -259,7 +259,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
-func createTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
+func newTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
 		t.Fatal(err)
@@ -280,9 +280,11 @@ func createTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend)
 // create a test swap account
 // create a default empty backend
 // creates a stateStore for persistence and a Swap account
-func createTestSwap(t *testing.T) (*Swap, string) {
-	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
-	return createTestSwapWithBackend(t, defaultBackend)
+func newTestSwap(t *testing.T) (*Swap, string) {
+	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
+		ownerAddress: {Balance: big.NewInt(1000000000)},
+	}, 8000000)
+	return newTestSwapWithBackend(t, defaultBackend)
 }
 
 type dummyPeer struct {
@@ -320,7 +322,7 @@ func newTestCheque() *Cheque {
 // tests if encodeCheque encodes the cheque as expected
 func TestEncodeCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -338,7 +340,7 @@ func TestEncodeCheque(t *testing.T) {
 // tests if sigHashCheque computes the correct hash to sign
 func TestSigHashCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -356,7 +358,7 @@ func TestSigHashCheque(t *testing.T) {
 // tests if signContent computes the correct signature
 func TestSignContent(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -382,7 +384,7 @@ func TestSignContent(t *testing.T) {
 // tests if verifyChequeSig accepts a correct signature
 func TestVerifyChequeSig(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -396,7 +398,7 @@ func TestVerifyChequeSig(t *testing.T) {
 // tests if verifyChequeSig reject a signature produced by another key
 func TestVerifyChequeSigWrongSigner(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -411,7 +413,7 @@ func TestVerifyChequeSigWrongSigner(t *testing.T) {
 // tests if verifyChequeSig reject an invalid signature
 func TestVerifyChequeInvalidSignature(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -428,7 +430,7 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 
 // tests if verifyContract accepts an address with the correct bytecode
 func TestVerifyContract(t *testing.T) {
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	// deploy a new swap contract
@@ -447,7 +449,7 @@ func TestVerifyContract(t *testing.T) {
 
 // tests if verifyContract rejects an address with different bytecode
 func TestVerifyContractWrongContract(t *testing.T) {
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	opts := bind.NewKeyedTransactor(ownerKey)
@@ -484,7 +486,7 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("creating test swap")
 
-	issuerSwap, dir := createTestSwapWithBackend(t, backend)
+	issuerSwap, dir := newTestSwapWithBackend(t, backend)
 	defer os.RemoveAll(dir)
 
 	backend.Commit()
