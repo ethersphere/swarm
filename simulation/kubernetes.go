@@ -36,7 +36,6 @@ type KubernetesAdapter struct {
 	client *kubernetes.Clientset
 	config KubernetesAdapterConfig
 	image  string
-	nodes  map[NodeID]*KubernetesNode
 	proxy  string
 }
 
@@ -171,15 +170,11 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 		client: clientset,
 		image:  image,
 		config: config,
-		nodes:  make(map[NodeID]*KubernetesNode),
 		proxy:  l.Addr().String(),
 	}, nil
 }
 
 func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
-	if _, ok := a.nodes[config.ID]; ok {
-		return nil, fmt.Errorf("node '%s' already exists", config.ID)
-	}
 	info := NodeInfo{
 		ID: config.ID,
 	}
@@ -188,7 +183,6 @@ func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 		adapter: &a,
 		info:    info,
 	}
-	a.nodes[config.ID] = node
 	return node, nil
 }
 

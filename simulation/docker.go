@@ -34,7 +34,6 @@ type DockerAdapter struct {
 	client *client.Client
 	image  string
 	config DockerAdapterConfig
-	nodes  map[NodeID]*DockerNode
 }
 
 type DockerAdapterConfig struct {
@@ -143,15 +142,11 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 		image:  image,
 		client: cli,
 		config: config,
-		nodes:  make(map[NodeID]*DockerNode),
 	}, nil
 }
 
 // NewNode creates a new node
 func (a DockerAdapter) NewNode(config NodeConfig) (Node, error) {
-	if _, ok := a.nodes[config.ID]; ok {
-		return nil, fmt.Errorf("node '%s' already exists", config.ID)
-	}
 	info := NodeInfo{
 		ID: config.ID,
 	}
@@ -161,7 +156,6 @@ func (a DockerAdapter) NewNode(config NodeConfig) (Node, error) {
 		adapter: &a,
 		info:    info,
 	}
-	a.nodes[config.ID] = node
 	return node, nil
 }
 

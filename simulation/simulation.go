@@ -61,10 +61,6 @@ func NewSimulation(adapter Adapter) *Simulation {
 	return sim
 }
 
-func Adapters() {
-
-}
-
 // NewSimulationFromSnapshot creates a simulation from a snapshot
 func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error) {
 	// Create adapter

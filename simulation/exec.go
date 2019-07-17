@@ -17,7 +17,6 @@ import (
 // ExecAdapter can manage local exec nodes
 type ExecAdapter struct {
 	config ExecAdapterConfig
-	nodes  map[NodeID]*ExecNode
 }
 
 // ExecAdapterConfig is used to configure an ExecAdapter
@@ -60,16 +59,12 @@ func NewExecAdapter(config ExecAdapterConfig) (*ExecAdapter, error) {
 
 	a := &ExecAdapter{
 		config: config,
-		nodes:  make(map[NodeID]*ExecNode),
 	}
 	return a, nil
 }
 
 // NewNode creates a new node
 func (a ExecAdapter) NewNode(config NodeConfig) (Node, error) {
-	if _, ok := a.nodes[config.ID]; ok {
-		return nil, fmt.Errorf("node '%s' already exists", config.ID)
-	}
 	info := NodeInfo{
 		ID: config.ID,
 	}
@@ -78,7 +73,6 @@ func (a ExecAdapter) NewNode(config NodeConfig) (Node, error) {
 		adapter: &a,
 		info:    info,
 	}
-	a.nodes[config.ID] = node
 	return node, nil
 }
 
