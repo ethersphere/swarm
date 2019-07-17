@@ -18,16 +18,19 @@ package swap
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	mrand "math/rand"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -36,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
+	contracts "github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -47,7 +52,7 @@ var (
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
-	testSwapAdress     = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
+	chequeSig          = common.Hex2Bytes("d985613f7d8bfcf0f96f4bb00a21111beb9a675477f47e4d9b79c89f880cf99c5ab9ef4cdec7186debc51b898fe4d062a835de61fba6db390316db13d50d23941c")
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -147,9 +152,9 @@ func TestRepeatedBookings(t *testing.T) {
 
 	// credits and debits to peer 2
 	mixedBookings := []booking{
-		booking{int64(mrand.Intn(100)), testPeer2.Peer},
-		booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
-		booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
+		{int64(mrand.Intn(100)), testPeer2.Peer},
+		{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		{int64(0 - mrand.Intn(999)), testPeer2.Peer},
 	}
 	addBookings(swap, mixedBookings)
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
@@ -267,7 +272,9 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 		t.Fatal(err)
 	}
 
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 8000000)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
+		ownerAddress: {Balance: big.NewInt(1000000000)},
+	}, 8000000)
 	swap := New(stateStore, key, common.Address{}, contractBackend)
 	return swap, dir
 }
@@ -286,6 +293,7 @@ func newDummyPeer() *dummyPeer {
 	return dummy
 }
 
+// creates cheque structure for testing
 func newTestCheque() *Cheque {
 	contract := common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
 	cashInDelay := 10
@@ -303,6 +311,7 @@ func newTestCheque() *Cheque {
 	return cheque
 }
 
+// tests if encodeCheque encodes the cheque as expected
 func TestEncodeCheque(t *testing.T) {
 	// setup test swap object
 	swap, dir := createTestSwap(t)
@@ -320,6 +329,7 @@ func TestEncodeCheque(t *testing.T) {
 	}
 }
 
+// tests if sigHashCheque computes the correct hash to sign
 func TestSigHashCheque(t *testing.T) {
 	// setup test swap object
 	swap, dir := createTestSwap(t)
@@ -337,6 +347,7 @@ func TestSigHashCheque(t *testing.T) {
 	}
 }
 
+// tests if signContent computes the correct signature
 func TestSignContent(t *testing.T) {
 	// setup test swap object
 	swap, dir := createTestSwap(t)
@@ -346,17 +357,105 @@ func TestSignContent(t *testing.T) {
 
 	var err error
 
-	swap.owner.privateKey, err = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	// set the owner private key to a known key so we always get the same signature
+	swap.owner.privateKey = ownerKey
 
 	// sign the cheque
 	sig, err := swap.signContent(expectedCheque)
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("d985613f7d8bfcf0f96f4bb00a21111beb9a675477f47e4d9b79c89f880cf99c5ab9ef4cdec7186debc51b898fe4d062a835de61fba6db390316db13d50d23941c")
+	expected := chequeSig
 	if err != nil {
 		t.Fatal(fmt.Sprintf("Error in signing: %s", err))
 	}
 	if !bytes.Equal(sig, expected) {
 		t.Fatal(fmt.Sprintf("Unexpected signature for cheque. Expected: %x, result is: %x",
 			expected, sig))
+	}
+}
+
+// tests if verifyChequeSig accepts a correct signature
+func TestVerifyChequeSig(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+	expectedCheque.Sig = chequeSig
+
+	if err := swap.verifyChequeSig(expectedCheque, ownerAddress); err != nil {
+		t.Fatalf("Invalid signature: %v", err)
+	}
+}
+
+// tests if verifyChequeSig reject a signature produced by another key
+func TestVerifyChequeSigWrongSigner(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+	expectedCheque.Sig = chequeSig
+
+	// We expect the signer to be beneficiaryAddress but chequeSig is the signature from the owner
+	if err := swap.verifyChequeSig(expectedCheque, beneficiaryAddress); err == nil {
+		t.Fatal("Valid signature, should have been invalid")
+	}
+}
+
+// tests if verifyChequeSig reject an invalid signature
+func TestVerifyChequeInvalidSignature(t *testing.T) {
+	// setup test swap object
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	expectedCheque := newTestCheque()
+
+	invalidSig := chequeSig[:]
+	// change one byte in the signature
+	invalidSig[27] += 2
+	expectedCheque.Sig = invalidSig
+
+	if err := swap.verifyChequeSig(expectedCheque, ownerAddress); err == nil {
+		t.Fatal("Valid signature, should have been invalid")
+	}
+}
+
+// tests if verifyContract accepts an address with the correct bytecode
+func TestVerifyContract(t *testing.T) {
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	// deploy a new swap contract
+	opts := bind.NewKeyedTransactor(ownerKey)
+	addr, _, _, err := cswap.Deploy(opts, swap.backend, ownerAddress, 0*time.Second)
+	if err != nil {
+		t.Fatalf("Error in deploy: %v", err)
+	}
+
+	swap.backend.(*backends.SimulatedBackend).Commit()
+
+	if err = swap.verifyContract(context.TODO(), addr); err != nil {
+		t.Fatalf("Contract verification failed: %v", err)
+	}
+}
+
+// tests if verifyContract rejects an address with different bytecode
+func TestVerifyContractWrongContract(t *testing.T) {
+	swap, dir := createTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	opts := bind.NewKeyedTransactor(ownerKey)
+
+	// we deploy the ECDSA library of OpenZeppelin which has a different bytecode than swap
+	addr, _, _, err := contracts.DeployECDSA(opts, swap.backend)
+	if err != nil {
+		t.Fatalf("Error in deploy: %v", err)
+	}
+
+	swap.backend.(*backends.SimulatedBackend).Commit()
+
+	// since the bytecode is different this should throw an error
+	if err = swap.verifyContract(context.TODO(), addr); err != cswap.ErrNotASwapContract {
+		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }
