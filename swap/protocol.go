@@ -26,7 +26,8 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-var ErrEmptyAddressInSignature = errors.New("empty address in signature")
+// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
+var ErrEmptyAddressInSignature = errors.New("empty address in handshake")
 
 var Spec = &protocols.Spec{
 	Name:       "swap",
@@ -71,28 +72,36 @@ func (s *Swap) Stop() error {
 	return nil
 }
 
+// verifyHandshake verifies the chequebook address transmitted in the swap handshake
 func (s *Swap) verifyHandshake(msg interface{}) error {
 	handshake, ok := msg.(*SwapHandshakeMsg)
-	var empty common.Address
-	if !ok || handshake.Beneficiary == empty {
+	if !ok || (handshake.ContractAddress == common.Address{}) {
 		return ErrEmptyAddressInSignature
 	}
-	return nil
+
+	return s.verifyContract(context.TODO(), handshake.ContractAddress)
 }
 
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
 	answer, err := protoPeer.Handshake(context.TODO(), &SwapHandshakeMsg{
-		Beneficiary: s.owner.address,
+		ContractAddress: s.owner.Contract,
 	}, s.verifyHandshake)
-
 	if err != nil {
 		return err
 	}
 
-	swapPeer := NewPeer(protoPeer, s, s.backend, answer.(*SwapHandshakeMsg).Beneficiary)
+	beneficiary, err := s.getContractOwner(context.TODO(), answer.(*SwapHandshakeMsg).ContractAddress)
+	if err != nil {
+		return err
+	}
+
+	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, answer.(*SwapHandshakeMsg).ContractAddress)
+
+	s.lock.Lock()
 	s.peers[p.ID()] = swapPeer
+	s.lock.Unlock()
 
 	s.logBalance(protoPeer)
 
