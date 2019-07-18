@@ -1,9 +1,8 @@
 package client
 
 import (
-	"strings"
-
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage"
 )
@@ -45,18 +44,14 @@ func (b *Bzz) GetChunksBitVector(addrs []storage.Address) (string, error) {
 
 // GetBzzAddr returns the bzzAddr of the node
 func (b *Bzz) GetBzzAddr() (string, error) {
-	var hive string
+	var info swarm.Info
 
-	err := b.client.Call(&hive, "bzz_hive")
+	err := b.client.Call(&info, "bzz_info")
 	if err != nil {
 		return "", err
 	}
 
-	// we make an ugly assumption about the output format of the hive.String() method
-	// ideally we should replace this with an API call that returns the bzz addr for a given host,
-	// but this also works for now (provided we don't change the hive.String() method, which we haven't in some time
-	ss := strings.Split(strings.Split(hive, "\n")[3], " ")
-	return ss[len(ss)-1], nil
+	return info.BzzKey[2:], nil
 }
 
 // IsPullSyncing is checking if the node is still receiving chunk deliveries due to pull syncing
