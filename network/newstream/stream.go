@@ -251,19 +251,20 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 			}
 
 			// handle stream unboundedness
-			//if !s.Bounded {
-			// constantly fetch the head of the stream
-			go func() {
-				// ask the tip (cursor + 1)
-				err := st.requestStreamHead(ctx, p, s.Stream, s.Cursor+1)
-				// https://github.com/golang/go/issues/4373 - use of closed network connection
-				if err != nil && err != p2p.ErrShuttingDown && !strings.Contains(err.Error(), "use of closed network connection") {
-					log.Error("had an error with initial stream head fetch", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor+1, "err", err)
-					// TODO: maybe not to panic here, but just to log any error?
-					//panic(fmt.Errorf("request stream head peer %s stream %s from %v: %v", p, s.Stream, s.Cursor+1, err))
-					p.Drop()
-				}
-			}()
+			if !s.Bounded {
+				//constantly fetch the head of the stream
+				go func() {
+					// ask the tip (cursor + 1)
+					err := st.requestStreamHead(ctx, p, s.Stream, s.Cursor+1)
+					// https://github.com/golang/go/issues/4373 - use of closed network connection
+					if err != nil && err != p2p.ErrShuttingDown && !strings.Contains(err.Error(), "use of closed network connection") {
+						log.Error("had an error with initial stream head fetch", "peer", p.ID(), "stream", s.Stream.String(), "cursor", s.Cursor+1, "err", err)
+						// TODO: maybe not to panic here, but just to log any error?
+						//panic(fmt.Errorf("request stream head peer %s stream %s from %v: %v", p, s.Stream, s.Cursor+1, err))
+						p.Drop()
+					}
+				}()
+			}
 		}
 	}
 }
@@ -501,9 +502,19 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
-		if err := s.requestStreamRange(ctx, p, w.stream, msg.LastIndex+1); err != nil {
-			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
-			p.Drop()
+		if w.head {
+			if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
+				streamRequestNextIntervalFail.Inc(1)
+				log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
+				p.Drop()
+			}
+
+		} else {
+			streamRequestNextIntervalFail.Inc(1)
+			if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
+				log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
+				p.Drop()
+			}
 		}
 		return
 	}
