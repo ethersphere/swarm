@@ -312,6 +312,10 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	// record the last time we received a chunk delivery message
 	lastReceivedRetrieveChunksMsg.Update(time.Now().UnixNano())
 
+	// count how many chunks we receive for retrieve requests per peer
+	peermetric := fmt.Sprintf("chunk.delivery.%x", p.BzzAddr.Over()[:16])
+	metrics.GetOrRegisterCounter(peermetric, nil).Inc(1)
+
 	peerPO := chunk.Proximity(p.BzzAddr.Over(), msg.Addr)
 	po := chunk.Proximity(r.kad.BaseAddr(), msg.Addr)
 	depth := r.kad.NeighbourhoodDepth()
