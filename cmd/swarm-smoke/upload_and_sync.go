@@ -120,14 +120,14 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 
 			bzzClient := client.NewBzz(rpcClient)
 
-			hostChunks, err := bzzClient.GetChunksBitVectorFromHost(addrs)
+			hostChunks, err := bzzClient.GetChunksBitVector(addrs)
 			if err != nil {
 				log.Error("error getting chunks bit vector from host", "err", err, "host", httpHost)
 				hasErr = true
 				return
 			}
 
-			bzzAddr, err := bzzClient.GetBzzAddrFromHost()
+			bzzAddr, err := bzzClient.GetBzzAddr()
 			if err != nil {
 				log.Error("error getting bzz addrs from host", "err", err, "host", httpHost)
 				hasErr = true
@@ -384,7 +384,7 @@ func waitToSync() {
 
 				bzzClient := client.NewBzz(rpcClient)
 
-				stillSyncing, err := bzzClient.IsSyncing()
+				stillSyncing, err := bzzClient.IsPullSyncing()
 				if err != nil {
 					return err
 				}

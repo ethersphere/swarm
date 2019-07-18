@@ -12,14 +12,15 @@ type Bzz struct {
 	client *rpc.Client
 }
 
+// NewBzz is a constructor for a Bzz API
 func NewBzz(client *rpc.Client) *Bzz {
 	return &Bzz{
 		client: client,
 	}
 }
 
-// GetChunksBitVectorFromHost returns a bit vector of presence for a given slice of chunks from a given host
-func (b *Bzz) GetChunksBitVectorFromHost(addrs []storage.Address) (string, error) {
+// GetChunksBitVector returns a bit vector of presence for a given slice of chunks
+func (b *Bzz) GetChunksBitVector(addrs []storage.Address) (string, error) {
 	var hostChunks string
 	const trackChunksPageSize = 7500
 
@@ -42,8 +43,8 @@ func (b *Bzz) GetChunksBitVectorFromHost(addrs []storage.Address) (string, error
 	return hostChunks, nil
 }
 
-// GetBzzAddrFromHost returns the bzzAddr for a given host
-func (b *Bzz) GetBzzAddrFromHost() (string, error) {
+// GetBzzAddr returns the bzzAddr of the node
+func (b *Bzz) GetBzzAddr() (string, error) {
 	var hive string
 
 	err := b.client.Call(&hive, "bzz_hive")
@@ -58,13 +59,13 @@ func (b *Bzz) GetBzzAddrFromHost() (string, error) {
 	return ss[len(ss)-1], nil
 }
 
-// IsSyncing is checking if the node is still receiving chunk deliveries due to pull syncing
-func (b *Bzz) IsSyncing() (bool, error) {
+// IsPullSyncing is checking if the node is still receiving chunk deliveries due to pull syncing
+func (b *Bzz) IsPullSyncing() (bool, error) {
 	var isSyncing bool
 
-	err := b.client.Call(&isSyncing, "bzz_isSyncing")
+	err := b.client.Call(&isSyncing, "bzz_isPullSyncing")
 	if err != nil {
-		log.Error("error calling host for isSyncing", "err", err)
+		log.Error("error calling host for isPullSyncing", "err", err)
 		return false, err
 	}
 
