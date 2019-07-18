@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -50,6 +51,14 @@ var spec = &protocols.Spec{
 		RetrieveRequest{},
 	},
 }
+
+var (
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks.count", nil)
+	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg.count", nil)
+	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail.count", nil)
+
+	lastReceivedRetrieveChunksMsg = metrics.GetOrRegisterGauge("network.retrieve.received_chunks", nil)
+)
 
 type Retrieval struct {
 	mtx      sync.Mutex
@@ -252,7 +261,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 
 func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) {
 	log.Trace("handle retrieve request", "peer", p.ID(), "hash", msg.Addr)
-	//handleRetrieveRequestMsgCount.Inc(1)
+	handleRetrieveRequestMsgCount.Inc(1)
 
 	ctx, osp := spancontext.StartSpan(
 		ctx,
@@ -271,7 +280,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	}
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
-		//retrieveChunkFail.Inc(1)
+		retrieveChunkFail.Inc(1)
 		log.Debug("ChunkStore.Get can not retrieve chunk", "peer", p.ID().String(), "addr", msg.Addr, "err", err)
 		return
 	}
@@ -297,6 +306,11 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	ctx, osp = spancontext.StartSpan(
 		ctx,
 		"handle.chunk.delivery")
+
+	processReceivedChunksCount.Inc(1)
+
+	// record the last time we received a chunk delivery message
+	lastReceivedRetrieveChunksMsg.Update(time.Now().UnixNano())
 
 	peerPO := chunk.Proximity(p.BzzAddr.Over(), msg.Addr)
 	po := chunk.Proximity(r.kad.BaseAddr(), msg.Addr)
@@ -331,7 +345,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 
 // RequestFromPeers sends a chunk retrieve request to the next found peer
 func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-	metrics.GetOrRegisterCounter("delivery.requestfrompeers", nil).Inc(1)
+	metrics.GetOrRegisterCounter("network.retrieve.requestfrompeers", nil).Inc(1)
 
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {

@@ -252,7 +252,7 @@ var reestablishCursorsSnapshotFilename = "testdata/reestablish-cursors-snapshot.
 // - asserts that the pivot does not maintain any cursors of the node that moved out of depth
 // - start removing nodes from the simulation until that peer is again within depth
 // - check that the cursors are being re-established
-func TestNodeRemovesAndReestablishCursors(t *testing.T) {
+func xTestNodeRemovesAndReestablishCursors(t *testing.T) {
 	if *update {
 		generateReestablishCursorsSnapshot(t, 2)
 	}

@@ -56,6 +56,20 @@ var Spec = &protocols.Spec{
 	},
 }
 
+var (
+	processReceivedChunksCount = metrics.NewRegisteredCounter("network.stream.received_chunks.count", nil)
+
+	streamSeenChunkDelivery = metrics.NewRegisteredCounter("network.stream.seen_chunk_delivery.count", nil)
+
+	streamEmptyWantedHashes = metrics.NewRegisteredCounter("network.stream.empty_wanted_hashes.count", nil)
+	streamWantedHashes      = metrics.NewRegisteredCounter("network.stream.wanted_hashes.count", nil)
+
+	streamBatchFail               = metrics.NewRegisteredCounter("network.stream.batch_fail.count", nil)
+	streamChunkDeliveryFail       = metrics.NewRegisteredCounter("network.stream.delivery_fail.count", nil)
+	streamRequestNextIntervalFail = metrics.NewRegisteredCounter("network.stream.next_interval_fail.count", nil)
+	lastReceivedChunksMsg         = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
+)
+
 // SlipStream is the base type that handles all client/server operations on a node
 // it is instantiated once per stream protocol instance, that is, it should have
 // one instance per node
@@ -530,11 +544,13 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	errc := s.sealBatch(p, provider, w)
 
 	if ctr == 0 && lenHashes == 0 {
+		streamEmptyWantedHashes.Inc(1)
 		wantedHashesMsg = WantedHashes{
 			Ruid:      msg.Ruid,
 			BitVector: []byte{},
 		}
 	} else {
+		streamWantedHashes.Inc(1)
 		wantedHashesMsg = WantedHashes{
 			Ruid:      msg.Ruid,
 			BitVector: want.Bytes(),
@@ -550,12 +566,14 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	select {
 	case err := <-errc:
 		if err != nil {
+			streamBatchFail.Inc(1)
 			log.Error("got an error while sealing batch", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
 			p.Drop()
 		}
 		err = p.addInterval(w.stream, w.from, *w.to)
 		if err != nil {
 			log.Error("error persisting interval", "peer", p.ID(), "from", w.from, "to", w.to, "err", err)
+			p.Drop()
 		}
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
@@ -565,11 +583,13 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	}
 	if w.head {
 		if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
+			streamRequestNextIntervalFail.Inc(1)
 			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 			p.Drop()
 		}
 
 	} else {
+		streamRequestNextIntervalFail.Inc(1)
 		if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
 			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 			p.Drop()
@@ -653,6 +673,8 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 
 func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	log.Debug("peer.handleChunkDelivery", "peer", p.ID(), "chunks", len(msg.Chunks))
+	processReceivedChunksCount.Inc(1)
+	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 
 	p.mtx.RLock()
 	w, ok := p.openWants[msg.Ruid]
@@ -696,6 +718,7 @@ func (s *SlipStream) sealBatch(p *Peer, provider StreamProvider, w *want) <-chan
 						}
 					}
 					if seen {
+						streamSeenChunkDelivery.Inc(1)
 						log.Error("chunk already seen!", "peer", p.ID(), "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
 					}
 					//want.hashes[c.Address().Hex()] = false //todo: should by sync map
