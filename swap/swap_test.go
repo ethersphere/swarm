@@ -34,13 +34,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
-	contracts "github.com/ethersphere/swarm/contracts/swap/contract"
+	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -71,13 +72,13 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-//Test getting a peer's balance
+// Test getting a peer's balance
 func TestGetPeerBalance(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	// create a test swap account
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	//test for correct value
+	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
 	b, err := swap.GetPeerBalance(testPeer.ID())
@@ -88,7 +89,7 @@ func TestGetPeerBalance(t *testing.T) {
 		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
 	}
 
-	//test for inexistent node
+	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
 	_, err = swap.GetPeerBalance(id)
 	if err == nil {
@@ -100,25 +101,25 @@ func TestGetPeerBalance(t *testing.T) {
 }
 
 func TestGetAllBalances(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	// create a test swap account
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	if len(swap.balances) != 0 {
 		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
 	}
 
-	//test balance addition for peer
+	// test balance addition for peer
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 808
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
-	//test successive balance addition for peer
+	// test successive balance addition for peer
 	testPeer2 := newDummyPeer()
 	swap.balances[testPeer2.ID()] = 909
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
 
-	//test balance change for peer
+	// test balance change for peer
 	swap.balances[testPeer.ID()] = 303
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
@@ -130,10 +131,10 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 	}
 }
 
-//Test that repeated bookings do correct accounting
+// Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	// create a test swap account
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	var bookings []booking
@@ -221,15 +222,15 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 	return expectedBalances
 }
 
-//try restoring a balance from state store
-//this is simulated by creating a node,
-//assigning it an arbitrary balance,
-//then closing the state store.
-//Then we re-open the state store and check that
-//the balance is still the same
+// try restoring a balance from state store
+// this is simulated by creating a node,
+// assigning it an arbitrary balance,
+// then closing the state store.
+// Then we re-open the state store and check that
+// the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t)
+	// create a test swap account
+	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
@@ -249,16 +250,16 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	var newBalance int64
 	stateStore.Get(testPeer.ID().String(), &newBalance)
 
-	//compare the balances
+	// compare the balances
 	if tmpBalance != newBalance {
 		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d",
 			tmpBalance, newBalance))
 	}
 }
 
-//create a test swap account
-//creates a stateStore for persistence and a Swap account
-func createTestSwap(t *testing.T) (*Swap, string) {
+// create a test swap account with a backend
+// creates a stateStore for persistence and a Swap account
+func newTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
 		t.Fatal(err)
@@ -272,18 +273,25 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 		t.Fatal(err)
 	}
 
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
+	swap := New(stateStore, key, common.Address{}, backend)
+	return swap, dir
+}
+
+// create a test swap account
+// create a default empty backend
+// creates a stateStore for persistence and a Swap account
+func newTestSwap(t *testing.T) (*Swap, string) {
+	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
 		ownerAddress: {Balance: big.NewInt(1000000000)},
 	}, 8000000)
-	swap := New(stateStore, key, common.Address{}, contractBackend)
-	return swap, dir
+	return newTestSwapWithBackend(t, defaultBackend)
 }
 
 type dummyPeer struct {
 	*protocols.Peer
 }
 
-//creates a dummy protocols.Peer with dummy MsgReadWriter
+// creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeer() *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
 	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
@@ -314,7 +322,7 @@ func newTestCheque() *Cheque {
 // tests if encodeCheque encodes the cheque as expected
 func TestEncodeCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -332,7 +340,7 @@ func TestEncodeCheque(t *testing.T) {
 // tests if sigHashCheque computes the correct hash to sign
 func TestSigHashCheque(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -350,7 +358,7 @@ func TestSigHashCheque(t *testing.T) {
 // tests if signContent computes the correct signature
 func TestSignContent(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -376,7 +384,7 @@ func TestSignContent(t *testing.T) {
 // tests if verifyChequeSig accepts a correct signature
 func TestVerifyChequeSig(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -390,7 +398,7 @@ func TestVerifyChequeSig(t *testing.T) {
 // tests if verifyChequeSig reject a signature produced by another key
 func TestVerifyChequeSigWrongSigner(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -405,7 +413,7 @@ func TestVerifyChequeSigWrongSigner(t *testing.T) {
 // tests if verifyChequeSig reject an invalid signature
 func TestVerifyChequeInvalidSignature(t *testing.T) {
 	// setup test swap object
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	expectedCheque := newTestCheque()
@@ -422,7 +430,7 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 
 // tests if verifyContract accepts an address with the correct bytecode
 func TestVerifyContract(t *testing.T) {
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	// deploy a new swap contract
@@ -441,13 +449,13 @@ func TestVerifyContract(t *testing.T) {
 
 // tests if verifyContract rejects an address with different bytecode
 func TestVerifyContractWrongContract(t *testing.T) {
-	swap, dir := createTestSwap(t)
+	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
 
 	opts := bind.NewKeyedTransactor(ownerKey)
 
 	// we deploy the ECDSA library of OpenZeppelin which has a different bytecode than swap
-	addr, _, _, err := contracts.DeployECDSA(opts, swap.backend)
+	addr, _, _, err := contract.DeployECDSA(opts, swap.backend)
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -458,4 +466,152 @@ func TestVerifyContractWrongContract(t *testing.T) {
 	if err = swap.verifyContract(context.TODO(), addr); err != cswap.ErrNotASwapContract {
 		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
+}
+
+// TestContractIntegration tests a end-to-end cheque interaction.
+// First a simulated backend is created, then we deploy the issuer's swap contract.
+// We issue a test cheque with the beneficiary address and on the issuer's contract,
+// and immediately try to cash-in the cheque
+func TestContractIntegration(t *testing.T) {
+
+	log.Debug("creating simulated backend")
+
+	gasLimit := uint64(10000000)
+	balance := new(big.Int)
+	balance.SetString("1000000000", 10)
+	backend := backends.NewSimulatedBackend(core.GenesisAlloc{
+		ownerAddress:       {Balance: balance},
+		beneficiaryAddress: {Balance: balance},
+	}, gasLimit)
+
+	log.Debug("creating test swap")
+
+	issuerSwap, dir := newTestSwapWithBackend(t, backend)
+	defer os.RemoveAll(dir)
+
+	backend.Commit()
+
+	issuerSwap.owner.address = ownerAddress
+	issuerSwap.owner.privateKey = ownerKey
+
+	log.Debug("deploy issuer swap")
+
+	ctx := context.TODO()
+	err := testDeploy(ctx, backend, issuerSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.Commit()
+
+	log.Debug("deployed. signing cheque")
+
+	cheque := newTestCheque()
+	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
+	cheque.Sig, err = issuerSwap.signContent(cheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Debug("sending cheque...")
+
+	opts := bind.NewKeyedTransactor(beneficiaryKey)
+	opts.Value = big.NewInt(0)
+	opts.Context = ctx
+
+	tx, err := issuerSwap.contractReference.Instance.SubmitChequeBeneficiary(
+		opts,
+		big.NewInt(int64(cheque.Serial)),
+		big.NewInt(int64(cheque.Amount)),
+		big.NewInt(int64(cheque.Timeout)),
+		cheque.Sig)
+
+	backend.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Debug("getting receipt")
+	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check if success
+	if receipt.Status != 1 {
+		t.Fatalf("Bad status %d", receipt.Status)
+	}
+
+	log.Debug("check cheques state")
+
+	// check state, check that cheque is indeed there
+	result, err := issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Serial.Uint64() != cheque.Serial {
+		t.Fatalf("Wrong serial %d", result.Serial)
+	}
+	if result.Amount.Uint64() != cheque.Amount {
+		t.Fatalf("Wrong amount %d", result.Amount)
+	}
+	log.Debug("cheques result", "result", result)
+
+	// go forward in time
+	backend.AdjustTime(30 * time.Second)
+
+	payoutAmount := int64(20)
+	// test cashing in, for this we need balance in the contract
+	// => send some money
+	log.Debug("send money to contract")
+	depoTx := types.NewTransaction(
+		1,
+		issuerSwap.owner.Contract,
+		big.NewInt(payoutAmount),
+		50000,
+		big.NewInt(int64(0)),
+		[]byte{},
+	)
+	depoTxs, err := types.SignTx(depoTx, types.HomesteadSigner{}, issuerSwap.owner.privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.SendTransaction(context.TODO(), depoTxs)
+
+	log.Debug("cash-in the cheque")
+	tx, err = issuerSwap.contractReference.Instance.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(payoutAmount))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.Commit()
+
+	log.Debug("check tx receipt")
+	receipt, err = backend.TransactionReceipt(context.TODO(), tx.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Status != 1 {
+		t.Fatalf("Bad status %d", receipt.Status)
+	}
+
+	// check again the status, check paid out is increase by amount
+	result, err = issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("cheques result", "result", result)
+	if result.PaidOut.Int64() != payoutAmount {
+		t.Fatalf("Expected paid out amount to be %d, but is %d", payoutAmount, result.PaidOut)
+	}
+}
+
+// deploy for testing (needs simulated backend commit)
+func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err error) {
+	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
+	opts.Context = ctx
+
+	if swap.owner.Contract, swap.contractReference, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration); err != nil {
+		return err
+	}
+	return nil
 }
