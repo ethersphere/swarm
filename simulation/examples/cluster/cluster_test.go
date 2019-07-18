@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -81,7 +82,7 @@ func TestCluster(t *testing.T) {
 }
 
 func startSimulation(t *testing.T, adapter simulation.Adapter, count int) {
-	sim := goclient.NewGoClientSimulation(adapter)
+	sim := goclient.NewSimulation(adapter)
 
 	defer sim.StopAll()
 
@@ -114,6 +115,16 @@ func startSimulation(t *testing.T, adapter simulation.Adapter, count int) {
 		t.Errorf("could not get hive info: %v", err)
 	}
 
-	fmt.Println(hive)
+	snap, err := sim.Snapshot()
+	if err != nil {
+		t.Error(err)
+	}
 
+	b, err := json.Marshal(snap)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(string(b))
+
+	fmt.Println(hive)
 }

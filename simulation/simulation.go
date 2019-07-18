@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/sync/errgroup"
 )
@@ -87,7 +89,40 @@ func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error
 	// Loop over nodes and add them
 	for _, n := range snapshot.Nodes {
 		if err := sim.Init(n.Config); err != nil {
-			return nil, fmt.Errorf("failed to initialize node %v", err)
+			return sim, fmt.Errorf("failed to initialize node %v", err)
+		}
+	}
+
+	// Start all nodes
+	err = sim.StartAll()
+	if err != nil {
+		return sim, err
+	}
+
+	// Establish connections
+	m := make(map[string]Node)
+	for _, n := range sim.GetAll() {
+		enode := removeNetworkAddressFromEnode(n.Info().Enode)
+		m[enode] = n
+	}
+
+	for _, con := range snapshot.Connections {
+		from, ok := m[con.From]
+		if !ok {
+			return sim, fmt.Errorf("No node found with enode: %s", con.From)
+		}
+		to, ok := m[con.To]
+		if !ok {
+			return sim, fmt.Errorf("No node found with enode: %s", con.To)
+		}
+
+		client, err := sim.RPCClient(from.Info().ID)
+		if err != nil {
+			return sim, err
+		}
+
+		if err := client.Call(nil, "admin_addPeer", to.Info().Enode); err != nil {
+			return sim, err
 		}
 	}
 	return sim, nil
@@ -147,7 +182,7 @@ func LoadSnapshotFromFile(filePath string) (*SimulationSnapshot, error) {
 func (s *Simulation) Get(id NodeID) (Node, error) {
 	node, ok := s.nodes.Load(id)
 	if !ok {
-		return nil, fmt.Errorf("a node with id %s already exists", id)
+		return nil, fmt.Errorf("a node with id %s does not exist", id)
 	}
 	return node, nil
 }
@@ -175,7 +210,7 @@ func (s *Simulation) Init(config NodeConfig) error {
 func (s *Simulation) Start(id NodeID) error {
 	node, ok := s.nodes.Load(id)
 	if !ok {
-		return fmt.Errorf("a node with id %s does not exists", id)
+		return fmt.Errorf("a node with id %s does not exist", id)
 	}
 
 	if err := node.Start(); err != nil {
@@ -188,7 +223,7 @@ func (s *Simulation) Start(id NodeID) error {
 func (s *Simulation) Stop(id NodeID) error {
 	node, ok := s.nodes.Load(id)
 	if !ok {
-		return fmt.Errorf("a node with id %s does not exists", id)
+		return fmt.Errorf("a node with id %s does not exist", id)
 	}
 
 	if err := node.Stop(); err != nil {
@@ -219,7 +254,7 @@ func (s *Simulation) StopAll() error {
 func (s *Simulation) RPCClient(id NodeID) (*rpc.Client, error) {
 	node, ok := s.nodes.Load(id)
 	if !ok {
-		return nil, fmt.Errorf("a node with id %s does not exists", id)
+		return nil, fmt.Errorf("a node with id %s does not exist", id)
 	}
 
 	info := node.Info()
@@ -243,7 +278,7 @@ func (s *Simulation) RPCClient(id NodeID) (*rpc.Client, error) {
 func (s *Simulation) HTTPBaseAddr(id NodeID) (string, error) {
 	node, ok := s.nodes.Load(id)
 	if !ok {
-		return "", fmt.Errorf("a node with id %s does not exists", id)
+		return "", fmt.Errorf("a node with id %s does not exist", id)
 	}
 	info := node.Info()
 	return info.HTTPListen, nil
@@ -264,13 +299,45 @@ func (s *Simulation) Snapshot() (*SimulationSnapshot, error) {
 	nodes := s.GetAll()
 	snap.Nodes = make([]NodeSnapshot, len(nodes))
 
+	snap.Connections = []ConnectionSnapshot{}
+
 	for idx, n := range nodes {
 		ns, err := n.Snapshot()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get nodes snapshot %s: %v", n.Info().ID, err)
 		}
 		snap.Nodes[idx] = ns
+
+		// Get connections
+		client, err := s.RPCClient(n.Info().ID)
+		if err != nil {
+			return nil, err
+		}
+		defer client.Close()
+		var peers []*p2p.PeerInfo
+		err = client.Call(&peers, "admin_peers")
+		if err != nil {
+			return nil, err
+		}
+		enodes := []string{}
+		for _, p := range peers {
+			// Only care about outbound connections
+			if !p.Network.Inbound {
+				enodes = append(enodes, p.Enode)
+				snap.Connections = append(snap.Connections, ConnectionSnapshot{
+					From: removeNetworkAddressFromEnode(n.Info().Enode),
+					To:   removeNetworkAddressFromEnode(p.Enode),
+				})
+			}
+		}
 	}
 
 	return &snap, nil
+}
+
+func removeNetworkAddressFromEnode(enode string) string {
+	if idx := strings.Index(enode, "@"); idx != -1 {
+		return enode[:idx]
+	}
+	return enode
 }

@@ -17,16 +17,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type GoClientSimulation struct {
+type Simulation struct {
 	*simulation.Simulation
 }
 
-func NewGoClientSimulation(adapter simulation.Adapter) *GoClientSimulation {
+func NewSimulation(adapter simulation.Adapter) *Simulation {
 	sim := simulation.NewSimulation(adapter)
-	return &GoClientSimulation{sim}
+	return &Simulation{sim}
 }
 
-func (s *GoClientSimulation) AddBootnode(id simulation.NodeID, args []string) (simulation.Node, error) {
+func (s *Simulation) AddBootnode(id simulation.NodeID, args []string) (simulation.Node, error) {
 	a := []string{
 		"--bootnode-mode",
 		"--bootnodes", "",
@@ -35,7 +35,7 @@ func (s *GoClientSimulation) AddBootnode(id simulation.NodeID, args []string) (s
 	return s.AddNode(id, a)
 }
 
-func (s *GoClientSimulation) AddNode(id simulation.NodeID, args []string) (simulation.Node, error) {
+func (s *Simulation) AddNode(id simulation.NodeID, args []string) (simulation.Node, error) {
 	bzzkey, err := randomHexKey()
 	if err != nil {
 		return nil, err
@@ -71,11 +71,13 @@ func (s *GoClientSimulation) AddNode(id simulation.NodeID, args []string) (simul
 	return node, nil
 }
 
-func (s *GoClientSimulation) AddNodes(idPrefix string, count int, args []string) ([]simulation.Node, error) {
+func (s *Simulation) AddNodes(idPrefix string, count int, args []string) ([]simulation.Node, error) {
 	g, _ := errgroup.WithContext(context.Background())
 
+	idFormat := "%s-%d"
+
 	for i := 0; i < count; i++ {
-		id := simulation.NodeID(fmt.Sprintf("%s%d", idPrefix, i))
+		id := simulation.NodeID(fmt.Sprintf(idFormat, idPrefix, i))
 		g.Go(func() error {
 			node, err := s.AddNode(id, args)
 			if err != nil {
@@ -93,7 +95,7 @@ func (s *GoClientSimulation) AddNodes(idPrefix string, count int, args []string)
 
 	nodes := make([]simulation.Node, count)
 	for i := 0; i < count; i++ {
-		id := simulation.NodeID(fmt.Sprintf("%s%d", idPrefix, i))
+		id := simulation.NodeID(fmt.Sprintf(idFormat, idPrefix, i))
 		nodes[i], err = s.Get(id)
 		if err != nil {
 			return nil, err
@@ -102,7 +104,7 @@ func (s *GoClientSimulation) AddNodes(idPrefix string, count int, args []string)
 	return nodes, nil
 }
 
-func (s *GoClientSimulation) CreateClusterWithBootnode(idPrefix string, count int, args []string) ([]simulation.Node, error) {
+func (s *Simulation) CreateClusterWithBootnode(idPrefix string, count int, args []string) ([]simulation.Node, error) {
 	bootnode, err := s.AddBootnode(simulation.NodeID(fmt.Sprintf("%s-bootnode", idPrefix)), args)
 	if err != nil {
 		return nil, err
@@ -122,7 +124,7 @@ func (s *GoClientSimulation) CreateClusterWithBootnode(idPrefix string, count in
 	return nodes, nil
 }
 
-func (s *GoClientSimulation) WaitForHealthyNetwork() error {
+func (s *Simulation) WaitForHealthyNetwork() error {
 	nodes := s.GetAll()
 
 	// Generate RPC clients

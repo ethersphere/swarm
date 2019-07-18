@@ -219,7 +219,6 @@ func (n *DockerNode) Start() error {
 	}
 
 	// Get container logs
-
 	if n.config.Stderr != nil {
 		go func() {
 			// Stderr
@@ -272,16 +271,9 @@ func (n *DockerNode) Start() error {
 	n.ipAddr = cinfo.NetworkSettings.IPAddress
 
 	// Wait for the node to start
-	var client *rpc.Client
-	wsAddr := fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort)
-	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
-		client, err = rpc.Dial(wsAddr)
-		if err == nil {
-			break
-		}
-	}
-	if client == nil {
-		return fmt.Errorf("could not establish rpc connection. node %s: %v", n.config.ID, err)
+	client, err := n.rpcClient()
+	if err != nil {
+		return err
 	}
 	defer client.Close()
 
@@ -301,7 +293,7 @@ func (n *DockerNode) Start() error {
 		ID:          n.config.ID,
 		Enode:       strings.Replace(p2pinfo.Enode, "127.0.0.1", n.ipAddr, 1),
 		BzzAddr:     swarminfo.BzzKey,
-		RPCListen:   wsAddr,
+		RPCListen:   fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort),
 		HTTPListen:  fmt.Sprintf("http://%s:%d", n.ipAddr, dockerHTTPPort),
 		PprofListen: fmt.Sprintf("http://%s:%d", n.ipAddr, dockerPProfPort),
 	}
@@ -334,6 +326,22 @@ func (n *DockerNode) Snapshot() (NodeSnapshot, error) {
 
 func (n *DockerNode) containerName() string {
 	return fmt.Sprintf("sim-docker-%s", n.config.ID)
+}
+
+func (n *DockerNode) rpcClient() (*rpc.Client, error) {
+	var client *rpc.Client
+	var err error
+	wsAddr := fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort)
+	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
+		client, err = rpc.Dial(wsAddr)
+		if err == nil {
+			break
+		}
+	}
+	if client == nil {
+		return nil, fmt.Errorf("could not establish rpc connection. node %s: %v", n.config.ID, err)
+	}
+	return client, nil
 }
 
 // buildImage builds a docker image and returns the image identifier (tag).

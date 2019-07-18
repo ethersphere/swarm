@@ -52,12 +52,18 @@ type NodeInfo struct {
 }
 
 type SimulationSnapshot struct {
-	Adapter AdapterSnapshot `json:"adapter"`
-	Nodes   []NodeSnapshot  `json:"nodes"`
+	Adapter     AdapterSnapshot      `json:"adapter"`
+	Nodes       []NodeSnapshot       `json:"nodes"`
+	Connections []ConnectionSnapshot `json:"connections"`
 }
 
 type NodeSnapshot struct {
 	Config NodeConfig `json:"config"`
+}
+
+type ConnectionSnapshot struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 type AdapterSnapshot struct {
