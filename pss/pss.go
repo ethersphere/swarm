@@ -117,10 +117,8 @@ func (params *Params) WithPrivateKey(privatekey *ecdsa.PrivateKey) *Params {
 	return params
 }
 
-// Toplevel pss object, takes care of message sending, receiving, decryption and encryption, message handler dispatchers and message forwarding.
-//
-// Implements node.Service
-
+// Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
+// and message forwarding. Implements node.Service
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
@@ -138,7 +136,7 @@ type Pss struct {
 	msgTTL          time.Duration
 	paddingByteSize int
 	capstring       string
-	outbox          chan *OutboxMsg
+	outbox          chan *outboxMsg
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -180,7 +178,7 @@ func NewPss(k *network.Kademlia, params *Params) (*Pss, error) {
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       c.String(),
-		outbox:          make(chan *OutboxMsg, defaultOutboxCapacity),
+		outbox:          make(chan *outboxMsg, defaultOutboxCapacity),
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
@@ -264,7 +262,14 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, spec)
 	p.addPeer(pp)
 	defer p.removePeer(pp)
-	return pp.Run(p.handlePssMsg)
+	return pp.Run(p.handle)
+}
+
+func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
+	p.peersMu.RLock()
+	defer p.peersMu.RUnlock()
+	pp, ok = p.peers[peer.Peer.Info().ID]
+	return
 }
 
 func (p *Pss) addPeer(peer *protocols.Peer) {
@@ -394,7 +399,7 @@ func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
+func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
 	pssmsg, ok := msg.(*PssMsg)
 	if !ok {
@@ -705,9 +710,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 	}
 
 	// get the protocol peer from the forwarding peer cache
-	p.peersMu.RLock()
-	pp, ok := p.peers[sp.Info().ID]
-	p.peersMu.RUnlock()
+	pp, ok := p.getPeer(sp.BzzPeer.Peer)
 	if !ok {
 		log.Warn("peer no longer in our list, dropping message")
 		return false

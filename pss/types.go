@@ -118,13 +118,13 @@ func (m *msgParams) Bytes() (paramBytes []byte) {
 	return paramBytes
 }
 
-type OutboxMsg struct {
+type outboxMsg struct {
 	msg       *PssMsg
 	startedAt time.Time
 }
 
-func newOutboxMsg(msg *PssMsg) *OutboxMsg {
-	return &OutboxMsg{
+func newOutboxMsg(msg *PssMsg) *outboxMsg {
+	return &outboxMsg{
 		msg:       msg,
 		startedAt: time.Now(),
 	}
