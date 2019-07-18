@@ -579,6 +579,16 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
 
+		// if the cursors entry does not exist it means we must not ask for the next range
+		// this is due to the fact we delete the cursor entry when the depth change signals
+		// unwanted bins
+		cursors := p.getCursorsCopy()
+		if _, ok := cursors[w.stream.String()]; !ok {
+			log.Debug("stream no longer wanted, quitting", "peer", p.ID(), "stream", w.stream.String())
+			metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
+			return
+		}
+
 		//TODO BATCH TIMEOUT?
 	}
 	if w.head {
