@@ -46,7 +46,7 @@ var timeout = 30 * time.Second
 func TestTwoNodesFullSync(t *testing.T) {
 	chunkCount := 10000
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunkCount),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 
 	defer sim.Close()
@@ -60,7 +60,27 @@ func TestTwoNodesFullSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	log.Debug("pivot node", "enode", uploaderNode)
+	uploadStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
+
+	chunks := uploadChunks(t, ctx, uploadStore, uint64(chunkCount))
+
+	uploaderNodeBinIDs := make([]uint64, 17)
+	uploaderStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
+	var uploaderSum uint64
+	for po := 0; po <= 16; po++ {
+		until, err := uploaderStore.LastPullSubscriptionBinID(uint8(po))
+		if err != nil {
+			t.Fatal(err)
+		}
+		uploaderNodeBinIDs[po] = until
+		uploaderSum += until
+	}
+
+	if uint64(len(chunks)) != uploaderSum {
+		t.Fatalf("uploader node chunk number mismatch. got %d want %d", len(chunks), uploaderSum)
+	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		syncingNode, err := sim.AddNode()
@@ -69,23 +89,10 @@ func TestTwoNodesFullSync(t *testing.T) {
 		}
 		log.Debug("syncing node", "enode", syncingNode)
 
-		err = sim.Net.ConnectNodesStar([]enode.ID{syncingNode}, uploaderNode)
+		err = sim.Net.ConnectNodesChain([]enode.ID{syncingNode, uploaderNode})
 		if err != nil {
 			return err
 		}
-
-		uploaderNodeBinIDs := make([]uint64, 17)
-		uploaderStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
-		var uploaderSum uint64
-		for po := 0; po <= 16; po++ {
-			until, err := uploaderStore.LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				return err
-			}
-			uploaderNodeBinIDs[po] = until
-			uploaderSum += until
-		}
-
 		return waitChunks(sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 	})
 
@@ -95,23 +102,6 @@ func TestTwoNodesFullSync(t *testing.T) {
 }
 
 func TestTwoNodesSyncWithGaps(t *testing.T) {
-	uploadChunks := func(t *testing.T, ctx context.Context, store chunk.Store, count uint64) (chunks []chunk.Address) {
-		t.Helper()
-
-		for i := uint64(0); i < count; i++ {
-			c := storage.GenerateRandomChunk(4096)
-			exists, err := store.Put(ctx, chunk.ModePutUpload, c)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if exists {
-				t.Fatal("generated already existing chunk")
-			}
-			chunks = append(chunks, c.Address())
-		}
-		return chunks
-	}
-
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
 		t.Helper()
 
@@ -1090,4 +1080,21 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 
 	reader := bytes.NewReader(testData)
 	return fileStore.GetAllReferences(context.Background(), reader, false)
+}
+
+func uploadChunks(t *testing.T, ctx context.Context, store chunk.Store, count uint64) (chunks []chunk.Address) {
+	t.Helper()
+
+	for i := uint64(0); i < count; i++ {
+		c := storage.GenerateRandomChunk(4096)
+		exists, err := store.Put(ctx, chunk.ModePutUpload, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Fatal("generated already existing chunk")
+		}
+		chunks = append(chunks, c.Address())
+	}
+	return chunks
 }
