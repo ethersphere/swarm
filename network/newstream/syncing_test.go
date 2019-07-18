@@ -553,19 +553,19 @@ func TestFullSync(t *testing.T) {
 			live:          true,
 		},
 		{
-			name:          "sync to 100 nodes history",
+			name:          "sync to 50 nodes history",
 			chunkCount:    500,
 			syncNodeCount: 50,
 			history:       true,
 		},
 		{
-			name:          "sync to 100 nodes live",
+			name:          "sync to 50 nodes live",
 			chunkCount:    500,
 			syncNodeCount: 50,
 			live:          true,
 		},
 		{
-			name:          "sync to 100 nodes history and live",
+			name:          "sync to 50 nodes history and live",
 			chunkCount:    250,
 			syncNodeCount: 50,
 			history:       true,
