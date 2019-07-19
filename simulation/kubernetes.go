@@ -155,7 +155,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 	}
 
 	// Setup proxy to access pods
-	server, err := NewProxyServer(k8scfg)
+	server, err := newProxyServer(k8scfg)
 
 	l, err := server.Listen("127.0.0.1", 0)
 	if err != nil {
@@ -389,30 +389,30 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE") // windows
 }
 
-// ProxyServer is a http.Handler which proxies Kubernetes APIs to remote API server.
-type ProxyServer struct {
+// proxyServer is a http.Handler which proxies Kubernetes APIs to remote API server.
+type proxyServer struct {
 	handler http.Handler
 }
 
 // Listen is a simple wrapper around net.Listen.
-func (s *ProxyServer) Listen(address string, port int) (net.Listener, error) {
+func (s *proxyServer) Listen(address string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", address, port))
 }
 
 // ServeOnListener starts the server using given listener, loops forever.
-func (s *ProxyServer) ServeOnListener(l net.Listener) error {
+func (s *proxyServer) ServeOnListener(l net.Listener) error {
 	server := http.Server{
 		Handler: s.handler,
 	}
 	return server.Serve(l)
 }
 
-func (s *ProxyServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (s *proxyServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	s.handler.ServeHTTP(rw, req)
 }
 
-// NewProxyServer creates a proxy server
-func NewProxyServer(cfg *rest.Config) (*ProxyServer, error) {
+// newProxyServer creates a proxy server
+func newProxyServer(cfg *rest.Config) (*proxyServer, error) {
 	target, err := url.Parse(cfg.Host)
 	if err != nil {
 		return nil, err
@@ -427,7 +427,7 @@ func NewProxyServer(cfg *rest.Config) (*ProxyServer, error) {
 
 	proxy.Transport = transport
 
-	return &ProxyServer{
+	return &proxyServer{
 		handler: proxy,
 	}, nil
 }
