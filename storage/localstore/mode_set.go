@@ -179,8 +179,12 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		// Get the existing pin counter of the chunk
 		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
 		if err != nil {
-			// If this is not present in DB, then its a new entry
-			existingPinCounter = 0
+			if err == leveldb.ErrNotFound {
+				// If this Address is not present in DB, then its a new entry
+				existingPinCounter = 0
+			} else {
+				return err
+			}
 		}
 
 		// Otherwise increase the existng counter by 1

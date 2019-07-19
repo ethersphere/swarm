@@ -172,6 +172,9 @@ func (p *PinAPI) ListPinFiles() {
 			log.Error("Error decoding root hash" + err.Error())
 			return
 		}
+
+		// TODO: This iteration can drain CPU. Figure out a way to store size of the pinned file
+		// in the pinFileIndex itself by changing the refactoring the Set method to get additional parameters.
 		pinCounter, err := p.db.GetPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 
 		isRaw := false
