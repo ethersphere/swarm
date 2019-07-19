@@ -28,7 +28,7 @@ func TestNewDB(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	s, err := db.GetSchema()
+	s, err := db.getSchema()
 	if err != nil {
 		t.Fatal(err)
 	}

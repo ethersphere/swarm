@@ -148,7 +148,7 @@ func TestPinGC(t *testing.T) {
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		ch := generateChunkForPinning()
+		ch := generateTestRandomChunk()
 
 		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
@@ -164,7 +164,7 @@ func TestPinGC(t *testing.T) {
 
 		// Pin the chunks at the end so that the access time is at the end
 		if i >= (chunkCount - pinChunksCount) {
-			err = db.Set(context.Background(), chunk.ModePinChunk, ch.Address())
+			err = db.Set(context.Background(), chunk.ModeSetPin, ch.Address())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -203,12 +203,6 @@ func TestPinGC(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-}
-
-func generateChunkForPinning() chunk.Chunk {
-	key := make([]byte, 32)
-	rand.Read(key)
-	return chunk.NewChunk(key, nil)
 }
 
 // TestDB_collectGarbageWorker_withRequests is a helper test function

@@ -19,8 +19,6 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -413,106 +411,6 @@ func (db *DB) Close() (err error) {
 // and database base key.
 func (db *DB) po(addr chunk.Address) (bin uint8) {
 	return uint8(chunk.Proximity(db.baseKey, addr))
-}
-
-func (db *DB) ShowDatabaseInformation() {
-
-	schemaName, err := db.schemaName.Get()
-	if err != nil {
-		schemaName = " - "
-	}
-	log.Info("Database schema name", "schemaName", schemaName)
-
-	gcSize, err := db.gcSize.Get()
-	gc_size := ""
-	if err != nil {
-		gc_size = " - "
-	} else {
-		gc_size = strconv.FormatUint(gcSize, 10)
-	}
-	log.Info("Database GC size", "gc_size", gc_size)
-
-	for i := 0; i < 256; i++ {
-		val, err := db.binIDs.Get(uint64(i))
-		if err == nil && val != 0 {
-			log.Info("Database binIds", strconv.Itoa(i), strconv.Itoa(int(val)))
-		}
-	}
-
-	// Get schema
-	s, err := db.shed.GetSchema()
-	if err == nil {
-		for k, v := range s.Fields {
-			log.Info("Schema field ", k, v.Type)
-		}
-		for k, v := range s.Indexes {
-			log.Info("Schema Index", strconv.Itoa(int(k)), v.Name)
-		}
-	}
-
-	// Print the retrievalDataIndex
-	_ = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("retrievalDataIndex",
-			fmt.Sprintf("2|%0x", item.Address),
-			fmt.Sprintf("storeTS=%d|binId=%d|datalen=%d", item.StoreTimestamp, item.BinID, len(item.Data)))
-
-		return false, nil
-	}, nil)
-
-	_ = db.retrievalAccessIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("retrievalAccessIndex",
-			fmt.Sprintf("3|%0x", item.Address),
-			fmt.Sprintf("accessTS=%d", item.AccessTimestamp))
-
-		return false, nil
-	}, nil)
-
-	_ = db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("pullIndex",
-			fmt.Sprintf("4|po=%d|binID=%d", db.po(item.Address), item.BinID),
-			fmt.Sprintf("%0x", item.Address))
-
-		return false, nil
-	}, nil)
-
-	_ = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("pushIndex",
-			fmt.Sprintf("5|storeTS=%d|%0x", item.StoreTimestamp, item.Address),
-			fmt.Sprintf("tags=%s", " - "))
-
-		return false, nil
-	}, nil)
-
-	_ = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("gcIndex",
-			fmt.Sprintf("6|accessTS=%d|binID=%d|%0x", item.AccessTimestamp, item.BinID, item.Address),
-			fmt.Sprintf("value=%s", " - "))
-
-		return false, nil
-	}, nil)
-
-	_ = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("pinIndex",
-			fmt.Sprintf("7|%0x", item.Address),
-			fmt.Sprintf("pinc=%d", item.PinCounter))
-
-		return false, nil
-	}, nil)
-
-	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		log.Info("pinIndex",
-			fmt.Sprintf("8|%0x", item.Address),
-			fmt.Sprintf("IsRaw=%d", item.IsRaw))
-
-		return false, nil
-	}, nil)
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.

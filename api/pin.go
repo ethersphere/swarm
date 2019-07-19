@@ -73,7 +73,8 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 		return err
 	}
 
-	if !p.db.IsHashPresentInRetrievalDataIndex(p.removeDecryptionKeyFromChunkHash(addr)) {
+	hasCHunk, err := p.db.Has(context.TODO(), chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
+	if !hasCHunk {
 		log.Error("Could not pin hash. File not uploaded", "Hash", rootHash)
 		return err
 	}
@@ -81,7 +82,7 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 	// Walk the root hash and pin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.Set(context.TODO(), chunk.ModePinChunk, chunkAddr)
+		err := p.db.Set(context.TODO(), chunk.ModeSetPin, chunkAddr)
 		if err != nil {
 			log.Error("Could not pin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -93,12 +94,12 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
 
 	// Check if the root hash is already pinned
-	isFilePinned := p.db.IsFilePinned(addr)
+	isFilePinned := p.db.IsFilePinned(chunk.Address(addr))
 	if !isFilePinned {
 		if isRaw {
-			err = p.db.Set(context.TODO(), chunk.ModeStoreRootHashForRawFile, addr)
+			err = p.db.Set(context.TODO(), chunk.ModeSetPinRootHashRaw, addr)
 		} else {
-			err = p.db.Set(context.TODO(), chunk.ModeStoreRootHashForNormalFile, addr)
+			err = p.db.Set(context.TODO(), chunk.ModeSetPinRootHash, addr)
 		}
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
@@ -122,7 +123,7 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 		return
 	}
 
-	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
+	isRawInDB, err := p.db.IsPinnedFileRaw(chunk.Address(addr))
 	if err != nil {
 		log.Error("Root hash is not pinned" + err.Error())
 		return
@@ -131,7 +132,7 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 	// Walk the root hash and unpin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.Set(context.TODO(), chunk.ModeUnpinChunk, chunkAddr)
+		err := p.db.Set(context.TODO(), chunk.ModeSetUnpin, chunkAddr)
 		if err != nil {
 			log.Error("Could not unpin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -145,9 +146,9 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 	// Check if the root chunk exists in pinIndex
 	// If it is not.. then the pin counter became 0
 	// so remove the root hash from pinFilesIndex
-	isRootChunkPinned := p.db.IsChunkPinned(p.removeDecryptionKeyFromChunkHash(addr))
+	isRootChunkPinned := p.db.IsChunkPinned(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 	if !isRootChunkPinned {
-		err := p.db.Set(context.TODO(), chunk.ModeRemoveRootHash, addr)
+		err := p.db.Set(context.TODO(), chunk.ModeSetUnpinRootHash, addr)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -169,7 +170,7 @@ func (p *PinAPI) ListPinFiles() {
 			log.Error("Error decoding root hash" + err.Error())
 			return
 		}
-		pinCounter, err := p.db.GetPinCounterOfChunk(p.removeDecryptionKeyFromChunkHash(addr))
+		pinCounter, err := p.db.GetPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 
 		isRaw := false
 		if v > 0 {
@@ -191,7 +192,7 @@ func (p *PinAPI) LogPinnedChunks(rootHash string, credentials string) {
 		return
 	}
 
-	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
+	isRawInDB, err := p.db.IsPinnedFileRaw(chunk.Address(addr))
 	if err != nil {
 		log.Error("Root hash is not pinned" + err.Error())
 		return
@@ -202,13 +203,6 @@ func (p *PinAPI) LogPinnedChunks(rootHash string, credentials string) {
 		return nil
 	}
 	p.walkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
-}
-
-// ShowDatabase is purely a developer debugging tool.
-// This logs the entire database contents along with the metadata present in the Swarm levelDB.
-func (p *PinAPI) ShowDatabase() string {
-	p.db.ShowDatabaseInformation()
-	return "Check the swarm log file for the output"
 }
 
 func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials string, executeFunc func(storage.Reference) error) {
@@ -296,6 +290,8 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 
 				go func() {
 
+					defer cwg.Done()
+
 					chunkData, err := getter.Get(context.TODO(), ref)
 					if err != nil {
 						log.Error("Error getting chunk data from localstore.")
@@ -341,7 +337,6 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 						// TODO: if this happens, we should go back and revert the entire file's chunks
 						log.Error("Could not unpin chunk. Address " + fmt.Sprintf("%0x", ref))
 					}
-					cwg.Done()
 				}()
 			}
 		}
@@ -396,7 +391,7 @@ func (p *PinAPI) GetAllChunksFromDB() map[string]int {
 // given root hash.
 func (p *PinAPI) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
 
-	var lock = sync.RWMutex{}
+
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
@@ -404,16 +399,17 @@ func (p *PinAPI) CollectPinnedChunks(rootHash string, credentials string) map[st
 		return nil
 	}
 
-	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
+	isRawInDB, err := p.db.IsPinnedFileRaw(chunk.Address(addr))
 	if err != nil {
 		log.Error("Root hash is not pinned" + err.Error())
 		return nil
 	}
 
 	pinnedChunks := make(map[string]uint64)
+	var lock = sync.RWMutex{}
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		pinCounter, err := p.db.GetPinCounterOfChunk(chunkAddr)
+		pinCounter, err := p.db.GetPinCounterOfChunk(chunk.Address(chunkAddr))
 		if err != nil {
 			return err
 		}

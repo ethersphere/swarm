@@ -188,16 +188,16 @@ func (m ModeSet) String() string {
 		return "Sync"
 	case ModeSetRemove:
 		return "Remove"
-	case ModePinChunk:
-		return "ModePinChunk"
-	case ModeUnpinChunk:
-		return "ModeUnpinChunk"
-	case ModeStoreRootHashForRawFile:
-		return "ModeStoreRootHashForRawFile"
-	case ModeStoreRootHashForNormalFile:
-		return "ModeStoreRootHashForNormalFile"
-	case ModeRemoveRootHash:
-		return "ModeRemoveRootHash"
+	case ModeSetPin:
+		return "ModeSetPin"
+	case ModeSetUnpin:
+		return "ModeSetUnpin"
+	case ModeSetPinRootHashRaw:
+		return "ModeSetPinRootHashRaw"
+	case ModeSetPinRootHash:
+		return "ModeSetPinRootHash"
+	case ModeSetUnpinRootHash:
+		return "ModeSetUnpinRootHash"
 	default:
 		return "Unknown"
 	}
@@ -211,18 +211,18 @@ const (
 	ModeSetSync
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove
-	// ModePinChunk: when a chunk is pinned during upload or separately
-	ModePinChunk
-	// ModeUnpinChunk: when a chunk is unpinned using a command locally
-	ModeUnpinChunk
-	// ModeStoreRootHashForRawFile: When a root hash of a RAW file needs to be stored
+	// ModeSetPin: when a chunk is pinned during upload or separately
+	ModeSetPin
+	// ModeSetUnpin: when a chunk is unpinned using a command locally
+	ModeSetUnpin
+	// ModeSetPinRootHashRaw: When a root hash of a RAW file needs to be stored
 	// (to display later using list pins command)
-	ModeStoreRootHashForRawFile
-	// ModeStoreRootHashForNormalFile: When a root hash of a manifest based file needs to be stored
+	ModeSetPinRootHashRaw
+	// ModeSetPinRootHash: When a root hash of a manifest based file needs to be stored
 	// (to display later using list pins command)
-	ModeStoreRootHashForNormalFile
-	// ModeRemoveRootHash: When a root hash of a file is unpinned
-	ModeRemoveRootHash
+	ModeSetPinRootHash
+	// ModeSetUnpinRootHash: When a root hash of a file is unpinned
+	ModeSetUnpinRootHash
 )
 
 // Descriptor holds information required for Pull syncing. This struct

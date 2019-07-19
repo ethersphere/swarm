@@ -63,7 +63,7 @@ func NewDB(path string, metricsPrefix string) (db *DB, err error) {
 		ldb: ldb,
 	}
 
-	if _, err = db.GetSchema(); err != nil {
+	if _, err = db.getSchema(); err != nil {
 		if err == leveldb.ErrNotFound {
 			// save schema with initialized default fields
 			if err = db.putSchema(schema{

@@ -17,7 +17,6 @@
 package localstore
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -145,22 +144,11 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	return db.shed.WriteBatch(batch)
 }
 
-// IsHashPresentInRetrievalDataIndex: This function is used to check if a given hash is present in the DB or not.
-// This is used to see if the file is already uploaded before pinning
-func (db *DB) IsHashPresentInRetrievalDataIndex(hash []byte) bool {
-	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	_, err := db.retrievalDataIndex.Get(item)
-	return (err == nil)
-}
-
 // IsPinnedFileRaw checks if a given root hash is pinned as a Raw file or not.
 // This infrmation is stored in pinFilesIndex as part of pinning the file
-func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
+func (db *DB) IsPinnedFileRaw(addr chunk.Address) (bool, error) {
 	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
+	item.Address = addr
 	i, err := db.pinFilesIndex.Get(item)
 	if err != nil {
 		return false, err
@@ -174,37 +162,32 @@ func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 
 // IsFilePinned checks if a given root hash is pinned or not.
 // It check for the given root hash in the pinFilesIndex
-func (db *DB) IsFilePinned(hash []byte) bool {
-	isFilePinned := false
+func (db *DB) IsFilePinned(addr chunk.Address) bool {
 	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	i, err := db.pinFilesIndex.Get(item)
+	item.Address = addr
+	has, err := db.pinFilesIndex.Has(item)
 	if err != nil {
 		return false
 	}
-
-	if bytes.Equal(i.Address, hash) {
-		isFilePinned = true
-	}
-	return isFilePinned
+	return  has
 }
 
 // IsChunkPinned checks of a given chunk id pinned or not.
 // it check for an entry in pinIndex and takes a decision.
-func (db *DB) IsChunkPinned(hash []byte) bool {
+func (db *DB) IsChunkPinned(addr chunk.Address) bool {
 	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
-	_, err := db.pinIndex.Get(item)
-	return !(err != nil)
+	item.Address = addr
+	has, err := db.pinIndex.Has(item)
+	if err != nil {
+		return false
+	}
+	return has
 }
 
 // GetPinCounterOfChunk returns the number of times a given chunk is pinned.
-func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
+func (db *DB) GetPinCounterOfChunk(addr chunk.Address) (uint64, error) {
 	var item shed.Item
-	item.Address = make([]byte, len(hash))
-	copy(item.Address[:], hash[:])
+	item.Address = addr
 	i, err := db.pinIndex.Get(item)
 	if err != nil {
 		return 0, err
