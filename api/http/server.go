@@ -65,8 +65,8 @@ var (
 )
 
 const (
-	SwarmTagHeaderName = "x-swarm-tag"
-	SwarmPinContent    = "x-swarm-pin"
+	SwarmTagHeaderName = "x-swarm-tag"   // Presence of this in header indicates the tag
+	SwarmPinContent    = "x-swarm-pin"   // Presence of this in header indicates pinning required
 )
 
 type methodHandler map[string]http.Handler

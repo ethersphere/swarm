@@ -153,11 +153,7 @@ func (db *DB) IsPinnedFileRaw(addr chunk.Address) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	raw := false
-	if i.IsRaw > 0 {
-		raw = true
-	}
-	return raw, nil
+	return i.IsRaw > 0, nil
 }
 
 // IsFilePinned checks if a given root hash is pinned or not.

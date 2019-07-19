@@ -196,7 +196,7 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		// Get the existing pin counter of the chunk
 		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
 		if err != nil {
-			return ErrChunkNotPinned
+			return err
 		}
 
 		// Decrement the pin counter or

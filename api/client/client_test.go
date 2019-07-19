@@ -70,6 +70,7 @@ func TestClientUploadDownloadRawEncrypted(t *testing.T) {
 	testutil.CheckTag(t, tag, 1, 1, 0, 1)
 }
 
+// Pin a file while uploading of a RAW file and unpin it
 func TestPinWithRawUpload(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -85,6 +86,7 @@ func TestPinWithRawUpload(t *testing.T) {
 	checkIfUnpinned(t, srv, hash)
 }
 
+// Pin a file separately after uploading a RAW file and unpin it
 func TestPinAfterRawUpload(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -101,6 +103,7 @@ func TestPinAfterRawUpload(t *testing.T) {
 	checkIfUnpinned(t, srv, hash)
 }
 
+// Upload a RAW file then pin and unpin multiple times
 func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -125,6 +128,7 @@ func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
 	checkIfUnpinned(t, srv, hash)
 }
 
+// Pin a file during upload of a RAW encrypted file and then unpin it
 func TestPinUploadRawEncrypted(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -140,6 +144,7 @@ func TestPinUploadRawEncrypted(t *testing.T) {
 	checkIfUnpinned(t, srv, hash)
 }
 
+// Pin a file during upload of a RAW encrypted file and then unpin it
 func TestPinAfterUploadRawEncrypted(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -185,7 +190,7 @@ func testClientUploadDownloadRaw(srv *swarmhttp.TestSwarmServer, toEncrypt bool,
 }
 
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
-// manifests
+// manifests with pinning and unpinning multiple times
 func TestClientUploadDownloadFiles(t *testing.T) {
 	testClientUploadDownloadFiles(false, t)
 }
@@ -316,7 +321,7 @@ func newTestDirectory(t *testing.T) string {
 }
 
 // TestClientUploadDownloadDirectory tests uploading and downloading a
-// directory of files to a swarm manifest
+// directory of files to a swarm manifest with pinning and unpinning
 func TestClientUploadDownloadDirectory(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -382,7 +387,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	}
 }
 
-// TestClientFileList tests listing files in a swarm manifest
+// TestClientFileList tests listing files in a swarm manifest and pin unpin it
 func TestClientFileList(t *testing.T) {
 	testClientFileList(false, t)
 }
@@ -455,7 +460,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 }
 
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
-// upload
+// upload with pinning and unpinning
 func TestClientMultipartUpload(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()

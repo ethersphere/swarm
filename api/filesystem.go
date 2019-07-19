@@ -121,8 +121,6 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 			var hash storage.Address
 			var wait func(context.Context) error
 			ctx := context.TODO()
-
-			// Fixing the pin counter as DONT_PIN , since this is deprecated
 			hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt)
 			if err != nil {
 				errors[i] = err
@@ -167,7 +165,6 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 		trie.addEntry(entry, quitC)
 	}
 
-	// Fixing the pin counter as DONT_PIN , since this is deprecated
 	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {

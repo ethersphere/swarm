@@ -649,17 +649,12 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		return nil, "", err
 	}
 
-	// TODO_PIN: support pinning when creating a file in fuse
-	// For now, don't pin it
 	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 
-	// TODO_PIN: support pinning manifests when creating a file in fuse
-	// For now, don't pin it
-	// care should be taken to unpin the old manifest
 	newMkey, err := mw.Store()
 	if err != nil {
 		apiAddFileFail.Inc(1)
@@ -769,8 +764,6 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 		return "", err
 	}
 
-	// TODO_PIN: If a pinned manifest is modified then it needs to pinned too
-	// care should be taken to unpin the old manifest
 	newMkey, err := mw.Store()
 	if err != nil {
 		apiRmFileFail.Inc(1)
@@ -846,16 +839,12 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		ModTime:     time.Now(),
 	}
 
-	// TODO_PIN: If a pinned file is modified in fuse, pin it here too
-	// For now, this is ignored
 	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
 
-	// TODO_PIN: If a pinned file is modified in fuse, pin the new manifest too
-	// For now, this is ignored
 	newMkey, err := mw.Store()
 	if err != nil {
 		apiAppendFileFail.Inc(1)

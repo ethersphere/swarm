@@ -124,9 +124,9 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	})
 }
 
+// Pin a file, upload chunks to go past the gc limit to trigger GC,
+// check if the pinned files are still around
 func TestPinGC(t *testing.T) {
-
-	t.Helper()
 
 	chunkCount := 150
 	pinChunksCount := 50

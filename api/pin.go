@@ -101,8 +101,7 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
 
 	// Check if the root hash is already pinned
-	isFilePinned := p.db.IsFilePinned(chunk.Address(addr))
-	if !isFilePinned {
+	if !p.db.IsFilePinned(chunk.Address(addr)) {
 		if isRaw {
 			err = p.db.Set(context.TODO(), chunk.ModeSetRawFile, addr)
 		} else {
