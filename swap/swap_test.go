@@ -44,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -159,6 +160,56 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 	addBookings(swap, mixedBookings)
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
+}
+
+// TestResetBalance tests that balances are correctly reset
+func TestResetBalance(t *testing.T) {
+	// create a test swap accounts
+	creditorSwap, testDir1 := newTestSwap2(t)
+	debitorSwap, testDir2 := newTestSwap2(t)
+	defer os.RemoveAll(testDir1)
+	defer os.RemoveAll(testDir2)
+
+	ctx := context.Background()
+	testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	creditorSwap.backend.(*backends.SimulatedBackend).Commit()
+	debitorSwap.backend.(*backends.SimulatedBackend).Commit()
+
+	cPeer := newDummyPeerWithSpec(Spec)
+	dPeer := newDummyPeerWithSpec(Spec)
+	creditorPeerModelForDebitor := NewPeer(cPeer.Peer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitorPeerModelForCreditor := NewPeer(dPeer.Peer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
+
+	testAmount := int64(DefaultPaymentThreshold + 42)
+	creditorSwap.balances[debitorPeerModelForCreditor.ID()] = testAmount
+	debitorSwap.balances[creditorPeerModelForDebitor.ID()] = 0 - testAmount
+
+	creditorSwap.peers[debitorPeerModelForCreditor.ID()] = debitorPeerModelForCreditor
+	debitorSwap.peers[creditorPeerModelForDebitor.ID()] = creditorPeerModelForDebitor
+
+	debitorSwap.sendCheque(creditorPeerModelForDebitor.ID())
+	if debitorSwap.balances[creditorPeerModelForDebitor.ID()] != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditorPeerModelForDebitor.ID()])
+	}
+
+	var err error
+	cheque := debitorSwap.cheques[creditorPeerModelForDebitor.ID()]
+	if cheque == nil {
+		t.Fatal("expected to find a cheque, but it was empty")
+	}
+	msg := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
+	err = debitorPeerModelForCreditor.handleEmitChequeMsg(ctx, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if creditorSwap.balances[debitorPeerModelForCreditor.ID()] != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", creditorSwap.balances[debitorPeerModelForCreditor.ID()])
+	}
 }
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
@@ -277,6 +328,28 @@ func newTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*
 	return swap, dir
 }
 
+func newTestSwap2(t *testing.T) (*Swap, string) {
+	dir, err := ioutil.TempDir("", "swap_test_store")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateStore, err2 := state.NewDBStore(dir)
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	address := crypto.PubkeyToAddress(key.PublicKey)
+	backend := backends.NewSimulatedBackend(core.GenesisAlloc{
+		address: {Balance: big.NewInt(1000000000)},
+	}, 8000000)
+	swap := New(stateStore, key, address, backend)
+	return swap, dir
+}
+
 // create a test swap account
 // create a default empty backend
 // creates a stateStore for persistence and a Swap account
@@ -293,8 +366,14 @@ type dummyPeer struct {
 
 // creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeer() *dummyPeer {
+	return newDummyPeerWithSpec(nil)
+}
+
+// creates a dummy protocols.Peer with dummy MsgReadWriter
+func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
-	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
+	rw := &testutil.DummyMsgRW{}
+	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, spec)
 	dummy := &dummyPeer{
 		Peer: protoPeer,
 	}

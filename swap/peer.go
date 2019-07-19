@@ -103,8 +103,10 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg interface{}) error 
 
 	// TODO: check serial and balance are higher
 
-	// reset balance to zero, TODO: fix
-	sp.swap.resetBalance(sp.ID())
+	// reset balance by amount
+	// as this is done by the creditor, receiving the cheque, the amount should be negative,
+	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
+	sp.swap.resetBalance(sp.ID(), 0-int64(cheque.Amount))
 	// send confirmation
 	if err := sp.Send(ctx, &ConfirmMsg{}); err != nil {
 		log.Error("error while sending confirm msg", "peer", sp.ID().String(), "err", err.Error())
