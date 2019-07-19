@@ -18,7 +18,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -30,6 +30,11 @@ import (
 const (
 	PinVersion     = "1.0"
 	WorkerChanSize = 8
+)
+
+var (
+	errDecodingRootHash         = errors.New("error decoding root hash")
+	errFileNotUploadedToPin     = errors.New("file not uploaded")
 )
 
 
@@ -86,10 +91,10 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
 		err := p.db.Set(context.TODO(), chunk.ModeSetPin, chunkAddr)
 		if err != nil {
-			log.Error("Could not pin chunk. Address " + hex.EncodeToString(chunkAddr))
+			log.Error("Could not pin chunk. Address " + "Address", hex.EncodeToString(chunkAddr))
 			return err
 		} else {
-			log.Trace("Pinning chunk", "Address", hex.EncodeToString(chunkAddr))
+			log.Trace("Pinning chunk", "Address", "Address", hex.EncodeToString(chunkAddr))
 		}
 		return nil
 	}
@@ -104,8 +109,7 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 			err = p.db.Set(context.TODO(), chunk.ModeSetFile, addr)
 		}
 		if err != nil {
-			// TODO: if this happens, we should go back and revert the entire file's chunks
-			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
+			log.Error("Could not unpin root chunk.", "Address", hex.EncodeToString(addr))
 			return err
 		}
 	}
@@ -117,18 +121,18 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 // that are encountered on the way. The pre-requisite is that the file should
 // have been already pinned using the PinFiles function. This function can
 // be called only from an external command.
-func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
+func (p *PinAPI) UnpinFiles(rootHash string, credentials string) error {
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
-		log.Error("Error decoding root hash" + err.Error())
-		return
+		log.Error("Error decoding root hash", "Reason",  err.Error())
+		return err
 	}
 
 	isRawInDB, err := p.db.IsPinnedFileRaw(chunk.Address(addr))
 	if err != nil {
-		log.Error("Root hash is not pinned" + err.Error())
-		return
+		log.Error("Root hash is not pinned", "Reason",  err.Error())
+		return err
 	}
 
 	// Walk the root hash and unpin all the chunks
@@ -136,10 +140,10 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
 		err := p.db.Set(context.TODO(), chunk.ModeSetUnpin, chunkAddr)
 		if err != nil {
-			log.Error("Could not unpin chunk. Address " + hex.EncodeToString(chunkAddr))
+			log.Error("Could not unpin chunk", "Address",  hex.EncodeToString(chunkAddr))
 			return err
 		} else {
-			log.Trace("Unpinning chunk", "Address", fmt.Sprintf("%0x", chunkAddr))
+			log.Trace("Unpinning chunk", "Address", hex.EncodeToString(chunkAddr))
 		}
 		return nil
 	}
@@ -152,10 +156,11 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 	if !isRootChunkPinned {
 		err := p.db.Set(context.TODO(), chunk.ModeSetUnpinFile, addr)
 		if err != nil {
-			// TODO: if this happens, we should go back and revert the entire file's chunks
-			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
+			log.Error("Could not unpin root chunk", "Address", hex.EncodeToString(addr))
+			return err
 		}
 	}
+	return nil
 }
 
 // ListPinFiles functions logs information of all the files that are pinned
@@ -169,11 +174,11 @@ func (p *PinAPI) ListPinFiles() {
 
 		addr, err := hex.DecodeString(k)
 		if err != nil {
-			log.Error("Error decoding root hash" + err.Error())
+			log.Error("Error decoding root hash.", "Reason", err.Error())
 			return
 		}
 
-		// TODO: This iteration can drain CPU. Figure out a way to store size of the pinned file
+		// This iteration can drain CPU. Figure out a way to store size of the pinned file
 		// in the pinFileIndex itself by changing the refactoring the Set method to get additional parameters.
 		pinCounter, err := p.db.GetPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 
@@ -193,18 +198,18 @@ func (p *PinAPI) LogPinnedChunks(rootHash string, credentials string) {
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
-		log.Error("Error decoding root hash" + err.Error())
+		log.Error("Error decoding root hash", "Reason",  err.Error())
 		return
 	}
 
 	isRawInDB, err := p.db.IsPinnedFileRaw(chunk.Address(addr))
 	if err != nil {
-		log.Error("Root hash is not pinned" + err.Error())
+		log.Error("Root hash is not pinned", "Reason",  err.Error())
 		return
 	}
 
 	walkerFunction := func(ref storage.Reference) error {
-		log.Info("Chunk", "Address", fmt.Sprintf("%0x", ref))
+		log.Info("Chunk", "Address", hex.EncodeToString(ref))
 		return nil
 	}
 	p.walkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
@@ -217,7 +222,7 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
-		log.Error("Error decoding root hash" + err.Error())
+		log.Error("Error decoding root hash", "Reason", err.Error())
 		return
 	}
 
@@ -235,7 +240,7 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 				p.api.Decryptor(context.TODO(), credentials), nil)
 
 			if err != nil {
-				log.Error("Could not decode manifest. Reason: " + err.Error())
+				log.Error("Could not decode manifest.", "Reason",  err.Error())
 				return
 			}
 
@@ -243,7 +248,7 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 
 				fileAddr, err := hex.DecodeString(entry.Hash)
 				if err != nil {
-					log.Error("Error decoding hash present in manifest" + err.Error())
+					log.Error("Error decoding hash present in manifest", "Reason", err.Error())
 					return err
 				}
 
@@ -254,7 +259,7 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 			})
 
 			if err != nil {
-				log.Error("Error walking manifest. Reason: " + err.Error())
+				log.Error("Error walking manifest", "Reaon", err.Error())
 				return
 			}
 
@@ -299,14 +304,14 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 
 					chunkData, err := getter.Get(context.TODO(), ref)
 					if err != nil {
-						log.Error("Error getting chunk data from localstore.")
+						log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(ref))
 						close(doneChunkWorker)
 						return
 					}
 
 					datalen := len(chunkData)
 					if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
-						log.Error("Invalid chunk data from localstore.")
+						log.Error("Invalid chunk data from localstore.", "Address", hex.EncodeToString(ref))
 						close(doneChunkWorker)
 						return
 					}
@@ -340,7 +345,7 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 					err = executeFunc(ref)
 					if err != nil {
 						// TODO: if this happens, we should go back and revert the entire file's chunks
-						log.Error("Could not unpin chunk. Address " + fmt.Sprintf("%0x", ref))
+						log.Error("Could not unpin chunk.", "Address",  hex.EncodeToString(ref))
 					}
 				}()
 			}
@@ -396,17 +401,15 @@ func (p *PinAPI) GetAllChunksFromDB() map[string]int {
 // given root hash.
 func (p *PinAPI) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
 
-
-
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
-		log.Error("Error decoding root hash" + err.Error())
+		log.Error("Error decoding root hash", "Reason",  err.Error())
 		return nil
 	}
 
 	isRawInDB, err := p.db.IsPinnedFileRaw(chunk.Address(addr))
 	if err != nil {
-		log.Error("Root hash is not pinned" + err.Error())
+		log.Error("Root hash is not pinned", "Reason", err.Error())
 		return nil
 	}
 
