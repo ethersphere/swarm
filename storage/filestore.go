@@ -92,7 +92,6 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 		tag = chunk.NewTag(0, "ephemeral-retrieval-tag", 0)
 	}
 
-	// Pinning doesn't matter when retrieving a file
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag)
 	reader = TreeJoin(ctx, addr, getter, 0)
 	return

@@ -165,7 +165,7 @@ func (db *DB) IsFilePinned(addr chunk.Address) bool {
 	if err != nil {
 		return false
 	}
-	return  has
+	return has
 }
 
 // IsChunkPinned checks of a given chunk id pinned or not.

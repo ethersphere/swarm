@@ -129,9 +129,9 @@ func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
 
 // Used by the hash processor to create a data/tree chunk and send to storage
 type chunkJob struct {
-	key         Address
-	chunk       []byte
-	parentWg    *sync.WaitGroup
+	key      Address
+	chunk    []byte
+	parentWg *sync.WaitGroup
 }
 
 type PyramidChunker struct {
@@ -675,7 +675,7 @@ func (pc *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent
 
 	chunkWG.Add(1)
 	select {
-	case pc.jobC <- &chunkJob{pkey, chunkData[:size+8],chunkWG}:
+	case pc.jobC <- &chunkJob{pkey, chunkData[:size+8], chunkWG}:
 	case <-pc.quitC:
 	}
 

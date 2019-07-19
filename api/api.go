@@ -21,6 +21,7 @@ package api
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -28,13 +29,11 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"mime"
 	"net/http"
 	"path"
-	"strings"
-
-	"bytes"
-	"mime"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -47,7 +46,6 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
-
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -193,7 +191,8 @@ type API struct {
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags, pinAPI *PinAPI) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey,
+	tags *chunk.Tags, pinAPI *PinAPI) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,

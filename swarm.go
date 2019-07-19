@@ -216,9 +216,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	lnetStore := storage.NewLNetStore(self.netStore)
 	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
 
-	// Instantiate the pinAPI object with the already opened localstore
-	self.pinAPI = api.NewPinApi(localStore, self.config.FileStoreParams, tags)
-
 	log.Debug("Setup local storage")
 
 	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
@@ -232,6 +229,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
+	// Instantiate the pinAPI object with the already opened localstore
+	self.pinAPI = api.NewPinApi(localStore, self.config.FileStoreParams, tags)
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags, self.pinAPI)
 	self.pinAPI.SetApi(self.api)
 

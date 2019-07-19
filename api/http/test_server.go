@@ -62,16 +62,13 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 		t.Fatal(err)
 	}
 
-	pinAPI := api.NewPinApi(localStore, nil, tags)
-	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags, pinAPI)
-	pinAPI.SetApi(swarmApi)
+	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags, nil)
 	apiServer := httptest.NewServer(serverFunc(swarmApi))
 
 	tss := &TestSwarmServer{
 		Server:    apiServer,
 		FileStore: fileStore,
 		Tags:      tags,
-		PinAPI:    pinAPI,
 		dir:       swarmDir,
 		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
 		cleanup: func() {
@@ -92,7 +89,6 @@ type TestSwarmServer struct {
 	Hasher      storage.SwarmHash
 	FileStore   *storage.FileStore
 	Tags        *chunk.Tags
-	PinAPI      *api.PinAPI
 	dir         string
 	cleanup     func()
 	CurrentTime uint64
