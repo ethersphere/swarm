@@ -120,6 +120,7 @@ func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error
 		if err != nil {
 			return sim, err
 		}
+		defer client.Close()
 
 		if err := client.Call(nil, "admin_addPeer", to.Info().Enode); err != nil {
 			return sim, err

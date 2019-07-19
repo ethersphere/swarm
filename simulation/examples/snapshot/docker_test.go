@@ -24,8 +24,7 @@ func TestDockerSnapshotFromFile(t *testing.T) {
 	}
 
 	// Check hive output on the first node
-
-	node, err := sim.Get(simulation.NodeID("test-1"))
+	node, err := sim.Get(simulation.NodeID("test-0"))
 	if err != nil {
 		t.Error(err)
 	}
