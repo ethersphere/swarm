@@ -93,7 +93,7 @@ func getAdapterFromSnapshotConfig(snapshot *AdapterSnapshot) (Adapter, error) {
 }
 
 // NewSimulationFromSnapshot creates a simulation from a snapshot
-func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error) {
+func NewSimulationFromSnapshot(snapshot *Snapshot) (*Simulation, error) {
 	// Create adapter
 	adapter, err := getAdapterFromSnapshotConfig(snapshot.DefaultAdapter)
 	if err != nil {
@@ -190,7 +190,7 @@ func (s *AdapterSnapshot) detectConfigurationType() error {
 	return nil
 }
 
-func unmarshalSnapshot(data []byte, snapshot *SimulationSnapshot) error {
+func unmarshalSnapshot(data []byte, snapshot *Snapshot) error {
 	err := json.Unmarshal(data, snapshot)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func unmarshalSnapshot(data []byte, snapshot *SimulationSnapshot) error {
 	return nil
 }
 
-func LoadSnapshotFromFile(filePath string) (*SimulationSnapshot, error) {
+func LoadSnapshotFromFile(filePath string) (*Snapshot, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -223,7 +223,7 @@ func LoadSnapshotFromFile(filePath string) (*SimulationSnapshot, error) {
 		return nil, err
 	}
 
-	var snapshot SimulationSnapshot
+	var snapshot Snapshot
 	err = unmarshalSnapshot(bytes, &snapshot)
 	if err != nil {
 		return nil, err
@@ -348,8 +348,8 @@ func (s *Simulation) HTTPBaseAddr(id NodeID) (string, error) {
 }
 
 // Snapshot returns a snapshot of the simulation
-func (s *Simulation) Snapshot() (*SimulationSnapshot, error) {
-	snap := SimulationSnapshot{}
+func (s *Simulation) Snapshot() (*Snapshot, error) {
+	snap := Snapshot{}
 
 	// Default adapter snapshot
 	asnap, err := s.DefaultAdapter().Snapshot()

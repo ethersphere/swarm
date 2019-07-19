@@ -51,7 +51,7 @@ type NodeInfo struct {
 	PprofListen string // PProf listener address: e.g http://localhost:6060
 }
 
-type SimulationSnapshot struct {
+type Snapshot struct {
 	DefaultAdapter *AdapterSnapshot     `json:"defaultAdapter"`
 	Nodes          []NodeSnapshot       `json:"nodes"`
 	Connections    []ConnectionSnapshot `json:"connections"`
