@@ -127,7 +127,7 @@ func (s *Swap) DeploySuccess() string {
 
 // Add is the (sole) accounting function
 // Swap implements the protocols.Balance interface
-func (s *Swap) Add(honey int64, peer *protocols.Peer) (err error) {
+func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -144,14 +144,6 @@ func (s *Swap) Add(honey int64, peer *protocols.Peer) (err error) {
 		disconnectMessage := fmt.Sprintf("balance for peer %s is over the disconnect threshold %v, disconnecting", peer.ID().String(), s.disconnectThreshold)
 		log.Warn(disconnectMessage)
 		return errors.New(disconnectMessage)
-	}
-
-	// convert honey to ETH
-	var amount int64
-	amount, err = s.oracle.GetPrice(honey)
-	if err != nil {
-		log.Error("error getting price from oracle", "err", err)
-		return
 	}
 
 	// calculate new balance
@@ -242,8 +234,19 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance := s.balances[peer]
-	amount := -peerBalance
+	honey := -peerBalance
 
+	// convert honey to ETH
+	var amount int64
+	amount, err = s.oracle.GetPrice(honey)
+	if err != nil {
+		log.Error("error getting price from oracle", "err", err)
+		return nil, err
+	}
+
+	// we need to ignore the error check when loading from the StateStore,
+	// as an error might indicate that there is no existing cheque, which
+	// could mean it's the first interaction, which is absolutely valid
 	_ = s.loadCheque(peer)
 	lastCheque := s.cheques[peer]
 
@@ -264,7 +267,9 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	}
 	cheque.ChequeParams.Timeout = defaultCashInDelay
 	cheque.ChequeParams.Contract = s.owner.Contract
+	cheque.ChequeParams.Honey = uint64(honey)
 	cheque.Beneficiary = beneficiary
+
 	cheque.Sig, err = s.signContent(cheque)
 
 	return cheque, err

@@ -16,105 +16,81 @@
 
 package swap
 
-// TODO: Update this test.
-// We are no longer sending the cheque request messages, we send the cheques directly now.
+import (
+	"os"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+)
+
 /*
-TestRequestCheque tests that a peer will respond with a
-`EmitChequeMsg` containing a cheque for an expected amount
-if it sends a `RequestChequeMsg` is sent to it
+TestEmitCheque tests an end-to-end exchange between a debitor peer
+and its creditor. The debitor issues the cheque, the creditor receives it
+and responds with a confirmation
 */
-// func TestRequestCheque(t *testing.T) {
-// 	var err error
+func TestEmitCheque(t *testing.T) {
+	var err error
 
-// 	// setup test swap object
-// 	swap, dir := createTestSwap(t)
-// 	defer os.RemoveAll(dir)
+	// setup test swap object
+	swap, dir := newTestSwap(t)
+	defer os.RemoveAll(dir)
 
-// 	// dummy object so we can run the protocol
-// 	ss := swap
+	// setup the protocolTester, which will allow protocol testing by sending messages
+	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
 
-// 	// setup the protocolTester, which will allow protocol testing by sending messages
-// 	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, ss.run)
+	// shortcut to creditor node
+	debitor := protocolTester.Nodes[0]
+	creditor := protocolTester.Nodes[1]
 
-// 	// shortcut to creditor node
-// 	creditor := protocolTester.Nodes[0]
+	// set balance artifially
+	swap.balances[creditor.ID()] = -42
 
-// 	// set balance artifially
-// 	swap.balances[creditor.ID()] = -42
+	// create the expected cheque to be received
+	cheque := newTestCheque()
 
-// 	// create the expected cheque to be received
-// 	// NOTE: this may be improved, as it is essentially running the same
-// 	// code as in production
-// 	expectedCheque := swap.cheques[creditor.ID()]
-// 	expectedCheque = &Cheque{
-// 		ChequeParams: ChequeParams{
-// 			Serial:      uint64(1),
-// 			Amount:      uint64(42),
-// 			Timeout:     defaultCashInDelay,
-// 			Beneficiary: crypto.PubkeyToAddress(*creditor.Pubkey()),
-// 		},
-// 	}
+	// sign the cheque
+	cheque.Sig, err = swap.signContent(cheque)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	// sign the cheque
-// 	expectedCheque.Sig, err = swap.signContent(expectedCheque)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	// run the exchange:
+	// trigger a `ChequeRequestMsg`
+	// expect a `EmitChequeMsg` with a valid cheque
+	err = protocolTester.TestExchanges(p2ptest.Exchange{
+		Label: "TestRequestCheque",
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 1,
+				Msg: &EmitChequeMsg{
+					Cheque: cheque,
+				},
+				Peer: debitor.ID(),
+			},
+		},
+		Expects: []p2ptest.Expect{
+			{
+				Code: 0,
+				Msg: &HandshakeMsg{
+					ContractAddress: common.Address{},
+				},
+				Peer: creditor.ID(),
+			},
+			{
+				Code: 0,
+				Msg: &HandshakeMsg{
+					ContractAddress: common.Address{},
+				},
+				Peer: debitor.ID(),
+			},
+		},
+	})
 
-// 	// run the exchange:
-// 	// trigger a `ChequeRequestMsg`
-// 	// expect a `EmitChequeMsg` with a valid cheque
-// 	err = protocolTester.TestExchanges(p2ptest.Exchange{
-// 		Label: "TestRequestCheque",
-// 		Triggers: []p2ptest.Trigger{
-// 			{
-// 				Code: 0,
-// 				Msg: &ChequeRequestMsg{
-// 					crypto.PubkeyToAddress(*creditor.Pubkey()),
-// 				},
-// 				Peer: creditor.ID(),
-// 			},
-// 		},
-// 		Expects: []p2ptest.Expect{
-// 			{
-// 				Code: 1,
-// 				Msg: &EmitChequeMsg{
-// 					Cheque: expectedCheque,
-// 				},
-// 				Peer: creditor.ID(),
-// 			},
-// 		},
-// 	})
+	// there should be no error at this point
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	// there should be no error at this point
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	// now we request a new cheque;
-// 	// the peer though should have already reset the balance,
-// 	// so no new cheque should be issued
-// 	err = protocolTester.TestExchanges(p2ptest.Exchange{
-// 		Label: "TestRequestNoCheque",
-// 		Triggers: []p2ptest.Trigger{
-// 			{
-// 				Code: 0,
-// 				Msg: &ChequeRequestMsg{
-// 					crypto.PubkeyToAddress(*creditor.Pubkey()),
-// 				},
-// 				Peer: creditor.ID(),
-// 			},
-// 		},
-// 	})
-
-// 	//
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	// no new cheques should have been emitted
-// 	if len(swap.cheques) != 1 {
-// 		t.Fatalf("Expected unchanged number of cheques, but it changed: %d", len(swap.cheques))
-// 	}
-
-// }
+	// TODO: Test further exchanges
+}
