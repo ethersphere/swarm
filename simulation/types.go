@@ -31,7 +31,7 @@ type NodeConfig struct {
 	// Command line arguments
 	Args []string `json:"args"`
 	// Environment variables
-	Env []string `json:"env"`
+	Env []string `json:"env,omitempty"`
 	// Stdout and Stderr specify the nodes' standard output and error
 	Stdout io.Writer `json:"-"`
 	Stderr io.Writer `json:"-"`
@@ -52,13 +52,14 @@ type NodeInfo struct {
 }
 
 type SimulationSnapshot struct {
-	Adapter     AdapterSnapshot      `json:"adapter"`
-	Nodes       []NodeSnapshot       `json:"nodes"`
-	Connections []ConnectionSnapshot `json:"connections"`
+	DefaultAdapter *AdapterSnapshot     `json:"defaultAdapter"`
+	Nodes          []NodeSnapshot       `json:"nodes"`
+	Connections    []ConnectionSnapshot `json:"connections"`
 }
 
 type NodeSnapshot struct {
-	Config NodeConfig `json:"config"`
+	Config  NodeConfig       `json:"config"`
+	Adapter *AdapterSnapshot `json:"adapter,omitempty"`
 }
 
 type ConnectionSnapshot struct {

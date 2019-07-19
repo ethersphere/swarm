@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/simulation"
 )
 
@@ -12,6 +13,8 @@ func TestDockerSnapshotFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	spew.Dump(snap)
 
 	sim, err := simulation.NewSimulationFromSnapshot(snap)
 	if err != nil {

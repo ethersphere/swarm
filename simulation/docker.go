@@ -39,24 +39,24 @@ type DockerAdapter struct {
 type DockerAdapterConfig struct {
 	// BuildContext can be used to build a docker image
 	// from a Dockerfile and a context directory
-	BuildContext DockerBuildContext
+	BuildContext *DockerBuildContext `json:"build,omitempty"`
 	// DockerImage points to an existing docker image
 	// e.g. ethersphere/swarm:latest
-	DockerImage string
+	DockerImage string `json:"image,omitempty"`
 	// DaemonAddr is the docker daemon address
-	DaemonAddr string
+	DaemonAddr string `json:"daemonAddr,omitempty"`
 }
 
 // DockerBuildContext defines the build context to build
 // local docker images
 type DockerBuildContext struct {
 	// Dockefile is the path to the dockerfile
-	Dockerfile string
+	Dockerfile string `json:"dockerFile"`
 	// Directory is the directory that will be used
 	// in the context of a docker build
-	Directory string
+	Directory string `json:"directory"`
 	// Tag is used to tag the image
-	Tag string
+	Tag string `json:"tag"`
 }
 
 type DockerNode struct {
@@ -98,12 +98,12 @@ func IsDockerAvailable(daemonAddr string) bool {
 
 // NewDockerAdapter creates an ExecAdapter by receiving a DockerAdapterConfig
 func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
-	if config.BuildContext.Dockerfile != "" && config.DockerImage != "" {
+	if config.DockerImage != "" && config.BuildContext != nil {
 		return nil, fmt.Errorf("only one can be defined: BuildContext (%v) or DockerImage(%s)",
 			config.BuildContext, config.DockerImage)
 	}
 
-	if config.BuildContext.Dockerfile == "" && config.DockerImage == "" {
+	if config.DockerImage == "" && config.BuildContext != nil {
 		return nil, errors.New("required: BuildContext or ExecutablePath")
 	}
 
@@ -121,9 +121,9 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 	image := config.DockerImage
 
 	// Build docker image
-	if config.BuildContext.Dockerfile != "" {
+	if config.BuildContext != nil {
 		var err error
-		image, err = buildImage(config.BuildContext, config.DaemonAddr)
+		image, err = buildImage(*config.BuildContext, config.DaemonAddr)
 		if err != nil {
 			return nil, fmt.Errorf("could not build the docker image: %v", err)
 		}
@@ -319,9 +319,15 @@ func (n *DockerNode) Stop() error {
 }
 
 func (n *DockerNode) Snapshot() (NodeSnapshot, error) {
-	return NodeSnapshot{
+	snap := NodeSnapshot{
 		Config: n.config,
-	}, nil
+	}
+	adapterSnap, err := n.adapter.Snapshot()
+	if err != nil {
+		return snap, err
+	}
+	snap.Adapter = &adapterSnap
+	return snap, nil
 }
 
 func (n *DockerNode) containerName() string {

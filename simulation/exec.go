@@ -203,9 +203,15 @@ func (n *ExecNode) Stop() error {
 }
 
 func (n *ExecNode) Snapshot() (NodeSnapshot, error) {
-	return NodeSnapshot{
+	snap := NodeSnapshot{
 		Config: n.config,
-	}, nil
+	}
+	adapterSnap, err := n.adapter.Snapshot()
+	if err != nil {
+		return snap, err
+	}
+	snap.Adapter = &adapterSnap
+	return snap, nil
 }
 
 // ipcPath returns the path to the ipc socket

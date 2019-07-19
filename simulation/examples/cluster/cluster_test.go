@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/simulation"
-	"github.com/ethersphere/swarm/simulation/goclient"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -82,7 +81,7 @@ func TestCluster(t *testing.T) {
 }
 
 func startSimulation(t *testing.T, adapter simulation.Adapter, count int) {
-	sim := goclient.NewSimulation(adapter)
+	sim := simulation.NewSimulation(adapter)
 
 	defer sim.StopAll()
 

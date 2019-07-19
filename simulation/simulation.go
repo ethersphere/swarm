@@ -2,16 +2,23 @@ package simulation
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -63,23 +70,34 @@ func NewSimulation(adapter Adapter) *Simulation {
 	return sim
 }
 
-// NewSimulationFromSnapshot creates a simulation from a snapshot
-func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error) {
-	// Create adapter
+func getAdapterFromSnapshotConfig(snapshot *AdapterSnapshot) (Adapter, error) {
+	if snapshot == nil {
+		return nil, errors.New("snapshot can't be nil")
+	}
 	var adapter Adapter
 	var err error
-	switch t := snapshot.Adapter.Type; t {
+	switch t := snapshot.Type; t {
 	case "exec":
-		adapter, err = NewExecAdapter(snapshot.Adapter.Config.(ExecAdapterConfig))
+		adapter, err = NewExecAdapter(snapshot.Config.(ExecAdapterConfig))
 	case "docker":
-		adapter, err = NewDockerAdapter(snapshot.Adapter.Config.(DockerAdapterConfig))
+		adapter, err = NewDockerAdapter(snapshot.Config.(DockerAdapterConfig))
 	case "kubernetes":
-		adapter, err = NewKubernetesAdapter(snapshot.Adapter.Config.(KubernetesAdapterConfig))
+		adapter, err = NewKubernetesAdapter(snapshot.Config.(KubernetesAdapterConfig))
 	default:
 		return nil, fmt.Errorf("unknown adapter type: %s", t)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("could not initialize %s adapter: %v", snapshot.Adapter.Type, err)
+		return nil, fmt.Errorf("could not initialize %s adapter: %v", snapshot.Type, err)
+	}
+	return adapter, nil
+}
+
+// NewSimulationFromSnapshot creates a simulation from a snapshot
+func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error) {
+	// Create adapter
+	adapter, err := getAdapterFromSnapshotConfig(snapshot.DefaultAdapter)
+	if err != nil {
+		return nil, err
 	}
 	sim := &Simulation{
 		adapter: adapter,
@@ -88,8 +106,18 @@ func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error
 
 	// Loop over nodes and add them
 	for _, n := range snapshot.Nodes {
-		if err := sim.Init(n.Config); err != nil {
-			return sim, fmt.Errorf("failed to initialize node %v", err)
+		if n.Adapter == nil {
+			if err := sim.Init(n.Config); err != nil {
+				return sim, fmt.Errorf("failed to initialize node %v", err)
+			}
+		} else {
+			adapter, err := getAdapterFromSnapshotConfig(n.Adapter)
+			if err != nil {
+				return sim, fmt.Errorf("could not read adapter configureation for node %s: %v", n.Config.ID, err)
+			}
+			if err := sim.InitWithAdapter(n.Config, adapter); err != nil {
+				return sim, fmt.Errorf("failed to initialize node %s: %v", n.Config.ID, err)
+			}
 		}
 	}
 
@@ -129,6 +157,60 @@ func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error
 	return sim, nil
 }
 
+func (s *AdapterSnapshot) detectConfigurationType() error {
+	adapterconfig, err := json.Marshal(s.Config)
+	if err != nil {
+		return err
+	}
+	switch t := s.Type; t {
+	case "exec":
+		var config ExecAdapterConfig
+		err := json.Unmarshal(adapterconfig, &config)
+		if err != nil {
+			return err
+		}
+		s.Config = config
+	case "docker":
+		var config DockerAdapterConfig
+		err := json.Unmarshal(adapterconfig, &config)
+		if err != nil {
+			return err
+		}
+		s.Config = config
+	case "kubernetes":
+		var config KubernetesAdapterConfig
+		err := json.Unmarshal(adapterconfig, &config)
+		if err != nil {
+			return err
+		}
+		s.Config = config
+	default:
+		return fmt.Errorf("unknown adapter type: %s", t)
+	}
+	return nil
+}
+
+func unmarshalSnapshot(data []byte, snapshot *SimulationSnapshot) error {
+	err := json.Unmarshal(data, snapshot)
+	if err != nil {
+		return err
+	}
+
+	// snapshot.Adapter.Config will be of type map[string]interface{}
+	// we have to unmarshal it to the correct adapter configuration struct
+	if err := snapshot.DefaultAdapter.detectConfigurationType(); err != nil {
+		return err
+	}
+	for _, n := range snapshot.Nodes {
+		if n.Adapter != nil {
+			if err := n.Adapter.detectConfigurationType(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func LoadSnapshotFromFile(filePath string) (*SimulationSnapshot, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -142,40 +224,10 @@ func LoadSnapshotFromFile(filePath string) (*SimulationSnapshot, error) {
 	}
 
 	var snapshot SimulationSnapshot
-	err = json.Unmarshal(bytes, &snapshot)
+	err = unmarshalSnapshot(bytes, &snapshot)
 	if err != nil {
 		return nil, err
 	}
-
-	// snapshot.Adapter.Config will be of type map[string]interface{}
-	// we have to unmarshal it to the correct adapter configuration struct
-	adapterconfig, _ := json.Marshal(snapshot.Adapter.Config)
-	switch t := snapshot.Adapter.Type; t {
-	case "exec":
-		var config ExecAdapterConfig
-		err := json.Unmarshal(adapterconfig, &config)
-		if err != nil {
-			return nil, err
-		}
-		snapshot.Adapter.Config = config
-	case "docker":
-		var config DockerAdapterConfig
-		err := json.Unmarshal(adapterconfig, &config)
-		if err != nil {
-			return nil, err
-		}
-		snapshot.Adapter.Config = config
-	case "kubernetes":
-		var config KubernetesAdapterConfig
-		err := json.Unmarshal(adapterconfig, &config)
-		if err != nil {
-			return nil, err
-		}
-		snapshot.Adapter.Config = config
-	default:
-		return nil, fmt.Errorf("unknown adapter type: %s", t)
-	}
-
 	return &snapshot, nil
 }
 
@@ -193,13 +245,23 @@ func (s *Simulation) GetAll() []Node {
 	return s.nodes.LoadAll()
 }
 
+// DefaultAdapter returns the default adapter that the
+// simulation is configured with
+func (s *Simulation) DefaultAdapter() Adapter {
+	return s.adapter
+}
+
 // Init initializes a node with the NodeConfig
 func (s *Simulation) Init(config NodeConfig) error {
+	return s.InitWithAdapter(config, s.DefaultAdapter())
+}
+
+// Init initializes a node with the NodeConfig and the Adapter
+func (s *Simulation) InitWithAdapter(config NodeConfig, adapter Adapter) error {
 	if _, ok := s.nodes.Load(config.ID); ok {
 		return fmt.Errorf("a node with id %s already exists", config.ID)
 	}
-
-	node, err := s.adapter.NewNode(config)
+	node, err := adapter.NewNode(config)
 	if err != nil {
 		return fmt.Errorf("failed to create node: %v", err)
 	}
@@ -289,12 +351,12 @@ func (s *Simulation) HTTPBaseAddr(id NodeID) (string, error) {
 func (s *Simulation) Snapshot() (*SimulationSnapshot, error) {
 	snap := SimulationSnapshot{}
 
-	// Adapter snapshot
-	asnap, err := s.adapter.Snapshot()
+	// Default adapter snapshot
+	asnap, err := s.DefaultAdapter().Snapshot()
 	if err != nil {
 		return nil, fmt.Errorf("could not get adapter snapshot: %v", err)
 	}
-	snap.Adapter = asnap
+	snap.DefaultAdapter = &asnap
 
 	// Nodes snapshot
 	nodes := s.GetAll()
@@ -307,6 +369,13 @@ func (s *Simulation) Snapshot() (*SimulationSnapshot, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get nodes snapshot %s: %v", n.Info().ID, err)
 		}
+
+		// Don't need to specify the node's adapter snapshot if it's
+		// the same as the default adapters snapshot
+		if reflect.DeepEqual(asnap, *ns.Adapter) {
+			ns.Adapter = nil
+		}
+
 		snap.Nodes[idx] = ns
 
 		// Get connections
@@ -334,6 +403,179 @@ func (s *Simulation) Snapshot() (*SimulationSnapshot, error) {
 	}
 
 	return &snap, nil
+}
+
+func (s *Simulation) AddBootnode(id NodeID, args []string) (Node, error) {
+	a := []string{
+		"--bootnode-mode",
+		"--bootnodes", "",
+	}
+	a = append(a, args...)
+	return s.AddNode(id, a)
+}
+
+func (s *Simulation) AddNode(id NodeID, args []string) (Node, error) {
+	bzzkey, err := randomHexKey()
+	if err != nil {
+		return nil, err
+	}
+	nodekey, err := randomHexKey()
+	if err != nil {
+		return nil, err
+	}
+	a := []string{
+		"--bzzkeyhex", bzzkey,
+		"--nodekeyhex", nodekey,
+	}
+	a = append(a, args...)
+	cfg := NodeConfig{
+		ID:   id,
+		Args: a,
+		// TODO: Figure out how to handle logs when using AddNode(...)
+		Stdout: ioutil.Discard,
+		Stderr: ioutil.Discard,
+	}
+	err = s.Init(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.Start(id)
+	if err != nil {
+		return nil, err
+	}
+	node, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func (s *Simulation) AddNodes(idPrefix string, count int, args []string) ([]Node, error) {
+	g, _ := errgroup.WithContext(context.Background())
+
+	idFormat := "%s-%d"
+
+	for i := 0; i < count; i++ {
+		id := NodeID(fmt.Sprintf(idFormat, idPrefix, i))
+		g.Go(func() error {
+			node, err := s.AddNode(id, args)
+			if err != nil {
+				log.Warn("Failed to add node", "id", id, "err", err.Error())
+			} else {
+				log.Info("Added node", "id", id, "enode", node.Info().Enode)
+			}
+			return err
+		})
+	}
+	err := g.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]Node, count)
+	for i := 0; i < count; i++ {
+		id := NodeID(fmt.Sprintf(idFormat, idPrefix, i))
+		nodes[i], err = s.Get(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nodes, nil
+}
+
+func (s *Simulation) CreateClusterWithBootnode(idPrefix string, count int, args []string) ([]Node, error) {
+	bootnode, err := s.AddBootnode(NodeID(fmt.Sprintf("%s-bootnode", idPrefix)), args)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeArgs := []string{
+		"--bootnodes", bootnode.Info().Enode,
+	}
+	nodeArgs = append(nodeArgs, args...)
+
+	n, err := s.AddNodes(idPrefix, count, nodeArgs)
+	if err != nil {
+		return nil, err
+	}
+	nodes := []Node{bootnode}
+	nodes = append(nodes, n...)
+	return nodes, nil
+}
+
+func (s *Simulation) WaitForHealthyNetwork() error {
+	nodes := s.GetAll()
+
+	// Generate RPC clients
+	var clients struct {
+		RPC []*rpc.Client
+		mu  sync.Mutex
+	}
+	clients.RPC = make([]*rpc.Client, len(nodes))
+
+	g, _ := errgroup.WithContext(context.Background())
+
+	for idx, node := range nodes {
+		node := node
+		idx := idx
+		g.Go(func() error {
+			id := node.Info().ID
+			client, err := s.RPCClient(id)
+			if err != nil {
+				return err
+			}
+			clients.mu.Lock()
+			clients.RPC[idx] = client
+			clients.mu.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	for _, c := range clients.RPC {
+		defer c.Close()
+	}
+
+	// Generate addresses for PotMap
+	addrs := [][]byte{}
+	for _, node := range nodes {
+		byteaddr, err := hexutil.Decode(node.Info().BzzAddr)
+		if err != nil {
+			return err
+		}
+		addrs = append(addrs, byteaddr)
+	}
+
+	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
+
+	log.Info("Waiting for healthy kademlia...")
+
+	for i := 0; i < len(nodes); {
+		healthy := &network.Health{}
+		if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Info().BzzAddr[2:]]); err != nil {
+			return err
+		}
+		if healthy.Healthy() {
+			i++
+		} else {
+			log.Info("Node isn't healthy yet, checking again all nodes...", "id", nodes[i].Info().ID)
+			time.Sleep(500 * time.Millisecond)
+			i = 0 // Start checking all nodes again
+		}
+	}
+	log.Info("Healthy kademlia on all nodes")
+	return nil
+}
+
+func randomHexKey() (string, error) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		return "", err
+	}
+	keyhex := hex.EncodeToString(crypto.FromECDSA(key))
+	return keyhex, nil
 }
 
 func removeNetworkAddressFromEnode(enode string) string {

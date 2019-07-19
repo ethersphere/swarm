@@ -46,10 +46,10 @@ type KubernetesAdapterConfig struct {
 	Namespace string `json:"namespace"`
 	// BuildContext can be used to build a docker image
 	// from a Dockerfile and a context directory
-	BuildContext KubernetesBuildContext `json:"build"`
+	BuildContext *KubernetesBuildContext `json:"build,omitempty"`
 	// DockerImage points to an existing docker image
 	// e.g. ethersphere/swarm:latest
-	DockerImage string `json:"image"`
+	DockerImage string `json:"image,omitempty"`
 }
 
 type KubernetesBuildContext struct {
@@ -83,7 +83,7 @@ func DefaultKubernetesAdapterConfig() KubernetesAdapterConfig {
 }
 
 func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, error) {
-	if config.BuildContext.Dockerfile != "" && config.DockerImage != "" {
+	if config.DockerImage != "" && config.BuildContext != nil {
 		return nil, fmt.Errorf("only one can be defined: BuildContext (%v) or DockerImage(%s)",
 			config.BuildContext, config.DockerImage)
 	}
@@ -109,7 +109,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 	image := config.DockerImage
 
 	// Build and push container image
-	if config.BuildContext.Dockerfile != "" {
+	if config.BuildContext != nil {
 		var err error
 		// Build image
 		image, err = buildImage(DockerBuildContext{
@@ -373,9 +373,15 @@ func (n *KubernetesNode) Stop() error {
 }
 
 func (n *KubernetesNode) Snapshot() (NodeSnapshot, error) {
-	return NodeSnapshot{
+	snap := NodeSnapshot{
 		Config: n.config,
-	}, nil
+	}
+	adapterSnap, err := n.adapter.Snapshot()
+	if err != nil {
+		return snap, err
+	}
+	snap.Adapter = &adapterSnap
+	return snap, nil
 }
 
 func (n *KubernetesNode) podName() string {
