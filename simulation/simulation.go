@@ -22,25 +22,25 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type NodeMap struct {
+type nodeMap struct {
 	sync.RWMutex
 	internal map[NodeID]Node
 }
 
-func NewNodeMap() *NodeMap {
-	return &NodeMap{
+func newNodeMap() *nodeMap {
+	return &nodeMap{
 		internal: make(map[NodeID]Node),
 	}
 }
 
-func (nm *NodeMap) Load(key NodeID) (value Node, ok bool) {
+func (nm *nodeMap) Load(key NodeID) (value Node, ok bool) {
 	nm.RLock()
 	result, ok := nm.internal[key]
 	nm.RUnlock()
 	return result, ok
 }
 
-func (nm *NodeMap) LoadAll() []Node {
+func (nm *nodeMap) LoadAll() []Node {
 	nm.RLock()
 	v := []Node{}
 	for _, node := range nm.internal {
@@ -50,7 +50,7 @@ func (nm *NodeMap) LoadAll() []Node {
 	return v
 }
 
-func (nm *NodeMap) Store(key NodeID, value Node) {
+func (nm *nodeMap) Store(key NodeID, value Node) {
 	nm.Lock()
 	nm.internal[key] = value
 	nm.Unlock()
@@ -58,14 +58,14 @@ func (nm *NodeMap) Store(key NodeID, value Node) {
 
 type Simulation struct {
 	adapter Adapter
-	nodes   *NodeMap
+	nodes   *nodeMap
 }
 
 // NewSimulation creates a new simulation given an adapter
 func NewSimulation(adapter Adapter) *Simulation {
 	sim := &Simulation{
 		adapter: adapter,
-		nodes:   NewNodeMap(),
+		nodes:   newNodeMap(),
 	}
 	return sim
 }
@@ -101,7 +101,7 @@ func NewSimulationFromSnapshot(snapshot *SimulationSnapshot) (*Simulation, error
 	}
 	sim := &Simulation{
 		adapter: adapter,
-		nodes:   NewNodeMap(),
+		nodes:   newNodeMap(),
 	}
 
 	// Loop over nodes and add them
