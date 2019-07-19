@@ -204,15 +204,15 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			db.pinIndex.DeleteInBatch(batch, item)
 		}
 
-	case chunk.ModeSetPinRootHashRaw:
+	case chunk.ModeSetRawFile:
 		item.IsRaw = 1
 		db.pinFilesIndex.PutInBatch(batch, item)
 
-	case chunk.ModeSetPinRootHash:
+	case chunk.ModeSetFile:
 		item.IsRaw = 0
 		db.pinFilesIndex.PutInBatch(batch, item)
 
-	case chunk.ModeSetUnpinRootHash:
+	case chunk.ModeSetUnpinFile:
 		db.pinFilesIndex.DeleteInBatch(batch, item)
 
 	default:

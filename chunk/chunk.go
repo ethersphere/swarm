@@ -192,12 +192,12 @@ func (m ModeSet) String() string {
 		return "ModeSetPin"
 	case ModeSetUnpin:
 		return "ModeSetUnpin"
-	case ModeSetPinRootHashRaw:
-		return "ModeSetPinRootHashRaw"
-	case ModeSetPinRootHash:
-		return "ModeSetPinRootHash"
-	case ModeSetUnpinRootHash:
-		return "ModeSetUnpinRootHash"
+	case ModeSetRawFile:
+		return "ModeSetRawFile"
+	case ModeSetFile:
+		return "ModeSetFile"
+	case ModeSetUnpinFile:
+		return "ModeSetUnpinFile"
 	default:
 		return "Unknown"
 	}
@@ -215,14 +215,14 @@ const (
 	ModeSetPin
 	// ModeSetUnpin: when a chunk is unpinned using a command locally
 	ModeSetUnpin
-	// ModeSetPinRootHashRaw: When a root hash of a RAW file needs to be stored
+	// ModeSetRawFile: When a root hash of a RAW file needs to be stored
 	// (to display later using list pins command)
-	ModeSetPinRootHashRaw
-	// ModeSetPinRootHash: When a root hash of a manifest based file needs to be stored
+	ModeSetRawFile
+	// ModeSetFile: When a root hash of a manifest based file needs to be stored
 	// (to display later using list pins command)
-	ModeSetPinRootHash
-	// ModeSetUnpinRootHash: When a root hash of a file is unpinned
-	ModeSetUnpinRootHash
+	ModeSetFile
+	// ModeSetUnpinFile: When a root hash of a file is unpinned
+	ModeSetUnpinFile
 )
 
 // Descriptor holds information required for Pull syncing. This struct

@@ -32,6 +32,8 @@ const (
 	WorkerChanSize = 8
 )
 
+
+// PinAPI is the main object which implements all things pinning.
 type PinAPI struct {
 	db         *localstore.DB
 	api        *API
@@ -97,9 +99,9 @@ func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error
 	isFilePinned := p.db.IsFilePinned(chunk.Address(addr))
 	if !isFilePinned {
 		if isRaw {
-			err = p.db.Set(context.TODO(), chunk.ModeSetPinRootHashRaw, addr)
+			err = p.db.Set(context.TODO(), chunk.ModeSetRawFile, addr)
 		} else {
-			err = p.db.Set(context.TODO(), chunk.ModeSetPinRootHash, addr)
+			err = p.db.Set(context.TODO(), chunk.ModeSetFile, addr)
 		}
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
@@ -148,7 +150,7 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 	// so remove the root hash from pinFilesIndex
 	isRootChunkPinned := p.db.IsChunkPinned(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 	if !isRootChunkPinned {
-		err := p.db.Set(context.TODO(), chunk.ModeSetUnpinRootHash, addr)
+		err := p.db.Set(context.TODO(), chunk.ModeSetUnpinFile, addr)
 		if err != nil {
 			// TODO: if this happens, we should go back and revert the entire file's chunks
 			log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", addr))
@@ -375,8 +377,8 @@ func (p *PinAPI) getNoOfChunks(rootHash string, isRaw bool, credentials string) 
 // Functions used in testing
 //
 
-// GetPinnedFiles is used in testing to get all the pinned file root hashes and weather it
-// is a Raw file or a manifest based collection.
+// GetPinnedFiles is used in testing to get root hashes of all the pinned content
+// including info whether they are raw files or manifests
 func (p *PinAPI) GetPinnedFiles() map[string]uint8 {
 	return p.db.GetPinFilesIndex()
 }
