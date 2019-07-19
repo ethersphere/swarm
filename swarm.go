@@ -85,7 +85,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
-	pinApi            *api.PinApi // PinAPI object implements all pinning related commands
+	pinAPI            *api.PinAPI // PinAPI object implements all pinning related commands
 
 	tracerClose io.Closer
 }
@@ -217,7 +217,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
 
 	// Instantiate the pinAPI object with the already opened localstore
-	self.pinApi = api.NewPinApi(localStore, self.config.FileStoreParams, tags)
+	self.pinAPI = api.NewPinApi(localStore, self.config.FileStoreParams, tags)
 
 	log.Debug("Setup local storage")
 
@@ -232,8 +232,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags, self.pinApi)
-	self.pinApi.SetApi(self.api)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags, self.pinAPI)
+	self.pinAPI.SetApi(self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
@@ -534,7 +534,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "pin",
 			Version:   api.PinVersion,
-			Service:   s.pinApi,
+			Service:   s.pinAPI,
 			Public:    false,
 		},
 	}

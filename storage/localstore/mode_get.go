@@ -145,14 +145,18 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	return db.shed.WriteBatch(batch)
 }
 
+// IsHashPresentInRetrievalDataIndex: This function is used to check if a given hash is present in the DB or not.
+// This is used to see if the file is already uploaded before pinning
 func (db *DB) IsHashPresentInRetrievalDataIndex(hash []byte) bool {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
 	copy(item.Address[:], hash[:])
 	_, err := db.retrievalDataIndex.Get(item)
-	return !(err != nil)
+	return (err == nil)
 }
 
+// IsPinnedFileRaw checks if a given root hash is pinned as a Raw file or not.
+// This infrmation is stored in pinFilesIndex as part of pinning the file
 func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
@@ -168,6 +172,8 @@ func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 	return raw, nil
 }
 
+// IsFilePinned checks if a given root hash is pinned or not.
+// It check for the given root hash in the pinFilesIndex
 func (db *DB) IsFilePinned(hash []byte) bool {
 	isFilePinned := false
 	var item shed.Item
@@ -184,6 +190,8 @@ func (db *DB) IsFilePinned(hash []byte) bool {
 	return isFilePinned
 }
 
+// IsChunkPinned checks of a given chunk id pinned or not.
+// it check for an entry in pinIndex and takes a decision.
 func (db *DB) IsChunkPinned(hash []byte) bool {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
@@ -192,6 +200,7 @@ func (db *DB) IsChunkPinned(hash []byte) bool {
 	return !(err != nil)
 }
 
+// GetPinCounterOfChunk returns the number of times a given chunk is pinned.
 func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
@@ -203,10 +212,9 @@ func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 	return i.PinCounter, nil
 }
 
-// testHookUpdateGC is a hook that can provide
-// information when a garbage collection index is updated.
-var testHookUpdateGC func()
-
+// GetPinFilesIndex collects all the root hashes that are pinned and returns it.
+// This is used in places like ListPinFiles to get the number of chunks
+// present in a pinned file.
 func (db *DB) GetPinFilesIndex() map[string]uint8 {
 	pinnedFiles := make(map[string]uint8)
 	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
@@ -216,16 +224,13 @@ func (db *DB) GetPinFilesIndex() map[string]uint8 {
 	return pinnedFiles
 }
 
-// Used in Testing
-func (db *DB) GetPinnedChunks() map[string]uint64 {
-	pinnedChunks := make(map[string]uint64)
-	_ = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		pinnedChunks[hex.EncodeToString(item.Address)] = item.PinCounter
-		return false, nil
-	}, nil)
-	return pinnedChunks
-}
+// testHookUpdateGC is a hook that can provide
+// information when a garbage collection index is updated.
+var testHookUpdateGC func()
 
+// GetAllChunksInDB is used only in testing.
+// This function returns all the chunks that are present in the DB irrespective of
+// whether they are pinned or not. This is used in testing as a truth data set for pinning.
 func (db *DB) GetAllChunksInDB() map[string]int {
 	chunksInDB := make(map[string]int)
 	_ = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
@@ -233,13 +238,4 @@ func (db *DB) GetAllChunksInDB() map[string]int {
 		return false, nil
 	}, nil)
 	return chunksInDB
-}
-
-func (db *DB) GetAllChunksInGCIndex() map[string]string {
-	chunksInGC := make(map[string]string)
-	_ = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		chunksInGC[hex.EncodeToString(item.Address)] = time.Unix(item.AccessTimestamp, 0).Format(time.RFC822Z)
-		return false, nil
-	}, nil)
-	return chunksInGC
 }

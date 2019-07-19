@@ -188,18 +188,18 @@ type API struct {
 	fileStore *storage.FileStore
 	dns       Resolver
 	Tags      *chunk.Tags
-	PinApi    *PinApi
+	PinAPI    *PinAPI
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags, pinApi *PinApi) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags, pinAPI *PinAPI) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
 		feed:      feedHandler,
 		Tags:      tags,
-		PinApi:    pinApi,
+		PinAPI:    pinAPI,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -402,6 +402,8 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 	return
 }
 
+// Delete handles removing a file from the manifest.
+// This creates a new manifest without the given path
 func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
 	apiDeleteCount.Inc(1)
 	uri, err := Parse("bzz:/" + addr)

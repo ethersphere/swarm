@@ -179,13 +179,16 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		// Get the existing pin counter of the chunk
 		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
 		if err != nil {
+			// If this is not present in DB, then its a new entry
 			existingPinCounter = 0
 		}
 
+		// Otherwise increase the existng counter by 1
 		item.PinCounter = existingPinCounter + 1
+
 		db.pinIndex.PutInBatch(batch, item)
 
-	case chunk.ModeUnPinChunk:
+	case chunk.ModeUnpinChunk:
 		// Get the existing pin counter of the chunk
 		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
 		if err != nil {

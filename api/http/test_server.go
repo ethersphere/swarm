@@ -92,7 +92,7 @@ type TestSwarmServer struct {
 	Hasher      storage.SwarmHash
 	FileStore   *storage.FileStore
 	Tags        *chunk.Tags
-	PinAPI      *api.PinApi
+	PinAPI      *api.PinAPI
 	dir         string
 	cleanup     func()
 	CurrentTime uint64

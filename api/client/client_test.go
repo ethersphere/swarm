@@ -78,11 +78,11 @@ func TestPinWithRawUpload(t *testing.T) {
 	hash := testClientUploadDownloadRaw(srv, false, t, data, true)
 
 	// Check if the file is pinned
-	CheckIfPinned(t, srv, hash, nil, 1, true)
+	checkIfPinned(t, srv, hash, nil, 1, true)
 
 	// Unpin once again and see if the file is totally unpinned
 	srv.PinAPI.UnpinFiles(hash, "")
-	CheckIfUnpinned(t, srv, hash)
+	checkIfUnpinned(t, srv, hash)
 }
 
 func TestPinAfterRawUpload(t *testing.T) {
@@ -94,11 +94,11 @@ func TestPinAfterRawUpload(t *testing.T) {
 
 	// Pin the file for first time and check if the file is pinned
 	srv.PinAPI.PinFiles(hash, true, "")
-	CheckIfPinned(t, srv, hash, nil, 1, true)
+	checkIfPinned(t, srv, hash, nil, 1, true)
 
 	// Unpin once again and see if the file is totally unpinned
 	srv.PinAPI.UnpinFiles(hash, "")
-	CheckIfUnpinned(t, srv, hash)
+	checkIfUnpinned(t, srv, hash)
 }
 
 func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
@@ -110,19 +110,19 @@ func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
 
 	// Pin the file for first time and check if the file is pinned
 	srv.PinAPI.PinFiles(hash, true, "")
-	CheckIfPinned(t, srv, hash, nil, 1, true)
+	checkIfPinned(t, srv, hash, nil, 1, true)
 
 	// pin it once more and check if pin counter is increased by 2
 	srv.PinAPI.PinFiles(hash, true, "")
-	CheckIfPinned(t, srv, hash, nil, 2, true)
+	checkIfPinned(t, srv, hash, nil, 2, true)
 
 	// Unpin and check if the pin counter decrements to 1
 	srv.PinAPI.UnpinFiles(hash, "")
-	CheckIfPinned(t, srv, hash, nil, 1, true)
+	checkIfPinned(t, srv, hash, nil, 1, true)
 
 	// Unpin once again and see if the file is totally unpinned
 	srv.PinAPI.UnpinFiles(hash, "")
-	CheckIfUnpinned(t, srv, hash)
+	checkIfUnpinned(t, srv, hash)
 }
 
 func TestPinUploadRawEncrypted(t *testing.T) {
@@ -133,11 +133,11 @@ func TestPinUploadRawEncrypted(t *testing.T) {
 	hash := testClientUploadDownloadRaw(srv, true, t, data, true)
 
 	// Check if the file is pinned
-	CheckIfPinned(t, srv, hash, nil, 1, true)
+	checkIfPinned(t, srv, hash, nil, 1, true)
 
 	// Unpin once again and see if the file is totally unpinned
 	srv.PinAPI.UnpinFiles(hash, "")
-	CheckIfUnpinned(t, srv, hash)
+	checkIfUnpinned(t, srv, hash)
 }
 
 func TestPinAfterUploadRawEncrypted(t *testing.T) {
@@ -149,11 +149,11 @@ func TestPinAfterUploadRawEncrypted(t *testing.T) {
 
 	// Pin the file for first time and check if the file is pinned
 	srv.PinAPI.PinFiles(hash, true, "")
-	CheckIfPinned(t, srv, hash, nil, 1, true)
+	checkIfPinned(t, srv, hash, nil, 1, true)
 
 	// Unpin once again and see if the file is totally unpinned
 	srv.PinAPI.UnpinFiles(hash, "")
-	CheckIfUnpinned(t, srv, hash)
+	checkIfUnpinned(t, srv, hash)
 }
 
 func testClientUploadDownloadRaw(srv *swarmhttp.TestSwarmServer, toEncrypt bool, t *testing.T, data []byte, toPin bool) string {
@@ -242,23 +242,23 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 	pinRoot := upload("", "", pinData, false)
 
 	// None of the chunks should be pinned
-	IsNoChunksPinned(t, srv, pinRoot)
+	isNoChunksPinned(t, srv, pinRoot)
 
 	// Pin and check if the file is pinned
 	srv.PinAPI.PinFiles(pinRoot, false, "")
-	CheckIfPinned(t, srv, pinRoot, nil, 1, false)
+	checkIfPinned(t, srv, pinRoot, nil, 1, false)
 
 	// Pin and check again
 	srv.PinAPI.PinFiles(pinRoot, false, "")
-	CheckIfPinned(t, srv, pinRoot, nil, 2, false)
+	checkIfPinned(t, srv, pinRoot, nil, 2, false)
 
 	// Unpin and check again
 	srv.PinAPI.UnpinFiles(pinRoot, "")
-	CheckIfPinned(t, srv, pinRoot, nil, 1, false)
+	checkIfPinned(t, srv, pinRoot, nil, 1, false)
 
 	// Unpin one last time and see if none of the chunks are pinned
 	srv.PinAPI.UnpinFiles(pinRoot, "")
-	IsNoChunksPinned(t, srv, pinRoot)
+	isNoChunksPinned(t, srv, pinRoot)
 
 	// upload a file to the root of a manifest
 	rootData := []byte("some-data")
@@ -338,7 +338,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 	// Pin the file for first time and check if the file is pinned
 	srv.PinAPI.PinFiles(hash, false, "")
-	CheckIfPinned(t, srv, hash, []byte(defaultPath), 1, false)
+	checkIfPinned(t, srv, hash, []byte(defaultPath), 1, false)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string, expected []byte) {
@@ -405,11 +405,11 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 	}
 
 	// File pinned during upload.. check if this is pinned properly
-	CheckIfPinned(t, srv, hash, nil, 1, false)
+	checkIfPinned(t, srv, hash, nil, 1, false)
 
 	// Pin the file for second time and check if this is pinned
 	srv.PinAPI.PinFiles(hash, false, "")
-	CheckIfPinned(t, srv, hash, nil, 2, false)
+	checkIfPinned(t, srv, hash, nil, 2, false)
 
 	ls := func(prefix string) []string {
 		list, err := client.List(hash, prefix, "")
@@ -492,7 +492,7 @@ func TestClientMultipartUpload(t *testing.T) {
 	testutil.CheckTag(t, tag, 9, 9, 0, 9)
 
 	// File pinned during upload.. check if this is pinned properly
-	CheckIfPinned(t, srv, hash, nil, 1, false)
+	checkIfPinned(t, srv, hash, nil, 1, false)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {

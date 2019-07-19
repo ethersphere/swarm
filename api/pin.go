@@ -32,7 +32,7 @@ const (
 	WorkerChanSize = 8
 )
 
-type PinApi struct {
+type PinAPI struct {
 	db         *localstore.DB
 	api        *API
 	fileParams *storage.FileStoreParams
@@ -40,10 +40,10 @@ type PinApi struct {
 	hashSize   int
 }
 
-func NewPinApi(lstore *localstore.DB, params *storage.FileStoreParams, tags *chunk.Tags) *PinApi {
+func NewPinApi(lstore *localstore.DB, params *storage.FileStoreParams, tags *chunk.Tags) *PinAPI {
 
 	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
-	pinApi := &PinApi{
+	pinApi := &PinAPI{
 		db:         lstore,
 		fileParams: params,
 		tag:        tags,
@@ -53,19 +53,19 @@ func NewPinApi(lstore *localstore.DB, params *storage.FileStoreParams, tags *chu
 	return pinApi
 }
 
-func (p *PinApi) SetApi(api *API) {
+func (p *PinAPI) SetApi(api *API) {
 	p.api = api
 }
 
 // PinFiles is used to pin a RAW file or a collection (which hash manifest's)
 // to the local Swarm node. It takes the root hash as the argument and walks
-// down the merkle tree and pin's all the chunks that are encountered on the
-// way. It pins both the data chunk and tree chunks. The pre-requisite is that
+// down the merkle tree and pin all the chunks that are encountered on the
+// way. It pins both data chunk and tree chunks. The pre-requisite is that
 // the file should be present in the local database. This function is called
 // from two places 1) Just after the file is uploaded 2) anytime after
 // uploading the file using the pin command. This function can pin both
 // encrypted and non-encrypted files.
-func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error {
+func (p *PinAPI) PinFiles(rootHash string, isRaw bool, credentials string) error {
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
@@ -90,7 +90,7 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 		}
 		return nil
 	}
-	p.WalkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
 
 	// Check if the root hash is already pinned
 	isFilePinned := p.db.IsFilePinned(addr)
@@ -114,7 +114,7 @@ func (p *PinApi) PinFiles(rootHash string, isRaw bool, credentials string) error
 // that are encountered on the way. The pre-requisite is that the file should
 // have been already pinned using the PinFiles function. This function can
 // be called only from an external command.
-func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
+func (p *PinAPI) UnpinFiles(rootHash string, credentials string) {
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
@@ -131,7 +131,7 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 	// Walk the root hash and unpin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.Set(context.TODO(), chunk.ModeUnPinChunk, chunkAddr)
+		err := p.db.Set(context.TODO(), chunk.ModeUnpinChunk, chunkAddr)
 		if err != nil {
 			log.Error("Could not unpin chunk. Address " + hex.EncodeToString(chunkAddr))
 			return err
@@ -140,7 +140,7 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 		}
 		return nil
 	}
-	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
+	p.walkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
 
 	// Check if the root chunk exists in pinIndex
 	// If it is not.. then the pin counter became 0
@@ -160,7 +160,7 @@ func (p *PinApi) UnpinFiles(rootHash string, credentials string) {
 // or collection. It also display two vital information
 //     1) Size of the pinned file or collection
 //     2) the number of times that particular file or collection is pinned.
-func (p *PinApi) ListPinFiles() {
+func (p *PinAPI) ListPinFiles() {
 	pinnedFiles := p.db.GetPinFilesIndex()
 	for k, v := range pinnedFiles {
 
@@ -175,13 +175,43 @@ func (p *PinApi) ListPinFiles() {
 		if v > 0 {
 			isRaw = true
 		}
-		noOfChunks := p.GetNoOfChunks(k, isRaw, "")
+		noOfChunks := p.getNoOfChunks(k, isRaw, "")
 
 		log.Info("Pinned file", "Address", k, "NoOfChunks", noOfChunks, "pinCounter", pinCounter)
 	}
 }
 
-func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials string, executeFunc func(storage.Reference) error) {
+// LogPinnedChunks logs all the chunks that are pinned as part of the given root hash.
+// This is mostly used for debugging.
+func (p *PinAPI) LogPinnedChunks(rootHash string, credentials string) {
+
+	addr, err := hex.DecodeString(rootHash)
+	if err != nil {
+		log.Error("Error decoding root hash" + err.Error())
+		return
+	}
+
+	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
+	if err != nil {
+		log.Error("Root hash is not pinned" + err.Error())
+		return
+	}
+
+	walkerFunction := func(ref storage.Reference) error {
+		log.Info("Chunk", "Address", fmt.Sprintf("%0x", ref))
+		return nil
+	}
+	p.walkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
+}
+
+// ShowDatabase is purely a developer debugging tool.
+// This logs the entire database contents along with the metadata present in the Swarm levelDB.
+func (p *PinAPI) ShowDatabase() string {
+	p.db.ShowDatabaseInformation()
+	return "Check the swarm log file for the output"
+}
+
+func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials string, executeFunc func(storage.Reference) error) {
 
 	fileWorkers := make(chan storage.Reference, WorkerChanSize)
 	chunkWorkers := make(chan storage.Reference, WorkerChanSize)
@@ -322,33 +352,7 @@ func (p *PinApi) WalkChunksFromRootHash(rootHash string, isRaw bool, credentials
 	}
 }
 
-func (p *PinApi) LogPinnedChunks(rootHash string, credentials string) {
-
-	addr, err := hex.DecodeString(rootHash)
-	if err != nil {
-		log.Error("Error decoding root hash" + err.Error())
-		return
-	}
-
-	isRawInDB, err := p.db.IsPinnedFileRaw(addr)
-	if err != nil {
-		log.Error("Root hash is not pinned" + err.Error())
-		return
-	}
-
-	walkerFunction := func(ref storage.Reference) error {
-		log.Info("Chunk", "Address", fmt.Sprintf("%0x", ref))
-		return nil
-	}
-	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
-}
-
-func (p *PinApi) ShowDatabase() string {
-	p.db.ShowDatabaseInformation()
-	return "Check the swarm log file for the output"
-}
-
-func (p *PinApi) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
+func (p *PinAPI) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
 
 	// remove the decryption key from the encrypted file hash
 	isEncrypted := len(ref) > p.hashSize
@@ -360,36 +364,37 @@ func (p *PinApi) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
 	return ref
 }
 
-func (p *PinApi) GetNoOfChunks(rootHash string, isRaw bool, credentials string) uint64 {
+func (p *PinAPI) getNoOfChunks(rootHash string, isRaw bool, credentials string) uint64 {
 
 	noOfChunks := uint64(0)
 	walkerFunction := func(ref storage.Reference) error {
 		noOfChunks += 1
 		return nil
 	}
-	p.WalkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
 
 	return noOfChunks
 }
 
-// Used in testing
-func (p *PinApi) GetPinnedFiles() map[string]uint8 {
+//
+// Functions used in testing
+//
+
+// GetPinnedFiles is used in testing to get all the pinned file root hashes and weather it
+// is a Raw file or a manifest based collection.
+func (p *PinAPI) GetPinnedFiles() map[string]uint8 {
 	return p.db.GetPinFilesIndex()
 }
 
-func (p *PinApi) GetPinnedChunks() map[string]uint64 {
-	return p.db.GetPinnedChunks()
-}
-
-func (p *PinApi) GetAllChunksFromDB() map[string]int {
+// GetAllChunksFromDB is used in testing to generate the truth dataset about all the chunks
+// that are present in the DB.
+func (p *PinAPI) GetAllChunksFromDB() map[string]int {
 	return p.db.GetAllChunksInDB()
 }
 
-func (p *PinApi) GetAllChunksInGCIndex() map[string]string {
-	return p.db.GetAllChunksInGCIndex()
-}
-
-func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
+// CollectPinnedChunks is used to collect all the chunks that are pinned as part of the
+// given root hash.
+func (p *PinAPI) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
 
 	var lock = sync.RWMutex{}
 
@@ -417,7 +422,7 @@ func (p *PinApi) CollectPinnedChunks(rootHash string, credentials string) map[st
 		pinnedChunks[hex.EncodeToString(chunkAddr)] = pinCounter
 		return nil
 	}
-	p.WalkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
+	p.walkChunksFromRootHash(rootHash, isRawInDB, credentials, walkerFunction)
 
 	return pinnedChunks
 }

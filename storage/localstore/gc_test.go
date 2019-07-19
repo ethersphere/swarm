@@ -18,7 +18,6 @@ package localstore
 
 import (
 	"context"
-
 	"io/ioutil"
 	"math/rand"
 	"os"

@@ -25,7 +25,7 @@ import (
 	swarmhttp "github.com/ethersphere/swarm/api/http"
 )
 
-func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string, data []byte, pinCounter uint64, isRaw bool) {
+func checkIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string, data []byte, pinCounter uint64, isRaw bool) {
 
 	// Check if the root hash is in the pinFilesIndex
 	pinnedFiles := srv.PinAPI.GetPinnedFiles()
@@ -93,7 +93,7 @@ func CheckIfPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string
 
 }
 
-func IsNoChunksPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string) {
+func isNoChunksPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string) {
 
 	// Get pinned chunks details from pinning indexes
 	pinnedChunks := srv.PinAPI.CollectPinnedChunks(rootHash, "")
@@ -104,7 +104,7 @@ func IsNoChunksPinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash str
 	}
 }
 
-func CheckIfUnpinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string) {
+func checkIfUnpinned(t *testing.T, srv *swarmhttp.TestSwarmServer, rootHash string) {
 
 	// root hash should not be in pinFilesIndex
 	pinnedFiles := srv.PinAPI.GetPinnedFiles()

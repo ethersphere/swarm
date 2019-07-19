@@ -131,7 +131,6 @@ func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
 type chunkJob struct {
 	key         Address
 	chunk       []byte
-	isTreeChunk bool
 	parentWg    *sync.WaitGroup
 }
 
@@ -294,12 +293,6 @@ func (pc *PyramidChunker) processChunk(ctx context.Context, id int64, job *chunk
 
 	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)
 	copy(job.key, ref)
-
-	if job.isTreeChunk {
-		log.Trace("Tree chunk", "Address", job.key.Hex())
-	} else {
-		log.Trace("Data chunk", "Address", job.key.Hex())
-	}
 
 	// send off new chunk to storage
 	job.parentWg.Done()
@@ -661,7 +654,7 @@ func (pc *PyramidChunker) enqueueTreeChunk(ent *TreeEntry, chunkWG *sync.WaitGro
 		ent.key = make([]byte, pc.hashSize)
 		chunkWG.Add(1)
 		select {
-		case pc.jobC <- &chunkJob{ent.key, ent.chunk[:ent.branchCount*pc.hashSize+8], true, chunkWG}:
+		case pc.jobC <- &chunkJob{ent.key, ent.chunk[:ent.branchCount*pc.hashSize+8], chunkWG}:
 		case <-pc.quitC:
 		}
 
@@ -682,7 +675,7 @@ func (pc *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent
 
 	chunkWG.Add(1)
 	select {
-	case pc.jobC <- &chunkJob{pkey, chunkData[:size+8], false, chunkWG}:
+	case pc.jobC <- &chunkJob{pkey, chunkData[:size+8],chunkWG}:
 	case <-pc.quitC:
 	}
 

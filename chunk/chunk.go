@@ -190,8 +190,8 @@ func (m ModeSet) String() string {
 		return "Remove"
 	case ModePinChunk:
 		return "ModePinChunk"
-	case ModeUnPinChunk:
-		return "ModeUnPinChunk"
+	case ModeUnpinChunk:
+		return "ModeUnpinChunk"
 	case ModeStoreRootHashForRawFile:
 		return "ModeStoreRootHashForRawFile"
 	case ModeStoreRootHashForNormalFile:
@@ -213,8 +213,8 @@ const (
 	ModeSetRemove
 	// ModePinChunk: when a chunk is pinned during upload or separately
 	ModePinChunk
-	// ModeUnPinChunk: when a chunk is unpinned using a command locally
-	ModeUnPinChunk
+	// ModeUnpinChunk: when a chunk is unpinned using a command locally
+	ModeUnpinChunk
 	// ModeStoreRootHashForRawFile: When a root hash of a RAW file needs to be stored
 	// (to display later using list pins command)
 	ModeStoreRootHashForRawFile
