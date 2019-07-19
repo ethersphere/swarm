@@ -84,11 +84,11 @@ func (p *Peer) getCursorsCopy() map[string]uint64 {
 	return c
 }
 
-func (p *Peer) getCursor(stream ID) uint64 {
+func (p *Peer) getCursor(stream ID) (uint64, bool) {
 	p.streamCursorsMu.Lock()
 	defer p.streamCursorsMu.Unlock()
-
-	return p.streamCursors[stream.String()]
+	val, ok := p.streamCursors[stream.String()]
+	return val, ok
 }
 
 func (p *Peer) setCursor(stream ID, cursor uint64) {
