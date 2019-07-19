@@ -48,14 +48,6 @@ func (i *Inspector) KademliaInfo() network.KademliaInfo {
 	return i.hive.KademliaInfo()
 }
 
-func (i *Inspector) ListKnown() []string {
-	res := []string{}
-	for _, v := range i.hive.Kademlia.ListKnown() {
-		res = append(res, fmt.Sprintf("%v", v))
-	}
-	return res
-}
-
 func (i *Inspector) IsPullSyncing() bool {
 	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
@@ -68,6 +60,7 @@ func (i *Inspector) IsPullSyncing() bool {
 	return lrct.After(time.Now().Add(-15 * time.Second))
 }
 
+// DeliveriesPerPeer returns the sum of chunks we received from a given peer
 func (i *Inspector) DeliveriesPerPeer() map[string]int64 {
 	res := map[string]int64{}
 

@@ -431,18 +431,6 @@ func (k *Kademlia) Off(p *Peer) {
 	}
 }
 
-func (k *Kademlia) ListKnown() []*BzzAddr {
-	res := []*BzzAddr{}
-
-	k.addrs.Each(func(val pot.Val) bool {
-		e := val.(*entry)
-		res = append(res, e.BzzAddr)
-		return true
-	})
-
-	return res
-}
-
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
