@@ -388,8 +388,8 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		LastIndex: t,
 		Hashes:    h,
 	}
-	_ = len(h) / HashSize
-	log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestfrom", msg.From, "requestto", msg.To)
+	i := len(h) / HashSize
+	log.Debug("server offering live batch", "peer", p.ID(), "ruid", msg.Ruid, "requestfrom", msg.From, "requestto", msg.To, "hashes", i)
 	if err := p.Send(ctx, offered); err != nil {
 		log.Error("erroring sending offered hashes", "peer", p.ID(), "ruid", msg.Ruid, "err", err)
 		p.mtx.Lock()
@@ -502,6 +502,12 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
+		cur, ok := p.getCursor(w.stream)
+		if !ok {
+			metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
+			log.Debug("no longer interested in stream. quitting", "peer", p.ID(), "stream", w.stream.String())
+			return
+		}
 		if w.head {
 			if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
 				streamRequestNextIntervalFail.Inc(1)
@@ -510,8 +516,8 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 			}
 
 		} else {
-			streamRequestNextIntervalFail.Inc(1)
-			if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
+			if err := s.requestStreamRange(ctx, p, w.stream, cur); err != nil {
+				streamRequestNextIntervalFail.Inc(1)
 				log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 				p.Drop()
 			}
@@ -590,18 +596,15 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
 
-		// if the cursors entry does not exist it means we must not ask for the next range
-		// this is due to the fact we delete the cursor entry when the depth change signals
-		// unwanted bins
-		cursors := p.getCursorsCopy()
-		if _, ok := cursors[w.stream.String()]; !ok {
-			log.Debug("stream no longer wanted, quitting", "peer", p.ID(), "stream", w.stream.String())
-			metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
-			return
-		}
-
 		//TODO BATCH TIMEOUT?
 	}
+	cur, ok := p.getCursor(w.stream)
+	if !ok {
+		metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
+		log.Debug("no longer interested in stream. quitting", "peer", p.ID(), "stream", w.stream.String())
+		return
+	}
+
 	if w.head {
 		if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
 			streamRequestNextIntervalFail.Inc(1)
@@ -610,8 +613,8 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		}
 
 	} else {
-		streamRequestNextIntervalFail.Inc(1)
-		if err := s.requestStreamRange(ctx, p, w.stream, p.getCursor(w.stream)); err != nil {
+		if err := s.requestStreamRange(ctx, p, w.stream, cur); err != nil {
+			streamRequestNextIntervalFail.Inc(1)
 			log.Error("error requesting next interval from peer", "peer", p.ID(), "err", err)
 			p.Drop()
 		}
