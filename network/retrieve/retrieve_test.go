@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"sync"
 	"testing"
@@ -32,21 +34,33 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/testutil"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
 	loglevel           = flag.Int("loglevel", 5, "verbosity of logs")
 	bucketKeyFileStore = simulation.BucketKey("filestore")
 	bucketKeyNetstore  = simulation.BucketKey("netstore")
+
+	hash0         = sha3.Sum256([]byte{0})
+	hash1         = sha3.Sum256([]byte{1})
+	hash2         = sha3.Sum256([]byte{2})
+	hashesTmp     = append(hash0[:], hash1[:]...)
+	hashes        = append(hashesTmp, hash2[:]...)
+	corruptHashes = append(hashes[:40])
 )
 
 func init() {
@@ -130,12 +144,180 @@ func TestChunkDelivery(t *testing.T) {
 	}
 }
 
+func TestDeliveryForwarding(t *testing.T) {
+	chunkCount := 100
+	filesize := chunkCount * 4096
+	sim, uploader, forwarder, fetcher := setupTestDeliveryForwardingSimulation(t)
+
+	log.Debug("test delivery forwarding", "uploader", uploader, "forwarder", forwarder, "fetcher", fetcher)
+	uploaderNodeStore := sim.NodeItem(uploader, bucketKeyFileStore).(*storage.FileStore)
+	fetcherKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia)
+	ctx := context.Background()
+	_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	chunks, err := getChunks(uploaderNodeStore.ChunkStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for c, _ := range chunks {
+		addr, err := hex.DecodeString(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if chunk.Proximity(addr, fetcherKad.BaseAddr()) == 2 {
+			//try to fetch the chunk
+			panic("beep")
+		}
+	}
+
+}
+
+func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simulation, uploader, forwarder, fetching enode.ID) {
+	// initial node count
+
+	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-retrieve": newBzzRetrieveWithLocalstore,
+	})
+
+	fetching, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fetcherBase := sim.NodeItem(fetching, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+
+	override := func(o *adapters.NodeConfig) func(*adapters.NodeConfig) {
+		return func(c *adapters.NodeConfig) {
+			*o = *c
+		}
+	}
+
+	// create a node that will be in po 1 from fetcher
+	forwarderConfig := createNodeConfigAtPo(t, fetcherBase, 1)
+	forwarder, err = sim.AddNode(override(forwarderConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sim.Net.Connect(fetching, forwarder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	uploaderConfig := createNodeConfigAtPo(t, fetcherBase, 2)
+	uploader, err = sim.AddNode(override(uploaderConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sim.Net.Connect(forwarder, uploader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return sim, uploader, forwarder, fetching
+}
+
+// createNodeConfigAtPo brute forces a node config to create a node that has an overlay address at the provided po in relation to the given baseaddr
+func createNodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig {
+	foundPo := -1
+	var conf *adapters.NodeConfig
+	for foundPo != po {
+		conf = adapters.RandomNodeConfig()
+		ip := net.IPv4(127, 0, 0, 1)
+		enrIp := enr.IP(ip)
+		conf.Record.Set(&enrIp)
+		enrTcpPort := enr.TCP(conf.Port)
+		conf.Record.Set(&enrTcpPort)
+		enrUdpPort := enr.UDP(0)
+		conf.Record.Set(&enrUdpPort)
+
+		err := enode.SignV4(&conf.Record, conf.PrivateKey)
+		if err != nil {
+			t.Fatalf("unable to generate ENR: %v", err)
+		}
+		nod, err := enode.New(enode.V4ID{}, &conf.Record)
+		if err != nil {
+			t.Fatalf("unable to create enode: %v", err)
+		}
+
+		n := network.NewAddr(nod)
+		foundPo = chunk.Proximity(baseaddr, n.Over())
+	}
+
+	return conf
+}
+
 /*
 more test cases:
 1. connect 3 nodes in chain and make sure that the retrieve request is being forwarded between the nodes
 2. make sure that the whole thing plays out with a root hash and an actual trie that needs to be retrieved
 3. make sure it works with manifests too
 */
+
+// if there is one peer in the Kademlia, RequestFromPeers should return it
+func TestRequestFromPeers(t *testing.T) {
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
+	peer := network.NewPeer(&network.BzzPeer{
+		BzzAddr:   network.RandomAddr(),
+		LightNode: false,
+		Peer:      protocolsPeer,
+	}, to)
+
+	to.On(peer)
+
+	s := NewRetrieval(to, nil)
+
+	req := storage.NewRequest(storage.Address(hash0[:]))
+	id, err := s.findPeer(context.TODO(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if id.ID() != dummyPeerID {
+		t.Fatalf("Expected an id, got %v", id)
+	}
+}
+
+// RequestFromPeers should not return light nodes
+func TestRequestFromPeersWithLightNode(t *testing.T) {
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
+
+	// setting up a lightnode
+	peer := network.NewPeer(&network.BzzPeer{
+		BzzAddr:   network.RandomAddr(),
+		LightNode: true,
+		Peer:      protocolsPeer,
+	}, to)
+
+	to.On(peer)
+
+	r := NewRetrieval(to, nil)
+	req := storage.NewRequest(storage.Address(hash0[:]))
+
+	// making a request which should return with "no peer found"
+	_, err := r.findPeer(context.TODO(), req)
+
+	expectedError := "no peer found"
+	if err.Error() != expectedError {
+		t.Fatalf("expected '%v', got %v", expectedError, err)
+	}
+}
 
 func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	n := ctx.Config.Node()
@@ -150,6 +332,8 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
 		kad = kv.(*network.Kademlia)
 	} else {
+		//eee := fmt.Sprintf("over %s, under %s", hex.EncodeToString(addr.Over()), hex.EncodeToString(addr.Under()))
+		//panic(eee)
 		kad = network.NewKademlia(addr.Over(), network.NewKadParams())
 		bucket.Store(simulation.BucketKeyKademlia, kad)
 	}
@@ -223,4 +407,26 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 
 	reader := bytes.NewReader(testData)
 	return fileStore.GetAllReferences(context.Background(), reader, false)
+}
+
+func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
+	chunks = make(map[string]struct{})
+	for po := uint8(0); po <= chunk.MaxPO; po++ {
+		last, err := store.LastPullSubscriptionBinID(uint8(po))
+		if err != nil {
+			return nil, err
+		}
+		if last == 0 {
+			continue
+		}
+		ch, _ := store.SubscribePull(context.Background(), po, 0, last)
+		for c := range ch {
+			addr := c.Address.Hex()
+			if _, ok := chunks[addr]; ok {
+				return nil, fmt.Errorf("duplicate chunk %s", addr)
+			}
+			chunks[addr] = struct{}{}
+		}
+	}
+	return chunks, nil
 }
