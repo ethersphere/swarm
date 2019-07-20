@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"github.com/ethersphere/swarm/storage/feed"
 	"io/ioutil"
 	"mime"
 	"os"
@@ -30,6 +29,7 @@ import (
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/testutil"
 )
