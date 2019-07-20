@@ -36,7 +36,7 @@ import (
 )
 
 func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, "")
+	return swarmhttp.NewServer(api, "", nil)
 }
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm

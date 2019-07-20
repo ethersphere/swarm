@@ -13,13 +13,14 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
-package api
+package pin
 
 import (
 	"context"
 	"encoding/hex"
 	"sync"
 
+	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage"
@@ -34,27 +35,24 @@ const (
 // PinAPI is the main object which implements all things pinning.
 type PinAPI struct {
 	db         *localstore.DB
-	api        *API
+	api        *api.API
 	fileParams *storage.FileStoreParams
 	tag        *chunk.Tags
 	hashSize   int
 }
 
-func NewPinApi(lstore *localstore.DB, params *storage.FileStoreParams, tags *chunk.Tags) *PinAPI {
+func NewPinApi(lstore *localstore.DB, params *storage.FileStoreParams, tags *chunk.Tags, api *api.API) *PinAPI {
 
 	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
 	pinApi := &PinAPI{
 		db:         lstore,
+		api:        api,
 		fileParams: params,
 		tag:        tags,
 		hashSize:   hashFunc().Size(),
 	}
 
 	return pinApi
-}
-
-func (p *PinAPI) SetApi(api *API) {
-	p.api = api
 }
 
 // PinFiles is used to pin a RAW file or a collection (which hash manifest's)
@@ -221,7 +219,7 @@ func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials
 				return
 			}
 
-			err = walker.Walk(func(entry *ManifestEntry) error {
+			err = walker.Walk(func(entry *api.ManifestEntry) error {
 
 				fileAddr, err := hex.DecodeString(entry.Hash)
 				if err != nil {

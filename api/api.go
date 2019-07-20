@@ -186,19 +186,16 @@ type API struct {
 	fileStore *storage.FileStore
 	dns       Resolver
 	Tags      *chunk.Tags
-	PinAPI    *PinAPI
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey,
-	tags *chunk.Tags, pinAPI *PinAPI) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
 		feed:      feedHandler,
 		Tags:      tags,
-		PinAPI:    pinAPI,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},

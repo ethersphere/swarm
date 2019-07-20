@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethersphere/swarm/storage/pin"
 	"io"
 	"io/ioutil"
 	"math"
@@ -80,7 +81,7 @@ func (m methodHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-func NewServer(api *api.API, corsString string) *Server {
+func NewServer(api *api.API, corsString string, pinAPI *pin.PinAPI) *Server {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(corsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -92,7 +93,7 @@ func NewServer(api *api.API, corsString string) *Server {
 		AllowedHeaders: []string{"*"},
 	})
 
-	server := &Server{api: api}
+	server := &Server{api: api, pinAPI: pinAPI}
 
 	defaultMiddlewares := []Adapter{
 		RecoverPanic,
@@ -187,6 +188,7 @@ func (s *Server) ListenAndServe(addr string) error {
 type Server struct {
 	http.Handler
 	api        *api.API
+	pinAPI     *pin.PinAPI
 	listenAddr string
 }
 
@@ -294,7 +296,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 
 	// Add the root hash of the RAW file in the pinFilesIndex
 	if headerPin != "" {
-		err = s.api.PinAPI.PinFiles(hex.EncodeToString(addr), true, "")
+		err = s.pinAPI.PinFiles(hex.EncodeToString(addr), true, "")
 		if err != nil {
 			postRawFail.Inc(1)
 			respondError(w, r, fmt.Sprintf("Error pinning file : %s", addr.Hex()), http.StatusInternalServerError)
@@ -384,7 +386,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Pin the file
 	if headerPin != "" {
-		err = s.api.PinAPI.PinFiles(hex.EncodeToString(newAddr), false, "")
+		err = s.pinAPI.PinFiles(hex.EncodeToString(newAddr), false, "")
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, fmt.Sprintf("Error pinning file : %s", newAddr.Hex()), http.StatusInternalServerError)

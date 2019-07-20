@@ -32,11 +32,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -46,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/fuse"
@@ -56,7 +52,10 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
 )
@@ -85,7 +84,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
-	pinAPI            *api.PinAPI // PinAPI object implements all pinning related commands
+	pinAPI            *pin.PinAPI // PinAPI object implements all pinning related commands
 
 	tracerClose io.Closer
 }
@@ -229,10 +228,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
+
 	// Instantiate the pinAPI object with the already opened localstore
-	self.pinAPI = api.NewPinApi(localStore, self.config.FileStoreParams, tags)
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags, self.pinAPI)
-	self.pinAPI.SetApi(self.api)
+	self.pinAPI = pin.NewPinApi(localStore, self.config.FileStoreParams, tags, self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
@@ -387,7 +386,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	// start swarm http proxy server
 	if s.config.Port != "" {
 		addr := net.JoinHostPort(s.config.ListenAddr, s.config.Port)
-		server := httpapi.NewServer(s.api, s.config.Cors)
+		server := httpapi.NewServer(s.api, s.config.Cors, s.pinAPI)
 
 		if s.config.Cors != "" {
 			log.Info("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
@@ -532,7 +531,7 @@ func (s *Swarm) APIs() []rpc.API {
 		},
 		{
 			Namespace: "pin",
-			Version:   api.PinVersion,
+			Version:   pin.PinVersion,
 			Service:   s.pinAPI,
 			Public:    false,
 		},

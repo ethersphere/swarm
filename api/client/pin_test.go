@@ -29,9 +29,9 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/localstore"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/testutil"
 )
-
 
 //
 //   isRaw       toPin        encrypted     noPfPins
@@ -60,7 +60,7 @@ import (
 
 // Pin a file while uploading of a RAW file and unpin it
 func TestPinWithRawUpload(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	data := testutil.RandomBytes(1, 10000)
@@ -73,7 +73,7 @@ func TestPinWithRawUpload(t *testing.T) {
 
 // Pin a file separately after uploading a RAW file and unpin it
 func TestPinAfterRawUpload(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	data := testutil.RandomBytes(1, 10000)
@@ -85,7 +85,7 @@ func TestPinAfterRawUpload(t *testing.T) {
 
 // Upload a RAW file then pin and unpin multiple times
 func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	data := testutil.RandomBytes(1, 10000)
@@ -97,7 +97,7 @@ func TestPinAfterRawUploadPinMultipleTimes(t *testing.T) {
 
 // Pin a file during upload of a RAW encrypted file and then unpin it
 func TestPinUploadRawEncrypted(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	data := testutil.RandomBytes(1, 10000)
@@ -109,7 +109,7 @@ func TestPinUploadRawEncrypted(t *testing.T) {
 
 // Pin a file during upload of a RAW encrypted file and then unpin it
 func TestPinAfterUploadRawEncrypted(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	data := testutil.RandomBytes(1, 10000)
@@ -121,7 +121,7 @@ func TestPinAfterUploadRawEncrypted(t *testing.T) {
 
 // Pin collection after the file is uploaded and pin multiple times
 func TestPinCollectionMultipleTimesAfterUpload(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	pinRoot := testClientUploadCollection(srv, false, t, false)
@@ -132,7 +132,7 @@ func TestPinCollectionMultipleTimesAfterUpload(t *testing.T) {
 
 // Pin encrypted collection after the file is uploaded and pin multiple times
 func TestPinEncryptedCollectionMultipleTimesAfterUpload(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	pinRoot := testClientUploadCollection(srv, true, t, false)
@@ -143,7 +143,7 @@ func TestPinEncryptedCollectionMultipleTimesAfterUpload(t *testing.T) {
 
 // Pin collection during file upload and once after that file is uploaded
 func TestPinCollectionDuringUploadMultipleTimes(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	pinRoot := testClientUploadCollection(srv, false, t, true)
@@ -154,7 +154,7 @@ func TestPinCollectionDuringUploadMultipleTimes(t *testing.T) {
 
 // Pin encrypted collection during file upload and once after that file is uploaded
 func TestPinEncryptedCollectionDuringUploadMultipleTimes(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	pinRoot := testClientUploadCollection(srv, true, t, true)
@@ -166,7 +166,7 @@ func TestPinEncryptedCollectionDuringUploadMultipleTimes(t *testing.T) {
 // Pin directory after the file is uploaded and pin multiple times
 func TestPinDuringUploadDirectory(t *testing.T) {
 
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -188,7 +188,7 @@ func TestPinDuringUploadDirectory(t *testing.T) {
 // Pin directory collection after the file is uploaded and pin multiple times
 func TestPinDuringUploadEncryptedDirectory(t *testing.T) {
 
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -210,7 +210,7 @@ func TestPinDuringUploadEncryptedDirectory(t *testing.T) {
 // Pin directory during file upload and once after that file is uploaded
 func TestPinAfterUploadDirectory(t *testing.T) {
 
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -232,7 +232,7 @@ func TestPinAfterUploadDirectory(t *testing.T) {
 // Pin directory collection during file upload and once after that file is uploaded
 func TestPinAfterUploadEncryptedDirectory(t *testing.T) {
 
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -254,7 +254,7 @@ func TestPinAfterUploadEncryptedDirectory(t *testing.T) {
 // Pin during a multipart upload
 // upload with pinning and unpinning
 func TestPinningWithMultipartUpload(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	srv := NewTestSwarmServer(t, pinServerFunc, nil, nil)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
@@ -363,13 +363,13 @@ type testSimpleSwarmServer struct {
 	Hasher      storage.SwarmHash
 	FileStore   *storage.FileStore
 	Tags        *chunk.Tags
-	PinAPI      *api.PinAPI
+	PinAPI      *pin.PinAPI
 	dir         string
 	cleanup     func()
 	CurrentTime uint64
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) swarmhttp.TestServer, resolver api.Resolver,
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API, *pin.PinAPI) swarmhttp.TestServer, resolver api.Resolver,
 	o *localstore.Options) *testSimpleSwarmServer {
 
 	swarmDir, err := ioutil.TempDir("", "swarm-storage-test")
@@ -397,10 +397,9 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) swarmhttp.TestSe
 		t.Fatal(err)
 	}
 
-	pinAPI := api.NewPinApi(localStore, nil, tags)
-	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags, pinAPI)
-	pinAPI.SetApi(swarmApi)
-	apiServer := httptest.NewServer(serverFunc(swarmApi))
+	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags)
+	pinAPI := pin.NewPinApi(localStore, nil, tags, swarmApi)
+	apiServer := httptest.NewServer(serverFunc(swarmApi, pinAPI))
 
 	tss := &testSimpleSwarmServer{
 		Server:    apiServer,
@@ -428,7 +427,6 @@ func (t *testSimpleSwarmServer) Close() {
 func (t *testSimpleSwarmServer) Now() feed.Timestamp {
 	return feed.Timestamp{Time: t.CurrentTime}
 }
-
 
 func failIfUnpinned(t *testing.T, srv *testSimpleSwarmServer, rootHash string) {
 
@@ -525,4 +523,8 @@ func testClientUploadCollection(srv *testSimpleSwarmServer, toEncrypt bool, t *t
 	rootHash := upload("", "", rootData, pinDuringUpload)
 
 	return rootHash
+}
+
+func pinServerFunc(api *api.API, pinAPI *pin.PinAPI) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, "", pinAPI)
 }
