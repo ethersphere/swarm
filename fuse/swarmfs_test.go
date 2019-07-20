@@ -1620,7 +1620,7 @@ func TestFUSE(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil, nil, chunk.NewTags(), nil)}
+	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil, nil, chunk.NewTags())}
 
 	//run a short suite of tests
 	//approx time: 28s

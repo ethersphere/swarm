@@ -25,7 +25,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethersphere/swarm/storage/pin"
 	"io"
 	"io/ioutil"
 	"math"
@@ -46,6 +45,7 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/rs/cors"
 )
 
@@ -67,7 +67,6 @@ var (
 
 const (
 	SwarmTagHeaderName = "x-swarm-tag" // Presence of this in header indicates the tag
-	SwarmPinContent    = "x-swarm-pin" // Presence of this in header indicates pinning required
 )
 
 type methodHandler map[string]http.Handler
@@ -262,7 +261,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(SwarmPinContent)
+	headerPin := r.Header.Get(pin.SwarmPinContent)
 
 	if uri.Path != "" {
 		postRawFail.Inc(1)
@@ -333,7 +332,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(SwarmPinContent)
+	headerPin := r.Header.Get(pin.SwarmPinContent)
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {

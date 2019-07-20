@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	PinVersion     = "1.0"
-	WorkerChanSize = 8
+	PinVersion      = "1.0"
+	WorkerChanSize  = 8
+	SwarmPinContent = "x-swarm-pin" // Presence of this in header indicates pinning required
 )
 
 // PinAPI is the main object which implements all things pinning.
@@ -159,18 +160,26 @@ func (p *PinAPI) UnpinFiles(rootHash string, credentials string) error {
 	return nil
 }
 
+type PinInfo struct {
+	noOfChunks uint64
+	pinCounter uint64
+}
+
 // ListPinFiles functions logs information of all the files that are pinned
 // in the current local node. It displays the root hash of the pinned file
 // or collection. It also display two vital information
 //     1) Size of the pinned file or collection
 //     2) the number of times that particular file or collection is pinned.
-func (p *PinAPI) ListPinFiles() {
+func (p *PinAPI) ListPinFiles() map[string]PinInfo {
+
+	pinInfo := make(map[string]PinInfo, 0)
+
 	pinnedFiles := p.db.GetPinFilesIndex()
 	for k, v := range pinnedFiles {
 		addr, err := hex.DecodeString(k)
 		if err != nil {
 			log.Error("Error decoding root hash.", "rootHash", k, "Reason", err.Error())
-			return
+			return nil
 		}
 
 		// This iteration can drain CPU. Figure out a way to store size of the pinned file
@@ -178,7 +187,7 @@ func (p *PinAPI) ListPinFiles() {
 		pinCounter, err := p.db.GetPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 		if err != nil {
 			log.Error("Error getting pin counter of root hash.", "rootHash", k, "Reason", err.Error())
-			return
+			return nil
 		}
 
 		isRaw := false
@@ -187,8 +196,14 @@ func (p *PinAPI) ListPinFiles() {
 		}
 		noOfChunks := p.getNoOfChunks(k, isRaw, "")
 
+		pi := PinInfo{
+			noOfChunks: noOfChunks,
+			pinCounter: pinCounter,
+		}
+		pinInfo[k] = pi
 		log.Info("Pinned file", "Address", k, "NoOfChunks", noOfChunks, "pinCounter", pinCounter)
 	}
+	return pinInfo
 }
 
 func (p *PinAPI) walkChunksFromRootHash(rootHash string, isRaw bool, credentials string, executeFunc func(storage.Reference) error) {
@@ -362,19 +377,19 @@ func (p *PinAPI) getNoOfChunks(rootHash string, isRaw bool, credentials string) 
 
 // getPinnedFiles is used in testing to get root hashes of all the pinned content
 // including info whether they are raw files or manifests
-func (p *PinAPI) GetPinnedFiles() map[string]uint8 {
+func (p *PinAPI) getPinnedFiles() map[string]uint8 {
 	return p.db.GetPinFilesIndex()
 }
 
 // getAllChunksFromDB is used in testing to generate the truth dataset about all the chunks
 // that are present in the DB.
-func (p *PinAPI) GetAllChunksFromDB() map[string]int {
+func (p *PinAPI) getAllChunksFromDB() map[string]int {
 	return p.db.GetAllChunksInDB()
 }
 
 // collectPinnedChunks is used to collect all the chunks that are pinned as part of the
 // given root hash.
-func (p *PinAPI) CollectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
+func (p *PinAPI) collectPinnedChunks(rootHash string, credentials string) map[string]uint64 {
 
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {

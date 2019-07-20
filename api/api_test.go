@@ -58,7 +58,7 @@ func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
 			return
 		}
 		defer cleanup()
-		api := NewAPI(fileStore, nil, nil, nil, tags, nil)
+		api := NewAPI(fileStore, nil, nil, nil, tags)
 		f(api, tags, v)
 	}
 }
@@ -438,7 +438,7 @@ func TestDecryptOriginForbidden(t *testing.T) {
 		Access: &AccessEntry{Type: AccessTypePass},
 	}
 
-	api := NewAPI(nil, nil, nil, nil, chunk.NewTags(), nil)
+	api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
 
 	f := api.Decryptor(ctx, "")
 	err := f(me)
@@ -472,7 +472,7 @@ func TestDecryptOrigin(t *testing.T) {
 			Access: &AccessEntry{Type: AccessTypePass},
 		}
 
-		api := NewAPI(nil, nil, nil, nil, chunk.NewTags(), nil)
+		api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
 
 		f := api.Decryptor(ctx, "")
 		err := f(me)

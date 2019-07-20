@@ -603,7 +603,6 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		trie.deleteEntry(path, quitC)
 	}
 
-	// Dont pin manifest as this is used only in test cases
 	if err := trie.recalcAndStore(); err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
