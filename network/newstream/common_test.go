@@ -17,17 +17,27 @@
 package newstream
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
 )
@@ -42,6 +52,126 @@ func init() {
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+}
+
+var (
+	serviceNameSlipStream      = "bzz-sync"
+	bucketKeyFileStore         = "filestore"
+	bucketKeyInitialBinIndexes = "bin-indexes"
+
+	simContextTimeout = 20 * time.Second
+)
+
+func nodeSlipStream(sim *simulation.Simulation, id enode.ID) (s *SlipStream) {
+	return sim.Service(serviceNameSlipStream, id).(*SlipStream)
+}
+
+func nodeFileStore(sim *simulation.Simulation, id enode.ID) (s *storage.FileStore) {
+	return sim.NodeItem(id, bucketKeyFileStore).(*storage.FileStore)
+}
+
+func nodeInitialBinIndexes(sim *simulation.Simulation, id enode.ID) (s []uint64) {
+	return sim.NodeItem(id, bucketKeyInitialBinIndexes).([]uint64)
+}
+
+func nodeKademlia(sim *simulation.Simulation, id enode.ID) (k *network.Kademlia) {
+	return sim.NodeItem(id, simulation.BucketKeyKademlia).(*network.Kademlia)
+}
+
+func nodeBinIndexes(t *testing.T, store interface {
+	LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
+}) []uint64 {
+	t.Helper()
+
+	binIndexes := make([]uint64, 17)
+	for i := 0; i <= 16; i++ {
+		binIndex, err := store.LastPullSubscriptionBinID(uint8(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		binIndexes[i] = binIndex
+	}
+	return binIndexes
+}
+
+type SyncSimServiceOptions struct {
+	InitialChunkCount uint64
+	NoSyncWithinDepth bool
+}
+
+func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+	if o == nil {
+		o = new(SyncSimServiceOptions)
+	}
+	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+		n := ctx.Config.Node()
+		addr := network.NewAddr(n)
+
+		localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		var kad *network.Kademlia
+
+		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
+		if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
+			kad = kv.(*network.Kademlia)
+		} else {
+			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
+			bucket.Store(simulation.BucketKeyKademlia, kad)
+		}
+
+		netStore := storage.NewNetStore(localStore, n.ID())
+		lnetStore := storage.NewLNetStore(netStore)
+		fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+		bucket.Store(bucketKeyFileStore, fileStore)
+
+		if o.InitialChunkCount > 0 {
+			for i := uint64(0); i < o.InitialChunkCount; i++ {
+				c := storage.GenerateRandomChunk(4096)
+				exists, err := localStore.Put(context.Background(), chunk.ModePutUpload, c)
+				if err != nil {
+					return nil, nil, err
+				}
+				if exists {
+					return nil, nil, fmt.Errorf("generated already existing chunk")
+				}
+			}
+			binIndexes := make([]uint64, 17)
+			for i := uint8(0); i <= 16; i++ {
+				binIndex, err := localStore.LastPullSubscriptionBinID(i)
+				if err != nil {
+					return nil, nil, err
+				}
+				binIndexes[i] = binIndex
+			}
+			bucket.Store(bucketKeyInitialBinIndexes, binIndexes)
+		}
+
+		var store *state.DBStore
+		// Use on-disk DBStore to reduce memory consumption in race tests.
+		dir, err := ioutil.TempDir(tmpDir, "statestore-")
+		if err != nil {
+			return nil, nil, err
+		}
+		store, err = state.NewDBStore(dir)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		sp := NewSyncProvider(netStore, kad, o.NoSyncWithinDepth)
+		s = NewSlipStream(store, sp)
+
+		cleanup = func() {
+			localStore.Close()
+			localStoreCleanup()
+			store.Close()
+			os.RemoveAll(dir)
+		}
+
+		return s, cleanup, nil
+	}
 }
 
 func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.GlobalStorer) (localStore *localstore.DB, cleanup func(), err error) {
@@ -66,6 +196,31 @@ func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.Glob
 		return nil, nil, err
 	}
 	return localStore, cleanup, nil
+}
+
+func parseID(str string) ID {
+	v := strings.Split(str, "|")
+	if len(v) != 2 {
+		panic("too short")
+	}
+	return NewID(v[0], v[1])
+}
+
+func uploadChunks(ctx context.Context, t testing.TB, store chunk.Store, count uint64) (chunks []chunk.Address) {
+	t.Helper()
+
+	for i := uint64(0); i < count; i++ {
+		c := storage.GenerateRandomChunk(4096)
+		exists, err := store.Put(ctx, chunk.ModePutUpload, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Fatal("generated already existing chunk")
+		}
+		chunks = append(chunks, c.Address())
+	}
+	return chunks
 }
 
 // Test run global tmp dir. Please, use it as the first argument

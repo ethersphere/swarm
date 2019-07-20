@@ -44,15 +44,14 @@ var timeout = 30 * time.Second
 // 1. All subscriptions are created
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) {
-	chunkCount := 10000
+	const chunkCount = 10000
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+		"bzz-sync": newSyncSimServiceFunc(nil),
 	})
 
 	defer sim.Close()
 	defer catchDuplicateChunkSync(t)()
 
-	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -64,7 +63,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 	log.Debug("pivot node", "enode", uploaderNode)
 	uploadStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
 
-	chunks := uploadChunks(t, ctx, uploadStore, uint64(chunkCount))
+	chunks := uploadChunks(ctx, t, uploadStore, chunkCount)
 
 	uploaderNodeBinIDs := make([]uint64, 17)
 	uploaderStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
@@ -204,7 +203,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+				"bzz-sync": newSyncSimServiceFunc(nil),
 			})
 			defer sim.Close()
 			defer catchDuplicateChunkSync(t)()
@@ -219,7 +218,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 			uploadStore := sim.NodeItem(uploadNode, bucketKeyFileStore).(chunk.Store)
 
-			chunks := uploadChunks(t, ctx, uploadStore, tc.chunkCount)
+			chunks := uploadChunks(ctx, t, uploadStore, tc.chunkCount)
 
 			totalChunkCount, err := getChunkCount(uploadStore)
 			if err != nil {
@@ -249,7 +248,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			}
 
 			if tc.liveChunkCount > 0 {
-				chunks = append(chunks, uploadChunks(t, ctx, uploadStore, tc.liveChunkCount)...)
+				chunks = append(chunks, uploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
 
 				totalChunkCount, err = getChunkCount(uploadStore)
 				if err != nil {
@@ -281,7 +280,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 	defer catchDuplicateChunkSync(t)()
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+		"bzz-sync": newSyncSimServiceFunc(nil),
 	})
 	defer sim.Close()
 
@@ -373,7 +372,7 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 	)
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+		"bzz-sync": newSyncSimServiceFunc(nil),
 	})
 	defer sim.Close()
 
@@ -564,7 +563,7 @@ func TestFullSync(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-				"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+				"bzz-sync": newSyncSimServiceFunc(nil),
 			})
 			defer sim.Close()
 
@@ -815,10 +814,10 @@ func BenchmarkHistoricalStream_10000(b *testing.B) { benchmarkHistoricalStream(b
 func BenchmarkHistoricalStream_15000(b *testing.B) { benchmarkHistoricalStream(b, 15000) }
 func BenchmarkHistoricalStream_20000(b *testing.B) { benchmarkHistoricalStream(b, 20000) }
 
-func benchmarkHistoricalStream(b *testing.B, chunks int) {
+func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 	b.StopTimer()
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunks),
+		"bzz-sync": newSyncSimServiceFunc(nil),
 	})
 
 	defer sim.Close()
@@ -843,6 +842,8 @@ func benchmarkHistoricalStream(b *testing.B, chunks int) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
+		uploadChunks(context.Background(), b, nodeFileStore(sim, syncingNode), chunks)
 
 		err = sim.Net.Connect(syncingNode, uploaderNode)
 		if err != nil {
@@ -909,7 +910,7 @@ func TestStarNetworkSync(t *testing.T) {
 		filesize   = chunkCount * chunkSize
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
+		"bzz-sync": newSyncSimServiceFunc(nil),
 	})
 	defer sim.Close()
 
@@ -1080,21 +1081,4 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 
 	reader := bytes.NewReader(testData)
 	return fileStore.GetAllReferences(context.Background(), reader, false)
-}
-
-func uploadChunks(t *testing.T, ctx context.Context, store chunk.Store, count uint64) (chunks []chunk.Address) {
-	t.Helper()
-
-	for i := uint64(0); i < count; i++ {
-		c := storage.GenerateRandomChunk(4096)
-		exists, err := store.Put(ctx, chunk.ModePutUpload, c)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if exists {
-			t.Fatal("generated already existing chunk")
-		}
-		chunks = append(chunks, c.Address())
-	}
-	return chunks
 }
