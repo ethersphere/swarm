@@ -18,7 +18,6 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -30,11 +29,6 @@ import (
 const (
 	PinVersion     = "1.0"
 	WorkerChanSize = 8
-)
-
-var (
-	errDecodingRootHash     = errors.New("error decoding root hash")
-	errFileNotUploadedToPin = errors.New("file not uploaded")
 )
 
 // PinAPI is the main object which implements all things pinning.

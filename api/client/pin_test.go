@@ -32,76 +32,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
-type testSimpleSwarmServer struct {
-	*httptest.Server
-	Hasher      storage.SwarmHash
-	FileStore   *storage.FileStore
-	Tags        *chunk.Tags
-	PinAPI      *api.PinAPI
-	dir         string
-	cleanup     func()
-	CurrentTime uint64
-}
-
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) swarmhttp.TestServer, resolver api.Resolver,
-	o *localstore.Options) *testSimpleSwarmServer {
-
-	swarmDir, err := ioutil.TempDir("", "swarm-storage-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	localStore, err := localstore.New(swarmDir, make([]byte, 32), o)
-	if err != nil {
-		os.RemoveAll(swarmDir)
-		t.Fatal(err)
-	}
-
-	tags := chunk.NewTags()
-	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams(), tags)
-
-	// Swarm feeds test setup
-	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	feeds, err := feed.NewTestHandler(feedsDir, &feed.HandlerParams{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pinAPI := api.NewPinApi(localStore, nil, tags)
-	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags, pinAPI)
-	pinAPI.SetApi(swarmApi)
-	apiServer := httptest.NewServer(serverFunc(swarmApi))
-
-	tss := &testSimpleSwarmServer{
-		Server:    apiServer,
-		FileStore: fileStore,
-		Tags:      tags,
-		PinAPI:    pinAPI,
-		dir:       swarmDir,
-		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
-		cleanup: func() {
-			apiServer.Close()
-			fileStore.Close()
-			feeds.Close()
-			os.RemoveAll(swarmDir)
-			os.RemoveAll(feedsDir)
-		},
-		CurrentTime: 42,
-	}
-	feed.TimestampProvider = tss
-	return tss
-}
-
-func (t *testSimpleSwarmServer) Close() {
-	t.cleanup()
-}
-func (t *testSimpleSwarmServer) Now() feed.Timestamp {
-	return feed.Timestamp{Time: t.CurrentTime}
-}
 
 //
 //   isRaw       toPin        encrypted     noPfPins
@@ -427,6 +357,78 @@ func failIfNotPinned(t *testing.T, srv *testSimpleSwarmServer, rootHash string, 
 		}
 	}
 }
+
+type testSimpleSwarmServer struct {
+	*httptest.Server
+	Hasher      storage.SwarmHash
+	FileStore   *storage.FileStore
+	Tags        *chunk.Tags
+	PinAPI      *api.PinAPI
+	dir         string
+	cleanup     func()
+	CurrentTime uint64
+}
+
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) swarmhttp.TestServer, resolver api.Resolver,
+	o *localstore.Options) *testSimpleSwarmServer {
+
+	swarmDir, err := ioutil.TempDir("", "swarm-storage-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	localStore, err := localstore.New(swarmDir, make([]byte, 32), o)
+	if err != nil {
+		os.RemoveAll(swarmDir)
+		t.Fatal(err)
+	}
+
+	tags := chunk.NewTags()
+	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams(), tags)
+
+	// Swarm feeds test setup
+	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	feeds, err := feed.NewTestHandler(feedsDir, &feed.HandlerParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pinAPI := api.NewPinApi(localStore, nil, tags)
+	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags, pinAPI)
+	pinAPI.SetApi(swarmApi)
+	apiServer := httptest.NewServer(serverFunc(swarmApi))
+
+	tss := &testSimpleSwarmServer{
+		Server:    apiServer,
+		FileStore: fileStore,
+		Tags:      tags,
+		PinAPI:    pinAPI,
+		dir:       swarmDir,
+		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
+		cleanup: func() {
+			apiServer.Close()
+			fileStore.Close()
+			feeds.Close()
+			os.RemoveAll(swarmDir)
+			os.RemoveAll(feedsDir)
+		},
+		CurrentTime: 42,
+	}
+	feed.TimestampProvider = tss
+	return tss
+}
+
+func (t *testSimpleSwarmServer) Close() {
+	t.cleanup()
+}
+func (t *testSimpleSwarmServer) Now() feed.Timestamp {
+	return feed.Timestamp{Time: t.CurrentTime}
+}
+
 
 func failIfUnpinned(t *testing.T, srv *testSimpleSwarmServer, rootHash string) {
 
