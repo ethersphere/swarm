@@ -148,10 +148,11 @@ func TestDeliveryForwarding(t *testing.T) {
 	chunkCount := 100
 	filesize := chunkCount * 4096
 	sim, uploader, forwarder, fetcher := setupTestDeliveryForwardingSimulation(t)
-
+	defer sim.Close()
 	log.Debug("test delivery forwarding", "uploader", uploader, "forwarder", forwarder, "fetcher", fetcher)
 	uploaderNodeStore := sim.NodeItem(uploader, bucketKeyFileStore).(*storage.FileStore)
-	fetcherKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia)
+	fetcherKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	uploaderKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 	ctx := context.Background()
 	_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 	if err != nil {
@@ -170,12 +171,18 @@ func TestDeliveryForwarding(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if chunk.Proximity(addr, fetcherKad.BaseAddr()) == 2 {
-			//try to fetch the chunk
-			panic("beep")
+
+		// try to retrieve all of the chunks which have no bits in common with the
+		// fetcher, but have more than one bit in common with the uploader node
+		if chunk.Proximity(addr, fetcherKad) == 0 && chunk.Proximity(addr, uploaderKad) > 1 {
+			req := storage.NewRequest(chunk.Address(addr))
+			fetcherNetstore := sim.NodeItem(fetcher, bucketKeyNetstore).(*storage.NetStore)
+			_, err := fetcherNetstore.Get(ctx, chunk.ModeGetRequest, req)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
-
 }
 
 func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simulation, uploader, forwarder, fetching enode.ID) {
@@ -210,7 +217,9 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 		t.Fatal(err)
 	}
 
-	uploaderConfig := createNodeConfigAtPo(t, fetcherBase, 2)
+	forwarderBase := sim.NodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+
+	uploaderConfig := createNodeConfigAtPo(t, forwarderBase, 2)
 	uploader, err = sim.AddNode(override(uploaderConfig))
 	if err != nil {
 		t.Fatal(err)
