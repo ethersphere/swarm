@@ -172,7 +172,7 @@ type PinInfo struct {
 //     2) the number of times that particular file or collection is pinned.
 func (p *PinAPI) ListPinFiles() map[string]PinInfo {
 
-	pinInfo := make(map[string]PinInfo, 0)
+	pinInfo := make(map[string]PinInfo)
 
 	pinnedFiles := p.db.GetPinFilesIndex()
 	for k, v := range pinnedFiles {
