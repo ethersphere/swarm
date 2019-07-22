@@ -682,3 +682,47 @@ func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err err
 	}
 	return nil
 }
+
+func testSaveAndLoadLastReceivedCheque(t *testing.T) {
+	swap, dir := newTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	testID := newDummyPeer().Peer.ID()
+	testCheque := newTestCheque()
+
+	if err := swap.saveLastReceivedCheque(testID, testCheque); err != nil {
+		t.Fatalf("Error while saving: %s", err.Error())
+	}
+
+	returnedCheque := swap.loadLastReceivedCheque(testID)
+
+	if returnedCheque == nil {
+		t.Fatalf("Could not find saved cheque")
+	}
+
+	if returnedCheque.Amount != testCheque.Amount || returnedCheque.Beneficiary != testCheque.Beneficiary {
+		t.Fatalf("Returned cheque was different")
+	}
+}
+
+func testPeerSaveAndLoadLastReceivedCheque(t *testing.T) {
+	swap, dir := newTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	testCheque := newTestCheque()
+	peer := NewPeer(newDummyPeer().Peer, swap, nil, common.Address{}, common.Address{})
+
+	if err := peer.saveLastReceivedCheque(testCheque); err != nil {
+		t.Fatalf("Error while saving: %s", err.Error())
+	}
+
+	returnedCheque := peer.loadLastReceivedCheque()
+
+	if returnedCheque == nil {
+		t.Fatalf("Could not find saved cheque")
+	}
+
+	if returnedCheque.Amount != testCheque.Amount || returnedCheque.Beneficiary != testCheque.Beneficiary {
+		t.Fatalf("Returned cheque was different")
+	}
+}
