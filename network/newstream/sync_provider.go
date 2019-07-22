@@ -86,7 +86,7 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
 	err = s.netStore.Store.Set(context.Background(), chunk.ModeSetSync, addr)
 	if err != nil {
-		metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
+		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return nil, err
 	}
 	return ch.Data(), nil
@@ -134,14 +134,6 @@ func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
 	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
-func (s *syncProvider) Cursor(key interface{}) (uint64, error) {
-	bin, ok := key.(uint8)
-	if !ok {
-		return 0, errors.New("error converting stream key to bin index")
-	}
-	return s.netStore.LastPullSubscriptionBinID(bin)
-}
-
 // InitPeer creates and maintains the streams per peer.
 // Runs per peer, in a separate goroutine
 // when the depth changes on our node
@@ -155,7 +147,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 
 	wasWithinDepth := po >= depth
 
-	log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "po", po, "depth", depth)
+	p.logDebug("update syncing subscriptions: initial", "po", po, "depth", depth)
 
 	// initial subscriptions
 	subBins, quitBins := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.noSyncWithinDepth)
@@ -192,7 +184,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 // and the second one representing bins for syncing subscriptions that
 // need to be removed.
 func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int) {
-	log.Debug("update syncing subscriptions", "peer", p.ID(), "subscribe", subBins, "quit", quitBins)
+	p.logDebug("update syncing subscriptions", "subscribe", subBins, "quit", quitBins)
 	if l := len(subBins); l > 0 {
 		streams := make([]ID, l)
 		for i, po := range subBins {
@@ -200,7 +192,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 			stream := NewID(s.StreamName(), strconv.Itoa(po))
 			_, err := p.getOrCreateInterval(p.peerStreamIntervalKey(stream))
 			if err != nil {
-				log.Error("got an error while trying to register initial streams", "peer", p.ID(), "stream", stream)
+				p.logError("got an error while trying to register initial streams", "stream", stream)
 			}
 
 			streams[i] = stream
@@ -208,12 +200,13 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := p.Send(ctx, StreamInfoReq{Streams: streams}); err != nil {
-			log.Error("error establishing subsequent subscription", "err", err)
+			p.logError("error establishing subsequent subscription", "err", err)
 			p.Drop()
+			return
 		}
 	}
 	for _, po := range quitBins {
-		log.Debug("removing cursor info for peer", "peer", p.ID(), "bin", po, "cursors", p.streamCursors)
+		p.logDebug("removing cursor info for peer", "bin", po)
 		p.deleteCursor(NewID(streamName, strconv.Itoa(po)))
 	}
 }

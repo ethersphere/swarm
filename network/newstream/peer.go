@@ -17,7 +17,6 @@
 package newstream
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -30,8 +29,6 @@ import (
 	"github.com/ethersphere/swarm/network/stream/intervals"
 	"github.com/ethersphere/swarm/state"
 )
-
-var ErrEmptyBatch = errors.New("empty batch")
 
 const (
 	HashSize  = 32
@@ -106,7 +103,7 @@ func (p *Peer) deleteCursor(stream ID) {
 }
 
 func (p *Peer) InitProviders() {
-	log.Debug("peer.InitProviders")
+	p.logDebug("peer.InitProviders")
 
 	for _, sp := range p.providers {
 		go sp.InitPeer(p)
@@ -177,7 +174,7 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 			return nil, err
 		}
 	default:
-		log.Error("unknown error while getting interval for peer", "err", err)
+		p.logError("unknown error while getting interval for peer", "err", err)
 		return nil, err
 	}
 	return i, nil
@@ -188,6 +185,14 @@ func (p *Peer) peerStreamIntervalKey(stream ID) string {
 	return k
 }
 
+func (p *Peer) logWarn(msg string, ctx ...interface{}) {
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Warn(msg, ctxs...)
+}
 func (p *Peer) logError(msg string, ctx ...interface{}) {
 	ctxs := []interface{}{
 		"peer",

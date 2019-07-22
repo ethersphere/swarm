@@ -311,7 +311,7 @@ func (s *SlipStream) requestStreamRange(ctx context.Context, p *Peer, stream ID,
 		// at this point of the message exchange unsupported providers are illegal. drop peer
 		p.logError("unsupported provider", "stream", stream)
 		p.Drop()
-		return
+		return nil
 	}
 	from, _, empty, err := p.nextInterval(stream, 0)
 	if err != nil {
