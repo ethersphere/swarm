@@ -55,12 +55,7 @@ var (
 	bucketKeyFileStore = simulation.BucketKey("filestore")
 	bucketKeyNetstore  = simulation.BucketKey("netstore")
 
-	hash0         = sha3.Sum256([]byte{0})
-	hash1         = sha3.Sum256([]byte{1})
-	hash2         = sha3.Sum256([]byte{2})
-	hashesTmp     = append(hash0[:], hash1[:]...)
-	hashes        = append(hashesTmp, hash2[:]...)
-	corruptHashes = append(hashes[:40])
+	hash0 = sha3.Sum256([]byte{0})
 )
 
 func init() {
@@ -111,11 +106,11 @@ func TestChunkDelivery(t *testing.T) {
 			return err
 		}
 
-		id, err := sim.AddNodes(1)
+		id, err := sim.AddNode()
 		if err != nil {
 			return err
 		}
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		err = sim.Net.Connect(id, nodeIDs[0])
 		if err != nil {
 			return err
 		}
@@ -123,7 +118,7 @@ func TestChunkDelivery(t *testing.T) {
 		if len(nodeIDs) != 2 {
 			return fmt.Errorf("wrong number of nodes, expected %d got %d", 2, len(nodeIDs))
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		log.Debug("fetching through node", "enode", nodeIDs[1])
 		ns := sim.NodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
 		ctr := 0
@@ -188,8 +183,6 @@ func TestDeliveryForwarding(t *testing.T) {
 }
 
 func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simulation, uploader, forwarder, fetching enode.ID) {
-	// initial node count
-
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
 	})
@@ -242,12 +235,12 @@ func createNodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeC
 	for foundPo != po {
 		conf = adapters.RandomNodeConfig()
 		ip := net.IPv4(127, 0, 0, 1)
-		enrIp := enr.IP(ip)
-		conf.Record.Set(&enrIp)
-		enrTcpPort := enr.TCP(conf.Port)
-		conf.Record.Set(&enrTcpPort)
-		enrUdpPort := enr.UDP(0)
-		conf.Record.Set(&enrUdpPort)
+		enrIP := enr.IP(ip)
+		conf.Record.Set(&enrIP)
+		enrTCPPort := enr.TCP(conf.Port)
+		conf.Record.Set(&enrTCPPort)
+		enrUDPPort := enr.UDP(0)
+		conf.Record.Set(&enrUDPPort)
 
 		err := enode.SignV4(&conf.Record, conf.PrivateKey)
 		if err != nil {
@@ -290,7 +283,7 @@ func TestRequestFromPeers(t *testing.T) {
 	s := NewRetrieval(to, nil)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
-	id, err := s.findPeer(context.TODO(), req)
+	id, err := s.findPeer(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,11 +315,10 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	req := storage.NewRequest(storage.Address(hash0[:]))
 
 	// making a request which should return with "no peer found"
-	_, err := r.findPeer(context.TODO(), req)
+	_, err := r.findPeer(context.Background(), req)
 
-	expectedError := "no peer found"
-	if err.Error() != expectedError {
-		t.Fatalf("expected '%v', got %v", expectedError, err)
+	if err != ErrNoPeerFound {
+		t.Fatalf("expected '%v', got %v", ErrNoPeerFound, err)
 	}
 }
 

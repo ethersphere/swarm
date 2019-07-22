@@ -60,8 +60,11 @@ var (
 			RetrieveRequest{},
 		},
 	}
+
+	ErrNoPeerFound = errors.New("no peer found")
 )
 
+// Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
 	mtx      sync.Mutex
 	netStore *storage.NetStore
@@ -74,6 +77,7 @@ type Retrieval struct {
 	quit chan struct{} // termination
 }
 
+// NewRetrieval returns a new instance of the retrieval protocol handler
 func NewRetrieval(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
 	ret := &Retrieval{
 		kad:      kad,
@@ -106,7 +110,7 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 	return r.peers[id]
 }
 
-// Protocol Run function
+// Run protocol function
 func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
@@ -259,7 +263,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	}
 
 	if retPeer == nil {
-		return nil, errors.New("no peer found")
+		return nil, ErrNoPeerFound
 	}
 
 	return retPeer, nil
@@ -350,8 +354,6 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
-				// we removed this log because it spams the logs
-				// TODO: Enable this log line
 				p.Drop()
 			}
 		}
@@ -422,7 +424,6 @@ func (r *Retrieval) APIs() []rpc.API {
 	}
 }
 
-// Additional public methods accessible through API for pss
 type API struct {
 	*Retrieval
 }
