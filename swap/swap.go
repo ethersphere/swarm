@@ -256,13 +256,17 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 }
 
 //GetPeerBalance returns the balance for a given peer
-func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
-	swap.lock.RLock()
-	defer swap.lock.RUnlock()
-	if p, ok := swap.balances[peer]; ok {
-		return p, nil
+func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	var peerBalance int64
+	var err error
+
+	_, keyExists := s.balances[peer]
+	if !keyExists {
+		err = s.stateStore.Get(peer.String(), &peerBalance)
 	}
-	return 0, errors.New("Peer not found")
+	return peerBalance, err
 }
 
 //GetAllBalances returns the balances for all known peers
