@@ -149,10 +149,12 @@ func TestDeliveryForwarding(t *testing.T) {
 	filesize := chunkCount * 4096
 	sim, uploader, forwarder, fetcher := setupTestDeliveryForwardingSimulation(t)
 	defer sim.Close()
+
 	log.Debug("test delivery forwarding", "uploader", uploader, "forwarder", forwarder, "fetcher", fetcher)
+
 	uploaderNodeStore := sim.NodeItem(uploader, bucketKeyFileStore).(*storage.FileStore)
-	fetcherKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
-	uploaderKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	fetcherBase := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	uploaderBase := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 	ctx := context.Background()
 	_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 	if err != nil {
@@ -174,7 +176,7 @@ func TestDeliveryForwarding(t *testing.T) {
 
 		// try to retrieve all of the chunks which have no bits in common with the
 		// fetcher, but have more than one bit in common with the uploader node
-		if chunk.Proximity(addr, fetcherKad) == 0 && chunk.Proximity(addr, uploaderKad) > 1 {
+		if chunk.Proximity(addr, fetcherBase) == 0 && chunk.Proximity(addr, uploaderBase) >= 1 {
 			req := storage.NewRequest(chunk.Address(addr))
 			fetcherNetstore := sim.NodeItem(fetcher, bucketKeyNetstore).(*storage.NetStore)
 			_, err := fetcherNetstore.Get(ctx, chunk.ModeGetRequest, req)
