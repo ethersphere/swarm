@@ -42,13 +42,28 @@ func NewPeer(peer *network.BzzPeer) *Peer {
 	return p
 }
 func (p *Peer) logError(msg string, ctx ...interface{}) {
-	log.Error(msg, "peer", p.ID(), ctx...)
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Error(msg, ctxs...)
 }
 
 func (p *Peer) logDebug(msg string, ctx ...interface{}) {
-	log.Debug(msg, "peer", p.ID(), ctx...)
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Debug(msg, ctxs...)
 }
 
 func (p *Peer) logTrace(msg string, ctx ...interface{}) {
-	log.Trace(msg, "peer", p.ID(), ctx...)
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Trace(msg, ctxs...)
 }
