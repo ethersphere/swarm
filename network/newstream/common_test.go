@@ -18,6 +18,7 @@ package newstream
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -128,15 +129,9 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		bucket.Store(bucketKeyFileStore, fileStore)
 
 		if o.InitialChunkCount > 0 {
-			for i := uint64(0); i < o.InitialChunkCount; i++ {
-				c := storage.GenerateRandomChunk(4096)
-				exists, err := localStore.Put(context.Background(), chunk.ModePutUpload, c)
-				if err != nil {
-					return nil, nil, err
-				}
-				if exists {
-					return nil, nil, fmt.Errorf("generated already existing chunk")
-				}
+			_, err := uploadChunks(context.Background(), localStore, o.InitialChunkCount)
+			if err != nil {
+				return nil, nil, err
 			}
 			binIndexes := make([]uint64, 17)
 			for i := uint8(0); i <= 16; i++ {
@@ -206,19 +201,27 @@ func parseID(str string) ID {
 	return NewID(v[0], v[1])
 }
 
-func uploadChunks(ctx context.Context, t testing.TB, store chunk.Store, count uint64) (chunks []chunk.Address) {
-	t.Helper()
-
+func uploadChunks(ctx context.Context, store chunk.Store, count uint64) (chunks []chunk.Address, err error) {
 	for i := uint64(0); i < count; i++ {
 		c := storage.GenerateRandomChunk(4096)
 		exists, err := store.Put(ctx, chunk.ModePutUpload, c)
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 		if exists {
-			t.Fatal("generated already existing chunk")
+			return nil, errors.New("generated already existing chunk")
 		}
 		chunks = append(chunks, c.Address())
+	}
+	return chunks, nil
+}
+
+func mustUploadChunks(ctx context.Context, t testing.TB, store chunk.Store, count uint64) (chunks []chunk.Address) {
+	t.Helper()
+
+	chunks, err := uploadChunks(ctx, store, count)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return chunks
 }

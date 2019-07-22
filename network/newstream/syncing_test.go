@@ -63,7 +63,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 	log.Debug("pivot node", "enode", uploaderNode)
 	uploadStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
 
-	chunks := uploadChunks(ctx, t, uploadStore, chunkCount)
+	chunks := mustUploadChunks(ctx, t, uploadStore, chunkCount)
 
 	uploaderNodeBinIDs := make([]uint64, 17)
 	uploaderStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
@@ -218,7 +218,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 			uploadStore := sim.NodeItem(uploadNode, bucketKeyFileStore).(chunk.Store)
 
-			chunks := uploadChunks(ctx, t, uploadStore, tc.chunkCount)
+			chunks := mustUploadChunks(ctx, t, uploadStore, tc.chunkCount)
 
 			totalChunkCount, err := getChunkCount(uploadStore)
 			if err != nil {
@@ -248,7 +248,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			}
 
 			if tc.liveChunkCount > 0 {
-				chunks = append(chunks, uploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
+				chunks = append(chunks, mustUploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
 
 				totalChunkCount, err = getChunkCount(uploadStore)
 				if err != nil {
@@ -273,7 +273,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // TestTwoNodesFullSyncLive brings up two nodes, connects them, adds chunkCount
 // * 4096 bytes to its localstore, then validates that all chunks are synced.
 func TestTwoNodesFullSyncLive(t *testing.T) {
-	var (
+	const (
 		chunkCount = 20000
 	)
 
@@ -311,15 +311,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 			return fmt.Errorf("got not empty uploader chunk store")
 		}
 
-		// now add stuff so that we fetch it with live syncing
-		filesize := chunkCount * 4096
-		_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
-		if err != nil {
-			return err
-		}
-		if err = wait(ctx); err != nil {
-			return err
-		}
+		mustUploadChunks(ctx, t, uploaderNodeStore, chunkCount)
 
 		// count the content in the bins again
 		uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
@@ -367,7 +359,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 // are synced to the newly connected node. After that it adds another chunkCount
 // * 4096 bytes to its localstore and validates that all live chunks are synced.
 func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
-	var (
+	const (
 		chunkCount = 10000 // per history and per live upload
 	)
 
@@ -386,17 +378,10 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+		uploaderNodeStore := nodeFileStore(sim, uploaderNode)
 
 		// add chunks for historical syncing before new node connection
-		filesize := chunkCount * 4096
-		_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
-		if err != nil {
-			return err
-		}
-		if err = wait(ctx); err != nil {
-			return err
-		}
+		mustUploadChunks(ctx, t, uploaderNodeStore, chunkCount)
 
 		// add another node
 		syncingNode, err := sim.AddNode()
@@ -452,13 +437,7 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 		}
 
 		// upload chunks for live syncing
-		_, wait, err = uploaderNodeStore.Store(ctx, testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
-		if err != nil {
-			return err
-		}
-		if err = wait(ctx); err != nil {
-			return err
-		}
+		mustUploadChunks(ctx, t, uploaderNodeStore, chunkCount)
 
 		// get all chunks from the uploader node
 		uploadedChunks, err = getChunks(uploaderNodeStore.ChunkStore)
@@ -517,7 +496,7 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 func TestFullSync(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
-		chunkCount    int
+		chunkCount    uint64
 		syncNodeCount int
 		history       bool
 		live          bool
@@ -576,14 +555,7 @@ func TestFullSync(t *testing.T) {
 			uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
 
 			if tc.history {
-				filesize := tc.chunkCount * 4096
-				_, wait, err := uploaderNodeStore.Store(context.Background(), testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err = wait(context.Background()); err != nil {
-					t.Fatal(err)
-				}
+				mustUploadChunks(context.Background(), t, uploaderNodeStore, tc.chunkCount)
 			}
 
 			// add nodes to sync to
@@ -646,14 +618,7 @@ func TestFullSync(t *testing.T) {
 			}
 
 			if tc.live {
-				filesize := tc.chunkCount * 4096
-				_, wait, err := uploaderNodeStore.Store(context.Background(), testutil.RandomReader(int(time.Now().UnixNano()), filesize), int64(filesize), false)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err = wait(context.Background()); err != nil {
-					t.Fatal(err)
-				}
+				mustUploadChunks(context.Background(), t, uploaderNodeStore, tc.chunkCount)
 			}
 
 			uploadedChunks, err = getChunks(uploaderNodeStore.ChunkStore)
@@ -843,7 +808,7 @@ func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 			b.Fatal(err)
 		}
 
-		uploadChunks(context.Background(), b, nodeFileStore(sim, syncingNode), chunks)
+		mustUploadChunks(context.Background(), b, nodeFileStore(sim, syncingNode), chunks)
 
 		err = sim.Net.Connect(syncingNode, uploaderNode)
 		if err != nil {
