@@ -202,7 +202,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	//syncing = stream.SyncingDisabled
 	//}
 
-	syncProvider := newstream.NewSyncProvider(self.netStore, to, false)
+	syncProvider := newstream.NewSyncProvider(self.netStore, to, true)
 	self.newstreamer = newstream.NewSlipStream(self.stateStore, syncProvider)
 	tags := chunk.NewTags() //todo load from state store
 
