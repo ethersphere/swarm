@@ -579,6 +579,11 @@ func (i *Info) Info() *Info {
 	return i
 }
 
+func (i *Info) Balance(peer enode.ID) int64 {
+	peerBalance, _ := i.Swap.GetPeerBalance(peer)
+	return peerBalance
+}
+
 func (i *Info) Balances() map[enode.ID]int64 {
 	return i.Swap.GetAllBalances()
 }
