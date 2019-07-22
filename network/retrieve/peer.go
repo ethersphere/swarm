@@ -19,6 +19,7 @@ package retrieve
 import (
 	"errors"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 )
 
@@ -39,4 +40,15 @@ func NewPeer(peer *network.BzzPeer) *Peer {
 		quit:    make(chan struct{}),
 	}
 	return p
+}
+func (p *Peer) logError(msg string, ctx ...interface{}) {
+	log.Error(msg, "peer", p.ID(), ctx...)
+}
+
+func (p *Peer) logDebug(msg string, ctx ...interface{}) {
+	log.Debug(msg, "peer", p.ID(), ctx...)
+}
+
+func (p *Peer) logTrace(msg string, ctx ...interface{}) {
+	log.Trace(msg, "peer", p.ID(), ctx...)
 }
