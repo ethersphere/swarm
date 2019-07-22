@@ -245,6 +245,8 @@ var reestablishCursorsSnapshotFilename = "testdata/reestablish-cursors-snapshot.
 // - start removing nodes from the simulation until that peer is again within depth
 // - check that the cursors are being re-established
 func TestNodeRemovesAndReestablishCursors(t *testing.T) {
+	t.Skip("disable to find more optimal way to run it")
+
 	if *update {
 		generateReestablishCursorsSnapshot(t, 2)
 	}
@@ -276,7 +278,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	lookupPO := s.PO
 	nodeCount := len(sim.UpNodeIDs())
 
-	uploadChunks(context.Background(), t, nodeFileStore(sim, pivotEnode), chunkCount)
+	mustUploadChunks(context.Background(), t, nodeFileStore(sim, pivotEnode), chunkCount)
 
 	log.Debug("tracking enode", "enode", lookupEnode, "po", lookupPO)
 
