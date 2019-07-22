@@ -84,7 +84,7 @@ func TestChunkDelivery(t *testing.T) {
 		nodeIDs := sim.UpNodeIDs()
 		log.Debug("uploader node", "enode", nodeIDs[0])
 
-		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		item := sim.MustNodeItem(nodeIDs[0], bucketKeyFileStore)
 
 		//put some data into just the first node
 		data := make([]byte, filesize)
@@ -120,7 +120,7 @@ func TestChunkDelivery(t *testing.T) {
 		// allow the two nodes time to set up the protocols otherwise kademlias will be empty when retrieve requests happen
 		time.Sleep(50 * time.Millisecond)
 		log.Debug("fetching through node", "enode", nodeIDs[1])
-		ns := sim.NodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
+		ns := sim.MustNodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
 		ctr := 0
 		for _, ch := range refs {
 			ctr++
@@ -147,9 +147,9 @@ func TestDeliveryForwarding(t *testing.T) {
 
 	log.Debug("test delivery forwarding", "uploader", uploader, "forwarder", forwarder, "fetcher", fetcher)
 
-	uploaderNodeStore := sim.NodeItem(uploader, bucketKeyFileStore).(*storage.FileStore)
-	fetcherBase := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
-	uploaderBase := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	uploaderNodeStore := sim.MustNodeItem(uploader, bucketKeyFileStore).(*storage.FileStore)
+	fetcherBase := sim.MustNodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	uploaderBase := sim.MustNodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 	ctx := context.Background()
 	_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 	if err != nil {
@@ -173,7 +173,7 @@ func TestDeliveryForwarding(t *testing.T) {
 		// fetcher, but have more than one bit in common with the uploader node
 		if chunk.Proximity(addr, fetcherBase) == 0 && chunk.Proximity(addr, uploaderBase) >= 1 {
 			req := storage.NewRequest(chunk.Address(addr))
-			fetcherNetstore := sim.NodeItem(fetcher, bucketKeyNetstore).(*storage.NetStore)
+			fetcherNetstore := sim.MustNodeItem(fetcher, bucketKeyNetstore).(*storage.NetStore)
 			_, err := fetcherNetstore.Get(ctx, chunk.ModeGetRequest, req)
 			if err != nil {
 				t.Fatal(err)
@@ -192,7 +192,7 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 		t.Fatal(err)
 	}
 
-	fetcherBase := sim.NodeItem(fetching, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	fetcherBase := sim.MustNodeItem(fetching, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 
 	override := func(o *adapters.NodeConfig) func(*adapters.NodeConfig) {
 		return func(c *adapters.NodeConfig) {
@@ -212,7 +212,7 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 		t.Fatal(err)
 	}
 
-	forwarderBase := sim.NodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	forwarderBase := sim.MustNodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 
 	// create a node on which the files will be stored at po 1 in relation to the forwarding node
 	uploaderConfig := testutil.NodeConfigAtPo(t, forwarderBase, 1)
