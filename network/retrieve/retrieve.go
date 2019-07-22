@@ -39,25 +39,27 @@ import (
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
-// Retrieve implements node.Service
-var _ node.Service = &Retrieval{}
-
-var spec = &protocols.Spec{
-	Name:       "bzz-retrieve",
-	Version:    1,
-	MaxMsgSize: 10 * 1024 * 1024,
-	Messages: []interface{}{
-		ChunkDelivery{},
-		RetrieveRequest{},
-	},
-}
-
 var (
+	// Compile time interface check
+	_ node.Service = &Retrieval{}
+
+	// Metrics
 	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks.count", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg.count", nil)
 	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail.count", nil)
 
 	lastReceivedRetrieveChunksMsg = metrics.GetOrRegisterGauge("network.retrieve.received_chunks", nil)
+
+	// Protocol spec
+	spec = &protocols.Spec{
+		Name:       "bzz-retrieve",
+		Version:    1,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			ChunkDelivery{},
+			RetrieveRequest{},
+		},
+	}
 )
 
 type Retrieval struct {
@@ -104,6 +106,7 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 	return r.peers[id]
 }
 
+// Protocol Run function
 func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
@@ -113,7 +116,7 @@ func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return peer.Run(r.HandleMsg(sp))
 }
 
-// HandleMsg is the message handler that delegates incoming messages
+// HandleMsg handles incoming messages for a certain peer
 func (r *Retrieval) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
@@ -132,6 +135,7 @@ func (r *Retrieval) HandleMsg(p *Peer) func(context.Context, interface{}) error 
 // this is used only for tracing, and can probably be refactor so that we don't have to
 // iterater over Kademlia
 func (r *Retrieval) getOriginPo(req *storage.Request) int {
+	log.Trace("retrieval.getOriginPo", "req.Addr", req.Addr)
 	originPo := -1
 
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
@@ -149,7 +153,9 @@ func (r *Retrieval) getOriginPo(req *storage.Request) int {
 	return originPo
 }
 
+// findPeer finds a peer we need to ask for a specific chunk from according to our kademlia
 func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer *network.Peer, err error) {
+	log.Trace("retrieval.findPeer", "req.Addr", req.Addr)
 	osp, _ := ctx.Value("remote.fetch").(opentracing.Span)
 
 	// originPo - proximity of the node that made the request; -1 if the request originator is our node;
@@ -259,8 +265,11 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	return retPeer, nil
 }
 
+// handleRetrieveRequest handles an incoming retrieve request from a certain Peer
+// if the chunk is found in the localstore it is served immediately, otherwise
+// it results in a new retrieve request to candidate peers in our localstore
 func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) {
-	log.Trace("handle retrieve request", "peer", p.ID(), "hash", msg.Addr)
+	p.logDebug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
 	ctx, osp := spancontext.StartSpan(
@@ -281,11 +290,11 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		log.Debug("ChunkStore.Get can not retrieve chunk", "peer", p.ID().String(), "addr", msg.Addr, "err", err)
+		p.logDebug("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
 		return
 	}
 
-	log.Trace("retrieve request, delivery", "ref", msg.Addr, "peer", p.ID())
+	p.logTrace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
 
 	deliveryMsg := &ChunkDelivery{
 		Addr:  chunk.Address(),
@@ -294,14 +303,18 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 
 	err = p.Send(ctx, deliveryMsg)
 	if err != nil {
-		log.Error("peer delivery failed", "peer", p.ID(), "chunkAddr", msg.Addr, "err", err)
+		p.logError("retrieval.handleRetrieveRequest - peer delivery failed", "ref", msg.Addr, "err", err)
 		osp.LogFields(olog.Bool("delivered", false))
 		return
 	}
 	osp.LogFields(olog.Bool("delivered", true))
 }
 
+// handleChunkDelivery handles a ChunkDelivery message from a certain peer
+// if the chunk proximity order in relation to our base address is within depth
+// we treat the chunk as a chunk received in syncing
 func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) error {
+	p.logDebug("retrieval.handleChunkDelivery", "ref", msg.Addr)
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
@@ -329,11 +342,11 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		mode = chunk.ModePutRequest
 	}
 
-	log.Trace("handle.chunk.delivery", "ref", msg.Addr, "from peer", p.ID())
+	p.logTrace("handle.chunk.delivery", "ref", msg.Addr)
 
 	go func() {
 		defer osp.Finish()
-		log.Trace("handle.chunk.delivery", "put", msg.Addr)
+		p.logTrace("handle.chunk.delivery", "put", msg.Addr)
 		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
@@ -342,13 +355,14 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 				p.Drop()
 			}
 		}
-		log.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
+		p.logTrace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
 }
 
 // RequestFromPeers sends a chunk retrieve request to the next found peer
 func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+	log.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr)
 	metrics.GetOrRegisterCounter("network.retrieve.requestfrompeers", nil).Inc(1)
 
 	sp, err := r.findPeer(ctx, req)
@@ -364,15 +378,26 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 	ret := RetrieveRequest{
 		Addr: req.Addr,
 	}
-	log.Trace("sending retrieve request", "ref", ret.Addr, "peer", sp.ID().String(), "origin", localID)
+	protoPeer.logTrace("sending retrieve request", "ref", ret.Addr, "origin", localID)
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
-		log.Error(err.Error())
+		protoPeer.logError("error sending retrieve request to peer", "err", err)
 		return nil, err
 	}
 
 	spID := protoPeer.ID()
 	return &spID, nil
+}
+
+func (r *Retrieval) Start(server *p2p.Server) error {
+	log.Info("starting bzz-retrieve")
+	return nil
+}
+
+func (r *Retrieval) Stop() error {
+	log.Info("shutting down bzz-retrieve")
+	close(r.quit)
+	return nil
 }
 
 func (r *Retrieval) Protocols() []p2p.Protocol {
@@ -404,15 +429,4 @@ type API struct {
 
 func NewAPI(r *Retrieval) *API {
 	return &API{r}
-}
-
-func (r *Retrieval) Start(server *p2p.Server) error {
-	log.Info("started retrieval")
-	return nil
-}
-
-func (r *Retrieval) Stop() error {
-	log.Info("shutting down retrieval")
-	close(r.quit)
-	return nil
 }
