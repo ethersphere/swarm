@@ -187,3 +187,30 @@ func (p *Peer) peerStreamIntervalKey(stream ID) string {
 	k := fmt.Sprintf("%s|%s", p.ID().String(), stream.String())
 	return k
 }
+
+func (p *Peer) logError(msg string, ctx ...interface{}) {
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Error(msg, ctxs...)
+}
+
+func (p *Peer) logDebug(msg string, ctx ...interface{}) {
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Debug(msg, ctxs...)
+}
+
+func (p *Peer) logTrace(msg string, ctx ...interface{}) {
+	ctxs := []interface{}{
+		"peer",
+		p.ID(),
+	}
+	ctxs = append(ctxs, ctx...)
+	log.Trace(msg, ctxs...)
+}
