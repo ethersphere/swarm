@@ -116,6 +116,8 @@ func TestChunkDelivery(t *testing.T) {
 		if len(nodeIDs) != 2 {
 			return fmt.Errorf("wrong number of nodes, expected %d got %d", 2, len(nodeIDs))
 		}
+
+		// allow the two nodes time to set up the protocols otherwise kademlias will be empty when retrieve requests happen
 		time.Sleep(50 * time.Millisecond)
 		log.Debug("fetching through node", "enode", nodeIDs[1])
 		ns := sim.NodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
