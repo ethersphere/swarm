@@ -139,6 +139,10 @@ func TestChunkDelivery(t *testing.T) {
 	}
 }
 
+// TestDeliveryForwarding tests that chunk delivery forwarding requests happen. It creates three nodes (fetching, forwarding and uploading)
+// each in PO 1 in relation to each other (fetching is base, forwarding at po 1 for fetching, uploading at po 1 for forwarding), then uploads chunks
+// to the uploading node, afterwards tries to retrieve the relevant chunks (ones with po = 0 to fetching i.e. no bits in common with fetching and with
+// po = 1 with uploading i.e. with 1 bit in common with the uploading)
 func TestDeliveryForwarding(t *testing.T) {
 	chunkCount := 100
 	filesize := chunkCount * 4096
@@ -228,13 +232,6 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 
 	return sim, uploader, forwarder, fetching
 }
-
-/*
-more test cases:
-1. connect 3 nodes in chain and make sure that the retrieve request is being forwarded between the nodes
-2. make sure that the whole thing plays out with a root hash and an actual trie that needs to be retrieved
-3. make sure it works with manifests too
-*/
 
 // if there is one peer in the Kademlia, RequestFromPeers should return it
 func TestRequestFromPeers(t *testing.T) {

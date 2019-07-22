@@ -23,7 +23,7 @@ type RetrieveRequest struct {
 	Addr storage.Address
 }
 
-//Chunk delivery always uses the same message type....
+//ChunkDelivery is the protocol msg for delivering an arbitrary chunk to a peer
 type ChunkDelivery struct {
 	Addr  storage.Address
 	SData []byte // the stored chunk Data (incl size)

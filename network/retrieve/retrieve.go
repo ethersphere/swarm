@@ -375,8 +375,6 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 
 	protoPeer := r.getPeer(sp.ID())
 
-	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
-	// this span will finish only when delivery is handled (or times out)
 	ret := RetrieveRequest{
 		Addr: req.Addr,
 	}
