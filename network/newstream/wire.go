@@ -49,8 +49,7 @@ type StreamProvider interface {
 	// Subscribe to a data stream from an arbitrary data source
 	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
 
-	// Cursor returns the last known Cursor for a given Stream Key
-	Cursor(interface{}) (uint64, error)
+	// CursorStr returns the last known Cursor for a given Stream Key string
 	CursorStr(string) (uint64, error)
 
 	// InitPeer is a provider specific implementation on how to maintain running streams with
