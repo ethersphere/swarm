@@ -167,7 +167,7 @@ func TestDeliveryForwarding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for c, _ := range chunks {
+	for c := range chunks {
 		addr, err := hex.DecodeString(c)
 		if err != nil {
 			t.Fatal(err)
