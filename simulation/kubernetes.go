@@ -199,7 +199,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 }
 
 // NewNode creates a new node
-func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
+func (a KubernetesAdapter) NewNode(config NodeConfig) Node {
 	info := NodeInfo{
 		ID: config.ID,
 	}
@@ -208,15 +208,15 @@ func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 		adapter: &a,
 		info:    info,
 	}
-	return node, nil
+	return node
 }
 
 // Snapshot returns a snapshot of the Adapter
-func (a KubernetesAdapter) Snapshot() (AdapterSnapshot, error) {
+func (a KubernetesAdapter) Snapshot() AdapterSnapshot {
 	return AdapterSnapshot{
 		Type:   "kubernetes",
 		Config: a.config,
-	}, nil
+	}
 }
 
 // KubernetesNode is a node that was started via the KubernetesAdapter
@@ -407,10 +407,7 @@ func (n *KubernetesNode) Snapshot() (NodeSnapshot, error) {
 	snap := NodeSnapshot{
 		Config: n.config,
 	}
-	adapterSnap, err := n.adapter.Snapshot()
-	if err != nil {
-		return snap, err
-	}
+	adapterSnap := n.adapter.Snapshot()
 	snap.Adapter = &adapterSnap
 	return snap, nil
 }

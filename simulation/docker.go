@@ -54,7 +54,7 @@ type DockerAdapterConfig struct {
 // local docker images
 type DockerBuildContext struct {
 	// Dockefile is the path to the dockerfile
-	Dockerfile string `json:"dockerFile"`
+	Dockerfile string `json:"dockerfile"`
 	// Directory is the directory that will be used
 	// in the context of a docker build
 	Directory string `json:"directory"`
@@ -155,7 +155,7 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 }
 
 // NewNode creates a new node
-func (a DockerAdapter) NewNode(config NodeConfig) (Node, error) {
+func (a DockerAdapter) NewNode(config NodeConfig) Node {
 	info := NodeInfo{
 		ID: config.ID,
 	}
@@ -165,15 +165,15 @@ func (a DockerAdapter) NewNode(config NodeConfig) (Node, error) {
 		adapter: &a,
 		info:    info,
 	}
-	return node, nil
+	return node
 }
 
 // Snapshot returns a snapshot of the adapter
-func (a DockerAdapter) Snapshot() (AdapterSnapshot, error) {
+func (a DockerAdapter) Snapshot() AdapterSnapshot {
 	return AdapterSnapshot{
 		Type:   "docker",
 		Config: a.config,
-	}, nil
+	}
 }
 
 // Info returns the node status
@@ -333,10 +333,7 @@ func (n *DockerNode) Snapshot() (NodeSnapshot, error) {
 	snap := NodeSnapshot{
 		Config: n.config,
 	}
-	adapterSnap, err := n.adapter.Snapshot()
-	if err != nil {
-		return snap, err
-	}
+	adapterSnap := n.adapter.Snapshot()
 	snap.Adapter = &adapterSnap
 	return snap, nil
 }

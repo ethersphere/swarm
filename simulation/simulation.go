@@ -262,10 +262,7 @@ func (s *Simulation) InitWithAdapter(config NodeConfig, adapter Adapter) error {
 	if _, ok := s.nodes.Load(config.ID); ok {
 		return fmt.Errorf("a node with id %s already exists", config.ID)
 	}
-	node, err := adapter.NewNode(config)
-	if err != nil {
-		return fmt.Errorf("failed to create node: %v", err)
-	}
+	node := adapter.NewNode(config)
 	s.nodes.Store(config.ID, node)
 	return nil
 }
@@ -353,10 +350,7 @@ func (s *Simulation) Snapshot() (*Snapshot, error) {
 	snap := Snapshot{}
 
 	// Default adapter snapshot
-	asnap, err := s.DefaultAdapter().Snapshot()
-	if err != nil {
-		return nil, fmt.Errorf("could not get adapter snapshot: %v", err)
-	}
+	asnap := s.DefaultAdapter().Snapshot()
 	snap.DefaultAdapter = &asnap
 
 	// Nodes snapshot

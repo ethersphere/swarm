@@ -18,9 +18,9 @@ type Node interface {
 // Adapter can handle Node creation
 type Adapter interface {
 	// NewNode creates a new node based on the NodeConfig
-	NewNode(config NodeConfig) (Node, error)
+	NewNode(config NodeConfig) Node
 	// Snapshot returns a snapshot of the adapter
-	Snapshot() (AdapterSnapshot, error)
+	Snapshot() AdapterSnapshot
 }
 
 // NodeID is the node identifier within a simulation. This can be an arbitrary string.
