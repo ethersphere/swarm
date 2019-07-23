@@ -17,6 +17,7 @@
 package retrieve
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -146,7 +147,7 @@ func (r *Retrieval) getOriginPo(req *storage.Request) int {
 		id := p.ID()
 
 		// get po between chunk and origin
-		if req.Origin.String() == id.String() {
+		if bytes.Compare(req.Origin.Bytes(), id.Bytes()) == 0 {
 			originPo = po
 			return false
 		}
@@ -192,7 +193,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 		}
 
 		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
-		if req.Origin.String() == id.String() {
+		if bytes.Compare(req.Origin.Bytes(), id.Bytes()) == 0 {
 			return true
 		}
 
@@ -271,7 +272,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 
 // handleRetrieveRequest handles an incoming retrieve request from a certain Peer
 // if the chunk is found in the localstore it is served immediately, otherwise
-// it results in a new retrieve request to candidate peers in our localstore
+// it results in a new retrieve request to candidate peers in our kademlia
 func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) {
 	p.logDebug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
