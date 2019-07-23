@@ -368,6 +368,7 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 	log.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr)
 	metrics.GetOrRegisterCounter("network.retrieve.requestfrompeers", nil).Inc(1)
 
+FINDPEER:
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {
 		log.Trace(err.Error())
@@ -375,6 +376,9 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 	}
 
 	protoPeer := r.getPeer(sp.ID())
+	if protoPeer == nil {
+		goto FINDPEER
+	}
 
 	ret := RetrieveRequest{
 		Addr: req.Addr,

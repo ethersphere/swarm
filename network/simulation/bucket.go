@@ -47,7 +47,7 @@ func (s *Simulation) MustNodeItem(id enode.ID, key interface{}) (value interface
 	if v, ok := s.buckets[id].Load(key); ok {
 		return v
 	} else {
-		e := fmt.Errorf("cannot find key %s on node bucket", key.(string))
+		e := fmt.Errorf("cannot find key %v on node bucket", key)
 		panic(e)
 	}
 }

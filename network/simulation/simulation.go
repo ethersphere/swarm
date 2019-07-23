@@ -105,7 +105,7 @@ func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 		addr := network.NewAddr(ctx.Config.Node())
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
-		hp.Discovery = false // discovery must be enabled when creating a snapshot
+		hp.Discovery = false
 		var kad *network.Kademlia
 
 		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
