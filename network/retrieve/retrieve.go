@@ -274,7 +274,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 // if the chunk is found in the localstore it is served immediately, otherwise
 // it results in a new retrieve request to candidate peers in our kademlia
 func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) {
-	p.logDebug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
+	p.logger.Debug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
 	ctx, osp := spancontext.StartSpan(
@@ -295,11 +295,11 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		p.logDebug("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
+		p.logger.Debug("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
 		return
 	}
 
-	p.logTrace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
+	p.logger.Trace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
 
 	deliveryMsg := &ChunkDelivery{
 		Addr:  chunk.Address(),
@@ -308,7 +308,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 
 	err = p.Send(ctx, deliveryMsg)
 	if err != nil {
-		p.logError("retrieval.handleRetrieveRequest - peer delivery failed", "ref", msg.Addr, "err", err)
+		p.logger.Error("retrieval.handleRetrieveRequest - peer delivery failed", "ref", msg.Addr, "err", err)
 		osp.LogFields(olog.Bool("delivered", false))
 		return
 	}
@@ -319,7 +319,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 // if the chunk proximity order in relation to our base address is within depth
 // we treat the chunk as a chunk received in syncing
 func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) error {
-	p.logDebug("retrieval.handleChunkDelivery", "ref", msg.Addr)
+	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
@@ -347,18 +347,18 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		mode = chunk.ModePutRequest
 	}
 
-	p.logTrace("handle.chunk.delivery", "ref", msg.Addr)
+	p.logger.Trace("handle.chunk.delivery", "ref", msg.Addr)
 
 	go func() {
 		defer osp.Finish()
-		p.logTrace("handle.chunk.delivery", "put", msg.Addr)
+		p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
 		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				p.Drop()
 			}
 		}
-		p.logTrace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
+		p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
 }
@@ -379,10 +379,10 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 	ret := RetrieveRequest{
 		Addr: req.Addr,
 	}
-	protoPeer.logTrace("sending retrieve request", "ref", ret.Addr, "origin", localID)
+	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID)
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
-		protoPeer.logError("error sending retrieve request to peer", "err", err)
+		protoPeer.logger.Error("error sending retrieve request to peer", "err", err)
 		return nil, err
 	}
 

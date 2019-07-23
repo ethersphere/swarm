@@ -17,45 +17,21 @@
 package retrieve
 
 import (
-	"github.com/ethersphere/swarm/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/network"
 )
 
-// Peer is the Peer extension for the streaming protocol
+// Peer wraps BzzPeer with a contextual logger for this peer
 type Peer struct {
 	*network.BzzPeer
+	logger log.Logger
 }
 
 // NewPeer is the constructor for Peer
 func NewPeer(peer *network.BzzPeer) *Peer {
 	p := &Peer{
 		BzzPeer: peer,
+		logger:  log.New("peer", peer.ID()),
 	}
 	return p
-}
-func (p *Peer) logError(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Error(msg, ctxs...)
-}
-
-func (p *Peer) logDebug(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Debug(msg, ctxs...)
-}
-
-func (p *Peer) logTrace(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Trace(msg, ctxs...)
 }
