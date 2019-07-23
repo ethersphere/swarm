@@ -103,7 +103,10 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	sp.swap.resetBalance(sp.ID(), 0-int64(cheque.Honey))
 	// send confirmation
-	if err := sp.Send(ctx, &ConfirmMsg{}); err != nil {
+	confMsg := &ConfirmMsg{
+		Cheque: cheque,
+	}
+	if err := sp.Send(ctx, confMsg); err != nil {
 		log.Error("error while sending confirm msg", "peer", sp.ID().String(), "err", err.Error())
 		return err
 	}

@@ -19,6 +19,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -104,14 +105,30 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	}
 
 	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, answer.(*HandshakeMsg).ContractAddress)
-
-	s.lock.Lock()
-	s.peers[p.ID()] = swapPeer
-	s.lock.Unlock()
+	s.addPeer(swapPeer)
+	defer s.removePeer(swapPeer)
 
 	s.logBalance(protoPeer)
 
 	return swapPeer.Run(swapPeer.handleMsg)
+}
+
+func (s *Swap) removePeer(p *Peer) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	delete(s.peers, p.ID())
+}
+
+func (s *Swap) addPeer(p *Peer) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.peers[p.ID()] = p
+}
+
+func (s *Swap) getPeer(id enode.ID) *Peer {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.peers[id]
 }
 
 // PublicAPI would be the public API accessor for protocol methods

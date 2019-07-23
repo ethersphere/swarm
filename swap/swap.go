@@ -131,16 +131,16 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	//load existing balances from the state store
+	// load existing balances from the state store
 	err = s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
 		log.Error("error while loading balance for peer", "peer", peer.ID().String())
 		return
 	}
 
-	//check if balance with peer is over the disconnect threshold
+	// check if balance with peer is over the disconnect threshold
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
-		//if so, return error in order to abort the transfer
+		// if so, return error in order to abort the transfer
 		disconnectMessage := fmt.Sprintf("balance for peer %s is over the disconnect threshold %v, disconnecting", peer.ID().String(), s.disconnectThreshold)
 		log.Warn(disconnectMessage)
 		return errors.New(disconnectMessage)
@@ -153,7 +153,9 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	//check if balance with peer is over the payment threshold
+	// check if balance with peer is over the payment threshold
+	// it is the peer with a negative balance who sends a cheque, thus we check
+	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		//if so, send cheque
 		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, sending cheque", peer.ID().String(), s.paymentThreshold))
@@ -194,7 +196,7 @@ func (s *Swap) logBalance(peer *protocols.Peer) {
 
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer := s.peers[peer]
+	swapPeer := s.getPeer(peer)
 	cheque, err := s.createCheque(peer)
 	if err != nil {
 		log.Error("error while creating cheque: %s", err.Error())
@@ -230,14 +232,15 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer := s.peers[peer]
+	swapPeer := s.getPeer(peer)
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance := s.balances[peer]
-	honey := -peerBalance
+	// the balance should be negative here, we take the absolute value:
+	honey := uint64(-peerBalance)
 
 	// convert honey to ETH
-	var amount int64
+	var amount uint64
 	amount, err = s.oracle.GetPrice(honey)
 	if err != nil {
 		log.Error("error getting price from oracle", "err", err)

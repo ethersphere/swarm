@@ -29,7 +29,7 @@ type Currency string
 
 // PriceOracle is the interface through which Oracles will deliver prices
 type PriceOracle interface {
-	GetPrice(honey int64) (int64, error)
+	GetPrice(honey uint64) (uint64, error)
 }
 
 // NewPriceOracle returns the actual oracle to be used for discovering the price
@@ -52,14 +52,18 @@ type ConfigurablePriceOracle struct {
 }
 
 // GetPrice returns the actual price for honey
-func (cpo *ConfigurablePriceOracle) GetPrice(honey int64) (int64, error) {
+func (cpo *ConfigurablePriceOracle) GetPrice(honey uint64) (uint64, error) {
+	// only request to refresh the rate if the timestamp is old enough
 	if time.Now().After(cpo.lastUpdated.Add(maxPriceAge)) {
 		cpo.refreshRate()
 	}
-	return honey * int64(cpo.honeyPrice), nil
+	// otherwise don't refresh the rate and return the latest price
+	return honey * cpo.honeyPrice, nil
 }
 
 // refreshRate refreshes the honey to output unit price (currently ETH)
 func (cpo *ConfigurablePriceOracle) refreshRate() (uint64, error) {
+	// currently do not do anything.
+	// in the future, this might make a network request to some service, reload a file or whatever
 	return cpo.honeyPrice, nil
 }
