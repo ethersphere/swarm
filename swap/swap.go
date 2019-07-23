@@ -262,8 +262,10 @@ func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	var peerBalance int64
 	var err error
 
+	// load balance from memory
 	peerBalance, keyExists := s.balances[peer]
 	if !keyExists {
+		// if not in memory, try to load balance from disk
 		err = s.stateStore.Get(peer.String(), &peerBalance)
 	}
 	return peerBalance, err
@@ -272,6 +274,8 @@ func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 //GetAllBalances returns the balances for all known peers
 func (s *Swap) GetAllBalances() map[enode.ID]int64 {
 	balances := make(map[enode.ID]int64)
+
+	// load balances from disk
 	keys, err := s.stateStore.Keys()
 	if err == nil {
 		for _, key := range keys {
@@ -281,6 +285,11 @@ func (s *Swap) GetAllBalances() map[enode.ID]int64 {
 				balances[peerID] = peerBalance
 			}
 		}
+	}
+
+	// add balances from memory
+	for peerID, peerBalance := range s.balances {
+		balances[peerID] = peerBalance
 	}
 	return balances
 }
