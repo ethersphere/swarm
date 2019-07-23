@@ -272,26 +272,30 @@ func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 }
 
 //GetAllBalances returns the balances for all known peers
-func (s *Swap) GetAllBalances() map[enode.ID]int64 {
+func (s *Swap) GetAllBalances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
 	// load balances from disk
 	peerIDs, err := s.stateStore.Keys()
-	if err == nil {
-		for _, peerIDString := range peerIDs {
-			peerID := enode.HexID(peerIDString)
-			peerBalance, err := s.GetPeerBalance(peerID)
-			if err == nil {
-				balances[peerID] = peerBalance
-			}
+	if err != nil {
+		return nil, err
+	}
+
+	for _, peerIDString := range peerIDs {
+		peerID := enode.HexID(peerIDString)
+		peerBalance, err := s.GetPeerBalance(peerID)
+		if err != nil {
+			return nil, err
 		}
+		balances[peerID] = peerBalance
 	}
 
 	// add balances from memory
 	for peerID, peerBalance := range s.balances {
 		balances[peerID] = peerBalance
 	}
-	return balances
+
+	return balances, nil
 }
 
 // GetLastCheque returns the last cheque for a given peer

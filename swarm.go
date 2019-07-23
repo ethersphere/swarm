@@ -595,5 +595,6 @@ func (s *SwapInfo) Balance(peer enode.ID) int64 {
 }
 
 func (s *SwapInfo) Balances() map[enode.ID]int64 {
-	return s.Swap.GetAllBalances()
+	peerBalances, _ := s.Swap.GetAllBalances()
+	return peerBalances
 }
