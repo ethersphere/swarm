@@ -93,7 +93,7 @@ func TestChunkDelivery(t *testing.T) {
 		}
 		refs, err := getAllRefs(data)
 		if err != nil {
-			return nil
+			return err
 		}
 		log.Trace("got all refs", "refs", refs)
 		_, wait, err := item.(*storage.FileStore).Store(context.Background(), bytes.NewReader(data), int64(filesize), false)
@@ -129,9 +129,6 @@ func TestChunkDelivery(t *testing.T) {
 				return err
 			}
 		}
-		if ctr != len(refs) {
-			return fmt.Errorf("did not process enough refs. got %d want %d", ctr, len(refs))
-		}
 		return nil
 	})
 	if result.Error != nil {
@@ -140,9 +137,9 @@ func TestChunkDelivery(t *testing.T) {
 }
 
 // TestDeliveryForwarding tests that chunk delivery forwarding requests happen. It creates three nodes (fetching, forwarding and uploading)
-// each in PO 1 in relation to each other (fetching is base, forwarding at po 1 for fetching, uploading at po 1 for forwarding), then uploads chunks
-// to the uploading node, afterwards tries to retrieve the relevant chunks (ones with po = 0 to fetching i.e. no bits in common with fetching and with
-// po = 1 with uploading i.e. with 1 bit in common with the uploading)
+// where po(fetching,forwarding) = 1 and po(forwarding,uploading) = 1, then uploads chunks to the uploading node, afterwards
+// tries to retrieve the relevant chunks (ones with po = 0 to fetching i.e. no bits in common with fetching and with
+// po >= 1 with uploading i.e. with 1 bit or more in common with the uploading)
 func TestDeliveryForwarding(t *testing.T) {
 	chunkCount := 100
 	filesize := chunkCount * 4096
