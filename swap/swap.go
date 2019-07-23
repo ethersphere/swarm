@@ -262,7 +262,7 @@ func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	var peerBalance int64
 	var err error
 
-	_, keyExists := s.balances[peer]
+	peerBalance, keyExists := s.balances[peer]
 	if !keyExists {
 		err = s.stateStore.Get(peer.String(), &peerBalance)
 	}

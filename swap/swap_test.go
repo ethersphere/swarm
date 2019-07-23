@@ -95,8 +95,8 @@ func TestGetPeerBalance(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
-	if err.Error() != "Peer not found" {
-		t.Fatalf("Expected test to fail with %s, but is %s", "Peer not found", err.Error())
+	if err.Error() != "ErrorNotFound" {
+		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
 }
 
