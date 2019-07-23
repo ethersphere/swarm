@@ -13,10 +13,21 @@ func TestDockerSnapshotFromFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if !simulation.IsDockerAvailable(snap.DefaultAdapter.Config.(simulation.DockerAdapterConfig).DaemonAddr) {
+		t.Skip("docker is not available, skipping test")
+	}
+
 	sim, err := simulation.NewSimulationFromSnapshot(snap)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer func() {
+		err = sim.StopAll()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
 
 	nodes := sim.GetAll()
 	if len(nodes) != len(snap.Nodes) {
@@ -41,10 +52,4 @@ func TestDockerSnapshotFromFile(t *testing.T) {
 	}
 
 	fmt.Println(hive)
-
-	err = sim.StopAll()
-	if err != nil {
-		t.Error(err)
-	}
-
 }

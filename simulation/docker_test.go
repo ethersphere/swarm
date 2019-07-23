@@ -25,7 +25,7 @@ func TestDockerAdapterBuild(t *testing.T) {
 	config := DefaultDockerAdapterConfig()
 
 	// Build based on a Dockerfile
-	config.BuildContext = DockerBuildContext{
+	config.BuildContext = &DockerBuildContext{
 		Directory:  "../",
 		Dockerfile: "Dockerfile",
 		Tag:        imageTag,

@@ -67,11 +67,6 @@ func TestExecAdapter(t *testing.T) {
 		t.Fatal("node id is different")
 	}
 
-	_, err = adapter.NewNode(nodeconfig)
-	if err == nil {
-		t.Fatal("a node with the same id was registered")
-	}
-
 	err = node.Start()
 	if err != nil {
 		t.Fatalf("node did not start: %v", err)

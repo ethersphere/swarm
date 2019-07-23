@@ -76,6 +76,7 @@ func (a ExecAdapter) NewNode(config NodeConfig) (Node, error) {
 	return node, nil
 }
 
+// Snapshot returns a snapshot of the adapter
 func (a ExecAdapter) Snapshot() (AdapterSnapshot, error) {
 	return AdapterSnapshot{
 		Type:   "exec",
@@ -172,7 +173,6 @@ func (n *ExecNode) Start() error {
 		RPCListen:  n.ipcPath(),
 		HTTPListen: fmt.Sprintf("http://localhost:%s", swarminfo.Port),
 	}
-	// TODO: What happens if the program exits unexpectatly ?
 	return nil
 }
 
@@ -202,6 +202,7 @@ func (n *ExecNode) Stop() error {
 	}
 }
 
+// Snapshot returns a snapshot of the node
 func (n *ExecNode) Snapshot() (NodeSnapshot, error) {
 	snap := NodeSnapshot{
 		Config: n.config,

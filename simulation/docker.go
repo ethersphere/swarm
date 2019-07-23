@@ -30,12 +30,15 @@ const (
 	dockerPProfPort     = 6060
 )
 
+// DockerAdapter is an adapter that can manage DockerNodes
 type DockerAdapter struct {
 	client *client.Client
 	image  string
 	config DockerAdapterConfig
 }
 
+// DockerAdapterConfig is the configuration that can be provided when
+// initializing a DockerAdapter
 type DockerAdapterConfig struct {
 	// BuildContext can be used to build a docker image
 	// from a Dockerfile and a context directory
@@ -59,6 +62,7 @@ type DockerBuildContext struct {
 	Tag string `json:"tag"`
 }
 
+// DockerNode is a node that was started via the DockerAdapter
 type DockerNode struct {
 	config  NodeConfig
 	adapter *DockerAdapter
@@ -66,12 +70,15 @@ type DockerNode struct {
 	ipAddr  string
 }
 
+// DefaultDockerAdapterConfig returns the default configuration
+// that uses the local docker daemon
 func DefaultDockerAdapterConfig() DockerAdapterConfig {
 	return DockerAdapterConfig{
 		DaemonAddr: client.DefaultDockerHost,
 	}
 }
 
+// DefaultDockerBuildContext returns the default build context that uses a Dockerfile
 func DefaultDockerBuildContext() DockerBuildContext {
 	return DockerBuildContext{
 		Dockerfile: "Dockerfile",
@@ -96,14 +103,14 @@ func IsDockerAvailable(daemonAddr string) bool {
 	return true
 }
 
-// NewDockerAdapter creates an ExecAdapter by receiving a DockerAdapterConfig
+// NewDockerAdapter creates a DockerAdapter by receiving a DockerAdapterConfig
 func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 	if config.DockerImage != "" && config.BuildContext != nil {
 		return nil, fmt.Errorf("only one can be defined: BuildContext (%v) or DockerImage(%s)",
 			config.BuildContext, config.DockerImage)
 	}
 
-	if config.DockerImage == "" && config.BuildContext != nil {
+	if config.DockerImage == "" && config.BuildContext == nil {
 		return nil, errors.New("required: BuildContext or ExecutablePath")
 	}
 
@@ -135,7 +142,9 @@ func NewDockerAdapter(config DockerAdapterConfig) (*DockerAdapter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("pull image error: %v", err)
 		}
-		io.Copy(os.Stdout, reader)
+		if _, err := io.Copy(os.Stdout, reader); err != nil && err != io.EOF {
+			log.Error("Error pulling docker image", "err", err)
+		}
 	}
 
 	return &DockerAdapter{
@@ -159,6 +168,7 @@ func (a DockerAdapter) NewNode(config NodeConfig) (Node, error) {
 	return node, nil
 }
 
+// Snapshot returns a snapshot of the adapter
 func (a DockerAdapter) Snapshot() (AdapterSnapshot, error) {
 	return AdapterSnapshot{
 		Type:   "docker",
@@ -318,6 +328,7 @@ func (n *DockerNode) Stop() error {
 	return nil
 }
 
+// Snapshot returns a snapshot of the node
 func (n *DockerNode) Snapshot() (NodeSnapshot, error) {
 	snap := NodeSnapshot{
 		Config: n.config,

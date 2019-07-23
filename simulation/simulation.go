@@ -56,6 +56,7 @@ func (nm *nodeMap) Store(key NodeID, value Node) {
 	nm.Unlock()
 }
 
+// Simulation is used to simulate a network of nodes
 type Simulation struct {
 	adapter Adapter
 	nodes   *nodeMap
@@ -137,11 +138,11 @@ func NewSimulationFromSnapshot(snapshot *Snapshot) (*Simulation, error) {
 	for _, con := range snapshot.Connections {
 		from, ok := m[con.From]
 		if !ok {
-			return sim, fmt.Errorf("No node found with enode: %s", con.From)
+			return sim, fmt.Errorf("no node found with enode: %s", con.From)
 		}
 		to, ok := m[con.To]
 		if !ok {
-			return sim, fmt.Errorf("No node found with enode: %s", con.To)
+			return sim, fmt.Errorf("no node found with enode: %s", con.To)
 		}
 
 		client, err := sim.RPCClient(from.Info().ID)
@@ -211,6 +212,7 @@ func unmarshalSnapshot(data []byte, snapshot *Snapshot) error {
 	return nil
 }
 
+// LoadSnapshotFromFile loads a snapshot from a given JSON file
 func LoadSnapshotFromFile(filePath string) (*Snapshot, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -245,18 +247,17 @@ func (s *Simulation) GetAll() []Node {
 	return s.nodes.LoadAll()
 }
 
-// DefaultAdapter returns the default adapter that the
-// simulation is configured with
+// DefaultAdapter returns the default adapter that the simulation was initialized with
 func (s *Simulation) DefaultAdapter() Adapter {
 	return s.adapter
 }
 
-// Init initializes a node with the NodeConfig
+// Init initializes a node with the NodeConfig with the default Adapter
 func (s *Simulation) Init(config NodeConfig) error {
 	return s.InitWithAdapter(config, s.DefaultAdapter())
 }
 
-// Init initializes a node with the NodeConfig and the Adapter
+// InitWithAdapter initializes a node with the NodeConfig and the given Adapter
 func (s *Simulation) InitWithAdapter(config NodeConfig, adapter Adapter) error {
 	if _, ok := s.nodes.Load(config.ID); ok {
 		return fmt.Errorf("a node with id %s already exists", config.ID)
@@ -269,7 +270,7 @@ func (s *Simulation) InitWithAdapter(config NodeConfig, adapter Adapter) error {
 	return nil
 }
 
-// Start starts a given node
+// Start starts a node by ID
 func (s *Simulation) Start(id NodeID) error {
 	node, ok := s.nodes.Load(id)
 	if !ok {
@@ -375,7 +376,6 @@ func (s *Simulation) Snapshot() (*Snapshot, error) {
 		if reflect.DeepEqual(asnap, *ns.Adapter) {
 			ns.Adapter = nil
 		}
-
 		snap.Nodes[idx] = ns
 
 		// Get connections
@@ -389,12 +389,12 @@ func (s *Simulation) Snapshot() (*Snapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		enodes := []string{}
 		for _, p := range peers {
 			// Only care about outbound connections
 			if !p.Network.Inbound {
-				enodes = append(enodes, p.Enode)
 				snap.Connections = append(snap.Connections, ConnectionSnapshot{
+					// we need to remove network addresses from enodes
+					// because they will change between simulations
 					From: removeNetworkAddressFromEnode(n.Info().Enode),
 					To:   removeNetworkAddressFromEnode(p.Enode),
 				})
@@ -405,6 +405,7 @@ func (s *Simulation) Snapshot() (*Snapshot, error) {
 	return &snap, nil
 }
 
+// AddBootnode adds and starts a bootnode with the given id and arguments
 func (s *Simulation) AddBootnode(id NodeID, args []string) (Node, error) {
 	a := []string{
 		"--bootnode-mode",
@@ -414,6 +415,7 @@ func (s *Simulation) AddBootnode(id NodeID, args []string) (Node, error) {
 	return s.AddNode(id, a)
 }
 
+// AddNode adds and starts a node with the given id and arguments
 func (s *Simulation) AddNode(id NodeID, args []string) (Node, error) {
 	bzzkey, err := randomHexKey()
 	if err != nil {
@@ -451,6 +453,9 @@ func (s *Simulation) AddNode(id NodeID, args []string) (Node, error) {
 	return node, nil
 }
 
+// AddNodes adds and starts 'count' nodes with a given ID prefix, arguments.
+// If the idPrefix is "node" and count is 3 then the following nodes will be
+// created: node-0, node-1, node-2
 func (s *Simulation) AddNodes(idPrefix string, count int, args []string) ([]Node, error) {
 	g, _ := errgroup.WithContext(context.Background())
 
@@ -484,6 +489,11 @@ func (s *Simulation) AddNodes(idPrefix string, count int, args []string) ([]Node
 	return nodes, nil
 }
 
+// CreateClusterWithBootnode adds and starts a bootnode. Afterwards it will add and start 'count' nodes that connect
+// to the bootnode. All nodes can be provided by custom arguments.
+// If the idPrefix is "node" and count is 3 then you will have the following nodes created:
+//  node-bootnode, node-0, node-1, node-2.
+// The bootnode will be the first node on the returned Node slice.
 func (s *Simulation) CreateClusterWithBootnode(idPrefix string, count int, args []string) ([]Node, error) {
 	bootnode, err := s.AddBootnode(NodeID(fmt.Sprintf("%s-bootnode", idPrefix)), args)
 	if err != nil {
@@ -504,6 +514,8 @@ func (s *Simulation) CreateClusterWithBootnode(idPrefix string, count int, args 
 	return nodes, nil
 }
 
+// WaitForHealthyNetwork will block until all the nodes are considered
+// to have a healthy kademlia table
 func (s *Simulation) WaitForHealthyNetwork() error {
 	nodes := s.GetAll()
 

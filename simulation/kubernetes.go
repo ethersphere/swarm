@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// KubernetesAdapter can manage nodes on a kubernetes cluster
 type KubernetesAdapter struct {
 	client *kubernetes.Clientset
 	config KubernetesAdapterConfig
@@ -39,6 +40,7 @@ type KubernetesAdapter struct {
 	proxy  string
 }
 
+// KubernetesAdapterConfig is the configuration provided to a KubernetesAdapter
 type KubernetesAdapterConfig struct {
 	// KubeConfigPath is the path to your kubernetes configuration path
 	KubeConfigPath string `json:"kubeConfigPath"`
@@ -52,6 +54,8 @@ type KubernetesAdapterConfig struct {
 	DockerImage string `json:"image,omitempty"`
 }
 
+// KubernetesBuildContext defines the build context to build
+// local docker images
 type KubernetesBuildContext struct {
 	// Dockefile is the path to the dockerfile
 	Dockerfile string `json:"dockerfile"`
@@ -74,6 +78,8 @@ func (bc *KubernetesBuildContext) ImageTag() string {
 	return fmt.Sprintf("%s/%s", bc.Registry, bc.Tag)
 }
 
+// DefaultKubernetesAdapterConfig uses the default ~/.kube/config
+// to discover the kubernetes clusters. It also uses the "default" namespace.
 func DefaultKubernetesAdapterConfig() KubernetesAdapterConfig {
 	kubeconfig := filepath.Join(homeDir(), ".kube", "config")
 	return KubernetesAdapterConfig{
@@ -82,6 +88,7 @@ func DefaultKubernetesAdapterConfig() KubernetesAdapterConfig {
 	}
 }
 
+// NewKubernetesAdapter creates a KubernetesAdpater by receiving a KubernetesAdapterConfig
 func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, error) {
 	if config.DockerImage != "" && config.BuildContext != nil {
 		return nil, fmt.Errorf("only one can be defined: BuildContext (%v) or DockerImage(%s)",
@@ -151,7 +158,9 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 			return nil, fmt.Errorf("failed to push image: %v", err)
 		}
 		defer out.Close()
-		io.Copy(os.Stdout, out)
+		if _, err := io.Copy(os.Stdout, out); err != nil && err != io.EOF {
+			log.Error("Error pushing docker image", "err", err)
+		}
 	}
 
 	// Setup proxy to access pods
@@ -162,7 +171,9 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 		return nil, fmt.Errorf("failed to start proxy: %v", err)
 	}
 	go func() {
-		server.ServeOnListener(l)
+		if err := server.ServeOnListener(l); err != nil {
+			log.Error("Kubernetes dapater proxy failed:", "err", err.Error())
+		}
 	}()
 
 	// Return adapter
@@ -174,6 +185,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 	}, nil
 }
 
+// NewNode creates a new node
 func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 	info := NodeInfo{
 		ID: config.ID,
@@ -186,6 +198,7 @@ func (a KubernetesAdapter) NewNode(config NodeConfig) (Node, error) {
 	return node, nil
 }
 
+// Snapshot returns a snapshot of the Adapter
 func (a KubernetesAdapter) Snapshot() (AdapterSnapshot, error) {
 	return AdapterSnapshot{
 		Type:   "kubernetes",
@@ -193,6 +206,7 @@ func (a KubernetesAdapter) Snapshot() (AdapterSnapshot, error) {
 	}, nil
 }
 
+// KubernetesNode is a node that was started via the KubernetesAdapter
 type KubernetesNode struct {
 	config  NodeConfig
 	adapter *KubernetesAdapter
@@ -226,7 +240,7 @@ func (n *KubernetesNode) Start() error {
 
 	// Build environment variables
 	env := []v1.EnvVar{
-		v1.EnvVar{
+		{
 			// POD_IP is useful for setting the NAT config: e.g. `--nat ip:$POD_IP`
 			Name: "POD_IP",
 			ValueFrom: &v1.EnvVarSource{
@@ -261,7 +275,7 @@ func (n *KubernetesNode) Start() error {
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
-				v1.Container{
+				{
 					Name:  n.podName(),
 					Image: adapter.image,
 					Args:  args,
@@ -319,7 +333,8 @@ func (n *KubernetesNode) Start() error {
 
 	// Wait for the node to start
 	var client *rpc.Client
-	wsAddr := fmt.Sprintf("ws://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.config.Namespace, n.podName(), dockerWebsocketPort)
+	wsAddr := fmt.Sprintf("ws://%s/api/v1/namespaces/%s/pods/%s:%d/proxy",
+		adapter.proxy, adapter.config.Namespace, n.podName(), dockerWebsocketPort)
 
 	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
 		client, err = rpc.Dial(wsAddr)
@@ -345,12 +360,14 @@ func (n *KubernetesNode) Start() error {
 	}
 
 	n.info = NodeInfo{
-		ID:          n.config.ID,
-		Enode:       p2pinfo.Enode,
-		BzzAddr:     swarminfo.BzzKey,
-		RPCListen:   wsAddr,
-		HTTPListen:  fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.config.Namespace, n.podName(), dockerHTTPPort),
-		PprofListen: fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy", adapter.proxy, adapter.config.Namespace, n.podName(), dockerPProfPort),
+		ID:        n.config.ID,
+		Enode:     p2pinfo.Enode,
+		BzzAddr:   swarminfo.BzzKey,
+		RPCListen: wsAddr,
+		HTTPListen: fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy",
+			adapter.proxy, adapter.config.Namespace, n.podName(), dockerHTTPPort),
+		PprofListen: fmt.Sprintf("http://%s/api/v1/namespaces/%s/pods/%s:%d/proxy",
+			adapter.proxy, adapter.config.Namespace, n.podName(), dockerPProfPort),
 	}
 
 	return nil
@@ -372,6 +389,7 @@ func (n *KubernetesNode) Stop() error {
 	return nil
 }
 
+// Snapshot returns a snapshot of the node
 func (n *KubernetesNode) Snapshot() (NodeSnapshot, error) {
 	snap := NodeSnapshot{
 		Config: n.config,
@@ -417,7 +435,7 @@ func (s *proxyServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	s.handler.ServeHTTP(rw, req)
 }
 
-// newProxyServer creates a proxy server
+// newProxyServer creates a proxy server that can be used to proxy to the kubernetes API
 func newProxyServer(cfg *rest.Config) (*proxyServer, error) {
 	target, err := url.Parse(cfg.Host)
 	if err != nil {
