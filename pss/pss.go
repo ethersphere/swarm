@@ -281,12 +281,8 @@ func (p *Pss) addPeer(peer *protocols.Peer) {
 func (p *Pss) removePeer(peer *protocols.Peer) {
 	p.peersMu.Lock()
 	defer p.peersMu.Unlock()
-	if _, found := p.peers[peer.Peer.Info().ID]; found {
-		log.Trace("removing peer", "id", peer.Peer.Info().ID)
-		delete(p.peers, peer.Peer.Info().ID)
-	} else {
-		log.Warn("peer was marked for removal but not found", "peer", peer.Peer.Info().ID)
-	}
+	log.Trace("removing peer", "id", peer.Peer.Info().ID)
+	delete(p.peers, peer.Peer.Info().ID)
 }
 
 func (p *Pss) APIs() []rpc.API {
