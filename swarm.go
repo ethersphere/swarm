@@ -544,8 +544,8 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	swapPublicApi := rpc.API{
-		Namespace: "bzz",
-		Version:   "3.0",
+		Namespace: "swap",
+		Version:   "1.0",
 		Service:   swapService,
 		Public:    true,
 	}
