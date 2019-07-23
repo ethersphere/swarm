@@ -368,6 +368,9 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 	log.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr)
 	metrics.GetOrRegisterCounter("network.retrieve.requestfrompeers", nil).Inc(1)
 
+	const maxFindPeerRetries = 5
+	retries := 0
+
 FINDPEER:
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {
@@ -377,6 +380,12 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
+		retries++
+		if retries == maxFindPeerRetries {
+			log.Error("max find peer retries reached", "max retries", maxFindPeerRetries)
+			return nil, ErrNoPeerFound
+		}
+
 		goto FINDPEER
 	}
 
