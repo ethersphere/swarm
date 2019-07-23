@@ -306,8 +306,11 @@ func TestAddressMatch(t *testing.T) {
 
 }
 
-// test that message is handled by sender if a prox handler exists and sender is in prox of message
-func XTestProxShortCircuit(t *testing.T) {
+// TestProxShortCircuit tests that a message is handled by sender if a prox handler exists and sender is in prox of message
+func TestProxShortCircuit(t *testing.T) {
+	// it will make sense to enable this test in case we decide to introduce additional RPC, such as `Process`, or something similar.
+	// at the moment `Send`, `SendRaw`, etc. do not try to process an outgoing message.
+	t.Skip("this test is disabled because `SendRaw` no longer tries to handle a message by the sender. messages are handled only when an incoming request/message is received.")
 	// sender node address
 	localAddr := network.RandomAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
