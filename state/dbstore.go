@@ -106,7 +106,7 @@ func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
 }
 
-// Keys returns a string slice containing all the store keys
+// Keys returns a list of all the keys in the underlying LevelDB.
 func (s *DBStore) Keys() (keys []string, err error) {
 	iter := s.db.NewIterator(nil, nil)
 	for iter.Next() {
