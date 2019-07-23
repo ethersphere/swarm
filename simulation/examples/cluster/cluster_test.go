@@ -70,6 +70,9 @@ func TestCluster(t *testing.T) {
 	// Test kubernetes adapter
 	t.Run("kubernetes", func(t *testing.T) {
 		config := simulation.DefaultKubernetesAdapterConfig()
+		if !simulation.IsKubernetesAvailable(config.KubeConfigPath) {
+			t.Skip("kubernetes is not available, skipping test")
+		}
 		config.Namespace = "simulation-test"
 		config.DockerImage = "ethersphere/swarm:edge"
 		adapter, err := simulation.NewKubernetesAdapter(config)

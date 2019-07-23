@@ -88,6 +88,16 @@ func DefaultKubernetesAdapterConfig() KubernetesAdapterConfig {
 	}
 }
 
+// IsKubernetesAvailable checks if a kubernetes configuration file exists
+func IsKubernetesAvailable(kubeConfigPath string) bool {
+	k8scfg, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	if err != nil {
+		return false
+	}
+	_, err = kubernetes.NewForConfig(k8scfg)
+	return err == nil
+}
+
 // NewKubernetesAdapter creates a KubernetesAdpater by receiving a KubernetesAdapterConfig
 func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, error) {
 	if config.DockerImage != "" && config.BuildContext != nil {
@@ -95,7 +105,7 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 			config.BuildContext, config.DockerImage)
 	}
 
-	if config.BuildContext.Dockerfile == "" && config.DockerImage == "" {
+	if config.DockerImage == "" && config.BuildContext == nil {
 		return nil, errors.New("required: Dockerfile or DockerImage")
 	}
 
@@ -165,6 +175,9 @@ func NewKubernetesAdapter(config KubernetesAdapterConfig) (*KubernetesAdapter, e
 
 	// Setup proxy to access pods
 	server, err := newProxyServer(k8scfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create proxy: %v", err)
+	}
 
 	l, err := server.Listen("127.0.0.1", 0)
 	if err != nil {
