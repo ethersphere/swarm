@@ -276,10 +276,10 @@ func (s *Swap) GetAllBalances() map[enode.ID]int64 {
 	balances := make(map[enode.ID]int64)
 
 	// load balances from disk
-	keys, err := s.stateStore.Keys()
+	peerIDs, err := s.stateStore.Keys()
 	if err == nil {
-		for _, key := range keys {
-			peerID := enode.HexID(key)
+		for _, peerIDString := range peerIDs {
+			peerID := enode.HexID(peerIDString)
 			peerBalance, err := s.GetPeerBalance(peerID)
 			if err == nil {
 				balances[peerID] = peerBalance
