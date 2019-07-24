@@ -73,7 +73,7 @@ func init() {
 }
 
 // Test getting a peer's balance
-func TestGetPeerBalance(t *testing.T) {
+func TestPeerBalance(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
@@ -81,7 +81,7 @@ func TestGetPeerBalance(t *testing.T) {
 	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
-	b, err := swap.GetPeerBalance(testPeer.ID())
+	b, err := swap.PeerBalance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestGetPeerBalance(t *testing.T) {
 
 	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
-	_, err = swap.GetPeerBalance(id)
+	_, err = swap.PeerBalance(id)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
