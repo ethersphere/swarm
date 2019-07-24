@@ -23,22 +23,25 @@ import (
 // TODO: add handshake protocol where we exchange last cheque (this is useful if one node disconnects)
 // FIXME: Check the contract bytecode of the counterparty
 
+// ChequeParams encapsulate all cheque parameters
 type ChequeParams struct {
 	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
-	Beneficiary common.Address
-	Serial      uint64 // cumulative amount of all funds sent
-	Amount      uint64 // cumulative amount of all funds sent
-	Timeout     uint64
+	Beneficiary common.Address // address of the beneficiary, the contract which will redeem the cheque
+	Serial      uint64         // monotonically increasing serial number
+	Amount      uint64         // cumulative amount of the cheque in currency
+	Honey       uint64         // amount of honey which resulted in the cumulative currency difference
+	Timeout     uint64         // timeout for cashing in
 }
 
+// Cheque encapsulates the parameters and the signature
 // TODO: There should be a request cheque struct that only gives the Serial
-// Cheque encapsulates the cheque information
 type Cheque struct {
 	ChequeParams
 	Sig []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
 }
 
-type SwapHandshakeMsg struct {
+// HandshakeMsg is exchanged on peer handshake
+type HandshakeMsg struct {
 	ContractAddress common.Address
 }
 
@@ -49,8 +52,3 @@ type EmitChequeMsg struct {
 
 // ErrorMsg is sent in case of an error TODO: specify error conditions and when this needs to be sent
 type ErrorMsg struct{}
-
-// ConfirmMsg is sent from the creditor to the debitor to confirm cheque reception
-type ConfirmMsg struct {
-	Cheque Cheque // TODO: probably not needed and if so likely should not include the full cheque
-}

@@ -16,105 +16,204 @@
 
 package swap
 
-// TODO: Update this test.
-// We are no longer sending the cheque request messages, we send the cheques directly now.
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethersphere/swarm/p2p/protocols"
+)
+
 /*
-TestRequestCheque tests that a peer will respond with a
-`EmitChequeMsg` containing a cheque for an expected amount
-if it sends a `RequestChequeMsg` is sent to it
+TestHandshake creates two mock nodes and initiates an exchange;
+it expects a handshake to take place between the two nodes
+(the handshake would fail because we don't actually use real nodes here)
 */
-// func TestRequestCheque(t *testing.T) {
-// 	var err error
+func TestHandshake(t *testing.T) {
+	var err error
 
-// 	// setup test swap object
-// 	swap, dir := createTestSwap(t)
-// 	defer os.RemoveAll(dir)
+	// setup test swap object
+	swap, dir := newTestSwap(t)
+	defer os.RemoveAll(dir)
 
-// 	// dummy object so we can run the protocol
-// 	ss := swap
+	ctx := context.Background()
+	testDeploy(ctx, swap.backend, swap)
+	// setup the protocolTester, which will allow protocol testing by sending messages
+	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
 
-// 	// setup the protocolTester, which will allow protocol testing by sending messages
-// 	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, ss.run)
+	// shortcut to creditor node
+	debitor := protocolTester.Nodes[0]
+	creditor := protocolTester.Nodes[1]
 
-// 	// shortcut to creditor node
-// 	creditor := protocolTester.Nodes[0]
+	// set balance artifially
+	swap.balances[creditor.ID()] = -42
 
-// 	// set balance artifially
-// 	swap.balances[creditor.ID()] = -42
+	// create the expected cheque to be received
+	cheque := newTestCheque()
 
-// 	// create the expected cheque to be received
-// 	// NOTE: this may be improved, as it is essentially running the same
-// 	// code as in production
-// 	expectedCheque := swap.cheques[creditor.ID()]
-// 	expectedCheque = &Cheque{
-// 		ChequeParams: ChequeParams{
-// 			Serial:      uint64(1),
-// 			Amount:      uint64(42),
-// 			Timeout:     defaultCashInDelay,
-// 			Beneficiary: crypto.PubkeyToAddress(*creditor.Pubkey()),
-// 		},
-// 	}
+	// sign the cheque
+	cheque.Sig, err = swap.signContent(cheque)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	// sign the cheque
-// 	expectedCheque.Sig, err = swap.signContent(expectedCheque)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	// run the exchange:
+	// trigger a `ChequeRequestMsg`
+	// expect a `EmitChequeMsg` with a valid cheque
+	err = protocolTester.TestExchanges(p2ptest.Exchange{
+		Label: "TestRequestCheque",
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 1,
+				Msg: &EmitChequeMsg{
+					Cheque: cheque,
+				},
+				Peer: debitor.ID(),
+			},
+		},
+		Expects: []p2ptest.Expect{
+			{
+				Code: 0,
+				Msg: &HandshakeMsg{
+					ContractAddress: swap.owner.Contract,
+				},
+				Peer: creditor.ID(),
+			},
+			{
+				Code: 0,
+				Msg: &HandshakeMsg{
+					ContractAddress: swap.owner.Contract,
+				},
+				Peer: debitor.ID(),
+			},
+		},
+	})
 
-// 	// run the exchange:
-// 	// trigger a `ChequeRequestMsg`
-// 	// expect a `EmitChequeMsg` with a valid cheque
-// 	err = protocolTester.TestExchanges(p2ptest.Exchange{
-// 		Label: "TestRequestCheque",
-// 		Triggers: []p2ptest.Trigger{
-// 			{
-// 				Code: 0,
-// 				Msg: &ChequeRequestMsg{
-// 					crypto.PubkeyToAddress(*creditor.Pubkey()),
-// 				},
-// 				Peer: creditor.ID(),
-// 			},
-// 		},
-// 		Expects: []p2ptest.Expect{
-// 			{
-// 				Code: 1,
-// 				Msg: &EmitChequeMsg{
-// 					Cheque: expectedCheque,
-// 				},
-// 				Peer: creditor.ID(),
-// 			},
-// 		},
-// 	})
+	// there should be no error at this point
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
-// 	// there should be no error at this point
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+// TestEmitCheque is a full round of a cheque exchange between peers via the protocol.
+// We create two swap, for the creditor (beneficiary) and debitor (issuer) each,
+// and deploy them to the simulated backend.
+// We then create Swap protocol peers with a MsgPipe to be able to directly write messages to each other.
+// We have the debitor send a cheque via an `EmitChequeMsg`, then the creditor "reads" (pipe) the message
+// and handles the cheque.
+func TestEmitCheque(t *testing.T) {
+	log.Debug("set up test swaps")
+	creditorSwap, testDir1 := newTestSwap(t)
+	debitorSwap, testDir2 := newTestSwap(t)
+	defer os.RemoveAll(testDir1)
+	defer os.RemoveAll(testDir2)
 
-// 	// now we request a new cheque;
-// 	// the peer though should have already reset the balance,
-// 	// so no new cheque should be issued
-// 	err = protocolTester.TestExchanges(p2ptest.Exchange{
-// 		Label: "TestRequestNoCheque",
-// 		Triggers: []p2ptest.Trigger{
-// 			{
-// 				Code: 0,
-// 				Msg: &ChequeRequestMsg{
-// 					crypto.PubkeyToAddress(*creditor.Pubkey()),
-// 				},
-// 				Peer: creditor.ID(),
-// 			},
-// 		},
-// 	})
+	ctx := context.Background()
 
-// 	//
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	log.Debug("deploy to simulated backend")
+	testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	creditorSwap.backend.(*backends.SimulatedBackend).Commit()
+	debitorSwap.backend.(*backends.SimulatedBackend).Commit()
 
-// 	// no new cheques should have been emitted
-// 	if len(swap.cheques) != 1 {
-// 		t.Fatalf("Expected unchanged number of cheques, but it changed: %d", len(swap.cheques))
-// 	}
+	log.Debug("create peer instances")
+	// create Peer instances
+	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
+	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 
-// }
+	// in order to be able to model as realistically as possible sending and receiving, let's use a MsgPipe
+	// a MsgPipe is a duplex read-write object, write to one end and read from the other
+
+	// create the message pipe
+	crw, drw := p2p.MsgPipe()
+	// create the creditor peer
+	cPtpPeer := p2p.NewPeer(enode.ID{}, "creditor", []p2p.Cap{})
+	cProtoPeer := protocols.NewPeer(cPtpPeer, crw, Spec)
+	// create the debitor peer
+	dPtpPeer := p2p.NewPeer(enode.ID{}, "dreditor", []p2p.Cap{})
+	dProtoPeer := protocols.NewPeer(dPtpPeer, drw, Spec)
+	// create the Swap protocol peers
+	creditor := NewPeer(cProtoPeer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dProtoPeer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
+
+	// set balance artifically
+	creditorSwap.balances[debitor.ID()] = 42
+	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
+	// a safe check: at this point no cheques should be in the swap
+	if len(creditorSwap.cheques) != 0 {
+		t.Fatalf("Expected no cheques at creditor, but there are %d:", len(creditorSwap.cheques))
+	}
+
+	log.Debug("create a cheque")
+	var err error
+	cheque := &Cheque{
+		ChequeParams: ChequeParams{
+			Contract:    debitorSwap.owner.Contract,
+			Beneficiary: creditorSwap.owner.address,
+			Amount:      42,
+			Honey:       42,
+			Timeout:     0,
+		},
+	}
+	cheque.Sig, err = debitorSwap.signContent(cheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	emitMsg := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+	log.Debug("send the message with the cheque to the beneficiary")
+	go creditor.Send(ctx, emitMsg)
+
+	log.Debug("read the message on the beneficiary through the pipe")
+	msg, err := drw.ReadMsg()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Debug("convert the message to our message type (simulated p2p.protocols)")
+	var wmsg protocols.WrappedMsg
+	err = msg.Decode(&wmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg.Discard()
+
+	val, ok := Spec.NewMsg(msg.Code)
+	if !ok {
+		t.Fatalf("invalid message code: %v", msg.Code)
+	}
+	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
+		t.Fatalf("decode error <= %v: %v", msg, err)
+	}
+
+	log.Debug("trigger reading the message on the beneficiary")
+	// handleMsg is blocking as it sends a synchronous confirmation message back.
+	// Therefore, we need a go-routine in order to check for the test,
+	// and we need to synchronize the go-routines
+
+	// this blocks
+	err = debitor.handleMsg(ctx, val)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
+	if creditorSwap.balances[debitor.ID()] != 0 {
+		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, creditorSwap.balances[debitor.ID()])
+	}
+	/*
+		TODO: When saving the cheque on creditor side is implemented,
+		we should to re-enable this check
+		if len(creditorSwap.cheques) != 1 {
+			t.Fatalf("Expected exactly one cheque at creditor, but there are %d:", len(creditorSwap.cheques))
+		}
+	*/
+
+}

@@ -44,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -164,6 +165,75 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
+// TestResetBalance tests that balances are correctly reset
+// The test deploys creates swap instances for each node,
+// deploys simulated contracts, sets the balance of each
+// other node to some arbitrary number above thresholds,
+// and then calls both `sendCheque` on one side and
+// `handleEmitChequeMsg` in order to simulate a roundtrip
+// and see that both have reset the balance correctly
+func TestResetBalance(t *testing.T) {
+	// create both test swap accounts
+	creditorSwap, testDir1 := newTestSwap(t)
+	debitorSwap, testDir2 := newTestSwap(t)
+	defer os.RemoveAll(testDir1)
+	defer os.RemoveAll(testDir2)
+
+	ctx := context.Background()
+	// deploying would strictly speaking not be necessary, as the signing would also just work
+	// with empty contract addresses. Nevertheless to avoid later suprises and for
+	// coherence and clarity we deploy here so that we get a simulated contract address
+	testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	creditorSwap.backend.(*backends.SimulatedBackend).Commit()
+	debitorSwap.backend.(*backends.SimulatedBackend).Commit()
+
+	// create Peer instances
+	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
+	// so creditor is the model of the remote mode for the debitor! (and vice versa)
+	cPeer := newDummyPeerWithSpec(Spec)
+	dPeer := newDummyPeerWithSpec(Spec)
+	creditor := NewPeer(cPeer.Peer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dPeer.Peer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
+
+	// set balances arbitrarily
+	testAmount := int64(DefaultPaymentThreshold + 42)
+	creditorSwap.balances[debitor.ID()] = testAmount
+	debitorSwap.balances[creditor.ID()] = 0 - testAmount
+
+	// set the peers into each other's list
+	creditorSwap.peers[debitor.ID()] = debitor
+	debitorSwap.peers[creditor.ID()] = creditor
+
+	// now simulate sending the cheque to the creditor from the debitor
+	debitorSwap.sendCheque(creditor.ID())
+	// the debitor should have already reset its balance
+	if debitorSwap.balances[creditor.ID()] != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditor.ID()])
+	}
+
+	var err error
+	// now load the cheque that the debitor created...
+	cheque := debitorSwap.cheques[creditor.ID()]
+	if cheque == nil {
+		t.Fatal("expected to find a cheque, but it was empty")
+	}
+	// ...create a message...
+	msg := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+	// ...and trigger message handling on the receiver side (creditor)
+	// remember that debitor is the model of the remote node for the creditor...
+	err = debitor.handleEmitChequeMsg(ctx, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// finally check that the creditor also successfully reset the balances
+	if creditorSwap.balances[debitor.ID()] != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", creditorSwap.balances[debitor.ID()])
+	}
+}
+
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
 // append generated bookings to slice pointer
 func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
@@ -262,7 +332,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
-func newTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*Swap, string) {
+func newTestSwap(t *testing.T) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
 		t.Fatal(err)
@@ -276,18 +346,19 @@ func newTestSwapWithBackend(t *testing.T, backend *backends.SimulatedBackend) (*
 		t.Fatal(err)
 	}
 
-	swap := New(stateStore, key, common.Address{}, backend)
-	return swap, dir
-}
+	log.Debug("creating simulated backend")
 
-// create a test swap account
-// create a default empty backend
-// creates a stateStore for persistence and a Swap account
-func newTestSwap(t *testing.T) (*Swap, string) {
+	gasLimit := uint64(8000000)
+	owner := crypto.PubkeyToAddress(key.PublicKey)
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		ownerAddress: {Balance: big.NewInt(1000000000)},
-	}, 8000000)
-	return newTestSwapWithBackend(t, defaultBackend)
+		owner:              {Balance: big.NewInt(1000000000)},
+		ownerAddress:       {Balance: big.NewInt(1000000000)},
+		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
+	}, gasLimit)
+
+	swap := New(stateStore, key, common.Address{}, defaultBackend)
+	defaultBackend.Commit()
+	return swap, dir
 }
 
 type dummyPeer struct {
@@ -296,8 +367,14 @@ type dummyPeer struct {
 
 // creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeer() *dummyPeer {
+	return newDummyPeerWithSpec(nil)
+}
+
+// creates a dummy protocols.Peer with dummy MsgReadWriter
+func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
-	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
+	rw := &testutil.DummyMsgRW{}
+	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, spec)
 	dummy := &dummyPeer{
 		Peer: protoPeer,
 	}
@@ -477,25 +554,15 @@ func TestVerifyContractWrongContract(t *testing.T) {
 // and immediately try to cash-in the cheque
 func TestContractIntegration(t *testing.T) {
 
-	log.Debug("creating simulated backend")
-
-	gasLimit := uint64(10000000)
-	balance := new(big.Int)
-	balance.SetString("1000000000", 10)
-	backend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		ownerAddress:       {Balance: balance},
-		beneficiaryAddress: {Balance: balance},
-	}, gasLimit)
-
 	log.Debug("creating test swap")
 
-	issuerSwap, dir := newTestSwapWithBackend(t, backend)
+	issuerSwap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
-
-	backend.Commit()
 
 	issuerSwap.owner.address = ownerAddress
 	issuerSwap.owner.privateKey = ownerKey
+
+	backend := issuerSwap.backend.(*backends.SimulatedBackend)
 
 	log.Debug("deploy issuer swap")
 

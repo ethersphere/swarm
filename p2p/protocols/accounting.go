@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -53,10 +53,13 @@ type Prices interface {
 	Price(interface{}) *Price
 }
 
+// Payer is the base type to define who pays in an exchange between peers
 type Payer bool
 
 const (
-	Sender   = Payer(true)
+	// Sender declares that a message needs to be payed by the sender of the message
+	Sender = Payer(true)
+	// Receiver declares that a message needs to be payed by the receiver of the message
 	Receiver = Payer(false)
 )
 
@@ -103,6 +106,7 @@ type Accounting struct {
 	Prices  // interface to prices logic
 }
 
+// NewAccounting creates a new instance of Accounting
 func NewAccounting(balance Balance, po Prices) *Accounting {
 	ah := &Accounting{
 		Prices:  po,

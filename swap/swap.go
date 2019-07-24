@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,18 +39,10 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-const (
-	deployRetries                     = 5
-	deployDelay                       = 1 * time.Second // delay between retries
-	defaultCashInDelay                = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
-	DefaultInitialDepositAmount       = 0               // TODO: deliberate value for now; needs experimentation
-	defaultHarddepositTimeoutDuration = 24 * time.Hour  // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
-)
-
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-// SwAP Swarm Accounting Protocol
+// Swap represents the SwAP Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
@@ -60,13 +52,14 @@ type Swap struct {
 	lock                sync.RWMutex         // lock the balances
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of balances for each peer
-	peers               map[enode.ID]*Peer
-	backend             cswap.Backend
-	owner               *Owner  // contract access
-	params              *Params // economic and operational parameters
-	contractReference   *swap.Swap
-	paymentThreshold    int64 // balance difference required for requesting cheque
-	disconnectThreshold int64 // balance difference required for dropping peer
+	peers               map[enode.ID]*Peer   // map of all swap Peers
+	backend             cswap.Backend        // the backend (blockchain) used
+	owner               *Owner               // contract access
+	params              *Params              // economic and operational parameters
+	contractReference   *swap.Swap           // reference to the smart contract
+	oracle              PriceOracle          // the oracle providing the ether price for honey
+	paymentThreshold    int64                // balance difference required for requesting cheque
+	disconnectThreshold int64                // balance difference required for dropping peer
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -101,6 +94,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
 		contractReference:   nil,
+		oracle:              NewPriceOracle(),
 	}
 	sw.owner = sw.createOwner(prvkey, contract)
 	return sw
@@ -128,37 +122,32 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	//load existing balances from the state store
+	// load existing balances from the state store
 	err = s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
 		log.Error("error while loading balance for peer", "peer", peer.ID().String())
 		return
 	}
 
-	//check if balance with peer is over the disconnect threshold
+	// check if balance with peer is over the disconnect threshold
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
-		//if so, return error in order to abort the transfer
+		// if so, return error in order to abort the transfer
 		disconnectMessage := fmt.Sprintf("balance for peer %s is over the disconnect threshold %v, disconnecting", peer.ID().String(), s.disconnectThreshold)
 		log.Warn(disconnectMessage)
 		return errors.New(disconnectMessage)
 	}
 
-	//adjust the balance
-	//if amount is negative, it will decrease, otherwise increase
-	s.balances[peer.ID()] += amount
-
-	//save the new balance to the state store
-	peerBalance := s.balances[peer.ID()]
-	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
+	// calculate new balance
+	var newBalance int64
+	newBalance, err = s.updateBalance(peer.ID(), amount)
 	if err != nil {
-		log.Error(fmt.Sprintf("error while storing balance for peer %s", peer.ID().String()))
-		return err
+		return
 	}
 
-	log.Debug(fmt.Sprintf("balance for peer %s after accounting: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
-
-	//check if balance with peer is over the payment threshold
-	if peerBalance <= -s.paymentThreshold {
+	// check if balance with peer crosses the threshold
+	// it is the peer with a negative balance who sends a cheque, thus we check
+	// that the balance is *below* the threshold
+	if newBalance <= -s.paymentThreshold {
 		//if so, send cheque
 		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, sending cheque", peer.ID().String(), s.paymentThreshold))
 		err = s.sendCheque(peer.ID())
@@ -170,6 +159,20 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	}
 
 	return
+}
+
+func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
+	//adjust the balance
+	//if amount is negative, it will decrease, otherwise increase
+	s.balances[peer] += amount
+	//save the new balance to the state store
+	peerBalance := s.balances[peer]
+	err := s.stateStore.Put(peer.String(), &peerBalance)
+	if err != nil {
+		log.Error("error while storing balance for peer", "peer", peer.String())
+	}
+	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(peerBalance, 10))
+	return peerBalance, err
 }
 
 // logBalance is a helper function to log the current balance of a peer
@@ -184,7 +187,7 @@ func (s *Swap) logBalance(peer *protocols.Peer) {
 
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer := s.peers[peer]
+	swapPeer := s.getPeer(peer)
 	cheque, err := s.createCheque(peer)
 	if err != nil {
 		log.Error("error while creating cheque: %s", err.Error())
@@ -205,12 +208,9 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 		Cheque: cheque,
 	}
 
-	// TODO: reset balance here?
-	// if we don't, then multiple cheques may be sent
-	// If we do, then if something goes wrong and the remote does not reset the balance,
-	// we have issues as well.
-	// For now, reset the balance
-	s.resetBalance(peer)
+	// reset balance;
+	// TODO: if sending fails it should actually be roll backed...
+	s.resetBalance(peer, int64(cheque.Amount))
 
 	err = swapPeer.Send(context.TODO(), emit)
 	return err
@@ -223,12 +223,24 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer := s.peers[peer]
+	swapPeer := s.getPeer(peer)
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance := s.balances[peer]
-	amount := -peerBalance
+	// the balance should be negative here, we take the absolute value:
+	honey := uint64(-peerBalance)
 
+	// convert honey to ETH
+	var amount uint64
+	amount, err = s.oracle.GetPrice(honey)
+	if err != nil {
+		log.Error("error getting price from oracle", "err", err)
+		return nil, err
+	}
+
+	// we need to ignore the error check when loading from the StateStore,
+	// as an error might indicate that there is no existing cheque, which
+	// could mean it's the first interaction, which is absolutely valid
 	_ = s.loadCheque(peer)
 	lastCheque := s.cheques[peer]
 
@@ -249,7 +261,9 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	}
 	cheque.ChequeParams.Timeout = defaultCashInDelay
 	cheque.ChequeParams.Contract = s.owner.Contract
+	cheque.ChequeParams.Honey = uint64(honey)
 	cheque.Beneficiary = beneficiary
+
 	cheque.Sig, err = s.signContent(cheque)
 
 	return cheque, err
@@ -324,11 +338,11 @@ func (s *Swap) Peers() (peers []enode.ID, err error) {
 }
 
 // GetLastCheque returns the last cheque for a given peer
-func (swap *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
-	swap.lock.RLock()
-	defer swap.lock.RUnlock()
+func (s *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	if lc, ok := swap.cheques[peer]; ok {
+	if lc, ok := s.cheques[peer]; ok {
 		return lc, nil
 	}
 
@@ -360,19 +374,17 @@ func (s *Swap) loadCheque(peer enode.ID) (err error) {
 	return
 }
 
-//Clean up Swap
-func (swap *Swap) Close() {
-	swap.stateStore.Close()
+// Close cleans up swap
+func (s *Swap) Close() {
+	s.stateStore.Close()
 }
 
 // resetBalance is called:
 // * for the creditor: on cheque receival
 // * for the debitor: on confirmation receival
-func (s *Swap) resetBalance(peerID enode.ID) {
-	//TODO: reset balance based on actual amount
-	//TODO: review the locks
-	log.Info(fmt.Sprintf("resetting balance for peer %s", peerID.String()))
-	s.balances[peerID] = 0
+func (s *Swap) resetBalance(peerID enode.ID, amount int64) {
+	log.Info("resetting balance for peer", "peer", peerID.String(), "amount", amount)
+	s.updateBalance(peerID, amount)
 }
 
 // encodeCheque encodes the cheque in the format used in the signing procedure
