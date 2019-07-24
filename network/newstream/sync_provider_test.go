@@ -30,161 +30,161 @@ func TestSyncSubscriptionsDiff(t *testing.T) {
 	for _, tc := range []struct {
 		po, prevDepth, newDepth int
 		subBins, quitBins       []int
-		noSyncWithinDepth       bool
+		syncBinsOnlyWithinDepth bool
 	}{
 		// tests for old syncBins logic that establish streams on all bins (not push-sync adjusted)
 		{
 			po: 0, prevDepth: -1, newDepth: 0,
-			subBins:           []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 1, prevDepth: -1, newDepth: 0,
-			subBins:           []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 2, prevDepth: -1, newDepth: 0,
-			subBins:           []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 0, prevDepth: -1, newDepth: 1,
-			subBins:           []int{0},
-			noSyncWithinDepth: true,
+			subBins:                 []int{0},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 1, prevDepth: -1, newDepth: 1,
-			subBins:           []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 2, prevDepth: -1, newDepth: 2,
-			subBins:           []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 3, prevDepth: -1, newDepth: 2,
-			subBins:           []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 1, prevDepth: -1, newDepth: 2,
-			subBins:           []int{1},
-			noSyncWithinDepth: true,
+			subBins:                 []int{1},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 0, prevDepth: 0, newDepth: 0, // 0-16 -> 0-16
-			noSyncWithinDepth: true,
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 1, prevDepth: 0, newDepth: 0, // 0-16 -> 0-16
-			noSyncWithinDepth: true,
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 0, prevDepth: 0, newDepth: 1, // 0-16 -> 0
-			quitBins:          []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			quitBins:                []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 0, prevDepth: 0, newDepth: 2, // 0-16 -> 0
-			quitBins:          []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			quitBins:                []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 1, prevDepth: 0, newDepth: 1, // 0-16 -> 1-16
-			quitBins:          []int{0},
-			noSyncWithinDepth: true,
+			quitBins:                []int{0},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 1, prevDepth: 1, newDepth: 0, // 1-16 -> 0-16
-			subBins:           []int{0},
-			noSyncWithinDepth: true,
+			subBins:                 []int{0},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 4, prevDepth: 0, newDepth: 1, // 0-16 -> 1-16
-			quitBins:          []int{0},
-			noSyncWithinDepth: true,
+			quitBins:                []int{0},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 4, prevDepth: 0, newDepth: 4, // 0-16 -> 4-16
-			quitBins:          []int{0, 1, 2, 3},
-			noSyncWithinDepth: true,
+			quitBins:                []int{0, 1, 2, 3},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 4, prevDepth: 0, newDepth: 5, // 0-16 -> 4
-			quitBins:          []int{0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			quitBins:                []int{0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 4, prevDepth: 5, newDepth: 0, // 4 -> 0-16
-			subBins:           []int{0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: true,
+			subBins:                 []int{0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: false,
 		},
 		{
 			po: 4, prevDepth: 5, newDepth: 6, // 4 -> 4
-			noSyncWithinDepth: true,
+			syncBinsOnlyWithinDepth: false,
 		},
 
 		// tests for syncBins logic to establish streams only within depth
 		{
 			po: 0, prevDepth: 5, newDepth: 6,
-			noSyncWithinDepth: false,
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 1, prevDepth: 5, newDepth: 6,
-			noSyncWithinDepth: false,
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 7, prevDepth: 5, newDepth: 6, // 5-16 -> 6-16
-			quitBins:          []int{5},
-			noSyncWithinDepth: false,
+			quitBins:                []int{5},
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 9, prevDepth: 5, newDepth: 6, // 5-16 -> 6-16
-			quitBins:          []int{5},
-			noSyncWithinDepth: false,
+			quitBins:                []int{5},
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 9, prevDepth: 0, newDepth: 6, // 0-16 -> 6-16
-			quitBins:          []int{0, 1, 2, 3, 4, 5},
-			noSyncWithinDepth: false,
+			quitBins:                []int{0, 1, 2, 3, 4, 5},
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 9, prevDepth: -1, newDepth: 0, // [] -> 0-16
-			subBins:           []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: false,
+			subBins:                 []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 9, prevDepth: -1, newDepth: 7, // [] -> 7-16
-			subBins:           []int{7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: false,
+			subBins:                 []int{7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 9, prevDepth: -1, newDepth: 10, // [] -> []
-			noSyncWithinDepth: false,
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 9, prevDepth: 8, newDepth: 10, // 8-16 -> []
-			quitBins:          []int{8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: false,
+			quitBins:                []int{8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 1, prevDepth: 0, newDepth: 0, // [] -> []
-			noSyncWithinDepth: false,
+			syncBinsOnlyWithinDepth: true,
 		},
 		{
 			po: 1, prevDepth: 0, newDepth: 8, // 0-16 -> []
-			quitBins:          []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			noSyncWithinDepth: false,
+			quitBins:                []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			syncBinsOnlyWithinDepth: true,
 		},
 	} {
-		subBins, quitBins := syncSubscriptionsDiff(tc.po, tc.prevDepth, tc.newDepth, max, tc.noSyncWithinDepth)
+		subBins, quitBins := syncSubscriptionsDiff(tc.po, tc.prevDepth, tc.newDepth, max, tc.syncBinsOnlyWithinDepth)
 		if fmt.Sprint(subBins) != fmt.Sprint(tc.subBins) {
-			t.Errorf("po: %v, prevDepth: %v, newDepth: %v, noSyncWithinDepth: %t: got subBins %v, want %v", tc.po, tc.prevDepth, tc.newDepth, tc.noSyncWithinDepth, subBins, tc.subBins)
+			t.Errorf("po: %v, prevDepth: %v, newDepth: %v, syncBinsOnlyWithinDepth: %t: got subBins %v, want %v", tc.po, tc.prevDepth, tc.newDepth, tc.syncBinsOnlyWithinDepth, subBins, tc.subBins)
 		}
 		if fmt.Sprint(quitBins) != fmt.Sprint(tc.quitBins) {
-			t.Errorf("po: %v, prevDepth: %v, newDepth: %v, noSyncWithinDepth: %t: got quitBins %v, want %v", tc.po, tc.prevDepth, tc.newDepth, tc.noSyncWithinDepth, quitBins, tc.quitBins)
+			t.Errorf("po: %v, prevDepth: %v, newDepth: %v, syncBinsOnlyWithinDepth: %t: got quitBins %v, want %v", tc.po, tc.prevDepth, tc.newDepth, tc.syncBinsOnlyWithinDepth, quitBins, tc.quitBins)
 		}
 	}
 }

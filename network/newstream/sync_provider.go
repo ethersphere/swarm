@@ -38,18 +38,22 @@ type syncProvider struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 
-	name              string
-	noSyncWithinDepth bool
-	quit              chan struct{}
+	name                    string
+	syncBinsOnlyWithinDepth bool
+	quit                    chan struct{}
 }
 
-func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, noSyncWithinDepth bool) *syncProvider {
+// NewSyncProvider creates a new sync provider that is used by the stream protocol to sink data and control its behaviour
+// NOTE: syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
+// established only within depth ( >=depth ). This is needed for Push Sync. When set to false, the streams are
+// established on all bins as they did traditionally with Pull Sync.
+func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, syncOnlyWithinDepth bool) *syncProvider {
 	s := &syncProvider{
-		netStore:          ns,
-		kad:               kad,
-		noSyncWithinDepth: noSyncWithinDepth,
-		name:              streamName,
-		quit:              make(chan struct{}),
+		netStore:                ns,
+		kad:                     kad,
+		syncBinsOnlyWithinDepth: syncOnlyWithinDepth,
+		name:                    streamName,
+		quit:                    make(chan struct{}),
 	}
 	return s
 }
@@ -150,7 +154,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	p.logDebug("update syncing subscriptions: initial", "po", po, "depth", depth)
 
 	// initial subscriptions
-	subBins, quitBins := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.noSyncWithinDepth)
+	subBins, quitBins := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
 	s.updateSyncSubscriptions(p, subBins, quitBins)
 
 	depthChangeSignal, unsubscribeDepthChangeSignal := s.kad.SubscribeToNeighbourhoodDepthChange()
@@ -168,7 +172,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 				depth = -1
 			}
 
-			subBins, quitBins := syncSubscriptionsDiff(po, depth, newDepth, s.kad.MaxProxDisplay, s.noSyncWithinDepth)
+			subBins, quitBins := syncSubscriptionsDiff(po, depth, newDepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
 			s.updateSyncSubscriptions(p, subBins, quitBins)
 
 			wasWithinDepth = po >= newDepth
@@ -219,8 +223,10 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 // be requested and the second one which subscriptions need to be quit. Argument
 // prevDepth with value less then 0 represents no previous depth, used for
 // initial syncing subscriptions.
-func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int, noSyncWithinDepth bool) (subBins, quitBins []int) {
-	newStart, newEnd := syncBins(peerPO, newDepth, max, noSyncWithinDepth)
+// syncBinsOnlyWithinDepth toggles between having requested streams only within depth(true)
+// or rather with the old stream establishing logic (false)
+func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int, syncBinsOnlyWithinDepth bool) (subBins, quitBins []int) {
+	newStart, newEnd := syncBins(peerPO, newDepth, max, syncBinsOnlyWithinDepth)
 	if prevDepth < 0 {
 		if newStart == -1 && newEnd == -1 {
 			return nil, nil
@@ -230,7 +236,7 @@ func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int, noSyncWithinDep
 		return intRange(newStart, newEnd), nil
 	}
 
-	prevStart, prevEnd := syncBins(peerPO, prevDepth, max, noSyncWithinDepth)
+	prevStart, prevEnd := syncBins(peerPO, prevDepth, max, syncBinsOnlyWithinDepth)
 	if newStart == -1 && newEnd == -1 {
 		// this means that we should not have any streams on any bins with this peer
 		// get rid of what was established on the previous depth
@@ -261,8 +267,10 @@ func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int, noSyncWithinDep
 // subscriptions need to be requested, based on peer proximity and
 // kademlia neighbourhood depth. Returned range is [start,end), inclusive for
 // start and exclusive for end.
-func syncBins(peerPO, depth, max int, noSyncWithinDepth bool) (start, end int) {
-	if !noSyncWithinDepth && peerPO < depth {
+// syncBinsOnlyWithinDepth toggles between having requested streams only within depth(true)
+// or rather with the old stream establishing logic (false)
+func syncBins(peerPO, depth, max int, syncBinsOnlyWithinDepth bool) (start, end int) {
+	if syncBinsOnlyWithinDepth && peerPO < depth {
 		// we don't want to request anything from peers outside depth
 		return -1, -1
 	}
