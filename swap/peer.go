@@ -62,16 +62,13 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 	case *ErrorMsg:
 		return sp.handleErrorMsg(ctx, msg)
-
-	case *ConfirmMsg:
-		return sp.handleConfirmMsg(ctx, msg)
 	}
 
 	return nil
 }
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
-// a cheque from a creditor
+// a cheque from a debitor
 // TODO: validate the contract address in the cheque to match the address given at handshake
 // TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
@@ -102,14 +99,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	sp.swap.resetBalance(sp.ID(), 0-int64(cheque.Honey))
-	// send confirmation
-	confMsg := &ConfirmMsg{
-		Cheque: cheque,
-	}
-	if err := sp.Send(ctx, confMsg); err != nil {
-		log.Error("error while sending confirm msg", "peer", sp.ID().String(), "err", err.Error())
-		return err
-	}
+
 	// cash in cheque
 	//TODO: input parameter checks?
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
@@ -144,11 +134,5 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 	log.Info("received error msg")
 	// maybe balance disagreement
-	return nil
-}
-
-// handleConfirmMsg is called when a ConfirmMsg is received
-func (sp *Peer) handleConfirmMsg(ctx context.Context, msg interface{}) error {
-	log.Info("received confirm msg")
 	return nil
 }

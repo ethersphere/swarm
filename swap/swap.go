@@ -39,15 +39,6 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-const (
-	deployRetries      = 5
-	deployDelay        = 1 * time.Second // delay between retries
-	defaultCashInDelay = uint64(0)       // Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment // should be non-zero once we implement waivers
-	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
-	DefaultInitialDepositAmount       = 0              // TODO: deliberate value for now; needs experimentation
-	defaultHarddepositTimeoutDuration = 24 * time.Hour // this is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary. The smart-contract allows for setting this variable differently per beneficiary
-)
-
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 

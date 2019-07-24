@@ -52,8 +52,3 @@ type EmitChequeMsg struct {
 
 // ErrorMsg is sent in case of an error TODO: specify error conditions and when this needs to be sent
 type ErrorMsg struct{}
-
-// ConfirmMsg is sent from the creditor to the debitor to confirm cheque reception
-type ConfirmMsg struct {
-	Cheque *Cheque // TODO: probably not needed and if so likely should not include the full cheque
-}

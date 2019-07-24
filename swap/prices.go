@@ -20,11 +20,12 @@ package swap
 This module contains the pricing for message types as constants.
 
 Pricing in Swarm is defined in an internal unit.
-This unit allows to set prices of messages relative to each other
+The name of this internal unit is honey.
+The honey unit allows to set prices of messages relative to each other
 without any dependancy to any currency.
 
 The expectation is then that an external, probably on-chain, **oracle**
-would be queried with the total amount of units for a message,
+would be queried with the total amount of honey for a message,
 for which the oracle would return the price in a given currency.
 
 Currently the expected currency from the oracle would be wei,
@@ -36,4 +37,6 @@ allowing for a multi-currency design.
 const (
 	RetrieveRequestMsgPrice        = uint64(1)
 	ChunkDeliveryMsgRetrievalPrice = uint64(1)
+	// default convertion of honey into output currency - currently ETH
+	defaultHoneyPrice = uint64(1)
 )

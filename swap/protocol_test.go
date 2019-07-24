@@ -17,7 +17,6 @@
 package swap
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -107,8 +106,7 @@ func TestHandshake(t *testing.T) {
 // and deploy them to the simulated backend.
 // We then create Swap protocol peers with a MsgPipe to be able to directly write messages to each other.
 // We have the debitor send a cheque via an `EmitChequeMsg`, then the creditor "reads" (pipe) the message
-// and handles the cheque. We finally also send back a `ConfirmMsg` to the debitor
-// TODO: The ConfirmMsg part is not definitevely specificied.
+// and handles the cheque.
 func TestEmitCheque(t *testing.T) {
 	log.Debug("set up test swaps")
 	creditorSwap, testDir1 := newTestSwap(t)
@@ -144,6 +142,9 @@ func TestEmitCheque(t *testing.T) {
 	creditor := NewPeer(cProtoPeer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
 	debitor := NewPeer(dProtoPeer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
+	// set balance artifically
+	creditorSwap.balances[debitor.ID()] = 42
+	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// a safe check: at this point no cheques should be in the swap
 	if len(creditorSwap.cheques) != 0 {
 		t.Fatalf("Expected no cheques at creditor, but there are %d:", len(creditorSwap.cheques))
@@ -156,6 +157,7 @@ func TestEmitCheque(t *testing.T) {
 			Contract:    debitorSwap.owner.Contract,
 			Beneficiary: creditorSwap.owner.address,
 			Amount:      42,
+			Honey:       42,
 			Timeout:     0,
 		},
 	}
@@ -197,55 +199,21 @@ func TestEmitCheque(t *testing.T) {
 	// Therefore, we need a go-routine in order to check for the test,
 	// and we need to synchronize the go-routines
 
-	errc := make(chan error)
-	// start the go-routine for handling the message
-	go func(t *testing.T) {
-		// this blocks
-		err = debitor.handleMsg(ctx, val)
-		if err != nil {
-			errc <- err
+	// this blocks
+	err = debitor.handleMsg(ctx, val)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
+	if creditorSwap.balances[debitor.ID()] != 0 {
+		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, creditorSwap.balances[debitor.ID()])
+	}
+	/*
+		TODO: When saving the cheque on creditor side is implemented,
+		we should to re-enable this check
+		if len(creditorSwap.cheques) != 1 {
+			t.Fatalf("Expected exactly one cheque at creditor, but there are %d:", len(creditorSwap.cheques))
 		}
-		/*
-			TODO: When saving the cheque on creditor side is implemented,
-			we should to re-enable this check
-			if len(creditorSwap.cheques) != 1 {
-				t.Fatalf("Expected exactly one cheque at creditor, but there are %d:", len(creditorSwap.cheques))
-			}
-		*/
-		errc <- nil
-	}(t)
+	*/
 
-	// handleMsg will block until we read a message
-	log.Debug("read the message on the issuer")
-	msg, err = crw.ReadMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = msg.Decode(&wmsg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	val, ok = Spec.NewMsg(msg.Code)
-	if !ok {
-		t.Fatalf("invalid message code: %v", msg.Code)
-	}
-	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
-		t.Fatalf("decode error <= %v: %v", msg, err)
-	}
-
-	// check that it is indeed a `ConfirmMsg`
-	var conf *ConfirmMsg
-	if conf, ok = val.(*ConfirmMsg); !ok {
-		t.Fatal("Expected ConfirmMsg but it was not")
-	}
-	if bytes.Compare(conf.Cheque.Sig, cheque.Sig) != 0 {
-		t.Fatal("Expected confirmation cheque to be the same, but it is no")
-	}
-
-	// wait until the go routine terminates
-	if err := <-errc; err != nil {
-		t.Fatal(err)
-	}
 }

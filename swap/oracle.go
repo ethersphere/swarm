@@ -16,17 +16,6 @@
 
 package swap
 
-import "time"
-
-const (
-	// maximum validity of the honey price
-	maxPriceAge       = 1 * time.Hour // TODO: this is currently an arbitrary value - currently irrelevant as prices are fixed
-	defaultHoneyPrice = uint64(1)     // default convertion of honey into output currency - currently ETH
-)
-
-// Currency represents a string identifier for currencies
-type Currency string
-
 // PriceOracle is the interface through which Oracles will deliver prices
 type PriceOracle interface {
 	GetPrice(honey uint64) (uint64, error)
@@ -36,34 +25,21 @@ type PriceOracle interface {
 // TODO: Add a config flag so that this can be configured via command line
 // For now it will return a default one
 func NewPriceOracle() PriceOracle {
-	cpo := &ConfigurablePriceOracle{
+	cpo := &FixedPriceOracle{
 		honeyPrice: defaultHoneyPrice,
 	}
-	cpo.refreshRate()
 	return cpo
 }
 
-// ConfigurablePriceOracle is a price oracle which can be customized.
+// FixedPriceOracle is a price oracle which which returns a fixed price.
 // It is the default price oracle used as a placeholder for this iteration of the implementation.
 // In production this should probably be some on-chain oracle called remotely
-type ConfigurablePriceOracle struct {
-	honeyPrice  uint64
-	lastUpdated time.Time
+type FixedPriceOracle struct {
+	honeyPrice uint64
 }
 
 // GetPrice returns the actual price for honey
-func (cpo *ConfigurablePriceOracle) GetPrice(honey uint64) (uint64, error) {
-	// only request to refresh the rate if the timestamp is old enough
-	if time.Now().After(cpo.lastUpdated.Add(maxPriceAge)) {
-		cpo.refreshRate()
-	}
+func (cpo *FixedPriceOracle) GetPrice(honey uint64) (uint64, error) {
 	// otherwise don't refresh the rate and return the latest price
 	return honey * cpo.honeyPrice, nil
-}
-
-// refreshRate refreshes the honey to output unit price (currently ETH)
-func (cpo *ConfigurablePriceOracle) refreshRate() (uint64, error) {
-	// currently do not do anything.
-	// in the future, this might make a network request to some service, reload a file or whatever
-	return cpo.honeyPrice, nil
 }
