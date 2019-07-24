@@ -589,12 +589,14 @@ type SwapInfo struct {
 	*swap.Swap
 }
 
-func (s *SwapInfo) Balance(peer enode.ID) int64 {
-	peerBalance, _ := s.Swap.GetPeerBalance(peer)
-	return peerBalance
+// Balance returns the current SWAP balance for a given peer
+func (s *SwapInfo) Balance(peer enode.ID) (int64, error) {
+	peerBalance, err := s.Swap.GetPeerBalance(peer)
+	return peerBalance, err
 }
 
-func (s *SwapInfo) Balances() map[enode.ID]int64 {
-	peerBalances, _ := s.Swap.GetAllBalances()
-	return peerBalances
+// Balances returns the current SWAP balances for all known peers
+func (s *SwapInfo) Balances() (map[enode.ID]int64, error) {
+	peerBalances, err := s.Swap.GetAllBalances()
+	return peerBalances, err
 }
