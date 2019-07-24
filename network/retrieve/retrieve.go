@@ -147,7 +147,7 @@ func (r *Retrieval) getOriginPo(req *storage.Request) int {
 		id := p.ID()
 
 		// get po between chunk and origin
-		if bytes.Compare(req.Origin.Bytes(), id.Bytes()) == 0 {
+		if bytes.Equal(req.Origin.Bytes(), id.Bytes()) {
 			originPo = po
 			return false
 		}
@@ -193,7 +193,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 		}
 
 		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
-		if bytes.Compare(req.Origin.Bytes(), id.Bytes()) == 0 {
+		if bytes.Equal(req.Origin.Bytes(), id.Bytes()) {
 			return true
 		}
 
