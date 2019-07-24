@@ -271,12 +271,12 @@ func (s *Swap) PeerBalance(peer enode.ID) (int64, error) {
 	return peerBalance, err
 }
 
-// GetAllBalances returns the balances for all known SWAP peers
-func (s *Swap) GetAllBalances() (map[enode.ID]int64, error) {
+// Balances returns the balances for all known SWAP peers
+func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
 	// get list of all known SWAP peers
-	swapPeers, err := s.SwapPeers()
+	swapPeers, err := s.Peers()
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +293,8 @@ func (s *Swap) GetAllBalances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
-// SwapPeers returns a list of every peer known through SWAP
-func (s *Swap) SwapPeers() (peers []enode.ID, err error) {
+// Peers returns a list of every peer known through SWAP
+func (s *Swap) Peers() (peers []enode.ID, err error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 

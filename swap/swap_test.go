@@ -125,7 +125,7 @@ func TestGetAllBalances(t *testing.T) {
 }
 
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
-	balances, err := swap.GetAllBalances()
+	balances, err := swap.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
