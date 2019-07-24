@@ -118,11 +118,10 @@ func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	sp := NewPeer(bp)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
-	return peer.Run(r.HandleMsg(sp))
+	return peer.Run(r.handleMsg(sp))
 }
 
-// HandleMsg handles incoming messages for a certain peer
-func (r *Retrieval) HandleMsg(p *Peer) func(context.Context, interface{}) error {
+func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
 		case *RetrieveRequest:
@@ -426,20 +425,5 @@ func (r *Retrieval) Protocols() []p2p.Protocol {
 }
 
 func (r *Retrieval) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "bzz-retrieve",
-			Version:   "1",
-			Service:   NewAPI(r),
-			Public:    false,
-		},
-	}
-}
-
-type API struct {
-	*Retrieval
-}
-
-func NewAPI(r *Retrieval) *API {
-	return &API{r}
+	return nil
 }

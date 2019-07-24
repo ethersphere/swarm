@@ -36,6 +36,8 @@ func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}, 
 	return s.buckets[id].Load(key)
 }
 
+// MustNodeItem returns the item set in ServiceFunc for a particular node or panics in case
+// the item is not found
 func (s *Simulation) MustNodeItem(id enode.ID, key interface{}) (value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

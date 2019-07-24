@@ -300,8 +300,6 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
 		kad = kv.(*network.Kademlia)
 	} else {
-		//eee := fmt.Sprintf("over %s, under %s", hex.EncodeToString(addr.Over()), hex.EncodeToString(addr.Under()))
-		//panic(eee)
 		kad = network.NewKademlia(addr.Over(), network.NewKadParams())
 		bucket.Store(simulation.BucketKeyKademlia, kad)
 	}
@@ -364,7 +362,7 @@ func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.Glob
 func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	datadir, err := ioutil.TempDir("", "chunk-debug")
 	if err != nil {
-		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+		return nil, err
 	}
 	defer os.RemoveAll(datadir)
 	fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
