@@ -298,6 +298,33 @@ func (s *Swap) GetAllBalances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
+// Returns a list of every known peer to have interacted through SWAP
+func (s *Swap) SwapPeers() (peers []enode.ID, err error) {
+	knownPeers := make(map[enode.ID]bool)
+
+	// get peer IDs from store
+	storePeers, err := s.stateStore.Keys()
+	if err != nil {
+		return nil, err
+	}
+
+	// add store peers to result and mark as present
+	for _, storePeer := range storePeers {
+		peerID := enode.HexID(storePeer)
+		knownPeers[peerID] = true
+		peers = append(peers, peerID)
+	}
+
+	// add in-memory peers to result if not present
+	for peerID := range s.balances {
+		if _, peerExists := knownPeers[peerID]; !peerExists {
+			peers = append(peers, peerID)
+		}
+	}
+
+	return peers, nil
+}
+
 // GetLastCheque returns the last cheque for a given peer
 func (swap *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 	swap.lock.RLock()
