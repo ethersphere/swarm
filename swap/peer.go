@@ -62,9 +62,10 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 	case *ErrorMsg:
 		return sp.handleErrorMsg(ctx, msg)
-	}
 
-	return nil
+	default:
+		return fmt.Errorf("unknown message type: %T", msg)
+	}
 }
 
 // handleEmitChequeMsg should be handled by the creditor when it receives

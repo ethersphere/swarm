@@ -144,7 +144,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	// check if balance with peer is over the payment threshold
+	// check if balance with peer crosses the threshold
 	// it is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
