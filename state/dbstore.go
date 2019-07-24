@@ -109,13 +109,15 @@ func (s *DBStore) Delete(key string) (err error) {
 // Keys returns a list of all the keys in the underlying LevelDB.
 func (s *DBStore) Keys() (keys []string, err error) {
 	iter := s.db.NewIterator(nil, nil)
+	defer iter.Release()
 	for iter.Next() {
 		keys = append(keys, string(iter.Key()))
 	}
-	iter.Release()
 	err = iter.Error()
-
-	return keys, err
+	if err != nil {
+		return []string{}, err
+	}
+	return keys, nil
 }
 
 // Close releases the resources used by the underlying LevelDB.
