@@ -125,7 +125,10 @@ func TestGetAllBalances(t *testing.T) {
 }
 
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
-	balances, _ := swap.GetAllBalances()
+	balances, err := swap.GetAllBalances()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !reflect.DeepEqual(balances, expectedBalances) {
 		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
 	}
