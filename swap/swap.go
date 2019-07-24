@@ -400,9 +400,9 @@ func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) er
 	return nil
 }
 
-// signContent signs the cheque
-func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
-	sig, err := crypto.Sign(s.sigHashCheque(cheque), s.owner.privateKey)
+// signContent signs the cheque with supplied private key
+func (s *Swap) signContentWithKey(cheque *Cheque, prv *ecdsa.PrivateKey) ([]byte, error) {
+	sig, err := crypto.Sign(s.sigHashCheque(cheque), prv)
 	if err != nil {
 		return nil, err
 	}
@@ -410,6 +410,11 @@ func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
 	sig[len(sig)-1] += 27
 	return sig, nil
+}
+
+// signContent signs the cheque with the owners private key
+func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
+	return s.signContentWithKey(cheque, s.owner.privateKey)
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
