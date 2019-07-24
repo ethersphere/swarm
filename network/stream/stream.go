@@ -34,6 +34,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/swap"
 )
 
 const (
@@ -658,13 +659,13 @@ func (sp *StreamerPrices) Price(msg interface{}) *protocols.Price {
 // Instead of hardcoding the price, get it
 // through a function - it could be quite complex in the future
 func (sp *StreamerPrices) getRetrieveRequestMsgPrice() uint64 {
-	return RetrieveRequestMsgPrice
+	return swap.RetrieveRequestMsgPrice
 }
 
 // Instead of hardcoding the price, get it
 // through a function - it could be quite complex in the future
 func (sp *StreamerPrices) getChunkDeliveryMsgRetrievalPrice() uint64 {
-	return ChunkDeliveryMsgRetrievalPrice
+	return swap.ChunkDeliveryMsgRetrievalPrice
 }
 
 // createPriceOracle sets up a matrix which can be queried to get
