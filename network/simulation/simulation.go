@@ -107,7 +107,6 @@ func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
-
 		var kad *network.Kademlia
 
 		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it

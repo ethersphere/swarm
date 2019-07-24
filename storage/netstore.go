@@ -283,6 +283,7 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 	has, err := n.Store.Has(ctx, ref)
 	if err != nil {
 		log.Error(err.Error())
+		panic(err)
 	}
 	if has {
 		return nil, false, false

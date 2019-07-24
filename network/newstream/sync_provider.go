@@ -18,15 +18,16 @@ package newstream
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/storage"
@@ -41,6 +42,8 @@ type syncProvider struct {
 	name                    string
 	syncBinsOnlyWithinDepth bool
 	quit                    chan struct{}
+
+	logger log.Logger
 }
 
 // NewSyncProvider creates a new sync provider that is used by the stream protocol to sink data and control its behaviour
@@ -54,19 +57,22 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, syncOnlyWithin
 		syncBinsOnlyWithinDepth: syncOnlyWithinDepth,
 		name:                    streamName,
 		quit:                    make(chan struct{}),
+		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:8])),
 	}
 	return s
 }
 
 func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
+	s.logger.Debug("syncProvider.NeedData", "key", hex.EncodeToString(key))
 	start := time.Now()
 
 	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
+		s.logger.Debug("returning as if we dont need data")
 		return loaded, nil
 	}
-
-	return loaded, func(ctx context.Context) error {
+	s.logger.Debug("we need data", "ref", hex.EncodeToString(key))
+	return ok, func(ctx context.Context) error {
 		select {
 		case <-fi.Delivered:
 			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
@@ -149,9 +155,9 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
 
-	wasWithinDepth := po >= depth
+	//wasWithinDepth := po >= depth
 
-	p.logDebug("update syncing subscriptions: initial", "po", po, "depth", depth)
+	p.logger.Debug("update syncing subscriptions: initial", "po", po, "depth", depth)
 
 	// initial subscriptions
 	subBins, quitBins := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
@@ -166,17 +172,25 @@ func (s *syncProvider) InitPeer(p *Peer) {
 			if !ok {
 				return
 			}
-			newDepth := s.kad.NeighbourhoodDepth()
-			if po >= newDepth && !wasWithinDepth {
-				// previous depth is -1 because we did not have any streams with the client beforehand
-				depth = -1
-			}
+			//newDepth := s.kad.NeighbourhoodDepth()
+			//if po >= newDepth && !wasWithinDepth {
+			//// previous depth is -1 because we did not have any streams with the client beforehand
+			//depth = -1
+			//}
 
-			subBins, quitBins := syncSubscriptionsDiff(po, depth, newDepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
-			s.updateSyncSubscriptions(p, subBins, quitBins)
+			//subBins, quitBins := syncSubscriptionsDiff(po, depth, newDepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
+			//s.updateSyncSubscriptions(p, subBins, quitBins)
 
-			wasWithinDepth = po >= newDepth
-			depth = newDepth
+			//wasWithinDepth = po >= newDepth
+			//depth = newDepth
+
+			// update subscriptions for this peer when depth changes
+			ndepth := s.kad.NeighbourhoodDepth()
+			sub, qui := syncSubscriptionsDiff(po, depth, ndepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
+			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", sub, "quit", qui)
+			s.updateSyncSubscriptions(p, sub, qui)
+			depth = ndepth
+
 		case <-s.quit:
 			return
 		}
@@ -188,7 +202,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 // and the second one representing bins for syncing subscriptions that
 // need to be removed.
 func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int) {
-	p.logDebug("update syncing subscriptions", "subscribe", subBins, "quit", quitBins)
+	p.logger.Debug("update syncing subscriptions", "subscribe", subBins, "quit", quitBins)
 	if l := len(subBins); l > 0 {
 		streams := make([]ID, l)
 		for i, po := range subBins {
@@ -196,7 +210,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 			stream := NewID(s.StreamName(), strconv.Itoa(po))
 			_, err := p.getOrCreateInterval(p.peerStreamIntervalKey(stream))
 			if err != nil {
-				p.logError("got an error while trying to register initial streams", "stream", stream)
+				p.logger.Error("got an error while trying to register initial streams", "stream", stream)
 			}
 
 			streams[i] = stream
@@ -204,13 +218,13 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := p.Send(ctx, StreamInfoReq{Streams: streams}); err != nil {
-			p.logError("error establishing subsequent subscription", "err", err)
+			p.logger.Error("error establishing subsequent subscription", "err", err)
 			p.Drop()
 			return
 		}
 	}
 	for _, po := range quitBins {
-		p.logDebug("removing cursor info for peer", "bin", po)
+		p.logger.Debug("removing cursor info for peer", "bin", po)
 		p.deleteCursor(NewID(streamName, strconv.Itoa(po)))
 	}
 }

@@ -58,6 +58,7 @@ func init() {
 var (
 	serviceNameSlipStream      = "bzz-sync"
 	bucketKeyFileStore         = "filestore"
+	bucketKeyLocalStore        = "localstore"
 	bucketKeyInitialBinIndexes = "bin-indexes"
 
 	simContextTimeout = 20 * time.Second
@@ -127,6 +128,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		lnetStore := storage.NewLNetStore(netStore)
 		fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		bucket.Store(bucketKeyFileStore, fileStore)
+		bucket.Store(bucketKeyLocalStore, localStore)
 
 		if o.InitialChunkCount > 0 {
 			_, err := uploadChunks(context.Background(), localStore, o.InitialChunkCount)
@@ -156,7 +158,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		}
 
 		sp := NewSyncProvider(netStore, kad, o.SyncOnlyWithinDepth)
-		s = NewSlipStream(store, sp)
+		s = NewSlipStream(store, addr.Over(), sp)
 
 		cleanup = func() {
 			localStore.Close()

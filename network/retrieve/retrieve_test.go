@@ -148,8 +148,18 @@ func TestDeliveryForwarding(t *testing.T) {
 	log.Debug("test delivery forwarding", "uploader", uploader, "forwarder", forwarder, "fetcher", fetcher)
 
 	uploaderNodeStore := sim.NodeItem(uploader, bucketKeyFileStore).(*storage.FileStore)
+
+	fetcherKad := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia)
+	t.Log(fetcherKad.String())
 	fetcherBase := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
-	uploaderBase := sim.NodeItem(fetcher, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+
+	uploaderKad := sim.NodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia)
+	t.Log(uploaderKad.String())
+
+	upKad := sim.NodeItem(uploader, simulation.BucketKeyKademlia).(*network.Kademlia)
+	t.Log(upKad.String())
+
+	uploaderBase := sim.NodeItem(uploader, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 	ctx := context.Background()
 	_, wait, err := uploaderNodeStore.Store(ctx, testutil.RandomReader(101010, filesize), int64(filesize), false)
 	if err != nil {
@@ -211,11 +221,10 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	forwarderBase := sim.NodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
+	//forwarderBase := sim.NodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 
 	// create a node on which the files will be stored at po 1 in relation to the forwarding node
-	uploaderConfig := testutil.NodeConfigAtPo(t, forwarderBase, 1)
+	uploaderConfig := testutil.NodeConfigAtPo(t, fetcherBase, 2)
 	uploader, err = sim.AddNode(override(uploaderConfig))
 	if err != nil {
 		t.Fatal(err)
@@ -225,6 +234,7 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 	if err != nil {
 		t.Fatal(err)
 	}
+	time.Sleep(50 * time.Millisecond)
 
 	return sim, uploader, forwarder, fetching
 }
@@ -306,8 +316,6 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
 		kad = kv.(*network.Kademlia)
 	} else {
-		//eee := fmt.Sprintf("over %s, under %s", hex.EncodeToString(addr.Over()), hex.EncodeToString(addr.Under()))
-		//panic(eee)
 		kad = network.NewKademlia(addr.Over(), network.NewKadParams())
 		bucket.Store(simulation.BucketKeyKademlia, kad)
 	}
@@ -331,7 +339,6 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)
-	bucket.Store(simulation.BucketKeyKademlia, kad)
 
 	cleanup = func() {
 		localStore.Close()

@@ -17,13 +17,14 @@
 package newstream
 
 import (
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
 
-	"github.com/ethersphere/swarm/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/bitvector"
 	"github.com/ethersphere/swarm/network/stream/intervals"
@@ -42,6 +43,8 @@ type Peer struct {
 	providers      map[string]StreamProvider
 	intervalsStore state.Store //move to stream
 
+	logger log.Logger
+
 	streamCursorsMu sync.Mutex
 	streamCursors   map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
 	openWants       map[uint]*want    // maintain open wants on the client side
@@ -50,7 +53,7 @@ type Peer struct {
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer, i state.Store, providers map[string]StreamProvider) *Peer {
+func NewPeer(peer *network.BzzPeer, baseKey []byte, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
 		BzzPeer:        peer,
 		providers:      providers,
@@ -59,6 +62,7 @@ func NewPeer(peer *network.BzzPeer, i state.Store, providers map[string]StreamPr
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
+		logger:         log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
 	}
 	return p
 }
@@ -103,7 +107,7 @@ func (p *Peer) deleteCursor(stream ID) {
 }
 
 func (p *Peer) InitProviders() {
-	p.logDebug("peer.InitProviders")
+	p.logger.Debug("peer.InitProviders")
 
 	for _, sp := range p.providers {
 		go sp.InitPeer(p)
@@ -174,7 +178,7 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 			return nil, err
 		}
 	default:
-		p.logError("unknown error while getting interval for peer", "err", err)
+		p.logger.Error("unknown error while getting interval for peer", "err", err)
 		return nil, err
 	}
 	return i, nil
@@ -183,39 +187,4 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 func (p *Peer) peerStreamIntervalKey(stream ID) string {
 	k := fmt.Sprintf("%s|%s", p.ID().String(), stream.String())
 	return k
-}
-
-func (p *Peer) logWarn(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Warn(msg, ctxs...)
-}
-func (p *Peer) logError(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Error(msg, ctxs...)
-}
-
-func (p *Peer) logDebug(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Debug(msg, ctxs...)
-}
-
-func (p *Peer) logTrace(msg string, ctx ...interface{}) {
-	ctxs := []interface{}{
-		"peer",
-		p.ID(),
-	}
-	ctxs = append(ctxs, ctx...)
-	log.Trace(msg, ctxs...)
 }
