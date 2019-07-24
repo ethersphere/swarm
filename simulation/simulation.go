@@ -558,19 +558,31 @@ func (s *Simulation) WaitForHealthyNetwork() error {
 
 	log.Info("Waiting for healthy kademlia...")
 
-	for i := 0; i < len(nodes); {
-		healthy := &network.Health{}
-		if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Info().BzzAddr[2:]]); err != nil {
-			return err
+	// Check for healthInfo on all nodes
+	for {
+		g, _ = errgroup.WithContext(context.Background())
+		for i := 0; i < len(nodes)-1; i++ {
+			i := i
+			g.Go(func() error {
+				log.Debug("Checking hive_getHealthInfo", "node", nodes[i].Info().ID)
+				healthy := &network.Health{}
+				if err := clients.RPC[i].Call(&healthy, "hive_getHealthInfo", ppmap[nodes[i].Info().BzzAddr[2:]]); err != nil {
+					return err
+				}
+				if !healthy.Healthy() {
+					return fmt.Errorf("node %s is not healthy", nodes[i].Info().ID)
+				}
+				return nil
+			})
 		}
-		if healthy.Healthy() {
-			i++
-		} else {
-			log.Info("Node isn't healthy yet, checking again all nodes...", "id", nodes[i].Info().ID)
-			time.Sleep(500 * time.Millisecond)
-			i = 0 // Start checking all nodes again
+		err := g.Wait()
+		if err == nil {
+			break
 		}
+		log.Info("Not healthy yet...", "msg", err.Error())
+		time.Sleep(500 * time.Millisecond)
 	}
+
 	log.Info("Healthy kademlia on all nodes")
 	return nil
 }

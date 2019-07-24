@@ -58,10 +58,7 @@ func TestExecAdapter(t *testing.T) {
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
-	node, err := adapter.NewNode(nodeconfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	node := adapter.NewNode(nodeconfig)
 	info := node.Info()
 	if info.ID != "node1" {
 		t.Fatal("node id is different")
