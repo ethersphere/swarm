@@ -33,6 +33,7 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 /***
@@ -249,16 +250,7 @@ func newDiscPeer(addr pot.Address) (*Peer, error) {
 	id := nod.ID()
 	p2pPeer := p2p.NewPeer(id, id.String(), nil)
 	return NewPeer(&BzzPeer{
-		Peer:    protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
+		Peer:    protocols.NewPeer(p2pPeer, &testutil.DummyMsgRW{}, DiscoverySpec),
 		BzzAddr: bzzAddr,
 	}, nil), nil
-}
-
-type dummyMsgRW struct{}
-
-func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
-	return p2p.Msg{}, nil
-}
-func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
-	return nil
 }
