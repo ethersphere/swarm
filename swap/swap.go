@@ -255,7 +255,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	return cheque, err
 }
 
-//GetPeerBalance returns the balance for a given peer
+// GetPeerBalance returns the balance for a given peer
 func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -271,35 +271,33 @@ func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return peerBalance, err
 }
 
-//GetAllBalances returns the balances for all known peers
+// GetAllBalances returns the balances for all known SWAP peers
 func (s *Swap) GetAllBalances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// load balances from disk
-	peerIDs, err := s.stateStore.Keys()
+	// get list of all known SWAP peers
+	swapPeers, err := s.SwapPeers()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, peerIDString := range peerIDs {
-		peerID := enode.HexID(peerIDString)
-		peerBalance, err := s.GetPeerBalance(peerID)
+	// get balance for list of peers
+	for _, peer := range swapPeers {
+		peerBalance, err := s.GetPeerBalance(peer)
 		if err != nil {
 			return nil, err
 		}
-		balances[peerID] = peerBalance
-	}
-
-	// add balances from memory
-	for peerID, peerBalance := range s.balances {
-		balances[peerID] = peerBalance
+		balances[peer] = peerBalance
 	}
 
 	return balances, nil
 }
 
-// Returns a list of every known peer to have interacted through SWAP
+// SwapPeers returns a list of every peer known through SWAP
 func (s *Swap) SwapPeers() (peers []enode.ID, err error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
 	knownPeers := make(map[enode.ID]bool)
 
 	// get peer IDs from store
