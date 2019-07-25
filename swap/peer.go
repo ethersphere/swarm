@@ -77,7 +77,10 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	log.Info("received emit cheque message")
 
 	cheque := msg.Cheque
-	sp.processAndVerifyCheque(cheque)
+	if err := sp.processAndVerifyCheque(cheque); err != nil {
+		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
+		return err
+	}
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -157,7 +160,6 @@ func (sp *Peer) verifyChequeProperties(cheque *Cheque) error {
 
 	// the beneficiary is the owner of the counterparty swap contract
 	if err := sp.swap.verifyChequeSig(cheque, sp.beneficiary); err != nil {
-		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
 		return err
 	}
 

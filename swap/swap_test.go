@@ -882,15 +882,25 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 }
 
 // TestPeerProcessAndVerifyChequeInvalid verifies that processAndVerifyCheque does not accept cheques incompatible with the last cheque
-// it first processes a valid cheque
+// it first tries to process an invalid cheque
+// then it processes a valid cheque
 // then rejects one with lower serial
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	swap, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
 
-	// valid cheque with serial 5
+	// invalid cheque because wrong recipient
 	cheque := newTestCheque()
+	cheque.Beneficiary = ownerAddress
+	cheque.Sig, _ = swap.signContentWithKey(cheque, ownerKey)
+
+	if err := peer.processAndVerifyCheque(cheque); err == nil {
+		t.Fatal("accecpted an invalid cheque as first cheque")
+	}
+
+	// valid cheque with serial 5
+	cheque = newTestCheque()
 	cheque.Serial = 5
 	cheque.Sig, _ = swap.signContentWithKey(cheque, ownerKey)
 

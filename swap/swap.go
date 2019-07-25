@@ -383,6 +383,9 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
 	sigHash := s.sigHashCheque(cheque)
 
+	if cheque.Sig == nil {
+		return fmt.Errorf("tried to verify signature on cheque with sig nil")
+	}
 	// copy signature to avoid modifying the original
 	sig := make([]byte, len(cheque.Sig))
 	copy(sig, cheque.Sig)
