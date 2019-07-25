@@ -922,8 +922,7 @@ func TestStarNetworkSync(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	pivotKad = sim.NodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
-	fmt.Println(pivotKad.String())
-	t.Log(pivotKad.String())
+	log.Trace(pivotKad.String())
 	if d := pivotKad.NeighbourhoodDepth(); d < minPivotDepth {
 		t.Skipf("too shallow. depth %d want %d", d, minPivotDepth)
 	}
@@ -1040,7 +1039,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	t.Log(sim.NodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
+	log.Trace(sim.NodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
 	pivotKad = sim.NodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 	pivotAddr := pot.NewAddressFromBytes(pivotBase)
 	// add a few fictional nodes at higher POs to uploader so that uploader depth goes > 0
