@@ -138,7 +138,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	defer s.lock.Unlock()
 
 	// load existing balances from the state store
-	err = s.loadBalance(peer)
+	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		log.Error("error while loading balance for peer", "peer", peer.ID().String())
 		return
@@ -191,21 +191,20 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 }
 
 // loadBalance loads balances from the state store (persisted)
-func (s *Swap) loadBalance(peer *protocols.Peer) (err error) {
+func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	var peerBalance int64
-	peerID := peer.ID()
 	//only load if the current instance doesn't already have this peer's
 	//balance in memory
-	if _, ok := s.balances[peerID]; !ok {
-		err = s.stateStore.Get(balanceKey(peerID), &peerBalance)
-		s.balances[peerID] = peerBalance
+	if _, ok := s.balances[peer]; !ok {
+		err = s.stateStore.Get(balanceKey(peer), &peerBalance)
+		s.balances[peer] = peerBalance
 	}
 	return
 }
 
 // logBalance is a helper function to log the current balance of a peer
 func (s *Swap) logBalance(peer *protocols.Peer) {
-	err := s.loadBalance(peer)
+	err := s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.String()))
 	} else {
@@ -363,18 +362,6 @@ func (s *Swap) Peers() (peers []enode.ID, err error) {
 	}
 
 	return peers, nil
-}
-
-// GetLastCheque returns the last cheque for a given peer
-func (s *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	if lc, ok := s.cheques[peer]; ok {
-		return lc, nil
-	}
-
-	return nil, errors.New("Peer not found")
 }
 
 // loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
