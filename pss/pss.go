@@ -157,7 +157,7 @@ func (p *Pss) String() string {
 //
 // In addition to params, it takes a swarm network Kademlia
 // and a FileStore storage for message cache storage.
-func NewPss(k *network.Kademlia, params *Params) (*Pss, error) {
+func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")
 	}
@@ -396,7 +396,8 @@ func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handle(ctx context.Context, msg interface{}) error {
-	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
+	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
+
 	pssmsg, ok := msg.(*PssMsg)
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T", msg)

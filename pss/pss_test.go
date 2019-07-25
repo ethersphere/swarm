@@ -269,7 +269,7 @@ func TestAddressMatch(t *testing.T) {
 	}
 	privkey, err := w.GetPrivateKey(keys)
 	pssp := NewParams().WithPrivateKey(privkey)
-	ps, err := NewPss(kad, pssp)
+	ps, err := New(kad, pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -323,7 +323,7 @@ func TestProxShortCircuit(t *testing.T) {
 	// set up pss
 	privKey, err := crypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
-	ps, err := NewPss(kad, pssp)
+	ps, err := New(kad, pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -464,7 +464,7 @@ func TestAddressMatchProx(t *testing.T) {
 	// set up pss
 	privKey, err := crypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
-	ps, err := NewPss(kad, pssp)
+	ps, err := New(kad, pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -663,7 +663,6 @@ func TestMessageProcessing(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	tmr := time.NewTimer(time.Millisecond * 100)
-	//var outmsg *PssMsg
 	var outmsg *outboxMsg
 	select {
 	case outmsg = <-ps.outbox:
@@ -1993,7 +1992,7 @@ func newServices(allowRaw bool) adapters.Services {
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
-			ps, err := NewPss(pskad, pssp)
+			ps, err := New(pskad, pssp)
 			if err != nil {
 				return nil, err
 			}
@@ -2061,7 +2060,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Param
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-	ps, err := NewPss(kad, pp)
+	ps, err := New(kad, pp)
 	if err != nil {
 		return nil
 	}

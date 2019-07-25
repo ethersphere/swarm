@@ -430,7 +430,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			ps, err := NewPss(pskad, pssp)
+			ps, err := New(pskad, pssp)
 			if err != nil {
 				return nil, nil, err
 			}
