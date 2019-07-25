@@ -269,7 +269,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// we need to ignore the error check when loading from the StateStore,
 	// as an error might indicate that there is no existing cheque, which
 	// could mean it's the first interaction, which is absolutely valid
-	_ = s.loadCheque(peer)
+	_ = s.loadLastSentCheque(peer)
 	lastCheque := s.cheques[peer]
 
 	if lastCheque == nil {
@@ -377,8 +377,8 @@ func (s *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 	return nil, errors.New("Peer not found")
 }
 
-//loadCheque loads the last cheque for a peer from the state store (persisted)
-func (s *Swap) loadCheque(peer enode.ID) (err error) {
+// loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
+func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	//only load if the current instance doesn't already have this peer's
 	//last cheque in memory
 	var cheque *Cheque
