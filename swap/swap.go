@@ -324,12 +324,11 @@ func (s *Swap) loadCheque(peer enode.ID) (err error) {
 }
 
 // saveLastReceivedCheque loads the last received cheque for peer
-func (s *Swap) loadLastReceivedCheque(peer enode.ID) *Cheque {
+func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	var cheque *Cheque
 	s.stateStore.Get(peer.String()+"_cheques_received", &cheque)
-	return cheque
+	return
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer

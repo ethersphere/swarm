@@ -193,7 +193,7 @@ func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expe
 
 	// TODO: maybe allow some range around expectedAmount?
 	if expectedAmount != actualAmount {
-		return fmt.Errorf("unexpected exchange rate used for honey, expected %d was %d", expectedAmount, actualAmount)
+		return fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
 	}
 
 	return nil
