@@ -52,7 +52,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/newstream"
-	"github.com/ethersphere/swarm/network/retrieve"
+	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
@@ -76,7 +76,7 @@ type Swarm struct {
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	newstreamer       *newstream.SlipStream
-	retrieval         *retrieve.Retrieval
+	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
@@ -184,7 +184,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	self.retrieval = retrieve.NewRetrieval(to, self.netStore)
+	self.retrieval = retrieval.New(to, self.netStore)
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)

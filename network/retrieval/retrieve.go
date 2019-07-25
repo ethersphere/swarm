@@ -71,9 +71,9 @@ type Retrieval struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
-	spec     *protocols.Spec //this protocol's spec
+	spec     *protocols.Spec
 
-	quit chan struct{} // termination
+	quit chan struct{}
 }
 
 // NewRetrieval returns a new instance of the retrieval protocol handler
