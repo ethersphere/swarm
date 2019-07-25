@@ -49,9 +49,9 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 PublicAPI
 	stateStore          state.Store          // stateStore is needed in order to keep balances across sessions
-	lock                sync.RWMutex         // lock the balances
+	lock                sync.RWMutex         // lock the store
 	balances            map[enode.ID]int64   // map of balances for each peer
-	cheques             map[enode.ID]*Cheque // map of balances for each peer
+	cheques             map[enode.ID]*Cheque // map of cheques for each peer
 	peers               map[enode.ID]*Peer   // map of all swap Peers
 	backend             cswap.Backend        // the backend (blockchain) used
 	owner               *Owner               // contract access
