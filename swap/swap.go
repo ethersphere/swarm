@@ -100,6 +100,21 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return sw
 }
 
+// returns the store key for retrieving a peer's balance
+func balanceKey(peer enode.ID) string {
+	return "balance_" + peer.String()
+}
+
+// returns the store key for retrieving a peer's last sent cheque
+func sentChequeKey(peer enode.ID) string {
+	return "sent_cheque" + peer.String()
+}
+
+// returns the store key for retrieving a peer's last received cheque
+func receivedChequeKey(peer enode.ID) string {
+	return "received_cheque_" + peer.String()
+}
+
 // createOwner assings keys and addresses
 func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
 	pubkey := &prvkey.PublicKey
@@ -197,7 +212,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
 	s.cheques[peer] = cheque
 
-	err = s.stateStore.Put(peer.String()+"_cheques", &cheque)
+	err = s.stateStore.Put(sentChequeKey(peer), &cheque)
 	// TODO: error handling might be quite more complex
 	if err != nil {
 		log.Error("error while storing the last cheque: %s", err.Error())
@@ -368,7 +383,7 @@ func (s *Swap) loadCheque(peer enode.ID) (err error) {
 	//last cheque in memory
 	var cheque *Cheque
 	if _, ok := s.cheques[peer]; !ok {
-		err = s.stateStore.Get(peer.String()+"_cheques", &cheque)
+		err = s.stateStore.Get(sentChequeKey(peer), &cheque)
 		s.cheques[peer] = cheque
 	}
 	return
@@ -378,7 +393,7 @@ func (s *Swap) loadCheque(peer enode.ID) (err error) {
 func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.stateStore.Get(peer.String()+"_cheques_received", &cheque)
+	s.stateStore.Get(receivedChequeKey(peer), &cheque)
 	return
 }
 
@@ -386,7 +401,7 @@ func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
 func (s *Swap) saveLastReceivedCheque(peer enode.ID, cheque *Cheque) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.stateStore.Put(peer.String()+"_cheques_received", cheque)
+	return s.stateStore.Put(receivedChequeKey(peer), cheque)
 }
 
 // Close cleans up swap
