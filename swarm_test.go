@@ -230,7 +230,7 @@ func TestNewSwarmFailure(t *testing.T) {
 		{
 			name: "with swap enabled and default network ID",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ""
+				config.SwapAPI = ipcEndpoint
 				config.SwapEnabled = true
 				config.NetworkID = network.DefaultNetworkID
 			},
