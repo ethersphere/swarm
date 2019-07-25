@@ -34,6 +34,7 @@ type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
+	Keys() (keys []string, err error)
 	Close() error
 }
 
@@ -103,6 +104,20 @@ func (s *DBStore) Put(key string, i interface{}) (err error) {
 // Delete removes entries stored under a specific key.
 func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
+}
+
+// Keys returns a list of all the keys in the underlying LevelDB.
+func (s *DBStore) Keys() (keys []string, err error) {
+	iter := s.db.NewIterator(nil, nil)
+	defer iter.Release()
+	for iter.Next() {
+		keys = append(keys, string(iter.Key()))
+	}
+	err = iter.Error()
+	if err != nil {
+		return []string{}, err
+	}
+	return keys, nil
 }
 
 // Close releases the resources used by the underlying LevelDB.
