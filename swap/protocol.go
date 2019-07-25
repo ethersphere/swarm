@@ -125,8 +125,6 @@ func (s *Swap) addPeer(p *Peer) {
 }
 
 func (s *Swap) getPeer(id enode.ID) *Peer {
-	s.lock.Lock()
-	defer s.lock.Unlock()
 	return s.peers[id]
 }
 
