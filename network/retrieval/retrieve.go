@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package retrieve
+package retrieval
 
 import (
 	"bytes"
@@ -70,26 +70,21 @@ type Retrieval struct {
 	mtx      sync.Mutex
 	netStore *storage.NetStore
 	kad      *network.Kademlia
-	peers    map[enode.ID]*Peer //this protocols peers
-	spec     *protocols.Spec    //this protocol's spec
-	balance  protocols.Balance  //implements protocols.Balance, for accounting
-	prices   protocols.Prices   //implements protocols.Prices, provides prices to accounting
+	peers    map[enode.ID]*Peer
+	spec     *protocols.Spec //this protocol's spec
 
 	quit chan struct{} // termination
 }
 
 // NewRetrieval returns a new instance of the retrieval protocol handler
-func NewRetrieval(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
-	ret := &Retrieval{
+func New(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
+	return &Retrieval{
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
 		netStore: ns,
 		quit:     make(chan struct{}),
+		spec:     spec,
 	}
-
-	ret.spec = spec
-
-	return ret
 }
 
 func (r *Retrieval) addPeer(p *Peer) {
@@ -365,7 +360,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 // RequestFromPeers sends a chunk retrieve request to the next found peer
 func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
 	log.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr)
-	metrics.GetOrRegisterCounter("network.retrieve.requestfrompeers", nil).Inc(1)
+	metrics.GetOrRegisterCounter("network.retrieve.request_from_peers", nil).Inc(1)
 
 	const maxFindPeerRetries = 5
 	retries := 0

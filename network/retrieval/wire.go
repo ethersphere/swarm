@@ -14,24 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package retrieve
+package retrieval
 
-import (
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethersphere/swarm/network"
-)
+import "github.com/ethersphere/swarm/storage"
 
-// Peer wraps BzzPeer with a contextual logger for this peer
-type Peer struct {
-	*network.BzzPeer
-	logger log.Logger
+// RetrieveRequestMsg is the protocol msg for chunk retrieve requests
+type RetrieveRequest struct {
+	Addr storage.Address
 }
 
-// NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer) *Peer {
-	p := &Peer{
-		BzzPeer: peer,
-		logger:  log.New("peer", peer.ID()),
-	}
-	return p
+// ChunkDelivery is the protocol msg for delivering a solicited chunk to a peer
+type ChunkDelivery struct {
+	Addr  storage.Address
+	SData []byte // the stored chunk Data (incl size)
 }

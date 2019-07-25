@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package retrieve
+package retrieval
 
 import (
 	"bytes"
@@ -73,7 +73,7 @@ func TestChunkDelivery(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := sim.AddNode()
 	if err != nil {
@@ -84,7 +84,7 @@ func TestChunkDelivery(t *testing.T) {
 		nodeIDs := sim.UpNodeIDs()
 		log.Debug("uploader node", "enode", nodeIDs[0])
 
-		item := sim.MustNodeItem(nodeIDs[0], bucketKeyFileStore)
+		fs := sim.MustNodeItem(nodeIDs[0], bucketKeyFileStore).(*storage.FileStore)
 
 		//put some data into just the first node
 		data := make([]byte, filesize)
@@ -96,7 +96,7 @@ func TestChunkDelivery(t *testing.T) {
 			return err
 		}
 		log.Trace("got all refs", "refs", refs)
-		_, wait, err := item.(*storage.FileStore).Store(context.Background(), bytes.NewReader(data), int64(filesize), false)
+		_, wait, err := fs.Store(context.Background(), bytes.NewReader(data), int64(filesize), false)
 		if err != nil {
 			return err
 		}
@@ -245,7 +245,7 @@ func TestRequestFromPeers(t *testing.T) {
 
 	to.On(peer)
 
-	s := NewRetrieval(to, nil)
+	s := New(to, nil)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.Background(), req)
@@ -276,7 +276,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 	to.On(peer)
 
-	r := NewRetrieval(to, nil)
+	r := New(to, nil)
 	req := storage.NewRequest(storage.Address(hash0[:]))
 
 	// making a request which should return with "no peer found"
@@ -319,7 +319,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := NewRetrieval(kad, netStore)
+	r := New(kad, netStore)
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)
