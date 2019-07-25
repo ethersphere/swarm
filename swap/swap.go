@@ -138,7 +138,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	defer s.lock.Unlock()
 
 	// load existing balances from the state store
-	err = s.loadState(peer)
+	err = s.loadBalance(peer)
 	if err != nil && err != state.ErrNotFound {
 		log.Error("error while loading balance for peer", "peer", peer.ID().String())
 		return
@@ -192,7 +192,7 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 
 // logBalance is a helper function to log the current balance of a peer
 func (s *Swap) logBalance(peer *protocols.Peer) {
-	err := s.loadState(peer)
+	err := s.loadBalance(peer)
 	if err != nil && err != state.ErrNotFound {
 		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.String()))
 	} else {
@@ -365,7 +365,7 @@ func (s *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 }
 
 // loadStates loads balances from the state store (persisted)
-func (s *Swap) loadState(peer *protocols.Peer) (err error) {
+func (s *Swap) loadBalance(peer *protocols.Peer) (err error) {
 	var peerBalance int64
 	peerID := peer.ID()
 	//only load if the current instance doesn't already have this peer's
