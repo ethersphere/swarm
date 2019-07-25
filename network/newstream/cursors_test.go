@@ -133,7 +133,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 			pivotCursors := peerRecord.getCursorsCopy()
 			otherSyncer := nodeSlipStream(sim, idOther).getPeer(idPivot)
 			otherCursors := otherSyncer.getCursorsCopy()
-			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
+			otherKademlia := sim.MustNodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 
 			othersBins := nodeInitialBinIndexes(sim, idOther)
 
@@ -214,7 +214,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 			idPivot = nodeIDs[0]
 			for i := 1; i < j; i++ {
 				idOther := nodeIDs[i]
-				otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
+				otherKademlia := sim.MustNodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 				po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 				depth := pivotKademlia.NeighbourhoodDepth()
 				pivotCursors := pivotSyncer.getPeer(idOther).getCursorsCopy()
@@ -273,7 +273,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	}
 
 	pivotEnode := s.PivotEnode
-	pivotKademlia := sim.NodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
+	pivotKademlia := sim.MustNodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
 	lookupEnode := s.LookupEnode
 	lookupPO := s.PO
 	nodeCount := len(sim.UpNodeIDs())
@@ -391,12 +391,12 @@ func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulati
 	}
 	pivotEnode = nodeIDs[0]
 	log.Debug("simulation pivot node", "id", pivotEnode)
-	pivotKademlia := sim.NodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
+	pivotKademlia := sim.MustNodeItem(pivotEnode, simulation.BucketKeyKademlia).(*network.Kademlia)
 
 	// make sure that we get a node with po <= depth
 	for i := 1; i < nodeCount; i++ {
 		log.Debug("looking for a peer", "i", i, "nodecount", nodeCount)
-		otherKademlia := sim.NodeItem(nodeIDs[i], simulation.BucketKeyKademlia).(*network.Kademlia)
+		otherKademlia := sim.MustNodeItem(nodeIDs[i], simulation.BucketKeyKademlia).(*network.Kademlia)
 		po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 		depth := pivotKademlia.NeighbourhoodDepth()
 		if po > depth {

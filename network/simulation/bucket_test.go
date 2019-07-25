@@ -51,7 +51,10 @@ func TestServiceBucket(t *testing.T) {
 	}
 
 	t.Run("ServiceFunc bucket Store", func(t *testing.T) {
-		v := sim.NodeItem(id1, testKey)
+		v, ok := sim.NodeItem(id1, testKey)
+		if !ok {
+			t.Fatal("bucket item not found")
+		}
 		s, ok := v.(string)
 		if !ok {
 			t.Fatal("bucket item value is not string")
@@ -60,7 +63,10 @@ func TestServiceBucket(t *testing.T) {
 			t.Fatalf("expected %q, got %q", testValue+id1.String(), s)
 		}
 
-		v = sim.NodeItem(id2, testKey)
+		v, ok = sim.NodeItem(id2, testKey)
+		if !ok {
+			t.Fatal("bucket item not found")
+		}
 		s, ok = v.(string)
 		if !ok {
 			t.Fatal("bucket item value is not string")
@@ -76,18 +82,22 @@ func TestServiceBucket(t *testing.T) {
 	t.Run("SetNodeItem", func(t *testing.T) {
 		sim.SetNodeItem(id1, customKey, customValue)
 
-		v := sim.NodeItem(id1, customKey)
-		s := v.(string)
+		v, ok := sim.NodeItem(id1, customKey)
+		if !ok {
+			t.Fatal("bucket item not found")
+		}
+		s, ok := v.(string)
+		if !ok {
+			t.Fatal("bucket item value is not string")
+		}
 		if s != customValue {
 			t.Fatalf("expected %q, got %q", customValue, s)
 		}
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("bucket item should not be found")
-			}
-		}()
-		_ = sim.NodeItem(id2, customKey)
+		_, ok = sim.NodeItem(id2, customKey)
+		if ok {
+			t.Fatal("bucket item should not be found")
+		}
 	})
 
 	if err := sim.StopNode(id2); err != nil {

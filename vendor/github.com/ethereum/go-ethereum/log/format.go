@@ -23,9 +23,7 @@ const (
 
 // locationTrims are trimmed for display to avoid unwieldy log lines.
 var locationTrims = []string{
-	"vendor/github.com/ethereum/go-ethereum/",
 	"github.com/ethereum/go-ethereum/",
-	"github.com/ethersphere/swarm/",
 }
 
 // PrintOrigins sets or unsets log location (file:line) printing for terminal

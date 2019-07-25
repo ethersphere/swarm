@@ -69,15 +69,15 @@ func nodeSlipStream(sim *simulation.Simulation, id enode.ID) (s *SlipStream) {
 }
 
 func nodeFileStore(sim *simulation.Simulation, id enode.ID) (s *storage.FileStore) {
-	return sim.NodeItem(id, bucketKeyFileStore).(*storage.FileStore)
+	return sim.MustNodeItem(id, bucketKeyFileStore).(*storage.FileStore)
 }
 
 func nodeInitialBinIndexes(sim *simulation.Simulation, id enode.ID) (s []uint64) {
-	return sim.NodeItem(id, bucketKeyInitialBinIndexes).([]uint64)
+	return sim.MustNodeItem(id, bucketKeyInitialBinIndexes).([]uint64)
 }
 
 func nodeKademlia(sim *simulation.Simulation, id enode.ID) (k *network.Kademlia) {
-	return sim.NodeItem(id, simulation.BucketKeyKademlia).(*network.Kademlia)
+	return sim.MustNodeItem(id, simulation.BucketKeyKademlia).(*network.Kademlia)
 }
 
 func nodeBinIndexes(t *testing.T, store interface {

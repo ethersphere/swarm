@@ -68,12 +68,12 @@ func TestTwoNodesFullSync(t *testing.T) {
 	}
 
 	log.Debug("pivot node", "enode", uploaderNode)
-	uploadStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
+	uploadStore := sim.MustNodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
 
 	chunks := mustUploadChunks(ctx, t, uploadStore, chunkCount)
 
 	uploaderNodeBinIDs := make([]uint64, 17)
-	uploaderStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
+	uploaderStore := sim.MustNodeItem(uploaderNode, bucketKeyFileStore).(chunk.Store)
 	var uploaderSum uint64
 	for po := 0; po <= 16; po++ {
 		until, err := uploaderStore.LastPullSubscriptionBinID(uint8(po))
@@ -99,7 +99,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return waitChunks(sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
+		return waitChunks(sim.MustNodeItem(syncingNode, bucketKeyFileStore).(chunk.Store), uploaderSum, 10*time.Second)
 	})
 
 	if result.Error != nil {
@@ -223,7 +223,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			uploadStore := sim.NodeItem(uploadNode, bucketKeyFileStore).(chunk.Store)
+			uploadStore := sim.MustNodeItem(uploadNode, bucketKeyFileStore).(chunk.Store)
 
 			chunks := mustUploadChunks(ctx, t, uploadStore, tc.chunkCount)
 
@@ -247,7 +247,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			syncStore := sim.NodeItem(syncNode, bucketKeyFileStore).(chunk.Store)
+			syncStore := sim.MustNodeItem(syncNode, bucketKeyFileStore).(chunk.Store)
 
 			err = waitChunks(syncStore, totalChunkCount-removedCount, 10*time.Second)
 			if err != nil {
@@ -299,7 +299,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+		uploaderNodeStore := sim.MustNodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
 
 		syncingNode, err := sim.AddNode()
 		if err != nil {
@@ -330,7 +330,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 		}
 
 		// wait for all chunks to be synced
-		syncingNodeStore := sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
+		syncingNodeStore := sim.MustNodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
 		if err := waitChunks(syncingNodeStore, uint64(len(uploadedChunks)), 10*time.Second); err != nil {
 			return err
 		}
@@ -395,7 +395,7 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		syncingNodeStore := sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
+		syncingNodeStore := sim.MustNodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
 		// and connect it with the uploading node
 		err = sim.Net.Connect(syncingNode, uploaderNode)
 		if err != nil {
@@ -559,7 +559,7 @@ func TestFullSync(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+			uploaderNodeStore := sim.MustNodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
 
 			if tc.history {
 				mustUploadChunks(context.Background(), t, uploaderNodeStore, tc.chunkCount)
@@ -597,7 +597,7 @@ func TestFullSync(t *testing.T) {
 					wantChunks[k] = v
 				}
 				// wait for all chunks to be synced
-				store := sim.NodeItem(id, bucketKeyFileStore).(chunk.Store)
+				store := sim.MustNodeItem(id, bucketKeyFileStore).(chunk.Store)
 				if err := waitChunks(store, uint64(len(wantChunks)), 10*time.Second); err != nil {
 					t.Fatal(err)
 				}
@@ -638,7 +638,7 @@ func TestFullSync(t *testing.T) {
 				for k, v := range uploadedChunks {
 					wantChunks[k] = v
 				}
-				store := sim.NodeItem(id, bucketKeyFileStore).(chunk.Store)
+				store := sim.MustNodeItem(id, bucketKeyFileStore).(chunk.Store)
 				// wait for all chunks to be synced
 				if err := waitChunks(store, uint64(len(wantChunks)), 10*time.Second); err != nil {
 					t.Fatal(err)
@@ -802,7 +802,7 @@ func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 		b.Fatal(err)
 	}
 
-	uploaderNodeStore := sim.NodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
+	uploaderNodeStore := sim.MustNodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
 	uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
 	if err != nil {
 		b.Fatal(err)
@@ -821,7 +821,7 @@ func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		syncingNodeStore := sim.NodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
+		syncingNodeStore := sim.MustNodeItem(syncingNode, bucketKeyFileStore).(chunk.Store)
 		if err := waitChunks(syncingNodeStore, uint64(len(uploadedChunks)), 10*time.Second); err != nil {
 			b.Fatal(err)
 		}
@@ -888,7 +888,7 @@ func TestStarNetworkSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pivotKad := sim.NodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+	pivotKad := sim.MustNodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 	pivotBase := pivotKad.BaseAddr()
 
 	log.Debug("started pivot node", "addr", hex.EncodeToString(pivotBase))
@@ -916,12 +916,12 @@ func TestStarNetworkSync(t *testing.T) {
 		}
 
 		time.Sleep(50 * time.Millisecond)
-		log.Debug(sim.NodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
+		log.Debug(sim.MustNodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
 
 	}
 	time.Sleep(50 * time.Millisecond)
 
-	pivotKad = sim.NodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+	pivotKad = sim.MustNodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 	log.Trace(pivotKad.String())
 	if d := pivotKad.NeighbourhoodDepth(); d < minPivotDepth {
 		t.Skipf("too shallow. depth %d want %d", d, minPivotDepth)
@@ -936,7 +936,7 @@ func TestStarNetworkSync(t *testing.T) {
 			if bytes.Equal(pivot.Bytes(), node.Bytes()) {
 				continue
 			}
-			nodeKad := sim.NodeItem(node, simulation.BucketKeyKademlia).(*network.Kademlia)
+			nodeKad := sim.MustNodeItem(node, simulation.BucketKeyKademlia).(*network.Kademlia)
 			nodePo := chunk.Proximity(nodeKad.BaseAddr(), pivotKad.BaseAddr())
 			seed := int(time.Now().UnixNano())
 			randomBytes := testutil.RandomBytes(seed, filesize)
@@ -961,7 +961,7 @@ func TestStarNetworkSync(t *testing.T) {
 				chunkProx[hex.EncodeToString(c)] = proxData
 			}
 
-			fs := sim.NodeItem(node, bucketKeyFileStore).(*storage.FileStore)
+			fs := sim.MustNodeItem(node, bucketKeyFileStore).(*storage.FileStore)
 			reader := bytes.NewReader(randomBytes[:])
 			_, wait1, err := fs.Store(ctx, reader, int64(len(randomBytes)), false)
 			if err != nil {
@@ -977,7 +977,7 @@ func TestStarNetworkSync(t *testing.T) {
 		time.Sleep(syncTime)
 
 		// inclusive test
-		pivotLs := sim.NodeItem(pivot, bucketKeyLocalStore).(*localstore.DB)
+		pivotLs := sim.MustNodeItem(pivot, bucketKeyLocalStore).(*localstore.DB)
 		return verifyCorrectChunksOnPivot(chunkProx, pivotDepth, pivotLs)
 	})
 
@@ -1008,7 +1008,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pivotKad := sim.NodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+	pivotKad := sim.MustNodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 	pivotBase := pivotKad.BaseAddr()
 
 	log.Debug("started pivot node", "addr", hex.EncodeToString(pivotBase))
@@ -1039,8 +1039,8 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	log.Trace(sim.NodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
-	pivotKad = sim.NodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+	log.Trace(sim.MustNodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
+	pivotKad = sim.MustNodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 	pivotAddr := pot.NewAddressFromBytes(pivotBase)
 	// add a few fictional nodes at higher POs to uploader so that uploader depth goes > 0
 	for i := 0; i < nodeCount; i++ {
@@ -1075,7 +1075,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 			if bytes.Equal(pivot.Bytes(), node.Bytes()) {
 				continue
 			}
-			nodeKad := sim.NodeItem(node, simulation.BucketKeyKademlia).(*network.Kademlia)
+			nodeKad := sim.MustNodeItem(node, simulation.BucketKeyKademlia).(*network.Kademlia)
 			nodePo := chunk.Proximity(nodeKad.BaseAddr(), pivotKad.BaseAddr())
 			seed := int(time.Now().UnixNano())
 			randomBytes := testutil.RandomBytes(seed, filesize)
@@ -1100,7 +1100,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 				chunkProx[hex.EncodeToString(c)] = proxData
 			}
 
-			fs := sim.NodeItem(node, bucketKeyFileStore).(*storage.FileStore)
+			fs := sim.MustNodeItem(node, bucketKeyFileStore).(*storage.FileStore)
 			reader := bytes.NewReader(randomBytes[:])
 			_, wait1, err := fs.Store(ctx, reader, int64(len(randomBytes)), false)
 			if err != nil {
@@ -1114,7 +1114,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 		//according to old pull sync - if the node is outside of depth - it should have all chunks where po(chunk)==po(node)
 		time.Sleep(syncTime)
 
-		pivotLs := sim.NodeItem(pivot, bucketKeyLocalStore).(*localstore.DB)
+		pivotLs := sim.MustNodeItem(pivot, bucketKeyLocalStore).(*localstore.DB)
 		return verifyCorrectChunksOnPivot(chunkProx, pivotDepth, pivotLs)
 	})
 

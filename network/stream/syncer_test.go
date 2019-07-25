@@ -40,6 +40,8 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
+const dataChunkCount = 1000
+
 // TestTwoNodesFullSync connects two nodes, uploads content to one node and expects the
 // uploader node's chunks to be synced to the second node. This is expected behaviour since although
 // both nodes might share address bits, due to kademlia depth=0 when under ProxBinSize - this will
@@ -49,8 +51,8 @@ import (
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) { //
 	var (
-		chunkCount = 50000 //~4mb
-		syncTime   = 3 * time.Second
+		chunkCount = 1000 //~4mb
+		syncTime   = 5 * time.Second
 	)
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -102,43 +104,86 @@ func TestTwoNodesFullSync(t *testing.T) { //
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
 
-	_, err := sim.AddNode()
+	_, err := sim.AddNodesAndConnectChain(2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != 2 {
+			return errors.New("not enough nodes up")
+		}
 
-		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
+			}
+		}()
+
+		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
 
-		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
 
-		if err = wait(ctx); err != nil {
-			return err
+		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
 		}
 
-		id, err := sim.AddNode()
-		if err != nil {
-			return err
-		}
-		err = sim.Net.ConnectNodesStar([]enode.ID{id}, nodeIDs[0])
-		if err != nil {
-			return err
-		}
-		nodeIDs = sim.UpNodeIDs()
-		if len(nodeIDs) != 2 {
-			return errors.New("not enough nodes up")
-		}
-		syncingNode := nodeIDs[1]
+		wait1(ctx)
+		wait2(ctx)
+		time.Sleep(1 * time.Second)
 
+		//explicitly check that all subscriptions are there on all bins
+		for idx, id := range nodeIDs {
+			node := sim.Net.GetNode(id)
+			client, err := node.Client()
+			if err != nil {
+				return fmt.Errorf("create node %d rpc client fail: %v", idx, err)
+			}
+
+			//ask it for subscriptions
+			pstreams := make(map[string][]string)
+			err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+			if err != nil {
+				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+			}
+			for _, streams := range pstreams {
+				b := make([]bool, 17)
+				for _, sub := range streams {
+					subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
+					if err != nil {
+						return err
+					}
+					b[int(subPO)] = true
+				}
+				for bin, v := range b {
+					if !v {
+						return fmt.Errorf("did not find any subscriptions for node %d on bin %d", idx, bin)
+					}
+				}
+			}
+		}
+		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
-		item = sim.NodeItem(nodeIDs[0], bucketKeyStore)
+		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
+		if !ok {
+			return fmt.Errorf("No DB")
+		}
 		store := item.(chunk.Store)
 		uploaderNodeBinIDs := make([]uint64, 17)
 
@@ -152,24 +197,33 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			uploaderNodeBinIDs[po] = until
 		}
 		// wait for syncing
-		<-time.After(syncTime)
+		time.Sleep(syncTime)
 
 		// check that the sum of bin indexes is equal
-		log.Debug("compare to", "enode", syncingNode)
-		item = sim.NodeItem(syncingNode, bucketKeyStore)
-		db := item.(chunk.Store)
-
-		uploaderSum, otherNodeSum := 0, 0
-		for po, uploaderUntil := range uploaderNodeBinIDs {
-			shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
-			if err != nil {
-				t.Fatal(err)
+		for idx := range nodeIDs {
+			if nodeIDs[idx] == nodeIDs[0] {
+				continue
 			}
-			otherNodeSum += int(shouldUntil)
-			uploaderSum += int(uploaderUntil)
-		}
-		if uploaderSum != otherNodeSum {
-			return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+
+			log.Debug("compare to", "enode", nodeIDs[idx])
+			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
+			if !ok {
+				return fmt.Errorf("No DB")
+			}
+			db := item.(chunk.Store)
+
+			uploaderSum, otherNodeSum := 0, 0
+			for po, uploaderUntil := range uploaderNodeBinIDs {
+				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+				if err != nil {
+					t.Fatal(err)
+				}
+				otherNodeSum += int(shouldUntil)
+				uploaderSum += int(uploaderUntil)
+			}
+			if uploaderSum != otherNodeSum {
+				t.Fatalf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+			}
 		}
 		return nil
 	})
@@ -294,7 +348,10 @@ func TestStarNetworkSync(t *testing.T) {
 		}
 
 		// get the pivot node and pump some data
-		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
 		fileStore := item.(*storage.FileStore)
 		reader := bytes.NewReader(randomBytes[:])
 		_, wait1, err := fileStore.Store(ctx, reader, int64(len(randomBytes)), false)
@@ -316,7 +373,10 @@ func TestStarNetworkSync(t *testing.T) {
 			if c.closestNodePO > 0 {
 				count++
 				log.Trace("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
-				item = sim.NodeItem(c.closestNode, bucketKeyStore)
+				item, ok = sim.NodeItem(c.closestNode, bucketKeyStore)
+				if !ok {
+					return fmt.Errorf("No DB")
+				}
 				store := item.(chunk.Store)
 
 				_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
@@ -372,7 +432,10 @@ func TestStarNetworkSync(t *testing.T) {
 				// if the chunk PO is equal to the sub that the node shouldnt have - check if the node has the chunk!
 				if _, ok := nodeNoSubs[c.uploaderNodePO]; ok {
 					count++
-					item = sim.NodeItem(nodeId, bucketKeyStore)
+					item, ok = sim.NodeItem(nodeId, bucketKeyStore)
+					if !ok {
+						return fmt.Errorf("No DB")
+					}
 					store := item.(chunk.Store)
 
 					_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
@@ -443,7 +506,10 @@ func TestSameVersionID(t *testing.T) {
 		//get the pivot node's filestore
 		nodes := sim.UpNodeIDs()
 
-		item := sim.NodeItem(nodes[0], bucketKeyRegistry)
+		item, ok := sim.NodeItem(nodes[0], bucketKeyRegistry)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
 		registry := item.(*Registry)
 
 		//the peers should connect, thus getting the peer should not return nil
@@ -504,7 +570,10 @@ func TestDifferentVersionID(t *testing.T) {
 		//get the pivot node's filestore
 		nodes := sim.UpNodeIDs()
 
-		item := sim.NodeItem(nodes[0], bucketKeyRegistry)
+		item, ok := sim.NodeItem(nodes[0], bucketKeyRegistry)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
 		registry := item.(*Registry)
 
 		//getting the other peer should fail due to the different version numbers

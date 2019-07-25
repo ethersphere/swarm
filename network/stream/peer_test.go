@@ -167,7 +167,10 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 		// nodes proximities from the pivot node
 		nodeProximities := make(map[string]int)
 		for _, id := range ids[1:] {
-			bzzAddr := sim.NodeItem(id, "bzz-address")
+			bzzAddr, ok := sim.NodeItem(id, "bzz-address")
+			if !ok {
+				t.Fatal("no bzz address for node")
+			}
 			nodeProximities[id.String()] = chunk.Proximity(pivotKademlia.BaseAddr(), bzzAddr.(*network.BzzAddr).Over())
 		}
 		// wait until sync subscriptions are done for all nodes
@@ -189,7 +192,10 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 			}
 			// add new nodes to sync subscriptions check
 			for _, id := range ids {
-				bzzAddr := sim.NodeItem(id, "bzz-address")
+				bzzAddr, ok := sim.NodeItem(id, "bzz-address")
+				if !ok {
+					t.Fatal("no bzz address for node")
+				}
 				nodeProximities[id.String()] = chunk.Proximity(pivotKademlia.BaseAddr(), bzzAddr.(*network.BzzAddr).Over())
 			}
 			err = sim.Net.ConnectNodesStar(ids, pivotRegistryID)

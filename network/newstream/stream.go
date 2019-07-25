@@ -950,14 +950,7 @@ func (s *SlipStream) Protocols() []p2p.Protocol {
 }
 
 func (s *SlipStream) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "bzz-stream",
-			Version:   "1.0",
-			Service:   NewAPI(s),
-			Public:    false,
-		},
-	}
+	return nil
 }
 
 func (s *SlipStream) Close() {
@@ -968,15 +961,6 @@ func (s *SlipStream) Close() {
 		// this is just an experiment, delete as soon as possible
 		time.Sleep(time.Second)
 	})
-}
-
-// Additional public methods accessible through API for pss
-type API struct {
-	*SlipStream
-}
-
-func NewAPI(s *SlipStream) *API {
-	return &API{SlipStream: s}
 }
 
 func (s *SlipStream) Start(server *p2p.Server) error {

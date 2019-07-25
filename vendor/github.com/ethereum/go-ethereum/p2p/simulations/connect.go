@@ -20,7 +20,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -136,10 +135,8 @@ func (net *Network) ConnectNodesStar(ids []enode.ID, center enode.ID) (err error
 			continue
 		}
 		if err := net.connectNotConnected(center, id); err != nil {
-			log.Error("node connection to pivot errored to pivot", "pivot", center, "peer", id, "err", err)
 			return err
 		}
-		log.Debug("connected node successfully to pivot", "pivot", center, "peer", id)
 	}
 	return nil
 }
