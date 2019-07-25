@@ -86,7 +86,9 @@ type SlipStream struct {
 	balance protocols.Balance //implements protocols.Balance, for accounting
 	prices  protocols.Prices  //implements protocols.Prices, provides prices to accounting
 
-	quit chan struct{} // terminates registry goroutines
+	handlersWg sync.WaitGroup // waits for all handlers to finish in Close method
+	quit       chan struct{}  // terminates registry goroutines
+	closeOnce  sync.Once
 
 	logger log.Logger
 }
@@ -155,25 +157,40 @@ func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		switch msg := msg.(type) {
-		case *StreamInfoReq:
-			go s.handleStreamInfoReq(ctx, p, msg)
-		case *StreamInfoRes:
-			go s.handleStreamInfoRes(ctx, p, msg)
-		case *GetRange:
-			if msg.To == nil {
-				// handle live
-				go s.handleGetRangeHead(ctx, p, msg)
-			} else {
-				go s.handleGetRange(ctx, p, msg)
-			}
-		case *OfferedHashes:
-			go s.handleOfferedHashes(ctx, p, msg)
-		case *WantedHashes:
-			go s.handleWantedHashes(ctx, p, msg)
-		case *ChunkDelivery:
-			go s.handleChunkDelivery(ctx, p, msg)
+		s.mtx.Lock() // ensure that quit read and handlersWg add are locked together
+		defer s.mtx.Unlock()
+
+		select {
+		case <-s.quit:
+			// no message handling if we quit
+			return nil
+		default:
 		}
+
+		s.handlersWg.Add(1)
+		go func() {
+			defer s.handlersWg.Done()
+
+			switch msg := msg.(type) {
+			case *StreamInfoReq:
+				s.handleStreamInfoReq(ctx, p, msg)
+			case *StreamInfoRes:
+				s.handleStreamInfoRes(ctx, p, msg)
+			case *GetRange:
+				if msg.To == nil {
+					// handle live
+					s.handleGetRangeHead(ctx, p, msg)
+				} else {
+					s.handleGetRange(ctx, p, msg)
+				}
+			case *OfferedHashes:
+				s.handleOfferedHashes(ctx, p, msg)
+			case *WantedHashes:
+				s.handleWantedHashes(ctx, p, msg)
+			case *ChunkDelivery:
+				s.handleChunkDelivery(ctx, p, msg)
+			}
+		}()
 		return nil
 	}
 }
@@ -789,7 +806,11 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 	for _, dc := range msg.Chunks {
 		c := chunk.NewChunk(dc.Addr, dc.Data)
 		p.logger.Trace("writing chunk to chunks channel", "caddr", c.Address())
-		w.chunks <- c
+		select {
+		case w.chunks <- c:
+		case <-s.quit:
+			return
+		}
 	}
 	p.logger.Debug("done writing batch to chunks channel")
 }
@@ -941,6 +962,14 @@ func (s *SlipStream) APIs() []rpc.API {
 	}
 }
 
+func (s *SlipStream) Close() {
+	s.closeOnce.Do(func() {
+		close(s.quit)
+		// wait for all handlers to finish
+		s.handlersWg.Wait()
+	})
+}
+
 // Additional public methods accessible through API for pss
 type API struct {
 	*SlipStream
@@ -960,7 +989,7 @@ func (s *SlipStream) Stop() error {
 	log.Debug("slip stream stopping")
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	close(s.quit)
+	s.Close()
 	for _, v := range s.providers {
 		v.Close()
 	}

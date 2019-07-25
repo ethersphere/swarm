@@ -957,7 +957,7 @@ func TestStarNetworkSync(t *testing.T) {
 				}
 				log.Debug("test putting chunk", "node", node, "addr", hex.EncodeToString(c), "uploaderToPivotPO", proxData.uploaderNodeToPivotNodePO, "c2uploaderPO", proxData.chunkToUploaderPO, "pivotDepth", pivotDepth)
 				if _, ok := chunkProx[hex.EncodeToString(c)]; ok {
-					return fmt.Errorf("chunk already found on another node!", "addr", hex.EncodeToString(c))
+					return fmt.Errorf("chunk already found on another node %s", hex.EncodeToString(c))
 				}
 				chunkProx[hex.EncodeToString(c)] = proxData
 			}
@@ -1001,15 +1001,15 @@ func TestStarNetworkSync(t *testing.T) {
 	}
 }
 
-func TestStarNetworkSync(t *testing.T) {
+func TestStarNetworkSync2(t *testing.T) {
 	var (
-		chunkCount     = 500
-		bogusNodeCount = 12
-		minPivotDepth  = 1
-		chunkSize      = 4096
-		simTimeout     = 60 * time.Second
-		syncTime       = 2 * time.Second
-		filesize       = chunkCount * chunkSize
+		chunkCount    = 500
+		nodeCount     = 12
+		minPivotDepth = 1
+		chunkSize     = 4096
+		simTimeout    = 60 * time.Second
+		syncTime      = 2 * time.Second
+		filesize      = chunkCount * chunkSize
 	)
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{SyncOnlyWithinDepth: false}),
@@ -1110,7 +1110,7 @@ func TestStarNetworkSync(t *testing.T) {
 				}
 				log.Debug("test putting chunk", "node", node, "addr", hex.EncodeToString(c), "uploaderToPivotPO", proxData.uploaderNodeToPivotNodePO, "c2uploaderPO", proxData.chunkToUploaderPO, "pivotDepth", pivotDepth)
 				if _, ok := chunkProx[hex.EncodeToString(c)]; ok {
-					return fmt.Errorf("chunk already found on another node!", "addr", hex.EncodeToString(c))
+					return fmt.Errorf("chunk already found on another node %s", hex.EncodeToString(c))
 				}
 				chunkProx[hex.EncodeToString(c)] = proxData
 			}

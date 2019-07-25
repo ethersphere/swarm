@@ -158,16 +158,17 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		}
 
 		sp := NewSyncProvider(netStore, kad, o.SyncOnlyWithinDepth)
-		s = NewSlipStream(store, addr.Over(), sp)
+		ss := NewSlipStream(store, addr.Over(), sp)
 
 		cleanup = func() {
+			ss.Close() // wait for handlers to finish before closing localstore
 			localStore.Close()
 			localStoreCleanup()
 			store.Close()
 			os.RemoveAll(dir)
 		}
 
-		return s, cleanup, nil
+		return ss, cleanup, nil
 	}
 }
 
