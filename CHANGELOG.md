@@ -2,7 +2,7 @@
 
 ### Notes
 
-- **Docker users:** The `$PASSWORD` and `$DATA_DIR` environment variables are not supported anymore since this release. From now on you should mount the password or data dirctories as a volume. For example:
+- **Docker users:** The `$PASSWORD` and `$DATADIR` environment variables are not supported anymore since this release. From now on you should mount the password or data dirctories as a volume. For example:
   ```bash
   $ docker run -it -v $PWD/hostdata:/data \
                    -v $PWD/password:/password \
