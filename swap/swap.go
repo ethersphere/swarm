@@ -315,7 +315,7 @@ func (s *Swap) Peers() (peers []enode.ID, err error) {
 	knownPeers := make(map[enode.ID]bool)
 
 	// get peer IDs from store
-	storePeers, err := s.stateStore.Keys()
+	storePeers, err := s.stateStore.Keys("", "")
 	if err != nil {
 		return nil, err
 	}
