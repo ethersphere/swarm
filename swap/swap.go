@@ -269,14 +269,72 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	return cheque, err
 }
 
-// GetPeerBalance returns the balance for a given peer
-func (s *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
+// PeerBalance returns the balance for a given peer
+func (s *Swap) PeerBalance(peer enode.ID) (int64, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	if p, ok := s.balances[peer]; ok {
-		return p, nil
+	var peerBalance int64
+	var err error
+
+	// load balance from memory
+	peerBalance, keyExists := s.balances[peer]
+	if !keyExists {
+		// if not in memory, try to load balance from disk
+		err = s.stateStore.Get(peer.String(), &peerBalance)
 	}
-	return 0, errors.New("Peer not found")
+	return peerBalance, err
+}
+
+// Balances returns the balances for all known SWAP peers
+func (s *Swap) Balances() (map[enode.ID]int64, error) {
+	balances := make(map[enode.ID]int64)
+
+	// get list of all known SWAP peers
+	swapPeers, err := s.Peers()
+	if err != nil {
+		return nil, err
+	}
+
+	// get balance for list of peers
+	for _, peer := range swapPeers {
+		peerBalance, err := s.PeerBalance(peer)
+		if err != nil {
+			return nil, err
+		}
+		balances[peer] = peerBalance
+	}
+
+	return balances, nil
+}
+
+// Peers returns a list of every peer known through SWAP
+func (s *Swap) Peers() (peers []enode.ID, err error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	knownPeers := make(map[enode.ID]bool)
+
+	// get peer IDs from store
+	storePeers, err := s.stateStore.Keys()
+	if err != nil {
+		return nil, err
+	}
+
+	// add store peers to result and mark as present
+	for _, storePeer := range storePeers {
+		peerID := enode.HexID(storePeer)
+		knownPeers[peerID] = true
+		peers = append(peers, peerID)
+	}
+
+	// add in-memory peers to result if not present
+	for peerID := range s.balances {
+		if _, peerExists := knownPeers[peerID]; !peerExists {
+			peers = append(peers, peerID)
+		}
+	}
+
+	return peers, nil
 }
 
 // GetLastCheque returns the last cheque for a given peer
@@ -289,13 +347,6 @@ func (s *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
 	}
 
 	return nil, errors.New("Peer not found")
-}
-
-//GetAllBalances returns the balances for all known peers
-func (s *Swap) GetAllBalances() map[enode.ID]int64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.balances
 }
 
 // loadStates loads balances from the state store (persisted)
