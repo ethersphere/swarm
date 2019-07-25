@@ -374,6 +374,21 @@ func (s *Swap) loadCheque(peer enode.ID) (err error) {
 	return
 }
 
+// saveLastReceivedCheque loads the last received cheque for peer
+func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.stateStore.Get(peer.String()+"_cheques_received", &cheque)
+	return
+}
+
+// saveLastReceivedCheque saves cheque as the last received cheque for peer
+func (s *Swap) saveLastReceivedCheque(peer enode.ID, cheque *Cheque) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.stateStore.Put(peer.String()+"_cheques_received", cheque)
+}
+
 // Close cleans up swap
 func (s *Swap) Close() {
 	s.stateStore.Close()
@@ -418,6 +433,9 @@ func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
 func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
 	sigHash := s.sigHashCheque(cheque)
 
+	if cheque.Sig == nil {
+		return fmt.Errorf("tried to verify signature on cheque with sig nil")
+	}
 	// copy signature to avoid modifying the original
 	sig := make([]byte, len(cheque.Sig))
 	copy(sig, cheque.Sig)
@@ -435,9 +453,9 @@ func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) er
 	return nil
 }
 
-// signContent signs the cheque
-func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
-	sig, err := crypto.Sign(s.sigHashCheque(cheque), s.owner.privateKey)
+// signContent signs the cheque with supplied private key
+func (s *Swap) signContentWithKey(cheque *Cheque, prv *ecdsa.PrivateKey) ([]byte, error) {
+	sig, err := crypto.Sign(s.sigHashCheque(cheque), prv)
 	if err != nil {
 		return nil, err
 	}
@@ -445,6 +463,11 @@ func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
 	sig[len(sig)-1] += 27
 	return sig, nil
+}
+
+// signContent signs the cheque with the owners private key
+func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
+	return s.signContentWithKey(cheque, s.owner.privateKey)
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract

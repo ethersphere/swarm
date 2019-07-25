@@ -36,10 +36,11 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap            *Swap
-	backend         cswap.Backend
-	beneficiary     common.Address
-	contractAddress common.Address
+	swap               *Swap
+	backend            cswap.Backend
+	beneficiary        common.Address
+	contractAddress    common.Address
+	lastReceivedCheque *Cheque
 }
 
 // NewPeer creates a new swap Peer instance
@@ -76,25 +77,10 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	log.Info("received emit cheque message")
 
 	cheque := msg.Cheque
-	if cheque.Contract != sp.contractAddress {
-		return fmt.Errorf("wrong cheque parameters: expected contract: %s, was: %s", sp.contractAddress, cheque.Contract)
-	}
-
-	// the beneficiary is the owner of the counterparty swap contract
-	if err := sp.swap.verifyChequeSig(cheque, sp.beneficiary); err != nil {
+	if err := sp.processAndVerifyCheque(cheque); err != nil {
 		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
 		return err
 	}
-
-	if cheque.Beneficiary != sp.swap.owner.address {
-		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %s, was: %s", sp.swap.owner.address, cheque.Beneficiary)
-	}
-
-	if cheque.Timeout != 0 {
-		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
-	}
-
-	// TODO: check serial and balance are higher
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -136,4 +122,94 @@ func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 	log.Info("received error msg")
 	// maybe balance disagreement
 	return nil
+}
+
+// processAndVerifyCheque verifies the cheque and compares it with the last received cheque
+// if the cheque is valid it will also be saved as the new last cheque
+func (sp *Peer) processAndVerifyCheque(cheque *Cheque) error {
+	if err := sp.verifyChequeProperties(cheque); err != nil {
+		return err
+	}
+
+	lastCheque := sp.loadLastReceivedCheque()
+
+	// TODO: there should probably be a lock here?
+	expectedAmount, err := sp.swap.oracle.GetPrice(cheque.Honey)
+	if err != nil {
+		return err
+	}
+
+	if err := sp.verifyChequeAgainstLast(cheque, lastCheque, expectedAmount); err != nil {
+		return err
+	}
+
+	if err := sp.saveLastReceivedCheque(cheque); err != nil {
+		log.Error("error while saving last received cheque", "peer", sp.ID().String(), "err", err.Error())
+		// TODO: what do we do here?
+	}
+
+	return nil
+}
+
+// verifyChequeProperties verifies the signautre and if the cheque fields are appropiate for this peer
+// it does not verify anything that requires knowing the previous cheque
+func (sp *Peer) verifyChequeProperties(cheque *Cheque) error {
+	if cheque.Contract != sp.contractAddress {
+		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", sp.contractAddress, cheque.Contract)
+	}
+
+	// the beneficiary is the owner of the counterparty swap contract
+	if err := sp.swap.verifyChequeSig(cheque, sp.beneficiary); err != nil {
+		return err
+	}
+
+	if cheque.Beneficiary != sp.swap.owner.address {
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", sp.swap.owner.address, cheque.Beneficiary)
+	}
+
+	if cheque.Timeout != 0 {
+		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
+	}
+
+	return nil
+}
+
+// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
+// furthermore it cheques that the increase in amount is as expected
+func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) error {
+	actualAmount := cheque.Amount
+
+	if lastCheque != nil {
+		if cheque.Serial <= lastCheque.Serial {
+			return fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
+		}
+
+		if cheque.Amount <= lastCheque.Amount {
+			return fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
+		}
+
+		actualAmount -= lastCheque.Amount
+	}
+
+	// TODO: maybe allow some range around expectedAmount?
+	if expectedAmount != actualAmount {
+		return fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+	}
+
+	return nil
+}
+
+// loadLastReceivedCheque gets the last received cheque for this peer
+// cheque gets loaded from database if not already in memory
+func (sp *Peer) loadLastReceivedCheque() *Cheque {
+	if sp.lastReceivedCheque == nil {
+		sp.lastReceivedCheque = sp.swap.loadLastReceivedCheque(sp.ID())
+	}
+	return sp.lastReceivedCheque
+}
+
+// saveLastReceivedCheque saves cheque as the last received cheque for this peer
+func (sp *Peer) saveLastReceivedCheque(cheque *Cheque) error {
+	sp.lastReceivedCheque = cheque
+	return sp.swap.saveLastReceivedCheque(sp.ID(), cheque)
 }
