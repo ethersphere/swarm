@@ -966,7 +966,9 @@ func (s *SlipStream) Close() {
 	s.closeOnce.Do(func() {
 		close(s.quit)
 		// wait for all handlers to finish
-		s.handlersWg.Wait()
+		//s.handlersWg.Wait()
+		// this is just an experiment, delete as soon as possible
+		time.Sleep(time.Second)
 	})
 }
 
