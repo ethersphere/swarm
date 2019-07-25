@@ -77,7 +77,8 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	log.Info("received emit cheque message")
 
 	cheque := msg.Cheque
-	if err := sp.processAndVerifyCheque(cheque); err != nil {
+	actualAmount, err := sp.processAndVerifyCheque(cheque)
+	if err != nil {
 		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
 		return err
 	}
@@ -108,7 +109,14 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 			log.Error("Got error when calling submitChequeBeneficiary", "err", err)
 			//TODO: do something with the error
 		}
-		log.Info("tx minded", "receipt", receipt)
+		log.Info("submit tx minded", "receipt", receipt)
+
+		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
+		if err != nil {
+			log.Error("Got error when calling cashChequeBeneficiary", "err", err)
+			//TODO: do something with the error
+		}
+		log.Info("cash tx minded", "receipt", receipt)
 		//TODO: cashCheque
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
@@ -126,9 +134,9 @@ func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
-func (sp *Peer) processAndVerifyCheque(cheque *Cheque) error {
+func (sp *Peer) processAndVerifyCheque(cheque *Cheque) (uint64, error) {
 	if err := sp.verifyChequeProperties(cheque); err != nil {
-		return err
+		return 0, err
 	}
 
 	lastCheque := sp.loadLastReceivedCheque()
@@ -136,11 +144,12 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) error {
 	// TODO: there should probably be a lock here?
 	expectedAmount, err := sp.swap.oracle.GetPrice(cheque.Honey)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	if err := sp.verifyChequeAgainstLast(cheque, lastCheque, expectedAmount); err != nil {
-		return err
+	actualAmount, err := sp.verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
+	if err != nil {
+		return 0, err
 	}
 
 	if err := sp.saveLastReceivedCheque(cheque); err != nil {
@@ -148,7 +157,7 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) error {
 		// TODO: what do we do here?
 	}
 
-	return nil
+	return actualAmount, nil
 }
 
 // verifyChequeProperties verifies the signautre and if the cheque fields are appropiate for this peer
@@ -176,16 +185,17 @@ func (sp *Peer) verifyChequeProperties(cheque *Cheque) error {
 
 // verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
 // furthermore it cheques that the increase in amount is as expected
-func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) error {
+// returns the actual amount received in this cheque
+func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
 	actualAmount := cheque.Amount
 
 	if lastCheque != nil {
 		if cheque.Serial <= lastCheque.Serial {
-			return fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
+			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
 		}
 
 		if cheque.Amount <= lastCheque.Amount {
-			return fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
+			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
 		}
 
 		actualAmount -= lastCheque.Amount
@@ -193,10 +203,10 @@ func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expe
 
 	// TODO: maybe allow some range around expectedAmount?
 	if expectedAmount != actualAmount {
-		return fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
 	}
 
-	return nil
+	return actualAmount, nil
 }
 
 // loadLastReceivedCheque gets the last received cheque for this peer
