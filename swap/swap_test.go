@@ -74,7 +74,7 @@ func init() {
 }
 
 // Test getting a peer's balance
-func TestGetPeerBalance(t *testing.T) {
+func TestPeerBalance(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
@@ -82,7 +82,7 @@ func TestGetPeerBalance(t *testing.T) {
 	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
-	b, err := swap.GetPeerBalance(testPeer.ID())
+	b, err := swap.PeerBalance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,12 +92,12 @@ func TestGetPeerBalance(t *testing.T) {
 
 	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
-	_, err = swap.GetPeerBalance(id)
+	_, err = swap.PeerBalance(id)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
-	if err.Error() != "Peer not found" {
-		t.Fatalf("Expected test to fail with %s, but is %s", "Peer not found", err.Error())
+	if err != state.ErrNotFound {
+		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
 }
 
@@ -126,7 +126,10 @@ func TestGetAllBalances(t *testing.T) {
 }
 
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
-	balances := swap.GetAllBalances()
+	balances, err := swap.Balances()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !reflect.DeepEqual(balances, expectedBalances) {
 		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
 	}
