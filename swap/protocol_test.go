@@ -146,8 +146,8 @@ func TestEmitCheque(t *testing.T) {
 	creditorSwap.balances[debitor.ID()] = 42
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// a safe check: at this point no cheques should be in the swap
-	if len(creditorSwap.cheques) != 0 {
-		t.Fatalf("Expected no cheques at creditor, but there are %d:", len(creditorSwap.cheques))
+	if creditorSwap.loadLastSentCheque(debitor.ID()) != nil {
+		t.Fatalf("Expected no cheques at creditor, but there is")
 	}
 
 	log.Debug("create a cheque")

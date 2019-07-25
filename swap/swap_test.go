@@ -207,7 +207,7 @@ func TestResetBalance(t *testing.T) {
 	debitorSwap.peers[creditor.ID()] = creditor
 
 	// now simulate sending the cheque to the creditor from the debitor
-	debitorSwap.sendCheque(creditor.ID())
+	creditor.sendCheque()
 	// the debitor should have already reset its balance
 	if debitorSwap.balances[creditor.ID()] != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditor.ID()])
@@ -215,7 +215,7 @@ func TestResetBalance(t *testing.T) {
 
 	var err error
 	// now load the cheque that the debitor created...
-	cheque := debitorSwap.cheques[creditor.ID()]
+	cheque := debitorSwap.loadLastSentCheque(creditor.ID())
 	if cheque == nil {
 		t.Fatal("expected to find a cheque, but it was empty")
 	}

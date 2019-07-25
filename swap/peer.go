@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -36,11 +37,13 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
+	lock               sync.RWMutex // lock for the peer struct
 	swap               *Swap
 	backend            cswap.Backend
 	beneficiary        common.Address
 	contractAddress    common.Address
 	lastReceivedCheque *Cheque
+	lastSentCheque     *Cheque
 }
 
 // NewPeer creates a new swap Peer instance
@@ -56,6 +59,9 @@ func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary comm
 
 // handleMsg is for handling messages when receiving messages
 func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
+	sp.lock.Lock()
+	defer sp.lock.Unlock()
+
 	switch msg := msg.(type) {
 
 	case *EmitChequeMsg:
@@ -134,7 +140,9 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) error {
 	lastCheque := sp.loadLastReceivedCheque()
 
 	// TODO: there should probably be a lock here?
+	sp.swap.lock.Lock()
 	expectedAmount, err := sp.swap.oracle.GetPrice(cheque.Honey)
+	sp.swap.lock.Unlock()
 	if err != nil {
 		return err
 	}
@@ -199,6 +207,87 @@ func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expe
 	return nil
 }
 
+// Create a Cheque structure emitted to a specific peer as a beneficiary
+// The serial and amount of the cheque will depend on the last cheque and current balance for this peer
+// The cheque will be signed and point to the issuer's contract
+func (sp *Peer) createCheque() (*Cheque, error) {
+	var cheque *Cheque
+	var err error
+
+	beneficiary := sp.beneficiary
+
+	peerBalance, err := sp.swap.PeerBalance(sp.ID())
+	if err != nil {
+		log.Error("error getting peer balance", "err", err)
+		return nil, err
+	}
+	// the balance should be negative here, we take the absolute value:
+	honey := uint64(-peerBalance)
+
+	// convert honey to ETH
+	var amount uint64
+	sp.swap.lock.Lock()
+	amount, err = sp.swap.oracle.GetPrice(honey)
+	sp.swap.lock.Unlock()
+	if err != nil {
+		log.Error("error getting price from oracle", "err", err)
+		return nil, err
+	}
+
+	lastCheque := sp.loadLastSentCheque()
+
+	if lastCheque == nil {
+		cheque = &Cheque{
+			ChequeParams: ChequeParams{
+				Serial: uint64(1),
+				Amount: uint64(amount),
+			},
+		}
+	} else {
+		cheque = &Cheque{
+			ChequeParams: ChequeParams{
+				Serial: lastCheque.Serial + 1,
+				Amount: lastCheque.Amount + uint64(amount),
+			},
+		}
+	}
+	cheque.ChequeParams.Timeout = defaultCashInDelay
+	cheque.ChequeParams.Contract = sp.swap.GetContractAddress()
+	cheque.ChequeParams.Honey = uint64(honey)
+	cheque.Beneficiary = beneficiary
+	cheque.Sig, err = sp.swap.signContent(cheque)
+
+	return cheque, err
+}
+
+// sendCheque sends a cheque to peer
+func (sp *Peer) sendCheque() error {
+	cheque, err := sp.createCheque()
+	if err != nil {
+		log.Error("error while creating cheque: %s", err.Error())
+		return err
+	}
+
+	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
+
+	if err := sp.saveLastSentCheque(cheque); err != nil {
+		// TODO: error handling might be quite more complex
+		log.Error("error while storing the last cheque: %s", err.Error())
+		return err
+	}
+
+	emit := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
+	// reset balance;
+	// TODO: if sending fails it should actually be roll backed...
+	sp.swap.resetBalance(sp.ID(), int64(cheque.Amount)) // TODO: SWAP
+
+	err = sp.Send(context.TODO(), emit)
+	return err
+}
+
 // loadLastReceivedCheque gets the last received cheque for this peer
 // cheque gets loaded from database if not already in memory
 func (sp *Peer) loadLastReceivedCheque() *Cheque {
@@ -212,4 +301,19 @@ func (sp *Peer) loadLastReceivedCheque() *Cheque {
 func (sp *Peer) saveLastReceivedCheque(cheque *Cheque) error {
 	sp.lastReceivedCheque = cheque
 	return sp.swap.saveLastReceivedCheque(sp.ID(), cheque)
+}
+
+// loadLastReceivedCheque gets the last received cheque for this peer
+// cheque gets loaded from database if not already in memory
+func (sp *Peer) loadLastSentCheque() *Cheque {
+	if sp.lastSentCheque == nil {
+		sp.lastSentCheque = sp.swap.loadLastSentCheque(sp.ID())
+	}
+	return sp.lastReceivedCheque
+}
+
+// saveLastReceivedCheque saves cheque as the last received cheque for this peer
+func (sp *Peer) saveLastSentCheque(cheque *Cheque) error {
+	sp.lastSentCheque = cheque
+	return sp.swap.saveLastSentCheque(sp.ID(), cheque)
 }
