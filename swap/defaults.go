@@ -37,4 +37,7 @@ const (
 	// This is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary.
 	// The smart-contract allows for setting this variable differently per beneficiary
 	defaultHarddepositTimeoutDuration = 24 * time.Hour
+
+	// While Swap is unstable, it's only allowed to be run under a specific network ID
+	AllowedNetworkID = 5
 )
