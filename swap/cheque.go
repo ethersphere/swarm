@@ -60,6 +60,10 @@ func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 	if cheque.Sig == nil {
 		return fmt.Errorf("tried to verify signature on cheque with sig nil")
 	}
+
+	if len(cheque.Sig) != 65 {
+		return fmt.Errorf("signature has invalid length: %d", len(cheque.Sig))
+	}
 	// copy signature to avoid modifying the original
 	sig := make([]byte, len(cheque.Sig))
 	copy(sig, cheque.Sig)

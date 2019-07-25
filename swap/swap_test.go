@@ -694,6 +694,8 @@ func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
+// the owner of this swap is the beneficiaryAddress
+// hence the owner of this swap would sign cheques with beneficiaryKey and receive cheques from ownerKey (or another party) which is NOT the owner of this swap
 func newTestSwapAndPeer(t *testing.T) (*Swap, *Peer, string) {
 	swap, dir := newTestSwap(t)
 	// owner address is the beneficary (counterparty) for the peer
