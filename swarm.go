@@ -513,6 +513,13 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 // APIs returns the RPC API descriptors the Swarm implementation offers
 func (s *Swarm) APIs() []rpc.API {
 	apis := []rpc.API{
+		// public APIs
+		{
+			Namespace: "bzz",
+			Version:   "3.0",
+			Service:   &Info{s.config},
+			Public:    true,
+		},
 		// admin APIs
 		{
 			Namespace: "bzz",
@@ -542,17 +549,17 @@ func (s *Swarm) APIs() []rpc.API {
 		apis = append(apis, s.ps.APIs()...)
 	}
 
-	var swapService *Info
+	var swapService *SwapInfo
 	if s.config.SwapEnabled {
 		// Swap public API
-		swapService = &Info{s.config, s.swap.GetParams(), s.swap}
+		swapService = &SwapInfo{s.swap.GetParams(), s.swap}
 	} else {
-		swapService = &Info{s.config, nil, nil}
+		swapService = &SwapInfo{nil, nil}
 	}
 
 	swapPublicApi := rpc.API{
-		Namespace: "bzz",
-		Version:   "3.0",
+		Namespace: "swap",
+		Version:   "1.0",
 		Service:   swapService,
 		Public:    true,
 	}
@@ -578,14 +585,25 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 // serialisable info about swarm
 type Info struct {
 	*api.Config
-	*cswap.Params
-	*swap.Swap
 }
 
 func (i *Info) Info() *Info {
 	return i
 }
 
-func (i *Info) Balances() map[enode.ID]int64 {
-	return i.Swap.GetAllBalances()
+type SwapInfo struct {
+	*cswap.Params
+	*swap.Swap
+}
+
+// Balance returns the current SWAP balance for a given peer
+func (s *SwapInfo) Balance(peer enode.ID) (int64, error) {
+	peerBalance, err := s.Swap.PeerBalance(peer)
+	return peerBalance, err
+}
+
+// Balances returns the current SWAP balances for all known peers
+func (s *SwapInfo) Balances() (map[enode.ID]int64, error) {
+	peerBalances, err := s.Swap.Balances()
+	return peerBalances, err
 }
