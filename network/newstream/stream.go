@@ -76,15 +76,13 @@ var (
 // one instance per node
 type SlipStream struct {
 	mtx            sync.RWMutex
-	intervalsStore state.Store //every protocol would make use of this
+	intervalsStore state.Store
 	peers          map[enode.ID]*Peer
 	baseKey        []byte //this node's overlay address
 
 	providers map[string]StreamProvider
 
-	spec    *protocols.Spec   //this protocol's spec
-	balance protocols.Balance //implements protocols.Balance, for accounting
-	prices  protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	spec *protocols.Spec
 
 	handlersWg sync.WaitGroup // waits for all handlers to finish in Close method
 	quit       chan struct{}  // terminates registry goroutines
@@ -93,7 +91,7 @@ type SlipStream struct {
 	logger log.Logger
 }
 
-func NewSlipStream(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider) *SlipStream {
+func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider) *SlipStream {
 	slipStream := &SlipStream{
 		intervalsStore: intervalsStore,
 		peers:          make(map[enode.ID]*Peer),

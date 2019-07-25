@@ -158,7 +158,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		}
 
 		sp := NewSyncProvider(netStore, kad, o.SyncOnlyWithinDepth)
-		ss := NewSlipStream(store, addr.Over(), sp)
+		ss := New(store, addr.Over(), sp)
 
 		cleanup = func() {
 			ss.Close() // wait for handlers to finish before closing localstore
