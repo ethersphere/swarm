@@ -83,7 +83,7 @@ func TestPeerBalance(t *testing.T) {
 	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
-	b, err := swap.PeerBalance(testPeer.ID())
+	b, err := swap.Balance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestPeerBalance(t *testing.T) {
 
 	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
-	_, err = swap.PeerBalance(id)
+	_, err = swap.Balance(id)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}

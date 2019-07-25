@@ -591,7 +591,7 @@ type SwapInfo struct {
 
 // Balance returns the current SWAP balance for a given peer
 func (s *SwapInfo) Balance(peer enode.ID) (int64, error) {
-	peerBalance, err := s.Swap.PeerBalance(peer)
+	peerBalance, err := s.Swap.Balance(peer)
 	return peerBalance, err
 }
 

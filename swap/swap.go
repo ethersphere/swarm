@@ -296,10 +296,8 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	return cheque, err
 }
 
-// PeerBalance returns the balance for a given peer
-func (s *Swap) PeerBalance(peer enode.ID) (int64, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+// Balance returns the balance for a given peer
+func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	var peerBalance int64
 	var err error
 
@@ -324,7 +322,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 
 	// get balance for list of peers
 	for _, peer := range swapPeers {
-		peerBalance, err := s.PeerBalance(peer)
+		peerBalance, err := s.Balance(peer)
 		if err != nil {
 			return nil, err
 		}
