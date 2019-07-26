@@ -136,6 +136,29 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 	}
 }
 
+func TestStoreKeys(t *testing.T) {
+	nodeID := enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56")
+
+	expectedBalanceKey := "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"
+	expectedSentChequeKey := "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"
+	expectedReceivedChequeKey := "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"
+
+	actualBalanceKey := balanceKey(nodeID)
+	actualSentChequeKey := sentChequeKey(nodeID)
+	actualReceivedChequeKey := receivedChequeKey(nodeID)
+
+	if actualBalanceKey != expectedBalanceKey {
+		t.Fatalf("Expected balance key to be %s, but is %s instead.", expectedBalanceKey, actualBalanceKey)
+	}
+	if actualSentChequeKey != expectedSentChequeKey {
+		t.Fatalf("Expected sent cheque key to be %s, but is %s instead.", expectedSentChequeKey, actualSentChequeKey)
+	}
+	if actualReceivedChequeKey != expectedReceivedChequeKey {
+		t.Fatalf("Expected received cheque key to be %s, but is %s instead.", expectedReceivedChequeKey, actualReceivedChequeKey)
+	}
+
+}
+
 // Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	// create a test swap account
