@@ -297,17 +297,10 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 }
 
 // Balance returns the balance for a given peer
-func (s *Swap) Balance(peer enode.ID) (int64, error) {
-	var peerBalance int64
-	var err error
-
-	// load balance from memory
-	peerBalance, keyExists := s.balances[peer]
-	if !keyExists {
-		// if not in memory, try to load balance from disk
-		err = s.stateStore.Get(balanceKey(peer), &peerBalance)
-	}
-	return peerBalance, err
+func (s *Swap) Balance(peer enode.ID) (peerBalance int64, err error) {
+	err = s.loadBalance(peer)
+	peerBalance = s.balances[peer]
+	return
 }
 
 // Balances returns the balances for all known SWAP peers
