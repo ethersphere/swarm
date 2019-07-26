@@ -790,8 +790,13 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase
 
-	if err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err != nil {
-		t.Fatalf("failed to verify cheque compared to old cheque: %s", err.Error())
+	actualAmount, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase)
+	if err != nil {
+		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
+	}
+
+	if actualAmount != increase {
+		t.Fatalf("wrong actual amount, expected: %d, was: %d", increase, actualAmount)
 	}
 }
 
@@ -807,7 +812,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque := newTestCheque()
 	newCheque.Amount = oldCheque.Amount + increase
 
-	if err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same serial")
 	}
 
@@ -816,7 +821,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque = newTestCheque()
 	newCheque.Serial = oldCheque.Serial + 1
 
-	if err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
 	}
 
@@ -826,7 +831,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase + 5
 
-	if err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
 	}
 }
@@ -840,8 +845,13 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	cheque := newTestCheque()
 	cheque.Sig, _ = cheque.Sign(ownerKey)
 
-	if err := peer.processAndVerifyCheque(cheque); err != nil {
+	actualAmount, err := peer.processAndVerifyCheque(cheque)
+	if err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
+	}
+
+	if actualAmount != cheque.Amount {
+		t.Fatalf("computed wrong actual amount: was %d, expected: %d", actualAmount, cheque.Amount)
 	}
 
 	// verify that it was indeed saved
@@ -856,7 +866,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	otherCheque.Honey = 10
 	otherCheque.Sig, _ = otherCheque.Sign(ownerKey)
 
-	if err := peer.processAndVerifyCheque(otherCheque); err != nil {
+	if _, err := peer.processAndVerifyCheque(otherCheque); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
@@ -880,7 +890,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	cheque.Beneficiary = ownerAddress
 	cheque.Sig, _ = cheque.Sign(ownerKey)
 
-	if err := peer.processAndVerifyCheque(cheque); err == nil {
+	if _, err := peer.processAndVerifyCheque(cheque); err == nil {
 		t.Fatal("accecpted an invalid cheque as first cheque")
 	}
 
@@ -889,7 +899,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	cheque.Serial = 5
 	cheque.Sig, _ = cheque.Sign(ownerKey)
 
-	if err := peer.processAndVerifyCheque(cheque); err != nil {
+	if _, err := peer.processAndVerifyCheque(cheque); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
@@ -904,7 +914,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	otherCheque.Honey = 10
 	otherCheque.Sig, _ = otherCheque.Sign(ownerKey)
 
-	if err := peer.processAndVerifyCheque(otherCheque); err == nil {
+	if _, err := peer.processAndVerifyCheque(otherCheque); err == nil {
 		t.Fatal("accepted a cheque with lower serial")
 	}
 
@@ -915,12 +925,128 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	otherCheque.Honey = 10
 	otherCheque.Sig, _ = otherCheque.Sign(ownerKey)
 
-	if err := peer.processAndVerifyCheque(otherCheque); err == nil {
+	if _, err := peer.processAndVerifyCheque(otherCheque); err == nil {
 		t.Fatal("accepted a cheque with lower amount")
 	}
 
 	// check that no invalid cheque was saved
 	if peer.loadLastReceivedCheque().Serial != cheque.Serial {
 		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
+	}
+}
+
+// TestContractIntegrationWrapper tests a end-to-end cheque interaction.
+// Unlike the TestContractIntegration test this uses the swap.contractReference where possible
+// First a simulated backend is created, then we deploy the issuer's swap contract.
+// We issue a test cheque with the beneficiary address and on the issuer's contract,
+// and immediately try to cash-in the cheque
+
+func TestContractIntegrationWrapper(t *testing.T) {
+	issuerSwap, dir := newTestSwap(t)
+	defer os.RemoveAll(dir)
+
+	issuerSwap.owner.address = ownerAddress
+	issuerSwap.owner.privateKey = ownerKey
+
+	backend := issuerSwap.backend.(*backends.SimulatedBackend)
+
+	log.Debug("deploy issuer swap")
+
+	ctx := context.TODO()
+	err := testDeploy(ctx, backend, issuerSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.Commit()
+
+	log.Debug("deployed. signing cheque")
+
+	cheque := newTestCheque()
+	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
+	cheque.Sig, err = issuerSwap.signContent(cheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Debug("sending cheque...")
+
+	opts := bind.NewKeyedTransactor(beneficiaryKey)
+	opts.Value = big.NewInt(0)
+	opts.Context = ctx
+
+	// SubmitChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
+	go func() { time.Sleep(10 * time.Millisecond); backend.Commit() }()
+	receipt, err := issuerSwap.contractReference.SubmitChequeBeneficiary(
+		opts,
+		backend,
+		big.NewInt(int64(cheque.Serial)),
+		big.NewInt(int64(cheque.Amount)),
+		big.NewInt(int64(cheque.Timeout)),
+		cheque.Sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check if success
+	if receipt.Status != 1 {
+		t.Fatalf("Bad status %d", receipt.Status)
+	}
+
+	log.Debug("check cheques state")
+
+	// check state, check that cheque is indeed there
+	result, err := issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Serial.Uint64() != cheque.Serial {
+		t.Fatalf("Wrong serial %d", result.Serial)
+	}
+	if result.Amount.Uint64() != cheque.Amount {
+		t.Fatalf("Wrong amount %d", result.Amount)
+	}
+	log.Debug("cheques result", "result", result)
+
+	// go forward in time
+	backend.AdjustTime(30 * time.Second)
+
+	payoutAmount := int64(20)
+	// test cashing in, for this we need balance in the contract
+	// => send some money
+	log.Debug("send money to contract")
+	depoTx := types.NewTransaction(
+		1,
+		issuerSwap.owner.Contract,
+		big.NewInt(payoutAmount),
+		50000,
+		big.NewInt(int64(0)),
+		[]byte{},
+	)
+	depoTxs, err := types.SignTx(depoTx, types.HomesteadSigner{}, issuerSwap.owner.privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.SendTransaction(context.TODO(), depoTxs)
+
+	log.Debug("cash-in the cheque")
+	// CashChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
+	go func() { time.Sleep(10 * time.Millisecond); backend.Commit() }()
+	receipt, err = issuerSwap.contractReference.CashChequeBeneficiary(opts, backend, beneficiaryAddress, big.NewInt(payoutAmount))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if receipt.Status != 1 {
+		t.Fatalf("Bad status %d", receipt.Status)
+	}
+
+	// check again the status, check paid out is increase by amount
+	result, err = issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("cheques result", "result", result)
+	if result.PaidOut.Int64() != payoutAmount {
+		t.Fatalf("Expected paid out amount to be %d, but is %d", payoutAmount, result.PaidOut)
 	}
 }
