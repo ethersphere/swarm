@@ -48,6 +48,7 @@ type Backend interface {
 type SimpleSwap interface {
 	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout *big.Int) (common.Address, *types.Transaction, error)
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficary common.Address, requestPayout *big.Int) (*types.Transaction, error)
 	ValidateCode() bool
 	ContractParams() *Params
 	InstanceAt(address common.Address, backend bind.ContractBackend)
@@ -97,12 +98,8 @@ func (s *Swap) ContractParams() *Params {
 	}
 }
 
-// SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
-func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error) {
-	tx, err := s.Instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
-	if err != nil {
-		return nil, err
-	}
+// waitForTx waits for transaction to be mined and returns the receipt
+func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
 	// it blocks here until tx is mined
 	receipt, err := bind.WaitMined(auth.Context, backend, tx)
 	if err != nil {
@@ -113,6 +110,24 @@ func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend,
 		return nil, ErrTransactionReverted
 	}
 	return receipt, nil
+}
+
+// SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
+func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error) {
+	tx, err := s.Instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
+	if err != nil {
+		return nil, err
+	}
+	return waitForTx(auth, backend, tx)
+}
+
+// CashChequeBeneficiary cashes the cheque.
+func (s *Swap) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficary common.Address, requestPayout *big.Int) (*types.Receipt, error) {
+	tx, err := s.Instance.CashChequeBeneficiary(auth, beneficary, requestPayout)
+	if err != nil {
+		return nil, err
+	}
+	return waitForTx(auth, backend, tx)
 }
 
 // InstanceAt returns a new instance of simpleSwap at the address which was given
