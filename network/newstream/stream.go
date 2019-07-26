@@ -78,14 +78,14 @@ type SlipStream struct {
 	mtx            sync.RWMutex
 	intervalsStore state.Store
 	peers          map[enode.ID]*Peer
-	baseKey        []byte //this node's overlay address
+	baseKey        []byte
 
 	providers map[string]StreamProvider
 
 	spec *protocols.Spec
 
 	handlersWg sync.WaitGroup // waits for all handlers to finish in Close method
-	quit       chan struct{}  // terminates registry goroutines
+	quit       chan struct{}
 	closeOnce  sync.Once
 
 	logger log.Logger
