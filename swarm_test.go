@@ -28,11 +28,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethersphere/swarm/network"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/swap"
 )
 
 // TestNewSwarm validates Swarm fields in repsect to the provided configuration.
@@ -111,6 +114,7 @@ func TestNewSwarm(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapAPI = ipcEndpoint
 				config.SwapEnabled = true
+				config.NetworkID = swap.AllowedNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s.backend == nil {
@@ -215,6 +219,20 @@ func TestNewSwarmFailure(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapAPI = ""
 				config.SwapEnabled = true
+				config.NetworkID = swap.AllowedNetworkID
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s != nil {
+					t.Error("swarm struct is not nil")
+				}
+			},
+		},
+		{
+			name: "with swap enabled and default network ID",
+			configure: func(config *api.Config) {
+				config.SwapAPI = ipcEndpoint
+				config.SwapEnabled = true
+				config.NetworkID = network.DefaultNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {
