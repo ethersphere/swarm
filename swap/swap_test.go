@@ -136,27 +136,40 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 	}
 }
 
+type storeKeysTestCases struct {
+	nodeID                    string
+	expectedBalanceKey        string
+	expectedSentChequeKey     string
+	expectedReceivedChequeKey string
+}
+
 func TestStoreKeys(t *testing.T) {
-	nodeID := enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56")
-
-	expectedBalanceKey := "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"
-	expectedSentChequeKey := "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"
-	expectedReceivedChequeKey := "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"
-
-	actualBalanceKey := balanceKey(nodeID)
-	actualSentChequeKey := sentChequeKey(nodeID)
-	actualReceivedChequeKey := receivedChequeKey(nodeID)
-
-	if actualBalanceKey != expectedBalanceKey {
-		t.Fatalf("Expected balance key to be %s, but is %s instead.", expectedBalanceKey, actualBalanceKey)
+	testCases := []storeKeysTestCases{
+		{"f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"},
 	}
-	if actualSentChequeKey != expectedSentChequeKey {
-		t.Fatalf("Expected sent cheque key to be %s, but is %s instead.", expectedSentChequeKey, actualSentChequeKey)
-	}
-	if actualReceivedChequeKey != expectedReceivedChequeKey {
-		t.Fatalf("Expected received cheque key to be %s, but is %s instead.", expectedReceivedChequeKey, actualReceivedChequeKey)
-	}
+	testStoreKeys(t, testCases)
+}
 
+func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
+			nodeID := enode.HexID(testCase.nodeID)
+
+			actualBalanceKey := balanceKey(nodeID)
+			actualSentChequeKey := sentChequeKey(nodeID)
+			actualReceivedChequeKey := receivedChequeKey(nodeID)
+
+			if actualBalanceKey != testCase.expectedBalanceKey {
+				t.Fatalf("Expected balance key to be %s, but is %s instead.", testCase.expectedBalanceKey, actualBalanceKey)
+			}
+			if actualSentChequeKey != testCase.expectedSentChequeKey {
+				t.Fatalf("Expected sent cheque key to be %s, but is %s instead.", testCase.expectedSentChequeKey, actualSentChequeKey)
+			}
+			if actualReceivedChequeKey != testCase.expectedReceivedChequeKey {
+				t.Fatalf("Expected received cheque key to be %s, but is %s instead.", testCase.expectedReceivedChequeKey, actualReceivedChequeKey)
+			}
+		})
+	}
 }
 
 // Test that repeated bookings do correct accounting
