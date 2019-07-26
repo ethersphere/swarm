@@ -217,7 +217,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // * 4096 bytes to its localstore, then validates that all chunks are synced.
 func TestTwoNodesFullSyncLive(t *testing.T) {
 	const (
-		chunkCount = 20000
+		chunkCount = 10000
 	)
 
 	defer catchDuplicateChunkSync(t)()
