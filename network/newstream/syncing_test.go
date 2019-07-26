@@ -434,6 +434,48 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 	}
 }
 
+func TestThreeNodesUnionHistoricalSync(t *testing.T) {
+	nodes := 3
+	chunkCount := 1000
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newSyncSimServiceFunc(nil),
+	})
+	defer sim.Close()
+	union := make(map[string]struct{})
+	nodeIDs := []enode.ID{}
+	for i := 0; i < nodes; i++ {
+		node, err := sim.AddNode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodeIDs = append(nodeIDs, node)
+		nodeStore := sim.MustNodeItem(node, bucketKeyFileStore).(*storage.FileStore)
+		mustUploadChunks(context.Background(), t, nodeStore, uint64(chunkCount))
+
+		uploadedChunks, err := getChunks(nodeStore.ChunkStore)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, _ := range uploadedChunks {
+			if _, ok := union[k]; ok {
+				t.Fatal("chunk already exists in union")
+			}
+			union[k] = struct{}{}
+		}
+	}
+
+	err := sim.Net.ConnectNodesFull(nodeIDs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range nodeIDs {
+		nodeStore := sim.MustNodeItem(n, bucketKeyFileStore).(*storage.FileStore)
+		if err := waitChunks(nodeStore, uint64(len(union)), 10*time.Second); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // TestFullSync performs a series of subtests where a number of nodes are
 // connected to the single (chunk uploading) node.
 func TestFullSync(t *testing.T) {
