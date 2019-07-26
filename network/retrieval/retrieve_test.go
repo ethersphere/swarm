@@ -287,6 +287,31 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	}
 }
 
+//TestHasPriceImplementation is to check that Retrieval implements protocols.Prices
+func TestHasPriceImplementation(t *testing.T) {
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+	r := New(to, nil)
+
+	if r.prices == nil {
+		t.Fatal("No prices implementation available for retrieve protocol")
+	}
+
+	pricesInstance, ok := r.prices.(*RetrievalPrices)
+	if !ok {
+		t.Fatal("Retrieval does not have the expected Prices instance")
+	}
+	price := pricesInstance.Price(&ChunkDelivery{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.chunkDeliveryPrice() {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+
+	price = pricesInstance.Price(&RetrieveRequest{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.retrieveRequestPrice() {
+		t.Fatal("No prices set for retrieve requests")
+	}
+}
+
 func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	n := ctx.Config.Node()
 	addr := network.NewAddr(n)

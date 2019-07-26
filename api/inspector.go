@@ -37,7 +37,7 @@ type Inspector struct {
 }
 
 func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *newstream.SlipStream) *Inspector {
-	return &Inspector{api, hive, netStore}
+	return &Inspector{api, hive, netStore, pullSyncer}
 }
 
 // Hive prints the kademlia table

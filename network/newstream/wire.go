@@ -115,8 +115,7 @@ type WantedHashes struct {
 
 // ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
 type ChunkDelivery struct {
-	Ruid uint
-	//LastIndex uint
+	Ruid   uint
 	Chunks []DeliveredChunk
 }
 
