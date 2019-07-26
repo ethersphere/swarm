@@ -105,6 +105,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		if err != nil {
 			log.Error("Got error when calling submitChequeBeneficiary", "err", err)
 			//TODO: do something with the error
+			return
 		}
 		log.Info("submit tx minded", "receipt", receipt)
 
@@ -112,6 +113,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		if err != nil {
 			log.Error("Got error when calling cashChequeBeneficiary", "err", err)
 			//TODO: do something with the error
+			return
 		}
 		log.Info("cash tx minded", "receipt", receipt)
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
