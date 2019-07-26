@@ -313,7 +313,7 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// get list of all known SWAP peers
+	// get list of all known SWAP peers to have a balance
 	swapPeers, err := s.BalancePeers()
 	if err != nil {
 		return nil, err
