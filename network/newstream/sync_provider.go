@@ -144,6 +144,8 @@ func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
 	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
+var SyncUpdateBackoffTime = 30 * time.Second
+
 // InitPeer creates and maintains the streams per peer.
 // Runs per peer, in a separate goroutine
 // when the depth changes on our node
@@ -166,12 +168,27 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	depthChangeSignal, unsubscribeDepthChangeSignal := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribeDepthChangeSignal()
 
+	var (
+		backoff  *time.Timer
+		backoffC <-chan time.Time
+	)
 	for {
 		select {
 		case _, ok := <-depthChangeSignal:
 			if !ok {
 				return
 			}
+
+			if backoff == nil {
+				backoff = time.NewTimer(SyncUpdateBackoffTime)
+			} else {
+				if !backoff.Stop() {
+					<-backoff.C
+				}
+				backoff.Reset(SyncUpdateBackoffTime)
+			}
+			backoffC = backoff.C
+		case <-backoffC:
 			//newDepth := s.kad.NeighbourhoodDepth()
 			//if po >= newDepth && !wasWithinDepth {
 			//// previous depth is -1 because we did not have any streams with the client beforehand
@@ -190,7 +207,6 @@ func (s *syncProvider) InitPeer(p *Peer) {
 			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", sub, "quit", qui)
 			s.updateSyncSubscriptions(p, sub, qui)
 			depth = ndepth
-
 		case <-s.quit:
 			return
 		}
