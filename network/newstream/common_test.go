@@ -234,6 +234,10 @@ func mustUploadChunks(ctx context.Context, t testing.TB, store chunk.Store, coun
 var tmpDir string
 
 func TestMain(m *testing.M) {
+	// Remove the sync init delay in tests.
+	defer func(b time.Duration) { SyncInitBackoff = b }(SyncInitBackoff)
+	SyncInitBackoff = 0
+
 	// Tests in this package generate a lot of temporary directories
 	// that may not be removed if tests are interrupted with SIGINT.
 	// This function constructs a single top-level directory to be used

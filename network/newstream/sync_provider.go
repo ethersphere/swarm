@@ -144,6 +144,11 @@ func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
 	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
+var (
+	SyncUpdateBackoff = 30 * time.Second
+	SyncInitBackoff   = 30 * time.Second
+)
+
 // InitPeer creates and maintains the streams per peer.
 // Runs per peer, in a separate goroutine
 // when the depth changes on our node
@@ -152,6 +157,15 @@ func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
 //  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 // peer connects and disconnects quickly
 func (s *syncProvider) InitPeer(p *Peer) {
+	timer := time.NewTimer(SyncInitBackoff)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+	case <-p.quit:
+		return
+	}
+
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
 
@@ -166,12 +180,27 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	depthChangeSignal, unsubscribeDepthChangeSignal := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribeDepthChangeSignal()
 
+	var (
+		backoff  *time.Timer
+		backoffC <-chan time.Time
+	)
 	for {
 		select {
 		case _, ok := <-depthChangeSignal:
 			if !ok {
 				return
 			}
+
+			if backoff == nil {
+				backoff = time.NewTimer(SyncUpdateBackoff)
+			} else {
+				if !backoff.Stop() {
+					<-backoff.C
+				}
+				backoff.Reset(SyncUpdateBackoff)
+			}
+			backoffC = backoff.C
+		case <-backoffC:
 			//newDepth := s.kad.NeighbourhoodDepth()
 			//if po >= newDepth && !wasWithinDepth {
 			//// previous depth is -1 because we did not have any streams with the client beforehand
@@ -190,7 +219,6 @@ func (s *syncProvider) InitPeer(p *Peer) {
 			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", sub, "quit", qui)
 			s.updateSyncSubscriptions(p, sub, qui)
 			depth = ndepth
-
 		case <-s.quit:
 			return
 		}
