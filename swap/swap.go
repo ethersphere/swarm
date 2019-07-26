@@ -301,12 +301,12 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 }
 
 // Balance returns the balance for a given peer
-func (s *Swap) Balance(peer enode.ID) (int64, error) {
-	err := s.loadBalance(peer)
-	if err != nil && err != state.ErrNotFound {
-		return 0, err
+func (s *Swap) Balance(peer enode.ID) (peerBalance int64, err error) {
+	// check the balance in memory, and if not present check the store
+	if _, ok := s.balances[peer]; !ok {
+		err = s.stateStore.Get(balanceKey(peer), &peerBalance)
 	}
-	return s.balances[peer], nil
+	return peerBalance, err
 }
 
 // Balances returns the balances for all known SWAP peers
