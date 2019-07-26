@@ -823,10 +823,12 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 				if !ok {
 					p.logger.Error("want chanks returned on !ok")
 				}
-				//p.mtx.Lock()
-				//if wants, ok := want.hashes[c.Address().Hex()]; !ok || !wants {
-				//log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
-				//}
+				p.mtx.RLock()
+				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
+					log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
+					panic("unsolicited chunk")
+				}
+				p.mtx.RUnlock()
 				cc := chunk.NewChunk(c.Address(), c.Data())
 				go func() {
 					ctx := context.TODO()
@@ -841,9 +843,9 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 						streamSeenChunkDelivery.Inc(1)
 						p.logger.Error("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
 					}
-					//p.mtx.Lock()
-					//want.hashes[c.Address().Hex()] = false //todo: should by sync map
-					//p.mtx.Unlock()
+					p.mtx.Lock()
+					w.hashes[c.Address().Hex()] = false
+					p.mtx.Unlock()
 					v := atomic.AddUint64(&w.remaining, ^uint64(0))
 					p.logger.Trace("got chunk from peer", "addr", cc.Address(), "left", v)
 					if v == 0 {

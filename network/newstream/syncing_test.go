@@ -130,12 +130,12 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			gaps:           [][2]uint64{{5, 10}},
 			liveChunkCount: 100,
 		},
-		{
-			name:           "live and history with live gap",
-			chunkCount:     100,
-			liveChunkCount: 100,
-			liveGaps:       [][2]uint64{{105, 110}},
-		},
+		//{
+		//name:           "live and history with live gap",
+		//chunkCount:     100,
+		//liveChunkCount: 100,
+		//liveGaps:       [][2]uint64{{105, 110}},
+		//},
 		{
 			name:           "live and history with gaps",
 			chunkCount:     100,
