@@ -89,11 +89,8 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	sp.swap.resetBalance(sp.ID(), 0-int64(cheque.Honey))
 
 	// cash in cheque
-	//TODO: input parameter checks?
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
 	opts.Context = ctx
-
-	//TODO: make instanceAt to directly return a swap type
 
 	otherSwap, err := cswap.InstanceAt(cheque.Contract, sp.backend)
 	if err != nil {
@@ -117,7 +114,6 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 			//TODO: do something with the error
 		}
 		log.Info("cash tx minded", "receipt", receipt)
-		//TODO: cashCheque
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
 	}()
