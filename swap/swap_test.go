@@ -191,14 +191,43 @@ func TestStoreBalances(t *testing.T) {
 	s, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	var balancePeers []string
-	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
+	var expectedBalancePeers []string
+	var storeBalancePeers []string
+	var err error
 
+	storeBalancePeers, err = s.stateStore.Keys(balancePrefix)
 	if err != nil {
-		t.Error("Store balances retrieval failed.")
+		t.Error("Unexpected balance peer retrieval failure.")
 	}
-	if !reflect.DeepEqual(storeBalancePeers, balancePeers) {
-		t.Errorf("Expected store balance peers to be %v, is %v instead.", balancePeers, storeBalancePeers)
+
+	// store balances should be empty at this point
+	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
+		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
+	}
+
+	testPeer := newDummyPeer()
+	s.balances[testPeer.ID()] = 144
+
+	storeBalancePeers, err = s.stateStore.Keys(balancePrefix)
+	if err != nil {
+		t.Error("Unexpected balance peer retrieval failure.")
+	}
+	// store balances should still be empty at this point
+	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
+		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
+	}
+
+	_, err = s.updateBalance(testPeer.ID(), 29)
+	if err != nil {
+		t.Error("Unexpected balance update failure.")
+	}
+	storeBalancePeers, err = s.stateStore.Keys(balancePrefix)
+	if err != nil {
+		t.Error("Unexpected balance peer retrieval failure.")
+	}
+	expectedBalancePeers = []string{balanceKey(testPeer.ID())}
+	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
+		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
 	}
 }
 
