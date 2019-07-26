@@ -35,7 +35,7 @@ type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
-	Keys(prefix string, suffix string) (keys []string, err error)
+	Keys(prefix string) (keys []string, err error)
 	Close() error
 }
 
@@ -107,10 +107,9 @@ func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
 }
 
-// Keys returns a list of all the keys in the underlying LevelDB which match the `prefix` and `suffix` params
-// While not nil, these params can take the value of an empty string for the same effect
-func (s *DBStore) Keys(prefix string, suffix string) (keys []string, err error) {
-	iter := s.db.NewIterator(&util.Range{Start: []byte(prefix), Limit: []byte(suffix)}, nil)
+// Keys returns a list of all the keys in the underlying LevelDB which match the `prefix` param
+func (s *DBStore) Keys(prefix string) (keys []string, err error) {
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	defer iter.Release()
 	for iter.Next() {
 		keys = append(keys, string(iter.Key()))

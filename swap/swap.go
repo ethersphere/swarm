@@ -338,14 +338,15 @@ func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
 	knownPeers := make(map[enode.ID]bool)
 
 	// get balance keys from store
-	storeBalancePeers, err := s.stateStore.Keys(balancePrefix, "")
+	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
 	if err != nil {
 		return nil, err
 	}
 
 	// add peers with balance to result and mark as present
 	for _, storeBalancePeer := range storeBalancePeers {
-		peerID := enode.HexID(storeBalancePeer)
+		// take balance key and turn into node ID
+		peerID := enode.HexID(storeBalancePeer[len(balancePrefix):])
 		knownPeers[peerID] = true
 		peers = append(peers, peerID)
 	}
