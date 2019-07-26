@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -216,4 +217,102 @@ func TestEmitCheque(t *testing.T) {
 		}
 	*/
 
+}
+
+// TestTriggerPaymentThreshold is to test that the whole cheque protocol is triggered
+// when we reach the payment threshold
+// It is the debitor who triggers cheques
+func TestTriggerPaymentThreshold(t *testing.T) {
+	log.Debug("create test swap")
+	debitorSwap, testDir := newTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	// create a dummy pper
+	cPeer := newDummyPeerWithSpec(Spec)
+	creditor := NewPeer(cPeer.Peer, debitorSwap, debitorSwap.backend, common.Address{}, common.Address{})
+	// set the creditor as peer into the debitor's swap
+	debitorSwap.peers[creditor.ID()] = creditor
+
+	// set the balance to manually be at PaymentThreshold
+	overDraft := 42
+	debitorSwap.balances[creditor.ID()] = 0 - DefaultPaymentThreshold
+
+	// we expect a cheque at the end of the test, but not yet
+	lenCheques := len(debitorSwap.cheques)
+	if lenCheques != 0 {
+		t.Fatalf("Expected no cheques yet, but there are %d", lenCheques)
+	}
+	// do some accounting, no error expected, just a WARN
+	err := debitorSwap.Add(int64(-overDraft), creditor.Peer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// we should now have a cheque
+	lenCheques = len(debitorSwap.cheques)
+	if lenCheques != 1 {
+		t.Fatalf("Expected one cheque, but there are %d", lenCheques)
+	}
+	cheque := debitorSwap.cheques[creditor.ID()]
+	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
+	if cheque.Amount != expectedAmount {
+		t.Fatalf("Expected cheque amount to be %d, but is %d", expectedAmount, cheque.Amount)
+	}
+
+}
+
+// TestTriggerDisconnectThreshold is to test that no further accounting takes place
+// when we reach the disconnect threshold
+// It is the creditor who triggers the disconnect from a overdraft creditor
+func TestTriggerDisconnectThreshold(t *testing.T) {
+	log.Debug("create test swap")
+	creditorSwap, testDir := newTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	// create a dummy pper
+	cPeer := newDummyPeerWithSpec(Spec)
+	debitor := NewPeer(cPeer.Peer, creditorSwap, creditorSwap.backend, common.Address{}, common.Address{})
+	// set the debitor as peer into the creditor's swap
+	creditorSwap.peers[debitor.ID()] = debitor
+
+	// set the balance to manually be at DisconnectThreshold
+	overDraft := 42
+	expectedBalance := int64(DefaultDisconnectThreshold)
+	// we don't expect any change after the test
+	creditorSwap.balances[debitor.ID()] = expectedBalance
+	// we also don't expect any cheques yet
+	lenCheques := len(creditorSwap.cheques)
+	if lenCheques != 0 {
+		t.Fatalf("Expected no cheques yet, but there are %d", lenCheques)
+	}
+	// now do some accounting
+	err := creditorSwap.Add(int64(overDraft), debitor.Peer)
+	// it should fail due to overdraft
+	if err == nil {
+		t.Fatal("Expected an error due to overdraft, but did not get any")
+	}
+	// no balance change expected
+	if creditorSwap.balances[debitor.ID()] != expectedBalance {
+		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, creditorSwap.balances[debitor.ID()])
+	}
+	// still no cheques expected
+	lenCheques = len(creditorSwap.cheques)
+	if lenCheques != 0 {
+		t.Fatalf("Expected still no cheque, but there are %d", lenCheques)
+	}
+
+	// let's do the whole thing again (actually a bit silly, it's somehow simulating the peer would have been dropped)
+	err = creditorSwap.Add(int64(overDraft), debitor.Peer)
+	if err == nil {
+		t.Fatal("Expected an error due to overdraft, but did not get any")
+	}
+
+	if creditorSwap.balances[debitor.ID()] != expectedBalance {
+		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, creditorSwap.balances[debitor.ID()])
+	}
+
+	lenCheques = len(creditorSwap.cheques)
+	if lenCheques != 0 {
+		t.Fatalf("Expected still no cheque, but there are %d", lenCheques)
+	}
 }
