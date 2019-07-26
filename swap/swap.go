@@ -19,7 +19,6 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -148,7 +147,9 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	// check if balance with peer is over the disconnect threshold
+	// Check if balance with peer is over the disconnect threshold
+	// It is the creditor who triggers the disconnect from a overdraft creditor,
+	// thus we check for a positive value
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
 		// if so, return error in order to abort the transfer
 		disconnectMessage := fmt.Sprintf("balance for peer %s is over the disconnect threshold %v, disconnecting", peer.ID().String(), s.disconnectThreshold)
@@ -163,8 +164,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	// check if balance with peer crosses the threshold
-	// it is the peer with a negative balance who sends a cheque, thus we check
+	// Check if balance with peer crosses the threshold
+	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		//if so, send cheque
@@ -401,72 +402,9 @@ func (s *Swap) resetBalance(peerID enode.ID, amount int64) {
 	s.updateBalance(peerID, amount)
 }
 
-// encodeCheque encodes the cheque in the format used in the signing procedure
-func (s *Swap) encodeCheque(cheque *Cheque) []byte {
-	serialBytes := make([]byte, 32)
-	amountBytes := make([]byte, 32)
-	timeoutBytes := make([]byte, 32)
-	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
-	// encoded in BigEndian because EVM uses BigEndian encoding
-	binary.BigEndian.PutUint64(serialBytes[24:], cheque.Serial)
-	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
-	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
-	// construct the actual cheque
-	input := cheque.Contract.Bytes()
-	input = append(input, cheque.Beneficiary.Bytes()...)
-	input = append(input, serialBytes[:]...)
-	input = append(input, amountBytes[:]...)
-	input = append(input, timeoutBytes[:]...)
-
-	return input
-}
-
-// sigHashCheque hashes the cheque using the prefix that would be added by eth_Sign
-func (s *Swap) sigHashCheque(cheque *Cheque) []byte {
-	input := crypto.Keccak256(s.encodeCheque(cheque))
-	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
-	return crypto.Keccak256([]byte(withPrefix))
-}
-
-// verifyChequeSig verifies the signature on the cheque
-func (s *Swap) verifyChequeSig(cheque *Cheque, expectedSigner common.Address) error {
-	sigHash := s.sigHashCheque(cheque)
-
-	if cheque.Sig == nil {
-		return fmt.Errorf("tried to verify signature on cheque with sig nil")
-	}
-	// copy signature to avoid modifying the original
-	sig := make([]byte, len(cheque.Sig))
-	copy(sig, cheque.Sig)
-	// reduce the v value of the signature by 27 (see signContent)
-	sig[len(sig)-1] -= 27
-	pubKey, err := crypto.SigToPub(sigHash, sig)
-	if err != nil {
-		return err
-	}
-
-	if crypto.PubkeyToAddress(*pubKey) != expectedSigner {
-		return ErrInvalidChequeSignature
-	}
-
-	return nil
-}
-
-// signContent signs the cheque with supplied private key
-func (s *Swap) signContentWithKey(cheque *Cheque, prv *ecdsa.PrivateKey) ([]byte, error) {
-	sig, err := crypto.Sign(s.sigHashCheque(cheque), prv)
-	if err != nil {
-		return nil, err
-	}
-	// increase the v value by 27 as crypto.Sign produces 0 or 1 but the contract only accepts 27 or 28
-	// this is to prevent malleable signatures. while not strictly necessary in this case the ECDSA implementation from Openzeppelin expects it.
-	sig[len(sig)-1] += 27
-	return sig, nil
-}
-
 // signContent signs the cheque with the owners private key
 func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
-	return s.signContentWithKey(cheque, s.owner.privateKey)
+	return cheque.Sign(s.owner.privateKey)
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
