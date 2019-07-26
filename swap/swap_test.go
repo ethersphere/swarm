@@ -198,14 +198,13 @@ func TestStoreBalances(t *testing.T) {
 	compareBalancePeers(t, s, expectedBalancePeers)
 
 	// modify balances in memory but not in store
-	testPeer := newDummyPeer()
-	testPeerID := testPeer.ID()
+	testPeerID := enode.HexID("8418f4eeb20735630cfff00459b7fc7ec1674c9f77f19bab23e895706bfd1032")
 	s.balances[testPeerID] = 144
 	// store balance peers should still be empty at this point
 	compareBalancePeers(t, s, expectedBalancePeers)
 
 	// modify balances both in memory and in store
-	updatedBalance, err := s.updateBalance(testPeerID, 29)
+	peerBalance, err := s.updateBalance(testPeerID, 29)
 	if err != nil {
 		t.Error("Unexpected balance update failure.")
 	}
@@ -213,7 +212,20 @@ func TestStoreBalances(t *testing.T) {
 	expectedBalancePeers = []string{balanceKey(testPeerID)}
 	compareBalancePeers(t, s, expectedBalancePeers)
 	// store balance for peer should match
-	comparePeerBalance(t, s, testPeerID, updatedBalance)
+	comparePeerBalance(t, s, testPeerID, peerBalance)
+
+	// update balances for second peer
+	testPeer2ID := enode.HexID("fdbb55b4d9b0011c93e736bb1b736013943890f2a08640f89de00e738a8b7986")
+	peer2Balance, err := s.updateBalance(testPeer2ID, -76)
+	if err != nil {
+		t.Error("Unexpected balance update failure.")
+	}
+	// store balance peers should now include both test peers
+	expectedBalancePeers = []string{balanceKey(testPeerID), balanceKey(testPeer2ID)}
+	compareBalancePeers(t, s, expectedBalancePeers)
+	// store balance for each peer should match
+	comparePeerBalance(t, s, testPeerID, peerBalance)
+	comparePeerBalance(t, s, testPeer2ID, peer2Balance)
 }
 
 func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
