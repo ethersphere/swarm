@@ -399,15 +399,11 @@ func newTestCheque() *Cheque {
 }
 
 // tests if encodeCheque encodes the cheque as expected
-func TestEncodeCheque(t *testing.T) {
-	// setup test swap object
-	swap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-
+func TestChequeEncode(t *testing.T) {
 	expectedCheque := newTestCheque()
 
 	// encode the cheque
-	encoded := swap.encodeCheque(expectedCheque)
+	encoded := expectedCheque.Encode()
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000000")
 	if !bytes.Equal(encoded, expected) {
@@ -417,15 +413,11 @@ func TestEncodeCheque(t *testing.T) {
 }
 
 // tests if sigHashCheque computes the correct hash to sign
-func TestSigHashCheque(t *testing.T) {
-	// setup test swap object
-	swap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-
+func TestChequeSigHash(t *testing.T) {
 	expectedCheque := newTestCheque()
 
 	// compute the hash that will be signed
-	hash := swap.sigHashCheque(expectedCheque)
+	hash := expectedCheque.sigHash()
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("291619739fc0008915f09989411d22a29ea62eb39d86ed094ef51d6a420a1358")
 	if !bytes.Equal(hash, expected) {
@@ -462,29 +454,21 @@ func TestSignContent(t *testing.T) {
 
 // tests if verifyChequeSig accepts a correct signature
 func TestVerifyChequeSig(t *testing.T) {
-	// setup test swap object
-	swap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-
 	expectedCheque := newTestCheque()
 	expectedCheque.Sig = testChequeSig
 
-	if err := swap.verifyChequeSig(expectedCheque, ownerAddress); err != nil {
+	if err := expectedCheque.VerifySig(ownerAddress); err != nil {
 		t.Fatalf("Invalid signature: %v", err)
 	}
 }
 
 // tests if verifyChequeSig reject a signature produced by another key
 func TestVerifyChequeSigWrongSigner(t *testing.T) {
-	// setup test swap object
-	swap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-
 	expectedCheque := newTestCheque()
 	expectedCheque.Sig = testChequeSig
 
 	// We expect the signer to be beneficiaryAddress but chequeSig is the signature from the owner
-	if err := swap.verifyChequeSig(expectedCheque, beneficiaryAddress); err == nil {
+	if err := expectedCheque.VerifySig(beneficiaryAddress); err == nil {
 		t.Fatal("Valid signature, should have been invalid")
 	}
 }
@@ -500,14 +484,10 @@ func manipulateSignature(sig []byte) []byte {
 
 // tests if verifyChequeSig reject an invalid signature
 func TestVerifyChequeInvalidSignature(t *testing.T) {
-	// setup test swap object
-	swap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-
 	expectedCheque := newTestCheque()
 	expectedCheque.Sig = manipulateSignature(testChequeSig)
 
-	if err := swap.verifyChequeSig(expectedCheque, ownerAddress); err == nil {
+	if err := expectedCheque.VerifySig(ownerAddress); err == nil {
 		t.Fatal("Valid signature, should have been invalid")
 	}
 }
@@ -708,12 +688,14 @@ func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 		t.Fatalf("Could not find saved cheque")
 	}
 
-	if returnedCheque.Amount != testCheque.Amount || returnedCheque.Beneficiary != testCheque.Beneficiary {
+	if !returnedCheque.Equal(testCheque) {
 		t.Fatalf("Returned cheque was different")
 	}
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
+// the owner of this swap is the beneficiaryAddress
+// hence the owner of this swap would sign cheques with beneficiaryKey and receive cheques from ownerKey (or another party) which is NOT the owner of this swap
 func newTestSwapAndPeer(t *testing.T) (*Swap, *Peer, string) {
 	swap, dir := newTestSwap(t)
 	// owner address is the beneficary (counterparty) for the peer
@@ -741,7 +723,7 @@ func TestPeerSaveAndLoadLastReceivedCheque(t *testing.T) {
 		t.Fatal("Could not find saved cheque")
 	}
 
-	if returnedCheque.Amount != testCheque.Amount || returnedCheque.Beneficiary != testCheque.Beneficiary {
+	if !returnedCheque.Equal(testCheque) {
 		t.Fatal("Returned cheque was different")
 	}
 }
@@ -761,7 +743,7 @@ func TestPeerVerifyChequeProperties(t *testing.T) {
 
 // TestPeerVerifyChequeProperties tests that verifyChequeProperties will reject invalid cheques
 func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
-	swap, peer, dir := newTestSwapAndPeer(t)
+	_, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
 
 	// cheque with an invalid signature
@@ -774,7 +756,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	// cheque with wrong contract
 	testCheque = newTestCheque()
 	testCheque.Contract = beneficiaryAddress
-	testCheque.Sig, _ = swap.signContentWithKey(testCheque, ownerKey)
+	testCheque.Sig, _ = testCheque.Sign(ownerKey)
 	if err := peer.verifyChequeProperties(testCheque); err == nil {
 		t.Fatalf("accepted cheque with wrong contract")
 	}
@@ -782,7 +764,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	// cheque with wrong beneficiary
 	testCheque = newTestCheque()
 	testCheque.Beneficiary = ownerAddress
-	testCheque.Sig, _ = swap.signContentWithKey(testCheque, ownerKey)
+	testCheque.Sig, _ = testCheque.Sign(ownerKey)
 	if err := peer.verifyChequeProperties(testCheque); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
 	}
@@ -790,7 +772,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	// cheque with non-zero timeout
 	testCheque = newTestCheque()
 	testCheque.Timeout = 10
-	testCheque.Sig, _ = swap.signContentWithKey(testCheque, ownerKey)
+	testCheque.Sig, _ = testCheque.Sign(ownerKey)
 	if err := peer.verifyChequeProperties(testCheque); err == nil {
 		t.Fatalf("accepted cheque with non-zero timeout")
 	}
@@ -851,12 +833,12 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 
 // TestPeerProcessAndVerifyCheque tests that processAndVerifyCheque accepts a valid cheque and also saves it
 func TestPeerProcessAndVerifyCheque(t *testing.T) {
-	swap, peer, dir := newTestSwapAndPeer(t)
+	_, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
 
 	// create test cheque and process
 	cheque := newTestCheque()
-	cheque.Sig, _ = swap.signContentWithKey(cheque, ownerKey)
+	cheque.Sig, _ = cheque.Sign(ownerKey)
 
 	if err := peer.processAndVerifyCheque(cheque); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
@@ -872,7 +854,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	otherCheque.Serial = cheque.Serial + 1
 	otherCheque.Amount = cheque.Amount + 10
 	otherCheque.Honey = 10
-	otherCheque.Sig, _ = swap.signContentWithKey(otherCheque, ownerKey)
+	otherCheque.Sig, _ = otherCheque.Sign(ownerKey)
 
 	if err := peer.processAndVerifyCheque(otherCheque); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
@@ -890,13 +872,13 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 // then rejects one with lower serial
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
-	swap, peer, dir := newTestSwapAndPeer(t)
+	_, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
 
 	// invalid cheque because wrong recipient
 	cheque := newTestCheque()
 	cheque.Beneficiary = ownerAddress
-	cheque.Sig, _ = swap.signContentWithKey(cheque, ownerKey)
+	cheque.Sig, _ = cheque.Sign(ownerKey)
 
 	if err := peer.processAndVerifyCheque(cheque); err == nil {
 		t.Fatal("accecpted an invalid cheque as first cheque")
@@ -905,7 +887,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	// valid cheque with serial 5
 	cheque = newTestCheque()
 	cheque.Serial = 5
-	cheque.Sig, _ = swap.signContentWithKey(cheque, ownerKey)
+	cheque.Sig, _ = cheque.Sign(ownerKey)
 
 	if err := peer.processAndVerifyCheque(cheque); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
@@ -920,7 +902,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	otherCheque.Serial = cheque.Serial - 1
 	otherCheque.Amount = cheque.Amount + 10
 	otherCheque.Honey = 10
-	otherCheque.Sig, _ = swap.signContentWithKey(otherCheque, ownerKey)
+	otherCheque.Sig, _ = otherCheque.Sign(ownerKey)
 
 	if err := peer.processAndVerifyCheque(otherCheque); err == nil {
 		t.Fatal("accepted a cheque with lower serial")
@@ -931,7 +913,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	otherCheque.Serial = cheque.Serial + 1
 	otherCheque.Amount = cheque.Amount - 10
 	otherCheque.Honey = 10
-	otherCheque.Sig, _ = swap.signContentWithKey(otherCheque, ownerKey)
+	otherCheque.Sig, _ = otherCheque.Sign(ownerKey)
 
 	if err := peer.processAndVerifyCheque(otherCheque); err == nil {
 		t.Fatal("accepted a cheque with lower amount")
