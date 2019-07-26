@@ -505,7 +505,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
+			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.newstreamer),
 			Public:    false,
 		},
 		{

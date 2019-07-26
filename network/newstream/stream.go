@@ -935,7 +935,25 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 		return nil, 0, 0, true, nil
 	}
 	return batch, *batchStartID, batchEndID, false, nil
+}
 
+func (s *SlipStream) PeerCursors() string {
+	rows := []string{}
+	rows = append(rows, fmt.Sprintf("peer subscriptions for base address: %s", hex.EncodeToString(s.baseKey)))
+	ctr := 0
+	for peerEnode, p := range s.peers {
+		ctr++
+		rows = append(rows, fmt.Sprintf("\tpeer: %s", peerEnode.String()))
+		cursors := p.getCursorsCopy()
+		for stream, cursor := range cursors {
+
+			rows = append(rows, fmt.Sprintf("\t\tstream:\t%-5s\t\tcursor: %d", stream, cursor))
+		}
+	}
+	if ctr == 0 {
+		rows = append(rows, fmt.Sprintf("\tfound no associated bzz-stream peers on this node"))
+	}
+	return "\n" + strings.Join(rows, "\n")
 }
 
 func (s *SlipStream) Protocols() []p2p.Protocol {

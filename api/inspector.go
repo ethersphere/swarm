@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/newstream"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -32,9 +33,10 @@ type Inspector struct {
 	api      *API
 	hive     *network.Hive
 	netStore *storage.NetStore
+	stream   *newstream.SlipStream
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Inspector {
+func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *newstream.SlipStream) *Inspector {
 	return &Inspector{api, hive, netStore}
 }
 
@@ -95,4 +97,8 @@ func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 	}
 
 	return strings.Join(hostChunks, "")
+}
+
+func (i *Inspector) PeerStreams() string {
+	return i.stream.PeerCursors()
 }
