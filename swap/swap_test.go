@@ -186,6 +186,22 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 	}
 }
 
+func TestStoreBalances(t *testing.T) {
+	// create a test swap account
+	s, testDir := newTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	var balancePeers []string
+	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
+
+	if err != nil {
+		t.Error("Store balances retrieval failed.")
+	}
+	if !reflect.DeepEqual(storeBalancePeers, balancePeers) {
+		t.Errorf("Expected store balance peers to be %v, is %v instead.", balancePeers, storeBalancePeers)
+	}
+}
+
 // Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	// create a test swap account
