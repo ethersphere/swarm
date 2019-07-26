@@ -192,32 +192,29 @@ func TestStoreBalances(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	var expectedBalancePeers []string
-	var storeBalancePeers []string
 	var err error
 
 	// store balance peers should be empty at this point
-	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
-		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
-	}
+	compareBalancePeers(t, s, expectedBalancePeers)
 
 	// modify balances in memory but not in store
 	testPeer := newDummyPeer()
 	s.balances[testPeer.ID()] = 144
-
-	storeBalancePeers = getStoreBalancePeers(t, s)
 	// store balance peers should still be empty at this point
-	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
-		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
-	}
+	compareBalancePeers(t, s, expectedBalancePeers)
 
 	// modify balances both in memory and in store
 	_, err = s.updateBalance(testPeer.ID(), 29)
 	if err != nil {
 		t.Error("Unexpected balance update failure.")
 	}
-	// store balance peers should now include the test peer
-	storeBalancePeers = getStoreBalancePeers(t, s)
+	// store balance peers should now include ONLY the test peer
 	expectedBalancePeers = []string{balanceKey(testPeer.ID())}
+	compareBalancePeers(t, s, expectedBalancePeers)
+}
+
+func compareBalancePeers(t *testing.T, s *Swap, expectedBalancePeers []string) {
+	storeBalancePeers := getStoreBalancePeers(t, s)
 	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
 		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
 	}
