@@ -975,9 +975,16 @@ func (s *SlipStream) Close() {
 	s.closeOnce.Do(func() {
 		close(s.quit)
 		// wait for all handlers to finish
-		//s.handlersWg.Wait()
-		// this is just an experiment, delete as soon as possible
-		time.Sleep(time.Second)
+		done := make(chan struct{})
+		go func() {
+			s.handlersWg.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Error("slip stream closed with still active handlers")
+		}
 	})
 }
 
