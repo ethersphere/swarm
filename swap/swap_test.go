@@ -137,7 +137,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 }
 
 type storeKeysTestCases struct {
-	nodeID                    string
+	nodeID                    enode.ID
 	expectedBalanceKey        string
 	expectedSentChequeKey     string
 	expectedReceivedChequeKey string
@@ -145,7 +145,7 @@ type storeKeysTestCases struct {
 
 func TestStoreKeys(t *testing.T) {
 	testCases := []storeKeysTestCases{
-		{"f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"},
+		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"},
 	}
 	testStoreKeys(t, testCases)
 }
@@ -153,11 +153,9 @@ func TestStoreKeys(t *testing.T) {
 func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
-			nodeID := enode.HexID(testCase.nodeID)
-
-			actualBalanceKey := balanceKey(nodeID)
-			actualSentChequeKey := sentChequeKey(nodeID)
-			actualReceivedChequeKey := receivedChequeKey(nodeID)
+			actualBalanceKey := balanceKey(testCase.nodeID)
+			actualSentChequeKey := sentChequeKey(testCase.nodeID)
+			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID)
 
 			if actualBalanceKey != testCase.expectedBalanceKey {
 				t.Fatalf("Expected balance key to be %s, but is %s instead.", testCase.expectedBalanceKey, actualBalanceKey)
