@@ -166,6 +166,20 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 			if actualReceivedChequeKey != testCase.expectedReceivedChequeKey {
 				t.Fatalf("Expected received cheque key to be %s, but is %s instead.", testCase.expectedReceivedChequeKey, actualReceivedChequeKey)
 			}
+
+			var nodeID enode.ID
+			nodeID = keyToID(actualBalanceKey, balancePrefix)
+			if nodeID != testCase.nodeID {
+				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
+			}
+			nodeID = keyToID(actualSentChequeKey, sentChequePrefix)
+			if nodeID != testCase.nodeID {
+				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
+			}
+			nodeID = keyToID(actualReceivedChequeKey, receivedChequePrefix)
+			if nodeID != testCase.nodeID {
+				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
+			}
 		})
 	}
 }
