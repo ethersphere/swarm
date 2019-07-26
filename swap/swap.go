@@ -118,6 +118,10 @@ func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
 }
 
+func keyToID(key string, prefix string) enode.ID {
+	return enode.HexID(key[len(prefix):])
+}
+
 // createOwner assings keys and addresses
 func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
 	pubkey := &prvkey.PublicKey
@@ -347,7 +351,7 @@ func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
 	// add peers with balance to result and mark as present
 	for _, storeBalancePeer := range storeBalancePeers {
 		// take balance key and turn into node ID
-		peerID := enode.HexID(storeBalancePeer[len(balancePrefix):])
+		peerID := keyToID(storeBalancePeer, balancePrefix)
 		knownPeers[peerID] = true
 		peers = append(peers, peerID)
 	}

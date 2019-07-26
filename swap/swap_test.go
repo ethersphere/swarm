@@ -102,7 +102,7 @@ func TestPeerBalance(t *testing.T) {
 	}
 }
 
-func TestGetAllBalances(t *testing.T) {
+func TestAllBalances(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
