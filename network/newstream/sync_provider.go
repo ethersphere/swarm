@@ -144,7 +144,10 @@ func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
 	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
-var SyncUpdateBackoffTime = 30 * time.Second
+var (
+	SyncUpdateBackoff = 30 * time.Second
+	SyncInitBackoff   = 30 * time.Second
+)
 
 // InitPeer creates and maintains the streams per peer.
 // Runs per peer, in a separate goroutine
@@ -154,6 +157,15 @@ var SyncUpdateBackoffTime = 30 * time.Second
 //  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 // peer connects and disconnects quickly
 func (s *syncProvider) InitPeer(p *Peer) {
+	timer := time.NewTimer(SyncInitBackoff)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+	case <-p.quit:
+		return
+	}
+
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
 
@@ -180,12 +192,12 @@ func (s *syncProvider) InitPeer(p *Peer) {
 			}
 
 			if backoff == nil {
-				backoff = time.NewTimer(SyncUpdateBackoffTime)
+				backoff = time.NewTimer(SyncUpdateBackoff)
 			} else {
 				if !backoff.Stop() {
 					<-backoff.C
 				}
-				backoff.Reset(SyncUpdateBackoffTime)
+				backoff.Reset(SyncUpdateBackoff)
 			}
 			backoffC = backoff.C
 		case <-backoffC:
