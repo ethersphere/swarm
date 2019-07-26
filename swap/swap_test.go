@@ -199,18 +199,32 @@ func TestStoreBalances(t *testing.T) {
 
 	// modify balances in memory but not in store
 	testPeer := newDummyPeer()
-	s.balances[testPeer.ID()] = 144
+	testPeerID := testPeer.ID()
+	s.balances[testPeerID] = 144
 	// store balance peers should still be empty at this point
 	compareBalancePeers(t, s, expectedBalancePeers)
 
 	// modify balances both in memory and in store
-	_, err = s.updateBalance(testPeer.ID(), 29)
+	updatedBalance, err := s.updateBalance(testPeerID, 29)
 	if err != nil {
 		t.Error("Unexpected balance update failure.")
 	}
 	// store balance peers should now include ONLY the test peer
-	expectedBalancePeers = []string{balanceKey(testPeer.ID())}
+	expectedBalancePeers = []string{balanceKey(testPeerID)}
 	compareBalancePeers(t, s, expectedBalancePeers)
+	// store balance for peer should match
+	comparePeerBalance(t, s, testPeerID, updatedBalance)
+}
+
+func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
+	var peerBalance int64
+	err := s.stateStore.Get(balanceKey(peer), &peerBalance)
+	if err != nil {
+		t.Error("Unexpected peer balance retrieval failure.")
+	}
+	if peerBalance != expectedPeerBalance {
+		t.Errorf("Expected peer store balance to be %d, but is %d instead.", expectedPeerBalance, peerBalance)
+	}
 }
 
 func compareBalancePeers(t *testing.T, s *Swap, expectedBalancePeers []string) {
