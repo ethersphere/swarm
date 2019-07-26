@@ -100,19 +100,23 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return sw
 }
 
+var balancePrefix = "balance_"
+var sentChequePrefix = "sent_cheque_"
+var receivedChequePrefix = "received_cheque_"
+
 // returns the store key for retrieving a peer's balance
 func balanceKey(peer enode.ID) string {
-	return "balance_" + peer.String()
+	return balancePrefix + peer.String()
 }
 
 // returns the store key for retrieving a peer's last sent cheque
 func sentChequeKey(peer enode.ID) string {
-	return "sent_cheque" + peer.String()
+	return sentChequePrefix + peer.String()
 }
 
 // returns the store key for retrieving a peer's last received cheque
 func receivedChequeKey(peer enode.ID) string {
-	return "received_cheque_" + peer.String()
+	return receivedChequePrefix + peer.String()
 }
 
 // createOwner assings keys and addresses
@@ -308,7 +312,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
 	// get list of all known SWAP peers
-	swapPeers, err := s.Peers()
+	swapPeers, err := s.BalancePeers()
 	if err != nil {
 		return nil, err
 	}
@@ -325,27 +329,24 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
-// Peers returns a list of every peer known through SWAP
-func (s *Swap) Peers() (peers []enode.ID, err error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
+// BalancePeers returns a list of every peer known to have a balance set through SWAP
+func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
 	knownPeers := make(map[enode.ID]bool)
 
-	// get peer IDs from store
-	storePeers, err := s.stateStore.Keys("", "")
+	// get balance keys from store
+	storeBalancePeers, err := s.stateStore.Keys(balancePrefix, "")
 	if err != nil {
 		return nil, err
 	}
 
-	// add store peers to result and mark as present
-	for _, storePeer := range storePeers {
-		peerID := enode.HexID(storePeer)
+	// add peers with balance to result and mark as present
+	for _, storeBalancePeer := range storeBalancePeers {
+		peerID := enode.HexID(storeBalancePeer)
 		knownPeers[peerID] = true
 		peers = append(peers, peerID)
 	}
 
-	// add in-memory peers to result if not present
+	// add in-memory balance peers to result if not present
 	for peerID := range s.balances {
 		if _, peerExists := knownPeers[peerID]; !peerExists {
 			peers = append(peers, peerID)
