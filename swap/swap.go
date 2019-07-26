@@ -129,7 +129,9 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	// check if balance with peer is over the disconnect threshold
+	// Check if balance with peer is over the disconnect threshold
+	// It is the creditor who triggers the disconnect from a overdraft creditor,
+	// thus we check for a positive value
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
 		// if so, return error in order to abort the transfer
 		disconnectMessage := fmt.Sprintf("balance for peer %s is over the disconnect threshold %v, disconnecting", peer.ID().String(), s.disconnectThreshold)
@@ -144,8 +146,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	// check if balance with peer crosses the threshold
-	// it is the peer with a negative balance who sends a cheque, thus we check
+	// Check if balance with peer crosses the threshold
+	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		//if so, send cheque
