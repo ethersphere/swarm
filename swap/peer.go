@@ -159,7 +159,7 @@ func (sp *Peer) verifyChequeProperties(cheque *Cheque) error {
 	}
 
 	// the beneficiary is the owner of the counterparty swap contract
-	if err := sp.swap.verifyChequeSig(cheque, sp.beneficiary); err != nil {
+	if err := cheque.VerifySig(sp.beneficiary); err != nil {
 		return err
 	}
 
