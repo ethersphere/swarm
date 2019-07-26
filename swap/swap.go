@@ -100,9 +100,9 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return sw
 }
 
-var balancePrefix = "balance_"
-var sentChequePrefix = "sent_cheque_"
-var receivedChequePrefix = "received_cheque_"
+const balancePrefix = "balance_"
+const sentChequePrefix = "sent_cheque_"
+const receivedChequePrefix = "received_cheque_"
 
 // returns the store key for retrieving a peer's balance
 func balanceKey(peer enode.ID) string {
@@ -301,10 +301,12 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 }
 
 // Balance returns the balance for a given peer
-func (s *Swap) Balance(peer enode.ID) (peerBalance int64, err error) {
-	err = s.loadBalance(peer)
-	peerBalance = s.balances[peer]
-	return
+func (s *Swap) Balance(peer enode.ID) (int64, error) {
+	err := s.loadBalance(peer)
+	if err != nil && err != state.ErrNotFound {
+		return 0, err
+	}
+	return s.balances[peer], nil
 }
 
 // Balances returns the balances for all known SWAP peers
