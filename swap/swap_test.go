@@ -195,40 +195,40 @@ func TestStoreBalances(t *testing.T) {
 	var storeBalancePeers []string
 	var err error
 
-	storeBalancePeers, err = s.stateStore.Keys(balancePrefix)
-	if err != nil {
-		t.Error("Unexpected balance peer retrieval failure.")
-	}
-
-	// store balances should be empty at this point
+	// store balance peers should be empty at this point
 	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
 		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
 	}
 
+	// modify balances in memory but not in store
 	testPeer := newDummyPeer()
 	s.balances[testPeer.ID()] = 144
 
-	storeBalancePeers, err = s.stateStore.Keys(balancePrefix)
-	if err != nil {
-		t.Error("Unexpected balance peer retrieval failure.")
-	}
-	// store balances should still be empty at this point
+	storeBalancePeers = getStoreBalancePeers(t, s)
+	// store balance peers should still be empty at this point
 	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
 		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
 	}
 
+	// modify balances both in memory and in store
 	_, err = s.updateBalance(testPeer.ID(), 29)
 	if err != nil {
 		t.Error("Unexpected balance update failure.")
 	}
-	storeBalancePeers, err = s.stateStore.Keys(balancePrefix)
-	if err != nil {
-		t.Error("Unexpected balance peer retrieval failure.")
-	}
+	// store balance peers should now include the test peer
+	storeBalancePeers = getStoreBalancePeers(t, s)
 	expectedBalancePeers = []string{balanceKey(testPeer.ID())}
 	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
 		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
 	}
+}
+
+func getStoreBalancePeers(t *testing.T, s *Swap) []string {
+	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
+	if err != nil {
+		t.Error("Unexpected balance peer retrieval failure.")
+	}
+	return storeBalancePeers
 }
 
 // Test that repeated bookings do correct accounting
