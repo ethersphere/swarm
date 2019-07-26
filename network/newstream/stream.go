@@ -941,11 +941,11 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 
 func (s *SlipStream) PeerCursors() string {
 	rows := []string{}
-	rows = append(rows, fmt.Sprintf("peer subscriptions for base address: %s", hex.EncodeToString(s.baseKey)))
+	rows = append(rows, fmt.Sprintf("peer subscriptions for base address: %s", hex.EncodeToString(s.baseKey)[:16]))
 	ctr := 0
-	for peerEnode, p := range s.peers {
+	for _, p := range s.peers {
 		ctr++
-		rows = append(rows, fmt.Sprintf("\tpeer: %s", peerEnode.String()))
+		rows = append(rows, fmt.Sprintf("\tpeer: %s", hex.EncodeToString(p.OAddr)[:16]))
 		cursors := p.getCursorsCopy()
 		for stream, cursor := range cursors {
 
