@@ -198,6 +198,6 @@ var (
 	}
 	SwarmPinFlag = cli.BoolFlag{
 		Name:  "pin",
-		Usage: "Use this flag to pin the file after upload is complete. This flag is used when uploading the file.",
+		Usage: "Use this flag to pin the file after upload is complete. This flag is used when uploading a file.",
 	}
 )

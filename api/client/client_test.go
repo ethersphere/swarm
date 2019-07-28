@@ -36,7 +36,7 @@ import (
 )
 
 func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, "", nil)
+	return swarmhttp.NewServer(api, nil, "")
 }
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
@@ -206,8 +206,7 @@ func newTestDirectory(t *testing.T) string {
 	return dir
 }
 
-// TestClientUploadDownloadDirectory tests uploading and downloading a
-// directory of files to a swarm manifest with pinning and unpinning
+// TestClientUploadDownloadDirectory tests uploading and downloading
 func TestClientUploadDownloadDirectory(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -335,7 +334,6 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 }
 
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
-// upload with pinning and unpinning
 func TestClientMultipartUpload(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -382,6 +380,7 @@ func TestClientMultipartUpload(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The content is the file name just to make them different
 		if !bytes.Equal(gotData, []byte(path)) {
 			t.Fatalf("expected data to be %q, got %q", path, gotData)
 		}

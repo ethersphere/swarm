@@ -55,7 +55,7 @@ func init() {
 }
 
 func serverFunc(api *api.API) TestServer {
-	return NewServer(api, "", nil)
+	return NewServer(api, nil, "")
 }
 
 func newTestSigner() (*feed.GenericSigner, error) {

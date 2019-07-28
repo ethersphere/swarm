@@ -642,7 +642,6 @@ func (pc *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync
 }
 
 func (pc *PyramidChunker) enqueueTreeChunk(ent *TreeEntry, chunkWG *sync.WaitGroup, last bool) {
-
 	if ent != nil && ent.branchCount > 0 {
 
 		// wait for data chunks to get over before processing the tree chunk

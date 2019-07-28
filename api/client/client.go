@@ -81,7 +81,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool, toPin bool) 
 
 	// Set the pinning header if the file needs to be pinned
 	if toPin {
-		req.Header.Set(pin.SwarmPinContent, "true")
+		req.Header.Set(pin.SwarmPinHeaderName, "true")
 	}
 
 	res, err := http.DefaultClient.Do(req)
@@ -549,7 +549,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 
 	// Set the pinning header if the file is to be pinned
 	if toPin {
-		req.Header.Set(pin.SwarmPinContent, "true")
+		req.Header.Set(pin.SwarmPinHeaderName, "true")
 	}
 
 	// use 'Expect: 100-continue' so we don't send the request body if
@@ -619,7 +619,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%q", mw.Boundary()))
 	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
 	if toPin {
-		req.Header.Set(pin.SwarmPinContent, "true")
+		req.Header.Set(pin.SwarmPinHeaderName, "true")
 	}
 
 	// define an UploadFn which adds files to the multipart form

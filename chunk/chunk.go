@@ -136,6 +136,8 @@ func (m ModeGet) String() string {
 		return "Sync"
 	case ModeGetLookup:
 		return "Lookup"
+	case ModeGetPin:
+		return "PinLookup"
 	default:
 		return "Unknown"
 	}
@@ -149,6 +151,8 @@ const (
 	ModeGetSync
 	// ModeGetLookup: when accessed to lookup a a chunk in feeds or other places
 	ModeGetLookup
+	// ModeGetPin: used when a pinned chunk is accessed
+	ModeGetPin
 )
 
 // ModePut enumerates different Putter modes.
@@ -192,12 +196,6 @@ func (m ModeSet) String() string {
 		return "ModeSetPin"
 	case ModeSetUnpin:
 		return "ModeSetUnpin"
-	case ModeSetRawFile:
-		return "ModeSetRawFile"
-	case ModeSetFile:
-		return "ModeSetFile"
-	case ModeSetUnpinFile:
-		return "ModeSetUnpinFile"
 	default:
 		return "Unknown"
 	}
@@ -215,14 +213,6 @@ const (
 	ModeSetPin
 	// ModeSetUnpin: when a chunk is unpinned using a command locally
 	ModeSetUnpin
-	// ModeSetRawFile: When a root hash of a RAW file needs to be stored
-	// (to display later using list pins command)
-	ModeSetRawFile
-	// ModeSetFile: When a root hash of a manifest based file needs to be stored
-	// (to display later using list pins command)
-	ModeSetFile
-	// ModeSetUnpinFile: When a root hash of a file is unpinned
-	ModeSetUnpinFile
 )
 
 // Descriptor holds information required for Pull syncing. This struct

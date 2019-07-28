@@ -80,7 +80,7 @@ func (m methodHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-func NewServer(api *api.API, corsString string, pinAPI *pin.PinAPI) *Server {
+func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(corsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -187,7 +187,7 @@ func (s *Server) ListenAndServe(addr string) error {
 type Server struct {
 	http.Handler
 	api        *api.API
-	pinAPI     *pin.PinAPI
+	pinAPI     *pin.API
 	listenAddr string
 }
 
@@ -261,7 +261,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(pin.SwarmPinContent)
+	headerPin := r.Header.Get(pin.SwarmPinHeaderName)
 
 	if uri.Path != "" {
 		postRawFail.Inc(1)
@@ -332,7 +332,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(pin.SwarmPinContent)
+	headerPin := r.Header.Get(pin.SwarmPinHeaderName)
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {

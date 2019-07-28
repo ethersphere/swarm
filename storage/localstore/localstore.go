@@ -81,8 +81,7 @@ type DB struct {
 	gcIndex shed.Index
 
 	// pin files Index
-	pinIndex      shed.Index // Index which stores address of all the pinned chunks and their pin counter
-	pinFilesIndex shed.Index // Index that stores all the root hashes of the pinned files / manifests
+	pinIndex shed.Index // Index which stores address of all the pinned chunks and their pin counter
 
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
@@ -357,26 +356,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.PinCounter = binary.BigEndian.Uint64(value[:8])
-			return e, nil
-		},
-	})
-
-	// Create a index structure for storing the root hashes of the pinned files / manifests
-	db.pinFilesIndex, err = db.shed.NewIndex("Hash->IsRaw", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 1)
-			b[0] = fields.IsRaw
-			return b, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.IsRaw = value[0]
 			return e, nil
 		},
 	})

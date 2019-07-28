@@ -175,9 +175,9 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		}
 
 	case chunk.ModeSetPin:
-
 		// Get the existing pin counter of the chunk
-		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
+		existingPinCounter := uint64(0)
+		pinnedChunk, err := db.pinIndex.Get(item)
 		if err != nil {
 			if err == leveldb.ErrNotFound {
 				// If this Address is not present in DB, then its a new entry
@@ -185,40 +185,37 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			} else {
 				return err
 			}
+		} else {
+			existingPinCounter = pinnedChunk.PinCounter
 		}
 
-		// Otherwise increase the existng counter by 1
+		// If this is the first time the chunk is getting pinned
+		// remove this from the gcIndex
+		if existingPinCounter == 0 {
+			db.gcIndex.DeleteInBatch(batch, item)
+		}
+
+		// Otherwise increase the existing counter by 1
 		item.PinCounter = existingPinCounter + 1
-
 		db.pinIndex.PutInBatch(batch, item)
-
 	case chunk.ModeSetUnpin:
 		// Get the existing pin counter of the chunk
-		existingPinCounter, err := db.GetPinCounterOfChunk(item.Address)
+		pinnedChunk, err := db.pinIndex.Get(item)
 		if err != nil {
 			return err
 		}
 
 		// Decrement the pin counter or
-		// delete it from pin index if the oin counter has reached 0
-		if existingPinCounter > 1 {
-			item.PinCounter = existingPinCounter - 1
+		// delete it from pin index if the pin counter has reached 0
+		if pinnedChunk.PinCounter > 1 {
+			item.PinCounter = pinnedChunk.PinCounter - 1
 			db.pinIndex.PutInBatch(batch, item)
 		} else {
 			db.pinIndex.DeleteInBatch(batch, item)
+
+			// If the file is getting unpinned, add it to gcIndex
+			db.gcIndex.PutInBatch(batch, item)
 		}
-
-	case chunk.ModeSetRawFile:
-		item.IsRaw = 1
-		db.pinFilesIndex.PutInBatch(batch, item)
-
-	case chunk.ModeSetFile:
-		item.IsRaw = 0
-		db.pinFilesIndex.PutInBatch(batch, item)
-
-	case chunk.ModeSetUnpinFile:
-		db.pinFilesIndex.DeleteInBatch(batch, item)
-
 	default:
 		return ErrInvalidMode
 	}
