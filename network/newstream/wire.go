@@ -56,6 +56,9 @@ type StreamProvider interface {
 	// an arbitrary Peer. This method should always be run in a separate goroutine
 	InitPeer(p *Peer)
 
+	// WantStream indicates if we are interested in a stream
+	WantStream(*Peer, ID) bool
+
 	// StreamName returns the Name of the Stream (see ID)
 	StreamName() string
 

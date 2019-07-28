@@ -255,6 +255,15 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 			p.Drop()
 			return
 		}
+
+		if !provider.WantStream(p, s.Stream) {
+			if _, exists := p.getCursor(s.Stream); exists {
+				p.logger.Debug("stream cursor exists but we don't want it - removing", "stream", s.Stream)
+				p.deleteCursor(s.Stream)
+			}
+			continue
+		}
+
 		if _, exists := p.getCursor(s.Stream); exists {
 			p.logger.Debug("stream cursor already exists, continue to next", "stream", s.Stream)
 			continue

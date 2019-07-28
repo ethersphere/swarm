@@ -23,18 +23,29 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/rand"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/state"
 )
+
+func init() {
+	rand.Seed(time.Now().Unix())
+}
 
 // TestNodesExchangeCorrectBinIndexes tests that two nodes exchange the correct cursors for all streams
 // it tests that all streams are exchanged
@@ -504,4 +515,202 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 		}
 	}
 	return nil
+}
+
+func TestCorrectCursorsExchangeRace(t *testing.T) {
+	bogusNodeCount := 15
+	bogusNodes := []*network.Peer{}
+	popRandomNode := func() *network.Peer {
+		log.Debug("bogus peer array length", "len", len(bogusNodes))
+		i := rand.Intn(len(bogusNodes))
+		elem := bogusNodes[i]
+		bogusNodes = append(bogusNodes[:i], bogusNodes[i+1:]...)
+		return elem
+	}
+	streamInfoRes := []*StreamInfoRes{}
+	infoReqHook := func(msg *StreamInfoReq) {
+		log.Trace("mock got StreamInfoReq msg", "msg", msg)
+
+		//create the response
+		res := &StreamInfoRes{}
+		for _, v := range msg.Streams {
+			cur, err := strconv.Atoi(v.Key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			desc := StreamDescriptor{
+				Stream:  v,
+				Cursor:  uint64(cur),
+				Bounded: false,
+			}
+			res.Streams = append(res.Streams, desc)
+		}
+		streamInfoRes = append(streamInfoRes, res)
+	}
+
+	popRandomResponse := func() *StreamInfoRes {
+		log.Debug("responses array length", "len", len(streamInfoRes))
+		i := rand.Intn(len(streamInfoRes))
+		elem := streamInfoRes[i]
+		streamInfoRes = append(streamInfoRes[:i], streamInfoRes[i+1:]...)
+		return elem
+	}
+	opts := &SyncSimServiceOptions{
+		StreamConstructorFunc: func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+			return New(s, b, p...)
+		},
+	}
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		serviceNameSlipStream: newSyncSimServiceFunc(opts),
+	})
+	defer sim.Close()
+
+	// create the first node with the non mock initialiser
+	pivot, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// second node should start with the mock protocol
+	opts.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+		return newMock(infoReqHook)
+	}
+
+	other, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = sim.Net.Connect(pivot, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	pivotKad := nodeKademlia(sim, pivot)
+	pivotAddr := pot.NewAddressFromBytes(pivotKad.BaseAddr())
+	pivotStream := nodeSlipStream(sim, pivot)
+
+	otherBase := nodeKademlia(sim, other).BaseAddr()
+	otherPeer := pivotStream.getPeer(other)
+
+	log.Debug(pivotKad.String())
+	// add a few fictional nodes at higher POs so that we get kademlia depth change and as a result a trigger
+	// for a StreamInfoReq message between the two 'real' nodes
+
+	for i := 0; i < bogusNodeCount; i++ {
+		rw := &p2p.MsgPipeRW{}
+		ptpPeer := p2p.NewPeer(enode.ID{}, "wu tang killa beez", []p2p.Cap{})
+		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
+		peerAddr := pot.RandomAddressAt(pivotAddr, i)
+		bzzPeer := &network.BzzPeer{
+			Peer: protoPeer,
+			BzzAddr: &network.BzzAddr{
+				OAddr: peerAddr.Bytes(),
+				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
+			},
+		}
+		peer := network.NewPeer(bzzPeer, pivotKad)
+		pivotKad.On(peer)
+		bogusNodes = append(bogusNodes, peer)
+		time.Sleep(50 * time.Millisecond)
+	}
+CHECKSTREAMS:
+	pivotDepth := pivotKad.NeighbourhoodDepth()
+	po := chunk.Proximity(otherBase, pivotKad.BaseAddr())
+	sub, qui := syncSubscriptionsDiff(po, -1, pivotDepth, pivotKad.MaxProxDisplay, false) //s.syncBinsOnlyWithinDepth)
+	log.Debug("got desired pivot cursor state", "depth", pivotDepth, "subs", sub, "quits", qui)
+
+	for i := len(streamInfoRes); i > 0; i-- {
+		v := popRandomResponse()
+		pivotStream.handleStreamInfoRes(context.Background(), otherPeer, v)
+	}
+
+	//get the pivot cursors for peer, assert equal to what is in `sub`
+	for _, stream := range getAllSyncStreams() {
+		cur, ok := otherPeer.getCursor(stream)
+		keyInt, err := strconv.Atoi(stream.Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		shouldExist := checkKeyInSlice(keyInt, sub)
+
+		if shouldExist == ok {
+			continue
+		} else {
+			t.Fatalf("got a cursor that should not exist. key %s, cur %d", stream.Key, cur)
+		}
+	}
+
+	// repeat, until all of the bogus nodes are out of the way
+	if len(bogusNodes) > 0 {
+		p := popRandomNode()
+		pivotKad.Off(p)
+		time.Sleep(50 * time.Millisecond) // wait for the streamInfoReq to come through
+		goto CHECKSTREAMS
+	}
+}
+
+type slipStreamMock struct {
+	spec              *protocols.Spec
+	streamInfoReqHook func(*StreamInfoReq)
+}
+
+func newMock(infoReqHook func(*StreamInfoReq)) *slipStreamMock {
+	return &slipStreamMock{
+		spec:              Spec,
+		streamInfoReqHook: infoReqHook,
+	}
+}
+
+func (s *slipStreamMock) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{
+		{
+			Name:    "bzz-stream",
+			Version: 1,
+			Length:  10 * 1024 * 1024,
+			Run:     s.Run,
+		},
+	}
+}
+
+func (s *slipStreamMock) APIs() []rpc.API {
+	return nil
+}
+
+func (s *slipStreamMock) Close() {
+}
+
+func (s *slipStreamMock) Start(server *p2p.Server) error {
+	return nil
+}
+
+func (s *slipStreamMock) Stop() error {
+	return nil
+}
+
+func (s *slipStreamMock) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	peer := protocols.NewPeer(p, rw, s.spec)
+	return peer.Run(s.HandleMsg)
+}
+
+func (s *slipStreamMock) HandleMsg(ctx context.Context, msg interface{}) error {
+	switch msg := msg.(type) {
+	case *StreamInfoReq:
+		s.streamInfoReqHook(msg)
+	case *GetRange:
+		return nil
+	default:
+		panic("unexpected")
+	}
+	return nil
+}
+
+func getAllSyncStreams() (streams []ID) {
+	for i := 0; i <= 16; i++ {
+		streams = append(streams, ID{
+			Name: syncStreamName,
+			Key:  fmt.Sprintf("%d", i),
+		})
+	}
+	return
 }

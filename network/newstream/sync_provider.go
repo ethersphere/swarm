@@ -33,7 +33,7 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-const streamName = "SYNC"
+const syncStreamName = "SYNC"
 
 type syncProvider struct {
 	netStore *storage.NetStore
@@ -55,7 +55,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, syncOnlyWithin
 		netStore:                ns,
 		kad:                     kad,
 		syncBinsOnlyWithinDepth: syncOnlyWithinDepth,
-		name:                    streamName,
+		name:                    syncStreamName,
 		quit:                    make(chan struct{}),
 		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:8])),
 	}
@@ -144,6 +144,19 @@ func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
 	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
+func (s *syncProvider) WantStream(p *Peer, streamID ID) bool {
+	p.logger.Debug("syncProvider.WantStream", "stream", streamID)
+	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
+	depth := s.kad.NeighbourhoodDepth()
+
+	subBins, _ := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
+	v, err := strconv.Atoi(streamID.Key)
+	if err != nil {
+		return false
+	}
+	return checkKeyInSlice(v, subBins)
+}
+
 var (
 	SyncUpdateBackoff = 30 * time.Second
 	SyncInitBackoff   = 30 * time.Second
@@ -157,14 +170,14 @@ var (
 //  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 // peer connects and disconnects quickly
 func (s *syncProvider) InitPeer(p *Peer) {
-	timer := time.NewTimer(SyncInitBackoff)
-	defer timer.Stop()
+	//timer := time.NewTimer(SyncInitBackoff)
+	//defer timer.Stop()
 
-	select {
-	case <-timer.C:
-	case <-p.quit:
-		return
-	}
+	//select {
+	////case <-timer.C:
+	//case <-p.quit:
+	//return
+	//}
 
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
@@ -180,10 +193,10 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	depthChangeSignal, unsubscribeDepthChangeSignal := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribeDepthChangeSignal()
 
-	var (
-		backoff  *time.Timer
-		backoffC <-chan time.Time
-	)
+	//var (
+	//backoff  *time.Timer
+	//backoffC <-chan time.Time
+	//)
 	for {
 		select {
 		case _, ok := <-depthChangeSignal:
@@ -191,16 +204,16 @@ func (s *syncProvider) InitPeer(p *Peer) {
 				return
 			}
 
-			if backoff == nil {
-				backoff = time.NewTimer(SyncUpdateBackoff)
-			} else {
-				if !backoff.Stop() {
-					<-backoff.C
-				}
-				backoff.Reset(SyncUpdateBackoff)
-			}
-			backoffC = backoff.C
-		case <-backoffC:
+			//if backoff == nil {
+			//backoff = time.NewTimer(SyncUpdateBackoff)
+			//} else {
+			//if !backoff.Stop() {
+			//<-backoff.C
+			//}
+			//backoff.Reset(SyncUpdateBackoff)
+			//}
+			//backoffC = backoff.C
+			//case <-backoffC:
 			//newDepth := s.kad.NeighbourhoodDepth()
 			//if po >= newDepth && !wasWithinDepth {
 			//// previous depth is -1 because we did not have any streams with the client beforehand
@@ -215,7 +228,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 
 			// update subscriptions for this peer when depth changes
 			ndepth := s.kad.NeighbourhoodDepth()
-			sub, qui := syncSubscriptionsDiff(po, depth, ndepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
+			sub, qui := syncSubscriptionsDiff(po, -1, ndepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
 			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", sub, "quit", qui)
 			s.updateSyncSubscriptions(p, sub, qui)
 			depth = ndepth
@@ -253,7 +266,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 	}
 	for _, po := range quitBins {
 		p.logger.Debug("removing cursor info for peer", "bin", po)
-		p.deleteCursor(NewID(streamName, strconv.Itoa(po)))
+		p.deleteCursor(NewID(syncStreamName, strconv.Itoa(po)))
 	}
 }
 
@@ -333,6 +346,15 @@ func intRange(start, end int) (r []int) {
 		r = append(r, i)
 	}
 	return r
+}
+
+func checkKeyInSlice(k int, slice []int) (found bool) {
+	for _, v := range slice {
+		if v == k {
+			found = true
+		}
+	}
+	return
 }
 
 func (s *syncProvider) ParseKey(streamKey string) (interface{}, error) {
