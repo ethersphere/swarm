@@ -18,7 +18,6 @@ type Capabilities struct {
 }
 
 // NewCapabilities creates a new Capabilities container
-//
 // It optionally takes a change notification channel as argument. If this is nil, notifications will not be issued.
 func NewCapabilities(changeC chan<- capability) *Capabilities {
 	return &Capabilities{
@@ -58,12 +57,6 @@ func (c Capabilities) get(id uint8) capability {
 		}
 	}
 	return nil
-}
-
-// adds a capability module to the bitvector collection
-// does not protect against duplicate ids. Calling code should use registerModule instead
-func (c *Capabilities) add(cap capability) {
-	c.Flags = append(c.Flags, cap)
 }
 
 // sets bits on bitvector
@@ -125,7 +118,7 @@ func (c *Capabilities) registerModule(id uint8, length uint8) error {
 		return fmt.Errorf("capability %d already registered", id)
 	}
 	cap = newCapability(id, length)
-	c.add(cap)
+	c.Flags = append(c.Flags, cap)
 	return nil
 }
 
