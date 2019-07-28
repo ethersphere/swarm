@@ -1,28 +1,59 @@
-package main
+package network
 
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
+	"sync"
 )
 
-type capabilities []Cap
+type Capabilities struct {
+	idx  map[CapabilityId]int
+	caps []Capability
+	mu   sync.Mutex
+}
+
+func NewCapabilities() Capabilities {
+	c := Capabilities{
+		idx: make(map[CapabilityId]int),
+	}
+	return c
+}
 
 type CapabilityId uint64
 
-type Cap struct {
+type Capability struct {
 	id  CapabilityId
 	cap []bool
 }
 
-func NewCap(bitCount int, id CapabilityId) Cap {
-	return Cap{
+func NewCapability(id CapabilityId, bitCount int) Capability {
+	return Capability{
 		id:  id,
 		cap: make([]bool, bitCount),
 	}
 }
 
+func (c *Capability) Set(idx int) error {
+	l := len(c.cap)
+	if idx > l-1 {
+		return fmt.Errorf("index %d out of bounds (len=%d)", idx, l)
+	}
+	c.cap[idx] = true
+	return nil
+}
+
+func (c *Capability) Unset(idx int) error {
+	l := len(c.cap)
+	if idx > l-1 {
+		return fmt.Errorf("index %d out of bounds (len=%d)", idx, l)
+	}
+	c.cap[idx] = false
+	return nil
+}
+
 // implements encoding/BinaryMarshaler interface
-func (c Cap) MarshalBinary() ([]byte, error) {
+func (c Capability) MarshalBinary() ([]byte, error) {
 
 	// serialize bit vector length
 	l := make([]byte, 8)
@@ -56,7 +87,7 @@ func (c Cap) MarshalBinary() ([]byte, error) {
 }
 
 // implements encoding/BinaryUnmarshaler interface
-func (c Cap) UnmarshalBinary(s []byte) error {
+func (c Capability) UnmarshalBinary(s []byte) error {
 
 	// retrieve the bit vector length
 	idx := 0
@@ -85,7 +116,7 @@ func (c Cap) UnmarshalBinary(s []byte) error {
 	return nil
 }
 
-func (c *Cap) String() (s string) {
+func (c Capability) String() (s string) {
 	for _, b := range c.cap {
 		if b {
 			s += "1"
@@ -96,15 +127,37 @@ func (c *Cap) String() (s string) {
 	return s
 }
 
-func (c *capabilities) String() {
-
+func (c *Capabilities) add(cp Capability) error {
+	if _, ok := c.idx[cp.id]; ok {
+		return fmt.Errorf("Capability id %d already registered", cp.id)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.caps = append(c.caps, cp)
+	c.idx[cp.id] = len(c.caps) - 1
+	return nil
 }
 
-func main() {
-	c := NewCap(9, 42)
+func (c Capabilities) get(id CapabilityId) Capability {
+	fmt.Fprintf(os.Stderr, "id %v idx %v", id, c.idx[id])
+	return c.caps[c.idx[id]]
+}
+
+func (c Capabilities) String() (s string) {
+	for _, cp := range c.caps {
+		if s != "" {
+			s += ","
+		}
+		s += cp.String()
+	}
+	return s
+}
+
+func _main() {
+	c := NewCapability(42, 9)
 	fmt.Println(c)
-	c.cap[1] = true
-	c.cap[8] = true
+	c.Set(1)
+	c.Set(8)
 	fmt.Println(c)
 	m, _ := c.MarshalBinary()
 	fmt.Println(m)
@@ -114,4 +167,13 @@ func main() {
 	}
 	fmt.Println(c)
 	fmt.Println(c.String())
+
+	var cs Capabilities
+	cs.add(c)
+
+	c2 := NewCapability(157, 3)
+	c2.Set(2)
+	cs.add(c2)
+
+	fmt.Printf("%s\n", cs)
 }

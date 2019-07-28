@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -34,15 +35,17 @@ import (
 )
 
 var (
-	capabilitiesFlagRetrieve      = []byte{0x00, 0x01} // node retrieves data for itself
-	capabilitiesFlagPush          = []byte{0x00, 0x02} // node pushes own data to network
-	capabilitiesFlagRelayRetrieve = []byte{0x00, 0x10} // node relays retrieve requests for the network
-	capabilitiesFlagRelayPush     = []byte{0x00, 0x20} // node relays push requests for the network
-	capabilitiesFlagStorer        = []byte{0x80, 0x00} // node is part of network storage (sync)
+	capabilitiesFlagRetrieve      = 0
+	capabilitiesFlagPush          = 1
+	capabilitiesFlagRelayRetrieve = 4
+	capabilitiesFlagRelayPush     = 5
+	capabilitiesFlagStorer        = 15
 
 	// temporary presets to emulate the legacy LightNode/full node regime
-	fullCapability  capability
-	lightCapability capability
+	fullCapability       Capability
+	lightCapability      Capability
+	fullCapabilityBytes  []byte
+	lightCapabilityBytes []byte
 )
 
 const (
@@ -78,32 +81,48 @@ var DiscoverySpec = &protocols.Spec{
 func init() {
 	fullCapability = newFullCapability()
 	lightCapability = newLightCapability()
+
+	buf := bytes.Buffer{}
+	enc := gob.NewEncoder(&buf)
+	enc.Encode(&fullCapability)
+	fullCapabilityBytes = buf.Bytes()
+
+	buf = bytes.Buffer{}
+	enc = gob.NewEncoder(&buf)
+	enc.Encode(&lightCapability)
+	lightCapabilityBytes = buf.Bytes()
 }
 
 // temporary convenience functions for legacy "LightNode"
-func newLightCapability() capability {
-	c := newCapability(0, 2)
-	c.set(capabilitiesFlagRetrieve)
-	c.set(capabilitiesFlagPush)
+func newLightCapability() Capability {
+	c := NewCapability(0, 2)
+	c.Set(capabilitiesFlagRetrieve)
+	c.Set(capabilitiesFlagPush)
 	return c
 }
-func isLightCapability(c capability) bool {
-	return bytes.Equal(c, lightCapability)
+func isLightCapability(c Capability) bool {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	enc.Encode(&c)
+	return bytes.Equal(lightCapabilityBytes, buf.Bytes())
 }
 
 // temporary convenience functions for legacy "full node"
-func newFullCapability() capability {
-	c := newCapability(0, 2)
-	c.set(capabilitiesFlagRetrieve)
-	c.set(capabilitiesFlagPush)
-	c.set(capabilitiesFlagRelayRetrieve)
-	c.set(capabilitiesFlagRelayPush)
-	c.set(capabilitiesFlagStorer)
+func newFullCapability() Capability {
+	c := NewCapability(0, 2)
+	c.Set(capabilitiesFlagRetrieve)
+	c.Set(capabilitiesFlagPush)
+	c.Set(capabilitiesFlagRelayRetrieve)
+	c.Set(capabilitiesFlagRelayPush)
+	c.Set(capabilitiesFlagStorer)
 	return c
 }
 
-func isFullCapability(c capability) bool {
-	return bytes.Equal(c, fullCapability)
+func isFullCapability(c Capability) bool {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	enc.Encode(&c)
+	return bytes.Equal(fullCapabilityBytes, buf.Bytes())
 }
 
 // BzzConfig captures the config params used by the hive
@@ -119,14 +138,13 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	NetworkID     uint64
-	localAddr     *BzzAddr
-	mtx           sync.Mutex
-	handshakes    map[enode.ID]*HandshakeMsg
-	streamerSpec  *protocols.Spec
-	streamerRun   func(*BzzPeer) error
-	capabilities  *Capabilities     // capabilities control and state
-	capabilitiesC <-chan capability // reports changes in capabilities
+	NetworkID    uint64
+	localAddr    *BzzAddr
+	mtx          sync.Mutex
+	handshakes   map[enode.ID]*HandshakeMsg
+	streamerSpec *protocols.Spec
+	streamerRun  func(*BzzPeer) error
+	capabilities *Capabilities // capabilities control and state
 }
 
 // NewBzz is the swarm protocol constructor
@@ -135,16 +153,14 @@ type Bzz struct {
 // * overlay driver
 // * peer store
 func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
-	capabilitiesC := make(chan capability)
 	bzz := &Bzz{
-		Hive:          NewHive(config.HiveParams, kad, store),
-		NetworkID:     config.NetworkID,
-		localAddr:     &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes:    make(map[enode.ID]*HandshakeMsg),
-		streamerRun:   streamerRun,
-		streamerSpec:  streamerSpec,
-		capabilities:  NewCapabilities(capabilitiesC),
-		capabilitiesC: capabilitiesC,
+		Hive:         NewHive(config.HiveParams, kad, store),
+		NetworkID:    config.NetworkID,
+		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
+		handshakes:   make(map[enode.ID]*HandshakeMsg),
+		streamerRun:  streamerRun,
+		streamerSpec: streamerSpec,
+		capabilities: &Capabilities{},
 	}
 
 	if config.BootnodeMode {
@@ -164,9 +180,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 
 // Stop Implements node.Service
 func (b *Bzz) Stop() error {
-	err := b.Hive.Stop()
-	b.capabilities.destroy()
-	return err
+	return b.Hive.Stop()
 }
 
 // UpdateLocalAddr updates underlayaddress of the running node
@@ -341,7 +355,7 @@ type HandshakeMsg struct {
 	Version      uint64
 	NetworkID    uint64
 	Addr         *BzzAddr
-	Capabilities CapabilitiesMsg
+	Capabilities Capabilities
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -390,7 +404,7 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			Version:      uint64(BzzSpec.Version),
 			NetworkID:    b.NetworkID,
 			Addr:         b.localAddr,
-			Capabilities: b.capabilities.toMsg(),
+			Capabilities: *b.capabilities,
 			init:         make(chan bool, 1),
 			done:         make(chan struct{}),
 		}

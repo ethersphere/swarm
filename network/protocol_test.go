@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"os"
@@ -74,8 +75,8 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 }
 
 func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNode bool) *HandshakeMsg {
-	capabilities := NewCapabilities(nil)
-	var cap capability
+	capabilities := NewCapabilities()
+	var cap Capability
 	if lightNode {
 		cap = newLightCapability()
 	} else {
@@ -86,7 +87,7 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		Version:      version,
 		NetworkID:    networkId,
 		Addr:         addr,
-		Capabilities: capabilities.toMsg(),
+		Capabilities: capabilities,
 	}
 
 	return msg
@@ -302,7 +303,8 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	node := s.Nodes[0]
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
-	msg.Capabilities.get(0)[2] |= 0x40
+	cap := msg.Capabilities.get(0)
+	cap.Set(14)
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
@@ -369,18 +371,21 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			nodeCapabilities := Capabilities{}
+			var nodeCapabilitiesBytes []byte
 			if test.lightNode {
-				nodeCapabilities.add(newLightCapability())
+				nodeCapabilitiesBytes = lightCapabilityBytes
 			} else {
-				nodeCapabilities.add(newFullCapability())
+				nodeCapabilitiesBytes = fullCapabilityBytes
 			}
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for i, b := range pt.bzz.handshakes[node.ID()].Capabilities {
-					if !bytes.Equal(b, nodeCapabilities.Flags[i]) {
-						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities, nodeCapabilities.Flags)
+				for _, cp := range pt.bzz.handshakes[node.ID()].Capabilities.caps {
+					var buf bytes.Buffer
+					enc := gob.NewEncoder(&buf)
+					enc.Encode(&cp)
+					if !bytes.Equal(buf.Bytes(), nodeCapabilitiesBytes) {
+						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities, nodeCapabilitiesBytes)
 					}
 				}
 			case <-time.After(10 * time.Second):
