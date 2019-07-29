@@ -148,7 +148,7 @@ func TestListPinInfo(t *testing.T) {
 	if fileInfo.pinCounter != 1 {
 		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.pinCounter)
 	}
-	if fileInfo.isRaw != false {
+	if fileInfo.isRaw {
 		t.Fatalf("isRaw expected is false got is true")
 	}
 
