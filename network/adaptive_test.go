@@ -1,7 +1,11 @@
 package network
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -86,4 +90,29 @@ func TestCapabilitiesControl(t *testing.T) {
 			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.Cap)
 		}
 	}
+}
+
+func TestCapabilitiesRLP(t *testing.T) {
+	c := NewCapabilities()
+	c.add(&Capability{
+		Id:  42,
+		Cap: []bool{true, false, true},
+	})
+	c.add(&Capability{
+		Id:  666,
+		Cap: []bool{true, false, true, false, true, true, false, false, true},
+	})
+	buf := bytes.NewBuffer(nil)
+	err := rlp.Encode(buf, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(buf.Bytes())
+
+	var c2 Capabilities
+	err = rlp.Decode(buf, &c2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(c2)
 }

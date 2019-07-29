@@ -7,22 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Capabilities is the collection of capabilities for a Swarm node
-// It is user both to store the capabilities in the node, and
-// to communicate the node capabilities to its peers
-type Capabilities struct {
-	idx  map[CapabilityId]int
-	Caps []*Capability
-	mu   sync.Mutex
-}
-
-// NewCapabilities initializes a new Capabilities object
-func NewCapabilities() *Capabilities {
-	return &Capabilities{
-		idx: make(map[CapabilityId]int),
-	}
-}
-
 // CapabilityId defines a unique type of capability
 // @justelad concrete enough for ya?
 type CapabilityId uint64
@@ -78,10 +62,8 @@ func (c Capability) String() (s string) {
 // IsSameAs returns true if the given Capability object has the identical bit settings as the receiver
 func (c *Capability) IsSameAs(cp *Capability) bool {
 	if cp == nil {
-		fmt.Println("cp is nil!!!!")
 		return false
 	}
-	fmt.Printf("is same as: %s %s %d %d", c, cp, len(c.Cap), len(cp.Cap))
 	if len(c.Cap) != len(cp.Cap) {
 		return false
 	}
@@ -91,6 +73,22 @@ func (c *Capability) IsSameAs(cp *Capability) bool {
 		}
 	}
 	return true
+}
+
+// Capabilities is the collection of capabilities for a Swarm node
+// It is user both to store the capabilities in the node, and
+// to communicate the node capabilities to its peers
+type Capabilities struct {
+	idx  map[CapabilityId]int
+	Caps []*Capability
+	mu   sync.Mutex
+}
+
+// NewCapabilities initializes a new Capabilities object
+func NewCapabilities() *Capabilities {
+	return &Capabilities{
+		idx: make(map[CapabilityId]int),
+	}
 }
 
 // adds a capability to the Capabilities collection
@@ -132,15 +130,18 @@ func (c Capabilities) String() (s string) {
 // state of receiver is undefined on error
 func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 
-	idx := make(map[CapabilityId]int)
+	// make sure we have a pristine receiver
+	c.idx = make(map[CapabilityId]int)
+	c.Caps = []*Capability{}
+
 	// discard the Capabilities struct list item
 	_, err := s.List()
 	if err != nil {
 		return err
 	}
 
-	// retrieve the count of elements in the capability array
-	elementCount, err := s.List()
+	// discard the Capabilities Caps array list item
+	_, err = s.List()
 	if err != nil {
 		return err
 	}
@@ -148,28 +149,29 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 	// counter for the Capabilities.Caps array
 	i := 0
 
-	// The last two elements are the terminators of the Capabilities and Capabilities.Caps enclosures
-	for elementCount > 2 {
-
+	// All elements in array should be Capability type
+	for {
 		var cap Capability
 
-		// All elements in array should be Capability type
-		// if not throw error
+		// Decode the Capability from the list item
+		// if error means the end of the list we're done
+		// if not then oh-oh spaghettio's
 		err := s.Decode(&cap)
 		if err != nil {
+			if err == rlp.EOL {
+				break
+			}
 			return err
 		}
 
 		// Add the entry to the Capabilities array
 		c.Caps = append(c.Caps, &cap)
-		idx[cap.Id] = i
 
-		// elementCount decreases with one per flag plus one for the CapabilityId
-		elementCount -= uint64(len(cap.Cap) + 1)
-
+		// update the id to index map (the reason for the custom RLP)
+		// and increment the array index counter
+		c.idx[cap.Id] = i
 		i++
-		fmt.Printf("decoded cap: %v (%d,%d,%v)\n", cap, elementCount, i, cap.Id)
 	}
-	c.idx = idx
+
 	return nil
 }
