@@ -380,7 +380,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for _, cp := range pt.bzz.handshakes[node.ID()].Capabilities.caps {
+				for _, cp := range pt.bzz.handshakes[node.ID()].Capabilities.Caps {
 					var buf bytes.Buffer
 					enc := gob.NewEncoder(&buf)
 					enc.Encode(&cp)

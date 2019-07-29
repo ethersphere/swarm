@@ -66,9 +66,9 @@ func TestCapabilitiesControl(t *testing.T) {
 	}
 	// verify value
 	c4 = caps.get(1)
-	for i, b := range c4.cap {
+	for i, b := range c4.Cap {
 		if b != expects[0][i] {
-			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.cap)
+			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.Cap)
 		}
 	}
 
@@ -81,9 +81,9 @@ func TestCapabilitiesControl(t *testing.T) {
 	}
 	// verify value
 	c5 = caps.get(1)
-	for i, b := range c4.cap {
+	for i, b := range c4.Cap {
 		if b != expects[1][i] {
-			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.cap)
+			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.Cap)
 		}
 	}
 }
