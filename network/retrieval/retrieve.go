@@ -52,8 +52,7 @@ var (
 
 	lastReceivedRetrieveChunksMsg = metrics.GetOrRegisterGauge("network.retrieve.received_chunks", nil)
 
-	// Protocol spec
-	spec = &protocols.Spec{
+	Spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
 		Version:    1,
 		MaxMsgSize: 10 * 1024 * 1024,
@@ -111,7 +110,6 @@ type Retrieval struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
-	spec     *protocols.Spec
 	prices   protocols.Prices
 
 	quit chan struct{}
@@ -124,7 +122,6 @@ func New(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
 		peers:    make(map[enode.ID]*Peer),
 		netStore: ns,
 		quit:     make(chan struct{}),
-		spec:     spec,
 	}
 	r.createPriceOracle()
 	return r
@@ -149,14 +146,13 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 	return r.peers[id]
 }
 
-// Run protocol function
-func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, r.spec)
-	bp := network.NewBzzPeer(peer)
+// Run is being dispatched when 2 nodes connect
+func (r *Retrieval) Run(bp *network.BzzPeer) error {
 	sp := NewPeer(bp)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
-	return peer.Run(r.handleMsg(sp))
+
+	return sp.Peer.Run(r.handleMsg(sp))
 }
 
 func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error {
@@ -454,12 +450,20 @@ func (r *Retrieval) Stop() error {
 func (r *Retrieval) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    r.spec.Name,
-			Version: r.spec.Version,
-			Length:  r.spec.Length(),
-			Run:     r.Run,
+			Name:    Spec.Name,
+			Version: Spec.Version,
+			Length:  Spec.Length(),
+			Run:     r.runProtocol,
 		},
 	}
+}
+
+func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	peer := protocols.NewPeer(p, rw, Spec)
+	// TODO: fix, used in tests only. Incorrect, as we do not have access to the overlay address
+	bp := network.NewBzzPeer(peer)
+
+	return r.Run(bp)
 }
 
 func (r *Retrieval) APIs() []rpc.API {
