@@ -152,7 +152,7 @@ func TestApiTagLarge(t *testing.T) {
 	const contentLength = 4096 * 4095
 	testAPI(t, func(api *API, tags *chunk.Tags, toEncrypt bool) {
 		randomContentReader := io.LimitReader(crand.Reader, int64(contentLength))
-		tag, err := api.Tags.New("unnamed-tag", 0)
+		tag, err := api.Tags.Create("unnamed-tag", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -551,7 +551,7 @@ func TestDetectContentType(t *testing.T) {
 // putString provides singleton manifest creation on top of api.API
 func putString(ctx context.Context, a *API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	r := strings.NewReader(content)
-	tag, err := a.Tags.New("unnamed-tag", 0)
+	tag, err := a.Tags.Create("unnamed-tag", 0)
 
 	log.Trace("created new tag", "uid", tag.Uid)
 
