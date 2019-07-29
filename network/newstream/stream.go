@@ -98,12 +98,11 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 		quit:           make(chan struct{}),
 		baseKey:        baseKey,
 		logger:         log.New("base", hex.EncodeToString(baseKey)),
+		spec:           Spec,
 	}
 	for _, p := range providers {
 		slipStream.providers[p.StreamName()] = p
 	}
-
-	slipStream.spec = Spec
 
 	return slipStream
 }
@@ -226,6 +225,13 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 		}
 		streamRes.Streams = append(streamRes.Streams, descriptor)
 	}
+
+	select {
+	case <-s.quit:
+		return
+	default:
+	}
+
 	if err := p.Send(ctx, streamRes); err != nil {
 		p.logger.Error("failed to send StreamInfoRes to client", "err", err)
 	}
@@ -375,9 +381,8 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		p.Drop()
 		return
 	}
-	log.Debug("peer.handleGetRangeHead collecting batch", "from", msg.From, "ruid", msg.Ruid)
 	h, f, t, e, err := s.serverCollectBatch(ctx, p, provider, key, msg.From, 0)
-	p.logger.Debug("peer.serverCollectBatch", "stream", msg.Stream, "len(h)", len(h), "f", f, "t", t, "e", e, "err", err, "ruid", msg.Ruid)
+	p.logger.Debug("peer.serverCollectBatch", "stream", msg.Stream, "len(h)", len(h), "f", f, "t", t, "e", e, "err", err, "ruid", msg.Ruid, "msg.from", msg.From)
 	if err != nil {
 		p.logger.Error("erroring getting live batch for stream", "stream", msg.Stream, "err", err)
 		p.Drop()
@@ -391,7 +396,6 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 			// prevent sending an empty batch that resulted from db shutdown
 			return
 		default:
-			return
 			offered := OfferedHashes{
 				Ruid:      msg.Ruid,
 				LastIndex: msg.From,
@@ -404,15 +408,13 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 		}
 	}
 
-	o := offer{
+	p.mtx.Lock()
+	p.openOffers[msg.Ruid] = offer{
 		ruid:      msg.Ruid,
 		stream:    msg.Stream,
 		hashes:    h,
 		requested: time.Now(),
 	}
-
-	p.mtx.Lock()
-	p.openOffers[msg.Ruid] = o
 	p.mtx.Unlock()
 
 	offered := OfferedHashes{
@@ -503,11 +505,11 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 // handleOfferedHashes handles the OfferedHashes wire protocol message.
 // this message is handled by the CLIENT.
 func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *OfferedHashes) {
-	p.logger.Debug("peer.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
+	p.logger.Debug("stream.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	hashes := msg.Hashes
 	lenHashes := len(hashes)
 	if lenHashes%HashSize != 0 {
-		p.logger.Error("error invalid hashes length", "len", lenHashes, "ruid", msg.Ruid)
+		p.logger.Error("invalid hashes length", "len", lenHashes, "ruid", msg.Ruid)
 		p.Drop()
 		return
 	}
@@ -529,17 +531,17 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	}
 
 	w.to = &msg.LastIndex
+
+	// this code block handles the case of a gap on the interval on the server side
+	// lenhashes == 0 means there's no hashes in the requested range with the upper bound of
+	// the LastIndex on the incoming message
 	if lenHashes == 0 {
-		p.logger.Debug("len(hashes)==0", "ruid", w.ruid)
-		// received zero hashes count, just fill the intervals, remove open want and request next range
-		err := p.addInterval(w.stream, w.from, *w.to)
-		if err != nil {
-			p.logger.Error("error persisting interval", "stream", w.stream, "from", w.from, "to", w.to, "err", err)
+		p.logger.Debug("handling empty offered hashes - sealing empty interval", "ruid", w.ruid)
+		if err := p.sealWant(w); err != nil {
+			p.logger.Error("error persisting interval", "from", w.from, "to", w.to, "err", err)
+			p.Drop()
 			return
 		}
-		p.mtx.Lock()
-		delete(p.openWants, msg.Ruid)
-		p.mtx.Unlock()
 		cur, ok := p.getCursor(w.stream)
 		if !ok {
 			metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
@@ -553,7 +555,6 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 				p.Drop()
 				return
 			}
-
 		} else {
 			if err := s.requestStreamRange(ctx, p, w.stream, cur); err != nil {
 				streamRequestNextIntervalFail.Inc(1)
@@ -580,16 +581,13 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		c := chunk.Address(hash)
 
 		if _, wait := provider.NeedData(ctx, hash); wait != nil {
-
-			p.logger.Trace("checked offered hash", "need", "true", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
 			ctr++
 			w.hashes[c.Hex()] = true
 			// set the bit, so create a request
 			want.Set(i / HashSize)
-			p.logger.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true, "ruid", msg.Ruid)
+			p.logger.Trace("need data", "need", "true", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
 		} else {
-
-			p.logger.Trace("checked offered hash", "need", "false", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
+			p.logger.Trace("dont need data", "need", "false", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
 			w.hashes[c.Hex()] = false
 		}
 	}

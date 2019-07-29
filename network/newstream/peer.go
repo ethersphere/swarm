@@ -162,6 +162,17 @@ func (p *Peer) nextInterval(stream ID, ceil uint64) (start, end uint64, empty bo
 	return start, end, empty, nil
 }
 
+func (p *Peer) sealWant(w *want) error {
+	err := p.addInterval(w.stream, w.from, *w.to)
+	if err != nil {
+		return err
+	}
+	p.mtx.Lock()
+	delete(p.openWants, w.ruid)
+	p.mtx.Unlock()
+	return nil
+}
+
 func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
