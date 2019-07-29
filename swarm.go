@@ -601,8 +601,13 @@ type SwapInfo struct {
 
 // Balance returns the current SWAP balance for a given peer
 func (s *SwapInfo) Balance(peer enode.ID) (int64, error) {
-	peerBalance, err := s.Swap.PeerBalance(peer)
-	return peerBalance, err
+	peerBalance, err := s.Swap.Balance(peer)
+	if err != nil && err != state.ErrNotFound {
+		return peerBalance, err
+	}
+	// A peer not being found in the balances map is not considered an error at this level
+	// Just a balance of 0
+	return peerBalance, nil
 }
 
 // Balances returns the current SWAP balances for all known peers
