@@ -80,7 +80,7 @@ type Bzz struct {
 	mtx          sync.Mutex
 	handshakes   map[enode.ID]*HandshakeMsg
 	streamerSpec *protocols.Spec
-	streamerRun  func(*p2p.Peer, p2p.MsgReadWriter) error
+	streamerRun  func(*BzzPeer) error
 }
 
 // NewBzz is the swarm protocol constructor
@@ -88,7 +88,7 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*p2p.Peer, p2p.MsgReadWriter) error) *Bzz {
+func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
 	bzz := &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
@@ -148,7 +148,7 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Name:    b.streamerSpec.Name,
 			Version: b.streamerSpec.Version,
 			Length:  b.streamerSpec.Length(),
-			Run:     b.streamerRun,
+			Run:     b.RunProtocol(b.streamerSpec, b.streamerRun),
 		})
 	}
 	return protocol
