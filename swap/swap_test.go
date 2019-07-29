@@ -83,7 +83,7 @@ func TestPeerBalance(t *testing.T) {
 	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
-	b, err := swap.PeerBalance(testPeer.ID())
+	b, err := swap.Balance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestPeerBalance(t *testing.T) {
 
 	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
-	_, err = swap.PeerBalance(id)
+	_, err = swap.Balance(id)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
@@ -102,7 +102,8 @@ func TestPeerBalance(t *testing.T) {
 	}
 }
 
-func TestGetAllBalances(t *testing.T) {
+// Test getting balances for all known peers
+func TestAllBalances(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
@@ -134,6 +135,126 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 	if !reflect.DeepEqual(balances, expectedBalances) {
 		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
 	}
+}
+
+type storeKeysTestCases struct {
+	nodeID                    enode.ID
+	expectedBalanceKey        string
+	expectedSentChequeKey     string
+	expectedReceivedChequeKey string
+}
+
+// Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
+func TestStoreKeys(t *testing.T) {
+	testCases := []storeKeysTestCases{
+		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"},
+		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"},
+		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"},
+	}
+	testStoreKeys(t, testCases)
+}
+
+func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
+			actualBalanceKey := balanceKey(testCase.nodeID)
+			actualSentChequeKey := sentChequeKey(testCase.nodeID)
+			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID)
+
+			if actualBalanceKey != testCase.expectedBalanceKey {
+				t.Fatalf("Expected balance key to be %s, but is %s instead.", testCase.expectedBalanceKey, actualBalanceKey)
+			}
+			if actualSentChequeKey != testCase.expectedSentChequeKey {
+				t.Fatalf("Expected sent cheque key to be %s, but is %s instead.", testCase.expectedSentChequeKey, actualSentChequeKey)
+			}
+			if actualReceivedChequeKey != testCase.expectedReceivedChequeKey {
+				t.Fatalf("Expected received cheque key to be %s, but is %s instead.", testCase.expectedReceivedChequeKey, actualReceivedChequeKey)
+			}
+
+			var nodeID enode.ID
+			nodeID = keyToID(actualBalanceKey, balancePrefix)
+			if nodeID != testCase.nodeID {
+				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
+			}
+			nodeID = keyToID(actualSentChequeKey, sentChequePrefix)
+			if nodeID != testCase.nodeID {
+				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
+			}
+			nodeID = keyToID(actualReceivedChequeKey, receivedChequePrefix)
+			if nodeID != testCase.nodeID {
+				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
+			}
+		})
+	}
+}
+
+// Test the correct storing of peer balances through the store after node balance updates
+func TestStoreBalances(t *testing.T) {
+	// create a test swap account
+	s, testDir := newTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	var expectedBalancePeers []string
+	var err error
+
+	// store balance peers should be empty at this point
+	compareBalancePeers(t, s, expectedBalancePeers)
+
+	// modify balances in memory but not in store
+	testPeerID := enode.HexID("8418f4eeb20735630cfff00459b7fc7ec1674c9f77f19bab23e895706bfd1032")
+	s.balances[testPeerID] = 144
+	// store balance peers should still be empty at this point
+	compareBalancePeers(t, s, expectedBalancePeers)
+
+	// modify balances both in memory and in store
+	peerBalance, err := s.updateBalance(testPeerID, 29)
+	if err != nil {
+		t.Error("Unexpected balance update failure.")
+	}
+	// store balance peers should now include ONLY the test peer
+	expectedBalancePeers = []string{balanceKey(testPeerID)}
+	compareBalancePeers(t, s, expectedBalancePeers)
+	// store balance for peer should match
+	comparePeerBalance(t, s, testPeerID, peerBalance)
+
+	// update balances for second peer
+	testPeer2ID := enode.HexID("fdbb55b4d9b0011c93e736bb1b736013943890f2a08640f89de00e738a8b7986")
+	peer2Balance, err := s.updateBalance(testPeer2ID, -76)
+	if err != nil {
+		t.Error("Unexpected balance update failure.")
+	}
+	// store balance peers should now include both test peers
+	expectedBalancePeers = []string{balanceKey(testPeerID), balanceKey(testPeer2ID)}
+	compareBalancePeers(t, s, expectedBalancePeers)
+	// store balance for each peer should match
+	comparePeerBalance(t, s, testPeerID, peerBalance)
+	comparePeerBalance(t, s, testPeer2ID, peer2Balance)
+}
+
+func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
+	var peerBalance int64
+	err := s.stateStore.Get(balanceKey(peer), &peerBalance)
+	if err != nil {
+		t.Error("Unexpected peer balance retrieval failure.")
+	}
+	if peerBalance != expectedPeerBalance {
+		t.Errorf("Expected peer store balance to be %d, but is %d instead.", expectedPeerBalance, peerBalance)
+	}
+}
+
+func compareBalancePeers(t *testing.T, s *Swap, expectedBalancePeers []string) {
+	storeBalancePeers := getStoreBalancePeers(t, s)
+	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
+		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
+	}
+}
+
+func getStoreBalancePeers(t *testing.T, s *Swap) []string {
+	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
+	if err != nil {
+		t.Error("Unexpected balance peer retrieval failure.")
+	}
+	return storeBalancePeers
 }
 
 // Test that repeated bookings do correct accounting
