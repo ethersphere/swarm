@@ -66,6 +66,12 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 	s.logger.Debug("syncProvider.NeedData", "key", hex.EncodeToString(key))
 	start := time.Now()
 
+	select {
+	case <-s.quit:
+		return false, nil
+	default:
+	}
+
 	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
 		s.logger.Debug("returning as if we dont need data")

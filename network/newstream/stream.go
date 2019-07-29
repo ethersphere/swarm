@@ -638,13 +638,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		p.Drop()
 		return
 	}
-	var timeoutChan <-chan time.Time
-	if w.head {
-		timeoutChan = time.After(3 * time.Second)
-		//timeoutChan = make(chan time.Time)
-	} else {
-		timeoutChan = time.After(5 * time.Second)
-	}
+
 	select {
 	case err := <-errc:
 		if err != nil {
@@ -653,16 +647,12 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 			p.Drop()
 			return
 		}
-		err = p.addInterval(w.stream, w.from, *w.to)
-		if err != nil {
+		if err := p.sealWant(w); err != nil {
 			p.logger.Error("error persisting interval", "from", w.from, "to", w.to, "err", err)
 			p.Drop()
 			return
 		}
-		p.mtx.Lock()
-		delete(p.openWants, msg.Ruid)
-		p.mtx.Unlock()
-	case <-timeoutChan:
+	case <-time.After(5 * time.Second):
 		log.Error("batch has timed out", "ruid", w.ruid)
 		close(w.done)
 		p.mtx.Lock()
@@ -670,15 +660,13 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		p.mtx.Unlock()
 	case <-w.done:
 		p.logger.Debug("batch empty, sealing interval", "ruid", w.ruid)
-		err = p.addInterval(w.stream, w.from, *w.to)
-		if err != nil {
+		if err := p.sealWant(w); err != nil {
 			p.logger.Error("error persisting interval", "from", w.from, "to", w.to, "err", err)
 			p.Drop()
 			return
 		}
-		p.mtx.Lock()
-		delete(p.openWants, msg.Ruid)
-		p.mtx.Unlock()
+	case <-s.quit:
+		return
 	}
 	cur, ok := p.getCursor(w.stream)
 	if !ok {
@@ -686,7 +674,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
 		return
 	}
-	p.logger.Debug("batch finished, going to request the next", "ruid", w.ruid, "stream", w.stream)
+	p.logger.Debug("batch finished, requesting next", "ruid", w.ruid, "stream", w.stream)
 	if w.head {
 		if err := s.requestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
 			streamRequestNextIntervalFail.Inc(1)
@@ -708,11 +696,10 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 // the method is to ensure that all chunks in the requested batch is sent to the client
 func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes) {
 	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid, "bv", msg.BitVector)
-	// Get the length of the original offer from state
-	// get the offered hashes themselves
-	p.mtx.Lock()
+
+	p.mtx.RLock()
 	offer, ok := p.openOffers[msg.Ruid]
-	p.mtx.Unlock()
+	p.mtx.RUnlock()
 	if !ok {
 		p.logger.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid)
 		p.Drop()
@@ -737,7 +724,6 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
 		p.logger.Error("error initiaising bitvector", "l", l, "ll", len(offer.hashes), "err", err)
-		panic("err")
 		p.Drop()
 		return
 	}
@@ -774,6 +760,7 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 					p.logger.Debug("sending chunk delivery")
 					if err := p.Send(ctx, cd); err != nil {
 						p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
+						p.Drop()
 					}
 				}(cd)
 				frameSize = 0
@@ -788,6 +775,7 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 	if frameSize > 0 {
 		if err := p.Send(ctx, cd); err != nil {
 			p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
+			p.Drop()
 		}
 	}
 }
@@ -1008,5 +996,6 @@ func (s *SlipStream) Stop() error {
 	for _, v := range s.providers {
 		v.Close()
 	}
+
 	return nil
 }
