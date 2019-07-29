@@ -39,6 +39,7 @@ to suggest peers to bootstrap connectivity
 // HiveParams holds the config options to hive
 type HiveParams struct {
 	Discovery             bool  // if want discovery of not
+	DisableAutoConnect    bool  // this flag disables the auto connect loop
 	PeersBroadcastSetSize uint8 // how many peers to use when relaying
 	MaxPeersPerRequest    uint8 // max size for peer address batches
 	KeepAliveInterval     time.Duration
@@ -97,7 +98,9 @@ func (h *Hive) Start(server *p2p.Server) error {
 	// ticker to keep the hive alive
 	h.ticker = time.NewTicker(h.KeepAliveInterval)
 	// this loop is doing bootstrapping and maintains a healthy table
-	go h.connect()
+	if !h.DisableAutoConnect {
+		go h.connect()
+	}
 	return nil
 }
 
