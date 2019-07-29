@@ -32,8 +32,12 @@ import (
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 )
 
-var ErrNotASwapContract = errors.New("not a swap contract")
-var ErrTransactionReverted = errors.New("Transaction reverted")
+var (
+	// ErrNotASwapContract is given when an address is verified not to have a SWAP contract based on its bytecode
+	ErrNotASwapContract = errors.New("not a swap contract")
+	// ErrTransactionReverted is given when the transaction that submits or cashes a cheque is reverted
+	ErrTransactionReverted = errors.New("Transaction reverted")
+)
 
 // Validator struct -> put validator in implementation of Swap. Make the validator a package level function and implement this in Swap
 
@@ -105,7 +109,7 @@ func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) 
 	if err != nil {
 		return nil, err
 	}
-	// indicate wether the transaction did nnot revert
+	// indicate whether the transaction did not revert
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		return nil, ErrTransactionReverted
 	}
