@@ -603,9 +603,12 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 
 	errc := s.clientSealBatch(p, provider, w)
 
-	// this case happens when the interval is a gap - lenHashes is 0 because there are no hashes in the
-	// specified range, and ctr would obviously 0 because there's nothing to iterate over
-	if ctr == 0 && lenHashes == 0 {
+	if ctr == 0 {
+		// this handles the case that there are no hashes we are interested in (ctr==0)
+		// but some hashes were recieved by the server. the closed channel will result in
+		// clientSealBatch goroutine in returning, then in the following select case below
+		// the w.done channel is selected, in turn sealing the interval we are not interested in
+		// then requesting the next batch
 		p.logger.Debug("sending empty wanted hashes", "ruid", msg.Ruid)
 		streamEmptyWantedHashes.Inc(1)
 		wantedHashesMsg = WantedHashes{
@@ -614,21 +617,12 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		}
 		close(w.done)
 	} else {
-		// this case is when there ARE hashes in the range but we dont want any
-		if ctr == 0 {
-			wantedHashesMsg = WantedHashes{
-				Ruid:      msg.Ruid,
-				BitVector: []byte{},
-			}
-			close(w.done)
-		} else {
-			// there are some hashes in the offer and we want some
-			p.logger.Debug("sending non-empty wanted hashes", "ruid", msg.Ruid, "bv", want.Bytes())
-			streamWantedHashes.Inc(1)
-			wantedHashesMsg = WantedHashes{
-				Ruid:      msg.Ruid,
-				BitVector: want.Bytes(),
-			}
+		// there are some hashes in the offer and we want some
+		p.logger.Debug("sending non-empty wanted hashes", "ruid", msg.Ruid, "len(bv)", len(want.Bytes()))
+		streamWantedHashes.Inc(1)
+		wantedHashesMsg = WantedHashes{
+			Ruid:      msg.Ruid,
+			BitVector: want.Bytes(),
 		}
 	}
 
