@@ -29,10 +29,11 @@ type ExecAdapterConfig struct {
 
 // ExecNode is a node that is executed locally
 type ExecNode struct {
-	adapter *ExecAdapter
-	config  NodeConfig
-	cmd     *exec.Cmd
-	info    NodeInfo
+	adapter  *ExecAdapter
+	config   NodeConfig
+	cmd      *exec.Cmd
+	info     NodeInfo
+	waitChan chan error
 }
 
 // NewExecAdapter creates an ExecAdapter by receiving a ExecAdapterConfig
@@ -69,9 +70,10 @@ func (a ExecAdapter) NewNode(config NodeConfig) Node {
 		ID: config.ID,
 	}
 	node := &ExecNode{
-		config:  config,
-		adapter: &a,
-		info:    info,
+		config:   config,
+		adapter:  &a,
+		info:     info,
+		waitChan: make(chan error),
 	}
 	return node
 }
@@ -136,10 +138,9 @@ func (n *ExecNode) Start() error {
 	}
 
 	// Wait channel from cmd.Wait() to know if the cmd exited before successful rpc.Dial call
-	waitCh := make(chan error)
-	go func(cmd *exec.Cmd) {
+	go func(cmd *exec.Cmd, waitCh chan error) {
 		waitCh <- cmd.Wait()
-	}(n.cmd)
+	}(n.cmd, n.waitChan)
 
 	// Wait for the node to start
 	var client *rpc.Client
@@ -157,7 +158,7 @@ func (n *ExecNode) Start() error {
 		}
 		// rpc.Dial is failing, so let's check if command exited due to TCP/UDP pair fail
 		select {
-		case <-waitCh:
+		case <-n.waitChan:
 			// Command exited
 
 			// Restart command, as the process got killed due to tcp/udp pair of ports being taken
@@ -176,9 +177,9 @@ func (n *ExecNode) Start() error {
 			}
 
 			// Wait channel from cmd.Wait() to know if the cmd exited before successful rpc.Dial call
-			go func(cmd *exec.Cmd) {
+			go func(cmd *exec.Cmd, waitCh chan error) {
 				waitCh <- cmd.Wait()
-			}(n.cmd)
+			}(n.cmd, n.waitChan)
 
 		default:
 			// Wait hasn't returned, so Command is still running...
@@ -225,12 +226,8 @@ func (n *ExecNode) Stop() error {
 	}
 
 	// Wait for the process to terminate or timeout
-	waitErr := make(chan error)
-	go func() {
-		waitErr <- n.cmd.Wait()
-	}()
 	select {
-	case err := <-waitErr:
+	case err := <-n.waitChan:
 		return err
 	case <-time.After(20 * time.Second):
 		return n.cmd.Process.Kill()
