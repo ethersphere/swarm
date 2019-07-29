@@ -48,9 +48,9 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 PublicAPI
 	stateStore          state.Store          // stateStore is needed in order to keep balances across sessions
-	lock                sync.RWMutex         // lock the balances
+	lock                sync.RWMutex         // lock the store
 	balances            map[enode.ID]int64   // map of balances for each peer
-	cheques             map[enode.ID]*Cheque // map of balances for each peer
+	cheques             map[enode.ID]*Cheque // map of cheques for each peer
 	peers               map[enode.ID]*Peer   // map of all swap Peers
 	backend             cswap.Backend        // the backend (blockchain) used
 	owner               *Owner               // contract access
@@ -99,6 +99,29 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return sw
 }
 
+const balancePrefix = "balance_"
+const sentChequePrefix = "sent_cheque_"
+const receivedChequePrefix = "received_cheque_"
+
+// returns the store key for retrieving a peer's balance
+func balanceKey(peer enode.ID) string {
+	return balancePrefix + peer.String()
+}
+
+// returns the store key for retrieving a peer's last sent cheque
+func sentChequeKey(peer enode.ID) string {
+	return sentChequePrefix + peer.String()
+}
+
+// returns the store key for retrieving a peer's last received cheque
+func receivedChequeKey(peer enode.ID) string {
+	return receivedChequePrefix + peer.String()
+}
+
+func keyToID(key string, prefix string) enode.ID {
+	return enode.HexID(key[len(prefix):])
+}
+
 // createOwner assings keys and addresses
 func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
 	pubkey := &prvkey.PublicKey
@@ -122,7 +145,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	defer s.lock.Unlock()
 
 	// load existing balances from the state store
-	err = s.loadState(peer)
+	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		log.Error("error while loading balance for peer", "peer", peer.ID().String())
 		return
@@ -168,7 +191,7 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	s.balances[peer] += amount
 	//save the new balance to the state store
 	peerBalance := s.balances[peer]
-	err := s.stateStore.Put(peer.String(), &peerBalance)
+	err := s.stateStore.Put(balanceKey(peer), &peerBalance)
 	if err != nil {
 		log.Error("error while storing balance for peer", "peer", peer.String())
 	}
@@ -176,9 +199,21 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	return peerBalance, err
 }
 
+// loadBalance loads balances from the state store (persisted)
+func (s *Swap) loadBalance(peer enode.ID) (err error) {
+	var peerBalance int64
+	//only load if the current instance doesn't already have this peer's
+	//balance in memory
+	if _, ok := s.balances[peer]; !ok {
+		err = s.stateStore.Get(balanceKey(peer), &peerBalance)
+		s.balances[peer] = peerBalance
+	}
+	return
+}
+
 // logBalance is a helper function to log the current balance of a peer
 func (s *Swap) logBalance(peer *protocols.Peer) {
-	err := s.loadState(peer)
+	err := s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.String()))
 	} else {
@@ -198,7 +233,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
 	s.cheques[peer] = cheque
 
-	err = s.stateStore.Put(peer.String()+"_cheques", &cheque)
+	err = s.stateStore.Put(sentChequeKey(peer), &cheque)
 	// TODO: error handling might be quite more complex
 	if err != nil {
 		log.Error("error while storing the last cheque: %s", err.Error())
@@ -242,7 +277,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// we need to ignore the error check when loading from the StateStore,
 	// as an error might indicate that there is no existing cheque, which
 	// could mean it's the first interaction, which is absolutely valid
-	_ = s.loadCheque(peer)
+	_ = s.loadLastSentCheque(peer)
 	lastCheque := s.cheques[peer]
 
 	if lastCheque == nil {
@@ -270,18 +305,14 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	return cheque, err
 }
 
-// PeerBalance returns the balance for a given peer
-func (s *Swap) PeerBalance(peer enode.ID) (int64, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	var peerBalance int64
+// Balance returns the balance for a given peer
+func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	var err error
-
-	// load balance from memory
-	peerBalance, keyExists := s.balances[peer]
-	if !keyExists {
-		// if not in memory, try to load balance from disk
-		err = s.stateStore.Get(peer.String(), &peerBalance)
+	// check the balance in memory
+	peerBalance, ok := s.balances[peer]
+	// if not present, check in disk
+	if !ok {
+		err = s.stateStore.Get(balanceKey(peer), &peerBalance)
 	}
 	return peerBalance, err
 }
@@ -290,15 +321,15 @@ func (s *Swap) PeerBalance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// get list of all known SWAP peers
-	swapPeers, err := s.Peers()
+	// get list of all known SWAP peers to have a balance
+	swapPeers, err := s.BalancePeers()
 	if err != nil {
 		return nil, err
 	}
 
 	// get balance for list of peers
 	for _, peer := range swapPeers {
-		peerBalance, err := s.PeerBalance(peer)
+		peerBalance, err := s.Balance(peer)
 		if err != nil {
 			return nil, err
 		}
@@ -308,28 +339,26 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
-// Peers returns a list of every peer known through SWAP
-func (s *Swap) Peers() (peers []enode.ID, err error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
+// BalancePeers returns a list of every peer known to have a balance set through SWAP
+func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
 	knownPeers := make(map[enode.ID]bool)
 
-	// get peer IDs from store
-	storePeers, err := s.stateStore.Keys()
+	// add in-memory balance peers and mark as present
+	for peerID := range s.balances {
+		peers = append(peers, peerID)
+		knownPeers[peerID] = true
+	}
+
+	// get balance keys from store
+	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
 	if err != nil {
 		return nil, err
 	}
 
-	// add store peers to result and mark as present
-	for _, storePeer := range storePeers {
-		peerID := enode.HexID(storePeer)
-		knownPeers[peerID] = true
-		peers = append(peers, peerID)
-	}
-
-	// add in-memory peers to result if not present
-	for peerID := range s.balances {
+	// add balance peer to result if not present in memory
+	for _, storeBalancePeer := range storeBalancePeers {
+		// take balance key and turn into node ID
+		peerID := keyToID(storeBalancePeer, balancePrefix)
 		if _, peerExists := knownPeers[peerID]; !peerExists {
 			peers = append(peers, peerID)
 		}
@@ -338,38 +367,13 @@ func (s *Swap) Peers() (peers []enode.ID, err error) {
 	return peers, nil
 }
 
-// GetLastCheque returns the last cheque for a given peer
-func (s *Swap) GetLastCheque(peer enode.ID) (*Cheque, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	if lc, ok := s.cheques[peer]; ok {
-		return lc, nil
-	}
-
-	return nil, errors.New("Peer not found")
-}
-
-// loadStates loads balances from the state store (persisted)
-func (s *Swap) loadState(peer *protocols.Peer) (err error) {
-	var peerBalance int64
-	peerID := peer.ID()
-	//only load if the current instance doesn't already have this peer's
-	//balance in memory
-	if _, ok := s.balances[peerID]; !ok {
-		err = s.stateStore.Get(peerID.String(), &peerBalance)
-		s.balances[peerID] = peerBalance
-	}
-	return
-}
-
-//loadCheque loads the last cheque for a peer from the state store (persisted)
-func (s *Swap) loadCheque(peer enode.ID) (err error) {
+// loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
+func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	//only load if the current instance doesn't already have this peer's
 	//last cheque in memory
 	var cheque *Cheque
 	if _, ok := s.cheques[peer]; !ok {
-		err = s.stateStore.Get(peer.String()+"_cheques", &cheque)
+		err = s.stateStore.Get(sentChequeKey(peer), &cheque)
 		s.cheques[peer] = cheque
 	}
 	return
@@ -379,7 +383,7 @@ func (s *Swap) loadCheque(peer enode.ID) (err error) {
 func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.stateStore.Get(peer.String()+"_cheques_received", &cheque)
+	s.stateStore.Get(receivedChequeKey(peer), &cheque)
 	return
 }
 
@@ -387,7 +391,7 @@ func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
 func (s *Swap) saveLastReceivedCheque(peer enode.ID, cheque *Cheque) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.stateStore.Put(peer.String()+"_cheques_received", cheque)
+	return s.stateStore.Put(receivedChequeKey(peer), cheque)
 }
 
 // Close cleans up swap
