@@ -102,6 +102,7 @@ func TestPeerBalance(t *testing.T) {
 	}
 }
 
+// Test getting balances for all known peers
 func TestAllBalances(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
@@ -143,6 +144,7 @@ type storeKeysTestCases struct {
 	expectedReceivedChequeKey string
 }
 
+// Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
 func TestStoreKeys(t *testing.T) {
 	testCases := []storeKeysTestCases{
 		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"},
@@ -186,6 +188,7 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 	}
 }
 
+// Test the correct storing of peer balances through the store after node balance updates
 func TestStoreBalances(t *testing.T) {
 	// create a test swap account
 	s, testDir := newTestSwap(t)
