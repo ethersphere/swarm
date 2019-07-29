@@ -343,22 +343,22 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
 	knownPeers := make(map[enode.ID]bool)
 
+	// add in-memory balance peers and mark as present
+	for peerID := range s.balances {
+		peers = append(peers, peerID)
+		knownPeers[peerID] = true
+	}
+
 	// get balance keys from store
 	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
 	if err != nil {
 		return nil, err
 	}
 
-	// add peers with balance to result and mark as present
+	// add balance peer to result if not present in memory
 	for _, storeBalancePeer := range storeBalancePeers {
 		// take balance key and turn into node ID
 		peerID := keyToID(storeBalancePeer, balancePrefix)
-		knownPeers[peerID] = true
-		peers = append(peers, peerID)
-	}
-
-	// add in-memory balance peers to result if not present
-	for peerID := range s.balances {
 		if _, peerExists := knownPeers[peerID]; !peerExists {
 			peers = append(peers, peerID)
 		}
