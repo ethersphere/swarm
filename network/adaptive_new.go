@@ -1,10 +1,7 @@
 package network
 
 import (
-	//	"encoding/binary"
 	"fmt"
-	//	"github.com/ethereum/go-ethereum/rlp"
-	//	"io"
 	"sync"
 )
 
@@ -135,6 +132,7 @@ func (c *Capability) Unset(idx int) error {
 //}
 
 func (c Capability) String() (s string) {
+	s = fmt.Sprintf("%d:", c.Id)
 	for _, b := range c.Cap {
 		if b {
 			s += "1"
@@ -143,6 +141,15 @@ func (c Capability) String() (s string) {
 		}
 	}
 	return s
+}
+
+func (c Capability) IsSameAs(cp Capability) bool {
+	for i, b := range cp.Cap {
+		if b != c.Cap[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Capabilities) add(cp Capability) error {

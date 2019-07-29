@@ -17,9 +17,7 @@
 package network
 
 import (
-	"bytes"
 	"crypto/ecdsa"
-	"encoding/gob"
 	"flag"
 	"fmt"
 	"os"
@@ -371,21 +369,18 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var nodeCapabilitiesBytes []byte
+			var nodeCapability Capability
 			if test.lightNode {
-				nodeCapabilitiesBytes = lightCapabilityBytes
+				nodeCapability = lightCapability
 			} else {
-				nodeCapabilitiesBytes = fullCapabilityBytes
+				nodeCapability = fullCapability
 			}
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
 				for _, cp := range pt.bzz.handshakes[node.ID()].Capabilities.Caps {
-					var buf bytes.Buffer
-					enc := gob.NewEncoder(&buf)
-					enc.Encode(&cp)
-					if !bytes.Equal(buf.Bytes(), nodeCapabilitiesBytes) {
-						t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].Capabilities, nodeCapabilitiesBytes)
+					if cp.String() != nodeCapability.String() {
+						t.Fatalf("peer LightNode flag is %v, should be %v", cp.String(), nodeCapability.String())
 					}
 				}
 			case <-time.After(10 * time.Second):

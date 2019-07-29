@@ -17,9 +17,7 @@
 package network
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -81,35 +79,22 @@ var DiscoverySpec = &protocols.Spec{
 func init() {
 	fullCapability = newFullCapability()
 	lightCapability = newLightCapability()
-
-	buf := bytes.Buffer{}
-	enc := gob.NewEncoder(&buf)
-	enc.Encode(&fullCapability)
-	fullCapabilityBytes = buf.Bytes()
-
-	buf = bytes.Buffer{}
-	enc = gob.NewEncoder(&buf)
-	enc.Encode(&lightCapability)
-	lightCapabilityBytes = buf.Bytes()
 }
 
 // temporary convenience functions for legacy "LightNode"
 func newLightCapability() Capability {
-	c := NewCapability(0, 2)
+	c := NewCapability(0, 16)
 	c.Set(capabilitiesFlagRetrieve)
 	c.Set(capabilitiesFlagPush)
 	return c
 }
 func isLightCapability(c Capability) bool {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	enc.Encode(&c)
-	return bytes.Equal(lightCapabilityBytes, buf.Bytes())
+	return lightCapability.IsSameAs(c)
 }
 
 // temporary convenience functions for legacy "full node"
 func newFullCapability() Capability {
-	c := NewCapability(0, 2)
+	c := NewCapability(0, 16)
 	c.Set(capabilitiesFlagRetrieve)
 	c.Set(capabilitiesFlagPush)
 	c.Set(capabilitiesFlagRelayRetrieve)
@@ -119,10 +104,7 @@ func newFullCapability() Capability {
 }
 
 func isFullCapability(c Capability) bool {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	enc.Encode(&c)
-	return bytes.Equal(fullCapabilityBytes, buf.Bytes())
+	return fullCapability.IsSameAs(c)
 }
 
 // BzzConfig captures the config params used by the hive
@@ -144,7 +126,7 @@ type Bzz struct {
 	handshakes   map[enode.ID]*HandshakeMsg
 	streamerSpec *protocols.Spec
 	streamerRun  func(*BzzPeer) error
-	capabilities *Capabilities // capabilities control and state
+	capabilities Capabilities // capabilities control and state
 }
 
 // NewBzz is the swarm protocol constructor
@@ -160,7 +142,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		handshakes:   make(map[enode.ID]*HandshakeMsg),
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
-		capabilities: &Capabilities{},
+		capabilities: NewCapabilities(),
 	}
 
 	if config.BootnodeMode {
@@ -404,7 +386,7 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			Version:      uint64(BzzSpec.Version),
 			NetworkID:    b.NetworkID,
 			Addr:         b.localAddr,
-			Capabilities: *b.capabilities,
+			Capabilities: b.capabilities,
 			init:         make(chan bool, 1),
 			done:         make(chan struct{}),
 		}
