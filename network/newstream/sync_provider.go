@@ -164,45 +164,37 @@ func (s *syncProvider) WantStream(p *Peer, streamID ID) bool {
 }
 
 var (
-	SyncUpdateBackoff = 30 * time.Second
-	SyncInitBackoff   = 30 * time.Second
+	SyncInitBackoff = 500 * time.Millisecond
 )
 
 // InitPeer creates and maintains the streams per peer.
 // Runs per peer, in a separate goroutine
 // when the depth changes on our node
-//  - peer moves from out-of-depth to depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
-//  - peer moves from depth to out-of-depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
-//  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+//  - peer moves from out-of-depth to depth
+//  - peer moves from depth to out-of-depth
+//  - depth changes, and peer stays in depth, but we need more or less
 // peer connects and disconnects quickly
 func (s *syncProvider) InitPeer(p *Peer) {
-	//timer := time.NewTimer(SyncInitBackoff)
-	//defer timer.Stop()
+	timer := time.NewTimer(SyncInitBackoff)
+	defer timer.Stop()
 
-	//select {
-	////case <-timer.C:
-	//case <-p.quit:
-	//return
-	//}
+	select {
+	case <-timer.C:
+	case <-p.quit:
+		return
+	}
 
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
 
-	//wasWithinDepth := po >= depth
-
 	p.logger.Debug("update syncing subscriptions: initial", "po", po, "depth", depth)
 
-	// initial subscriptions
 	subBins, quitBins := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
 	s.updateSyncSubscriptions(p, subBins, quitBins)
 
 	depthChangeSignal, unsubscribeDepthChangeSignal := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribeDepthChangeSignal()
 
-	//var (
-	//backoff  *time.Timer
-	//backoffC <-chan time.Time
-	//)
 	for {
 		select {
 		case _, ok := <-depthChangeSignal:
@@ -210,33 +202,11 @@ func (s *syncProvider) InitPeer(p *Peer) {
 				return
 			}
 
-			//if backoff == nil {
-			//backoff = time.NewTimer(SyncUpdateBackoff)
-			//} else {
-			//if !backoff.Stop() {
-			//<-backoff.C
-			//}
-			//backoff.Reset(SyncUpdateBackoff)
-			//}
-			//backoffC = backoff.C
-			//case <-backoffC:
-			//newDepth := s.kad.NeighbourhoodDepth()
-			//if po >= newDepth && !wasWithinDepth {
-			//// previous depth is -1 because we did not have any streams with the client beforehand
-			//depth = -1
-			//}
-
-			//subBins, quitBins := syncSubscriptionsDiff(po, depth, newDepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
-			//s.updateSyncSubscriptions(p, subBins, quitBins)
-
-			//wasWithinDepth = po >= newDepth
-			//depth = newDepth
-
 			// update subscriptions for this peer when depth changes
 			ndepth := s.kad.NeighbourhoodDepth()
-			sub, qui := syncSubscriptionsDiff(po, -1, ndepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
-			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", sub, "quit", qui)
-			s.updateSyncSubscriptions(p, sub, qui)
+			subs, quits := syncSubscriptionsDiff(po, depth, ndepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
+			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", subs, "quit", quits)
+			s.updateSyncSubscriptions(p, subs, quits)
 			depth = ndepth
 		case <-s.quit:
 			return
@@ -271,7 +241,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 		}
 	}
 	for _, po := range quitBins {
-		p.logger.Debug("removing cursor info for peer", "bin", po)
+		p.logger.Debug("stream unwanted, removing cursor info for peer", "bin", po)
 		p.deleteCursor(NewID(syncStreamName, strconv.Itoa(po)))
 	}
 }
