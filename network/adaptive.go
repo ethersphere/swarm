@@ -8,7 +8,7 @@ import (
 )
 
 // CapabilityId defines a unique type of capability
-// @justelad concrete enough for ya?
+// @acud concrete enough for ya?
 type CapabilityId uint64
 
 // Capability contains a bit vector of flags that define what capability a node has in a specific module
