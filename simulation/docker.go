@@ -346,7 +346,7 @@ func (n *DockerNode) rpcClient() (*rpc.Client, error) {
 	var client *rpc.Client
 	var err error
 	wsAddr := fmt.Sprintf("ws://%s:%d", n.ipAddr, dockerWebsocketPort)
-	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(50 * time.Millisecond) {
+	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(200 * time.Millisecond) {
 		client, err = rpc.Dial(wsAddr)
 		if err == nil {
 			break

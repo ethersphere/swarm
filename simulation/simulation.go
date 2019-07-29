@@ -570,7 +570,7 @@ func (s *Simulation) WaitForHealthyNetwork() error {
 					return err
 				}
 				if !healthy.Healthy() {
-					return fmt.Errorf("node %s is not healthy", nodes[i].Info().ID)
+					return fmt.Errorf("node %s is not healthy: known <%v> ; connected <%v>", nodes[i].Info().ID, healthy.CountKnowNN, healthy.CountConnectNN)
 				}
 				return nil
 			})
