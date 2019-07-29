@@ -8,31 +8,53 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	objectprefix = []byte{10, 255, 129, 6, 1, 2, 255, 132, 0, 0, 0, 9, 255, 130, 0, 5, 16, 1, 1, 2, 0}
+// TestCapabilitySetUnset tests that setting and unsetting bits yield expected results
+func TestCapabilitySetUnset(t *testing.T) {
+	firstSet := []bool{
+		true, false, false, false, false, false, true, true, false,
+	} // 1000 0011 0
+	firstResult := firstSet
+	secondSet := []bool{
+		false, true, false, true, false, false, true, false, true,
+	} // 0101 0010 1
+	secondResult := []bool{
+		true, true, false, true, false, false, true, true, true,
+	} // 1101 0011 1
+	thirdUnset := []bool{
+		true, false, true, true, false, false, true, false, true,
+	} // 1011 0010 1
+	thirdResult := []bool{
+		false, true, false, false, false, false, false, true, false,
+	} // 0100 0001 0
 
-	changes = [][]bool{
-		{
-			true, false, false, false, false, false, true, true,
-			false, false, false, false, false, true, true, false,
-		}, // 0x8306
-		{
-			false, false, false, false, false, false, false, true,
-			false, false, false, false, false, false, true, false,
-		}, // 0x0102
+	c := NewCapability(42, 9)
+	for i, b := range firstSet {
+		if b {
+			c.Set(i)
+		}
+	}
+	if !isSameBools(c.Cap, firstResult) {
+		t.Fatalf("first set result mismatch, expected %v, got %v", firstResult, c.Cap)
 	}
 
-	expects = [][]bool{
-		{
-			true, false, false, false, false, false, true, true,
-			false, false, false, false, false, true, true, false,
-		}, // 0x8306
-		{
-			true, false, false, false, false, false, true, false,
-			false, false, false, false, false, true, false, false,
-		}, // 0x8204
+	for i, b := range secondSet {
+		if b {
+			c.Set(i)
+		}
 	}
-)
+	if !isSameBools(c.Cap, secondResult) {
+		t.Fatalf("second set result mismatch, expected %v, got %v", secondResult, c.Cap)
+	}
+
+	for i, b := range thirdUnset {
+		if b {
+			c.Unset(i)
+		}
+	}
+	if !isSameBools(c.Cap, thirdResult) {
+		t.Fatalf("second set result mismatch, expected %v, got %v", thirdResult, c.Cap)
+	}
+}
 
 // TestCapabilitiesControl tests that the methods for manipulating the capabilities bitvectors set values correctly and return errors when they should
 func TestCapabilitiesControl(t *testing.T) {
@@ -60,59 +82,79 @@ func TestCapabilitiesControl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule (second) fail: %v", err)
 	}
+}
 
-	// Set initial flags
-	c4 := caps.get(1)
-	for i, b := range changes[0] {
+// TestCapabilitiesString checks that the string representation of the capabilities is correct
+func TestCapabilitiesString(t *testing.T) {
+	sets1 := []bool{
+		false, false, true,
+	}
+	c1 := NewCapability(42, len(sets1))
+	for i, b := range sets1 {
 		if b {
-			c4.Set(i)
+			c1.Set(i)
 		}
 	}
-	// verify value
-	c4 = caps.get(1)
-	for i, b := range c4.Cap {
-		if b != expects[0][i] {
-			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.Cap)
+	sets2 := []bool{
+		true, false, false, false, true, false, true, false, true,
+	}
+	c2 := NewCapability(666, len(sets2))
+	for i, b := range sets2 {
+		if b {
+			c2.Set(i)
 		}
 	}
 
-	// Consecutive Set should only set specified bytes, leave others alone
-	c5 := caps.get(1)
-	for i, b := range changes[1] {
-		if b {
-			c5.Unset(i)
-		}
-	}
-	// verify value
-	c5 = caps.get(1)
-	for i, b := range c4.Cap {
-		if b != expects[1][i] {
-			t.Fatalf("Expected capability flags after first SetCapability %v, got: %v", expects[0], c4.Cap)
-		}
+	caps := NewCapabilities()
+	caps.add(c1)
+	caps.add(c2)
+
+	correctString := "42:001,666:100010101"
+	if correctString != caps.String() {
+		t.Fatalf("Capabilities string mismatch; expected %s, got %s", correctString, caps)
 	}
 }
 
+// TestCapabilitiesRLP ensures that a round of serialization and deserialization of Capabilities object
+// results in the correct data
 func TestCapabilitiesRLP(t *testing.T) {
 	c := NewCapabilities()
-	c.add(&Capability{
+	cap1 := &Capability{
 		Id:  42,
 		Cap: []bool{true, false, true},
-	})
-	c.add(&Capability{
+	}
+	c.add(cap1)
+	cap2 := &Capability{
 		Id:  666,
 		Cap: []bool{true, false, true, false, true, true, false, false, true},
-	})
+	}
+	c.add(cap2)
 	buf := bytes.NewBuffer(nil)
 	err := rlp.Encode(buf, &c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(buf.Bytes())
 
-	var c2 Capabilities
-	err = rlp.Decode(buf, &c2)
+	cRestored := NewCapabilities()
+	err = rlp.Decode(buf, &cRestored)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(c2)
+
+	fmt.Println(cRestored)
+	cap1Restored := cRestored.get(cap1.Id)
+	if cap1Restored.Id != cap1.Id {
+		t.Fatalf("cap 1 id not correct, expected %d, got %d", cap1.Id, cap1Restored.Id)
+	}
+	if !cap1.IsSameAs(cap1Restored) {
+		t.Fatalf("cap 1 caps not correct, expected %v, got %v", cap1.Cap, cap1Restored.Cap)
+	}
+
+	cap2Restored := cRestored.get(cap2.Id)
+	if cap2Restored.Id != cap2.Id {
+		t.Fatalf("cap 1 id not correct, expected %d, got %d", cap2.Id, cap2Restored.Id)
+	}
+	if !cap2.IsSameAs(cap2Restored) {
+		t.Fatalf("cap 1 caps not correct, expected %v, got %v", cap2.Cap, cap2Restored.Cap)
+	}
 }

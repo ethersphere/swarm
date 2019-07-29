@@ -64,11 +64,15 @@ func (c *Capability) IsSameAs(cp *Capability) bool {
 	if cp == nil {
 		return false
 	}
-	if len(c.Cap) != len(cp.Cap) {
+	return isSameBools(c.Cap, cp.Cap)
+}
+
+func isSameBools(left []bool, right []bool) bool {
+	if len(left) != len(right) {
 		return false
 	}
-	for i, b := range cp.Cap {
-		if b != c.Cap[i] {
+	for i, b := range left {
+		if b != right[i] {
 			return false
 		}
 	}
