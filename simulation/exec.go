@@ -135,6 +135,12 @@ func (n *ExecNode) Start() error {
 		return fmt.Errorf("error starting node %s: %s", n.config.ID, err)
 	}
 
+	// Wait channel from cmd.Wait() to know if the cmd exited before successful rpc.Dial call
+	waitCh := make(chan error)
+	go func(cmd *exec.Cmd) {
+		waitCh <- cmd.Wait()
+	}(n.cmd)
+
 	// Wait for the node to start
 	var client *rpc.Client
 	var err error
@@ -143,10 +149,39 @@ func (n *ExecNode) Start() error {
 			n.Stop()
 		}
 	}()
-	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
+
+	for start := time.Now(); time.Since(start) < 30*time.Second; time.Sleep(200 * time.Millisecond) {
 		client, err = rpc.Dial(n.ipcPath())
 		if err == nil {
 			break
+		}
+		// rpc.Dial is failing, so let's check if command exited due to TCP/UDP pair fail
+		select {
+		case <-waitCh:
+			// Command exited
+
+			// Restart command, as the process got killed due to tcp/udp pair of ports being taken
+			n.cmd = &exec.Cmd{
+				Path:   n.adapter.config.ExecutablePath,
+				Args:   args,
+				Dir:    dir,
+				Env:    n.config.Env,
+				Stdout: n.config.Stdout,
+				Stderr: n.config.Stderr,
+			}
+
+			if err := n.cmd.Start(); err != nil {
+				n.cmd = nil
+				return fmt.Errorf("error starting node %s: %s", n.config.ID, err)
+			}
+
+			// Wait channel from cmd.Wait() to know if the cmd exited before successful rpc.Dial call
+			go func(cmd *exec.Cmd) {
+				waitCh <- cmd.Wait()
+			}(n.cmd)
+
+		default:
+			// Wait hasn't returned, so Command is still running...
 		}
 	}
 	if client == nil {
