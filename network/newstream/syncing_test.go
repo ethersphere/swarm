@@ -456,7 +456,7 @@ func TestThreeNodesUnionHistoricalSync(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for k, _ := range uploadedChunks {
+		for k := range uploadedChunks {
 			if _, ok := union[k]; ok {
 				t.Fatal("chunk already exists in union")
 			}

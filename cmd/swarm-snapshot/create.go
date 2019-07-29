@@ -74,7 +74,7 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+			return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 		},
 	})
 	defer sim.Close()

@@ -216,7 +216,7 @@ func newServices() adapters.Services {
 				HiveParams:   hp,
 				NetworkID:    uint64(currentNetworkID),
 			}
-			return NewBzz(config, kademlia(ctx.Config.ID), nil, nil, nil), nil
+			return NewBzz(config, kademlia(ctx.Config.ID), nil, nil, nil, nil, nil), nil
 		},
 	}
 }

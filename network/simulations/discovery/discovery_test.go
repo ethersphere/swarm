@@ -526,8 +526,8 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 		if err != nil {
 			return nil, err
 		}
-		return network.NewBzz(config, kad, store, nil, nil), nil
+		return network.NewBzz(config, kad, store, nil, nil, nil, nil), nil
 	}
 
-	return network.NewBzz(config, kad, nil, nil, nil), nil
+	return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil
 }

@@ -103,7 +103,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, store, nil, nil), nil
+	return network.NewBzz(config, kad, store, nil, nil, nil, nil), nil
 }
 
 //create the simulation network
