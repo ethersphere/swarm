@@ -122,7 +122,7 @@ func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 			UnderlayAddr: addr.Under(),
 			HiveParams:   hp,
 		}
-		return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+		return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 	}
 
 	return NewInProc(services)

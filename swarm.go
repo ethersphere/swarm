@@ -217,7 +217,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, newstream.Spec, self.newstreamer.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, newstream.Spec, retrieval.Spec, self.newstreamer.Run, self.retrieval.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.New(to, config.Pss)
@@ -487,8 +487,6 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 		protos = append(protos, s.bzz.Protocols()...)
 	} else {
 		protos = append(protos, s.bzz.Protocols()...)
-
-		protos = append(protos, s.retrieval.Protocols()...)
 
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
