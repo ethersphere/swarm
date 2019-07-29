@@ -896,7 +896,7 @@ func TestHasPriceImplementation(t *testing.T) {
 		t.Fatal("`Registry` does not have the expected Prices instance")
 	}
 	price := pricesInstance.Price(&ChunkDeliveryMsgRetrieval{})
-	if price == nil || price.Value == 0 || price.Value != pricesInstance.getChunkDeliveryMsgRetrievalPrice() {
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getChunkDeliveryMsgPrice() {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
 
