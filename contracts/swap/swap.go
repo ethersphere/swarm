@@ -68,7 +68,8 @@ type Params struct {
 	ContractCode, ContractAbi string
 }
 
-func new() *Swap {
+// New returns a pointer to a new Swap struct
+func New() *Swap {
 	return &Swap{}
 }
 
@@ -89,7 +90,7 @@ func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address
 
 // Deploy a Swap contract
 func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (addr common.Address, s *Swap, tx *types.Transaction, err error) {
-	s = new()
+	s = New()
 	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout.Seconds())))
 	return addr, s, tx, err
 }
@@ -136,7 +137,7 @@ func (s *Swap) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, b
 
 // InstanceAt returns a new instance of simpleSwap at the address which was given
 func InstanceAt(address common.Address, backend bind.ContractBackend) (s *Swap, err error) {
-	s = new()
+	s = New()
 	s.Instance, err = contract.NewSimpleSwap(address, backend)
 	return s, err
 }
