@@ -3,14 +3,20 @@ package network
 import (
 	"fmt"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Capabilities is the collection of capabilities for a Swarm node
+// It is user both to store the capabilities in the node, and
+// to communicate the node capabilities to its peers
 type Capabilities struct {
 	idx  map[CapabilityId]int
-	Caps []Capability
+	Caps []*Capability
 	mu   sync.Mutex
 }
 
+// NewCapabilities initializes a new Capabilities object
 func NewCapabilities() Capabilities {
 	c := Capabilities{
 		idx: make(map[CapabilityId]int),
@@ -18,20 +24,26 @@ func NewCapabilities() Capabilities {
 	return c
 }
 
+// CapabilityId defines a unique type of capability
+// @justelad concrete enough for ya?
 type CapabilityId uint64
 
+// Capability contains a bit vector of flags that define what capability a node has in a specific module
+// The module is defined by the Id.
 type Capability struct {
 	Id  CapabilityId
 	Cap []bool
 }
 
-func NewCapability(id CapabilityId, bitCount int) Capability {
-	return Capability{
+// NewCapability initializes a new Capability with the given id and specified number of bits in the vector
+func NewCapability(id CapabilityId, bitCount int) *Capability {
+	return &Capability{
 		Id:  id,
 		Cap: make([]bool, bitCount),
 	}
 }
 
+// Set switches the bit at the specified index on
 func (c *Capability) Set(idx int) error {
 	l := len(c.Cap)
 	if idx > l-1 {
@@ -41,6 +53,7 @@ func (c *Capability) Set(idx int) error {
 	return nil
 }
 
+// Unset switches the bit at the specified index off
 func (c *Capability) Unset(idx int) error {
 	l := len(c.Cap)
 	if idx > l-1 {
@@ -50,87 +63,7 @@ func (c *Capability) Unset(idx int) error {
 	return nil
 }
 
-//// implements encoding/BinaryMarshaler interface
-//func (c Capability) MarshalBinary() ([]byte, error) {
-//
-//	// serialize bit vector length
-//	l := make([]byte, 8)
-//	csz := len(c.Cap)
-//	lsz := binary.PutUvarint(l, uint64(csz))
-//
-//	// serialize cap id
-//	id := make([]byte, 8)
-//	idsz := binary.PutUvarint(id, uint64(c.Id))
-//
-//	// create storage array (size rounded up to nearest byte threshold)
-//	s := make([]byte, csz/8+1+lsz+idsz)
-//
-//	// prefix with length
-//	idx := 0
-//	copy(s[idx:], l[:lsz])
-//
-//	idx += lsz
-//	copy(s[idx:], id[:idsz])
-//
-//	// iterate all bit flags and set bits in data portion of array accordingly
-//	idx += idsz
-//	for i, b := range c.Cap {
-//		if b {
-//			ri := uint8(7 - (i % 8))
-//			s[idx+i/8] |= 1 << ri
-//		}
-//	}
-//
-//	return s, nil
-//}
-//
-//// implements encoding/BinaryUnmarshaler interface
-//func (c Capability) UnmarshalBinary(s []byte) error {
-//
-//	// retrieve the bit vector length
-//	idx := 0
-//	csz, lsz := binary.Uvarint(s[idx:])
-//
-//	idx += lsz
-//	id, idsz := binary.Uvarint(s[idx:])
-//
-//	idx += idsz
-//
-//	// audit that enough bytes exist in the data to contain the indicated bit vector length
-//	tsz := csz/8 + 1 + uint64(lsz) + uint64(idsz)
-//	if tsz != uint64(len(s)) {
-//		return fmt.Errorf("wrong data length. expected length prefix %d bytes + bit vector length %d bits = %d bytes, got %d bytes", lsz, csz, tsz, len(s))
-//	}
-//
-//	// iterate all the bit flags and set the bools in the capability object accordingly
-//	c.Id = CapabilityId(id)
-//	c.Cap = make([]bool, csz)
-//	for i := uint64(0); i < csz; i++ {
-//		ri := uint(7 - (i % 8))
-//		if s[i/8+uint64(idx)]&1<<ri > 0 {
-//			c.Cap[i] = true
-//		}
-//	}
-//	return nil
-//}
-
-//func (c *Capability) EncodeRLP(w io.Writer) error {
-//	data, err := c.MarshalBinary()
-//	if err != nil {
-//		return err
-//	}
-//	return rlp.Encode(w, capabilityRlpHack{B: data})
-//}
-//
-//func (c *Capability) DecodeRLP(s *rlp.Stream) error {
-//	fmt.Printf("stream: %v\n\n", s)
-//	data, err := s.Bytes()
-//	if err != nil {
-//		return err
-//	}
-//	return c.UnmarshalBinary(data)
-//}
-
+// String implements Stringer interface
 func (c Capability) String() (s string) {
 	s = fmt.Sprintf("%d:", c.Id)
 	for _, b := range c.Cap {
@@ -143,7 +76,16 @@ func (c Capability) String() (s string) {
 	return s
 }
 
-func (c Capability) IsSameAs(cp Capability) bool {
+// IsSameAs returns true if the given Capability object has the identical bit settings as the receiver
+func (c *Capability) IsSameAs(cp *Capability) bool {
+	if cp == nil {
+		fmt.Println("cp is nil!!!!")
+		return false
+	}
+	fmt.Printf("is same as: %s %s %d %d", c, cp, len(c.Cap), len(cp.Cap))
+	if len(c.Cap) != len(cp.Cap) {
+		return false
+	}
 	for i, b := range cp.Cap {
 		if b != c.Cap[i] {
 			return false
@@ -152,7 +94,9 @@ func (c Capability) IsSameAs(cp Capability) bool {
 	return true
 }
 
-func (c *Capabilities) add(cp Capability) error {
+// adds a capability to the Capabilities collection
+// TODO: Following API PR with make this available to client code
+func (c *Capabilities) add(cp *Capability) error {
 	if _, ok := c.idx[cp.Id]; ok {
 		return fmt.Errorf("Capability id %d already registered", cp.Id)
 	}
@@ -163,14 +107,17 @@ func (c *Capabilities) add(cp Capability) error {
 	return nil
 }
 
-func (c *Capabilities) Add(cp Capability) error {
-	return c.add(cp)
+// gets the capability with the specified module id
+// returns nil if the id doesn't exist
+func (c Capabilities) get(id CapabilityId) *Capability {
+	idx, ok := c.idx[id]
+	if !ok {
+		return nil
+	}
+	return c.Caps[idx]
 }
 
-func (c Capabilities) get(id CapabilityId) Capability {
-	return c.Caps[c.idx[id]]
-}
-
+// String Implements Stringer interface
 func (c Capabilities) String() (s string) {
 	for _, cp := range c.Caps {
 		if s != "" {
@@ -179,4 +126,52 @@ func (c Capabilities) String() (s string) {
 		s += cp.String()
 	}
 	return s
+}
+
+// DecodeRLP implements rlp.RLPDecoder
+// this custom deserializer builds the module id to array index map
+// state of receiver is undefined on error
+func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
+
+	// overwrite receiver
+	c = NewCapabilities()
+
+	// discard the Capabilities struct list item
+	_, err := s.List()
+	if err != nil {
+		return err
+	}
+
+	// retrieve the count of elements in the capability array
+	elementCount, err := s.List()
+	if err != nil {
+		return err
+	}
+
+	// counter for the Capabilities.Caps array
+	i := 0
+
+	// The last two elements are the terminators of the Capabilities and Capabilities.Caps enclosures
+	for elementCount > 2 {
+
+		var cap Capability
+
+		// All elements in array should be Capability type
+		// if not throw error
+		err := s.Decode(&cap)
+		if err != nil {
+			return err
+		}
+
+		// Add the entry to the Capabilities array
+		c.Caps = append(c.Caps, &cap)
+		c.idx[cap.Id] = i
+
+		// elementCount decreases with one per flag plus one for the CapabilityId
+		elementCount -= uint64(len(cap.Cap) + 1)
+
+		i++
+		fmt.Printf("decoded cap: %v (%d)\n", cap, elementCount)
+	}
+	return nil
 }

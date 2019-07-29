@@ -40,8 +40,8 @@ var (
 	capabilitiesFlagStorer        = 15
 
 	// temporary presets to emulate the legacy LightNode/full node regime
-	fullCapability       Capability
-	lightCapability      Capability
+	fullCapability       *Capability
+	lightCapability      *Capability
 	fullCapabilityBytes  []byte
 	lightCapabilityBytes []byte
 )
@@ -82,18 +82,18 @@ func init() {
 }
 
 // temporary convenience functions for legacy "LightNode"
-func newLightCapability() Capability {
+func newLightCapability() *Capability {
 	c := NewCapability(0, 16)
 	c.Set(capabilitiesFlagRetrieve)
 	c.Set(capabilitiesFlagPush)
 	return c
 }
-func isLightCapability(c Capability) bool {
+func isLightCapability(c *Capability) bool {
 	return lightCapability.IsSameAs(c)
 }
 
 // temporary convenience functions for legacy "full node"
-func newFullCapability() Capability {
+func newFullCapability() *Capability {
 	c := NewCapability(0, 16)
 	c.Set(capabilitiesFlagRetrieve)
 	c.Set(capabilitiesFlagPush)
@@ -103,7 +103,7 @@ func newFullCapability() Capability {
 	return c
 }
 
-func isFullCapability(c Capability) bool {
+func isFullCapability(c *Capability) bool {
 	return fullCapability.IsSameAs(c)
 }
 
@@ -361,6 +361,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
+	fmt.Printf("check handshake %v\n", rhs.Capabilities.get(0))
 	// temporary check for valid capability settings, legacy full/light
 	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
