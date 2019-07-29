@@ -126,7 +126,7 @@ type Bzz struct {
 	handshakes   map[enode.ID]*HandshakeMsg
 	streamerSpec *protocols.Spec
 	streamerRun  func(*BzzPeer) error
-	capabilities Capabilities // capabilities control and state
+	capabilities *Capabilities // capabilities control and state
 }
 
 // NewBzz is the swarm protocol constructor
@@ -337,7 +337,7 @@ type HandshakeMsg struct {
 	Version      uint64
 	NetworkID    uint64
 	Addr         *BzzAddr
-	Capabilities Capabilities
+	Capabilities *Capabilities
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr

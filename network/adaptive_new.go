@@ -17,11 +17,10 @@ type Capabilities struct {
 }
 
 // NewCapabilities initializes a new Capabilities object
-func NewCapabilities() Capabilities {
-	c := Capabilities{
+func NewCapabilities() *Capabilities {
+	return &Capabilities{
 		idx: make(map[CapabilityId]int),
 	}
-	return c
 }
 
 // CapabilityId defines a unique type of capability
@@ -133,9 +132,7 @@ func (c Capabilities) String() (s string) {
 // state of receiver is undefined on error
 func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 
-	// overwrite receiver
-	c = NewCapabilities()
-
+	idx := make(map[CapabilityId]int)
 	// discard the Capabilities struct list item
 	_, err := s.List()
 	if err != nil {
@@ -165,13 +162,14 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 
 		// Add the entry to the Capabilities array
 		c.Caps = append(c.Caps, &cap)
-		c.idx[cap.Id] = i
+		idx[cap.Id] = i
 
 		// elementCount decreases with one per flag plus one for the CapabilityId
 		elementCount -= uint64(len(cap.Cap) + 1)
 
 		i++
-		fmt.Printf("decoded cap: %v (%d)\n", cap, elementCount)
+		fmt.Printf("decoded cap: %v (%d,%d,%v)\n", cap, elementCount, i, cap.Id)
 	}
+	c.idx = idx
 	return nil
 }
