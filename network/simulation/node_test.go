@@ -290,7 +290,7 @@ func TestUploadSnapshot(t *testing.T) {
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			b.Store(BucketKeyKademlia, kad)
-			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+			return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 		},
 	})
 	defer s.Close()

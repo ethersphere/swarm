@@ -410,7 +410,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil), nil, nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil, nil, nil), nil, nil
 		},
 		"pss": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()

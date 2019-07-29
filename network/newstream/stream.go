@@ -604,7 +604,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 
 	if ctr == 0 {
 		// this handles the case that there are no hashes we are interested in (ctr==0)
-		// but some hashes were recieved by the server. the closed channel will result in
+		// but some hashes were received by the server. the closed channel will result in
 		// clientSealBatch goroutine in returning, then in the following select case below
 		// the w.done channel is selected, in turn sealing the interval we are not interested in
 		// then requesting the next batch
@@ -782,6 +782,7 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 	w, ok := p.openWants[msg.Ruid]
 	p.mtx.RUnlock()
 	if !ok {
+		streamChunkDeliveryFail.Inc(1)
 		p.logger.Error("no open offers for for ruid", "ruid", msg.Ruid)
 		p.Drop()
 		return
@@ -812,8 +813,10 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 				}
 				p.mtx.RLock()
 				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
-					log.Error("got an unwanted chunk from peer!", "peer", p.ID(), "caddr", c.Address)
-					panic("unsolicited chunk")
+					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address)
+					streamChunkDeliveryFail.Inc(1)
+					p.Drop()
+					return
 				}
 				p.mtx.RUnlock()
 				cc := chunk.NewChunk(c.Address(), c.Data())
@@ -822,6 +825,7 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 					seen, err := provider.Put(ctx, cc.Address(), cc.Data())
 					if err != nil {
 						if err == storage.ErrChunkInvalid {
+							streamChunkDeliveryFail.Inc(1)
 							p.Drop()
 							return
 						}
