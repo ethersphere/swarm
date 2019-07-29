@@ -150,7 +150,7 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 	}
 
 	// Store the pinned files in state DB
-	err = p.state.Put("pin-files", p.pinnedFiles);
+	err = p.state.Put("pin-files", p.pinnedFiles)
 	if err != nil {
 		log.Error("Error pinning file.", "rootHash", rootHash, "err", err)
 		return nil
@@ -198,7 +198,7 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 		delete(p.pinnedFiles, rootHash)
 
 		// Store the pinned files in state DB
-		err = p.state.Put("pin-files", p.pinnedFiles);
+		err = p.state.Put("pin-files", p.pinnedFiles)
 		if err != nil {
 			log.Error("Error unpinning file.", "rootHash", rootHash, "err", err)
 			return nil
