@@ -54,7 +54,7 @@ func TestPinRawUploadEncrypted(t *testing.T) {
 	p, f, closeFunc := getPinApiAndFileStore(t)
 	defer closeFunc()
 
-	data := testutil.RandomBytes(1, 10000)
+	data := testutil.RandomBytes(2, 10000)
 	hash := uploadFile(t, f, data, true)
 
 	// test pin and unpin
@@ -266,14 +266,14 @@ type testFileInfo struct {
 }
 
 func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool) storage.Address {
-	file1hash := uploadFile(t, f, []byte("file1.txt"), toEncrypt)
-	file2hash := uploadFile(t, f, []byte("file2.txt"), toEncrypt)
-	file3hash := uploadFile(t, f, []byte("dir1/file3.txt"), toEncrypt)
-	file4hash := uploadFile(t, f, []byte("dir1/file4.txt"), toEncrypt)
-	file5hash := uploadFile(t, f, []byte("dir2/file5.txt"), toEncrypt)
-	file6hash := uploadFile(t, f, []byte("dir2/dir3/file6.txt"), toEncrypt)
-	file7hash := uploadFile(t, f, []byte("dir2/dir4/file7.txt"), toEncrypt)
-	file8hash := uploadFile(t, f, []byte("dir2/dir4/file8.txt"), toEncrypt)
+	file1hash := uploadFile(t, f, testutil.RandomBytes(1, 10000), toEncrypt)
+	file2hash := uploadFile(t, f, testutil.RandomBytes(2, 10000), toEncrypt)
+	file3hash := uploadFile(t, f, testutil.RandomBytes(3, 10000), toEncrypt)
+	file4hash := uploadFile(t, f, testutil.RandomBytes(4, 10000), toEncrypt)
+	file5hash := uploadFile(t, f, testutil.RandomBytes(5, 10000), toEncrypt)
+	file6hash := uploadFile(t, f, testutil.RandomBytes(6, 10000), toEncrypt)
+	file7hash := uploadFile(t, f, testutil.RandomBytes(7, 10000), toEncrypt)
+	file8hash := uploadFile(t, f, testutil.RandomBytes(8, 10000), toEncrypt)
 
 	var testDirFiles = []testFileInfo{
 		{"file1.txt", file1hash},
@@ -291,6 +291,7 @@ func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool
 		t.Fatalf("could not create new manifest error: %v", err.Error())
 	}
 
+	// Simulate "swarm --recursive up"
 	newAddr, err = p.api.UpdateManifest(context.TODO(), newAddr, func(mw *api.ManifestWriter) error {
 
 		for _, fileInfo := range testDirFiles {
