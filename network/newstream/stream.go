@@ -140,15 +140,14 @@ func (s *SlipStream) removePeer(p *Peer) {
 }
 
 // Run is being dispatched when 2 nodes connect
-func (s *SlipStream) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, s.spec)
-	bp := network.NewBzzPeer(peer)
-
+func (s *SlipStream) Run(bp *network.BzzPeer) error {
 	sp := NewPeer(bp, s.baseKey, s.intervalsStore, s.providers)
 	s.addPeer(sp)
 	defer s.removePeer(sp)
+
 	go sp.InitProviders()
-	return peer.Run(s.HandleMsg(sp))
+
+	return sp.Peer.Run(s.HandleMsg(sp))
 }
 
 func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error {
@@ -952,9 +951,17 @@ func (s *SlipStream) Protocols() []p2p.Protocol {
 			Name:    "bzz-stream",
 			Version: 1,
 			Length:  10 * 1024 * 1024,
-			Run:     s.Run,
+			Run:     s.runProtocol,
 		},
 	}
+}
+
+func (s *SlipStream) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	peer := protocols.NewPeer(p, rw, s.spec)
+	// TODO: fix, used in tests only. Incorrect, as we do not have access to the overlay address
+	bp := network.NewBzzPeer(peer)
+
+	return s.Run(bp)
 }
 
 func (s *SlipStream) APIs() []rpc.API {
