@@ -35,8 +35,8 @@ allowing for a multi-currency design.
 
 // Placeholder prices
 const (
-	RetrieveRequestMsgPrice        = uint64(1)
-	ChunkDeliveryMsgRetrievalPrice = uint64(1)
+	RetrieveRequestPrice = uint64(1)
+	ChunkDeliveryPrice   = uint64(1)
 	// default convertion of honey into output currency - currently ETH
 	defaultHoneyPrice = uint64(1)
 )
