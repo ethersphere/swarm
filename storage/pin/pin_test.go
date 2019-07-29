@@ -145,11 +145,11 @@ func TestListPinInfo(t *testing.T) {
 	if !ok {
 		t.Fatalf("uploaded collection not pinned")
 	}
-	if fileInfo.pinCounter != 1 {
-		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.pinCounter)
+	if fileInfo.PinCounter != 1 {
+		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.PinCounter)
 	}
-	if fileInfo.isRaw {
-		t.Fatalf("isRaw expected is false got is true")
+	if fileInfo.IsRaw {
+		t.Fatalf("IsRaw expected is false got is true")
 	}
 
 	// Pin it once more and check if the counters increases
@@ -158,8 +158,8 @@ func TestListPinInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not pin " + err.Error())
 	}
-	if fileInfo.pinCounter != 2 {
-		t.Fatalf("pincounter expected is 2 got is %d", fileInfo.pinCounter)
+	if fileInfo.PinCounter != 2 {
+		t.Fatalf("pincounter expected is 2 got is %d", fileInfo.PinCounter)
 	}
 
 	// Unpin it and check if the counter decrements
@@ -171,8 +171,8 @@ func TestListPinInfo(t *testing.T) {
 	if !ok {
 		t.Fatalf("collection totally unpinned")
 	}
-	if fileInfo.pinCounter != 1 {
-		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.pinCounter)
+	if fileInfo.PinCounter != 1 {
+		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.PinCounter)
 	}
 
 	// Unpin it final time and the entry should not be there
@@ -314,7 +314,7 @@ func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool
 // This function is called from test after a file is pinned.
 // It check if the file's chunks are properly pinned.
 // Assumption is that the file is uploaded in an empty database so that it can be easily tested.
-// It takes the root hash and expected pinCounter value.
+// It takes the root hash and expected PinCounter value.
 // It also has some hacks to take care of existing issues in the way we upload.
 //
 // The check process is as follows
@@ -327,7 +327,7 @@ func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool
 //         b) Get all chunks that are pinned (from pinIndex)
 //            In every upload.. an empty manifest is uploaded. that why add this hash to this list
 //         c) Check if both the above lists are equal
-//   3) Check if all the chunks pinned have the proper pinCounter
+//   3) Check if all the chunks pinned have the proper PinCounter
 //         -  This is just a simple go through of all the pinned chunks list and check if the counter is
 //            equal to the pin counter given as argument
 func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, isRaw bool) {
@@ -374,6 +374,26 @@ func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, i
 			}
 		}
 	}
+
+	pinnedFiles := make(map[string]FileInfo)
+	err := loadPinnedFilesInfo(pinnedFiles, p.state)
+	if err != nil {
+		t.Fatalf("Could not load pin state from state store")
+	}
+
+	fileInfo, ok := pinnedFiles[rootHash]
+	if !ok {
+		t.Fatalf("Fileinfo not present in state store")
+	}
+
+	if fileInfo.IsRaw != isRaw {
+		t.Fatalf("Invalid IsRaw state in fileInfo")
+	}
+
+	if fileInfo.PinCounter != pinCounter {
+		t.Fatalf("Invalid pincounter expected %d got %d", pinCounter, fileInfo.PinCounter)
+	}
+
 }
 
 func failIfNotUnpinned(t *testing.T, p *API, rootHash string, isRaw bool) {

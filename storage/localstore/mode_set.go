@@ -193,6 +193,13 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		// remove this from the gcIndex
 		if existingPinCounter == 0 {
 			db.gcIndex.DeleteInBatch(batch, item)
+
+			// a check is needed for decrementing gcSize
+			// as delete is not reporting if the key/value pair
+			// is deleted or not
+			if _, err := db.gcIndex.Get(item); err == nil {
+				gcSizeChange = -1
+			}
 		}
 
 		// Otherwise increase the existing counter by 1
@@ -215,6 +222,13 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 
 			// If the file is getting unpinned, add it to gcIndex
 			db.gcIndex.PutInBatch(batch, item)
+
+			// a check is needed for decrementing gcSize
+			// as delete is not reporting if the key/value pair
+			// is deleted or not
+			if _, err := db.gcIndex.Get(item); err == nil {
+				gcSizeChange = -1
+			}
 		}
 	default:
 		return ErrInvalidMode

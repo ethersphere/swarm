@@ -18,7 +18,6 @@ package pin
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"sync"
 
@@ -39,9 +38,9 @@ const (
 // FileInfo is the struct that stores the information about pinned files
 // A map of this is stored in the state DB
 type FileInfo struct {
-	isRaw      bool
-	fileSize   uint64
-	pinCounter uint64
+	IsRaw      bool
+	FileSize   uint64
+	PinCounter uint64
 }
 
 // API is the main object which implements all things pinning.
@@ -53,6 +52,7 @@ type API struct {
 	hashSize    int
 	state       state.Store         // the state store used to store info about pinned files
 	pinnedFiles map[string]FileInfo // stores the root hashes and other info. about the pinned files
+	pinLock     sync.RWMutex
 }
 
 // NewAPI creates a API object that is required for pinning and unpinning
@@ -90,7 +90,7 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 		return err
 	}
 
-	hasChunk, err := p.db.Has(context.TODO(), chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
+	hasChunk, err := p.db.Has(context.Background(), chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 	if !hasChunk {
 		log.Error("Could not pin hash. File not uploaded", "Hash", rootHash)
 		return err
@@ -99,7 +99,7 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 	// Walk the root hash and pin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.Set(context.TODO(), chunk.ModeSetPin, chunkAddr)
+		err := p.db.Set(context.Background(), chunk.ModeSetPin, chunkAddr)
 		if err != nil {
 			log.Error("Could not pin chunk. Address "+"Address", hex.EncodeToString(chunkAddr))
 			return err
@@ -111,12 +111,15 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
 
 	// Check if the root hash is already pinned and add it to the fileInfo struct
-	if val, ok := p.pinnedFiles[rootHash]; !ok {
+	p.pinLock.Lock()
+	defer p.pinLock.Unlock()
+	fileInfo, ok := p.pinnedFiles[rootHash]
+	if !ok {
 		// Get the file size from the root chunk first 8 bytes
 		hashFunc := storage.MakeHashFunc(storage.DefaultHash)
 		isEncrypted := len(addr) > hashFunc().Size()
 		getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(0, "show-chunks-tag", 0))
-		chunkData, err := getter.Get(context.TODO(), addr)
+		chunkData, err := getter.Get(context.Background(), addr)
 		if err != nil {
 			log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(addr))
 			return nil
@@ -133,9 +136,9 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 		// Store it in the fileinfo data structure
 		// this is pushed to state DB when Close() is called
 		p.pinnedFiles[rootHash] = FileInfo{
-			isRaw:      isRaw,
-			fileSize:   fileSize,
-			pinCounter: pinCounter,
+			IsRaw:      isRaw,
+			FileSize:   fileSize,
+			PinCounter: pinCounter,
 		}
 	} else {
 		// Get the pin counter from the pinIndex
@@ -145,8 +148,8 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 			return nil
 		}
 
-		val.pinCounter = pinCounter
-		p.pinnedFiles[rootHash] = val
+		fileInfo.PinCounter = pinCounter
+		p.pinnedFiles[rootHash] = fileInfo
 	}
 
 	// Store the pinned files in state DB
@@ -172,7 +175,9 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 		return err
 	}
 
+	p.pinLock.RLock()
 	fileInfo, ok := p.pinnedFiles[rootHash]
+	p.pinLock.RUnlock()
 	if !ok {
 		log.Error("Root hash is not pinned", "rootHash", rootHash)
 		return err
@@ -181,7 +186,7 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 	// Walk the root hash and unpin all the chunks
 	walkerFunction := func(ref storage.Reference) error {
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
-		err := p.db.Set(context.TODO(), chunk.ModeSetUnpin, chunkAddr)
+		err := p.db.Set(context.Background(), chunk.ModeSetUnpin, chunkAddr)
 		if err != nil {
 			log.Error("Could not unpin chunk", "Address", hex.EncodeToString(chunkAddr))
 			return err
@@ -190,23 +195,26 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 		}
 		return nil
 	}
-	p.walkChunksFromRootHash(rootHash, fileInfo.isRaw, credentials, walkerFunction)
+	p.walkChunksFromRootHash(rootHash, fileInfo.IsRaw, credentials, walkerFunction)
 
 	// Update the state DB
+	p.pinLock.Lock()
+	defer p.pinLock.Unlock()
 	pinCounter, err := p.getPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 	if err != nil {
 		delete(p.pinnedFiles, rootHash)
-
-		// Store the pinned files in state DB
-		err = p.state.Put("pin-files", p.pinnedFiles)
-		if err != nil {
-			log.Error("Error unpinning file.", "rootHash", rootHash, "err", err)
-			return nil
-		}
 	} else {
-		fileInfo.pinCounter = pinCounter
+		fileInfo.PinCounter = pinCounter
 		p.pinnedFiles[rootHash] = fileInfo
 	}
+
+	// Update the unpinned files in state DB
+	err = p.state.Put("pin-files", p.pinnedFiles)
+	if err != nil {
+		log.Error("Error unpinning file.", "rootHash", rootHash, "err", err)
+		return nil
+	}
+
 	log.Debug("File unpinned", "Address", rootHash)
 	return nil
 }
@@ -218,9 +226,11 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 //     2) Size of the pinned file or collection
 //     3) the number of times that particular file or collection is pinned.
 func (p *API) ListPinFiles() map[string]FileInfo {
+	p.pinLock.RLock()
+	defer p.pinLock.RUnlock()
 	for hash, fileInfo := range p.pinnedFiles {
-		log.Info("Pinned file", "Address", hash, "IsRAW", fileInfo.isRaw,
-			"fileSize", fileInfo.fileSize, "pinCounter", fileInfo.fileSize)
+		log.Info("Pinned file", "Address", hash, "IsRAW", fileInfo.IsRaw,
+			"FileSize", fileInfo.FileSize, "PinCounter", fileInfo.FileSize)
 	}
 	return p.pinnedFiles
 }
@@ -244,8 +254,8 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 		if !isRaw {
 
 			// If it is not a raw file... load the manifest and process the files inside one by one
-			walker, err := p.api.NewManifestWalker(context.TODO(), storage.Address(addr),
-				p.api.Decryptor(context.TODO(), credentials), nil)
+			walker, err := p.api.NewManifestWalker(context.Background(), storage.Address(addr),
+				p.api.Decryptor(context.Background(), credentials), nil)
 
 			if err != nil {
 				log.Error("Could not decode manifest.", "err", err)
@@ -310,7 +320,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 
 					defer cwg.Done()
 
-					chunkData, err := getter.Get(context.TODO(), ref)
+					chunkData, err := getter.Get(context.Background(), ref)
 					if err != nil {
 						log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(ref))
 						close(doneChunkWorker)
@@ -381,12 +391,10 @@ func (p *API) getPinCounterOfChunk(addr chunk.Address) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	// Pin counter is passed in the Data field... decode and use it
-	return binary.BigEndian.Uint64(pinnedChunk.Data()[:8]), nil
+	return pinnedChunk.PinCounter(), nil
 }
 
 func loadPinnedFilesInfo(pinnedFiles map[string]FileInfo, stateStore state.Store) error {
-	pinnedFiles = make(map[string]FileInfo)
 	err := stateStore.Get("pin-files", &pinnedFiles)
 	if err != nil {
 		if err == state.ErrNotFound {

@@ -95,7 +95,7 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
 	hasher.ResetWithLength(sdata[:8])
 	hasher.Write(sdata[8:])
-	return NewChunk(hasher.Sum(nil), sdata)
+	return NewChunk(hasher.Sum(nil), sdata, 0)
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {

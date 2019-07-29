@@ -17,8 +17,6 @@
 package localstore
 
 import (
-	"bytes"
-	"encoding/hex"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -106,14 +104,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		if gcSize-collectedCount <= target {
 			return true, nil
-		}
-
-		// Check if this chunk is pinned, if YES, then skip GC on that chunk
-		pinItem, err := db.pinIndex.Get(item)
-		if err == nil && bytes.Equal(item.Address, pinItem.Address) {
-			log.Debug("Ignoring GC for chunk", "Address", hex.EncodeToString(pinItem.Address),
-				"PinCounter", pinItem.PinCounter)
-			return false, nil
 		}
 
 		metrics.GetOrRegisterGauge(metricName+".storets", nil).Update(item.StoreTimestamp)

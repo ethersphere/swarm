@@ -151,9 +151,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				// LDBStore Export exported chunk data prefixed with the chunk key.
 				// That is not necessary, as the key is in the chunk filename,
 				// but backward compatibility needs to be preserved.
-				ch = chunk.NewChunk(key, data[32:])
+				ch = chunk.NewChunk(key, data[32:], 0)
 			case currentExportVersion:
-				ch = chunk.NewChunk(key, data)
+				ch = chunk.NewChunk(key, data, 0)
 			default:
 				select {
 				case errC <- fmt.Errorf("unsupported export data version %q", version):

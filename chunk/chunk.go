@@ -38,17 +38,20 @@ var (
 type Chunk interface {
 	Address() Address
 	Data() []byte
+	PinCounter() uint64
 }
 
 type chunk struct {
-	addr  Address
-	sdata []byte
+	addr       Address
+	sdata      []byte
+	pinCounter uint64
 }
 
-func NewChunk(addr Address, data []byte) Chunk {
+func NewChunk(addr Address, data []byte, pinCounter uint64) Chunk {
 	return &chunk{
-		addr:  addr,
-		sdata: data,
+		addr:       addr,
+		sdata:      data,
+		pinCounter: pinCounter,
 	}
 }
 
@@ -58,6 +61,10 @@ func (c *chunk) Address() Address {
 
 func (c *chunk) Data() []byte {
 	return c.sdata
+}
+
+func (c *chunk) PinCounter() uint64 {
+	return c.pinCounter
 }
 
 func (self *chunk) String() string {

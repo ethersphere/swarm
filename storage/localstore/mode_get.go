@@ -18,7 +18,6 @@ package localstore
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -53,7 +52,7 @@ func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (
 		}
 		return nil, err
 	}
-	return chunk.NewChunk(out.Address, out.Data), nil
+	return chunk.NewChunk(out.Address, out.Data, out.PinCounter), nil
 }
 
 // get returns Item from the retrieval index
@@ -98,13 +97,11 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 		}()
 
 	case chunk.ModeGetPin:
-		pinChunk, err := db.pinIndex.Get(item)
+		pinnedChunk, err := db.pinIndex.Get(item)
 		if err != nil {
 			return out, err
 		}
-		pinChunk.Data = make([]byte, 8)
-		binary.BigEndian.PutUint64(pinChunk.Data[:8], pinChunk.PinCounter)
-		return pinChunk, nil
+		return pinnedChunk, nil
 
 	// no updates to indexes
 	case chunk.ModeGetSync:
