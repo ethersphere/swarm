@@ -199,7 +199,6 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, func()) {
 		t.Fatalf("could not create state store. Error: %s", err.Error())
 	}
 
-
 	lStore, err := localstore.New(swarmDir, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatalf("could not create localstore. Error: %s", err.Error())
@@ -221,7 +220,7 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, func()) {
 	swarmApi := api.NewAPI(fileStore, nil, feeds.Handler, nil, tags)
 	pinAPI := NewApi(lStore, stateStore, nil, tags, swarmApi)
 
-	closeFunc := func() () {
+	closeFunc := func() {
 		err := stateStore.Close()
 		if err != nil {
 			t.Fatalf("Could not close state store")

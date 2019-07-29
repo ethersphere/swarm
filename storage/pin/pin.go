@@ -51,10 +51,11 @@ type API struct {
 	fileParams  *storage.FileStoreParams
 	tag         *chunk.Tags
 	hashSize    int
-	state       state.Store
-	pinnedFiles map[string]FileInfo
+	state       state.Store         // the state store used to store info about pinned files
+	pinnedFiles map[string]FileInfo // stores the root hashes and other info. about the pinned files
 }
 
+// NewAPI creates a API object that is required for pinning and unpinning
 func NewApi(lstore *localstore.DB, stateStore state.Store, params *storage.FileStoreParams, tags *chunk.Tags, api *api.API) *API {
 	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
 	pinnedFiles := make(map[string]FileInfo)
@@ -212,8 +213,8 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 
 // ListPinFiles functions logs information of all the files that are pinned
 // in the current local node. It displays the root hash of the pinned file
-// or collection. It also display three vital informations
-//     1) Wether the file is a RAW file or not
+// or collection. It also display three vital information's
+//     1) Whether the file is a RAW file or not
 //     2) Size of the pinned file or collection
 //     3) the number of times that particular file or collection is pinned.
 func (p *API) ListPinFiles() map[string]FileInfo {
@@ -242,7 +243,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 	go func() {
 		if !isRaw {
 
-			// If it not a raw file... load the manifest and process the files inside one by one
+			// If it is not a raw file... load the manifest and process the files inside one by one
 			walker, err := p.api.NewManifestWalker(context.TODO(), storage.Address(addr),
 				p.api.Decryptor(context.TODO(), credentials), nil)
 
