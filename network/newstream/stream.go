@@ -86,7 +86,6 @@ type SlipStream struct {
 
 	handlersWg sync.WaitGroup // waits for all handlers to finish in Close method
 	quit       chan struct{}
-	closeOnce  sync.Once
 
 	logger log.Logger
 }
@@ -983,20 +982,18 @@ func (s *SlipStream) APIs() []rpc.API {
 }
 
 func (s *SlipStream) Close() {
-	s.closeOnce.Do(func() {
-		close(s.quit)
-		// wait for all handlers to finish
-		done := make(chan struct{})
-		go func() {
-			s.handlersWg.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			log.Error("slip stream closed with still active handlers")
-		}
-	})
+	close(s.quit)
+	// wait for all handlers to finish
+	done := make(chan struct{})
+	go func() {
+		s.handlersWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		log.Error("slip stream closed with still active handlers")
+	}
 }
 
 func (s *SlipStream) Start(server *p2p.Server) error {

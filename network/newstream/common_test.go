@@ -105,6 +105,8 @@ type SyncSimServiceOptions struct {
 func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	if o == nil {
 		o = new(SyncSimServiceOptions)
+	}
+	if o.StreamConstructorFunc == nil {
 		o.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
 			return New(s, b, p...)
 		}
