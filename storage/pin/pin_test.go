@@ -39,8 +39,8 @@ import (
 
 // TestPinRawUpload pins a RAW file and unpin it multiple times
 func TestPinRawUpload(t *testing.T) {
-	p, f, swarmDir, db := getPinApiAndFileStore(t)
-	defer cleanup(t, swarmDir, db)
+	p, f, closeFunc := getPinApiAndFileStore(t)
+	defer closeFunc()
 
 	data := testutil.RandomBytes(1, 10000)
 	hash := uploadFile(t, f, data, false)
@@ -51,8 +51,8 @@ func TestPinRawUpload(t *testing.T) {
 
 // TestPinRawUploadEncrypted pins a encrypted RAW file and unpin it multiple times
 func TestPinRawUploadEncrypted(t *testing.T) {
-	p, f, swarmDir, db := getPinApiAndFileStore(t)
-	defer cleanup(t, swarmDir, db)
+	p, f, closeFunc := getPinApiAndFileStore(t)
+	defer closeFunc()
 
 	data := testutil.RandomBytes(1, 10000)
 	hash := uploadFile(t, f, data, true)
@@ -63,8 +63,8 @@ func TestPinRawUploadEncrypted(t *testing.T) {
 
 // TestPinCollectionUpload pins a simple collection and unpin it multiple times
 func TestPinCollectionUpload(t *testing.T) {
-	p, f, swarmDir, db := getPinApiAndFileStore(t)
-	defer cleanup(t, swarmDir, db)
+	p, f, closeFunc := getPinApiAndFileStore(t)
+	defer closeFunc()
 
 	hash := uploadCollection(t, p, f, false)
 
@@ -74,8 +74,8 @@ func TestPinCollectionUpload(t *testing.T) {
 
 // TestPinCollectionUploadEncrypted pins a encrypted simple collection and unpin it multiple times
 func TestPinCollectionUploadEncrypted(t *testing.T) {
-	p, f, swarmDir, db := getPinApiAndFileStore(t)
-	defer cleanup(t, swarmDir, db)
+	p, f, closeFunc := getPinApiAndFileStore(t)
+	defer closeFunc()
 
 	hash := uploadCollection(t, p, f, true)
 
@@ -88,8 +88,8 @@ func TestPinCollectionUploadEncrypted(t *testing.T) {
 func TestWalker(t *testing.T) {
 	sizes := []int{1, 4095, 4096, 4097, 123456}
 	for i := range sizes {
-		p, f, swarmDir, db := getPinApiAndFileStore(t)
-		defer cleanup(t, swarmDir, db)
+		p, f, closeFunc := getPinApiAndFileStore(t)
+		defer closeFunc()
 
 		data := testutil.RandomBytes(1, sizes[i])
 		hash := uploadFile(t, f, data, false)
@@ -126,8 +126,8 @@ func TestWalker(t *testing.T) {
 // TestListPinInfo tests the ListPinFiles command by pinning and unpinning a collection
 // twice and check if this gets reflected properly in the data structure
 func TestListPinInfo(t *testing.T) {
-	p, f, swarmDir, db := getPinApiAndFileStore(t)
-	defer cleanup(t, swarmDir, db)
+	p, f, closeFunc := getPinApiAndFileStore(t)
+	defer closeFunc()
 
 	hash := uploadCollection(t, p, f, false)
 
@@ -186,7 +186,7 @@ func TestListPinInfo(t *testing.T) {
 	}
 }
 
-func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, string, *localstore.DB) {
+func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, func()) {
 	t.Helper()
 
 	swarmDir, err := ioutil.TempDir("", "swarm-storage-test")
@@ -198,6 +198,7 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, string, *loc
 	if err != nil {
 		t.Fatalf("could not create state store. Error: %s", err.Error())
 	}
+
 
 	lStore, err := localstore.New(swarmDir, make([]byte, 32), nil)
 	if err != nil {
@@ -219,7 +220,28 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, string, *loc
 
 	swarmApi := api.NewAPI(fileStore, nil, feeds.Handler, nil, tags)
 	pinAPI := NewApi(lStore, stateStore, nil, tags, swarmApi)
-	return pinAPI, fileStore, swarmDir, lStore
+
+	closeFunc := func() () {
+		err := stateStore.Close()
+		if err != nil {
+			t.Fatalf("Could not close state store")
+		}
+		err = lStore.Close()
+		if err != nil {
+			t.Fatalf("Could not close localStore")
+		}
+		feeds.Close()
+		err = os.RemoveAll(feedsDir)
+		if err != nil {
+			t.Fatalf("Could not remove swarm feeds dir")
+		}
+		err = os.RemoveAll(swarmDir)
+		if err != nil {
+			t.Fatalf("Could not remove swarm temp dir")
+		}
+	}
+
+	return pinAPI, fileStore, closeFunc
 }
 
 func uploadFile(t *testing.T, f *storage.FileStore, data []byte, toEncrypt bool) storage.Address {
@@ -463,16 +485,5 @@ func getChunks(t *testing.T, bin uint8, addrs map[string]int, addrLock *sync.RWM
 		case <-ctx.Done():
 			return
 		}
-	}
-}
-
-func cleanup(t *testing.T, swarmDir string, db *localstore.DB) {
-	err := db.Close()
-	if err != nil {
-		t.Fatalf("Could not close localStore")
-	}
-	err = os.RemoveAll(swarmDir)
-	if err != nil {
-		t.Fatalf("Could not remove swarm temp dir")
 	}
 }
