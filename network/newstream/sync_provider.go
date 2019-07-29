@@ -205,7 +205,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 			// update subscriptions for this peer when depth changes
 			ndepth := s.kad.NeighbourhoodDepth()
 			subs, quits := syncSubscriptionsDiff(po, depth, ndepth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
-			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth, "sub", subs, "quit", quits)
+			p.logger.Debug("update syncing subscriptions", "po", po, "depth", depth, "sub", subs, "quit", quits)
 			s.updateSyncSubscriptions(p, subs, quits)
 			depth = ndepth
 		case <-s.quit:
@@ -219,7 +219,7 @@ func (s *syncProvider) InitPeer(p *Peer) {
 // and the second one representing bins for syncing subscriptions that
 // need to be removed.
 func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int) {
-	p.logger.Debug("update syncing subscriptions", "subscribe", subBins, "quit", quitBins)
+	p.logger.Debug("syncProvider.updateSyncSubscriptions", "subBins", subBins, "quitBins", quitBins)
 	if l := len(subBins); l > 0 {
 		streams := make([]ID, l)
 		for i, po := range subBins {
