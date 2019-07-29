@@ -160,7 +160,7 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Name:    b.retrievalSpec.Name,
 			Version: b.retrievalSpec.Version,
 			Length:  b.retrievalSpec.Length(),
-			Run:     b.RunProtocol(b.retrievalSpec, b.streamerRun),
+			Run:     b.RunProtocol(b.retrievalSpec, b.retrievalRun),
 		})
 	}
 	return protocol
