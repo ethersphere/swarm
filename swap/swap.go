@@ -173,7 +173,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		//if so, send cheque
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold))
+		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		err = s.sendCheque(peer.ID())
 		if err != nil {
 			log.Error("error while sending cheque to peer", "peer", peer.ID().String(), "error", err.Error())
