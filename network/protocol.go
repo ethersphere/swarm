@@ -40,10 +40,8 @@ var (
 	capabilitiesFlagStorer        = 15
 
 	// temporary presets to emulate the legacy LightNode/full node regime
-	fullCapability       *Capability
-	lightCapability      *Capability
-	fullCapabilityBytes  []byte
-	lightCapabilityBytes []byte
+	fullCapability  *Capability
+	lightCapability *Capability
 )
 
 const (
