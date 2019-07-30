@@ -135,7 +135,7 @@ func (s *SlipStream) removePeer(p *Peer) {
 		delete(s.peers, p.ID())
 		close(p.quit)
 	} else {
-		p.logger.Warn("peer was marked for removal but not found")
+		p.logger.Warn("peer was marked for removal but not found") // todo: this could possibly be removed
 	}
 }
 
