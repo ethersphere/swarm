@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -620,135 +619,13 @@ func catchDuplicateChunkSync(t *testing.T) (validate func()) {
 	}
 }
 
-// TestStarNetworkSync tests that syncing works on a more elaborate network topology
-// the test creates a network of 8 nodes and connects them in a star topology, this causes
-// the pivot node to have neighbourhood depth > 0, which in turn means that from each
+// TestStarNetworkSyncWithBogusNodes ests that syncing works on a more elaborate network topology
+// the test creates three real nodes in a star topology, then adds bogus nodes to the pivot (instead of using real nodes
+// this is in order to make the simulation be more CI friendly):w
+// the pivot node will have neighbourhood depth > 0, which in turn means that from each
 // connected node, the pivot node should have only part of its chunks
 // The test checks that EVERY chunk that exists a node which is not the pivot, according to
 // its PO, and kademlia table of the pivot - exists on the pivot node and does not exist on other nodes
-func TestStarNetworkSync(t *testing.T) {
-	var (
-		chunkCount    = 500
-		nodeCount     = 8
-		minPivotDepth = 1
-		chunkSize     = 4096
-		simTimeout    = 2 * time.Minute
-		syncTime      = 10 * time.Second
-		filesize      = chunkCount * chunkSize
-	)
-	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{SyncOnlyWithinDepth: false}),
-	})
-	defer sim.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), simTimeout)
-	defer cancel()
-
-	pivot, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-	pivotKad := sim.MustNodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
-	pivotBase := pivotKad.BaseAddr()
-
-	log.Debug("started pivot node", "addr", hex.EncodeToString(pivotBase))
-
-	override := func(o *adapters.NodeConfig) func(*adapters.NodeConfig) {
-		return func(c *adapters.NodeConfig) {
-			*o = *c
-		}
-	}
-
-	// add a few nodes at higher POs to uploader so that uploader depth goes > 0
-	currentPo := 1
-	for i := 0; i < nodeCount; i++ {
-		newNodeConfig := testutil.NodeConfigAtPo(t, pivotBase, currentPo)
-		newNode, err := sim.AddNode(override(newNodeConfig))
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = sim.Net.Connect(pivot, newNode)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if i%2 == 0 {
-			currentPo++
-		}
-
-		time.Sleep(50 * time.Millisecond)
-		log.Debug(sim.MustNodeItem(newNode, simulation.BucketKeyKademlia).(*network.Kademlia).String())
-
-	}
-	time.Sleep(50 * time.Millisecond)
-
-	pivotKad = sim.MustNodeItem(pivot, simulation.BucketKeyKademlia).(*network.Kademlia)
-	log.Trace(pivotKad.String())
-	if d := pivotKad.NeighbourhoodDepth(); d < minPivotDepth {
-		t.Skipf("too shallow. depth %d want %d", d, minPivotDepth)
-	}
-	pivotDepth := pivotKad.NeighbourhoodDepth()
-
-	chunkProx := make(map[string]chunkProxData)
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		nodeIDs := sim.UpNodeIDs()
-		for _, node := range nodeIDs {
-			node := node
-			if bytes.Equal(pivot.Bytes(), node.Bytes()) {
-				continue
-			}
-			nodeKad := sim.MustNodeItem(node, simulation.BucketKeyKademlia).(*network.Kademlia)
-			nodePo := chunk.Proximity(nodeKad.BaseAddr(), pivotKad.BaseAddr())
-			seed := int(time.Now().UnixNano())
-			randomBytes := testutil.RandomBytes(seed, filesize)
-			log.Debug("putting chunks to ephemeral localstore")
-			chunkAddrs, err := getAllRefs(randomBytes[:])
-			if err != nil {
-				return err
-			}
-
-			for _, c := range chunkAddrs {
-				proxData := chunkProxData{
-					addr:                      c,
-					uploaderNodeToPivotNodePO: nodePo,
-					chunkToUploaderPO:         chunk.Proximity(nodeKad.BaseAddr(), c),
-					pivotPO:                   chunk.Proximity(c, pivotKad.BaseAddr()),
-					uploaderNode:              node,
-				}
-				log.Debug("test putting chunk", "node", node, "addr", hex.EncodeToString(c), "uploaderToPivotPO", proxData.uploaderNodeToPivotNodePO, "c2uploaderPO", proxData.chunkToUploaderPO, "pivotDepth", pivotDepth)
-				if _, ok := chunkProx[hex.EncodeToString(c)]; ok {
-					return fmt.Errorf("chunk already found on another node %s", hex.EncodeToString(c))
-				}
-				chunkProx[hex.EncodeToString(c)] = proxData
-			}
-
-			fs := sim.MustNodeItem(node, bucketKeyFileStore).(*storage.FileStore)
-			reader := bytes.NewReader(randomBytes[:])
-			_, wait1, err := fs.Store(ctx, reader, int64(len(randomBytes)), false)
-			if err != nil {
-				return fmt.Errorf("fileStore.Store: %v", err)
-			}
-
-			if err := wait1(ctx); err != nil {
-				return err
-			}
-		}
-
-		//according to old pull sync - if the node is outside of depth - it should have all chunks where po(chunk)==po(node)
-		time.Sleep(syncTime)
-
-		// inclusive test
-		pivotLs := sim.MustNodeItem(pivot, bucketKeyLocalStore).(*localstore.DB)
-		return verifyCorrectChunksOnPivot(chunkProx, pivotDepth, pivotLs)
-	})
-
-	if result.Error != nil {
-		t.Fatal(result.Error)
-	}
-}
-
-// This is a lightweight version of the previous simulation
-// it is potentially a duplicate case and is a good candidate for removal (or alternatively - remove the previous one
-// since it takes longer to complete)
 func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 	var (
 		chunkCount    = 500
@@ -776,13 +653,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 
 	log.Debug("started pivot node", "addr", hex.EncodeToString(pivotBase))
 
-	override := func(o *adapters.NodeConfig) func(*adapters.NodeConfig) {
-		return func(c *adapters.NodeConfig) {
-			*o = *c
-		}
-	}
-	newNodeConfig := testutil.NodeConfigAtPo(t, pivotBase, 0)
-	newNode, err := sim.AddNode(override(newNodeConfig))
+	newNode, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
