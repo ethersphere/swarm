@@ -25,10 +25,9 @@ type PriceOracle interface {
 // TODO: Add a config flag so that this can be configured via command line
 // For now it will return a default one
 func NewPriceOracle() PriceOracle {
-	cpo := &FixedPriceOracle{
+	return &FixedPriceOracle{
 		honeyPrice: defaultHoneyPrice,
 	}
-	return cpo
 }
 
 // FixedPriceOracle is a price oracle which which returns a fixed price.
