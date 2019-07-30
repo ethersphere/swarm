@@ -99,19 +99,24 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
-	answer, err := protoPeer.Handshake(context.TODO(), &HandshakeMsg{
+	handshake, err := protoPeer.Handshake(context.TODO(), &HandshakeMsg{
 		ContractAddress: s.owner.Contract,
 	}, s.verifyHandshake)
 	if err != nil {
 		return err
 	}
 
-	beneficiary, err := s.getContractOwner(context.TODO(), answer.(*HandshakeMsg).ContractAddress)
+	answer, ok := handshake.(*HandshakeMsg)
+	if !ok {
+		return ErrInvalidHandshakeMsg
+	}
+
+	beneficiary, err := s.getContractOwner(context.TODO(), answer.ContractAddress)
 	if err != nil {
 		return err
 	}
 
-	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, answer.(*HandshakeMsg).ContractAddress)
+	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, answer.ContractAddress)
 	s.addPeer(swapPeer)
 	defer s.removePeer(swapPeer)
 
