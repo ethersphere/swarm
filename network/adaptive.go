@@ -80,7 +80,7 @@ func isSameBools(left []bool, right []bool) bool {
 }
 
 // Capabilities is the collection of capabilities for a Swarm node
-// It is user both to store the capabilities in the node, and
+// It is used both to store the capabilities in the node, and
 // to communicate the node capabilities to its peers
 type Capabilities struct {
 	idx  map[CapabilityId]int
@@ -149,9 +149,6 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	// counter for the Capabilities.Caps array
-	i := 0
-
 	// All elements in array should be Capability type
 	for {
 		var cap Capability
@@ -168,12 +165,7 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 		}
 
 		// Add the entry to the Capabilities array
-		c.Caps = append(c.Caps, &cap)
-
-		// update the id to index map (the reason for the custom RLP)
-		// and increment the array index counter
-		c.idx[cap.Id] = i
-		i++
+		c.add(&cap)
 	}
 
 	return nil

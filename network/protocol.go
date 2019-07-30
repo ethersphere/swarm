@@ -33,11 +33,11 @@ import (
 )
 
 var (
-	capabilitiesFlagRetrieve      = 0
-	capabilitiesFlagPush          = 1
-	capabilitiesFlagRelayRetrieve = 4
-	capabilitiesFlagRelayPush     = 5
-	capabilitiesFlagStorer        = 15
+	capabilitiesRetrieve      = 0
+	capabilitiesPush          = 1
+	capabilitiesRelayRetrieve = 4
+	capabilitiesRelayPush     = 5
+	capabilitiesStorer        = 15
 
 	// temporary presets to emulate the legacy LightNode/full node regime
 	fullCapability  *Capability
@@ -82,8 +82,8 @@ func init() {
 // temporary convenience functions for legacy "LightNode"
 func newLightCapability() *Capability {
 	c := NewCapability(0, 16)
-	c.Set(capabilitiesFlagRetrieve)
-	c.Set(capabilitiesFlagPush)
+	c.Set(capabilitiesRetrieve)
+	c.Set(capabilitiesPush)
 	return c
 }
 func isLightCapability(c *Capability) bool {
@@ -93,11 +93,11 @@ func isLightCapability(c *Capability) bool {
 // temporary convenience functions for legacy "full node"
 func newFullCapability() *Capability {
 	c := NewCapability(0, 16)
-	c.Set(capabilitiesFlagRetrieve)
-	c.Set(capabilitiesFlagPush)
-	c.Set(capabilitiesFlagRelayRetrieve)
-	c.Set(capabilitiesFlagRelayPush)
-	c.Set(capabilitiesFlagStorer)
+	c.Set(capabilitiesRetrieve)
+	c.Set(capabilitiesPush)
+	c.Set(capabilitiesRelayRetrieve)
+	c.Set(capabilitiesRelayPush)
+	c.Set(capabilitiesStorer)
 	return c
 }
 
@@ -148,7 +148,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		bzz.streamerSpec = nil
 	}
 
-	// temporary legacy light/full, as above
+	// temporary soon-to-be-legacy light/full, as above
 	if config.LightNode {
 		bzz.capabilities.add(newLightCapability())
 	} else {
