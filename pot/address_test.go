@@ -17,6 +17,8 @@ func (a testAddress) Address() []byte {
 	return []byte(a)
 }
 
+// TestDistance tests the correctness of the distance calculation
+// as well as the comparison method
 func TestDistance(t *testing.T) {
 	a := [32]byte{}
 	b := [32]byte{}
