@@ -121,9 +121,9 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 
 // TODO: Error handling
 // handleErrorMsg is called when an ErrorMsg is received
-func (sp *Peer) handleErrorMsg(ctx context.Context, msg interface{}) error {
+func (sp *Peer) handleErrorMsg(ctx context.Context, msg *ErrorMsg) error {
 	log.Info("received error msg")
-	// maybe balance disagreement
+	// maybe balance disagreement?
 	return nil
 }
 
