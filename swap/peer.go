@@ -71,12 +71,11 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 // TODO: validate the contract address in the cheque to match the address given at handshake
 // TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
-	log.Info("received emit cheque message")
-
 	cheque := msg.Cheque
+	log.Debug("received emit cheque message from peer", "peer", sp.ID().String())
 	actualAmount, err := sp.processAndVerifyCheque(cheque)
 	if err != nil {
-		log.Error("error invalid cheque", "from", sp.ID().String(), "err", err.Error())
+		log.Error("invalid cheque from peer", "peer", sp.ID().String(), "error", err.Error())
 		return err
 	}
 
