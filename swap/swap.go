@@ -272,18 +272,20 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	_ = s.loadLastSentCheque(peer)
 	lastCheque := s.cheques[peer]
 
-	if lastCheque == nil {
+	serial := uint64(1)
+	amount = uint64(amount)
+	if lastCheque != nil {
 		cheque = &Cheque{
 			ChequeParams: ChequeParams{
-				Serial: uint64(1),
-				Amount: uint64(amount),
+				Serial: lastCheque.Serial + serial,
+				Amount: lastCheque.Amount + amount,
 			},
 		}
 	} else {
 		cheque = &Cheque{
 			ChequeParams: ChequeParams{
-				Serial: lastCheque.Serial + 1,
-				Amount: lastCheque.Amount + uint64(amount),
+				Serial: serial,
+				Amount: amount,
 			},
 		}
 	}
