@@ -103,7 +103,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 			//TODO: do something with the error
 			return
 		}
-		log.Info("submit tx minded", "receipt", receipt)
+		log.Info("submit tx mined", "receipt", receipt)
 
 		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
 		if err != nil {
@@ -111,7 +111,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 			//TODO: do something with the error
 			return
 		}
-		log.Info("cash tx minded", "receipt", receipt)
+		log.Info("cash tx mined", "receipt", receipt)
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
 	}()
