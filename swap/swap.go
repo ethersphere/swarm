@@ -213,16 +213,6 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	return
 }
 
-// logBalance is a helper function to log the current balance of a peer
-func (s *Swap) logBalance(peer *protocols.Peer) {
-	err := s.loadBalance(peer.ID())
-	if err != nil && err != state.ErrNotFound {
-		log.Error("error while loading balance for peer", "peer", peer.String())
-	} else {
-		log.Info("balance for peer", "peer", peer.ID(), "balance", s.balances[peer.ID()])
-	}
-}
-
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
 	swapPeer := s.getPeer(peer)
