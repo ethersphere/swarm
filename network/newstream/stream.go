@@ -495,7 +495,7 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 		Hashes:    h,
 	}
 	l := len(h) / HashSize
-	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", h, "hashes", l)
+	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", l)
 	if err := p.Send(ctx, offered); err != nil {
 		p.logger.Error("erroring sending offered hashes", "ruid", msg.Ruid, "err", err)
 	}
