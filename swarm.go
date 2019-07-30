@@ -374,7 +374,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	if s.config.SwapEnabled {
 		// check here again (maybe redundant): if enabled, we MUST have a contract API
 		if s.config.SwapAPI == "" {
-			return fmt.Errorf("Swap enabled but no contract address given; fatal error condition, aborting.")
+			return fmt.Errorf("SWAP enabled but no contract address given; fatal error condition, aborting")
 		}
 		ctx := context.Background() // The initial setup has no deadline.
 		// deploy the contract
@@ -382,10 +382,10 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 		if err != nil {
 			return fmt.Errorf("Unable to deploy swap contract: %v", err)
 		}
-		log.Info(fmt.Sprintf("-> swap contract deployed: %v", s.swap.DeploySuccess()))
+		log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 	} else {
 		// if Swap is disabled, do not error, just continue
-		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
+		log.Debug("SWAP disabled: no chequebook set")
 	}
 
 	log.Info("Starting bzz service")
