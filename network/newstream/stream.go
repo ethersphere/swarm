@@ -849,6 +849,8 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 				return
 			case <-w.done:
 				return
+			case <-s.quit:
+				return
 			}
 		}
 	}()
