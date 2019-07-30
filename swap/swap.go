@@ -173,12 +173,12 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		//if so, send cheque
-		log.Warn(fmt.Sprintf("balance for peer %s went over the payment threshold %v, sending cheque", peer.ID().String(), s.paymentThreshold))
+		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold))
 		err = s.sendCheque(peer.ID())
 		if err != nil {
-			log.Error(fmt.Sprintf("error while sending cheque to peer %s: %s", peer.ID().String(), err.Error()))
+			log.Error("error while sending cheque to peer", "peer", peer.ID().String(), "error", err.Error())
 		} else {
-			log.Info(fmt.Sprintf("successfully sent cheque to peer %s", peer.ID().String()))
+			log.Info("successfully sent cheque to peer", "peer", peer.ID().String())
 		}
 	}
 
@@ -215,9 +215,9 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 func (s *Swap) logBalance(peer *protocols.Peer) {
 	err := s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
-		log.Error(fmt.Sprintf("error while loading balance for peer %s", peer.String()))
+		log.Error("error while loading balance for peer", "peer", peer.String())
 	} else {
-		log.Info(fmt.Sprintf("balance for peer %s is %d", peer.ID(), s.balances[peer.ID()]))
+		log.Info("balance for peer", "peer", peer.ID(), "balance", s.balances[peer.ID()])
 	}
 }
 
@@ -230,7 +230,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 		return err
 	}
 
-	log.Info(fmt.Sprintf("sending cheque with serial %d, amount %d, benficiary %v, contract %v", cheque.ChequeParams.Serial, cheque.ChequeParams.Amount, cheque.Beneficiary, cheque.Contract))
+	log.Info("sending cheque", "serial", cheque.ChequeParams.Serial, "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.cheques[peer] = cheque
 
 	err = s.stateStore.Put(sentChequeKey(peer), &cheque)
@@ -450,14 +450,14 @@ func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) er
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	log.Info(fmt.Sprintf("Deploying new swap (owner: %v)", opts.From.Hex()))
+	log.Info("deploying new swap", "owner", opts.From.Hex())
 	address, err := s.deployLoop(opts, backend, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
-		log.Error(fmt.Sprintf("unable to deploy swap: %v", err))
+		log.Error("unable to deploy swap", "error", err)
 		return err
 	}
 	s.owner.Contract = address
-	log.Info(fmt.Sprintf("swap deployed at %v (owner: %v)", address.Hex(), opts.From.Hex()))
+	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
 }
@@ -471,11 +471,11 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 		}
 
 		if _, s.contractReference, tx, err = swap.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
+			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
-			log.Warn(fmt.Sprintf("chequebook deploy error (try %d): %v", try, err))
+			log.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
 		return addr, nil
