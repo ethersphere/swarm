@@ -100,83 +100,13 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	}
 }
 
-// TestNodesExchangeCorrectBinIndexesInPivot creates a pivot network of 8 nodes, in which the pivot node
-// has depth > 0, puts data into every node's localstore and checks that the pivot node exchanges
-// with each other node the correct indexes
-func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
-	const (
-		nodeCount  = 8
-		chunkCount = 1000
-	)
-
-	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameSlipStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
-			InitialChunkCount: chunkCount,
-		}),
-	})
-	defer sim.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
-	defer cancel()
-	_, err := sim.AddNodesAndConnectStar(nodeCount)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		nodeIDs := sim.UpNodeIDs()
-		if len(nodeIDs) != nodeCount {
-			return errors.New("not enough nodes up")
-		}
-
-		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
-
-		idPivot := nodeIDs[0]
-		pivotBins := nodeInitialBinIndexes(sim, idPivot)
-		pivotKademlia := nodeKademlia(sim, idPivot)
-
-		for i := 1; i < nodeCount; i++ {
-			idOther := nodeIDs[i]
-			peerRecord := nodeSlipStream(sim, idPivot).getPeer(idOther)
-
-			// these are the cursors that the pivot node holds for the other peer
-			pivotCursors := peerRecord.getCursorsCopy()
-			otherSyncer := nodeSlipStream(sim, idOther).getPeer(idPivot)
-			otherCursors := otherSyncer.getCursorsCopy()
-			otherKademlia := sim.MustNodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
-
-			othersBins := nodeInitialBinIndexes(sim, idOther)
-
-			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
-			depth := pivotKademlia.NeighbourhoodDepth()
-			log.Debug("i", "i", i, "po", po, "d", depth, "idOther", idOther, "peerRecord", peerRecord, "pivotCursors", pivotCursors)
-
-			// if the peer is outside the depth - the pivot node should not request any streams
-			if po >= depth {
-				if err := compareNodeBinsToStreams(t, pivotCursors, othersBins); err != nil {
-					return err
-				}
-			}
-
-			if err := compareNodeBinsToStreams(t, otherCursors, pivotBins); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if result.Error != nil {
-		t.Fatal(result.Error)
-	}
-}
-
 // TestNodesCorrectBinsDynamic adds nodes to a star topology, connecting new nodes to the pivot node
 // after each connection is made, the cursors on the pivot are checked, to reflect the bins that we are
 // currently still interested in. this makes sure that correct bins are of interest
 // when nodes enter the kademlia of the pivot node
 func TestNodesCorrectBinsDynamic(t *testing.T) {
 	const (
-		nodeCount  = 10
+		nodeCount  = 8
 		chunkCount = 1000
 	)
 
