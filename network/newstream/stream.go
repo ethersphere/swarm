@@ -699,6 +699,11 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 		p.Drop()
 		return
 	}
+	defer func() {
+		p.mtx.Lock()
+		delete(p.openOffers, msg.Ruid)
+		p.mtx.Unlock()
+	}()
 
 	provider, ok := p.providers[offer.stream.Name]
 	if !ok {
@@ -710,9 +715,6 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 	l := len(offer.hashes) / HashSize
 	if len(msg.BitVector) == 0 {
 		p.logger.Debug("peer does not want any hashes in this range", "ruid", offer.ruid)
-		p.mtx.Lock()
-		delete(p.openOffers, msg.Ruid)
-		p.mtx.Unlock()
 		return
 	}
 	want, err := bv.NewFromBytes(msg.BitVector, l)
