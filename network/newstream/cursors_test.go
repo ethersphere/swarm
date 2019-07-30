@@ -50,7 +50,6 @@ func init() {
 // TestNodesExchangeCorrectBinIndexes tests that two nodes exchange the correct cursors for all streams
 // it tests that all streams are exchanged
 func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
-	log.Debug("TestNodesExchageCorrectBinIndexes")
 	const (
 		nodeCount  = 2
 		chunkCount = 1000
@@ -105,7 +104,6 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 // has depth > 0, puts data into every node's localstore and checks that the pivot node exchanges
 // with each other node the correct indexes
 func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
-	log.Debug("TestNodesExchageCorrectBinIndexesInPivot")
 	const (
 		nodeCount  = 8
 		chunkCount = 1000
@@ -177,7 +175,6 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 // currently still interested in. this makes sure that correct bins are of interest
 // when nodes enter the kademlia of the pivot node
 func TestNodesCorrectBinsDynamic(t *testing.T) {
-	log.Debug("TestNodesExchageCorrectBinsDynamic")
 	const (
 		nodeCount  = 10
 		chunkCount = 1000
@@ -521,7 +518,6 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 }
 
 func TestCorrectCursorsExchangeRace(t *testing.T) {
-	log.Debug("TestCorrectCursorsExchangeRace")
 	bogusNodeCount := 15
 	bogusNodes := []*network.Peer{}
 	popRandomNode := func() *network.Peer {
