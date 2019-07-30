@@ -19,7 +19,9 @@ package pot
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -75,6 +77,51 @@ func (a Address) Bytes() []byte {
 	return a[:]
 }
 
+// Distance returns the distance between address a and address b as a big integer using the distance metric defined in the swarm specfication
+// Fails if not all addresses are of equal length
+//func Distance(a Address, b Address) (*big.Int, error) {
+func Distance(x, y interface{}) (*big.Int, error) { // a Address, b Address) (*big.Int, error){
+	distanceBytes, err := DistanceRaw(x, y)
+	if err != nil {
+		return nil, err
+	}
+	r := big.NewInt(0)
+	r.SetBytes(distanceBytes)
+	return r, nil
+}
+
+// DistanceRaw returns the distance between address a and address b in big-endian binary format using the distance metric defined in the swarm specfication
+// Fails if not all addresses are of equal length
+//func DistanceRaw(a Address, b Address) ([]byte, error) {
+func DistanceRaw(x, y interface{}) ([]byte, error) { // Address, b Address) ([]byte, error) {
+	bx := ToBytes(x)
+	by := ToBytes(y)
+	if len(bx) != len(by) {
+		return nil, errors.New("address length must match")
+	}
+	c := NewAddressFromBytes(make([]byte, len(bx)))
+	for i, addr := range bx {
+		c[i] = addr ^ by[i]
+	}
+	return c.Bytes(), nil
+}
+
+// DistanceCmp compares subject and object to receiver in terms of the distance metric defined in the swarm specfication
+// it returns:
+// 	1 if subject is closer to a than object
+// 	0 if subject is equally far apart as object (subject and object are the same address)
+// 	-1 if subject is farther from a than object
+// Fails if not all addresses are of equal length
+func DistanceCmp(a, x, y interface{}) (int, error) { //a Address, subject Address, object Address) (int, error) {
+	ba := ToBytes(a)
+	bx := ToBytes(x)
+	by := ToBytes(y)
+	if len(ba) != len(bx) || len(ba) != len(by) {
+		return 0, errors.New("address length must match")
+	}
+	return proxCmp(ba, bx, by), nil
+}
+
 // ProxCmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
@@ -86,11 +133,12 @@ func proxCmp(a, x, y []byte) int {
 	for i := range a {
 		dx := x[i] ^ a[i]
 		dy := y[i] ^ a[i]
-		if dx > dy {
+		if dx == dy {
+			continue
+		} else if dx > dy {
 			return 1
-		} else if dx < dy {
-			return -1
 		}
+		return -1
 	}
 	return 0
 }
