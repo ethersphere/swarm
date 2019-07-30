@@ -44,6 +44,7 @@ import (
 var timeout = 30 * time.Second
 
 func TestTwoNodesSyncWithGaps(t *testing.T) {
+	log.Debug("TestTwoNodesSyncWithGaps")
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
 		t.Helper()
 
@@ -216,6 +217,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // TestTwoNodesFullSyncLive brings up two nodes, connects them, adds chunkCount
 // * 4096 bytes to its localstore, then validates that all chunks are synced.
 func TestTwoNodesFullSyncLive(t *testing.T) {
+	log.Debug("TestTwoNodesFullSyncLive")
 	const (
 		chunkCount = 10000
 	)
@@ -302,6 +304,7 @@ func TestTwoNodesFullSyncLive(t *testing.T) {
 // are synced to the newly connected node. After that it adds another chunkCount
 // * 4096 bytes to its localstore and validates that all live chunks are synced.
 func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
+	log.Debug("TestTwoNodesFullSyncHistoryAndLive")
 	const (
 		chunkCount = 10000 // per history and per live upload
 	)
@@ -435,6 +438,7 @@ func TestTwoNodesFullSyncHistoryAndLive(t *testing.T) {
 }
 
 func TestThreeNodesUnionHistoricalSync(t *testing.T) {
+	log.Debug("TestThreeNodesUnionHistoricalSync")
 	nodes := 3
 	chunkCount := 1000
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -526,6 +530,7 @@ func TestFullSync(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			log.Debug(tc.name)
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 				"bzz-sync": newSyncSimServiceFunc(nil),
 			})
@@ -845,6 +850,7 @@ func catchDuplicateChunkSync(t *testing.T) (validate func()) {
 // The test checks that EVERY chunk that exists a node which is not the pivot, according to
 // its PO, and kademlia table of the pivot - exists on the pivot node and does not exist on other nodes
 func TestStarNetworkSync(t *testing.T) {
+	log.Debug("TestStarNetworkSync")
 	var (
 		chunkCount    = 500
 		nodeCount     = 15
@@ -965,6 +971,7 @@ func TestStarNetworkSync(t *testing.T) {
 }
 
 func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
+	log.Debug("TestStarNetworkSyncWithBogusNodes")
 	var (
 		chunkCount    = 500
 		nodeCount     = 12
