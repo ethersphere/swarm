@@ -30,6 +30,10 @@ import (
 // ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
 var ErrEmptyAddressInSignature = errors.New("empty address in handshake")
 
+// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
+// structure of the HandshakeMsg
+var ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
+
 // Spec is the swap protocol specification
 var Spec = &protocols.Spec{
 	Name:       "swap",
@@ -80,7 +84,11 @@ func (s *Swap) Stop() error {
 // verifyHandshake verifies the chequebook address transmitted in the swap handshake
 func (s *Swap) verifyHandshake(msg interface{}) error {
 	handshake, ok := msg.(*HandshakeMsg)
-	if !ok || (handshake.ContractAddress == common.Address{}) {
+	if !ok {
+		return ErrInvalidHandshakeMsg
+	}
+
+	if (handshake.ContractAddress == common.Address{}) {
 		return ErrEmptyAddressInSignature
 	}
 
