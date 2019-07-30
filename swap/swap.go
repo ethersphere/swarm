@@ -99,9 +99,11 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return sw
 }
 
-const balancePrefix = "balance_"
-const sentChequePrefix = "sent_cheque_"
-const receivedChequePrefix = "received_cheque_"
+const (
+	balancePrefix        = "balance_"
+	sentChequePrefix     = "sent_cheque_"
+	receivedChequePrefix = "received_cheque_"
+)
 
 // returns the store key for retrieving a peer's balance
 func balanceKey(peer enode.ID) string {
