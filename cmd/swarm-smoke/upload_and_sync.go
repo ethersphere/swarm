@@ -217,8 +217,6 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			}
 		}
 
-		log.Debug("sync mode", "sync mode", syncMode)
-
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {
 				if allHostChunks[maxProxHost][i] == '0' {
