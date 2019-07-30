@@ -469,6 +469,10 @@ func (s *Swarm) Stop() error {
 		s.stateStore.Close()
 	}
 
+	if s.fileStore != nil {
+		s.fileStore.Close()
+	}
+
 	for _, cleanF := range s.cleanupFuncs {
 		err = cleanF()
 		if err != nil {
