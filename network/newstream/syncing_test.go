@@ -41,7 +41,7 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
-var timeout = 30 * time.Second
+var timeout = 90 * time.Second
 
 func TestTwoNodesSyncWithGaps(t *testing.T) {
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
@@ -151,7 +151,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			defer sim.Close()
 			defer catchDuplicateChunkSync(t)()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 
 			uploadNode, err := sim.AddNode()
@@ -217,7 +217,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // * 4096 bytes to its localstore, then validates that all chunks are synced.
 func TestTwoNodesFullSyncLive(t *testing.T) {
 	const (
-		chunkCount = 10000
+		chunkCount = 5000
 	)
 
 	defer catchDuplicateChunkSync(t)()
@@ -850,8 +850,8 @@ func TestStarNetworkSync(t *testing.T) {
 		nodeCount     = 15
 		minPivotDepth = 1
 		chunkSize     = 4096
-		simTimeout    = 60 * time.Second
-		syncTime      = 2 * time.Second
+		simTimeout    = 2 * time.Minute
+		syncTime      = 10 * time.Second
 		filesize      = chunkCount * chunkSize
 	)
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{

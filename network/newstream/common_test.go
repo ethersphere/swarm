@@ -61,7 +61,7 @@ var (
 	bucketKeyLocalStore        = "localstore"
 	bucketKeyInitialBinIndexes = "bin-indexes"
 
-	simContextTimeout = 20 * time.Second
+	simContextTimeout = 90 * time.Second
 )
 
 func nodeSlipStream(sim *simulation.Simulation, id enode.ID) (s *SlipStream) {
