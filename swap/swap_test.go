@@ -1092,7 +1092,7 @@ func TestContractIntegrationWrapper(t *testing.T) {
 	opts.Context = ctx
 
 	// SubmitChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
-	go func() { time.Sleep(10 * time.Millisecond); backend.Commit() }()
+	go func() { time.Sleep(100 * time.Millisecond); backend.Commit() }()
 	receipt, err := issuerSwap.contractReference.SubmitChequeBeneficiary(
 		opts,
 		backend,
@@ -1147,7 +1147,7 @@ func TestContractIntegrationWrapper(t *testing.T) {
 
 	log.Debug("cash-in the cheque")
 	// CashChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
-	go func() { time.Sleep(10 * time.Millisecond); backend.Commit() }()
+	go func() { time.Sleep(100 * time.Millisecond); backend.Commit() }()
 	receipt, err = issuerSwap.contractReference.CashChequeBeneficiary(opts, backend, beneficiaryAddress, big.NewInt(payoutAmount))
 	if err != nil {
 		t.Fatal(err)
