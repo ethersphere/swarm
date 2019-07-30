@@ -74,8 +74,8 @@ type Params struct {
 	InitialDepositAmount uint64 //
 }
 
-// NewDefaultParams returns a Params struct filled with default values
-func NewDefaultParams() *Params {
+// NewParams returns a Params struct filled with default values
+func NewParams() *Params {
 	return &Params{
 		InitialDepositAmount: DefaultInitialDepositAmount,
 	}
@@ -89,7 +89,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		backend:             backend,
 		cheques:             make(map[enode.ID]*Cheque),
 		peers:               make(map[enode.ID]*Peer),
-		params:              NewDefaultParams(),
+		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
 		contractReference:   nil,
