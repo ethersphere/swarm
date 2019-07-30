@@ -1,18 +1,18 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package swap
 
@@ -57,13 +57,10 @@ func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary comm
 // handleMsg is for handling messages when receiving messages
 func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
-
 	case *EmitChequeMsg:
 		return sp.handleEmitChequeMsg(ctx, msg)
-
 	case *ErrorMsg:
 		return sp.handleErrorMsg(ctx, msg)
-
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
