@@ -386,7 +386,7 @@ func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
 	expectedBalances := calculateExpectedBalances(swap, bookings)
 	realBalances := swap.balances
 	if !reflect.DeepEqual(expectedBalances, realBalances) {
-		t.Fatal(fmt.Sprintf("After %d bookings, expected balance to be %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances)))
+		t.Fatalf("After %d bookings, expected balance to be %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances))
 	}
 }
 
@@ -447,8 +447,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 
 	// compare the balances
 	if tmpBalance != newBalance {
-		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d",
-			tmpBalance, newBalance))
+		t.Fatalf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d", tmpBalance, newBalance)
 	}
 }
 
@@ -528,8 +527,7 @@ func TestChequeEncode(t *testing.T) {
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000000")
 	if !bytes.Equal(encoded, expected) {
-		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x",
-			expected, encoded)
+		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x", expected, encoded)
 	}
 }
 
@@ -542,8 +540,7 @@ func TestChequeSigHash(t *testing.T) {
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("291619739fc0008915f09989411d22a29ea62eb39d86ed094ef51d6a420a1358")
 	if !bytes.Equal(hash, expected) {
-		t.Fatal(fmt.Sprintf("Unexpected sigHash of cheque. Expected: %x, result is: %x",
-			expected, hash))
+		t.Fatalf("Unexpected sigHash of cheque. Expected: %x, result is: %x", expected, hash)
 	}
 }
 
@@ -565,11 +562,10 @@ func TestSignContent(t *testing.T) {
 	// expected value (computed through truffle/js)
 	expected := testChequeSig
 	if err != nil {
-		t.Fatal(fmt.Sprintf("Error in signing: %s", err))
+		t.Fatalf("Error in signing: %s", err)
 	}
 	if !bytes.Equal(sig, expected) {
-		t.Fatal(fmt.Sprintf("Unexpected signature for cheque. Expected: %x, result is: %x",
-			expected, sig))
+		t.Fatalf("Unexpected signature for cheque. Expected: %x, result is: %x", expected, sig)
 	}
 }
 
