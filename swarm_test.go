@@ -186,6 +186,7 @@ func TestNewSwarm(t *testing.T) {
 	}
 }
 
+// TestNewSwarmFailure validates that invalid Swarm fields in repsect to the provided configuration cause a failure.
 func TestNewSwarmFailure(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarm")
 	if err != nil {
