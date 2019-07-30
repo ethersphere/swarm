@@ -443,8 +443,8 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	return nil
 }
 
-// implements the node.Service interface
-// stops all component services.
+// Stop stops all component services.
+// Implements the node.Service interface.
 func (s *Swarm) Stop() error {
 	if s.tracerClose != nil {
 		err := s.tracerClose.Close()
@@ -458,9 +458,6 @@ func (s *Swarm) Stop() error {
 		s.ps.Stop()
 	}
 	if s.swap != nil {
-		//if svc := s.swap.Service; svc != nil {
-		//svc.Stop()
-		//}
 		s.swap.Close()
 	}
 	if s.accountingMetrics != nil {
