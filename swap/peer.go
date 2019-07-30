@@ -99,7 +99,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		// blocks here, as we are waiting for the transaction to be mined
 		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
 		if err != nil {
-			log.Error("Got error when calling submitChequeBeneficiary", "error", err)
+			log.Error("error calling submitChequeBeneficiary", "error", err)
 			//TODO: do something with the error
 			return
 		}
