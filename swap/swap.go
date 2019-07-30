@@ -57,7 +57,7 @@ type Swap struct {
 	params              *Params              // economic and operational parameters
 	contractReference   *swap.Swap           // reference to the smart contract
 	oracle              PriceOracle          // the oracle providing the ether price for honey
-	paymentThreshold    int64                // balance difference required for requesting cheque
+	paymentThreshold    int64                // balance difference required for sending cheque
 	disconnectThreshold int64                // balance difference required for dropping peer
 }
 
