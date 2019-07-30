@@ -43,6 +43,7 @@ import (
 
 var timeout = 90 * time.Second
 
+// TestTwoNodesSyncWithGaps tests that syncing works with gaps in the localstore intervals
 func TestTwoNodesSyncWithGaps(t *testing.T) {
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
 		t.Helper()
@@ -213,6 +214,8 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	}
 }
 
+// TestTheeNodesUnionHistoricalSync brings up three nodes, uploads content too all of them and then
+// asserts that all of them have the union of all 3 local stores (depth is assumed to be 0)
 func TestThreeNodesUnionHistoricalSync(t *testing.T) {
 	nodes := 3
 	chunkCount := 1000
@@ -618,7 +621,7 @@ func catchDuplicateChunkSync(t *testing.T) (validate func()) {
 }
 
 // TestStarNetworkSync tests that syncing works on a more elaborate network topology
-// the test creates a network of 10 nodes and connects them in a star topology, this causes
+// the test creates a network of 8 nodes and connects them in a star topology, this causes
 // the pivot node to have neighbourhood depth > 0, which in turn means that from each
 // connected node, the pivot node should have only part of its chunks
 // The test checks that EVERY chunk that exists a node which is not the pivot, according to
@@ -743,6 +746,9 @@ func TestStarNetworkSync(t *testing.T) {
 	}
 }
 
+// This is a lightweight version of the previous simulation
+// it is potentially a duplicate case and is a good candidate for removal (or alternatively - remove the previous one
+// since it takes longer to complete)
 func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 	var (
 		chunkCount    = 500
@@ -785,8 +791,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newNodeConfig2 := testutil.NodeConfigAtPo(t, pivotBase, 0)
-	newNode2, err := sim.AddNode(override(newNodeConfig2))
+	newNode2, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
