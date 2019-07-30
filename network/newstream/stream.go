@@ -645,6 +645,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 			p.Drop()
 			return
 		}
+		close(w.done)
 	case <-time.After(5 * time.Second):
 		log.Error("batch has timed out", "ruid", w.ruid)
 		close(w.done)
