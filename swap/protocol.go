@@ -120,8 +120,6 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	s.addPeer(swapPeer)
 	defer s.removePeer(swapPeer)
 
-	s.logBalance(protoPeer)
-
 	return swapPeer.Run(swapPeer.handleMsg)
 }
 
