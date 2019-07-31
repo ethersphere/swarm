@@ -48,8 +48,8 @@ type Backend interface {
 	//TODO: needed? BalanceAt(ctx context.Context, address common.Address, blockNum *big.Int) (*big.Int, error)
 }
 
-// SimpleSwap interface defines the simple swap's exposed methods
-type SimpleSwap interface {
+// Contract interface defines the simple swap's exposed methods
+type Contract interface {
 	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout *big.Int) (common.Address, *types.Transaction, error)
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
 	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Transaction, error)
@@ -58,10 +58,8 @@ type SimpleSwap interface {
 	InstanceAt(address common.Address, backend bind.ContractBackend)
 }
 
-// Swap is a proxy object for Swap contracts.
-type Swap struct {
-	Instance *contract.SimpleSwap
-}
+// Swap is a implementation for SimpleSwap contracts.
+type Swap struct{}
 
 // Params encapsulates some contract parameters (currently mostly informational)
 type Params struct {
@@ -69,14 +67,14 @@ type Params struct {
 }
 
 // New returns a pointer to a new Swap struct
-func New() *Swap {
+func NewContract() Contract {
 	return &Swap{}
 }
 
 // ValidateCode checks that the on-chain code at address matches the expected swap
 // contract code.
 // TODO: have this as a package level function and pass the SimpleSwapBin as argument
-func (s *Swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
+func (s *swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
 	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
 		return err
