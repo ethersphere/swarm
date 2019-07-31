@@ -117,7 +117,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		}
 		// if Swap is enabled, we MUST have a contract API
 		if self.config.SwapAPI == "" {
-			return nil, fmt.Errorf("Swap enabled but no contract address given; fatal error condition, aborting.")
+			return nil, errors.New("Swap enabled but no contract address given; fatal error condition, aborting.")
 		}
 		log.Info("connecting to SWAP API", "url", self.config.SwapAPI)
 		self.backend, err = ethclient.Dial(self.config.SwapAPI)
@@ -370,10 +370,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		// check here again (maybe redundant): if enabled, we MUST have a contract API
-		if s.config.SwapAPI == "" {
-			return errors.New("SWAP enabled but no contract address given; fatal error condition, aborting")
-		}
 		ctx := context.Background() // The initial setup has no deadline.
 		err := s.DeploySwap(ctx)
 		if err != nil {
