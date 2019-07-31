@@ -569,10 +569,7 @@ func (s *Swarm) APIs() []rpc.API {
 
 // DeploySwap ensures that Swap is set up on chain.
 func (s *Swarm) DeploySwap(ctx context.Context) error {
-	err := s.swap.Deploy(ctx, s.backend, s.config.Path)
-	return err
-	//TODO: original message, what's this "resetting all connections in the hive"?
-	//log.Info(fmt.Sprintf("new swap contract deployed (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
+	return s.swap.Deploy(ctx, s.backend, s.config.Path)
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
