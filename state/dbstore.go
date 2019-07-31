@@ -36,6 +36,7 @@ type Store interface {
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
 	Keys(prefix string) (keys []string, err error)
+	Iterate(prefix string, iterFunc func([]byte, []byte)) (err error)
 	Close() error
 }
 
@@ -119,6 +120,16 @@ func (s *DBStore) Keys(prefix string) (keys []string, err error) {
 		return []string{}, err
 	}
 	return keys, nil
+}
+
+// Iterate entries which has a specific prefix
+func (s *DBStore) Iterate(prefix string, iterFunc func([]byte, []byte)) (err error) {
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
+	for iter.Next() {
+		iterFunc(iter.Key(), iter.Value())
+	}
+	iter.Release()
+	return iter.Error()
 }
 
 // Close releases the resources used by the underlying LevelDB.
