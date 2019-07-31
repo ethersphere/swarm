@@ -150,7 +150,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		log.Error("error while loading balance for peer", "peer", peer.ID().String())
-		return
+		return err
 	}
 
 	// Check if balance with peer is over the disconnect threshold
@@ -167,7 +167,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	var newBalance int64
 	newBalance, err = s.updateBalance(peer.ID(), amount)
 	if err != nil {
-		return
+		return err
 	}
 
 	// Check if balance with peer crosses the threshold
@@ -184,7 +184,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		}
 	}
 
-	return
+	return nil
 }
 
 func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
