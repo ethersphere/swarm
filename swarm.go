@@ -370,14 +370,12 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
-	// set up Swap
 	if s.config.SwapEnabled {
 		// check here again (maybe redundant): if enabled, we MUST have a contract API
 		if s.config.SwapAPI == "" {
-			return fmt.Errorf("SWAP enabled but no contract address given; fatal error condition, aborting")
+			return errors.New("SWAP enabled but no contract address given; fatal error condition, aborting")
 		}
 		ctx := context.Background() // The initial setup has no deadline.
-		// deploy the contract
 		err := s.DeploySwap(ctx)
 		if err != nil {
 			return fmt.Errorf("Unable to deploy swap contract: %v", err)
