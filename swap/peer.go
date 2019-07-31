@@ -97,7 +97,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	// submit cheque to the blockchain and cashes it directly
 	go func() {
 		// blocks here, as we are waiting for the transaction to be mined
-		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Sig)
+		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
 		if err != nil {
 			log.Error("error calling submitChequeBeneficiary", "error", err)
 			//TODO: do something with the error

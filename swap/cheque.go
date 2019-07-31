@@ -57,16 +57,16 @@ func (cheque *Cheque) sigHash() []byte {
 func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 	sigHash := cheque.sigHash()
 
-	if cheque.Sig == nil {
+	if cheque.Signature == nil {
 		return fmt.Errorf("tried to verify signature on cheque with sig nil")
 	}
 
-	if len(cheque.Sig) != 65 {
-		return fmt.Errorf("signature has invalid length: %d", len(cheque.Sig))
+	if len(cheque.Signature) != 65 {
+		return fmt.Errorf("signature has invalid length: %d", len(cheque.Signature))
 	}
 	// copy signature to avoid modifying the original
-	sig := make([]byte, len(cheque.Sig))
-	copy(sig, cheque.Sig)
+	sig := make([]byte, len(cheque.Signature))
+	copy(sig, cheque.Signature)
 	// reduce the v value of the signature by 27 (see signContent)
 	sig[len(sig)-1] -= 27
 	pubKey, err := crypto.SigToPub(sigHash, sig)
@@ -115,7 +115,7 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 		return false
 	}
 
-	if !bytes.Equal(cheque.Sig, other.Sig) {
+	if !bytes.Equal(cheque.Signature, other.Signature) {
 		return false
 	}
 
