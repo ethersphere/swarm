@@ -371,15 +371,13 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		ctx := context.Background() // The initial setup has no deadline.
-		err := s.DeploySwap(ctx)
+		err := s.DeploySwap(context.Background())
 		if err != nil {
 			return fmt.Errorf("Unable to deploy swap contract: %v", err)
 		}
 		log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 	} else {
-		// if Swap is disabled, do not error, just continue
-		log.Debug("SWAP disabled: no chequebook set")
+		log.Info("SWAP disabled: no chequebook set")
 	}
 
 	log.Info("Starting bzz service")
