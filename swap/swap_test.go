@@ -44,7 +44,6 @@ import (
 	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -171,8 +170,7 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 				t.Fatalf("Expected received cheque key to be %s, but is %s instead.", testCase.expectedReceivedChequeKey, actualReceivedChequeKey)
 			}
 
-			var nodeID enode.ID
-			nodeID = keyToID(actualBalanceKey, balancePrefix)
+			nodeID := keyToID(actualBalanceKey, balancePrefix)
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
@@ -494,7 +492,7 @@ func newDummyPeer() *dummyPeer {
 // creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
-	rw := &testutil.DummyMsgRW{}
+	rw := &dummyMsgRW{}
 	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, spec)
 	dummy := &dummyPeer{
 		Peer: protoPeer,
@@ -781,10 +779,9 @@ func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err err
 	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	if swap.owner.Contract, swap.contractReference, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration); err != nil {
-		return err
-	}
-	return nil
+	swap.owner.Contract, swap.contractReference, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+
+	return err
 }
 
 // TestSaveAndLoadLastReceivedCheque tests if a saved last received cheque can be loaded again later using the swap functions
@@ -815,7 +812,7 @@ func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 // hence the owner of this swap would sign cheques with beneficiaryKey and receive cheques from ownerKey (or another party) which is NOT the owner of this swap
 func newTestSwapAndPeer(t *testing.T) (*Swap, *Peer, string) {
 	swap, dir := newTestSwap(t)
-	// owner address is the beneficary (counterparty) for the peer
+	// owner address is the beneficiary (counterparty) for the peer
 	// that's because we expect cheques we receive to be signed by the address we would issue cheques to
 	peer := NewPeer(newDummyPeer().Peer, swap, nil, ownerAddress, testChequeContract)
 	// we need to adjust the owner address on swap because we will issue cheques to beneficiaryAddress
@@ -1160,4 +1157,18 @@ func TestContractIntegrationWrapper(t *testing.T) {
 	if result.PaidOut.Int64() != payoutAmount {
 		t.Fatalf("Expected paid out amount to be %d, but is %d", payoutAmount, result.PaidOut)
 	}
+}
+
+// dummyMsgRW implements MessageReader and MessageWriter
+// but doesn't do anything. Useful for dummy message sends
+type dummyMsgRW struct{}
+
+// ReadMsg is from the MessageReader interface
+func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
+	return p2p.Msg{}, nil
+}
+
+// WriteMsg is from the MessageWriter interface
+func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
+	return nil
 }
