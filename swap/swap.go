@@ -55,7 +55,7 @@ type Swap struct {
 	backend             cswap.Backend        // the backend (blockchain) used
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
-	contractReference   *swap.Swap           // reference to the smart contract
+	swapContract        *swap.Swap           // reference to the smart contract
 	oracle              PriceOracle          // the oracle providing the ether price for honey
 	paymentThreshold    int64                // balance difference required for sending cheque
 	disconnectThreshold int64                // balance difference required for dropping peer
@@ -92,7 +92,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
-		contractReference:   nil,
+		swapContract:        nil,
 		oracle:              NewPriceOracle(),
 	}
 	sw.owner = sw.createOwner(prvkey, contract)
@@ -401,7 +401,7 @@ func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
 func (s *Swap) GetParams() *swap.Params {
-	return s.contractReference.ContractParams()
+	return s.swapContract.ContractParams()
 }
 
 // Deploy deploys a new swap contract
@@ -457,7 +457,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 			time.Sleep(deployDelay)
 		}
 
-		if _, s.contractReference, tx, err = swap.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+		if _, s.swapContract, tx, err = swap.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
 			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
