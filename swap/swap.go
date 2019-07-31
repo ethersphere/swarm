@@ -267,7 +267,6 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	lastCheque := s.cheques[peer]
 
 	serial := uint64(1)
-	amount = uint64(amount)
 	if lastCheque != nil {
 		cheque = &Cheque{
 			ChequeParams: ChequeParams{
@@ -285,7 +284,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	}
 	cheque.ChequeParams.Timeout = defaultCashInDelay
 	cheque.ChequeParams.Contract = s.owner.Contract
-	cheque.ChequeParams.Honey = uint64(honey)
+	cheque.ChequeParams.Honey = honey
 	cheque.Beneficiary = beneficiary
 
 	cheque.Signature, err = s.signContent(cheque)

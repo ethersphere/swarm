@@ -143,7 +143,7 @@ func TestEmitCheque(t *testing.T) {
 	creditor := NewPeer(cProtoPeer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
 	debitor := NewPeer(dProtoPeer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
-	// set balance artifically
+	// set balance artificially
 	creditorSwap.balances[debitor.ID()] = 42
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// a safe check: at this point no cheques should be in the swap

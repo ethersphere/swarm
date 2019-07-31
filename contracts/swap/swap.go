@@ -52,7 +52,7 @@ type Backend interface {
 type SimpleSwap interface {
 	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout *big.Int) (common.Address, *types.Transaction, error)
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
-	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficary common.Address, requestPayout *big.Int) (*types.Transaction, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Transaction, error)
 	ValidateCode() bool
 	ContractParams() *Params
 	InstanceAt(address common.Address, backend bind.ContractBackend)
@@ -127,8 +127,8 @@ func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend,
 }
 
 // CashChequeBeneficiary cashes the cheque.
-func (s *Swap) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficary common.Address, requestPayout *big.Int) (*types.Receipt, error) {
-	tx, err := s.Instance.CashChequeBeneficiary(auth, beneficary, requestPayout)
+func (s *Swap) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error) {
+	tx, err := s.Instance.CashChequeBeneficiary(auth, beneficiary, requestPayout)
 	if err != nil {
 		return nil, err
 	}
