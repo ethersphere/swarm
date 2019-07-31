@@ -687,7 +687,7 @@ func TestContractIntegration(t *testing.T) {
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	tx, err := issuerSwap.contractReference.Instance.SubmitChequeBeneficiary(
+	tx, err := issuerSwap.swapContract.Instance.SubmitChequeBeneficiary(
 		opts,
 		big.NewInt(int64(cheque.Serial)),
 		big.NewInt(int64(cheque.Amount)),
@@ -713,7 +713,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("check cheques state")
 
 	// check state, check that cheque is indeed there
-	result, err := issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	result, err := issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -747,7 +747,7 @@ func TestContractIntegration(t *testing.T) {
 	backend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	tx, err = issuerSwap.contractReference.Instance.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(payoutAmount))
+	tx, err = issuerSwap.swapContract.Instance.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(payoutAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,7 +763,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 
 	// check again the status, check paid out is increase by amount
-	result, err = issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	result, err = issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -779,7 +779,7 @@ func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err err
 	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	swap.owner.Contract, swap.contractReference, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	swap.owner.Contract, swap.swapContract, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
 
 	return err
 }
@@ -1044,7 +1044,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 }
 
 // TestContractIntegrationWrapper tests a end-to-end cheque interaction.
-// Unlike the TestContractIntegration test this uses the swap.contractReference where possible
+// Unlike the TestContractIntegration test this uses the swap.swapContract where possible
 // First a simulated backend is created, then we deploy the issuer's swap contract.
 // We issue a test cheque with the beneficiary address and on the issuer's contract,
 // and immediately try to cash-in the cheque
@@ -1084,7 +1084,7 @@ func TestContractIntegrationWrapper(t *testing.T) {
 
 	// SubmitChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
 	go func() { time.Sleep(100 * time.Millisecond); backend.Commit() }()
-	receipt, err := issuerSwap.contractReference.SubmitChequeBeneficiary(
+	receipt, err := issuerSwap.swapContract.SubmitChequeBeneficiary(
 		opts,
 		backend,
 		big.NewInt(int64(cheque.Serial)),
@@ -1103,7 +1103,7 @@ func TestContractIntegrationWrapper(t *testing.T) {
 	log.Debug("check cheques state")
 
 	// check state, check that cheque is indeed there
-	result, err := issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	result, err := issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1139,7 +1139,7 @@ func TestContractIntegrationWrapper(t *testing.T) {
 	log.Debug("cash-in the cheque")
 	// CashChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
 	go func() { time.Sleep(100 * time.Millisecond); backend.Commit() }()
-	receipt, err = issuerSwap.contractReference.CashChequeBeneficiary(opts, backend, beneficiaryAddress, big.NewInt(payoutAmount))
+	receipt, err = issuerSwap.swapContract.CashChequeBeneficiary(opts, backend, beneficiaryAddress, big.NewInt(payoutAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1149,7 +1149,7 @@ func TestContractIntegrationWrapper(t *testing.T) {
 	}
 
 	// check again the status, check paid out is increase by amount
-	result, err = issuerSwap.contractReference.Instance.Cheques(nil, beneficiaryAddress)
+	result, err = issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
