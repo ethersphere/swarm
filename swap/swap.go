@@ -207,11 +207,13 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer := s.getPeer(peer)
+	swapPeer, err := s.getPeer(peer)
+	if err != nil {
+		return fmt.Errorf("error while getting peer: %s", err.Error())
+	}
 	cheque, err := s.createCheque(peer)
 	if err != nil {
-		log.Error("error while creating cheque: %s", err.Error())
-		return err
+		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
 
 	log.Info("sending cheque", "serial", cheque.ChequeParams.Serial, "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
@@ -220,8 +222,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	err = s.stateStore.Put(sentChequeKey(peer), &cheque)
 	// TODO: error handling might be quite more complex
 	if err != nil {
-		log.Error("error while storing the last cheque: %s", err.Error())
-		return err
+		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
 	}
 
 	emit := &EmitChequeMsg{
@@ -242,7 +243,10 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer := s.getPeer(peer)
+	swapPeer, err := s.getPeer(peer)
+	if err != nil {
+		return nil, fmt.Errorf("error while getting peer: %s", err.Error())
+	}
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance := s.balances[peer]
@@ -253,8 +257,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var amount uint64
 	amount, err = s.oracle.GetPrice(honey)
 	if err != nil {
-		log.Error("error getting price from oracle", "err", err)
-		return nil, err
+		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
 	}
 
 	// we need to ignore the error check when loading from the StateStore,

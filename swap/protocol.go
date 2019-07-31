@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -137,8 +138,13 @@ func (s *Swap) addPeer(p *Peer) {
 	s.peers[p.ID()] = p
 }
 
-func (s *Swap) getPeer(id enode.ID) *Peer {
-	return s.peers[id]
+func (s *Swap) getPeer(id enode.ID) (*Peer, error) {
+	var err error
+	peer := s.peers[id]
+	if peer == nil {
+		err = fmt.Errorf("peer %s not found", id.String())
+	}
+	return peer, err
 }
 
 // PublicAPI would be the public API accessor for protocol methods
