@@ -154,7 +154,7 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) (uint64, error) {
 	return actualAmount, nil
 }
 
-// verifyChequeProperties verifies the signautre and if the cheque fields are appropiate for this peer
+// verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
 // it does not verify anything that requires knowing the previous cheque
 func (sp *Peer) verifyChequeProperties(cheque *Cheque) error {
 	if cheque.Contract != sp.contractAddress {
