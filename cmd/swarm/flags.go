@@ -45,6 +45,11 @@ var (
 		Usage:  "Swarm local http api port",
 		EnvVar: SwarmEnvPort,
 	}
+	SwarmNATInterfaceFlag = cli.StringFlag{
+		Name:   "natif",
+		Usage:  "Announce the IP address of a given network interface (e.g. eth0)",
+		EnvVar: SwarmEnvNATInterface,
+	}
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:   "bzznetworkid",
 		Usage:  "Network identifier (integer, default 3=swarm testnet)",
@@ -165,6 +170,10 @@ var (
 	SwarmBootnodeModeFlag = cli.BoolFlag{
 		Name:  "bootnode-mode",
 		Usage: "Run Swarm in Bootnode mode",
+	}
+	SwarmDisableAutoConnectFlag = cli.BoolFlag{
+		Name:  "disable-auto-connect",
+		Usage: "Disables the peer discovery mechanism in the hive protocol as well as the auto connect loop (manual peer addition)",
 	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",

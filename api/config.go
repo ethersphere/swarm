@@ -57,7 +57,7 @@ type Config struct {
 	// TODO: Add swap.Params --> define! (economic parameters)
 
 	*network.HiveParams
-	Pss                  *pss.PssParams
+	Pss                  *pss.Params
 	Contract             common.Address
 	EnsRoot              common.Address
 	EnsAPIs              []string
@@ -74,6 +74,7 @@ type Config struct {
 	MaxStreamPeerServers int
 	LightNodeEnabled     bool
 	BootnodeMode         bool
+	DisableAutoConnect   bool
 	SyncUpdateDelay      time.Duration
 	Cors                 string
 	BzzAccount           string
@@ -87,7 +88,7 @@ func NewConfig() (c *Config) {
 	c = &Config{
 		FileStoreParams:      storage.NewFileStoreParams(),
 		HiveParams:           network.NewHiveParams(),
-		Pss:                  pss.NewPssParams(),
+		Pss:                  pss.NewParams(),
 		ListenAddr:           DefaultHTTPListenAddr,
 		Port:                 DefaultHTTPPort,
 		Path:                 node.DefaultDataDir(),

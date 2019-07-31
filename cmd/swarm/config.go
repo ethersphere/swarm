@@ -81,6 +81,7 @@ const (
 	SwarmEnvStoreCapacity        = "SWARM_STORE_CAPACITY"
 	SwarmEnvStoreCacheCapacity   = "SWARM_STORE_CACHE_CAPACITY"
 	SwarmEnvBootnodeMode         = "SWARM_BOOTNODE_MODE"
+	SwarmEnvNATInterface         = "SWARM_NAT_INTERFACE"
 	SwarmAccessPassword          = "SWARM_ACCESS_PASSWORD"
 	SwarmAutoDefaultPath         = "SWARM_AUTO_DEFAULTPATH"
 	SwarmGlobalstoreAPI          = "SWARM_GLOBALSTORE_API"
@@ -264,6 +265,10 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 
 	if ctx.GlobalIsSet(SwarmBootnodeModeFlag.Name) {
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(SwarmDisableAutoConnectFlag.Name) {
+		currentConfig.DisableAutoConnect = ctx.GlobalBool(SwarmDisableAutoConnectFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
