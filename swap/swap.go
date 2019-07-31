@@ -304,6 +304,17 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	return peerBalance, err
 }
 
+func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
+	balances := make(map[enode.ID]int64)
+
+	// add in-memory balance peers
+	for peerID, peerBalance := range s.balances {
+		balances[peerID] = peerBalance
+	}
+
+	return balances, nil
+}
+
 // Balances returns the balances for all known SWAP peers
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
