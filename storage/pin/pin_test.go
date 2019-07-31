@@ -138,28 +138,40 @@ func TestListPinInfo(t *testing.T) {
 	}
 
 	// Get the list of pinned files by calling the ListPinFiles command
-	pinInfo := p.ListPinFiles()
+	pinInfo, err := p.ListPinFiles()
+	if err != nil {
+		t.Fatalf("Error executing ListPinFiles command")
+	}
 
 	// Check if the uploaded collection is in the list files data structure
 	fileInfo, ok := pinInfo[hex.EncodeToString(hash)]
 	if !ok {
 		t.Fatalf("uploaded collection not pinned")
 	}
-	if fileInfo.PinCounter != 1 {
-		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.PinCounter)
+	if fileInfo.pinCounter != 1 {
+		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.pinCounter)
 	}
-	if fileInfo.IsRaw {
-		t.Fatalf("IsRaw expected is false got is true")
+	if fileInfo.isRaw {
+		t.Fatalf("isRaw expected is false got is true")
 	}
 
 	// Pin it once more and check if the counters increases
 	err = p.PinFiles(hex.EncodeToString(hash), false, "")
+	if err != nil {
+		t.Fatalf("Could not pin " + err.Error())
+	}
+
+	// Get the list of pinned files by calling the ListPinFiles command
+	pinInfo, err = p.ListPinFiles()
+	if err != nil {
+		t.Fatalf("Error executing ListPinFiles command")
+	}
 	fileInfo, ok = pinInfo[hex.EncodeToString(hash)]
 	if err != nil {
 		t.Fatalf("Could not pin " + err.Error())
 	}
-	if fileInfo.PinCounter != 2 {
-		t.Fatalf("pincounter expected is 2 got is %d", fileInfo.PinCounter)
+	if fileInfo.pinCounter != 2 {
+		t.Fatalf("pincounter expected is 2 got is %d", fileInfo.pinCounter)
 	}
 
 	// Unpin it and check if the counter decrements
@@ -167,18 +179,30 @@ func TestListPinInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not unpin " + err.Error())
 	}
+
+	// Get the list of pinned files by calling the ListPinFiles command
+	pinInfo, err = p.ListPinFiles()
+	if err != nil {
+		t.Fatalf("Error executing ListPinFiles command")
+	}
 	fileInfo, ok = pinInfo[hex.EncodeToString(hash)]
 	if !ok {
 		t.Fatalf("collection totally unpinned")
 	}
-	if fileInfo.PinCounter != 1 {
-		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.PinCounter)
+	if fileInfo.pinCounter != 1 {
+		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.pinCounter)
 	}
 
 	// Unpin it final time and the entry should not be there
 	err = p.UnpinFiles(hex.EncodeToString(hash), "")
 	if err != nil {
 		t.Fatalf("Could not unpin " + err.Error())
+	}
+
+	// Get the list of pinned files by calling the ListPinFiles command
+	pinInfo, err = p.ListPinFiles()
+	if err != nil {
+		t.Fatalf("Error executing ListPinFiles command")
 	}
 	_, ok = pinInfo[hex.EncodeToString(hash)]
 	if ok {
@@ -218,7 +242,7 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, func()) {
 	}
 
 	swarmApi := api.NewAPI(fileStore, nil, feeds.Handler, nil, tags)
-	pinAPI := NewApi(lStore, stateStore, nil, tags, swarmApi)
+	pinAPI := NewAPI(lStore, stateStore, nil, tags, swarmApi)
 
 	closeFunc := func() {
 		err := stateStore.Close()
@@ -314,7 +338,7 @@ func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool
 // This function is called from test after a file is pinned.
 // It check if the file's chunks are properly pinned.
 // Assumption is that the file is uploaded in an empty database so that it can be easily tested.
-// It takes the root hash and expected PinCounter value.
+// It takes the root hash and expected pinCounter value.
 // It also has some hacks to take care of existing issues in the way we upload.
 //
 // The check process is as follows
@@ -327,14 +351,15 @@ func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool
 //         b) Get all chunks that are pinned (from pinIndex)
 //            In every upload.. an empty manifest is uploaded. that why add this hash to this list
 //         c) Check if both the above lists are equal
-//   3) Check if all the chunks pinned have the proper PinCounter
+//   3) Check if all the chunks pinned have the proper pinCounter
 //         -  This is just a simple go through of all the pinned chunks list and check if the counter is
 //            equal to the pin counter given as argument
 func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, isRaw bool) {
 	t.Helper()
 
 	// 1 - Check if the root hash is pinned in state store
-	if _, ok := p.pinnedFiles[rootHash]; !ok {
+	_, err := p.getPinnedFile(rootHash)
+	if err != nil {
 		t.Fatalf("File %s not pinned in state store", rootHash)
 	}
 
@@ -375,8 +400,7 @@ func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, i
 		}
 	}
 
-	pinnedFiles := make(map[string]FileInfo)
-	err := loadPinnedFilesInfo(pinnedFiles, p.state)
+	pinnedFiles, err := p.ListPinFiles()
 	if err != nil {
 		t.Fatalf("Could not load pin state from state store")
 	}
@@ -386,21 +410,21 @@ func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, i
 		t.Fatalf("Fileinfo not present in state store")
 	}
 
-	if fileInfo.IsRaw != isRaw {
-		t.Fatalf("Invalid IsRaw state in fileInfo")
+	if fileInfo.isRaw != isRaw {
+		t.Fatalf("Invalid isRaw state in fileInfo")
 	}
 
-	if fileInfo.PinCounter != pinCounter {
-		t.Fatalf("Invalid pincounter expected %d got %d", pinCounter, fileInfo.PinCounter)
+	if fileInfo.pinCounter != pinCounter {
+		t.Fatalf("Invalid pincounter expected %d got %d", pinCounter, fileInfo.pinCounter)
 	}
-
 }
 
 func failIfNotUnpinned(t *testing.T, p *API, rootHash string, isRaw bool) {
 	t.Helper()
 
 	// root hash should not be in state DB
-	if _, ok := p.pinnedFiles[rootHash]; ok {
+	_, err := p.getPinnedFile(rootHash)
+	if err == nil {
 		t.Fatalf("File %s pinned in pinFilesIndex", rootHash)
 	}
 
@@ -461,7 +485,6 @@ func (p *API) collectPinnedChunks(t *testing.T, rootHash string, credentials str
 		return nil
 	}
 	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
-
 	return pinnedChunks
 }
 

@@ -138,9 +138,13 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		item.AccessTimestamp = now()
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pushIndex.DeleteInBatch(batch, item)
-		db.gcIndex.PutInBatch(batch, item)
-		gcSizeChange++
 
+		// Add in gcIndex only if this chunk is not pinned
+		ok, err := db.pinIndex.Has(item)
+		if !ok {
+			db.gcIndex.PutInBatch(batch, item)
+			gcSizeChange++
+		}
 	case chunk.ModeSetRemove:
 		// delete from retrieve, pull, gc
 
@@ -182,24 +186,14 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			if err == leveldb.ErrNotFound {
 				// If this Address is not present in DB, then its a new entry
 				existingPinCounter = 0
+
+				// Add in gcExcludeIndex of the chunk is not pinned already
+				db.gcExcludeIndex.PutInBatch(batch, item)
 			} else {
 				return err
 			}
 		} else {
 			existingPinCounter = pinnedChunk.PinCounter
-		}
-
-		// If this is the first time the chunk is getting pinned
-		// remove this from the gcIndex
-		if existingPinCounter == 0 {
-			db.gcIndex.DeleteInBatch(batch, item)
-
-			// a check is needed for decrementing gcSize
-			// as delete is not reporting if the key/value pair
-			// is deleted or not
-			if _, err := db.gcIndex.Get(item); err == nil {
-				gcSizeChange = -1
-			}
 		}
 
 		// Otherwise increase the existing counter by 1
@@ -219,16 +213,6 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			db.pinIndex.PutInBatch(batch, item)
 		} else {
 			db.pinIndex.DeleteInBatch(batch, item)
-
-			// If the file is getting unpinned, add it to gcIndex
-			db.gcIndex.PutInBatch(batch, item)
-
-			// a check is needed for decrementing gcSize
-			// as delete is not reporting if the key/value pair
-			// is deleted or not
-			if _, err := db.gcIndex.Get(item); err == nil {
-				gcSizeChange = -1
-			}
 		}
 	default:
 		return ErrInvalidMode

@@ -50,6 +50,12 @@ func (db *DB) collectGarbageWorker() {
 	for {
 		select {
 		case <-db.collectGarbageTrigger:
+			// run through the recently pinned chunks and
+			// remove them from the gcIndex before calling GC
+			err := db.removePinnedChunksFromGC()
+			if err != nil {
+				log.Error("localstore exclude pinned chunks", "err", err)
+			}
 			// run a single collect garbage run and
 			// if done is false, gcBatchSize is reached and
 			// another collect garbage run is needed
@@ -136,6 +142,40 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		return 0, false, err
 	}
 	return collectedCount, done, nil
+}
+
+// removePinnedChunksFromGC removed any recently pinned chunks from the gcIndex.
+func (db *DB) removePinnedChunksFromGC() (err error) {
+	metricName := "localstore.gc.exclude"
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+	defer func() {
+		if err != nil {
+			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+		}
+	}()
+
+	batch := new(leveldb.Batch)
+	excludedCount := 0
+	err = db.gcExcludeIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		ok, err := db.gcIndex.Has(item)
+		if ok {
+			db.gcIndex.DeleteInBatch(batch, item)
+			excludedCount++
+		}
+		db.gcExcludeIndex.DeleteInBatch(batch, item)
+		return false, nil
+	}, nil)
+	if err != nil {
+		return err
+	}
+	metrics.GetOrRegisterCounter(metricName+".excluded-count", nil).Inc(int64(excludedCount))
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		metrics.GetOrRegisterCounter(metricName+".writebatch.err", nil).Inc(1)
+		return err
+	}
+	return nil
 }
 
 // gcTrigger retruns the absolute value for garbage collection

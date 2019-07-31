@@ -166,7 +166,7 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 	// signature is the last item in the chunk data
 	copy(r.binaryData[updateLength:], r.Signature[:])
 
-	chunk := storage.NewChunk(r.idAddr, r.binaryData, 0)
+	chunk := storage.NewChunk(r.idAddr, r.binaryData)
 	return chunk, nil
 }
 

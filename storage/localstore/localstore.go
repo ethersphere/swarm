@@ -80,6 +80,9 @@ type DB struct {
 	// garbage collection index
 	gcIndex shed.Index
 
+	// garbage collection exclude index for pinned contents
+	gcExcludeIndex shed.Index
+
 	// pin files Index
 	pinIndex shed.Index // Index which stores address of all the pinned chunks and their pin counter
 
@@ -341,7 +344,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 
 	// Create a index structure for storing pinned chunks and their pin counts
-	db.pinIndex, err = db.shed.NewIndex("Hash->PinCounter", shed.IndexFuncs{
+	db.pinIndex, err = db.shed.NewIndex("Hash->pinCounter", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
@@ -356,6 +359,26 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.PinCounter = binary.BigEndian.Uint64(value[:8])
+			return e, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a index structure for excluding pinned chunks from gcIndex
+	db.gcExcludeIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			return nil, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			return e, nil
 		},
 	})

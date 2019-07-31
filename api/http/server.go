@@ -261,7 +261,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(pin.SwarmPinHeaderName)
+	headerPin := r.Header.Get(pin.HeaderName)
 
 	if uri.Path != "" {
 		postRawFail.Inc(1)
@@ -332,7 +332,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(pin.SwarmPinHeaderName)
+	headerPin := r.Header.Get(pin.HeaderName)
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {

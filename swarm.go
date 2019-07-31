@@ -234,7 +234,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
 
 	// Instantiate the pinAPI object with the already opened localstore
-	self.pinAPI = pin.NewApi(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
+	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")

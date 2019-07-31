@@ -172,6 +172,9 @@ func TestPinGC(t *testing.T) {
 		}
 	}
 
+	// GC exclude index should have all the pinned chunks before GC is triggered
+	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(pinChunksCount)))
+
 	gcTarget := db.gcTarget()
 
 	for {
@@ -191,11 +194,64 @@ func TestPinGC(t *testing.T) {
 
 	t.Run("pin Index count", newItemsCountTest(db.pinIndex, int(pinChunksCount)))
 
+	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(0)))
+
 	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
+
+	for _, hash := range pinAddrs {
+		_, err := db.Get(context.Background(), chunk.ModeGetRequest, hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Upload chunks, pin those chunks, add to GC after it is pinned
+// check if the pinned files are still around
+func TestGCAfterPin(t *testing.T) {
+
+	chunkCount := 50
+
+	db, cleanupFunc := newTestDB(t, &Options{
+		Capacity: 100,
+	})
+	defer cleanupFunc()
+
+	pinAddrs := make([]chunk.Address, 0)
+
+	// upload random chunks
+	for i := 0; i < chunkCount; i++ {
+		ch := generateTestRandomChunk()
+
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Pin before adding to GC in ModeSetSync
+		err = db.Set(context.Background(), chunk.ModeSetPin, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+		pinAddrs = append(pinAddrs, ch.Address())
+
+		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, int(chunkCount)))
+
+	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(chunkCount)))
+
+	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(chunkCount)))
+
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(0)))
 
 	for _, hash := range pinAddrs {
 		_, err := db.Get(context.Background(), chunk.ModeGetRequest, hash)

@@ -52,7 +52,7 @@ func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (
 		}
 		return nil, err
 	}
-	return chunk.NewChunk(out.Address, out.Data, out.PinCounter), nil
+	return chunk.NewChunk(out.Address, out.Data).WithPinCounter(out.PinCounter), nil
 }
 
 // get returns Item from the retrieval index
@@ -97,11 +97,11 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 		}()
 
 	case chunk.ModeGetPin:
-		pinnedChunk, err := db.pinIndex.Get(item)
+		pinnedItem, err := db.pinIndex.Get(item)
 		if err != nil {
 			return out, err
 		}
-		return pinnedChunk, nil
+		return pinnedItem, nil
 
 	// no updates to indexes
 	case chunk.ModeGetSync:

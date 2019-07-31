@@ -182,7 +182,7 @@ func generateTestRandomChunk() chunk.Chunk {
 	rand.Read(data)
 	key := make([]byte, 32)
 	rand.Read(key)
-	return chunk.NewChunk(key, data, 0)
+	return chunk.NewChunk(key, data)
 }
 
 // TestGenerateTestRandomChunk validates that
