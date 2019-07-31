@@ -123,8 +123,6 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader) (addrs
 
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
-		// Pinning doesn't matter when splitting file for getting hash
-		// The file is not stored in the chunk DB here
 		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, false, tag),
 	}
 	// do the actual splitting anyway, no way around it

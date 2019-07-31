@@ -294,7 +294,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", addr)
 
 	// Add the root hash of the RAW file in the pinFilesIndex
-	if headerPin != "" {
+	if strings.ToLower(headerPin) == "true" {
 		err = s.pinAPI.PinFiles(hex.EncodeToString(addr), true, "")
 		if err != nil {
 			postRawFail.Inc(1)
@@ -384,7 +384,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	tag.DoneSplit(newAddr)
 
 	// Pin the file
-	if headerPin != "" {
+	if strings.ToLower(headerPin) == "true" {
 		err = s.pinAPI.PinFiles(hex.EncodeToString(newAddr), false, "")
 		if err != nil {
 			postFilesFail.Inc(1)

@@ -76,7 +76,6 @@ var manifestCommand = cli.Command{
 // with only one entry, which meta-data will be added to the original manifest.
 // On success, this function will print new (updated) manifest's hash.
 func manifestAdd(ctx *cli.Context) {
-
 	toPin := ctx.Bool(SwarmPinFlag.Name)
 
 	args := ctx.Args()
@@ -113,7 +112,6 @@ func manifestAdd(ctx *cli.Context) {
 // with only one entry, which meta-data will be added to the original manifest.
 // On success, this function will print hash of the updated manifest.
 func manifestUpdate(ctx *cli.Context) {
-
 	toPin := ctx.Bool(SwarmPinFlag.Name)
 
 	args := ctx.Args()
@@ -155,7 +153,6 @@ func manifestUpdate(ctx *cli.Context) {
 // On success, this function will print hash of the manifest which does not
 // contain the path.
 func manifestRemove(ctx *cli.Context) {
-
 	toPin := ctx.Bool(SwarmPinFlag.Name)
 
 	args := ctx.Args()

@@ -44,6 +44,31 @@ type FileInfo struct {
 	pinCounter uint64
 }
 
+// MarshalBinary encodes the FileInfo object in to a binary form for storage
+func (f *FileInfo) MarshalBinary() (data []byte, err error) {
+	data = make([]byte, 17)
+	if f.isRaw {
+		data[0] = 1
+	} else {
+		data[0] = 0
+	}
+	binary.BigEndian.PutUint64(data[1:], uint64(f.fileSize))
+	binary.BigEndian.PutUint64(data[9:], uint64(f.pinCounter))
+	return data, nil
+}
+
+// UnmarshalBinary decodes the binary form from the state store to the FileInfo object
+func (f *FileInfo) UnmarshalBinary(data []byte) error {
+	if data[0] == 1 {
+		f.isRaw = true
+	} else {
+		f.isRaw = false
+	}
+	f.fileSize = binary.BigEndian.Uint64(data[1:])
+	f.pinCounter = binary.BigEndian.Uint64(data[9:])
+	return nil
+}
+
 // API is the main object which implements all things pinning.
 type API struct {
 	db         *localstore.DB
@@ -217,7 +242,7 @@ func (p *API) ListPinFiles() (map[string]FileInfo, error) {
 		if err != nil {
 			log.Debug("Error unmarshaling fileinfo from state store", "Address", hash)
 		}
-		log.Info("Pinned file", "Address", hash, "IsRAW", fileInfo.isRaw,
+		log.Debug("Pinned file", "Address", hash, "IsRAW", fileInfo.isRaw,
 			"fileSize", fileInfo.fileSize, "pinCounter", fileInfo.pinCounter)
 		pinnedFiles[hash] = fileInfo
 	}
@@ -298,6 +323,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 		actualFileSize := uint64(0)
 		rcvdFileSize := uint64(0)
 		doneChunkWorker := make(chan struct{})
+		errC := make(chan error)
 		var cwg sync.WaitGroup // Wait group to wait for chunk processing to complete
 
 	QuitChunkFor:
@@ -305,7 +331,6 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 			select {
 			case <-doneChunkWorker:
 				break QuitChunkFor
-
 			case ref := <-chunkWorkers:
 				cwg.Add(1)
 				go func() {
@@ -314,6 +339,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 					chunkData, err := getter.Get(context.Background(), ref)
 					if err != nil {
 						log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(ref))
+						errC <- err
 						close(doneChunkWorker)
 						return
 					}
@@ -321,6 +347,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 					datalen := len(chunkData)
 					if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
 						log.Error("Invalid chunk data from localstore.", "Address", hex.EncodeToString(ref))
+						errC <- err
 						close(doneChunkWorker)
 						return
 					}
@@ -354,11 +381,12 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 					if err != nil {
 						// TODO: if this happens, we should go back and revert the entire file's chunks
 						log.Error("Could not unpin chunk.", "Address", hex.EncodeToString(ref))
+						errC <- err
+						close(doneChunkWorker)
 					}
 				}()
 			}
 		}
-
 		// Wait for all the chunks to finish execution
 		cwg.Wait()
 	}
@@ -400,29 +428,4 @@ func (p *API) getPinnedFile(rootHash string) (FileInfo, error) {
 	fileInfo := FileInfo{}
 	err := p.state.Get(key, &fileInfo)
 	return fileInfo, err
-}
-
-// MarshalBinary encodes the FileInfo object in to a binary form for storage
-func (f *FileInfo) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, 17)
-	if f.isRaw {
-		data[0] = 1
-	} else {
-		data[0] = 0
-	}
-	binary.BigEndian.PutUint64(data[1:], uint64(f.fileSize))
-	binary.BigEndian.PutUint64(data[9:], uint64(f.pinCounter))
-	return data, nil
-}
-
-// UnmarshalBinary decodes the binary form from the state store to the FileInfo object
-func (f *FileInfo) UnmarshalBinary(data []byte) error {
-	if data[0] == 1 {
-		f.isRaw = true
-	} else {
-		f.isRaw = false
-	}
-	f.fileSize = binary.BigEndian.Uint64(data[1:])
-	f.pinCounter = binary.BigEndian.Uint64(data[9:])
-	return nil
 }

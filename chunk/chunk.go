@@ -52,7 +52,6 @@ func NewChunk(addr Address, data []byte) Chunk {
 	return &chunk{
 		addr:       addr,
 		sdata:      data,
-		pinCounter: 0,
 	}
 }
 

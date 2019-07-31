@@ -17,7 +17,10 @@
 package localstore
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"github.com/ethersphere/swarm/shed"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -173,7 +176,7 @@ func TestPinGC(t *testing.T) {
 	}
 
 	// GC exclude index should have all the pinned chunks before GC is triggered
-	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(pinChunksCount)))
+	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, len(pinAddrs)))
 
 	gcTarget := db.gcTarget()
 
@@ -202,12 +205,28 @@ func TestPinGC(t *testing.T) {
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 
-	for _, hash := range pinAddrs {
-		_, err := db.Get(context.Background(), chunk.ModeGetRequest, hash)
-		if err != nil {
-			t.Fatal(err)
+	t.Run("chunks still pinned", func(t *testing.T) {
+		for _, hash := range pinAddrs {
+			_, err := db.Get(context.Background(), chunk.ModeGetRequest, hash)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-	}
+	})
+
+	t.Run("pinned chunk not in gc Index", func(t *testing.T) {
+		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+			for _, pinHash := range pinAddrs {
+				if bytes.Equal(pinHash, item.Address) {
+					t.Errorf("pin chunk %v present in gcIndex",hex.EncodeToString(pinHash))
+				}
+			}
+			return false, nil
+		}, nil)
+		if err != nil {
+			t.Error("could not iterate gcIndex")
+		}
+	})
 }
 
 // Upload chunks, pin those chunks, add to GC after it is pinned
@@ -248,8 +267,6 @@ func TestGCAfterPin(t *testing.T) {
 	t.Run("pin Index count", newItemsCountTest(db.pinIndex, int(chunkCount)))
 
 	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(chunkCount)))
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(chunkCount)))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(0)))
 

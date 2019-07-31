@@ -163,7 +163,6 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		msg.peer = sp
 		log.Trace("handle.chunk.delivery", "put", msg.Addr)
 
-		// Dont pin the chunk if it comes from outside
 		_, err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {

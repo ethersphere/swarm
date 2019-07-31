@@ -114,7 +114,6 @@ func (db *DB) schemaIndexPrefix(name string) (id byte, err error) {
 
 // getSchema retrieves the complete schema from
 // the database.
-// This is exported for displaying the schema info outside
 func (db *DB) getSchema() (s schema, err error) {
 	b, err := db.Get(keySchema)
 	if err != nil {

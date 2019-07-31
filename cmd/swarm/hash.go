@@ -80,7 +80,6 @@ func hash(ctx *cli.Context) {
 	stat, _ := f.Stat()
 	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams(), chunk.NewTags())
 
-	// Dont pin as the file is not stored in the chunk DB (its stored in FakeStore)
 	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)

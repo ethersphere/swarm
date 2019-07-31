@@ -141,6 +141,9 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 
 		// Add in gcIndex only if this chunk is not pinned
 		ok, err := db.pinIndex.Has(item)
+		if err != nil {
+			return err
+		}
 		if !ok {
 			db.gcIndex.PutInBatch(batch, item)
 			gcSizeChange++

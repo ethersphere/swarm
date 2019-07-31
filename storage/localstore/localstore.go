@@ -84,7 +84,7 @@ type DB struct {
 	gcExcludeIndex shed.Index
 
 	// pin files Index
-	pinIndex shed.Index // Index which stores address of all the pinned chunks and their pin counter
+	pinIndex shed.Index
 
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field

@@ -17,6 +17,8 @@
 package localstore
 
 import (
+	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -52,7 +54,7 @@ func (db *DB) collectGarbageWorker() {
 		case <-db.collectGarbageTrigger:
 			// run through the recently pinned chunks and
 			// remove them from the gcIndex before calling GC
-			err := db.removePinnedChunksFromGC()
+			err := db.removeChunksInExcludeIndexFromGC()
 			if err != nil {
 				log.Error("localstore exclude pinned chunks", "err", err)
 			}
@@ -144,8 +146,8 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	return collectedCount, done, nil
 }
 
-// removePinnedChunksFromGC removed any recently pinned chunks from the gcIndex.
-func (db *DB) removePinnedChunksFromGC() (err error) {
+// removeChunksInExcludeIndexFromGC removed any recently chunks in the exclude Index, from the gcIndex.
+func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
 	metricName := "localstore.gc.exclude"
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
@@ -155,12 +157,20 @@ func (db *DB) removePinnedChunksFromGC() (err error) {
 		}
 	}()
 
+	// protect database from changing idexes and gcSize
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
 	batch := new(leveldb.Batch)
 	excludedCount := 0
+
+
+
 	err = db.gcExcludeIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		ok, err := db.gcIndex.Has(item)
 		if ok {
 			db.gcIndex.DeleteInBatch(batch, item)
+			fmt.Println("Deleting from gcIndex " + hex.EncodeToString(item.Address))
 			excludedCount++
 		}
 		db.gcExcludeIndex.DeleteInBatch(batch, item)
