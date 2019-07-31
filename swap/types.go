@@ -37,7 +37,7 @@ type ChequeParams struct {
 // TODO: There should be a request cheque struct that only gives the Serial
 type Cheque struct {
 	ChequeParams
-	Sig []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
+	Signature []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
 }
 
 // HandshakeMsg is exchanged on peer handshake

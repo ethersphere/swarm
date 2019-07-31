@@ -293,7 +293,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	cheque.ChequeParams.Honey = uint64(honey)
 	cheque.Beneficiary = beneficiary
 
-	cheque.Sig, err = s.signContent(cheque)
+	cheque.Signature, err = s.signContent(cheque)
 
 	return cheque, err
 }
