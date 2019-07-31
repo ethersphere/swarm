@@ -19,7 +19,6 @@ package localstore
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"github.com/ethersphere/swarm/shed"
 	"io/ioutil"
 	"math/rand"
@@ -218,13 +217,13 @@ func TestPinGC(t *testing.T) {
 		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			for _, pinHash := range pinAddrs {
 				if bytes.Equal(pinHash, item.Address) {
-					t.Errorf("pin chunk %v present in gcIndex",hex.EncodeToString(pinHash))
+					t.Fatal("pin chunk present in gcIndex")
 				}
 			}
 			return false, nil
 		}, nil)
 		if err != nil {
-			t.Error("could not iterate gcIndex")
+			t.Fatal("could not iterate gcIndex")
 		}
 	})
 }
