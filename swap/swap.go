@@ -240,8 +240,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	// TODO: if sending fails it should actually be roll backed...
 	s.resetBalance(peer, int64(cheque.Amount))
 
-	err = swapPeer.Send(context.TODO(), emit)
-	return err
+	return swapPeer.Send(context.Background(), emit)
 }
 
 // Create a Cheque structure emitted to a specific peer as a beneficiary
