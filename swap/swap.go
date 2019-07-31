@@ -19,7 +19,6 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -314,9 +313,10 @@ func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
 	}
 
 	balanceIterFunction := func(key []byte, value []byte) {
-		peerID := enode.HexID(string(key))
-		peerBalance := binary.BigEndian.Uint64(value)
-		balances[peerID] = int64(peerBalance)
+		peerID := keyToID(string(key), balancePrefix)
+		var peerBalance int64
+		_ = s.stateStore.Get(string(key), &peerBalance)
+		balances[peerID] = peerBalance
 	}
 	err := s.stateStore.Iterate(balancePrefix, balanceIterFunction)
 	if err != nil {

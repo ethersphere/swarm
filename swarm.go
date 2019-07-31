@@ -599,3 +599,9 @@ func (s *SwapInfo) Balances() (map[enode.ID]int64, error) {
 	peerBalances, err := s.Swap.Balances()
 	return peerBalances, err
 }
+
+// Balances returns the current SWAP balances for all known peers
+func (s *SwapInfo) NewBalances() (map[enode.ID]int64, error) {
+	peerBalances, err := s.Swap.NewBalances()
+	return peerBalances, err
+}
