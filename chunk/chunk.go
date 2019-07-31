@@ -18,6 +18,7 @@ package chunk
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -69,18 +70,18 @@ type Address []byte
 var ZeroAddr = Address(common.Hash{}.Bytes())
 
 func (a Address) Hex() string {
-	return fmt.Sprintf("%064x", []byte(a[:]))
+	return hex.EncodeToString(a)
 }
 
 func (a Address) Log() string {
-	if len(a[:]) < 8 {
-		return fmt.Sprintf("%x", []byte(a[:]))
+	if len(a) < 8 {
+		return hex.EncodeToString(a)
 	}
-	return fmt.Sprintf("%016x", []byte(a[:8]))
+	return hex.EncodeToString(a[:8])
 }
 
 func (a Address) String() string {
-	return fmt.Sprintf("%064x", []byte(a))
+	return hex.EncodeToString(a)
 }
 
 func (a Address) MarshalJSON() (out []byte, err error) {
