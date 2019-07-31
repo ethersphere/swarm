@@ -56,9 +56,9 @@ type Prices interface {
 type Payer bool
 
 const (
-	// Sender declares that a message needs to be payed by the sender of the message
+	// Sender declares that a message needs to be paid by the sender of the message
 	Sender = Payer(true)
-	// Receiver declares that a message needs to be payed by the receiver of the message
+	// Receiver declares that a message needs to be paid by the receiver of the message
 	Receiver = Payer(false)
 )
 
