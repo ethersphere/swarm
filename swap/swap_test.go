@@ -897,9 +897,6 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher serial and amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
-	_, peer, dir := newTestSwapAndPeer(t)
-	defer os.RemoveAll(dir)
-
 	increase := uint64(10)
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
@@ -907,7 +904,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase
 
-	actualAmount, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase)
+	actualAmount, err := verifyChequeAgainstLast(newCheque, oldCheque, increase)
 	if err != nil {
 		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
 	}
@@ -919,9 +916,6 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower serial or amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
-	_, peer, dir := newTestSwapAndPeer(t)
-	defer os.RemoveAll(dir)
-
 	increase := uint64(10)
 
 	// cheque with higher amount but same serial
@@ -929,7 +923,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque := newTestCheque()
 	newCheque.Amount = oldCheque.Amount + increase
 
-	if _, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same serial")
 	}
 
@@ -938,7 +932,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque = newTestCheque()
 	newCheque.Serial = oldCheque.Serial + 1
 
-	if _, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
 	}
 
@@ -948,7 +942,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase + 5
 
-	if _, err := peer.verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
 	}
 }
