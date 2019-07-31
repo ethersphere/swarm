@@ -141,7 +141,7 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) (uint64, error) {
 		return 0, err
 	}
 
-	actualAmount, err := sp.verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
+	actualAmount, err := verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
 	if err != nil {
 		return 0, err
 	}
@@ -180,7 +180,7 @@ func (sp *Peer) verifyChequeProperties(cheque *Cheque) error {
 // verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
 // furthermore it cheques that the increase in amount is as expected
 // returns the actual amount received in this cheque
-func (sp *Peer) verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
+func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
 	actualAmount := cheque.Amount
 
 	if lastCheque != nil {
