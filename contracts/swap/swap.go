@@ -39,8 +39,6 @@ var (
 	ErrTransactionReverted = errors.New("Transaction reverted")
 )
 
-// Validator struct -> put validator in implementation of Swap. Make the validator a package level function and implement this in Swap
-
 // Backend wraps all methods required for contract deployment.
 type Backend interface {
 	bind.ContractBackend
@@ -48,33 +46,48 @@ type Backend interface {
 	//TODO: needed? BalanceAt(ctx context.Context, address common.Address, blockNum *big.Int) (*big.Int, error)
 }
 
-// Contract interface defines the simple swap's exposed methods
-type Contract interface {
-	Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout *big.Int) (common.Address, *types.Transaction, error)
-	SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Transaction, error)
-	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Transaction, error)
-	ValidateCode() bool
-	ContractParams() *Params
-	InstanceAt(address common.Address, backend bind.ContractBackend)
+// Deploy creates a new instance of the contract and immediately deploys it
+func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (common.Address, Contract, *types.Transaction, error) {
+	addr, tx, s, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
+	c := simpleContract{instance: s}
+	return addr, c, tx, err
 }
 
-// Swap is a implementation for SimpleSwap contracts.
-type Swap struct{}
+// InstanceAt creates a new instance of a contract at a specific address.
+// It assumes that there is an existing contract instance at the given address, or an error is returned
+// This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
+func InstanceAt(address common.Address, backend bind.ContractBackend) (Contract, error) {
+	simple, err := contract.NewSimpleSwap(address, backend)
+	c := simpleContract{instance: simple}
+	return c, err
+}
+
+// Contract interface defines the simple swap's exposed methods
+type Contract interface {
+	SubmitChequeBeneficiary(opts *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error)
+	ContractParams() *Params
+	Issuer(opts *bind.CallOpts) (common.Address, error)
+	Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error)
+}
+
+// ChequeResult is needed because the underlying `Cheques` method returns an untyped struct
+type ChequeResult struct {
+	Serial      *big.Int
+	Amount      *big.Int
+	PaidOut     *big.Int
+	CashTimeout *big.Int
+}
 
 // Params encapsulates some contract parameters (currently mostly informational)
 type Params struct {
 	ContractCode, ContractAbi string
 }
 
-// New returns a pointer to a new Swap struct
-func NewContract() Contract {
-	return &Swap{}
-}
-
 // ValidateCode checks that the on-chain code at address matches the expected swap
 // contract code.
 // TODO: have this as a package level function and pass the SimpleSwapBin as argument
-func (s *swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
+func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
 	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
 		return err
@@ -86,20 +99,9 @@ func (s *swap) ValidateCode(ctx context.Context, b bind.ContractBackend, address
 	return nil
 }
 
-// Deploy a Swap contract
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (addr common.Address, s *Swap, tx *types.Transaction, err error) {
-	s = New()
-	addr, tx, s.Instance, err = contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout.Seconds())))
-	return addr, s, tx, err
-}
-
-// ContractParams returns contract information
-func (s *Swap) ContractParams() *Params {
-	return &Params{
-		ContractCode: contract.SimpleSwapBin,
-		ContractAbi:  contract.SimpleSwapABI,
-	}
-}
+// WaitFunc is the default function to wait for transactions
+// We can overwrite this in tests so that we don't need to wait for mining
+var WaitFunc = waitForTx
 
 // waitForTx waits for transaction to be mined and returns the receipt
 func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
@@ -115,27 +117,50 @@ func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) 
 	return receipt, nil
 }
 
-// SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
-func (s *Swap) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error) {
-	tx, err := s.Instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
+type simpleContract struct {
+	instance *contract.SimpleSwap
+}
+
+// ContractParams returns contract information
+func (s simpleContract) ContractParams() *Params {
+	return &Params{
+		ContractCode: contract.SimpleSwapBin,
+		ContractAbi:  contract.SimpleSwapABI,
+	}
+}
+
+func (s simpleContract) Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error) {
+	r, err := s.instance.Cheques(opts, addr)
 	if err != nil {
 		return nil, err
 	}
-	return waitForTx(auth, backend, tx)
+	result := &ChequeResult{
+		Serial:      r.Serial,
+		Amount:      r.Amount,
+		PaidOut:     r.PaidOut,
+		CashTimeout: r.CashTimeout,
+	}
+	return result, nil
+}
+
+func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
+	return s.instance.Issuer(opts)
+}
+
+// SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
+func (s simpleContract) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error) {
+	tx, err := s.instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
+	if err != nil {
+		return nil, err
+	}
+	return WaitFunc(auth, backend, tx)
 }
 
 // CashChequeBeneficiary cashes the cheque.
-func (s *Swap) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error) {
-	tx, err := s.Instance.CashChequeBeneficiary(auth, beneficiary, requestPayout)
+func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error) {
+	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, requestPayout)
 	if err != nil {
 		return nil, err
 	}
-	return waitForTx(auth, backend, tx)
-}
-
-// InstanceAt returns a new instance of simpleSwap at the address which was given
-func InstanceAt(address common.Address, backend bind.ContractBackend) (s *Swap, err error) {
-	s = New()
-	s.Instance, err = contract.NewSimpleSwap(address, backend)
-	return s, err
+	return WaitFunc(auth, backend, tx)
 }
