@@ -22,7 +22,7 @@ This module contains the pricing for message types as constants.
 Pricing in Swarm is defined in an internal unit.
 The name of this internal unit is honey.
 The honey unit allows to set prices of messages relative to each other
-without any dependancy to any currency.
+without any dependency to any currency.
 
 The expectation is then that an external, probably on-chain, **oracle**
 would be queried with the total amount of honey for a message,
@@ -37,6 +37,6 @@ allowing for a multi-currency design.
 const (
 	RetrieveRequestPrice = uint64(1)
 	ChunkDeliveryPrice   = uint64(1)
-	// default convertion of honey into output currency - currently ETH in Wei
+	// default conversion of honey into output currency - currently ETH in Wei
 	defaultHoneyPrice = uint64(1)
 )
