@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// Encode encodes the cheque in the format used in the signing procedure
-func (cheque *Cheque) Encode() []byte {
+// MarshallBinary encodes the cheque in the format used in the signing procedure
+func (cheque *Cheque) MarshallBinary() ([]byte, error) {
 	serialBytes := make([]byte, 32)
 	amountBytes := make([]byte, 32)
 	timeoutBytes := make([]byte, 32)
@@ -43,12 +43,14 @@ func (cheque *Cheque) Encode() []byte {
 	input = append(input, amountBytes[:]...)
 	input = append(input, timeoutBytes[:]...)
 
-	return input
+	return input, nil
 }
 
 // sigHash hashes the cheque using the prefix that would be added by eth_Sign
 func (cheque *Cheque) sigHash() []byte {
-	input := crypto.Keccak256(cheque.Encode())
+	// we can ignore the error because it is always nil
+	encoded, _ := cheque.MarshallBinary()
+	input := crypto.Keccak256(encoded)
 	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
 	return crypto.Keccak256([]byte(withPrefix))
 }

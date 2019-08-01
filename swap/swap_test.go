@@ -521,7 +521,10 @@ func TestChequeEncode(t *testing.T) {
 	expectedCheque := newTestCheque()
 
 	// encode the cheque
-	encoded := expectedCheque.Encode()
+	encoded, err := expectedCheque.MarshallBinary()
+	if err != nil {
+		t.Fatalf("Unexpected error in MarshallBinary: %v", err)
+	}
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000000")
 	if !bytes.Equal(encoded, expected) {
