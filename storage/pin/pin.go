@@ -283,11 +283,9 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 	go func() {
 		defer fwg.Done()
 		if !isRaw {
-
 			// If it is not a raw file... load the manifest and add the files inside one by one
 			walker, err := p.api.NewManifestWalker(context.Background(), storage.Address(addr),
 				p.api.Decryptor(context.Background(), credentials), nil)
-
 			if err != nil {
 				log.Error("Could not decode manifest.", "err", err)
 				fileErrC <- err
@@ -305,7 +303,6 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 				fileHashesC <- storage.Reference(fileAddr)
 				return nil
 			})
-
 			if err != nil {
 				log.Error("Error walking manifest", "err", err)
 				fileErrC <- err
@@ -317,14 +314,12 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 
 			// Signal end of file hash stream
 			close(fileHashesC)
-
 		} else {
 			// Its a raw file.. no manifest.. so process only this hash
 			fileHashesC <- storage.Reference(addr)
 
 			// Signal end of file hash
 			close(fileHashesC)
-
 		}
 	}()
 
@@ -368,6 +363,7 @@ func (p *API) walkFile(fileRef storage.Reference, executeFunc func(storage.Refer
 	var cwg sync.WaitGroup // Wait group to wait for chunk routines to complete
 	actualFileSize := uint64(0)
 	rcvdFileSize := uint64(0)
+	var fileSizeLock sync.Mutex // lock to protect the fileSize variables
 	doneChunkWorker := make(chan struct{})
 
 	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
@@ -387,7 +383,6 @@ QuitChunkFor:
 			cwg.Add(1)
 			go func() {
 				defer cwg.Done()
-
 				chunkData, err := getter.Get(context.Background(), ref)
 				if err != nil {
 					log.Error("Error getting chunk data from localstore.",
@@ -407,9 +402,11 @@ QuitChunkFor:
 				}
 
 				subTreeSize := chunkData.Size()
+				fileSizeLock.Lock()
 				if actualFileSize < subTreeSize {
 					actualFileSize = subTreeSize
 				}
+				fileSizeLock.Unlock()
 
 				if subTreeSize > chunk.DefaultSize {
 					// this is a tree chunk
@@ -424,8 +421,12 @@ QuitChunkFor:
 					}
 				} else {
 					// this is a data chunk
+					fileSizeLock.Lock()
 					rcvdFileSize = rcvdFileSize + chunk.DefaultSize
-					if rcvdFileSize >= actualFileSize {
+					got := rcvdFileSize
+					need := actualFileSize
+					fileSizeLock.Unlock()
+					if got >= need {
 						close(doneChunkWorker)
 					}
 				}

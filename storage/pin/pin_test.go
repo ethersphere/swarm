@@ -109,7 +109,10 @@ func TestWalker(t *testing.T) {
 			walkedChunks[hex.EncodeToString(chunkAddr)] = 0
 			return nil
 		}
-		p.walkChunksFromRootHash(hex.EncodeToString(hash), true, "", walkerFunction)
+		err = p.walkChunksFromRootHash(hex.EncodeToString(hash), true, "", walkerFunction)
+		if err != nil {
+			t.Fatalf("Walker error for hash %s", hash)
+		}
 
 		// Check if the number of chunks and chunk addresses match
 		if len(addrs) != len(walkedChunks) {
@@ -167,8 +170,8 @@ func TestListPinInfo(t *testing.T) {
 		t.Fatalf("Error executing ListPinFiles command")
 	}
 	fileInfo, ok = pinInfo[hex.EncodeToString(hash)]
-	if err != nil {
-		t.Fatalf("Could not pin " + err.Error())
+	if !ok {
+		t.Fatalf("hash not pinned ")
 	}
 	if fileInfo.pinCounter != 2 {
 		t.Fatalf("pincounter expected is 2 got is %d", fileInfo.pinCounter)
@@ -488,7 +491,11 @@ func (p *API) collectPinnedChunks(t *testing.T, rootHash string, credentials str
 		pinnedChunks[hex.EncodeToString(chunkAddr)] = pinCounter
 		return nil
 	}
-	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	err := p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	if err != nil {
+		t.Fatal("Error during walking")
+	}
+
 	return pinnedChunks
 }
 
