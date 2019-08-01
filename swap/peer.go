@@ -58,10 +58,9 @@ func NewPeer(p *protocols.Peer, s *Swap, backend contract.Backend, beneficiary c
 func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 	case *EmitChequeMsg:
-		return sp.handleEmitChequeMsg(ctx, msg)
-	default:
-		return fmt.Errorf("unknown message type: %T", msg)
+		go sp.handleEmitChequeMsg(ctx, msg)
 	}
+	return nil
 }
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
