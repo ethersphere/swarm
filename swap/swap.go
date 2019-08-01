@@ -305,7 +305,8 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	return peerBalance, err
 }
 
-func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
+// Balances returns the balances for all known SWAP peers
+func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
 	// add in-memory balances
@@ -331,56 +332,6 @@ func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
 	}
 
 	return balances, nil
-}
-
-// Balances returns the balances for all known SWAP peers
-func (s *Swap) Balances() (map[enode.ID]int64, error) {
-	balances := make(map[enode.ID]int64)
-
-	// get list of all known SWAP peers to have a balance
-	swapPeers, err := s.BalancePeers()
-	if err != nil {
-		return nil, err
-	}
-
-	// get balance for list of peers
-	for _, peer := range swapPeers {
-		peerBalance, err := s.Balance(peer)
-		if err != nil {
-			return nil, err
-		}
-		balances[peer] = peerBalance
-	}
-
-	return balances, nil
-}
-
-// BalancePeers returns a list of every peer known to have a balance set through SWAP
-func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
-	knownPeers := make(map[enode.ID]bool)
-
-	// add in-memory balance peers and mark as present
-	for peerID := range s.balances {
-		peers = append(peers, peerID)
-		knownPeers[peerID] = true
-	}
-
-	// get balance keys from store
-	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
-	if err != nil {
-		return nil, err
-	}
-
-	// add balance peer to result if not present in memory
-	for _, storeBalancePeer := range storeBalancePeers {
-		// take balance key and turn into node ID
-		peerID := keyToID(storeBalancePeer, balancePrefix)
-		if _, peerExists := knownPeers[peerID]; !peerExists {
-			peers = append(peers, peerID)
-		}
-	}
-
-	return peers, nil
 }
 
 // loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
