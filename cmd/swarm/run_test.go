@@ -180,11 +180,7 @@ func (c *testCluster) StartNewNodes(t *testing.T, size int) {
 				return
 			}
 
-			node, err := newTestNode(t, dir)
-			if err != nil {
-				errors <- err
-				return
-			}
+			node := newTestNode(t, dir)
 			node.Name = fmt.Sprintf("swarm%02d", nodeIndex)
 			nodes <- node
 		}(i)
@@ -334,7 +330,9 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 	return node
 }
 
-func newTestNode(t *testing.T, dir string) (*testNode, error) {
+func newTestNode(t *testing.T, dir string) *testNode {
+
+	t.Helper()
 
 	conf, account := getTestAccount(t, dir)
 	ks := keystore.NewKeyStore(path.Join(dir, "keystore"), 1<<18, 1)
@@ -346,7 +344,7 @@ func newTestNode(t *testing.T, dir string) (*testNode, error) {
 	// assign ports
 	ports, err := getAvailableTCPPorts(2)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	p2pPort := ports[0]
 	httpPort := ports[1]
@@ -379,7 +377,7 @@ func newTestNode(t *testing.T, dir string) (*testNode, error) {
 	// when calling getAvailableTCPPorts
 	err = waitTCPPorts(ctx, ports...)
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 
 	// wait for the node to start
@@ -390,24 +388,24 @@ func newTestNode(t *testing.T, dir string) (*testNode, error) {
 		}
 	}
 	if node.Client == nil {
-		return nil, err
+		t.Fatal("Expected nil node")
 	}
 
 	// load info
 	var info swarm.Info
 	if err := node.Client.Call(&info, "bzz_info"); err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 	node.Addr = net.JoinHostPort("127.0.0.1", info.Port)
 	node.URL = "http://" + node.Addr
 
 	var nodeInfo p2p.NodeInfo
 	if err := node.Client.Call(&nodeInfo, "admin_nodeInfo"); err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 	node.Enode = nodeInfo.Enode
 	node.IpcPath = conf.IPCPath
-	return node, nil
+	return node
 }
 
 func (n *testNode) Shutdown() {
