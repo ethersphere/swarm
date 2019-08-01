@@ -421,7 +421,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			pssp := NewPssParams().WithPrivateKey(privkey)
+			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
@@ -430,7 +430,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			ps, err := NewPss(pskad, pssp)
+			ps, err := New(pskad, pssp)
 			if err != nil {
 				return nil, nil, err
 			}
