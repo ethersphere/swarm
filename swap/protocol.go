@@ -149,8 +149,8 @@ func (s *Swap) getPeer(id enode.ID) (*Peer, error) {
 }
 
 // NewAPI creates a new PublicAPI instance
-func NewAPI(s *Swap) PublicAPI {
-	return PublicAPI{
+func NewAPI(s *Swap) *PublicAPI {
+	return &PublicAPI{
 		Swap:   s,
 		Params: s.GetParams(),
 	}
