@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
@@ -68,7 +67,7 @@ var (
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
 )
 
-// the swarm stack
+// Swarm is an object abstracting the complete Swarm stack
 type Swarm struct {
 	config            *api.Config        // swarm configuration
 	api               *api.API           // high level api layer (fs/manifest)
@@ -113,11 +112,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if config.SwapEnabled {
 		// for now, Swap can only be enabled in a whitelisted network
 		if self.config.NetworkID != swap.AllowedNetworkID {
-			return nil, fmt.Errorf("Swap can only be enabled under Network ID %d, found Network ID %d instead.", swap.AllowedNetworkID, self.config.NetworkID)
+			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
 		// if Swap is enabled, we MUST have a contract API
 		if self.config.SwapAPI == "" {
-			return nil, errors.New("Swap enabled but no contract address given; fatal error condition, aborting.")
+			return nil, errors.New("swap enabled but no contract address given; fatal error condition, aborting")
 		}
 		log.Info("connecting to SWAP API", "url", self.config.SwapAPI)
 		self.backend, err = ethclient.Dial(self.config.SwapAPI)
@@ -501,8 +500,8 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 	return
 }
 
-// implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
+// implements node.Service
 func (s *Swarm) APIs() []rpc.API {
 	apis := []rpc.API{
 		// public APIs
@@ -541,22 +540,10 @@ func (s *Swarm) APIs() []rpc.API {
 		apis = append(apis, s.ps.APIs()...)
 	}
 
-	var swapService *SwapInfo
 	if s.config.SwapEnabled {
 		// Swap public API
-		swapService = &SwapInfo{s.swap.GetParams(), s.swap}
-	} else {
-		swapService = &SwapInfo{nil, nil}
+		apis = append(apis, s.swap.APIs()...)
 	}
-
-	swapPublicApi := rpc.API{
-		Namespace: "swap",
-		Version:   "1.0",
-		Service:   swapService,
-		Public:    true,
-	}
-
-	apis = append(apis, swapPublicApi)
 
 	return apis
 }
@@ -571,33 +558,12 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
-// serialisable info about swarm
+// Info represents serialisable info about swarm
 type Info struct {
 	*api.Config
 }
 
+// Info returns the actual Swarm information
 func (i *Info) Info() *Info {
 	return i
-}
-
-type SwapInfo struct {
-	*cswap.Params
-	*swap.Swap
-}
-
-// Balance returns the current SWAP balance for a given peer
-func (s *SwapInfo) Balance(peer enode.ID) (int64, error) {
-	peerBalance, err := s.Swap.Balance(peer)
-	if err != nil && err != state.ErrNotFound {
-		return peerBalance, err
-	}
-	// A peer not being found in the balances map is not considered an error at this level
-	// Just a balance of 0
-	return peerBalance, nil
-}
-
-// Balances returns the current SWAP balances for all known peers
-func (s *SwapInfo) Balances() (map[enode.ID]int64, error) {
-	peerBalances, err := s.Swap.Balances()
-	return peerBalances, err
 }
