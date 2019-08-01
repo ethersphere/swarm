@@ -52,7 +52,7 @@ type Config struct {
 	BaseKey       []byte
 
 	// Swap configs
-	SwapAPI     string
+	BackendURL  string
 	SwapEnabled bool
 	// TODO: Add swap.Params --> define! (economic parameters)
 
@@ -101,7 +101,7 @@ func NewConfig() (c *Config) {
 		DeliverySkipCheck:    true,
 		SyncUpdateDelay:      15 * time.Second,
 		SwapEnabled:          false,
-		SwapAPI:              "",
+		BackendURL:           "",
 	}
 
 	return
