@@ -308,17 +308,20 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// add in-memory balance peers
+	// add in-memory balances
 	for peerID, peerBalance := range s.balances {
 		balances[peerID] = peerBalance
 	}
 
+	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peerID := keyToID(string(key), balancePrefix)
-		var peerBalance int64
-		err = json.Unmarshal(value, &peerBalance)
-		if err == nil {
-			balances[peerID] = peerBalance
+		if _, peerHasBalance := balances[peerID]; !peerHasBalance {
+			var peerBalance int64
+			err = json.Unmarshal(value, &peerBalance)
+			if err == nil {
+				balances[peerID] = peerBalance
+			}
 		}
 		return stop, err
 	}
@@ -326,6 +329,7 @@ func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return balances, nil
 }
 
