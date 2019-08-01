@@ -49,6 +49,3 @@ type HandshakeMsg struct {
 type EmitChequeMsg struct {
 	Cheque *Cheque
 }
-
-// ErrorMsg is sent in case of an error TODO: specify error conditions and when this needs to be sent
-type ErrorMsg struct{}
