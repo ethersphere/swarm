@@ -112,7 +112,7 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ipcEndpoint
+				config.BackendURL = ipcEndpoint
 				config.SwapEnabled = true
 				config.NetworkID = swap.AllowedNetworkID
 			},
@@ -125,7 +125,7 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap disabled",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ipcEndpoint
+				config.BackendURL = ipcEndpoint
 				config.SwapEnabled = false
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
@@ -218,7 +218,7 @@ func TestNewSwarmFailure(t *testing.T) {
 		{
 			name: "with swap enabled and api endpoint blank",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ""
+				config.BackendURL = ""
 				config.SwapEnabled = true
 				config.NetworkID = swap.AllowedNetworkID
 			},
@@ -231,7 +231,7 @@ func TestNewSwarmFailure(t *testing.T) {
 		{
 			name: "with swap enabled and default network ID",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ipcEndpoint
+				config.BackendURL = ipcEndpoint
 				config.SwapEnabled = true
 				config.NetworkID = network.DefaultNetworkID
 			},
