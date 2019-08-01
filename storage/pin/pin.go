@@ -57,8 +57,8 @@ func (f *FileInfo) MarshalBinary() (data []byte, err error) {
 	} else {
 		data[0] = 0
 	}
-	binary.BigEndian.PutUint64(data[1:], uint64(f.fileSize))
-	binary.BigEndian.PutUint64(data[9:], uint64(f.pinCounter))
+	binary.BigEndian.PutUint64(data[1:], f.fileSize)
+	binary.BigEndian.PutUint64(data[9:], f.pinCounter)
 	return data, nil
 }
 
