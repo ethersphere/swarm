@@ -45,7 +45,6 @@ var Spec = &protocols.Spec{
 	Messages: []interface{}{
 		HandshakeMsg{},
 		EmitChequeMsg{},
-		ErrorMsg{},
 	},
 }
 
