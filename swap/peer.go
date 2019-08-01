@@ -59,8 +59,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 	case *EmitChequeMsg:
 		return sp.handleEmitChequeMsg(ctx, msg)
-	case *ErrorMsg:
-		return sp.handleErrorMsg(ctx, msg)
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
@@ -116,14 +114,6 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
 	}()
 	return err
-}
-
-// TODO: Error handling
-// handleErrorMsg is called when an ErrorMsg is received
-func (sp *Peer) handleErrorMsg(ctx context.Context, msg *ErrorMsg) error {
-	log.Info("received error msg")
-	// maybe balance disagreement?
-	return nil
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
