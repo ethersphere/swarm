@@ -77,9 +77,18 @@ func TestDBStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer persistedStore.Close()
 
 	testPersistedStore(t, persistedStore)
+
+	persistedStore.Close()
+
+	iteratedStore, err := NewDBStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer iteratedStore.Close()
+
+	testStoreIterator(t, iteratedStore)
 }
 
 func testStore(t *testing.T, store Store) {
@@ -122,4 +131,8 @@ func testPersistedStore(t *testing.T, store Store) {
 	if as[0] != "a" || as[1] != "b" || as[2] != "c" {
 		t.Fatalf("elements serialized did not match expected values")
 	}
+}
+
+func testStoreIterator(t *testing.T, store Store) {
+
 }
