@@ -650,6 +650,20 @@ func TestVerifyContractWrongContract(t *testing.T) {
 	}
 }
 
+// setupContractTest is a helper function for setting up the
+// blockchain wait function for testing
+func setupContractTest() func() {
+	// we overwrite the waitForTx function with one which the simulated backend
+	// immediately commits
+	currentWaitFunc := cswap.WaitFunc
+	// overwrite only for the duration of the test, so...
+	cswap.WaitFunc = testWaitForTx
+	return func() {
+		// ...we need to set it back to original when done
+		cswap.WaitFunc = currentWaitFunc
+	}
+}
+
 // TestContractIntegration tests a end-to-end cheque interaction.
 // First a simulated backend is created, then we deploy the issuer's swap contract.
 // We issue a test cheque with the beneficiary address and on the issuer's contract,
@@ -686,27 +700,21 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("sending cheque...")
 
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
 	opts := bind.NewKeyedTransactor(beneficiaryKey)
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	tx, err := issuerSwap.swapContract.Instance.SubmitChequeBeneficiary(
+	receipt, err := issuerSwap.contract.SubmitChequeBeneficiary(
 		opts,
+		backend,
 		big.NewInt(int64(cheque.Serial)),
 		big.NewInt(int64(cheque.Amount)),
 		big.NewInt(int64(cheque.Timeout)),
 		cheque.Signature)
-
-	backend.Commit()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	log.Debug("getting receipt")
-	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// check if success
 	if receipt.Status != 1 {
@@ -716,7 +724,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("check cheques state")
 
 	// check state, check that cheque is indeed there
-	result, err := issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
+	result, err := issuerSwap.contract.Cheques(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -750,14 +758,7 @@ func TestContractIntegration(t *testing.T) {
 	backend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	tx, err = issuerSwap.swapContract.Instance.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(payoutAmount))
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend.Commit()
-
-	log.Debug("check tx receipt")
-	receipt, err = backend.TransactionReceipt(context.TODO(), tx.Hash())
+	receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, backend, beneficiaryAddress, big.NewInt(payoutAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -766,7 +767,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 
 	// check again the status, check paid out is increase by amount
-	result, err = issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
+	result, err = issuerSwap.contract.Cheques(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -776,13 +777,25 @@ func TestContractIntegration(t *testing.T) {
 	}
 }
 
+// when testing, we don't need to wait for a transaction to be mined
+func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
+	simBackend := backend.(*backends.SimulatedBackend)
+	simBackend.Commit()
+
+	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
+	if err != nil {
+		return nil, err
+	}
+	return receipt, nil
+}
+
 // deploy for testing (needs simulated backend commit)
 func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	swap.owner.Contract, swap.swapContract, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	swap.owner.Contract, swap.contract, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
 
 	return err
 }
@@ -1043,122 +1056,6 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	// check that no invalid cheque was saved
 	if peer.loadLastReceivedCheque().Serial != cheque.Serial {
 		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
-	}
-}
-
-// TestContractIntegrationWrapper tests a end-to-end cheque interaction.
-// Unlike the TestContractIntegration test this uses the swap.swapContract where possible
-// First a simulated backend is created, then we deploy the issuer's swap contract.
-// We issue a test cheque with the beneficiary address and on the issuer's contract,
-// and immediately try to cash-in the cheque
-
-func TestContractIntegrationWrapper(t *testing.T) {
-	issuerSwap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-
-	issuerSwap.owner.address = ownerAddress
-	issuerSwap.owner.privateKey = ownerKey
-
-	backend := issuerSwap.backend.(*backends.SimulatedBackend)
-
-	log.Debug("deploy issuer swap")
-
-	ctx := context.TODO()
-	err := testDeploy(ctx, backend, issuerSwap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend.Commit()
-
-	log.Debug("deployed. signing cheque")
-
-	cheque := newTestCheque()
-	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
-	cheque.Signature, err = issuerSwap.signContent(cheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	log.Debug("sending cheque...")
-
-	opts := bind.NewKeyedTransactor(beneficiaryKey)
-	opts.Value = big.NewInt(0)
-	opts.Context = ctx
-
-	// SubmitChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
-	go func() { time.Sleep(100 * time.Millisecond); backend.Commit() }()
-	receipt, err := issuerSwap.swapContract.SubmitChequeBeneficiary(
-		opts,
-		backend,
-		big.NewInt(int64(cheque.Serial)),
-		big.NewInt(int64(cheque.Amount)),
-		big.NewInt(int64(cheque.Timeout)),
-		cheque.Signature)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// check if success
-	if receipt.Status != 1 {
-		t.Fatalf("Bad status %d", receipt.Status)
-	}
-
-	log.Debug("check cheques state")
-
-	// check state, check that cheque is indeed there
-	result, err := issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Serial.Uint64() != cheque.Serial {
-		t.Fatalf("Wrong serial %d", result.Serial)
-	}
-	if result.Amount.Uint64() != cheque.Amount {
-		t.Fatalf("Wrong amount %d", result.Amount)
-	}
-	log.Debug("cheques result", "result", result)
-
-	// go forward in time
-	backend.AdjustTime(30 * time.Second)
-
-	payoutAmount := int64(20)
-	// test cashing in, for this we need balance in the contract
-	// => send some money
-	log.Debug("send money to contract")
-	depoTx := types.NewTransaction(
-		1,
-		issuerSwap.owner.Contract,
-		big.NewInt(payoutAmount),
-		50000,
-		big.NewInt(int64(0)),
-		[]byte{},
-	)
-	depoTxs, err := types.SignTx(depoTx, types.HomesteadSigner{}, issuerSwap.owner.privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend.SendTransaction(context.TODO(), depoTxs)
-
-	log.Debug("cash-in the cheque")
-	// CashChequeBeneficiary will block until the tx is mined, therefore we have to schedule a Commit in the future
-	go func() { time.Sleep(100 * time.Millisecond); backend.Commit() }()
-	receipt, err = issuerSwap.swapContract.CashChequeBeneficiary(opts, backend, beneficiaryAddress, big.NewInt(payoutAmount))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if receipt.Status != 1 {
-		t.Fatalf("Bad status %d", receipt.Status)
-	}
-
-	// check again the status, check paid out is increase by amount
-	result, err = issuerSwap.swapContract.Instance.Cheques(nil, beneficiaryAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Debug("cheques result", "result", result)
-	if result.PaidOut.Int64() != payoutAmount {
-		t.Fatalf("Expected paid out amount to be %d, but is %d", payoutAmount, result.PaidOut)
 	}
 }
 
