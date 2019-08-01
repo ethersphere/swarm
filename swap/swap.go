@@ -313,11 +313,14 @@ func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
 		balances[peerID] = peerBalance
 	}
 
-	balanceIterFunction := func(key []byte, value []byte) {
+	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peerID := keyToID(string(key), balancePrefix)
 		var peerBalance int64
-		json.Unmarshal(value, &peerBalance)
-		balances[peerID] = peerBalance
+		err = json.Unmarshal(value, &peerBalance)
+		if err == nil {
+			balances[peerID] = peerBalance
+		}
+		return stop, err
 	}
 	err := s.stateStore.Iterate(balancePrefix, balanceIterFunction)
 	if err != nil {
