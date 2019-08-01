@@ -345,7 +345,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 				}
 
 			// got error from manifest walker goroutine, so quit file walker too
-			case <- fileErrC:
+			case <-fileErrC:
 				return
 			}
 		}
