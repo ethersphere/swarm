@@ -262,7 +262,10 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// we need to ignore the error check when loading from the StateStore,
 	// as an error might indicate that there is no existing cheque, which
 	// could mean it's the first interaction, which is absolutely valid
-	_ = s.loadLastSentCheque(peer)
+	err = s.loadLastSentCheque(peer)
+	if err != state.ErrNotFound {
+		return nil, err
+	}
 	lastCheque := s.cheques[peer]
 
 	serial := uint64(1)
