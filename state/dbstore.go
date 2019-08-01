@@ -114,7 +114,7 @@ func (s *DBStore) Delete(key string) (err error) {
 // propagated to the called iterator method on Iterate.
 type iterFunction func([]byte, []byte) (stop bool, err error)
 
-// Iterate entries which has a specific prefix
+// Iterate entries (key/value pair) which have keys matching the given prefix
 func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {
 	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	defer iter.Release()
