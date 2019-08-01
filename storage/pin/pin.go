@@ -323,7 +323,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 		actualFileSize := uint64(0)
 		rcvdFileSize := uint64(0)
 		doneChunkWorker := make(chan struct{})
-		errC := make(chan error)
+		//errC := make(chan error)
 		var cwg sync.WaitGroup // Wait group to wait for routines to complete
 
 	QuitChunkFor:
@@ -339,7 +339,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 					chunkData, err := getter.Get(context.Background(), ref)
 					if err != nil {
 						log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(ref))
-						errC <- err
+						//errC <- err
 						close(doneChunkWorker)
 						return
 					}
@@ -347,7 +347,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 					datalen := len(chunkData)
 					if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
 						log.Error("Invalid chunk data from localstore.", "Address", hex.EncodeToString(ref))
-						errC <- err
+						//errC <- err
 						close(doneChunkWorker)
 						return
 					}
@@ -380,8 +380,8 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 					err = executeFunc(ref)
 					if err != nil {
 						// TODO: if this happens, we should go back and revert the entire file's chunks
-						log.Error("Could not unpin chunk.", "Address", hex.EncodeToString(ref))
-						errC <- err
+						log.Error("Error executing walker function", "Address", hex.EncodeToString(ref), "err", err)
+						//errC <- err
 						close(doneChunkWorker)
 					}
 				}()

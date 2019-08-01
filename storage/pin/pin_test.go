@@ -477,7 +477,11 @@ func (p *API) collectPinnedChunks(t *testing.T, rootHash string, credentials str
 		chunkAddr := p.removeDecryptionKeyFromChunkHash(ref)
 		pinCounter, err := p.getPinCounterOfChunk(chunk.Address(chunkAddr))
 		if err != nil {
-			return err
+			if err == chunk.ErrChunkNotFound {
+				return nil
+			} else {
+				return err
+			}
 		}
 		lock.Lock()
 		defer lock.Unlock()
