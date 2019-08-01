@@ -192,26 +192,18 @@ func TestStoreBalances(t *testing.T) {
 	s, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	var expectedBalancePeers []string
 	var err error
-
-	// store balance peers should be empty at this point
-	compareBalancePeers(t, s, expectedBalancePeers)
 
 	// modify balances in memory but not in store
 	testPeerID := enode.HexID("8418f4eeb20735630cfff00459b7fc7ec1674c9f77f19bab23e895706bfd1032")
 	s.balances[testPeerID] = 144
-	// store balance peers should still be empty at this point
-	compareBalancePeers(t, s, expectedBalancePeers)
+	comparePeerBalance(t, s, testPeerID, 0)
 
 	// modify balances both in memory and in store
 	peerBalance, err := s.updateBalance(testPeerID, 29)
 	if err != nil {
 		t.Error("Unexpected balance update failure.")
 	}
-	// store balance peers should now include ONLY the test peer
-	expectedBalancePeers = []string{balanceKey(testPeerID)}
-	compareBalancePeers(t, s, expectedBalancePeers)
 	// store balance for peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
 
@@ -221,9 +213,6 @@ func TestStoreBalances(t *testing.T) {
 	if err != nil {
 		t.Error("Unexpected balance update failure.")
 	}
-	// store balance peers should now include both test peers
-	expectedBalancePeers = []string{balanceKey(testPeerID), balanceKey(testPeer2ID)}
-	compareBalancePeers(t, s, expectedBalancePeers)
 	// store balance for each peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
 	comparePeerBalance(t, s, testPeer2ID, peer2Balance)
@@ -232,27 +221,12 @@ func TestStoreBalances(t *testing.T) {
 func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
 	var peerBalance int64
 	err := s.stateStore.Get(balanceKey(peer), &peerBalance)
-	if err != nil {
+	if err != nil && err != state.ErrNotFound {
 		t.Error("Unexpected peer balance retrieval failure.")
 	}
 	if peerBalance != expectedPeerBalance {
 		t.Errorf("Expected peer store balance to be %d, but is %d instead.", expectedPeerBalance, peerBalance)
 	}
-}
-
-func compareBalancePeers(t *testing.T, s *Swap, expectedBalancePeers []string) {
-	storeBalancePeers := getStoreBalancePeers(t, s)
-	if !reflect.DeepEqual(storeBalancePeers, expectedBalancePeers) {
-		t.Errorf("Expected store balance peers to be %v, is %v instead.", expectedBalancePeers, storeBalancePeers)
-	}
-}
-
-func getStoreBalancePeers(t *testing.T, s *Swap) []string {
-	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
-	if err != nil {
-		t.Error("Unexpected balance peer retrieval failure.")
-	}
-	return storeBalancePeers
 }
 
 // Test that repeated bookings do correct accounting
