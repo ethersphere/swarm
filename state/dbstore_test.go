@@ -18,9 +18,11 @@ package state
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -134,27 +136,43 @@ func testPersistedStore(t *testing.T, store Store) {
 }
 
 func testStoreIterator(t *testing.T, store Store) {
-	storePrefix := "test"
+	storePrefix := "test_"
 
-	err := store.Put("key1", "value1")
+	err := store.Put(storePrefix+"key1", "value1")
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// do not include prefix in one of the entries
 	err = store.Put("key2", "value2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Put(storePrefix+"key3", "value3")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	entries := make(map[string]string)
 
-	// add store balances, if peer was not already added
 	entriesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		entries[string(key)] = string(value)
+		var entry string
+		err = json.Unmarshal(value, &entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries[string(key)] = entry
 		return stop, err
 	}
 	err = store.Iterate(storePrefix, entriesIterFunction)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	expectedEntries := map[string]string{"test_key1": "value1", "test_key3": "value3"}
+
+	if !reflect.DeepEqual(entries, expectedEntries) {
+		t.Fatalf("expected store entries to be %v, are %v instead", expectedEntries, entries)
 	}
 }
