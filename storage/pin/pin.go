@@ -284,7 +284,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 		defer fwg.Done()
 		if !isRaw {
 
-			// If it is not a raw file... load the manifest and process the files inside one by one
+			// If it is not a raw file... load the manifest and add the files inside one by one
 			walker, err := p.api.NewManifestWalker(context.Background(), storage.Address(addr),
 				p.api.Decryptor(context.Background(), credentials), nil)
 
@@ -341,7 +341,12 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 				err := p.walkFile(fileRef, executeFunc, addr)
 				if err != nil {
 					fileErrC <- err
+					return
 				}
+
+			// got error from manifest walker goroutine, so quit file walker too
+			case <- fileErrC:
+				return
 			}
 		}
 	}()
@@ -354,13 +359,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 		close(fileErrC)
 	}()
 
-	select {
-	case err := <-fileErrC:
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return <-fileErrC
 }
 
 func (p *API) walkFile(fileRef storage.Reference, executeFunc func(storage.Reference) error, addr []byte) error {
@@ -452,13 +451,7 @@ QuitChunkFor:
 		close(chunkErrC)
 	}()
 
-	select {
-	case err := <-chunkErrC:
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return <-chunkErrC
 }
 
 func (p *API) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
