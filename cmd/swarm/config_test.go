@@ -47,7 +47,7 @@ func TestConfigDump(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
+func TestConfigFailsSwapEnabledNoBackendURL(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
@@ -56,7 +56,7 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	}
 
 	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SwarmErrSwapSetNoAPI + "\n")
+	swarm.Expect("Fatal: " + SwarmErrSwapSetNoBackendURL + "\n")
 	swarm.ExpectExit()
 }
 
