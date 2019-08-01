@@ -371,7 +371,7 @@ func (p *API) walkFile(fileRef storage.Reference, executeFunc func(storage.Refer
 	isEncrypted := len(addr) > hashFunc().Size()
 	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(0, "show-chunks-tag", 0))
 
-	// Trigger unrwapping merkle tree starting from root hash of the file
+	// Trigger unwrapping the merkle tree starting from root hash of the file
 	chunkHashesC <- fileRef
 
 QuitChunkFor:
