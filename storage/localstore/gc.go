@@ -264,4 +264,3 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 // information when a garbage collection run is done
 // and how many items it removed.
 var testHookCollectGarbage func(collectedCount uint64)
-

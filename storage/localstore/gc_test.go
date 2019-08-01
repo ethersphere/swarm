@@ -136,7 +136,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 }
 
 // Pin a file, upload chunks to go past the gc limit to trigger GC,
-// check if the pinned files are still around
+// check if the pinned files are still around and removed from gcIndex
 func TestPinGC(t *testing.T) {
 
 	chunkCount := 150
@@ -204,7 +204,7 @@ func TestPinGC(t *testing.T) {
 
 	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(0)))
 
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget) + pinChunksCount))
+	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)+pinChunksCount))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(gcTarget)))
 
@@ -241,8 +241,6 @@ func TestPinGC(t *testing.T) {
 			}
 		}
 	})
-
-
 }
 
 // Upload chunks, pin those chunks, add to GC after it is pinned

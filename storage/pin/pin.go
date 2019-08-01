@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"sync"
 
 	"github.com/ethersphere/swarm/api"
@@ -34,6 +35,10 @@ const (
 	Version        = "1.0"
 	WorkerChanSize = 8             // Max no of goroutines when walking the file tree
 	HeaderName     = "x-swarm-pin" // Presence of this in header indicates pinning required
+)
+
+var (
+	errInvalidChunkData = errors.New("invalid chunk data")
 )
 
 // FileInfo is the struct that stores the information about pinned files
@@ -125,7 +130,11 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 		}
 		return nil
 	}
-	p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	err = p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	if err != nil {
+		log.Error("Error walking root hash.", "Hash", rootHash, "err", err)
+		return nil
+	}
 
 	// Check if the root hash is already pinned and add it to the fileInfo struct
 	fileInfo, err := p.getPinnedFile(rootHash)
@@ -204,7 +213,11 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 		}
 		return nil
 	}
-	p.walkChunksFromRootHash(rootHash, fileInfo.isRaw, credentials, walkerFunction)
+	err = p.walkChunksFromRootHash(rootHash, fileInfo.isRaw, credentials, walkerFunction)
+	if err != nil {
+		log.Error("Error walking root hash.", "Hash", rootHash, "err", err)
+		return nil
+	}
 
 	// Delete or Update the state DB
 	pinCounter, err := p.getPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
@@ -254,22 +267,21 @@ func (p *API) ListPinFiles() (map[string]FileInfo, error) {
 	return pinnedFiles, nil
 }
 
-func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials string, executeFunc func(storage.Reference) error) {
-	fileWorkers := make(chan storage.Reference, WorkerChanSize)
-	chunkWorkers := make(chan storage.Reference, WorkerChanSize)
-
+func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials string,
+	executeFunc func(storage.Reference) error) error {
 	addr, err := hex.DecodeString(rootHash)
 	if err != nil {
 		log.Error("Error decoding root hash", "err", err)
-		return
+		return err
 	}
 
-	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
-	hashSize := len(addr)
-	isEncrypted := len(addr) > hashFunc().Size()
-	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(0, "show-chunks-tag", 0))
+	fileHashesC := make(chan storage.Reference, WorkerChanSize)
+	fileErrC := make(chan error)
+	var fwg sync.WaitGroup // wait group for file walker reoutine to complete
 
+	fwg.Add(1)
 	go func() {
+		defer fwg.Done()
 		if !isRaw {
 
 			// If it is not a raw file... load the manifest and process the files inside one by one
@@ -278,11 +290,11 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 
 			if err != nil {
 				log.Error("Could not decode manifest.", "err", err)
+				fileErrC <- err
 				return
 			}
 
 			err = walker.Walk(func(entry *api.ManifestEntry) error {
-
 				fileAddr, err := hex.DecodeString(entry.Hash)
 				if err != nil {
 					log.Error("Error decoding hash present in manifest", "err", err)
@@ -290,106 +302,163 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 				}
 
 				// send the file to file workers
-				fileWorkers <- storage.Reference(fileAddr)
-
+				fileHashesC <- storage.Reference(fileAddr)
 				return nil
 			})
 
 			if err != nil {
 				log.Error("Error walking manifest", "err", err)
+				fileErrC <- err
 				return
 			}
 
-			// Finally, remove the manifest file too
-			fileWorkers <- storage.Reference(addr)
+			// Finally, add the root manifest hash too
+			fileHashesC <- storage.Reference(addr)
 
-			// Signal end of file stream
-			close(fileWorkers)
+			// Signal end of file hash stream
+			close(fileHashesC)
 
 		} else {
 			// Its a raw file.. no manifest.. so process only this hash
-			fileWorkers <- storage.Reference(addr)
+			fileHashesC <- storage.Reference(addr)
 
-			// Signal end of file stream
-			close(fileWorkers)
+			// Signal end of file hash
+			close(fileHashesC)
 
 		}
 	}()
 
-	for fileRef := range fileWorkers {
-		// Send the file to chunk workers
-		chunkWorkers <- fileRef
-
-		actualFileSize := uint64(0)
-		rcvdFileSize := uint64(0)
-		doneChunkWorker := make(chan struct{})
-		//errC := make(chan error)
-		var cwg sync.WaitGroup // Wait group to wait for routines to complete
-
-	QuitChunkFor:
+	fwg.Add(1)
+	go func() {
+		defer fwg.Done()
 		for {
 			select {
-			case <-doneChunkWorker:
-				break QuitChunkFor
-			case ref := <-chunkWorkers:
-				cwg.Add(1)
-				go func() {
-					defer cwg.Done()
-
-					chunkData, err := getter.Get(context.Background(), ref)
-					if err != nil {
-						log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(ref))
-						//errC <- err
-						close(doneChunkWorker)
-						return
-					}
-
-					datalen := len(chunkData)
-					if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
-						log.Error("Invalid chunk data from localstore.", "Address", hex.EncodeToString(ref))
-						//errC <- err
-						close(doneChunkWorker)
-						return
-					}
-
-					subTreeSize := chunkData.Size()
-					if actualFileSize < subTreeSize {
-						actualFileSize = subTreeSize
-					}
-
-					if subTreeSize > chunk.DefaultSize {
-						// this is a tree chunk
-						// load the tree's branches
-						branches := (datalen - 8) / hashSize
-						for i := 0; i < branches; i++ {
-							brAddr := make([]byte, hashSize)
-							start := (i * hashSize) + 8
-							end := ((i + 1) * hashSize) + 8
-							copy(brAddr[:], chunkData[start:end])
-							chunkWorkers <- storage.Reference(brAddr)
-						}
-					} else {
-						// this is a data chunk
-						rcvdFileSize = rcvdFileSize + chunk.DefaultSize
-						if rcvdFileSize >= actualFileSize {
-							close(doneChunkWorker)
-						}
-					}
-
-					// process the chunk (pin / unpin / display)
-					err = executeFunc(ref)
-					if err != nil {
-						// TODO: if this happens, we should go back and revert the entire file's chunks
-						log.Error("Error executing walker function", "Address", hex.EncodeToString(ref), "err", err)
-						//errC <- err
-						close(doneChunkWorker)
-					}
-				}()
+			case fileRef, ok := <-fileHashesC:
+				if !ok {
+					return
+				}
+				// Walk the file and its chunks
+				err := p.walkFile(fileRef, executeFunc, addr)
+				if err != nil {
+					fileErrC <- err
+				}
 			}
 		}
+	}()
+
+	go func() {
+		// Wait for all the chunks to finish execution
+		fwg.Wait()
+
+		// close internal error channel after the file routine is done
+		close(fileErrC)
+	}()
+
+	select {
+	case err := <-fileErrC:
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *API) walkFile(fileRef storage.Reference, executeFunc func(storage.Reference) error, addr []byte) error {
+	chunkHashesC := make(chan storage.Reference, WorkerChanSize)
+	chunkErrC := make(chan error)
+	var cwg sync.WaitGroup // Wait group to wait for chunk routines to complete
+	actualFileSize := uint64(0)
+	rcvdFileSize := uint64(0)
+	doneChunkWorker := make(chan struct{})
+
+	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
+	hashSize := len(addr)
+	isEncrypted := len(addr) > hashFunc().Size()
+	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(0, "show-chunks-tag", 0))
+
+	// Trigger unrwapping merkle tree starting from root hash of the file
+	chunkHashesC <- fileRef
+
+QuitChunkFor:
+	for {
+		select {
+		case <-doneChunkWorker:
+			break QuitChunkFor
+		case ref := <-chunkHashesC:
+			cwg.Add(1)
+			go func() {
+				defer cwg.Done()
+
+				chunkData, err := getter.Get(context.Background(), ref)
+				if err != nil {
+					log.Error("Error getting chunk data from localstore.",
+						"Address", hex.EncodeToString(ref), "err", err)
+					chunkErrC <- err
+					close(doneChunkWorker)
+					return
+				}
+
+				datalen := len(chunkData)
+				if datalen < 9 { // Atleast 1 data byte. first 8 bytes are address
+					log.Error("Invalid chunk data from localstore.",
+						"Address", hex.EncodeToString(ref), "err", err)
+					chunkErrC <- errInvalidChunkData
+					close(doneChunkWorker)
+					return
+				}
+
+				subTreeSize := chunkData.Size()
+				if actualFileSize < subTreeSize {
+					actualFileSize = subTreeSize
+				}
+
+				if subTreeSize > chunk.DefaultSize {
+					// this is a tree chunk
+					// load the tree's branches
+					branches := (datalen - 8) / hashSize
+					for i := 0; i < branches; i++ {
+						brAddr := make([]byte, hashSize)
+						start := (i * hashSize) + 8
+						end := ((i + 1) * hashSize) + 8
+						copy(brAddr[:], chunkData[start:end])
+						chunkHashesC <- storage.Reference(brAddr)
+					}
+				} else {
+					// this is a data chunk
+					rcvdFileSize = rcvdFileSize + chunk.DefaultSize
+					if rcvdFileSize >= actualFileSize {
+						close(doneChunkWorker)
+					}
+				}
+
+				// process the chunk (pin / unpin / display)
+				err = executeFunc(ref)
+				if err != nil {
+					// TODO: if this happens, we should go back and revert the entire file's chunks
+					log.Error("Error executing walker function",
+						"Address", hex.EncodeToString(ref), "err", err)
+					chunkErrC <- err
+					close(doneChunkWorker)
+				}
+			}()
+		}
+	}
+
+	func() {
 		// Wait for all the chunks to finish execution
 		cwg.Wait()
+
+		// close internal error channel after all routines are done
+		close(chunkErrC)
+	}()
+
+	select {
+	case err := <-chunkErrC:
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (p *API) removeDecryptionKeyFromChunkHash(ref []byte) []byte {
