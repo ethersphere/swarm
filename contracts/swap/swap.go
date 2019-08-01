@@ -46,7 +46,7 @@ type Backend interface {
 	//TODO: needed? BalanceAt(ctx context.Context, address common.Address, blockNum *big.Int) (*big.Int, error)
 }
 
-// Deploy creates a new instance of the contract and immediately deploys it
+// Deploy deploys an instance of the underlying contract and returns its `Contract` abstraction
 func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (common.Address, Contract, *types.Transaction, error) {
 	addr, tx, s, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
 	c := simpleContract{instance: s}
@@ -62,12 +62,17 @@ func InstanceAt(address common.Address, backend bind.ContractBackend) (Contract,
 	return c, err
 }
 
-// Contract interface defines the simple swap's exposed methods
+// Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
+	// Submit a cheque to the beneficiary
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error)
+	// Cash the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error)
+	// Return contract info (e.g. deployed address)
 	ContractParams() *Params
+	// Return the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
+	// Return the last cheque
 	Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error)
 }
 
@@ -129,6 +134,7 @@ func (s simpleContract) ContractParams() *Params {
 	}
 }
 
+// Cheques returns the last cheque from the smart contract
 func (s simpleContract) Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error) {
 	r, err := s.instance.Cheques(opts, addr)
 	if err != nil {
@@ -143,6 +149,7 @@ func (s simpleContract) Cheques(opts *bind.CallOpts, addr common.Address) (*Cheq
 	return result, nil
 }
 
+// Issuer returns the contract owner from the blockchain
 func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 	return s.instance.Issuer(opts)
 }
