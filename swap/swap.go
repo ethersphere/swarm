@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -315,7 +316,7 @@ func (s *Swap) NewBalances() (map[enode.ID]int64, error) {
 	balanceIterFunction := func(key []byte, value []byte) {
 		peerID := keyToID(string(key), balancePrefix)
 		var peerBalance int64
-		_ = s.stateStore.Get(string(key), &peerBalance)
+		json.Unmarshal(value, &peerBalance)
 		balances[peerID] = peerBalance
 	}
 	err := s.stateStore.Iterate(balancePrefix, balanceIterFunction)
