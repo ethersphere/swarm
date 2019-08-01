@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
-	cswap "github.com/ethersphere/swarm/contracts/swap"
+	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -53,10 +53,10 @@ type Swap struct {
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of cheques for each peer
 	peers               map[enode.ID]*Peer   // map of all swap Peers
-	backend             cswap.Backend        // the backend (blockchain) used
+	backend             contract.Backend     // the backend (blockchain) used
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
-	swapContract        *swap.Swap           // reference to the smart contract
+	contract            swap.Contract        // reference to the smart contract
 	oracle              PriceOracle          // the oracle providing the ether price for honey
 	paymentThreshold    int64                // balance difference required for sending cheque
 	disconnectThreshold int64                // balance difference required for dropping peer
@@ -83,7 +83,7 @@ func NewParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend cswap.Backend) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
 	sw := &Swap{
 		stateStore:          stateStore,
 		balances:            make(map[enode.ID]int64),
@@ -93,7 +93,6 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
-		swapContract:        nil,
 		oracle:              NewPriceOracle(),
 	}
 	sw.owner = sw.createOwner(prvkey, contract)
@@ -264,7 +263,10 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// we need to ignore the error check when loading from the StateStore,
 	// as an error might indicate that there is no existing cheque, which
 	// could mean it's the first interaction, which is absolutely valid
-	_ = s.loadLastSentCheque(peer)
+	err = s.loadLastSentCheque(peer)
+	if err != state.ErrNotFound {
+		return nil, err
+	}
 	lastCheque := s.cheques[peer]
 
 	serial := uint64(1)
@@ -381,7 +383,7 @@ func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
 func (s *Swap) GetParams() *swap.Params {
-	return s.swapContract.ContractParams()
+	return s.contract.ContractParams()
 }
 
 // Deploy deploys a new swap contract
@@ -392,22 +394,17 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 
 // verifyContract checks if the bytecode found at address matches the expected bytecode
 func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
-	swap, err := swap.InstanceAt(address, s.backend)
-	if err != nil {
-		return err
-	}
-
-	return swap.ValidateCode(ctx, s.backend, address)
+	return contract.ValidateCode(ctx, s.backend, address)
 }
 
 // getContractOwner retrieve the owner of the chequebook at address from the blockchain
 func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (common.Address, error) {
-	swap, err := swap.InstanceAt(address, s.backend)
+	contr, err := contract.InstanceAt(address, s.backend)
 	if err != nil {
 		return common.Address{}, err
 	}
 
-	return swap.Instance.Issuer(nil)
+	return contr.Issuer(nil)
 }
 
 // deploy deploys the Swap contract
@@ -437,7 +434,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 			time.Sleep(deployDelay)
 		}
 
-		if _, s.swapContract, tx, err = swap.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+		if _, s.contract, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
 			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}

@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	cswap "github.com/ethersphere/swarm/contracts/swap"
+	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
@@ -37,14 +37,14 @@ var ErrDontOwe = errors.New("no negative balance")
 type Peer struct {
 	*protocols.Peer
 	swap               *Swap
-	backend            cswap.Backend
+	backend            contract.Backend
 	beneficiary        common.Address
 	contractAddress    common.Address
 	lastReceivedCheque *Cheque
 }
 
 // NewPeer creates a new swap Peer instance
-func NewPeer(p *protocols.Peer, s *Swap, backend cswap.Backend, beneficiary common.Address, contractAddress common.Address) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, backend contract.Backend, beneficiary common.Address, contractAddress common.Address) *Peer {
 	return &Peer{
 		Peer:            p,
 		swap:            s,
@@ -59,8 +59,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 	case *EmitChequeMsg:
 		return sp.handleEmitChequeMsg(ctx, msg)
-	case *ErrorMsg:
-		return sp.handleErrorMsg(ctx, msg)
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
@@ -88,7 +86,7 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
 	opts.Context = ctx
 
-	otherSwap, err := cswap.InstanceAt(cheque.Contract, sp.backend)
+	otherSwap, err := contract.InstanceAt(cheque.Contract, sp.backend)
 	if err != nil {
 		log.Error("could not get an instance of simpleSwap", "error", err)
 		return err
@@ -116,14 +114,6 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
 	}()
 	return err
-}
-
-// TODO: Error handling
-// handleErrorMsg is called when an ErrorMsg is received
-func (sp *Peer) handleErrorMsg(ctx context.Context, msg *ErrorMsg) error {
-	log.Info("received error msg")
-	// maybe balance disagreement?
-	return nil
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
