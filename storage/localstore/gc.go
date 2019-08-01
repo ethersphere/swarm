@@ -17,8 +17,6 @@
 package localstore
 
 import (
-	"encoding/hex"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -70,7 +68,7 @@ func (db *DB) collectGarbageWorker() {
 				db.triggerGarbageCollection()
 			}
 
-			if collectedCount > 0 && testHookCollectGarbage != nil {
+			if collectedCount >= 0 && testHookCollectGarbage != nil {
 				testHookCollectGarbage(collectedCount)
 			}
 		case <-db.close:
@@ -163,28 +161,52 @@ func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
 
 	batch := new(leveldb.Batch)
 	excludedCount := 0
-
-
-
+	var gcSizeChange int64
 	err = db.gcExcludeIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		// Get access timestamp
+		retrievalAccessIndexItem, err := db.retrievalAccessIndex.Get(item)
+		if err != nil {
+			return false, err
+		}
+		item.AccessTimestamp = retrievalAccessIndexItem.AccessTimestamp
+
+		// Get the binId
+		retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return false, err
+		}
+		item.BinID = retrievalDataIndexItem.BinID
+
+		// Check if this item is in gcIndex and remove it
 		ok, err := db.gcIndex.Has(item)
 		if ok {
 			db.gcIndex.DeleteInBatch(batch, item)
-			fmt.Println("Deleting from gcIndex " + hex.EncodeToString(item.Address))
+			if _, err := db.gcIndex.Get(item); err == nil {
+				gcSizeChange--
+			}
 			excludedCount++
+			db.gcExcludeIndex.DeleteInBatch(batch, item)
 		}
-		db.gcExcludeIndex.DeleteInBatch(batch, item)
+
 		return false, nil
 	}, nil)
 	if err != nil {
 		return err
 	}
+
+	// update the gc size based on the no of entries deleted in gcIndex
+	err = db.incGCSizeInBatch(batch, gcSizeChange)
+	if err != nil {
+		return err
+	}
+
 	metrics.GetOrRegisterCounter(metricName+".excluded-count", nil).Inc(int64(excludedCount))
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".writebatch.err", nil).Inc(1)
 		return err
 	}
+
 	return nil
 }
 
@@ -242,3 +264,4 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 // information when a garbage collection run is done
 // and how many items it removed.
 var testHookCollectGarbage func(collectedCount uint64)
+

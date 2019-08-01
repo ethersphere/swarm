@@ -108,7 +108,7 @@ func (s *DBStore) Delete(key string) (err error) {
 }
 
 // Iterate entries which has a specific prefix
-// The key and value may be modified in the iterFund
+// The key and value may be modified in the iterFunc
 func (s *DBStore) Iterate(prefix string, iterFunc func([]byte, []byte)) (err error) {
 	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	for iter.Next() {

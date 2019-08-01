@@ -324,7 +324,7 @@ func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials st
 		rcvdFileSize := uint64(0)
 		doneChunkWorker := make(chan struct{})
 		errC := make(chan error)
-		var cwg sync.WaitGroup // Wait group to wait for chunk processing to complete
+		var cwg sync.WaitGroup // Wait group to wait for routines to complete
 
 	QuitChunkFor:
 		for {
