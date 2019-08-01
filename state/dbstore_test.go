@@ -134,5 +134,27 @@ func testPersistedStore(t *testing.T, store Store) {
 }
 
 func testStoreIterator(t *testing.T, store Store) {
+	storePrefix := "test"
 
+	err := store.Put("key1", "value1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Put("key2", "value2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries := make(map[string]string)
+
+	// add store balances, if peer was not already added
+	entriesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		entries[string(key)] = string(value)
+		return stop, err
+	}
+	err = store.Iterate(storePrefix, entriesIterFunction)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
