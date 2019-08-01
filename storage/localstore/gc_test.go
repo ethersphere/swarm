@@ -19,7 +19,6 @@ package localstore
 import (
 	"bytes"
 	"context"
-	"github.com/ethersphere/swarm/shed"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/shed"
 )
 
 // TestDB_collectGarbageWorker tests garbage collection runs
