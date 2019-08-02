@@ -220,7 +220,7 @@ func TestStoreBalances(t *testing.T) {
 
 func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
 	var peerBalance int64
-	err := s.stateStore.Get(balanceKey(peer), &peerBalance)
+	err := s.store.Get(balanceKey(peer), &peerBalance)
 	if err != nil && err != state.ErrNotFound {
 		t.Error("Unexpected peer balance retrieval failure.")
 	}
@@ -404,10 +404,10 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	swap.balances[testPeer.ID()] = -8888
 
 	tmpBalance := swap.balances[testPeer.ID()]
-	swap.stateStore.Put(testPeer.ID().String(), &tmpBalance)
+	swap.store.Put(testPeer.ID().String(), &tmpBalance)
 
-	swap.stateStore.Close()
-	swap.stateStore = nil
+	swap.store.Close()
+	swap.store = nil
 
 	stateStore, err := state.NewDBStore(testDir)
 	if err != nil {
