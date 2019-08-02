@@ -131,6 +131,7 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) (uint64, error) {
 
 	if err := sp.saveLastReceivedCheque(cheque); err != nil {
 		log.Error("error while saving last received cheque", "peer", sp.ID().String(), "err", err.Error())
+		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
 	return actualAmount, nil

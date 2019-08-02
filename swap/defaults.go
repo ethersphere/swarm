@@ -26,7 +26,7 @@ const (
 	DefaultDisconnectThreshold = 1500000
 	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
 	DefaultInitialDepositAmount = 0
-
+	// NOTE: deliberate value for now; needs experimentation
 	deployRetries = 5
 	// delay between retries
 	deployDelay = 1 * time.Second
