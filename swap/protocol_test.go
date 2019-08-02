@@ -210,6 +210,7 @@ func TestEmitCheque(t *testing.T) {
 	if creditorSwap.balances[debitor.ID()] != 0 {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, creditorSwap.balances[debitor.ID()])
 	}
+	//TODO: https://github.com/etherspherif crede/swarm/issues/1642
 }
 
 // TestTriggerPaymentThreshold is to test that the whole cheque protocol is triggered
