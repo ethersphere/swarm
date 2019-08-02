@@ -99,7 +99,9 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		// blocks here, as we are waiting for the transaction to be mined
 		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
 		if err != nil {
-			//TODO: do something with the error
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
+			log.Error("error submitting cheque", "err", err)
 			return
 		}
 		log.Debug("submit tx mined", "receipt", receipt)
@@ -107,11 +109,13 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
 		if err != nil {
 			//TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
+			log.Error("error cashing cheque", "err", err)
 			return
 		}
 		log.Debug("cash tx mined", "receipt", receipt)
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
-		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
+		//TODO: make sure we make a case where we listen to the possibility of the peer shutting down.
 		log.Info("Cheque successfully submitted and cashed")
 	}()
 	return err
