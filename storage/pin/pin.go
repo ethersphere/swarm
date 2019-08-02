@@ -38,7 +38,8 @@ const (
 )
 
 var (
-	errInvalidChunkData = errors.New("invalid chunk data")
+	errInvalidChunkData      = errors.New("invalid chunk data")
+	errInvalidUnmarshallData = errors.New("invalid data length")
 )
 
 // FileInfo is the struct that stores the information about pinned files
@@ -64,6 +65,9 @@ func (f *FileInfo) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary decodes the binary form from the state store to the FileInfo object
 func (f *FileInfo) UnmarshalBinary(data []byte) error {
+	if len(data) != 17 {
+		return errInvalidUnmarshallData
+	}
 	if data[0] == 1 {
 		f.isRaw = true
 	} else {
@@ -255,7 +259,7 @@ func (p *API) ListPinFiles() (map[string]FileInfo, error) {
 		if err != nil {
 			log.Debug("Error unmarshaling fileinfo from state store", "Address", hash)
 		}
-		log.Debug("Pinned file", "Address", hash, "IsRAW", fileInfo.isRaw,
+		log.Trace("Pinned file", "Address", hash, "IsRAW", fileInfo.isRaw,
 			"fileSize", fileInfo.fileSize, "pinCounter", fileInfo.pinCounter)
 		pinnedFiles[hash] = fileInfo
 	}

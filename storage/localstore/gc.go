@@ -50,12 +50,6 @@ func (db *DB) collectGarbageWorker() {
 	for {
 		select {
 		case <-db.collectGarbageTrigger:
-			// run through the recently pinned chunks and
-			// remove them from the gcIndex before calling GC
-			err := db.removeChunksInExcludeIndexFromGC()
-			if err != nil {
-				log.Error("localstore exclude pinned chunks", "err", err)
-			}
 			// run a single collect garbage run and
 			// if done is false, gcBatchSize is reached and
 			// another collect garbage run is needed
@@ -99,6 +93,13 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	// protect database from changing idexes and gcSize
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
+
+	// run through the recently pinned chunks and
+	// remove them from the gcIndex before iterating through gcIndex
+	err = db.removeChunksInExcludeIndexFromGC()
+	if err != nil {
+		log.Error("localstore exclude pinned chunks", "err", err)
+	}
 
 	gcSize, err := db.gcSize.Get()
 	if err != nil {
@@ -154,10 +155,6 @@ func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
 			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 		}
 	}()
-
-	// protect database from changing idexes and gcSize
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
 	excludedCount := 0
