@@ -99,6 +99,7 @@ func testClientUploadDownloadRaw(srv *swarmhttp.TestSwarmServer, toEncrypt bool,
 }
 
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
+// manifests
 func TestClientUploadDownloadFiles(t *testing.T) {
 	testClientUploadDownloadFiles(false, t)
 }
@@ -207,6 +208,7 @@ func newTestDirectory(t *testing.T) string {
 }
 
 // TestClientUploadDownloadDirectory tests uploading and downloading
+// directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
@@ -334,6 +336,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 }
 
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
+// upload
 func TestClientMultipartUpload(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
