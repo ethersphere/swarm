@@ -35,7 +35,7 @@ type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
-	Keys(prefix string) (keys []string, err error)
+	Iterate(prefix string, iterFunc iterFunction) (err error)
 	Close() error
 }
 
@@ -107,18 +107,27 @@ func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
 }
 
-// Keys returns a list of all the keys in the underlying LevelDB which match the `prefix` param
-func (s *DBStore) Keys(prefix string) (keys []string, err error) {
+// iterFunction is a function called on every key/value pair obtained
+// through iterating the store.
+// If true is returned in the stop variable, iteration will
+// stop, and by returning the error, that error will be
+// propagated to the called iterator method on Iterate.
+type iterFunction func([]byte, []byte) (stop bool, err error)
+
+// Iterate entries (key/value pair) which have keys matching the given prefix
+func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {
 	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	defer iter.Release()
 	for iter.Next() {
-		keys = append(keys, string(iter.Key()))
+		stop, err := iterFunc(iter.Key(), iter.Value())
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
 	}
-	err = iter.Error()
-	if err != nil {
-		return []string{}, err
-	}
-	return keys, nil
+	return iter.Error()
 }
 
 // Close releases the resources used by the underlying LevelDB.

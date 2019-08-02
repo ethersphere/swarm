@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -310,50 +311,29 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// get list of all known SWAP peers to have a balance
-	swapPeers, err := s.BalancePeers()
-	if err != nil {
-		return nil, err
+	// add in-memory balances
+	for peerID, peerBalance := range s.balances {
+		balances[peerID] = peerBalance
 	}
 
-	// get balance for list of peers
-	for _, peer := range swapPeers {
-		peerBalance, err := s.Balance(peer)
-		if err != nil {
-			return nil, err
+	// add store balances, if peer was not already added
+	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peerID := keyToID(string(key), balancePrefix)
+		if _, peerHasBalance := balances[peerID]; !peerHasBalance {
+			var peerBalance int64
+			err = json.Unmarshal(value, &peerBalance)
+			if err == nil {
+				balances[peerID] = peerBalance
+			}
 		}
-		balances[peer] = peerBalance
+		return stop, err
+	}
+	err := s.stateStore.Iterate(balancePrefix, balanceIterFunction)
+	if err != nil {
+		return nil, err
 	}
 
 	return balances, nil
-}
-
-// BalancePeers returns a list of every peer known to have a balance set through SWAP
-func (s *Swap) BalancePeers() (peers []enode.ID, err error) {
-	knownPeers := make(map[enode.ID]bool)
-
-	// add in-memory balance peers and mark as present
-	for peerID := range s.balances {
-		peers = append(peers, peerID)
-		knownPeers[peerID] = true
-	}
-
-	// get balance keys from store
-	storeBalancePeers, err := s.stateStore.Keys(balancePrefix)
-	if err != nil {
-		return nil, err
-	}
-
-	// add balance peer to result if not present in memory
-	for _, storeBalancePeer := range storeBalancePeers {
-		// take balance key and turn into node ID
-		peerID := keyToID(storeBalancePeer, balancePrefix)
-		if _, peerExists := knownPeers[peerID]; !peerExists {
-			peers = append(peers, peerID)
-		}
-	}
-
-	return peers, nil
 }
 
 // loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
