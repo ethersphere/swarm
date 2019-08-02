@@ -56,7 +56,7 @@ func TestConfig(t *testing.T) {
 	if one.PublicKey == "" {
 		t.Fatal("Expected PublicKey to be set")
 	}
-	if one.SwapEnabled && one.SwapAPI == "" {
+	if one.SwapEnabled && one.BackendURL == "" {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
 	if one.ChunkDbPath == one.Path {
