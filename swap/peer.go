@@ -65,7 +65,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a debitor
-// TODO: validate the contract address in the cheque to match the address given at handshake
 // TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
