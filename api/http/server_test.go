@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -38,7 +39,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/storage/feed/lookup"
-
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -65,6 +66,129 @@ func newTestSigner() (*feed.GenericSigner, error) {
 		return nil, err
 	}
 	return feed.NewGenericSigner(privKey), nil
+}
+
+// TestGetTag uploads a file, retrieves the tag using http GET and check if it matches
+func TestGetTagUsingHash(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	// upload a file
+	data := testutil.RandomBytes(1, 10000)
+	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader([]byte(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	rootHash, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get the tag for the above upload using root hash of the file
+	getBzzURL := fmt.Sprintf("%s/bzz-tag:/%s", srv.URL, string(rootHash))
+	getResp, err := http.Get(getBzzURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", getResp.Status)
+	}
+	retrievedData, err := ioutil.ReadAll(getResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tag := &chunk.Tag{}
+	fmt.Println(len(retrievedData))
+	err = tag.UnmarshalBinary(retrievedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check if the tag has valid values
+	rcvdAddress, err := hex.DecodeString(string(rootHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(tag.Address,rcvdAddress) {
+		t.Fatalf("retrieved address mismatch, expected %x, got %x", rcvdAddress, tag.Address)
+	}
+
+	if tag.Total()  != 4 {
+		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.Total())
+	}
+
+	if !strings.HasPrefix(tag.Name, "unnamed_tag_") {
+		t.Fatalf("retrieved name prefix mismatch, expected %x, got %x", "unnamed_tag_", tag.Name)
+	}
+
+}
+
+// TestGetTag uploads a file, retrieves the tag using http GET and check if it matches
+func TestGetTagUsingTagId(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	// upload a file
+	data := testutil.RandomBytes(1, 10000)
+	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader([]byte(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	rootHash, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tidString := resp.Header.Get(TagHeaderName)
+
+	// get the tag of the above upload using the tagId
+	getBzzURL := fmt.Sprintf("%s/bzz-tag:/?tagId=%s", srv.URL, tidString)
+	getResp, err := http.Get(getBzzURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", getResp.Status)
+	}
+	retrievedData, err := ioutil.ReadAll(getResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tag := &chunk.Tag{}
+	fmt.Println(len(retrievedData))
+	err = tag.UnmarshalBinary(retrievedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check if the received tags has valid values
+	rcvdAddress, err := hex.DecodeString(string(rootHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(tag.Address,rcvdAddress) {
+		t.Fatalf("retrieved address mismatch, expected %x, got %x", rcvdAddress, tag.Address)
+	}
+
+	if tag.Total()  != 4 {
+		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.Total())
+	}
+
+	if !strings.HasPrefix(tag.Name, "unnamed_tag_") {
+		t.Fatalf("retrieved name prefix mismatch, expected %x, got %x", "unnamed_tag_", tag.Name)
+	}
+
 }
 
 // Test the transparent resolving of feed updates with bzz:// scheme
@@ -754,7 +878,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("Content-Type", "application/x-tar")
-	req.Header.Add(SwarmTagHeaderName, "test-upload")
+	req.Header.Add(TagHeaderName, "test-upload")
 	client := &http.Client{}
 	resp2, err := client.Do(req)
 	if err != nil {
@@ -873,7 +997,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 
 		req = req.WithContext(ctx)
 		req.ContentLength = 1000000
-		req.Header.Add(SwarmTagHeaderName, "1000000")
+		req.Header.Add(TagHeaderName, "1000000")
 
 		go func() {
 			for {

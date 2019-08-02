@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math/rand"
@@ -28,8 +29,8 @@ import (
 
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
-	tags *sync.Map
-	rng  *rand.Rand
+	tags        *sync.Map
+	rng         *rand.Rand
 }
 
 // NewTags creates a tags object
@@ -67,13 +68,35 @@ func (ts *Tags) All() (t []*Tag) {
 	return t
 }
 
-// Get returns the undelying tag for the uid or an error if not found
+// Get returns the underlying tag for the uid or an error if not found
 func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	t, ok := ts.tags.Load(uid)
 	if !ok {
 		return nil, errors.New("tag not found")
 	}
 	return t.(*Tag), nil
+}
+
+// GetByAddress returns the underlying tag for the address or an error if not found
+func (ts *Tags) GetByAddress(address []byte) (*Tag, error) {
+	t := &Tag{}
+	found := false
+	ts.tags.Range(func(key interface{}, value interface{}) bool {
+		rcvdTag := value.(*Tag)
+		if bytes.Equal(rcvdTag.Address,address) {
+			t = rcvdTag
+			found = true
+			return false
+		}
+		return true
+	})
+
+	if found {
+		return t, nil
+	} else {
+		return nil, errTagNotFound
+	}
+
 }
 
 // GetFromContext gets a tag from the tag uid stored in the context

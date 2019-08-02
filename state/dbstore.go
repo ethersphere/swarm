@@ -20,6 +20,7 @@ import (
 	"encoding"
 	"encoding/json"
 	"errors"
+	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -34,6 +35,7 @@ type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
+	Iterate(prefix string, iterFunc iterFunction) (err error)
 	Close() error
 }
 
@@ -103,6 +105,28 @@ func (s *DBStore) Put(key string, i interface{}) (err error) {
 // Delete removes entries stored under a specific key.
 func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
+}
+
+// iterFunction is a function called on every key/value pair obtained
+// If true is returned in the stop variable, iteration will
+// stop, and by returning the error, that error will be
+// propagated to the called iterator method on Iterate.
+type iterFunction func([]byte, []byte) (stop bool, err error)
+
+// Iterate entries (key/value pair) which have keys matching the given prefix
+func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
+	defer iter.Release()
+	for iter.Next() {
+		stop, err := iterFunc(iter.Key(), iter.Value())
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+	}
+	return iter.Error()
 }
 
 // Close releases the resources used by the underlying LevelDB.

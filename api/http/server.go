@@ -61,9 +61,12 @@ var (
 	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
+	getTagCount     = metrics.NewRegisteredCounter("api.http.get.tag.count", nil)
+	getTagNotFound  = metrics.NewRegisteredCounter("api.http.get.tag.notfound", nil)
+	getTagFail      = metrics.NewRegisteredCounter("api.http.get.tag.fail", nil)
 )
 
-const SwarmTagHeaderName = "x-swarm-tag"
+const TagHeaderName = "x-swarm-tag"
 
 type methodHandler map[string]http.Handler
 
@@ -158,7 +161,12 @@ func NewServer(api *api.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
-
+	mux.Handle("/bzz-tag:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetTag),
+			defaultMiddlewares...,
+		),
+	})
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleRootPaths),
@@ -286,6 +294,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", addr)
 
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set( TagHeaderName, fmt.Sprint(tagUid))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -365,6 +374,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set( TagHeaderName, fmt.Sprint(tagUid))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }
@@ -863,6 +873,57 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+}
+
+// HandleGetTag responds to the following request
+//    - bzz-tag:/<manifest>  and
+//    - bzz-tag:/?tagId=<tagId>
+// Clients should use root hash or the tagID to get the tag counters
+func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
+	getTagCount.Inc(1)
+	uri := GetURI(r.Context())
+	fileAddr := uri.Address()
+
+	var tag *chunk.Tag
+	if fileAddr == nil {
+		tagString := r.URL.Query().Get("tagId")
+		if tagString == "" {
+			getTagFail.Inc(1)
+			respondError(w, r, "Missing one of the mandatory argument", http.StatusBadRequest)
+		}
+
+		u64, err := strconv.ParseUint(tagString, 10, 32)
+		if err != nil {
+			getTagFail.Inc(1)
+			respondError(w, r, "Invalid tagId argument", http.StatusBadRequest)
+		}
+		tagId := uint32(u64)
+
+		tag, err = s.api.Tags.Get(tagId)
+		if err != nil {
+			getTagNotFound.Inc(1)
+			respondError(w, r, "Tag not found", http.StatusNotFound)
+		}
+	} else {
+
+		tagByFile , err := s.api.Tags.GetByAddress(fileAddr)
+		if err != nil {
+			getTagNotFound.Inc(1)
+			respondError(w, r, "Tag not found", http.StatusNotFound)
+		}
+		tag = tagByFile
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
+	r.Header.Del("ETag")
+	w.WriteHeader(http.StatusOK)
+	bytesToSend, err := tag.MarshalBinary()
+	if err != nil {
+		getTagFail.Inc(1)
+		respondError(w, r, "marshalling error", http.StatusInternalServerError)
+	}
+	http.ServeContent(w, r, tag.Name, time.Now(), bytes.NewReader(bytesToSend))
 }
 
 // calculateNumberOfChunks calculates the number of chunks in an arbitrary content length
