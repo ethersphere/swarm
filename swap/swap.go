@@ -392,7 +392,7 @@ func (s *Swap) Close() {
 // * for the creditor: on cheque receival
 // * for the debitor: on confirmation receival
 func (s *Swap) resetBalance(peerID enode.ID, amount int64) {
-	log.Info("resetting balance for peer", "peer", peerID.String(), "amount", amount)
+	log.Debug("resetting balance for peer", "peer", peerID.String(), "amount", amount)
 	s.updateBalance(peerID, amount)
 }
 
