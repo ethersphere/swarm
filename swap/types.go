@@ -31,7 +31,6 @@ type ChequeParams struct {
 }
 
 // Cheque encapsulates the parameters and the signature
-// TODO: There should be a request cheque struct that only gives the Serial
 type Cheque struct {
 	ChequeParams
 	Signature []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)

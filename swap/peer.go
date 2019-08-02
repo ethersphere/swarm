@@ -65,7 +65,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a debitor
-// TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
 	log.Debug("received emit cheque message from peer", "peer", sp.ID().String())
@@ -132,7 +131,6 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) (uint64, error) {
 
 	if err := sp.saveLastReceivedCheque(cheque); err != nil {
 		log.Error("error while saving last received cheque", "peer", sp.ID().String(), "err", err.Error())
-		// TODO: what do we do here?
 	}
 
 	return actualAmount, nil
@@ -179,7 +177,6 @@ func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount 
 		actualAmount -= lastCheque.Amount
 	}
 
-	// TODO: maybe allow some range around expectedAmount?
 	if expectedAmount != actualAmount {
 		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
 	}

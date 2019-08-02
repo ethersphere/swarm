@@ -210,17 +210,6 @@ func TestEmitCheque(t *testing.T) {
 	if creditorSwap.balances[debitor.ID()] != 0 {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, creditorSwap.balances[debitor.ID()])
 	}
-	/*
-			TODO: This test actually fails now, because the two Swaps create independent backends,
-			thus when handling the cheque, it will actually complain (check ERROR log output)
-			with `error="no contract code at given address"`.
-			Therefore, the `lastReceivedCheque` is not being saved, and this check would fail.
-			So TODO is to find out how to address this (should be by having same backend when creating the Swap)
-		if creditorSwap.loadLastReceivedCheque(debitor.ID()) != cheque {
-			t.Fatalf("Expected exactly one cheque at creditor, but there are %d:", len(creditorSwap.cheques))
-		}
-	*/
-
 }
 
 // TestTriggerPaymentThreshold is to test that the whole cheque protocol is triggered

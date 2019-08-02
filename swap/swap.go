@@ -219,7 +219,6 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	s.cheques[peer] = cheque
 
 	err = s.stateStore.Put(sentChequeKey(peer), &cheque)
-	// TODO: error handling might be quite more complex
 	if err != nil {
 		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
 	}
@@ -229,7 +228,6 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	}
 
 	// reset balance;
-	// TODO: if sending fails it should actually be roll backed...
 	s.resetBalance(peer, int64(cheque.Amount))
 
 	return swapPeer.Send(context.Background(), emit)
