@@ -73,8 +73,6 @@ func TestDBStore(t *testing.T) {
 
 	testStore(t, store)
 
-	store.Close()
-
 	persistedStore, err := NewDBStore(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -82,18 +80,17 @@ func TestDBStore(t *testing.T) {
 
 	testPersistedStore(t, persistedStore)
 
-	persistedStore.Close()
-
 	iteratedStore, err := NewDBStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer iteratedStore.Close()
 
 	testStoreIterator(t, iteratedStore)
 }
 
 func testStore(t *testing.T, store Store) {
+	defer store.Close()
+
 	ser := &SerializingType{key: "key1", value: "value1"}
 	jsonify := []string{"a", "b", "c"}
 
@@ -110,8 +107,9 @@ func testStore(t *testing.T, store Store) {
 }
 
 func testPersistedStore(t *testing.T, store Store) {
-	ser := &SerializingType{}
+	defer store.Close()
 
+	ser := &SerializingType{}
 	err := store.Get("key1", ser)
 	if err != nil {
 		t.Fatal(err)
@@ -136,8 +134,9 @@ func testPersistedStore(t *testing.T, store Store) {
 }
 
 func testStoreIterator(t *testing.T, store Store) {
-	storePrefix := "test_"
+	defer store.Close()
 
+	storePrefix := "test_"
 	err := store.Put(storePrefix+"key1", "value1")
 	if err != nil {
 		t.Fatal(err)
