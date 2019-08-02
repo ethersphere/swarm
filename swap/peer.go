@@ -69,10 +69,10 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 // TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
-	log.Debug("received emit cheque message from peer", "peer", sp.ID().String())
+	log.Info("received cheque from peer, attempting to submit and cash", "peer", sp.ID().String())
 	actualAmount, err := sp.processAndVerifyCheque(cheque)
 	if err != nil {
-		log.Error("invalid cheque from peer", "peer", sp.ID().String(), "error", err.Error())
+		log.Warn("invalid cheque from peer", "peer", sp.ID().String(), "error", err.Error())
 		return err
 	}
 
@@ -96,21 +96,22 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		// blocks here, as we are waiting for the transaction to be mined
 		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
 		if err != nil {
-			log.Error("error calling submitChequeBeneficiary", "error", err)
+			log.Warn("error calling submitChequeBeneficiary", "error", err)
 			//TODO: do something with the error
 			return
 		}
-		log.Info("submit tx mined", "receipt", receipt)
+		log.Debug("submit tx mined", "receipt", receipt)
 
 		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
 		if err != nil {
-			log.Error("Got error when calling cashChequeBeneficiary", "err", err)
+			log.Warn("Got error when calling cashChequeBeneficiary", "err", err)
 			//TODO: do something with the error
 			return
 		}
-		log.Info("cash tx mined", "receipt", receipt)
+		log.Debug("cash tx mined", "receipt", receipt)
 		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
 		//TODO: make sure we make a case where we listen to the possibiliyt of the peer shutting down.
+		log.Info("Cheque sucesfully submitted and cashed.")
 	}()
 	return err
 }
