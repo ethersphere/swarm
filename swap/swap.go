@@ -267,7 +267,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// as an error might indicate that there is no existing cheque, which
 	// could mean it's the first interaction, which is absolutely valid
 	err = s.loadLastSentCheque(peer)
-	if err != state.ErrNotFound {
+	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
 	lastCheque := s.cheques[peer]
@@ -346,12 +346,14 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	var cheque *Cheque
 	if _, ok := s.cheques[peer]; !ok {
 		err = s.store.Get(sentChequeKey(peer), &cheque)
-		s.cheques[peer] = cheque
+		if err != nil && err != state.ErrNotFound {
+			s.cheques[peer] = cheque
+		}
 	}
-	return
+	return err
 }
 
-// saveLastReceivedCheque loads the last received cheque for peer
+// loadLastReceivedCheque loads the last received cheque for peer
 func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
