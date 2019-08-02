@@ -408,7 +408,6 @@ func (s *Swap) GetParams() *swap.Params {
 
 // Deploy deploys a new swap contract
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
-	// TODO: What to do if the contract is already deployed?
 	return s.deploy(ctx, backend, path)
 }
 
