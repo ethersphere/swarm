@@ -110,17 +110,17 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return err
 	}
 
-	answer, ok := handshake.(*HandshakeMsg)
+	response, ok := handshake.(*HandshakeMsg)
 	if !ok {
 		return ErrInvalidHandshakeMsg
 	}
 
-	beneficiary, err := s.getContractOwner(context.TODO(), answer.ContractAddress)
+	beneficiary, err := s.getContractOwner(context.TODO(), response.ContractAddress)
 	if err != nil {
 		return err
 	}
 
-	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, answer.ContractAddress)
+	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, response.ContractAddress)
 	s.addPeer(swapPeer)
 	defer s.removePeer(swapPeer)
 
