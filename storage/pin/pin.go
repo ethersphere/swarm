@@ -33,7 +33,7 @@ import (
 
 const (
 	Version        = "1.0"
-	WorkerChanSize = 8             // Max no of goroutines when walking the file tree
+	WorkerChanSize = 8 // Max no of goroutines when walking the file tree
 )
 
 var (
@@ -108,16 +108,10 @@ func NewAPI(lstore *localstore.DB, stateStore state.Store, params *storage.FileS
 // from two places 1) Just after the file is uploaded 2) anytime after
 // uploading the file using the pin command. This function can pin both
 // encrypted and non-encrypted files.
-func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
-	addr, err := hex.DecodeString(rootHash)
-	if err != nil {
-		log.Error("Error decoding root hash", "rootHash", rootHash, "err", err)
-		return err
-	}
-
+func (p *API) PinFiles(addr []byte, isRaw bool, credentials string) error {
 	hasChunk, err := p.db.Has(context.Background(), chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 	if !hasChunk {
-		log.Error("Could not pin hash. File not uploaded", "Hash", rootHash)
+		log.Error("Could not pin hash. File not uploaded", "rootHash", hex.EncodeToString(addr))
 		return err
 	}
 
@@ -133,14 +127,14 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 		}
 		return nil
 	}
-	err = p.walkChunksFromRootHash(rootHash, isRaw, credentials, walkerFunction)
+	err = p.walkChunksFromRootHash(addr, isRaw, credentials, walkerFunction)
 	if err != nil {
-		log.Error("Error walking root hash.", "Hash", rootHash, "err", err)
+		log.Error("Error walking root hash.", "Hash", hex.EncodeToString(addr), "err", err)
 		return nil
 	}
 
 	// Check if the root hash is already pinned and add it to the fileInfo struct
-	fileInfo, err := p.getPinnedFile(rootHash)
+	fileInfo, err := p.getPinnedFile(addr)
 	if err != nil {
 		// Get the file size from the root chunk first 8 bytes
 		hashFunc := storage.MakeHashFunc(storage.DefaultHash)
@@ -156,7 +150,7 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 		// Get the pin counter from the pinIndex
 		pinCounter, err := p.getPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 		if err != nil {
-			log.Error("Error getting pin counter of root hash.", "rootHash", rootHash, "err", err)
+			log.Error("Error getting pin counter of root hash.", "rootHash", hex.EncodeToString(addr), "err", err)
 			return nil
 		}
 
@@ -169,20 +163,20 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 		// Get the pin counter from the pinIndex
 		pinCounter, err := p.getPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 		if err != nil {
-			log.Error("Error getting pin counter of root hash.", "rootHash", rootHash, "err", err)
+			log.Error("Error getting pin counter of root hash.", "rootHash", hex.EncodeToString(addr), "err", err)
 			return nil
 		}
 		fileInfo.pinCounter = pinCounter
 	}
 
 	// Store the pinned files in state DB
-	err = p.savePinnedFile(rootHash, fileInfo)
+	err = p.savePinnedFile(addr, fileInfo)
 	if err != nil {
-		log.Error("Error saving pinned file info to state store.", "rootHash", rootHash, "err", err)
+		log.Error("Error saving pinned file info to state store.", "rootHash", hex.EncodeToString(addr), "err", err)
 		return nil
 	}
 
-	log.Debug("File pinned", "Address", rootHash)
+	log.Debug("File pinned", "Address", hex.EncodeToString(addr))
 	return nil
 }
 
@@ -191,16 +185,10 @@ func (p *API) PinFiles(rootHash string, isRaw bool, credentials string) error {
 // that are encountered on the way. The pre-requisite is that the file should
 // have been already pinned using the PinFiles function. This function can
 // be called only from an external command.
-func (p *API) UnpinFiles(rootHash string, credentials string) error {
-	addr, err := hex.DecodeString(rootHash)
+func (p *API) UnpinFiles(addr []byte, credentials string) error {
+	fileInfo, err := p.getPinnedFile(addr)
 	if err != nil {
-		log.Error("Error decoding root hash", "rootHash", rootHash, "err", err)
-		return err
-	}
-
-	fileInfo, err := p.getPinnedFile(rootHash)
-	if err != nil {
-		log.Error("Root hash is not pinned", "rootHash", rootHash, "err", err)
+		log.Error("Root hash is not pinned", "rootHash", hex.EncodeToString(addr), "err", err)
 		return err
 	}
 
@@ -216,30 +204,30 @@ func (p *API) UnpinFiles(rootHash string, credentials string) error {
 		}
 		return nil
 	}
-	err = p.walkChunksFromRootHash(rootHash, fileInfo.isRaw, credentials, walkerFunction)
+	err = p.walkChunksFromRootHash(addr, fileInfo.isRaw, credentials, walkerFunction)
 	if err != nil {
-		log.Error("Error walking root hash.", "Hash", rootHash, "err", err)
+		log.Error("Error walking root hash.", "Hash", hex.EncodeToString(addr), "err", err)
 		return nil
 	}
 
 	// Delete or Update the state DB
 	pinCounter, err := p.getPinCounterOfChunk(chunk.Address(p.removeDecryptionKeyFromChunkHash(addr)))
 	if err != nil {
-		err := p.removePinnedFile(rootHash)
+		err := p.removePinnedFile(addr)
 		if err != nil {
-			log.Error("Error unpinning file.", "rootHash", rootHash, "err", err)
+			log.Error("Error unpinning file.", "rootHash", hex.EncodeToString(addr), "err", err)
 			return nil
 		}
 	} else {
 		fileInfo.pinCounter = pinCounter
-		err = p.savePinnedFile(rootHash, fileInfo)
+		err = p.savePinnedFile(addr, fileInfo)
 		if err != nil {
-			log.Error("Error updating file info to state store.", "rootHash", rootHash, "err", err)
+			log.Error("Error updating file info to state store.", "rootHash", hex.EncodeToString(addr), "err", err)
 			return nil
 		}
 	}
 
-	log.Debug("File unpinned", "Address", rootHash)
+	log.Debug("File unpinned", "Address", hex.EncodeToString(addr))
 	return nil
 }
 
@@ -270,13 +258,8 @@ func (p *API) ListPinFiles() (map[string]FileInfo, error) {
 	return pinnedFiles, nil
 }
 
-func (p *API) walkChunksFromRootHash(rootHash string, isRaw bool, credentials string,
+func (p *API) walkChunksFromRootHash(addr []byte, isRaw bool, credentials string,
 	executeFunc func(storage.Reference) error) error {
-	addr, err := hex.DecodeString(rootHash)
-	if err != nil {
-		log.Error("Error decoding root hash", "err", err)
-		return err
-	}
 
 	fileHashesC := make(chan storage.Reference, WorkerChanSize)
 	fileErrC := make(chan error)
@@ -477,20 +460,20 @@ func (p *API) getPinCounterOfChunk(addr chunk.Address) (uint64, error) {
 	return pinnedChunk.PinCounter(), nil
 }
 
-func (p *API) savePinnedFile(rootHash string, fileInfo FileInfo) error {
-	key := "pin_" + rootHash
+func (p *API) savePinnedFile(addr []byte, fileInfo FileInfo) error {
+	key := "pin_" + hex.EncodeToString(addr)
 	err := p.state.Put(key, &fileInfo)
 	return err
 }
 
-func (p *API) removePinnedFile(rootHash string) error {
-	key := "pin_" + rootHash
+func (p *API) removePinnedFile(addr []byte) error {
+	key := "pin_" + hex.EncodeToString(addr)
 	err := p.state.Delete(key)
 	return err
 }
 
-func (p *API) getPinnedFile(rootHash string) (FileInfo, error) {
-	key := "pin_" + rootHash
+func (p *API) getPinnedFile(addr []byte) (FileInfo, error) {
+	key := "pin_" + hex.EncodeToString(addr)
 	fileInfo := FileInfo{}
 	err := p.state.Get(key, &fileInfo)
 	return fileInfo, err

@@ -46,7 +46,7 @@ func TestPinRawUpload(t *testing.T) {
 	hash := uploadFile(t, f, data, false)
 
 	// test pin and unpin
-	pinUnpinAndFailIfError(t, p, hex.EncodeToString(hash), 3, true)
+	pinUnpinAndFailIfError(t, p, hash, 3, true)
 }
 
 // TestPinRawUploadEncrypted pins a encrypted RAW file and unpin it multiple times
@@ -58,7 +58,7 @@ func TestPinRawUploadEncrypted(t *testing.T) {
 	hash := uploadFile(t, f, data, true)
 
 	// test pin and unpin
-	pinUnpinAndFailIfError(t, p, hex.EncodeToString(hash), 3, true)
+	pinUnpinAndFailIfError(t, p, hash, 3, true)
 }
 
 // TestPinCollectionUpload pins a simple collection and unpin it multiple times
@@ -69,7 +69,7 @@ func TestPinCollectionUpload(t *testing.T) {
 	hash := uploadCollection(t, p, f, false)
 
 	// test pin and unpin
-	pinUnpinAndFailIfError(t, p, hex.EncodeToString(hash), 3, false)
+	pinUnpinAndFailIfError(t, p, hash, 3, false)
 }
 
 // TestPinCollectionUploadEncrypted pins a encrypted simple collection and unpin it multiple times
@@ -80,7 +80,7 @@ func TestPinCollectionUploadEncrypted(t *testing.T) {
 	hash := uploadCollection(t, p, f, true)
 
 	// test pin and unpin
-	pinUnpinAndFailIfError(t, p, hex.EncodeToString(hash), 3, false)
+	pinUnpinAndFailIfError(t, p, hash, 3, false)
 }
 
 // TestWalker tests the walkChunksFromRootHash function which is the crux of
@@ -109,7 +109,7 @@ func TestWalker(t *testing.T) {
 			walkedChunks[hex.EncodeToString(chunkAddr)] = 0
 			return nil
 		}
-		err = p.walkChunksFromRootHash(hex.EncodeToString(hash), true, "", walkerFunction)
+		err = p.walkChunksFromRootHash(hash, true, "", walkerFunction)
 		if err != nil {
 			t.Fatalf("Walker error for hash %s", hash)
 		}
@@ -135,7 +135,7 @@ func TestListPinInfo(t *testing.T) {
 	hash := uploadCollection(t, p, f, false)
 
 	// Pin the hash for the first time
-	err := p.PinFiles(hex.EncodeToString(hash), false, "")
+	err := p.PinFiles(hash, false, "")
 	if err != nil {
 		t.Fatalf("Could not pin " + err.Error())
 	}
@@ -159,7 +159,7 @@ func TestListPinInfo(t *testing.T) {
 	}
 
 	// Pin it once more and check if the counters increases
-	err = p.PinFiles(hex.EncodeToString(hash), false, "")
+	err = p.PinFiles(hash, false, "")
 	if err != nil {
 		t.Fatalf("Could not pin " + err.Error())
 	}
@@ -178,7 +178,7 @@ func TestListPinInfo(t *testing.T) {
 	}
 
 	// Unpin it and check if the counter decrements
-	err = p.UnpinFiles(hex.EncodeToString(hash), "")
+	err = p.UnpinFiles(hash, "")
 	if err != nil {
 		t.Fatalf("Could not unpin " + err.Error())
 	}
@@ -197,7 +197,7 @@ func TestListPinInfo(t *testing.T) {
 	}
 
 	// Unpin it final time and the entry should not be there
-	err = p.UnpinFiles(hex.EncodeToString(hash), "")
+	err = p.UnpinFiles(hash, "")
 	if err != nil {
 		t.Fatalf("Could not unpin " + err.Error())
 	}
@@ -357,7 +357,7 @@ func uploadCollection(t *testing.T, p *API, f *storage.FileStore, toEncrypt bool
 //   3) Check if all the chunks pinned have the proper pinCounter
 //         -  This is just a simple go through of all the pinned chunks list and check if the counter is
 //            equal to the pin counter given as argument
-func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, isRaw bool) {
+func failIfNotPinned(t *testing.T, p *API, rootHash []byte, pinCounter uint64, isRaw bool) {
 	t.Helper()
 
 	// 1 - Check if the root hash is pinned in state store
@@ -408,7 +408,7 @@ func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, i
 		t.Fatalf("Could not load pin state from state store")
 	}
 
-	fileInfo, ok := pinnedFiles[rootHash]
+	fileInfo, ok := pinnedFiles[hex.EncodeToString(rootHash)]
 	if !ok {
 		t.Fatalf("Fileinfo not present in state store")
 	}
@@ -422,7 +422,7 @@ func failIfNotPinned(t *testing.T, p *API, rootHash string, pinCounter uint64, i
 	}
 }
 
-func failIfNotUnpinned(t *testing.T, p *API, rootHash string, isRaw bool) {
+func failIfNotUnpinned(t *testing.T, p *API, rootHash []byte, isRaw bool) {
 	t.Helper()
 
 	// root hash should not be in state DB
@@ -438,7 +438,7 @@ func failIfNotUnpinned(t *testing.T, p *API, rootHash string, isRaw bool) {
 	}
 }
 
-func pinUnpinAndFailIfError(t *testing.T, p *API, rootHash string, noOfPinUnpin int, isRaw bool) {
+func pinUnpinAndFailIfError(t *testing.T, p *API, rootHash []byte, noOfPinUnpin int, isRaw bool) {
 	t.Helper()
 
 	// Pin the file and check if it is pinned
@@ -471,7 +471,7 @@ func pinUnpinAndFailIfError(t *testing.T, p *API, rootHash string, noOfPinUnpin 
 
 // collectPinnedChunks is used to collect all the chunks that are pinned as part of the
 // given root hash.
-func (p *API) collectPinnedChunks(t *testing.T, rootHash string, credentials string, isRaw bool) map[string]uint64 {
+func (p *API) collectPinnedChunks(t *testing.T, rootHash []byte, credentials string, isRaw bool) map[string]uint64 {
 	t.Helper()
 
 	pinnedChunks := make(map[string]uint64)
