@@ -22,7 +22,6 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -296,7 +295,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 
 	// Add the root hash of the RAW file in the pinFilesIndex
 	if strings.ToLower(headerPin) == "true" {
-		err = s.pinAPI.PinFiles(hex.EncodeToString(addr), true, "")
+		err = s.pinAPI.PinFiles(addr, true, "")
 		if err != nil {
 			postRawFail.Inc(1)
 			respondError(w, r, fmt.Sprintf("Error pinning file : %s", addr.Hex()), http.StatusInternalServerError)
@@ -386,7 +385,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Pin the file
 	if strings.ToLower(headerPin) == "true" {
-		err = s.pinAPI.PinFiles(hex.EncodeToString(newAddr), false, "")
+		err = s.pinAPI.PinFiles(newAddr, false, "")
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, fmt.Sprintf("Error pinning file : %s", newAddr.Hex()), http.StatusInternalServerError)
