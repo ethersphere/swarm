@@ -219,6 +219,7 @@ func TestStoreBalances(t *testing.T) {
 }
 
 func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
+	t.Helper()
 	var peerBalance int64
 	err := s.store.Get(balanceKey(peer), &peerBalance)
 	if err != nil && err != state.ErrNotFound {
