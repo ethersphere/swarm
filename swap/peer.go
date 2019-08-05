@@ -97,6 +97,8 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		// blocks here, as we are waiting for the transaction to be mined
 		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
 		if err != nil {
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
 			log.Error("error submitting cheque", "err", err)
 			return
 		}
@@ -104,6 +106,8 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 
 		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
 		if err != nil {
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
 			log.Error("error cashing cheque", "err", err)
 			return
 		}
