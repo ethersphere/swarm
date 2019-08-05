@@ -141,7 +141,6 @@ func TestCapabilitiesRLP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println(cRestored)
 	cap1Restored := cRestored.get(cap1.Id)
 	if cap1Restored.Id != cap1.Id {
 		t.Fatalf("cap 1 id not correct, expected %d, got %d", cap1.Id, cap1Restored.Id)

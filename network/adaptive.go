@@ -83,7 +83,7 @@ func isSameBools(left []bool, right []bool) bool {
 // It is used both to store the capabilities in the node, and
 // to communicate the node capabilities to its peers
 type Capabilities struct {
-	idx  map[CapabilityId]int
+	idx  map[CapabilityId]int // maps the CapabilityIds to their position in the Caps vector
 	Caps []*Capability
 	mu   sync.Mutex
 }
