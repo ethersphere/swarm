@@ -22,7 +22,7 @@ This module contains the pricing for message types as constants.
 Pricing in Swarm is defined in an internal unit.
 The name of this internal unit is honey.
 The honey unit allows to set prices of messages relative to each other
-without any dependency to any currency.
+independently of any currency.
 
 The expectation is then that an external, probably on-chain, **oracle**
 would be queried with the total amount of honey for a message,
