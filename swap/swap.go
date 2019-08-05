@@ -220,7 +220,6 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	s.cheques[peer] = cheque
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
-	// TODO: error handling might be quite more complex
 	if err != nil {
 		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
 	}
@@ -230,7 +229,6 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	}
 
 	// reset balance;
-	// TODO: if sending fails it should actually be roll backed...
 	err = s.resetBalance(peer, int64(cheque.Amount))
 	if err != nil {
 		return err
@@ -394,7 +392,6 @@ func (s *Swap) GetParams() *swap.Params {
 
 // Deploy deploys a new swap contract
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
-	// TODO: What to do if the contract is already deployed?
 	return s.deploy(ctx, backend, path)
 }
 
