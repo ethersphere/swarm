@@ -178,7 +178,7 @@ func init() {
 		EnsAPIFlag,
 		SwarmTomlConfigPathFlag,
 		SwarmSwapEnabledFlag,
-		SwarmSwapAPIFlag,
+		SwarmBackendURLFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,
