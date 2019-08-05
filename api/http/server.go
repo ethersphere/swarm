@@ -67,6 +67,7 @@ var (
 
 const (
 	SwarmTagHeaderName = "x-swarm-tag" // Presence of this in header indicates the tag
+	PinHeaderName      = "x-swarm-pin" // Presence of this in header indicates pinning required
 )
 
 type methodHandler map[string]http.Handler
@@ -261,7 +262,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(pin.HeaderName)
+	headerPin := r.Header.Get(PinHeaderName)
 
 	if uri.Path != "" {
 		postRawFail.Inc(1)
@@ -332,7 +333,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the pinCounter if there is a pin header present in the request
-	headerPin := r.Header.Get(pin.HeaderName)
+	headerPin := r.Header.Get(PinHeaderName)
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {

@@ -34,7 +34,6 @@ import (
 const (
 	Version        = "1.0"
 	WorkerChanSize = 8             // Max no of goroutines when walking the file tree
-	HeaderName     = "x-swarm-pin" // Presence of this in header indicates pinning required
 )
 
 var (
