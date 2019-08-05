@@ -43,7 +43,6 @@ var (
 type Backend interface {
 	bind.ContractBackend
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
-	//TODO: needed? BalanceAt(ctx context.Context, address common.Address, blockNum *big.Int) (*big.Int, error)
 }
 
 // Deploy deploys an instance of the underlying contract and returns its `Contract` abstraction
@@ -91,7 +90,6 @@ type Params struct {
 
 // ValidateCode checks that the on-chain code at address matches the expected swap
 // contract code.
-// TODO: have this as a package level function and pass the SimpleSwapBin as argument
 func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
 	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
 	if err != nil {

@@ -65,8 +65,6 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a debitor
-// TODO: validate the contract address in the cheque to match the address given at handshake
-// TODO: this should not be blocking
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
 	log.Info("received cheque from peer", "peer", sp.ID().String())
@@ -108,14 +106,12 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 
 		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
 		if err != nil {
-			//TODO: do something with the error
+			// TODO: do something with the error
 			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
 			log.Error("error cashing cheque", "err", err)
 			return
 		}
 		log.Debug("cash tx mined", "receipt", receipt)
-		//TODO: after the cashCheque is done, we have to watch the blockchain for x amount (25) blocks for reorgs
-		//TODO: make sure we make a case where we listen to the possibility of the peer shutting down.
 		log.Info("Cheque successfully submitted and cashed")
 	}()
 	return err
@@ -143,7 +139,7 @@ func (sp *Peer) processAndVerifyCheque(cheque *Cheque) (uint64, error) {
 
 	if err := sp.saveLastReceivedCheque(cheque); err != nil {
 		log.Error("error while saving last received cheque", "peer", sp.ID().String(), "err", err.Error())
-		// TODO: what do we do here?
+		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
 	return actualAmount, nil
@@ -190,7 +186,6 @@ func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount 
 		actualAmount -= lastCheque.Amount
 	}
 
-	// TODO: maybe allow some range around expectedAmount?
 	if expectedAmount != actualAmount {
 		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
 	}
