@@ -99,6 +99,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	err = db.removeChunksInExcludeIndexFromGC()
 	if err != nil {
 		log.Error("localstore exclude pinned chunks", "err", err)
+		return 0, true, err
 	}
 
 	gcSize, err := db.gcSize.Get()

@@ -344,7 +344,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 
 	// Create a index structure for storing pinned chunks and their pin counts
-	db.pinIndex, err = db.shed.NewIndex("Hash->pinCounter", shed.IndexFuncs{
+	db.pinIndex, err = db.shed.NewIndex("Hash->PinCounter", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
