@@ -25,13 +25,11 @@ const (
 	DefaultPaymentThreshold    = 1000000
 	DefaultDisconnectThreshold = 1500000
 	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
-	// TODO: deliberate value for now; needs experimentation
+	// NOTE: deliberate value for now; needs experimentation
 	DefaultInitialDepositAmount = 0
-
-	deployRetries = 5
+	deployRetries               = 5
 	// delay between retries
 	deployDelay = 1 * time.Second
-	// Default timeout until cashing in cheques is possible - TODO: deliberate value, experiment
 	// Should be non-zero once we implement waivers
 	defaultCashInDelay = uint64(0)
 	// This is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary.

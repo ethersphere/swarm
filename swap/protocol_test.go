@@ -216,7 +216,6 @@ func TestEmitCheque(t *testing.T) {
 			t.Fatalf("Expected exactly one cheque at creditor, but there are %d:", len(creditorSwap.cheques))
 		}
 	*/
-
 }
 
 // TestTriggerPaymentThreshold is to test that the whole cheque protocol is triggered
