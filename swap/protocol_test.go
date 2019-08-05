@@ -196,11 +196,7 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	log.Debug("trigger reading the message on the beneficiary")
-	// handleMsg is blocking as it sends a synchronous confirmation message back.
-	// Therefore, we need a go-routine in order to check for the test,
-	// and we need to synchronize the go-routines
 
-	// this blocks
 	err = debitor.handleEmitChequeMsg(ctx, val.(*EmitChequeMsg))
 	if err != nil {
 		t.Fatal(err)

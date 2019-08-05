@@ -67,17 +67,21 @@ func (sp *Peer) handleMsg(ctx context.Context, msg interface{}) error {
 // a cheque from a debitor
 func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
-	log.Debug("received emit cheque message from peer", "peer", sp.ID().String())
+	log.Info("received cheque from peer", "peer", sp.ID().String())
 	actualAmount, err := sp.processAndVerifyCheque(cheque)
 	if err != nil {
-		log.Error("invalid cheque from peer", "peer", sp.ID().String(), "error", err.Error())
 		return err
 	}
+
+	log.Debug("received cheque processed and verified", "peer", sp.ID().String())
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	sp.swap.resetBalance(sp.ID(), 0-int64(cheque.Honey))
+	err = sp.swap.resetBalance(sp.ID(), 0-int64(cheque.Honey))
+	if err != nil {
+		return err
+	}
 
 	// cash in cheque
 	opts := bind.NewKeyedTransactor(sp.swap.owner.privateKey)
@@ -85,7 +89,6 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, sp.backend)
 	if err != nil {
-		log.Error("could not get an instance of simpleSwap", "error", err)
 		return err
 	}
 
@@ -94,17 +97,18 @@ func (sp *Peer) handleEmitChequeMsg(ctx context.Context, msg *EmitChequeMsg) err
 		// blocks here, as we are waiting for the transaction to be mined
 		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, sp.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
 		if err != nil {
-			log.Error("error calling submitChequeBeneficiary", "error", err)
+			log.Error("error submitting cheque", "err", err)
 			return
 		}
-		log.Info("submit tx mined", "receipt", receipt)
+		log.Debug("submit tx mined", "receipt", receipt)
 
 		receipt, err = otherSwap.CashChequeBeneficiary(opts, sp.backend, sp.swap.owner.Contract, big.NewInt(int64(actualAmount)))
 		if err != nil {
-			log.Error("Got error when calling cashChequeBeneficiary", "err", err)
+			log.Error("error cashing cheque", "err", err)
 			return
 		}
-		log.Info("cash tx mined", "receipt", receipt)
+		log.Debug("cash tx mined", "receipt", receipt)
+		log.Info("Cheque successfully submitted and cashed")
 	}()
 	return err
 }
