@@ -344,7 +344,7 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	var cheque *Cheque
 	if _, ok := s.cheques[peer]; !ok {
 		err = s.store.Get(sentChequeKey(peer), &cheque)
-		if err != nil && err != state.ErrNotFound {
+		if err == nil {
 			s.cheques[peer] = cheque
 		}
 	}
