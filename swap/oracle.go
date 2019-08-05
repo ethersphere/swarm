@@ -22,7 +22,6 @@ type PriceOracle interface {
 }
 
 // NewPriceOracle returns the actual oracle to be used for discovering the price
-// TODO: Add a config flag so that this can be configured via command line
 // For now it will return a default one
 func NewPriceOracle() PriceOracle {
 	return &FixedPriceOracle{
