@@ -229,7 +229,7 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.DeliverySkipCheck = true
 	}
 
-	currentConfig.BackendURL = ctx.GlobalString(SwarmSwapAPIFlag.Name)
+	currentConfig.BackendURL = ctx.GlobalString(SwarmBackendURLFlag.Name)
 	if currentConfig.SwapEnabled && currentConfig.BackendURL == "" {
 		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
 	}
