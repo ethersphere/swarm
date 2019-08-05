@@ -294,7 +294,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", addr)
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set( TagHeaderName, fmt.Sprint(tagUid))
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -374,7 +374,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set( TagHeaderName, fmt.Sprint(tagUid))
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }
@@ -906,7 +906,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 
-		tagByFile , err := s.api.Tags.GetByAddress(fileAddr)
+		tagByFile, err := s.api.Tags.GetByAddress(fileAddr)
 		if err != nil {
 			getTagNotFound.Inc(1)
 			respondError(w, r, "Tag not found", http.StatusNotFound)

@@ -20,6 +20,7 @@ import (
 	"encoding"
 	"encoding/json"
 	"errors"
+
 	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/syndtr/goleveldb/leveldb"

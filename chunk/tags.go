@@ -29,8 +29,8 @@ import (
 
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
-	tags        *sync.Map
-	rng         *rand.Rand
+	tags *sync.Map
+	rng  *rand.Rand
 }
 
 // NewTags creates a tags object
@@ -83,7 +83,7 @@ func (ts *Tags) GetByAddress(address []byte) (*Tag, error) {
 	found := false
 	ts.tags.Range(func(key interface{}, value interface{}) bool {
 		rcvdTag := value.(*Tag)
-		if bytes.Equal(rcvdTag.Address,address) {
+		if bytes.Equal(rcvdTag.Address, address) {
 			t = rcvdTag
 			found = true
 			return false

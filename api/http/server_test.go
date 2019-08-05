@@ -38,15 +38,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/swarm/storage/feed/lookup"
-	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -115,11 +115,11 @@ func TestGetTagUsingHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(tag.Address,rcvdAddress) {
+	if !bytes.Equal(tag.Address, rcvdAddress) {
 		t.Fatalf("retrieved address mismatch, expected %x, got %x", rcvdAddress, tag.Address)
 	}
 
-	if tag.Total()  != 4 {
+	if tag.Total() != 4 {
 		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.Total())
 	}
 
@@ -177,11 +177,11 @@ func TestGetTagUsingTagId(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(tag.Address,rcvdAddress) {
+	if !bytes.Equal(tag.Address, rcvdAddress) {
 		t.Fatalf("retrieved address mismatch, expected %x, got %x", rcvdAddress, tag.Address)
 	}
 
-	if tag.Total()  != 4 {
+	if tag.Total() != 4 {
 		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.Total())
 	}
 
