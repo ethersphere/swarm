@@ -20,9 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TODO: add handshake protocol where we exchange last cheque (this is useful if one node disconnects)
-// FIXME: Check the contract bytecode of the counterparty
-
 // ChequeParams encapsulate all cheque parameters
 type ChequeParams struct {
 	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
@@ -34,7 +31,6 @@ type ChequeParams struct {
 }
 
 // Cheque encapsulates the parameters and the signature
-// TODO: There should be a request cheque struct that only gives the Serial
 type Cheque struct {
 	ChequeParams
 	Signature []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
