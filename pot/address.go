@@ -79,7 +79,6 @@ func (a Address) Bytes() []byte {
 
 // Distance returns the distance between address a and address b as a big integer using the distance metric defined in the swarm specfication
 // Fails if not all addresses are of equal length
-//func Distance(a Address, b Address) (*big.Int, error) {
 func Distance(x, y interface{}) (*big.Int, error) { // a Address, b Address) (*big.Int, error){
 	distanceBytes, err := DistanceRaw(x, y)
 	if err != nil {
@@ -92,7 +91,6 @@ func Distance(x, y interface{}) (*big.Int, error) { // a Address, b Address) (*b
 
 // DistanceRaw returns the distance between address a and address b in big-endian binary format using the distance metric defined in the swarm specfication
 // Fails if not all addresses are of equal length
-//func DistanceRaw(a Address, b Address) ([]byte, error) {
 func DistanceRaw(x, y interface{}) ([]byte, error) { // Address, b Address) ([]byte, error) {
 	bx := ToBytes(x)
 	by := ToBytes(y)
