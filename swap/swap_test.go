@@ -127,6 +127,7 @@ func TestAllBalances(t *testing.T) {
 }
 
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
+	t.Helper()
 	balances, err := swap.Balances()
 	if err != nil {
 		t.Fatal(err)
@@ -332,6 +333,7 @@ func TestResetBalance(t *testing.T) {
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
 // append generated bookings to slice pointer
 func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+	t.Helper()
 	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
 	*bookings = append(*bookings, peerBookings...)
 	addBookings(swap, peerBookings)
@@ -356,6 +358,7 @@ func addBookings(swap *Swap, bookings []booking) {
 
 // take a Swap struct and a list of bookings, and verify the resulting balances are as expected
 func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
+	t.Helper()
 	expectedBalances := calculateExpectedBalances(swap, bookings)
 	realBalances := swap.balances
 	if !reflect.DeepEqual(expectedBalances, realBalances) {
