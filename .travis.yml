@@ -1,6 +1,8 @@
 language: go
 go_import_path: github.com/ethersphere/swarm
 sudo: false
+env:
+  - GO111MODULE=on
 branches:
   only:
     - master
@@ -15,7 +17,7 @@ jobs:
       env:
         - lint
       script:
-        - go run build/ci.go lint
+        - go run -mod=vendor build/ci.go lint
 
     # Go 1.11.x is needed because of the Ubuntu PPA builds
     - stage: build
@@ -27,8 +29,8 @@ jobs:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run -mod=vendor build/ci.go install
+        - go run -mod=vendor build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
     - stage: build
@@ -40,8 +42,8 @@ jobs:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run -mod=vendor build/ci.go install
+        - go run -mod=vendor build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
       os: osx
@@ -56,8 +58,8 @@ jobs:
         - ulimit -S -n $NOFILE
         - ulimit -n
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run -mod=vendor build/ci.go install
+        - go run -mod=vendor build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA upload
     - stage: deploy
@@ -78,7 +80,7 @@ jobs:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user ethswarm -signer "Ethereum Swarm Linux Builder <swarm@ethereum.org>"
+        - go run -mod=vendor build/ci.go debsrc -upload ethereum/ethereum -sftp-user ethswarm -signer "Ethereum Swarm Linux Builder <swarm@ethereum.org>"
 
     # This builder does the Linux Azure uploads
     - stage: deploy
@@ -95,23 +97,23 @@ jobs:
             - gcc-multilib
       script:
         # Build for the primary platforms that Trusty can manage
-        - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
-        - go run build/ci.go install -arch 386
-        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go install
+        - go run -mod=vendor build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go install -arch 386
+        - go run -mod=vendor build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
         # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
-        - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
-        - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
-        - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
-        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
-        - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
-        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - GOARM=5 go run -mod=vendor build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=5 go run -mod=vendor build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - GOARM=6 go run -mod=vendor build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=6 go run -mod=vendor build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - GOARM=7 go run -mod=vendor build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
+        - GOARM=7 go run -mod=vendor build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
+        - go run -mod=vendor build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
     - stage: deploy
@@ -124,21 +126,21 @@ jobs:
       env:
         - azure-linux-mips
       script:
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
+        - go run -mod=vendor build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
-        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
-        - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
+        - go run -mod=vendor build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
-        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
+        - go run -mod=vendor build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
-        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
+        - go run -mod=vendor build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
-        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - stage: deploy
@@ -148,8 +150,8 @@ jobs:
       env:
         - azure-osx
       script:
-        - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload ethswarm/builds
+        - go run -mod=vendor build/ci.go install
+        - go run -mod=vendor build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload ethswarm/builds
 
 
     # This builder does the Azure archive purges to avoid accumulating junk
@@ -161,4 +163,4 @@ jobs:
       env:
         - azure-purge
       script:
-        - go run build/ci.go purge -store ethswarm/builds -days 14
+        - go run -mod=vendor build/ci.go purge -store ethswarm/builds -days 14
