@@ -29,7 +29,6 @@ import (
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
-	"github.com/ethersphere/swarm/state"
 )
 
 // ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
@@ -148,33 +147,21 @@ func (s *Swap) getPeer(id enode.ID) (*Peer, error) {
 	return peer, err
 }
 
-// NewAPI creates a new PublicAPI instance
-func NewAPI(s *Swap) *PublicAPI {
-	return &PublicAPI{
-		Swap:   s,
-		Params: s.GetParams(),
-	}
+type swapAPI interface {
+	Balance(peer enode.ID) (int64, error)
+	Balances() (map[enode.ID]int64, error)
 }
 
 // PublicAPI would be the public API accessor for protocol methods
 type PublicAPI struct {
-	*Swap
+	swapAPI
 	*contract.Params
 }
 
-// Balance returns the current SWAP balance for a given peer
-func (api *PublicAPI) Balance(peer enode.ID) (int64, error) {
-	peerBalance, err := api.Swap.Balance(peer)
-	if err != nil && err != state.ErrNotFound {
-		return peerBalance, err
+// NewAPI creates a new PublicAPI instance
+func NewAPI(s *Swap) *PublicAPI {
+	return &PublicAPI{
+		swapAPI: s,
+		Params:  s.GetParams(),
 	}
-	// A peer not being found in the balances map is not considered an error at this level
-	// Just a balance of 0
-	return peerBalance, nil
-}
-
-// Balances returns the current SWAP balances for all known peers
-func (api *PublicAPI) Balances() (map[enode.ID]int64, error) {
-	peerBalances, err := api.Swap.Balances()
-	return peerBalances, err
 }
