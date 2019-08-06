@@ -2,7 +2,6 @@ package network
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
