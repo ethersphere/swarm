@@ -163,7 +163,7 @@ func ExpandPackagesNoVendor(patterns []string) []string {
 		}
 	}
 	if expand {
-		cmd := GoTool("list", patterns...)
+		cmd := GoTool("list", append([]string{"-mod=vendor"}, patterns...)...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Fatalf("package listing failed: %v\n%s", err, string(out))
