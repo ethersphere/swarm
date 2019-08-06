@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -329,7 +330,7 @@ func TestSwapRPC(t *testing.T) {
 	// connect to the servicenode RPCs
 	rpcclient, err := rpc.Dial(filepath.Join(stack.DataDir(), ipcPath))
 	if err != nil {
-		t.Fatal("connect to servicenode IPC fail", "err", err)
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(stack.DataDir())
 
@@ -340,60 +341,64 @@ func TestSwapRPC(t *testing.T) {
 	id2 := dummyPeer2.ID()
 
 	// set some fake balances
-	fake1 := int64(234)
-	fake2 := int64(-100)
+	fakeBalance1 := int64(234)
+	fakeBalance2 := int64(-100)
 
 	// query a first time, should be zero
 	var balance int64
 	err = rpcclient.Call(&balance, "swap_balance", id1)
 	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
+		t.Fatal(err)
 	}
 	log.Debug("servicenode balance", "balance", balance)
 
 	if balance != 0 {
-		t.Fatal("Expected balance to be 0 but it is not")
+		t.Fatalf("Expected balance to be 0 but it is %d", balance)
 	}
 
 	// now artificially assign some balances
-	swap.balances[id1] = fake1
-	swap.balances[id2] = fake2
+	swap.balances[id1] = fakeBalance1
+	swap.balances[id2] = fakeBalance2
 
 	// query them, values should coincide
 	err = rpcclient.Call(&balance, "swap_balance", id1)
 	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
+		t.Fatal(err)
 	}
 	log.Debug("balance1", "balance1", balance)
-	if balance != fake1 {
-		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fake1))
+	if balance != fakeBalance1 {
+		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance1)
 	}
 
 	err = rpcclient.Call(&balance, "swap_balance", id2)
 	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
+		t.Fatal(err)
 	}
 	log.Debug("balance2", "balance2", balance)
-	if balance != fake2 {
-		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fake2))
+	if balance != fakeBalance2 {
+		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance2)
 	}
 
 	// now call all balances
 	allBalances := make(map[enode.ID]int64)
 	err = rpcclient.Call(&allBalances, "swap_balances")
 	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
+		t.Fatal(err)
 	}
-	log.Debug("balance", "balance", balance)
+	log.Debug("received balances", "allBalances", allBalances)
 
 	var sum int64
 	for _, v := range allBalances {
 		sum += v
 	}
 
-	fakeSum := fake1 + fake2
+	fakeSum := fakeBalance1 + fakeBalance2
 	if sum != int64(fakeSum) {
-		t.Fatal(fmt.Sprintf("Expected total balance to be %d, but it %d", fakeSum, sum))
+		t.Fatalf("Expected total balance to be %d, but it %d", fakeSum, sum)
+	}
+
+	if reflect.DeepEqual(allBalances, swap.balances) {
+		t.Fatal("Balances are not deep equal")
 	}
 }
 
