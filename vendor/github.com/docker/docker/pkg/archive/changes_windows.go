@@ -1,4 +1,4 @@
-package archive // import "github.com/docker/docker/pkg/archive"
+package archive
 
 import (
 	"os"
@@ -7,22 +7,18 @@ import (
 )
 
 func statDifferent(oldStat *system.StatT, newStat *system.StatT) bool {
-	// Note there is slight difference between the Linux and Windows
-	// implementations here. Due to https://github.com/moby/moby/issues/9874,
-	// and the fix at https://github.com/moby/moby/pull/11422, Linux does not
-	// consider a change to the directory time as a change. Windows on NTFS
-	// does. See https://github.com/moby/moby/pull/37982 for more information.
 
-	if !sameFsTime(oldStat.Mtim(), newStat.Mtim()) ||
+	// Don't look at size for dirs, its not a good measure of change
+	if oldStat.ModTime() != newStat.ModTime() ||
 		oldStat.Mode() != newStat.Mode() ||
-		oldStat.Size() != newStat.Size() && !oldStat.Mode().IsDir() {
+		oldStat.Size() != newStat.Size() && !oldStat.IsDir() {
 		return true
 	}
 	return false
 }
 
 func (info *FileInfo) isDir() bool {
-	return info.parent == nil || info.stat.Mode().IsDir()
+	return info.parent == nil || info.stat.IsDir()
 }
 
 func getIno(fi os.FileInfo) (inode uint64) {

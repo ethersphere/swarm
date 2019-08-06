@@ -1,12 +1,13 @@
-package client // import "github.com/docker/docker/client"
+package client
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io/ioutil"
+	"net/http"
 
 	"github.com/docker/docker/api/types"
+	"golang.org/x/net/context"
 )
 
 // VolumeInspect returns the information about a specific volume in the docker host.
@@ -17,16 +18,15 @@ func (cli *Client) VolumeInspect(ctx context.Context, volumeID string) (types.Vo
 
 // VolumeInspectWithRaw returns the information about a specific volume in the docker host and its raw representation
 func (cli *Client) VolumeInspectWithRaw(ctx context.Context, volumeID string) (types.Volume, []byte, error) {
-	if volumeID == "" {
-		return types.Volume{}, nil, objectNotFoundError{object: "volume", id: volumeID}
-	}
-
 	var volume types.Volume
 	resp, err := cli.get(ctx, "/volumes/"+volumeID, nil, nil)
-	defer ensureReaderClosed(resp)
 	if err != nil {
-		return volume, nil, wrapResponseError(err, resp, "volume", volumeID)
+		if resp.statusCode == http.StatusNotFound {
+			return volume, nil, volumeNotFoundError{volumeID}
+		}
+		return volume, nil, err
 	}
+	defer ensureReaderClosed(resp)
 
 	body, err := ioutil.ReadAll(resp.body)
 	if err != nil {
