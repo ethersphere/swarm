@@ -2,7 +2,8 @@ language: go
 go_import_path: github.com/ethersphere/swarm
 sudo: false
 env:
-  - GO111MODULE=on
+  global:
+    - GO111MODULE=on
 branches:
   only:
     - master
