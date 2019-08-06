@@ -397,7 +397,7 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatalf("Expected total balance to be %d, but it %d", fakeSum, sum)
 	}
 
-	if reflect.DeepEqual(allBalances, swap.balances) {
+	if !reflect.DeepEqual(allBalances, swap.balances) {
 		t.Fatal("Balances are not deep equal")
 	}
 }
