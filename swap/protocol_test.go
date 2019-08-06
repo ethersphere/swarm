@@ -347,11 +347,13 @@ func TestSwapRPC(t *testing.T) {
 	// query a first time, should be zero
 	var balance int64
 	err = rpcclient.Call(&balance, "swap_balance", id1)
-	if err != nil {
-		t.Fatal(err)
+	// at this point no balance should be there:  no peer at address in map...
+	if err == nil {
+		t.Fatal("Expected error but no error received")
 	}
 	log.Debug("servicenode balance", "balance", balance)
 
+	// ...thus balance should be zero
 	if balance != 0 {
 		t.Fatalf("Expected balance to be 0 but it is %d", balance)
 	}
