@@ -62,7 +62,7 @@ func (db *DB) collectGarbageWorker() {
 				db.triggerGarbageCollection()
 			}
 
-			if collectedCount > 0 && testHookCollectGarbage != nil {
+			if testHookCollectGarbage != nil {
 				testHookCollectGarbage(collectedCount)
 			}
 		case <-db.close:
@@ -93,6 +93,14 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	// protect database from changing idexes and gcSize
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
+
+	// run through the recently pinned chunks and
+	// remove them from the gcIndex before iterating through gcIndex
+	err = db.removeChunksInExcludeIndexFromGC()
+	if err != nil {
+		log.Error("localstore exclude pinned chunks", "err", err)
+		return 0, true, err
+	}
 
 	gcSize, err := db.gcSize.Get()
 	if err != nil {
@@ -136,6 +144,68 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		return 0, false, err
 	}
 	return collectedCount, done, nil
+}
+
+// removeChunksInExcludeIndexFromGC removed any recently chunks in the exclude Index, from the gcIndex.
+func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
+	metricName := "localstore.gc.exclude"
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+	defer func() {
+		if err != nil {
+			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+		}
+	}()
+
+	batch := new(leveldb.Batch)
+	excludedCount := 0
+	var gcSizeChange int64
+	err = db.gcExcludeIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		// Get access timestamp
+		retrievalAccessIndexItem, err := db.retrievalAccessIndex.Get(item)
+		if err != nil {
+			return false, err
+		}
+		item.AccessTimestamp = retrievalAccessIndexItem.AccessTimestamp
+
+		// Get the binId
+		retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return false, err
+		}
+		item.BinID = retrievalDataIndexItem.BinID
+
+		// Check if this item is in gcIndex and remove it
+		ok, err := db.gcIndex.Has(item)
+		if ok {
+			db.gcIndex.DeleteInBatch(batch, item)
+			if _, err := db.gcIndex.Get(item); err == nil {
+				gcSizeChange--
+			}
+			excludedCount++
+			db.gcExcludeIndex.DeleteInBatch(batch, item)
+		}
+
+		return false, nil
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	// update the gc size based on the no of entries deleted in gcIndex
+	err = db.incGCSizeInBatch(batch, gcSizeChange)
+	if err != nil {
+		return err
+	}
+
+	metrics.GetOrRegisterCounter(metricName+".excluded-count", nil).Inc(int64(excludedCount))
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		metrics.GetOrRegisterCounter(metricName+".writebatch.err", nil).Inc(1)
+		return err
+	}
+
+	return nil
 }
 
 // gcTrigger retruns the absolute value for garbage collection

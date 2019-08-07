@@ -191,7 +191,7 @@ func TestGetAllReferences(t *testing.T) {
 	for i, r := range testRuns {
 		slice := testutil.RandomBytes(1, r)
 
-		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice), false)
+		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice))
 		if err != nil {
 			t.Fatal(err)
 		}

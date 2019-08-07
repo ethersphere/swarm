@@ -58,7 +58,7 @@ func TestManifestChangeEncrypted(t *testing.T) {
 // Argument encrypt controls whether to use encryption or not.
 func testManifestChange(t *testing.T, encrypt bool) {
 	t.Parallel()
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	tmp, err := ioutil.TempDir("", "swarm-manifest-test")
@@ -430,7 +430,7 @@ func TestNestedDefaultEntryUpdateEncrypted(t *testing.T) {
 
 func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 	t.Parallel()
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	tmp, err := ioutil.TempDir("", "swarm-manifest-test")
