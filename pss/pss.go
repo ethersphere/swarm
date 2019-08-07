@@ -137,6 +137,7 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *outboxMsg
+	forwardPending  int
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -439,12 +440,12 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
 		log.Trace("pss msg forwarding ===>", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
-		return p.enqueue(pssmsg)
+		return p.enqueue(pssmsg, false)
 	}
 
 	log.Trace("pss msg processing <===", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
-		qerr := p.enqueue(pssmsg)
+		qerr := p.enqueue(pssmsg, false)
 		if qerr != nil {
 			return fmt.Errorf("process fail: processerr %v, queueerr: %v", err, qerr)
 		}
@@ -487,7 +488,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	}
 
 	if len(pssmsg.To) < addressLength || prox {
-		err = p.enqueue(pssmsg)
+		err = p.enqueue(pssmsg, false)
 	}
 	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
 	return err
@@ -553,18 +554,19 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
-func (p *Pss) enqueue(msg *PssMsg) error {
+func (p *Pss) enqueue(msg *PssMsg, retry bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	outboxmsg := newOutboxMsg(msg)
-	select {
-	case p.outbox <- outboxmsg:
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
-
-		return nil
-	default:
+	adjustedOutboxCapacity := defaultOutboxCapacity - p.forwardPending
+	if retry || p.forwardPending == 0 || len(p.outbox) < adjustedOutboxCapacity {
+		select {
+		case p.outbox <- outboxmsg:
+			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
+			return nil
+		default:
+		}
 	}
-
 	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
 	return errors.New("outbox full")
 }
@@ -594,7 +596,7 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 
 	p.addFwdCache(pssMsg)
 
-	return p.enqueue(pssMsg)
+	return p.enqueue(pssMsg, false)
 }
 
 // Send a message using symmetric encryption
@@ -684,7 +686,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = envelope
 
-	return p.enqueue(pssMsg)
+	return p.enqueue(pssMsg, false)
 }
 
 // sendFunc is a helper function that tries to send a message and returns true on success.
@@ -734,6 +736,8 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
+	metrics.GetOrRegisterCounter("pss.forward.pending", nil).Inc(1)
+	p.forwardPending++
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
@@ -782,8 +786,10 @@ func (p *Pss) forward(msg *PssMsg) error {
 	// if we failed to send to anyone, re-insert message in the send-queue
 	if sent == 0 {
 		log.Debug("unable to forward to any peers")
-		if err := p.enqueue(msg); err != nil {
+		if err := p.enqueue(msg, true); err != nil {
 			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
+			metrics.GetOrRegisterCounter("pss.forward.pending", nil).Dec(1)
+			p.forwardPending--
 			log.Error(err.Error())
 			return err
 		}
@@ -791,6 +797,8 @@ func (p *Pss) forward(msg *PssMsg) error {
 
 	// cache the message
 	p.addFwdCache(msg)
+	metrics.GetOrRegisterCounter("pss.forward.pending", nil).Dec(1)
+	p.forwardPending--
 	return nil
 }
 
