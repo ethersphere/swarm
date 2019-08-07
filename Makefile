@@ -5,12 +5,12 @@
 GOBIN = $(shell pwd)/build/bin
 
 swarm:
-	build/env.sh go run -mod=vendor build/ci.go install ./cmd/swarm
+	build/env.sh go run build/ci.go install ./cmd/swarm
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/swarm\" to launch swarm."
 
 alltools:
-	build/env.sh go run -mod=vendor build/ci.go install ./cmd/...
+	build/env.sh go run build/ci.go install ./cmd/...
 
 # Wrap go modules vendor command to copy forked cgo libraries
 # from go module cache and correct their file permissons.

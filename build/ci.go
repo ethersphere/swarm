@@ -111,6 +111,11 @@ func main() {
 
 	// Use modules in subcommands.
 	os.Setenv("GO111MODULE", "on")
+	goflgs := "-mod=vendor"
+	if v := os.Getenv("GOFLAGS"); v != "" && v != "-mod=vendor" {
+		goflgs = v + " " + goflgs
+	}
+	os.Setenv("GOFLAGS", goflgs)
 
 	if _, err := os.Stat(filepath.Join("build", "ci.go")); os.IsNotExist(err) {
 		log.Fatal("this script must be run from the root of the repository")
@@ -171,7 +176,7 @@ func doInstall(cmdline []string) {
 
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
-		goinstall.Args = append(goinstall.Args, "-v", "-mod=vendor")
+		goinstall.Args = append(goinstall.Args, "-v")
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
 		return
@@ -185,7 +190,7 @@ func doInstall(cmdline []string) {
 	}
 	// Seems we are cross compiling, work around forbidden GOBIN
 	goinstall := goToolArch(*arch, *cc, "install", buildFlags(env)...)
-	goinstall.Args = append(goinstall.Args, "-v", "-mod=vendor")
+	goinstall.Args = append(goinstall.Args, "-v")
 	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
 	goinstall.Args = append(goinstall.Args, packages...)
 	build.MustRun(goinstall)
@@ -199,7 +204,7 @@ func doInstall(cmdline []string) {
 			for name := range pkgs {
 				if name == "main" {
 					gobuild := goToolArch(*arch, *cc, "build", buildFlags(env)...)
-					gobuild.Args = append(gobuild.Args, "-v", "-mod=vendor")
+					gobuild.Args = append(gobuild.Args, "-v")
 					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(cmd.Name())}...)
 					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
 					build.MustRun(gobuild)
@@ -269,7 +274,7 @@ func doTest(cmdline []string) {
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
 	gotest := goTool("test", buildFlags(env)...)
-	gotest.Args = append(gotest.Args, "-mod=vendor", "-p", "1", "-timeout", "5m")
+	gotest.Args = append(gotest.Args, "-p", "1", "-timeout", "5m")
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
 	}
@@ -650,6 +655,7 @@ func doXgo(cmdline []string) {
 
 	// Make sure xgo is available for cross compilation
 	gogetxgo := goTool("get", "github.com/karalabe/xgo")
+	gogetxgo.Env = append(gogetxgo.Env, "GO111MODULE=off") // do not interfere with project modules
 	build.MustRun(gogetxgo)
 
 	// If all tools building is requested, build everything the builder wants
