@@ -391,10 +391,6 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatalf("Expected HiveParams KeepAliveInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.KeepAliveInterval))
 	}
 
-	//	if info.SyncParams.KeyBufferSize != 512 {
-	//		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
-	//	}
-
 	node.Shutdown()
 }
 
@@ -599,10 +595,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	if info.HiveParams.KeepAliveInterval != 6000000000 {
 		t.Fatalf("Expected HiveParams KeepAliveInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.KeepAliveInterval))
 	}
-
-	//	if info.SyncParams.KeyBufferSize != 512 {
-	//		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
-	//	}
 
 	node.Shutdown()
 }
