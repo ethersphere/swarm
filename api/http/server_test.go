@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/ethersphere/swarm/testutil"
@@ -54,8 +56,8 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
-func serverFunc(api *api.API) TestServer {
-	return NewServer(api, nil, "")
+func serverFunc(api *api.API, pinAPI *pin.API) TestServer {
+	return NewServer(api, pinAPI, "")
 }
 
 func newTestSigner() (*feed.GenericSigner, error) {
@@ -64,6 +66,64 @@ func newTestSigner() (*feed.GenericSigner, error) {
 		return nil, err
 	}
 	return feed.NewGenericSigner(privKey), nil
+}
+
+// TestPinUnpinAPI function tests the pinning and unpinning through HTTP API.
+// It does the following
+//    1) upload a file
+//    2) pin file using HTTP API
+//    3) list all the files using HTTP API and check if the pinned file is present
+//    4) unpin the pinned file
+//    5) list pinned files and check if the unpinned files is not there anymore
+func TestPinUnpinAPI(t *testing.T){
+	// Initialize Swarm test server
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	defer srv.Close()
+
+	// upload a file
+	data := testutil.RandomBytes(1, 10000)
+	rootHash := uploadFile(t, srv, data)
+
+	// pin it
+	pinMessage := pinFile(t,srv, rootHash)
+
+	// Check if the return message is valid
+	expectedPinMsg := fmt.Sprintf("Address %s pinned",string(rootHash))
+	if string(pinMessage) != expectedPinMsg {
+		t.Fatalf("pin message mismatch, expected %x, got %x", expectedPinMsg, pinMessage)
+	}
+
+	// get the list of files pinned
+	pinnedInfo := listPinnedFiles(t,srv)
+	listInfos := make([]pin.FileInfo,0)
+	err := json.Unmarshal(pinnedInfo, &listInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check if the pinned file is present in the list pin command
+	fileInfo := listInfos[0]
+	if hex.EncodeToString(fileInfo.Address) !=  string(rootHash) {
+		t.Fatalf("roothash not in list of pinned files")
+	}
+	if fileInfo.IsRaw != true {
+		t.Fatalf("pinned file is not raw")
+	}
+	if fileInfo.PinCounter != 1 {
+		t.Fatalf("pin counter is not 1")
+	}
+	if fileInfo.FileSize != uint64(len(data)) {
+		t.Fatalf("data size mismatch, expected %x, got %x", len(data), fileInfo.FileSize)
+	}
+
+	// unpin it
+	unpinMessage := unpinFile(t,srv, rootHash)
+
+	// Check if the return message is valid
+	expectedunPinMsg := fmt.Sprintf("Address %s unpinned",string(rootHash))
+	if string(unpinMessage) != expectedunPinMsg {
+		t.Fatalf("pin message mismatch, expected %x, got %x", expectedunPinMsg, unpinMessage)
+	}
 }
 
 // Test the transparent resolving of feed updates with bzz:// scheme
@@ -1405,4 +1465,78 @@ func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err er
 
 func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
 	return
+}
+
+
+func uploadFile(t *testing.T, srv *TestSwarmServer, data []byte) []byte{
+	t.Helper()
+	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader([]byte(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	rootHash, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rootHash
+}
+
+func pinFile(t *testing.T, srv *TestSwarmServer, rootHash []byte) []byte{
+	t.Helper()
+	pinResp, err := http.Post(fmt.Sprintf("%s/bzz-pin:/%s?IsRaw=true", srv.URL, string(rootHash)), "text/plain", bytes.NewReader([]byte("")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pinResp.Body.Close()
+	if pinResp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", pinResp.Status)
+	}
+	pinMessage, err := ioutil.ReadAll(pinResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pinMessage
+}
+
+func listPinnedFiles(t *testing.T, srv *TestSwarmServer) []byte {
+	t.Helper()
+	getPinURL := fmt.Sprintf("%s/bzz-pin:/", srv.URL)
+	listResp, err := http.Get(getPinURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listResp.Body.Close()
+	if listResp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", listResp.Status)
+	}
+	pinnedInfo, err := ioutil.ReadAll(listResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pinnedInfo
+}
+
+func unpinFile(t *testing.T, srv *TestSwarmServer, rootHash []byte) []byte {
+	t.Helper()
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bzz-pin:/%s", srv.URL, string(rootHash)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unpinResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unpinResp.Body.Close()
+	if unpinResp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", unpinResp.Status)
+	}
+	unpinMessage, err := ioutil.ReadAll(unpinResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return unpinMessage
 }
