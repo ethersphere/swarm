@@ -69,7 +69,7 @@ func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 	// copy signature to avoid modifying the original
 	sig := make([]byte, len(cheque.Signature))
 	copy(sig, cheque.Signature)
-	// reduce the v value of the signature by 27 (see signContent)
+	// reduce the v value of the signature by 27 (see Sign)
 	sig[len(sig)-1] -= 27
 	pubKey, err := crypto.SigToPub(sigHash, sig)
 	if err != nil {
