@@ -106,6 +106,7 @@ func (p *Peer) deleteCursor(stream ID) {
 	delete(p.streamCursors, stream.String())
 }
 
+// InitProviders initializes a provider for a certain peer
 func (p *Peer) InitProviders() {
 	p.logger.Debug("peer.InitProviders")
 

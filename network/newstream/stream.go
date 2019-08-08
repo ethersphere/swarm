@@ -19,6 +19,7 @@ package newstream
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -90,6 +91,7 @@ type SlipStream struct {
 	logger log.Logger
 }
 
+// New creates a new stream protocol handler
 func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider) *SlipStream {
 	slipStream := &SlipStream{
 		intervalsStore: intervalsStore,
@@ -150,6 +152,7 @@ func (s *SlipStream) Run(bp *network.BzzPeer) error {
 	return sp.Peer.Run(s.HandleMsg(sp))
 }
 
+// HandleMsg is the main message handler for the stream protocol
 func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
 		s.mtx.Lock() // ensure that quit read and handlersWg add are locked together
@@ -935,23 +938,32 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 	return batch, *batchStartID, batchEndID, false, nil
 }
 
+// PeerCurosrs returns a JSON response in which the queried node's
+// peer cursors are returned
 func (s *SlipStream) PeerCursors() string {
-	rows := []string{}
-	rows = append(rows, fmt.Sprintf("peer subscriptions for base address: %s", hex.EncodeToString(s.baseKey)[:16]))
-	ctr := 0
-	for _, p := range s.peers {
-		ctr++
-		rows = append(rows, fmt.Sprintf("\tpeer: %s", hex.EncodeToString(p.OAddr)[:16]))
-		cursors := p.getCursorsCopy()
-		for stream, cursor := range cursors {
+	type peerCurs struct {
+		Peer    string            `json:"peer"` // the peer address
+		Cursors map[string]uint64 `json:"cursors"`
+	}
+	curs := struct {
+		Base  string     `json:"base"` // our node's base address
+		Peers []peerCurs `json:"peers"`
+	}{
+		Base: hex.EncodeToString(s.baseKey)[:16],
+	}
 
-			rows = append(rows, fmt.Sprintf("\t\tstream:\t%-5s\t\tcursor: %d", stream, cursor))
+	for _, p := range s.peers {
+		pcur := peerCurs{
+			Peer:    hex.EncodeToString(p.OAddr)[:16],
+			Cursors: p.getCursorsCopy(),
 		}
+		curs.Peers = append(curs.Peers, pcur)
 	}
-	if ctr == 0 {
-		rows = append(rows, fmt.Sprintf("\tfound no associated bzz-stream peers on this node"))
+	pc, err := json.Marshal(&curs)
+	if err != nil {
+		return ""
 	}
-	return "\n" + strings.Join(rows, "\n")
+	return string(pc)
 }
 
 func (s *SlipStream) Protocols() []p2p.Protocol {
@@ -978,18 +990,6 @@ func (s *SlipStream) APIs() []rpc.API {
 }
 
 func (s *SlipStream) Close() {
-	close(s.quit)
-	// wait for all handlers to finish
-	done := make(chan struct{})
-	go func() {
-		s.handlersWg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		log.Error("slip stream closed with still active handlers")
-	}
 }
 
 func (s *SlipStream) Start(server *p2p.Server) error {
@@ -1002,7 +1002,20 @@ func (s *SlipStream) Stop() error {
 	log.Debug("slip stream stopping")
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	s.Close()
+
+	close(s.quit)
+	// wait for all handlers to finish
+	done := make(chan struct{})
+	go func() {
+		s.handlersWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		log.Error("slip stream closed with still active handlers")
+	}
+
 	for _, v := range s.providers {
 		v.Close()
 	}

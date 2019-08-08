@@ -447,6 +447,16 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 	return nil
 }
 
+// TestCorrectCursorsExchangeRace brings up two nodes with a random config
+// then generates a whole bunch of bogus nodes at different POs from the pivot node
+// those POs are then turned On in the pivot Kademlia in order to trigger depth changes
+// without creating real nodes which slow down the test and the CI execution. The depth changes
+// trigger different cursor requests from the pivot to the other node, these requests are being intercepted
+// by a mock Stream handler which later on sends the replies to those requests in different order.
+// the test finishes after the random replies are processed and the correct cursors are asserted according to the
+// real kademlia depth. This test is to accomodate for possible race conditions where multiple cursors requests are
+// sent but the kademlia depth keeps changing. This in turn causes to possibly discard some contents of those requests which
+// are still in flight and which responses' are not yet processed
 func TestCorrectCursorsExchangeRace(t *testing.T) {
 	bogusNodeCount := 15
 	bogusNodes := []*network.Peer{}
