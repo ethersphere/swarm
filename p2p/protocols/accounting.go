@@ -17,11 +17,9 @@
 package protocols
 
 import (
-	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethersphere/swarm/log"
 )
 
 // define some metrics
@@ -135,7 +133,6 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	}
 	// evaluate the price for sending messages
 	costToLocalNode := price.For(Sender, size)
-	log.Debug("Sending msg", "type", reflect.TypeOf(msg), "cost", costToLocalNode)
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
@@ -155,7 +152,6 @@ func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 	}
 	// evaluate the price for receiving messages
 	costToLocalNode := price.For(Receiver, size)
-	log.Debug("Receiving msg", "type", reflect.TypeOf(msg), "cost", costToLocalNode)
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
