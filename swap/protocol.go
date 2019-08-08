@@ -123,7 +123,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	s.addPeer(swapPeer)
 	defer s.removePeer(swapPeer)
 
-	return swapPeer.Run(swapPeer.handleMsg)
+	return swapPeer.Run(s.handleMsg(swapPeer))
 }
 
 func (s *Swap) removePeer(p *Peer) {
