@@ -926,7 +926,7 @@ func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
 
 	if fileAddr == nil {
 		postPinFail.Inc(1)
-		respondError(w, r, "missig hash to pin " , http.StatusBadRequest)
+		respondError(w, r, "missig hash to pin ", http.StatusBadRequest)
 		return
 	}
 
@@ -939,7 +939,7 @@ func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
 	err := s.pinAPI.PinFiles(fileAddr, isRaw, "")
 	if err != nil {
 		postPinFail.Inc(1)
-		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err) , http.StatusInternalServerError)
+		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err), http.StatusInternalServerError)
 		return
 	}
 
@@ -959,14 +959,14 @@ func (s *Server) HandleUnpin(w http.ResponseWriter, r *http.Request) {
 
 	if fileAddr == nil {
 		deletePinFail.Inc(1)
-		respondError(w, r, "missig hash to unpin " , http.StatusBadRequest)
+		respondError(w, r, "missig hash to unpin ", http.StatusBadRequest)
 		return
 	}
 
 	err := s.pinAPI.UnpinFiles(fileAddr, "")
 	if err != nil {
 		deletePinFail.Inc(1)
-		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err) , http.StatusInternalServerError)
+		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err), http.StatusInternalServerError)
 		return
 	}
 
@@ -985,7 +985,7 @@ func (s *Server) HandleGetPins(w http.ResponseWriter, r *http.Request) {
 	pinnedFiles, err := s.pinAPI.ListPinFiles()
 	if err != nil {
 		getPinFail.Inc(1)
-		respondError(w, r, fmt.Sprintf("error getting pinned files: %s", err) , http.StatusInternalServerError)
+		respondError(w, r, fmt.Sprintf("error getting pinned files: %s", err), http.StatusInternalServerError)
 		return
 	}
 

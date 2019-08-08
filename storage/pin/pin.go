@@ -240,7 +240,7 @@ func (p *API) UnpinFiles(addr []byte, credentials string) error {
 //     2) Size of the pinned file or collection
 //     3) the number of times that particular file or collection is pinned.
 func (p *API) ListPinFiles() ([]FileInfo, error) {
-	pinnedFiles := make([]FileInfo,0)
+	pinnedFiles := make([]FileInfo, 0)
 	iterFunc := func(key []byte, value []byte) {
 		hash := string(key[4:])
 		fileInfo := FileInfo{}

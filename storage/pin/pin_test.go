@@ -148,7 +148,7 @@ func TestListPinInfo(t *testing.T) {
 	}
 
 	// Check if the uploaded collection is in the list files data structure
-	fileInfo, err :=  getFileInfo(pinInfo, hash)
+	fileInfo, err := getFileInfo(pinInfo, hash)
 	if err != nil {
 		t.Fatalf("uploaded collection not pinned")
 	}
@@ -170,7 +170,7 @@ func TestListPinInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error executing ListPinFiles command")
 	}
-	fileInfo, err =  getFileInfo(pinInfo, hash)
+	fileInfo, err = getFileInfo(pinInfo, hash)
 	if err != nil {
 		t.Fatalf("hash not pinned ")
 	}
@@ -189,7 +189,7 @@ func TestListPinInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error executing ListPinFiles command")
 	}
-	fileInfo, err =  getFileInfo(pinInfo, hash)
+	fileInfo, err = getFileInfo(pinInfo, hash)
 	if err != nil {
 		t.Fatalf("collection totally unpinned")
 	}
@@ -208,7 +208,7 @@ func TestListPinInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error executing ListPinFiles command")
 	}
-	_, err =  getFileInfo(pinInfo, hash)
+	_, err = getFileInfo(pinInfo, hash)
 	if err == nil {
 		t.Fatalf("uploaded collection is still pinned")
 	}
@@ -409,7 +409,7 @@ func failIfNotPinned(t *testing.T, p *API, rootHash []byte, pinCounter uint64, i
 		t.Fatalf("Could not load pin state from state store")
 	}
 
-	fileInfo, err :=  getFileInfo(pinnedFiles, rootHash)
+	fileInfo, err := getFileInfo(pinnedFiles, rootHash)
 	if err != nil {
 		t.Fatalf("Fileinfo not present in state store")
 	}
@@ -543,7 +543,7 @@ func getChunks(t *testing.T, bin uint8, addrs map[string]int, addrLock *sync.RWM
 	}
 }
 
-func getFileInfo(pinInfo []FileInfo, hash storage.Address) (fileInfo FileInfo, err error){
+func getFileInfo(pinInfo []FileInfo, hash storage.Address) (fileInfo FileInfo, err error) {
 	for _, fi := range pinInfo {
 		if bytes.Equal(fi.Address, hash) {
 			return fi, nil

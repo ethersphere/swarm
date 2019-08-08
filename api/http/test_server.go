@@ -28,9 +28,9 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/localstore"
+	"github.com/ethersphere/swarm/storage/pin"
 )
 
 type TestServer interface {
