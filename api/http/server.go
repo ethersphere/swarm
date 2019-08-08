@@ -914,6 +914,11 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 	getTagCount.Inc(1)
 	uri := GetURI(r.Context())
+	if uri == nil {
+		getTagFail.Inc(1)
+		respondError(w, r, "Error decoding uri", http.StatusBadRequest)
+		return
+	}
 	fileAddr := uri.Address()
 
 	var tag *chunk.Tag
@@ -922,12 +927,14 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		if tagString == "" {
 			getTagFail.Inc(1)
 			respondError(w, r, "Missing one of the mandatory argument", http.StatusBadRequest)
+			return
 		}
 
 		u64, err := strconv.ParseUint(tagString, 10, 32)
 		if err != nil {
 			getTagFail.Inc(1)
 			respondError(w, r, "Invalid tagId argument", http.StatusBadRequest)
+			return
 		}
 		tagId := uint32(u64)
 
@@ -935,6 +942,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			getTagNotFound.Inc(1)
 			respondError(w, r, "Tag not found", http.StatusNotFound)
+			return
 		}
 	} else {
 
@@ -942,6 +950,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			getTagNotFound.Inc(1)
 			respondError(w, r, "Tag not found", http.StatusNotFound)
+			return
 		}
 		tag = tagByFile
 	}
@@ -954,6 +963,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		getTagFail.Inc(1)
 		respondError(w, r, "marshalling error", http.StatusInternalServerError)
+		return
 	}
 	http.ServeContent(w, r, tag.Name, time.Now(), bytes.NewReader(bytesToSend))
 }
