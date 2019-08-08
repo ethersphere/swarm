@@ -205,7 +205,9 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
+	s.lock.Lock()
 	err = s.resetBalance(p.ID(), 0-int64(cheque.Honey))
+	s.lock.Unlock()
 	if err != nil {
 		return err
 	}

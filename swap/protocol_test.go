@@ -18,6 +18,7 @@ package swap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -236,22 +237,26 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	overDraft := 42
 	debitorSwap.balances[creditor.ID()] = 0 - DefaultPaymentThreshold
 
+	fmt.Println("1")
 	// we expect a cheque at the end of the test, but not yet
 	lenCheques := len(debitorSwap.cheques)
 	if lenCheques != 0 {
 		t.Fatalf("Expected no cheques yet, but there are %d", lenCheques)
 	}
+	fmt.Println("2")
 	// do some accounting, no error expected, just a WARN
 	err := debitorSwap.Add(int64(-overDraft), creditor.Peer)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	fmt.Println("3")
 	// we should now have a cheque
 	lenCheques = len(debitorSwap.cheques)
 	if lenCheques != 1 {
 		t.Fatalf("Expected one cheque, but there are %d", lenCheques)
 	}
+	fmt.Println("4")
 	cheque := debitorSwap.cheques[creditor.ID()]
 	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
 	if cheque.Amount != expectedAmount {
