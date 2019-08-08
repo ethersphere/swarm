@@ -124,6 +124,19 @@ func TestPinUnpinAPI(t *testing.T) {
 	if string(unpinMessage) != expectedunPinMsg {
 		t.Fatalf("pin message mismatch, expected %x, got %x", expectedunPinMsg, unpinMessage)
 	}
+
+	// get the list of files pinned again
+	unpinnedInfo := listPinnedFiles(t, srv)
+	listInfosUnpin := make([]pin.FileInfo, 0)
+	err = json.Unmarshal(unpinnedInfo, &listInfosUnpin)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check if the pinned file is not present in the list pin command
+	if len(listInfosUnpin) != 0 {
+		t.Fatalf("roothash is in list of pinned files")
+	}
 }
 
 // Test the transparent resolving of feed updates with bzz:// scheme

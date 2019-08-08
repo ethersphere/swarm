@@ -168,13 +168,6 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
-	mux.Handle("/", methodHandler{
-		"GET": Adapt(
-			http.HandlerFunc(server.HandleRootPaths),
-			SetRequestID,
-			InitLoggingResponseWriter,
-		),
-	})
 	mux.Handle("/bzz-pin:/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleGetPins),
@@ -187,6 +180,13 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 		"DELETE": Adapt(
 			http.HandlerFunc(server.HandleUnpin),
 			defaultMiddlewares...,
+		),
+	})
+	mux.Handle("/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleRootPaths),
+			SetRequestID,
+			InitLoggingResponseWriter,
 		),
 	})
 	server.Handler = c.Handler(mux)
@@ -930,10 +930,10 @@ func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isRaw := true
+	isRaw := false
 	isRawString := r.URL.Query().Get("IsRaw")
-	if isRawString == "" || isRawString == "false" {
-		isRaw = false
+	if strings.ToLower(isRawString) == "true" {
+		isRaw = true
 	}
 
 	err := s.pinAPI.PinFiles(fileAddr, isRaw, "")
