@@ -621,7 +621,7 @@ func catchDuplicateChunkSync(t *testing.T) (validate func()) {
 
 // TestStarNetworkSyncWithBogusNodes ests that syncing works on a more elaborate network topology
 // the test creates three real nodes in a star topology, then adds bogus nodes to the pivot (instead of using real nodes
-// this is in order to make the simulation be more CI friendly):w
+// this is in order to make the simulation be more CI friendly)
 // the pivot node will have neighbourhood depth > 0, which in turn means that from each
 // connected node, the pivot node should have only part of its chunks
 // The test checks that EVERY chunk that exists a node which is not the pivot, according to
