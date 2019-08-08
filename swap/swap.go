@@ -179,6 +179,146 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return nil
 }
 
+// handleMsg is for handling messages when receiving messages
+func (s *Swap) handleMsg(p *Peer) func(ctx context.Context, msg interface{}) error {
+	return func(ctx context.Context, msg interface{}) error {
+		switch msg := msg.(type) {
+		case *EmitChequeMsg:
+			go s.handleEmitChequeMsg(ctx, p, msg)
+		}
+		return nil
+	}
+}
+
+// handleEmitChequeMsg should be handled by the creditor when it receives
+// a cheque from a debitor
+func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitChequeMsg) error {
+	cheque := msg.Cheque
+	log.Info("received cheque from peer", "peer", p.ID().String())
+	actualAmount, err := s.processAndVerifyCheque(cheque, p)
+	if err != nil {
+		return err
+	}
+
+	log.Debug("received cheque processed and verified", "peer", p.ID().String())
+
+	// reset balance by amount
+	// as this is done by the creditor, receiving the cheque, the amount should be negative,
+	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
+	err = s.resetBalance(p.ID(), 0-int64(cheque.Honey))
+	if err != nil {
+		return err
+	}
+
+	// cash in cheque
+	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	opts.Context = ctx
+
+	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
+	if err != nil {
+		return err
+	}
+
+	// submit cheque to the blockchain and cashes it directly
+	go func() {
+		// blocks here, as we are waiting for the transaction to be mined
+		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, s.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
+		if err != nil {
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
+			log.Error("error submitting cheque", "err", err)
+			return
+		}
+		log.Debug("submit tx mined", "receipt", receipt)
+
+		receipt, err = otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(actualAmount)))
+		if err != nil {
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
+			log.Error("error cashing cheque", "err", err)
+			return
+		}
+		log.Info("Cheque successfully submitted and cashed")
+	}()
+	return err
+}
+
+// processAndVerifyCheque verifies the cheque and compares it with the last received cheque
+// if the cheque is valid it will also be saved as the new last cheque
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
+	if err := s.verifyChequeProperties(cheque, p); err != nil {
+		return 0, err
+	}
+
+	lastCheque := s.loadLastReceivedCheque(p)
+
+	// TODO: there should probably be a lock here?
+	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
+	if err != nil {
+		return 0, err
+	}
+
+	actualAmount, err := verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := s.saveLastReceivedCheque(p, cheque); err != nil {
+		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
+	}
+
+	return actualAmount, nil
+}
+
+// verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
+// it does not verify anything that requires knowing the previous cheque
+func (s *Swap) verifyChequeProperties(cheque *Cheque, p *Peer) error {
+	if cheque.Contract != p.contractAddress {
+		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
+	}
+
+	// the beneficiary is the owner of the counterparty swap contract
+	if err := cheque.VerifySig(p.beneficiary); err != nil {
+		return err
+	}
+
+	if cheque.Beneficiary != s.owner.address {
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", s.owner.address, cheque.Beneficiary)
+	}
+
+	if cheque.Timeout != 0 {
+		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
+	}
+
+	return nil
+}
+
+// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
+// furthermore it cheques that the increase in amount is as expected
+// returns the actual amount received in this cheque
+func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
+	actualAmount := cheque.Amount
+
+	if lastCheque != nil {
+		if cheque.Serial <= lastCheque.Serial {
+			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
+		}
+
+		if cheque.Amount <= lastCheque.Amount {
+			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
+		}
+
+		actualAmount -= lastCheque.Amount
+	}
+
+	if expectedAmount != actualAmount {
+		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+	}
+
+	return actualAmount, nil
+}
+
 func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
@@ -351,19 +491,24 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	return err
 }
 
-// loadLastReceivedCheque loads the last received cheque for peer
-func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
+// loadLastReceivedCheque gets the last received cheque for the peer
+// cheque gets loaded from database if not already in memory
+func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.store.Get(receivedChequeKey(peer), &cheque)
+	if p.lastReceivedCheque != nil {
+		return p.lastReceivedCheque
+	}
+	s.store.Get(receivedChequeKey(p.ID()), &cheque)
 	return
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
-func (s *Swap) saveLastReceivedCheque(peer enode.ID, cheque *Cheque) error {
+func (s *Swap) saveLastReceivedCheque(p *Peer, cheque *Cheque) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.store.Put(receivedChequeKey(peer), cheque)
+	p.lastReceivedCheque = cheque
+	return s.store.Put(receivedChequeKey(p.ID()), cheque)
 }
 
 // Close cleans up swap

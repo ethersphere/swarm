@@ -197,7 +197,7 @@ func TestEmitCheque(t *testing.T) {
 
 	log.Debug("trigger reading the message on the beneficiary")
 
-	err = debitor.handleEmitChequeMsg(ctx, val.(*EmitChequeMsg))
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, val.(*EmitChequeMsg))
 	if err != nil {
 		t.Fatal(err)
 	}
