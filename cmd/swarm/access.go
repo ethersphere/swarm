@@ -51,6 +51,7 @@ var (
 						Flags: []cli.Flag{
 							utils.PasswordFileFlag,
 							SwarmDryRunFlag,
+							SwarmPinFlag,
 						},
 						Name:        "pass",
 						Usage:       "encrypts a reference with a password and embeds it into a root manifest",
@@ -64,6 +65,7 @@ var (
 							utils.PasswordFileFlag,
 							SwarmDryRunFlag,
 							SwarmAccessGrantKeyFlag,
+							SwarmPinFlag,
 						},
 						Name:        "pk",
 						Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
@@ -77,6 +79,7 @@ var (
 							SwarmAccessGrantKeysFlag,
 							SwarmDryRunFlag,
 							utils.PasswordFileFlag,
+							SwarmPinFlag,
 						},
 						Name:        "act",
 						Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
@@ -108,6 +111,7 @@ func accessNewPass(ctx *cli.Context) {
 		ref       = args[0]
 		password  = getPassPhrase("", false, 0, makePasswordList(ctx))
 		dryRun    = ctx.Bool(SwarmDryRunFlag.Name)
+		toPin     = ctx.Bool(SwarmPinFlag.Name)
 	)
 	accessKey, ae, err = api.DoPassword(ctx, password, salt)
 	if err != nil {
@@ -123,7 +127,7 @@ func accessNewPass(ctx *cli.Context) {
 			utils.Fatalf("had an error printing the manifests: %v", err)
 		}
 	} else {
-		err = uploadManifests(ctx, m, nil)
+		err = uploadManifests(ctx, m, nil, toPin)
 		if err != nil {
 			utils.Fatalf("had an error uploading the manifests: %v", err)
 		}
@@ -144,6 +148,7 @@ func accessNewPK(ctx *cli.Context) {
 		privateKey       = getPrivKey(ctx)
 		granteePublicKey = ctx.String(SwarmAccessGrantKeyFlag.Name)
 		dryRun           = ctx.Bool(SwarmDryRunFlag.Name)
+		toPin            = ctx.Bool(SwarmPinFlag.Name)
 	)
 	sessionKey, ae, err = api.DoPK(ctx, privateKey, granteePublicKey, salt)
 	if err != nil {
@@ -159,7 +164,7 @@ func accessNewPK(ctx *cli.Context) {
 			utils.Fatalf("had an error printing the manifests: %v", err)
 		}
 	} else {
-		err = uploadManifests(ctx, m, nil)
+		err = uploadManifests(ctx, m, nil, toPin)
 		if err != nil {
 			utils.Fatalf("had an error uploading the manifests: %v", err)
 		}
@@ -184,6 +189,7 @@ func accessNewACT(ctx *cli.Context) {
 		passGranteesFilename = ctx.String(utils.PasswordFileFlag.Name)
 		privateKey           = getPrivKey(ctx)
 		dryRun               = ctx.Bool(SwarmDryRunFlag.Name)
+		toPin                = ctx.Bool(SwarmPinFlag.Name)
 	)
 	if pkGranteesFilename == "" && passGranteesFilename == "" {
 		utils.Fatalf("you have to provide either a grantee public-keys file or an encryption passwords file (or both)")
@@ -223,7 +229,7 @@ func accessNewACT(ctx *cli.Context) {
 			utils.Fatalf("had an error printing the manifests: %v", err)
 		}
 	} else {
-		err = uploadManifests(ctx, m, actManifest)
+		err = uploadManifests(ctx, m, actManifest, toPin)
 		if err != nil {
 			utils.Fatalf("had an error uploading the manifests: %v", err)
 		}
@@ -247,7 +253,7 @@ func printManifests(rootAccessManifest, actManifest *api.Manifest) error {
 	return nil
 }
 
-func uploadManifests(ctx *cli.Context, rootAccessManifest, actManifest *api.Manifest) error {
+func uploadManifests(ctx *cli.Context, rootAccessManifest, actManifest *api.Manifest, toPin bool) error {
 	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 	client := client.NewClient(bzzapi)
 
@@ -256,14 +262,14 @@ func uploadManifests(ctx *cli.Context, rootAccessManifest, actManifest *api.Mani
 		err error
 	)
 	if actManifest != nil {
-		key, err = client.UploadManifest(actManifest, false)
+		key, err = client.UploadManifest(actManifest, false, toPin)
 		if err != nil {
 			return err
 		}
 
 		rootAccessManifest.Entries[0].Access.Act = key
 	}
-	key, err = client.UploadManifest(rootAccessManifest, false)
+	key, err = client.UploadManifest(rootAccessManifest, false, toPin)
 	if err != nil {
 		return err
 	}

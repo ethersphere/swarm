@@ -21,10 +21,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/syndtr/goleveldb/leveldb/util"
-
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // ErrNotFound is returned when no results are returned from the database
