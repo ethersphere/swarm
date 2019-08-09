@@ -139,8 +139,6 @@ func (s *Swap) addPeer(p *Peer) {
 }
 
 func (s *Swap) getPeer(id enode.ID) (*Peer, bool) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
 	peer, ok := s.peers[id]
 	return peer, ok
 }
