@@ -134,7 +134,6 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
 				log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 			}
-
 			n.fetchers.Remove(ch.Address().String())
 		}
 	}
@@ -294,7 +293,7 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 
 	f = NewFetcher()
 	v, loaded := n.fetchers.Get(ref.String())
-	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
+	log.Trace("netstore.has-with-callback.loadorstore", "base", n.LocalID.String()[:16], "ref", ref.String(), "loaded", loaded, "createdBy", interestedParty)
 	if loaded {
 		f = v.(*Fetcher)
 	} else {

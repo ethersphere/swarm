@@ -794,7 +794,7 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 	p.logger.Debug("delivering chunks for peer", "chunks", len(msg.Chunks))
 	for _, dc := range msg.Chunks {
 		c := chunk.NewChunk(dc.Addr, dc.Data)
-		p.logger.Trace("writing chunk to chunks channel", "caddr", c.Address())
+		p.logger.Trace("writing chunk to chunks channel", "caddr", c.Address(), "ruid", msg.Ruid)
 		select {
 		case w.chunks <- c:
 		case <-s.quit:
