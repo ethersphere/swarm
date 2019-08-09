@@ -539,7 +539,6 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	if s.config.SwapEnabled {
-		// Swap public API
 		apis = append(apis, s.swap.APIs()...)
 	}
 
@@ -556,12 +555,12 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
-// Info represents serialisable info about swarm
+// Info represents the current Swarm node's configuration
 type Info struct {
 	*api.Config
 }
 
-// Info returns the actual Swarm information
+// Info returns the current Swarm configuration
 func (i *Info) Info() *Info {
 	return i
 }
