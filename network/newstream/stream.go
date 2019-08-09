@@ -216,7 +216,6 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 		streamCursor, err := provider.CursorStr(v.Key)
 		if err != nil {
 			p.logger.Error("error getting cursor for stream key", "name", v.Name, "key", v.Key, "err", err)
-			panic(fmt.Errorf("provider cursor str %q: %v", v.Key, err))
 			p.Drop()
 			return
 		}
@@ -458,7 +457,6 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 	// empty batch can be legit, TODO: check which errors should be handled, if any
 	if err != nil {
 		log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
-		panic("for now")
 		p.Drop()
 		return
 	}
@@ -585,7 +583,6 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		if _, wait := provider.NeedData(ctx, hash); wait != nil {
 			ctr++
 			w.hashes[c.Hex()] = true
-			// set the bit, so create a request
 			want.Set(i / HashSize)
 			p.logger.Trace("need data", "need", "true", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
 		} else {
