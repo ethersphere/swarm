@@ -18,6 +18,8 @@ package chunk
 
 import (
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"sync/atomic"
 	"time"
@@ -215,4 +217,58 @@ func decodeInt64Splice(buffer *[]byte) int64 {
 	val, n := binary.Varint((*buffer))
 	*buffer = (*buffer)[n:]
 	return val
+}
+
+// marshall friendly tag structure
+type MarshallTag struct {
+	Uid       uint32
+	Name      string
+	Address   string
+	Total     int64
+	Split     int64
+	Seen      int64
+	Stored    int64
+	Sent      int64
+	Synced    int64
+	StartedAt time.Time
+}
+
+// MarshalJSON marshals the tag structure in to JSON encoded byte slice
+func (t *Tag) MarshalJSON() ([]byte, error) {
+	j := MarshallTag{
+		Uid:       t.Uid,
+		Name:      t.Name,
+		Address:   hex.EncodeToString(t.Address),
+		Total:     t.total,
+		Split:     t.split,
+		Seen:      t.seen,
+		Stored:    t.stored,
+		Sent:      t.sent,
+		Synced:    t.synced,
+		StartedAt: t.startedAt,
+	}
+	return json.Marshal(j)
+}
+
+// UnmarshalJSON unwraps the JSON encoded byte slice to tag structure
+func (t *Tag) UnmarshalJSON(b []byte) error {
+	mTag := &MarshallTag{}
+	if err := json.Unmarshal(b, &mTag); err != nil {
+		return err
+	}
+	t.Uid = mTag.Uid
+	t.Name = mTag.Name
+	addStr, err := hex.DecodeString(mTag.Address)
+	if err != nil {
+		return err
+	}
+	t.Address = addStr
+	t.total = mTag.Total
+	t.split = mTag.Split
+	t.seen = mTag.Seen
+	t.stored = mTag.Stored
+	t.sent = mTag.Sent
+	t.synced = mTag.Synced
+	t.startedAt = mTag.StartedAt
+	return nil
 }

@@ -102,10 +102,8 @@ func TestGetTagUsingHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	tag := &chunk.Tag{}
-	fmt.Println(len(retrievedData))
-	err = tag.UnmarshalBinary(retrievedData)
+	err = json.Unmarshal(retrievedData, &tag)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,10 +162,8 @@ func TestGetTagUsingTagId(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	tag := &chunk.Tag{}
-	fmt.Println(len(retrievedData))
-	err = tag.UnmarshalBinary(retrievedData)
+	err = json.Unmarshal(retrievedData, &tag)
 	if err != nil {
 		t.Fatal(err)
 	}

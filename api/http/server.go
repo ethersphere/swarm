@@ -959,13 +959,12 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
 	r.Header.Del("ETag")
 	w.WriteHeader(http.StatusOK)
-	bytesToSend, err := tag.MarshalBinary()
+	err := json.NewEncoder(w).Encode(&tag)
 	if err != nil {
 		getTagFail.Inc(1)
 		respondError(w, r, "marshalling error", http.StatusInternalServerError)
 		return
 	}
-	http.ServeContent(w, r, tag.Name, time.Now(), bytes.NewReader(bytesToSend))
 }
 
 // calculateNumberOfChunks calculates the number of chunks in an arbitrary content length
