@@ -79,7 +79,7 @@ func (a Address) Bytes() []byte {
 
 // Distance returns the distance between address a and address b as a big integer using the distance metric defined in the swarm specfication
 // Fails if not all addresses are of equal length
-func Distance(x, y interface{}) (*big.Int, error) { // a Address, b Address) (*big.Int, error){
+func Distance(x, y []byte) (*big.Int, error) { // a Address, b Address) (*big.Int, error){
 	distanceBytes, err := DistanceRaw(x, y)
 	if err != nil {
 		return nil, err
@@ -91,15 +91,13 @@ func Distance(x, y interface{}) (*big.Int, error) { // a Address, b Address) (*b
 
 // DistanceRaw returns the distance between address a and address b in big-endian binary format using the distance metric defined in the swarm specfication
 // Fails if not all addresses are of equal length
-func DistanceRaw(x, y interface{}) ([]byte, error) { // Address, b Address) ([]byte, error) {
-	bx := ToBytes(x)
-	by := ToBytes(y)
-	if len(bx) != len(by) {
+func DistanceRaw(x, y []byte) ([]byte, error) { // Address, b Address) ([]byte, error) {
+	if len(x) != len(y) {
 		return nil, errors.New("address length must match")
 	}
-	c := NewAddressFromBytes(make([]byte, len(bx)))
-	for i, addr := range bx {
-		c[i] = addr ^ by[i]
+	c := NewAddressFromBytes(make([]byte, len(x)))
+	for i, addr := range x {
+		c[i] = addr ^ y[i]
 	}
 	return c.Bytes(), nil
 }
@@ -110,24 +108,18 @@ func DistanceRaw(x, y interface{}) ([]byte, error) { // Address, b Address) ([]b
 // 	0 if subject is equally far apart as object (subject and object are the same address)
 // 	-1 if subject is farther from a than object
 // Fails if not all addresses are of equal length
-func DistanceCmp(a, x, y interface{}) (int, error) { //a Address, subject Address, object Address) (int, error) {
-	ba := ToBytes(a)
-	bx := ToBytes(x)
-	by := ToBytes(y)
-	if len(ba) != len(bx) || len(ba) != len(by) {
+func DistanceCmp(a, x, y []byte) (int, error) { //a Address, subject Address, object Address) (int, error) {
+	if len(a) != len(x) || len(a) != len(y) {
 		return 0, errors.New("address length must match")
 	}
-	return proxCmp(ba, bx, by), nil
+	return ProxCmp(a, x, y), nil
 }
 
 // ProxCmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func ProxCmp(a, x, y interface{}) int {
-	return proxCmp(ToBytes(a), ToBytes(x), ToBytes(y))
-}
-
-func proxCmp(a, x, y []byte) int {
+//func ProxCmp(a, x, y interface{}) int {
+func ProxCmp(a, x, y []byte) int {
 	for i := range a {
 		dx := x[i] ^ a[i]
 		dy := y[i] ^ a[i]

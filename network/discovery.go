@@ -89,7 +89,8 @@ func NotifyPeer(p *BzzAddr, k *Kademlia) {
 // unless already notified during the connection session
 func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 	// immediately return
-	if (po < d.getDepth() && pot.ProxCmp(d.kad.BaseAddr(), d, a) != 1) || d.seen(a) {
+	//if (po < d.getDepth() && pot.ProxCmp(d.kad.BaseAddr(), d, a) != 1) || d.seen(a) {
+	if (po < d.getDepth() && pot.ProxCmp(d.kad.BaseAddr(), d.Address(), a.Address()) != 1) || d.seen(a) {
 		return
 	}
 	resp := &peersMsg{
