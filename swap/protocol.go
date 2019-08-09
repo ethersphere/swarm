@@ -95,14 +95,14 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	return s.verifyContract(context.TODO(), handshake.ContractAddress)
+	return s.verifyContract(context.Background(), handshake.ContractAddress)
 }
 
 // run is the actual swap protocol run method
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
-	handshake, err := protoPeer.Handshake(context.TODO(), &HandshakeMsg{
+	handshake, err := protoPeer.Handshake(context.Background(), &HandshakeMsg{
 		ContractAddress: s.owner.Contract,
 	}, s.verifyHandshake)
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return ErrInvalidHandshakeMsg
 	}
 
-	beneficiary, err := s.getContractOwner(context.TODO(), response.ContractAddress)
+	beneficiary, err := s.getContractOwner(context.Background(), response.ContractAddress)
 	if err != nil {
 		return err
 	}
