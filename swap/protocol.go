@@ -30,23 +30,25 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
-var ErrEmptyAddressInSignature = errors.New("empty address in handshake")
+var (
+	// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
+	ErrEmptyAddressInSignature = errors.New("empty address in handshake")
 
-// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
-// structure of the HandshakeMsg
-var ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
+	// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
+	// structure of the HandshakeMsg
+	ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
 
-// Spec is the swap protocol specification
-var Spec = &protocols.Spec{
-	Name:       "swap",
-	Version:    1,
-	MaxMsgSize: 10 * 1024 * 1024,
-	Messages: []interface{}{
-		HandshakeMsg{},
-		EmitChequeMsg{},
-	},
-}
+	// Spec is the swap protocol specification
+	Spec = &protocols.Spec{
+		Name:       "swap",
+		Version:    1,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			HandshakeMsg{},
+			EmitChequeMsg{},
+		},
+	}
+)
 
 // Protocols is a node.Service interface method
 func (s *Swap) Protocols() []p2p.Protocol {
