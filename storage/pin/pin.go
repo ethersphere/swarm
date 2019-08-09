@@ -239,16 +239,18 @@ func (p *API) UnpinFiles(addr []byte, credentials string) error {
 //     3) the number of times that particular file or collection is pinned.
 func (p *API) ListPinFiles() (map[string]FileInfo, error) {
 	pinnedFiles := make(map[string]FileInfo)
-	iterFunc := func(key []byte, value []byte) {
+	iterFunc := func(key []byte, value []byte) (stop bool, err error) {
 		hash := string(key[4:])
 		fileInfo := FileInfo{}
-		err := fileInfo.UnmarshalBinary(value)
+		err = fileInfo.UnmarshalBinary(value)
 		if err != nil {
 			log.Debug("Error unmarshaling fileinfo from state store", "Address", hash)
+			return true, err
 		}
 		log.Trace("Pinned file", "Address", hash, "IsRAW", fileInfo.isRaw,
 			"fileSize", fileInfo.fileSize, "pinCounter", fileInfo.pinCounter)
 		pinnedFiles[hash] = fileInfo
+		return stop, err
 	}
 	err := p.state.Iterate("pin_", iterFunc)
 	if err != nil {
