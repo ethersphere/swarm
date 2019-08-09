@@ -18,7 +18,6 @@ package swap
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -43,6 +42,7 @@ func TestHandshake(t *testing.T) {
 	// setup test swap object
 	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	ctx := context.Background()
 	testDeploy(ctx, swap.backend, swap)
@@ -115,6 +115,8 @@ func TestEmitCheque(t *testing.T) {
 	debitorSwap, testDir2 := newTestSwap(t)
 	defer os.RemoveAll(testDir1)
 	defer os.RemoveAll(testDir2)
+	defer creditorSwap.Close()
+	defer debitorSwap.Close()
 
 	ctx := context.Background()
 
@@ -226,6 +228,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
 	debitorSwap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer debitorSwap.Close()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
@@ -237,26 +240,22 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	overDraft := 42
 	debitorSwap.balances[creditor.ID()] = 0 - DefaultPaymentThreshold
 
-	fmt.Println("1")
 	// we expect a cheque at the end of the test, but not yet
 	lenCheques := len(debitorSwap.cheques)
 	if lenCheques != 0 {
 		t.Fatalf("Expected no cheques yet, but there are %d", lenCheques)
 	}
-	fmt.Println("2")
 	// do some accounting, no error expected, just a WARN
 	err := debitorSwap.Add(int64(-overDraft), creditor.Peer)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Println("3")
 	// we should now have a cheque
 	lenCheques = len(debitorSwap.cheques)
 	if lenCheques != 1 {
 		t.Fatalf("Expected one cheque, but there are %d", lenCheques)
 	}
-	fmt.Println("4")
 	cheque := debitorSwap.cheques[creditor.ID()]
 	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
 	if cheque.Amount != expectedAmount {
@@ -272,6 +271,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	log.Debug("create test swap")
 	creditorSwap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer creditorSwap.Close()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
