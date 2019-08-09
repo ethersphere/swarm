@@ -323,7 +323,7 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	peerBalance := s.balances[peer]
 	err := s.store.Put(balanceKey(peer), &peerBalance)
 	if err != nil {
-		return 0, fmt.Errorf("error while storing balance for peer %s", peer.String())
+		return 0, err
 	}
 	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(peerBalance, 10))
 	return peerBalance, err
