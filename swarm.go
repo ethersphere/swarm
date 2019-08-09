@@ -115,13 +115,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
 		// if Swap is enabled, we MUST have a contract API
-		if self.config.BackendURL == "" {
+		if self.config.SwapBackendURL == "" {
 			return nil, errors.New("swap enabled but no contract address given; fatal error condition, aborting")
 		}
-		log.Info("connecting to SWAP API", "url", self.config.BackendURL)
-		self.backend, err = ethclient.Dial(self.config.BackendURL)
+		log.Info("connecting to SWAP API", "url", self.config.SwapBackendURL)
+		self.backend, err = ethclient.Dial(self.config.SwapBackendURL)
 		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.BackendURL, err)
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapBackendURL, err)
 		}
 
 		// initialize the balances store
