@@ -72,7 +72,7 @@ type Owner struct {
 
 // Params encapsulates param
 type Params struct {
-	InitialDepositAmount uint64 //
+	InitialDepositAmount uint64
 }
 
 // NewParams returns a Params struct filled with default values
