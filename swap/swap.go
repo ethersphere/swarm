@@ -146,32 +146,26 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// load existing balances from the state store
 	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		return fmt.Errorf("error while loading balance for peer %s", peer.ID().String())
 	}
 
 	// Check if balance with peer is over the disconnect threshold
-	// It is the creditor who triggers the disconnect from a overdraft creditor,
-	// thus we check for a positive value
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
-		// if so, return error in order to abort the transfer
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
 	}
 
-	// calculate new balance
 	var newBalance int64
 	newBalance, err = s.updateBalance(peer.ID(), amount)
 	if err != nil {
 		return err
 	}
 
-	// Check if balance with peer crosses the threshold
+	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
-		//if so, send cheque
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		return s.sendCheque(peer.ID())
 	}
