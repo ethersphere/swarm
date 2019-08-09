@@ -81,6 +81,7 @@ func (s *Swap) Start(server *p2p.Server) error {
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
+	log.Info("Swap service stopping")
 	return nil
 }
 
