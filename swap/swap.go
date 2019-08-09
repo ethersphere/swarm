@@ -1,4 +1,4 @@
-// Copyright 2019 The Swarm Authors
+// Copyright 2018 The Swarm Authors
 // This file is part of the Swarm library.
 //
 // The Swarm library is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-// Swap represents the SwAP Swarm Accounting Protocol
+// Swap represents the Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
@@ -338,8 +338,6 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 // loadBalance loads balances from the state store (persisted)
 func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	var peerBalance int64
-	//only load if the current instance doesn't already have this peer's
-	//balance in memory
 	if _, ok := s.balances[peer]; !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
 		s.balances[peer] = peerBalance
@@ -349,9 +347,9 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer, err := s.getPeer(peer)
-	if err != nil {
-		return fmt.Errorf("error while getting peer: %s", err.Error())
+	swapPeer, ok := s.getPeer(peer)
+	if !ok {
+		return fmt.Errorf("error while getting peer: %s", peer)
 	}
 	cheque, err := s.createCheque(peer)
 	if err != nil {
@@ -379,16 +377,16 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	return swapPeer.Send(context.Background(), emit)
 }
 
-// Create a Cheque structure emitted to a specific peer as a beneficiary
-// The serial and amount of the cheque will depend on the last cheque and current balance for this peer
+// createCheque creates a new cheque whose beneficiary will be the peer and
+// whose serial and amount are set based on the last cheque and current balance for this peer
 // The cheque will be signed and point to the issuer's contract
 func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer, err := s.getPeer(peer)
-	if err != nil {
-		return nil, fmt.Errorf("error while getting peer: %s", err.Error())
+	swapPeer, ok := s.getPeer(peer)
+	if !ok {
+		return nil, fmt.Errorf("error while getting peer: %s", peer)
 	}
 	beneficiary := swapPeer.beneficiary
 
@@ -396,7 +394,6 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-peerBalance)
 
-	// convert honey to ETH
 	var amount uint64
 	amount, err = s.oracle.GetPrice(honey)
 	if err != nil {
@@ -441,9 +438,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 // Balance returns the balance for a given peer
 func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	var err error
-	// check the balance in memory
 	peerBalance, ok := s.balances[peer]
-	// if not present, check in disk
 	if !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
 	}
@@ -454,7 +449,6 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// add in-memory balances
 	for peerID, peerBalance := range s.balances {
 		balances[peerID] = peerBalance
 	}
