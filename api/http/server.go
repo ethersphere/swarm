@@ -946,7 +946,6 @@ func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
 	log.Debug("pinned content", "ruid", ruid, "key", fileAddr.Hex())
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, fmt.Sprintf("Address %s pinned", fileAddr.Hex()))
 }
 
 // HandleUnpin takes a root hash as argument and unpins the file or collection from the local Swarm DB
@@ -973,7 +972,6 @@ func (s *Server) HandleUnpin(w http.ResponseWriter, r *http.Request) {
 	log.Debug("unpinned content", "ruid", ruid, "key", fileAddr.Hex())
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, fmt.Sprintf("Address %s unpinned", fileAddr.Hex()))
 }
 
 // HandleGetPins return information about all the hashes pinned at this moment

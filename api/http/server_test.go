@@ -85,13 +85,7 @@ func TestPinUnpinAPI(t *testing.T) {
 	rootHash := uploadFile(t, srv, data)
 
 	// pin it
-	pinMessage := pinFile(t, srv, rootHash)
-
-	// Check if the return message is valid
-	expectedPinMsg := fmt.Sprintf("Address %s pinned", string(rootHash))
-	if string(pinMessage) != expectedPinMsg {
-		t.Fatalf("pin message mismatch, expected %x, got %x", expectedPinMsg, pinMessage)
-	}
+	pinFile(t, srv, rootHash)
 
 	// get the list of files pinned
 	pinnedInfo := listPinnedFiles(t, srv)
@@ -117,13 +111,7 @@ func TestPinUnpinAPI(t *testing.T) {
 	}
 
 	// unpin it
-	unpinMessage := unpinFile(t, srv, rootHash)
-
-	// Check if the return message is valid
-	expectedunPinMsg := fmt.Sprintf("Address %s unpinned", string(rootHash))
-	if string(unpinMessage) != expectedunPinMsg {
-		t.Fatalf("pin message mismatch, expected %x, got %x", expectedunPinMsg, unpinMessage)
-	}
+	unpinFile(t, srv, rootHash)
 
 	// get the list of files pinned again
 	unpinnedInfo := listPinnedFiles(t, srv)
