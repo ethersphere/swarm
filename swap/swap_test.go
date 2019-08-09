@@ -78,6 +78,7 @@ func TestPeerBalance(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer swap.Close()
 
 	// test for correct value
 	testPeer := newDummyPeer()
@@ -106,6 +107,7 @@ func TestAllBalances(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer swap.Close()
 
 	if len(swap.balances) != 0 {
 		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
@@ -192,6 +194,7 @@ func TestStoreBalances(t *testing.T) {
 	// create a test swap account
 	s, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer s.Close()
 
 	var err error
 
@@ -236,6 +239,7 @@ func TestRepeatedBookings(t *testing.T) {
 	// create a test swap account
 	swap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer swap.Close()
 
 	var bookings []booking
 
@@ -274,6 +278,8 @@ func TestResetBalance(t *testing.T) {
 	debitorSwap, testDir2 := newTestSwap(t)
 	defer os.RemoveAll(testDir1)
 	defer os.RemoveAll(testDir2)
+	defer creditorSwap.Close()
+	defer debitorSwap.Close()
 
 	ctx := context.Background()
 	// deploying would strictly speaking not be necessary, as the signing would also just work
@@ -414,6 +420,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	swap.store = nil
 
 	stateStore, err := state.NewDBStore(testDir)
+	defer stateStore.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,6 +535,7 @@ func TestSignContent(t *testing.T) {
 	// setup test swap object
 	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	expectedCheque := newTestCheque()
 
@@ -592,6 +600,7 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 func TestVerifyContract(t *testing.T) {
 	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	// deploy a new swap contract
 	opts := bind.NewKeyedTransactor(ownerKey)
@@ -611,6 +620,7 @@ func TestVerifyContract(t *testing.T) {
 func TestVerifyContractWrongContract(t *testing.T) {
 	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	opts := bind.NewKeyedTransactor(ownerKey)
 
@@ -652,6 +662,7 @@ func TestContractIntegration(t *testing.T) {
 
 	issuerSwap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer issuerSwap.Close()
 
 	issuerSwap.owner.address = ownerAddress
 	issuerSwap.owner.privateKey = ownerKey
@@ -782,6 +793,7 @@ func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err err
 func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	testPeer := NewPeer(newDummyPeer().Peer, swap, swap.backend, common.Address{}, common.Address{})
 	testCheque := newTestCheque()
@@ -840,6 +852,7 @@ func TestPeerSaveAndLoadLastReceivedCheque(t *testing.T) {
 func TestPeerVerifyChequeProperties(t *testing.T) {
 	swap, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	testCheque := newTestCheque()
 	testCheque.Signature = testChequeSig
@@ -853,6 +866,7 @@ func TestPeerVerifyChequeProperties(t *testing.T) {
 func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	swap, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	// cheque with an invalid signature
 	testCheque := newTestCheque()
@@ -942,6 +956,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	swap, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	// create test cheque and process
 	cheque := newTestCheque()
@@ -986,6 +1001,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	swap, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	// invalid cheque because wrong recipient
 	cheque := newTestCheque()
