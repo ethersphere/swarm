@@ -248,7 +248,7 @@ func (p *API) ListPins() ([]PinInfo, error) {
 		err = pinInfo.UnmarshalBinary(value)
 		if err != nil {
 			log.Debug("Error unmarshaling pininfo from state store", "Address", hash)
-			return
+			return true, err
 		}
 		pinInfo.Address, err = hex.DecodeString(hash)
 		if err != nil {
@@ -258,7 +258,7 @@ func (p *API) ListPins() ([]PinInfo, error) {
 		log.Trace("Pinned file", "Address", hash, "IsRAW", pinInfo.IsRaw,
 			"FileSize", pinInfo.FileSize, "PinCounter", pinInfo.PinCounter)
 		pinnedFiles = append(pinnedFiles, pinInfo)
-		return true, nil
+		return stop, err
 	}
 	err := p.state.Iterate("pin_", iterFunc)
 	if err != nil {
