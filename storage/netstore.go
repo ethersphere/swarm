@@ -122,7 +122,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 		// delivered through syncing and through a retrieve request
 		fii := fi.(*Fetcher)
 		fii.SafeClose()
-		log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
+		log.Trace("netstore.put chunk delivered and stored", "base", n.LocalID, "ref", ch.Address().String())
 
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
@@ -290,7 +290,7 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 
 	f = NewFetcher()
 	v, loaded := n.fetchers.Get(ref.String())
-	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
+	log.Trace("netstore.has-with-callback.loadorstore", "base", n.LocalID.String()[:16], "ref", ref.String(), "loaded", loaded, "createdBy", interestedParty)
 	if loaded {
 		f = v.(*Fetcher)
 	} else {
