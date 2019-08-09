@@ -220,7 +220,7 @@ func decodeInt64Splice(buffer *[]byte) int64 {
 }
 
 // marshall friendly tag structure
-type MarshallTag struct {
+type jsonTag struct {
 	Uid       uint32
 	Name      string
 	Address   string
@@ -235,7 +235,7 @@ type MarshallTag struct {
 
 // MarshalJSON marshals the tag structure in to JSON encoded byte slice
 func (t *Tag) MarshalJSON() ([]byte, error) {
-	j := MarshallTag{
+	j := jsonTag{
 		Uid:       t.Uid,
 		Name:      t.Name,
 		Address:   hex.EncodeToString(t.Address),
@@ -252,7 +252,7 @@ func (t *Tag) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON unwraps the JSON encoded byte slice to tag structure
 func (t *Tag) UnmarshalJSON(b []byte) error {
-	mTag := &MarshallTag{}
+	mTag := &jsonTag{}
 	if err := json.Unmarshal(b, &mTag); err != nil {
 		return err
 	}
