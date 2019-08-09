@@ -71,7 +71,7 @@ type Contract interface {
 	ContractParams() *Params
 	// Return the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
-	// Return the last cheque
+	// Return the last cheque issued to the given address
 	Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error)
 }
 
