@@ -304,16 +304,16 @@ func doLint(cmdline []string) {
 		"--disable-all",
 		"--enable=goimports",
 		"--enable=varcheck",
-		//"--enable=vet", // TODO: fix issues and enable
+		"--enable=vet",
 		"--enable=gofmt",
-		// "--enable=misspell", // TODO: fix issues and enable
-		// "--enable=goconst", // TODO: fix issues and enable
+		"--enable=misspell",
+		"--enable=goconst",
 	}
 	build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
 
 	// Run slow linters one by one
 	for _, linter := range []string{
-		//"unconvert",// TODO: fix issues and enable
+		"unconvert",
 		"gosimple",
 	} {
 		configs = []string{"run", "--tests", "--deadline=10m", "--disable-all", "--enable=" + linter}

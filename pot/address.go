@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const nilString = "<nil>"
+
 var (
 	zerosBin = Address{}.Bin()
 )
@@ -198,7 +200,7 @@ func proximityOrder(one, other []byte, pos int) (int, bool) {
 // Label displays the node's key in binary format
 func Label(v Val) string {
 	if v == nil {
-		return "<nil>"
+		return nilString
 	}
 	if s, ok := v.(fmt.Stringer); ok {
 		return s.String()

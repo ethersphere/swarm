@@ -53,6 +53,7 @@ func (env Environment) String() string {
 // Env returns metadata about the current CI environment, falling back to LocalEnv
 // if not running on CI.
 func Env() Environment {
+	const trueFlag = "True"
 	switch {
 	case os.Getenv("CI") == "true" && os.Getenv("TRAVIS") == "true":
 		commit := os.Getenv("TRAVIS_PULL_REQUEST_SHA")
@@ -70,7 +71,7 @@ func Env() Environment {
 			IsPullRequest: os.Getenv("TRAVIS_PULL_REQUEST") != "false",
 			IsCronJob:     os.Getenv("TRAVIS_EVENT_TYPE") == "cron",
 		}
-	case os.Getenv("CI") == "True" && os.Getenv("APPVEYOR") == "True":
+	case os.Getenv("CI") == trueFlag && os.Getenv("APPVEYOR") == trueFlag:
 		commit := os.Getenv("APPVEYOR_PULL_REQUEST_HEAD_COMMIT")
 		if commit == "" {
 			commit = os.Getenv("APPVEYOR_REPO_COMMIT")
@@ -84,7 +85,7 @@ func Env() Environment {
 			Tag:           os.Getenv("APPVEYOR_REPO_TAG_NAME"),
 			Buildnum:      os.Getenv("APPVEYOR_BUILD_NUMBER"),
 			IsPullRequest: os.Getenv("APPVEYOR_PULL_REQUEST_NUMBER") != "",
-			IsCronJob:     os.Getenv("APPVEYOR_SCHEDULED_BUILD") == "True",
+			IsCronJob:     os.Getenv("APPVEYOR_SCHEDULED_BUILD") == trueFlag,
 		}
 	default:
 		return LocalEnv()

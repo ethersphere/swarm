@@ -60,7 +60,7 @@ func RandomAddr() *BzzAddr {
 	return NewAddr(node)
 }
 
-// NewAddr constucts a BzzAddr from a node record.
+// NewAddr constructs a BzzAddr from a node record.
 func NewAddr(node *enode.Node) *BzzAddr {
 	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.String())}
 }

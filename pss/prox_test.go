@@ -132,7 +132,7 @@ func (td *testData) init(msgCount int) error {
 		td.nodeAddresses[nodeId] = kad.BaseAddr()
 	}
 
-	for i := 0; i < int(msgCount); i++ {
+	for i := 0; i < msgCount; i++ {
 		msgAddr := pot.RandomAddress() // we choose message addresses randomly
 		td.recipientAddresses = append(td.recipientAddresses, msgAddr.Bytes())
 		smallestPo := 256

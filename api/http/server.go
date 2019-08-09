@@ -63,7 +63,12 @@ var (
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
 
-const SwarmTagHeaderName = "x-swarm-tag"
+const (
+	SwarmTagHeaderName = "x-swarm-tag"
+
+	encryptAddr    = "encrypt"
+	tarContentType = "application/x-tar"
+)
 
 type methodHandler map[string]http.Handler
 
@@ -188,7 +193,7 @@ type Server struct {
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
-	if r.Header.Get("Accept") == "application/x-tar" {
+	if r.Header.Get("Accept") == tarContentType {
 		uri := GetURI(r.Context())
 		_, credentials, _ := r.BasicAuth()
 		reader, err := s.api.GetDirectoryTar(r.Context(), s.api.Decryptor(r.Context(), credentials), uri)
@@ -203,7 +208,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		}
 		defer reader.Close()
 
-		w.Header().Set("Content-Type", "application/x-tar")
+		w.Header().Set("Content-Type", tarContentType)
 
 		fileName := uri.Addr
 		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
@@ -251,7 +256,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 
 	toEncrypt := false
 	uri := GetURI(r.Context())
-	if uri.Addr == "encrypt" {
+	if uri.Addr == encryptAddr {
 		toEncrypt = true
 	}
 
@@ -261,7 +266,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if uri.Addr != "" && uri.Addr != "encrypt" {
+	if uri.Addr != "" && uri.Addr != encryptAddr {
 		postRawFail.Inc(1)
 		respondError(w, r, "raw POST request addr can only be empty or \"encrypt\"", http.StatusBadRequest)
 		return
@@ -309,12 +314,12 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	toEncrypt := false
 	uri := GetURI(r.Context())
-	if uri.Addr == "encrypt" {
+	if uri.Addr == encryptAddr {
 		toEncrypt = true
 	}
 
 	var addr storage.Address
-	if uri.Addr != "" && uri.Addr != "encrypt" {
+	if uri.Addr != "" && uri.Addr != encryptAddr {
 		addr, err = s.api.Resolve(r.Context(), uri.Addr)
 		if err != nil {
 			postFilesFail.Inc(1)
@@ -333,7 +338,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
-		case "application/x-tar":
+		case tarContentType:
 			_, err := s.handleTarUpload(r, mw)
 			if err != nil {
 				respondError(w, r, fmt.Sprintf("error uploading tarball: %v", err), http.StatusInternalServerError)
