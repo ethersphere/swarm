@@ -349,9 +349,9 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer, err := s.getPeer(peer)
-	if err != nil {
-		return fmt.Errorf("error while getting peer: %s", err.Error())
+	swapPeer, ok := s.getPeer(peer)
+	if !ok {
+		return fmt.Errorf("error while getting peer: %s", peer)
 	}
 	cheque, err := s.createCheque(peer)
 	if err != nil {
@@ -386,9 +386,9 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer, err := s.getPeer(peer)
-	if err != nil {
-		return nil, fmt.Errorf("error while getting peer: %s", err.Error())
+	swapPeer, ok := s.getPeer(peer)
+	if !ok {
+		return nil, fmt.Errorf("error while getting peer: %s", peer)
 	}
 	beneficiary := swapPeer.beneficiary
 
