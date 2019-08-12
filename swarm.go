@@ -67,7 +67,7 @@ var (
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
 )
 
-// the complete Swarm stack
+// Swarm abstracts the complete Swarm stack
 type Swarm struct {
 	config            *api.Config        // swarm configuration
 	api               *api.API           // high level api layer (fs/manifest)
