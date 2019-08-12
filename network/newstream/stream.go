@@ -990,7 +990,7 @@ func (s *SlipStream) Close() {
 }
 
 func (s *SlipStream) Start(server *p2p.Server) error {
-	log.Debug("slip stream starting")
+	s.logger.Debug("slip stream starting")
 
 	return nil
 }

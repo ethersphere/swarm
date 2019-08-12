@@ -161,7 +161,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 		return nil, nil, nil, nil, err
 	}
 
-	netStore := storage.NewNetStore(localStore, enode.ID{})
+	netStore := storage.NewNetStore(localStore, enode.ID(addr.Under()))
 
 	delivery := NewDelivery(to, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers

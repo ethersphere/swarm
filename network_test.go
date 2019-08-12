@@ -461,7 +461,7 @@ func retrieveF(
 
 		swarm := sim.Service("swarm", id).(*Swarm)
 		for _, f := range files {
-
+			f := f
 			checkKey := check{
 				key:    f.addr.String(),
 				nodeID: id,
