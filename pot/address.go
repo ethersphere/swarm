@@ -77,9 +77,9 @@ func (a Address) Bytes() []byte {
 	return a[:]
 }
 
-// Distance returns the distance between address a and address b as a big integer using the distance metric defined in the swarm specfication
+// Distance returns the distance between address x and address y as a (comparable) big integer using the distance metric defined in the swarm specification
 // Fails if not all addresses are of equal length
-func Distance(x, y []byte) (*big.Int, error) { // a Address, b Address) (*big.Int, error){
+func Distance(x, y []byte) (*big.Int, error) {
 	distanceBytes, err := DistanceRaw(x, y)
 	if err != nil {
 		return nil, err
@@ -89,9 +89,9 @@ func Distance(x, y []byte) (*big.Int, error) { // a Address, b Address) (*big.In
 	return r, nil
 }
 
-// DistanceRaw returns the distance between address a and address b in big-endian binary format using the distance metric defined in the swarm specfication
+// DistanceRaw returns the distance between address x and address y in big-endian binary format using the distance metric defined in the swarm specfication
 // Fails if not all addresses are of equal length
-func DistanceRaw(x, y []byte) ([]byte, error) { // Address, b Address) ([]byte, error) {
+func DistanceRaw(x, y []byte) ([]byte, error) {
 	if len(x) != len(y) {
 		return nil, errors.New("address length must match")
 	}
@@ -102,23 +102,22 @@ func DistanceRaw(x, y []byte) ([]byte, error) { // Address, b Address) ([]byte, 
 	return c.Bytes(), nil
 }
 
-// DistanceCmp compares subject and object to receiver in terms of the distance metric defined in the swarm specfication
+// DistanceCmp compares x and y to a in terms of the distance metric defined in the swarm specfication
 // it returns:
-// 	1 if subject is closer to a than object
-// 	0 if subject is equally far apart as object (subject and object are the same address)
-// 	-1 if subject is farther from a than object
+// 	1 if x is closer to a than y
+// 	0 if x and y are equally far apart from (this means that x and y are the same address)
+// 	-1 if x is farther from a than y
 // Fails if not all addresses are of equal length
-func DistanceCmp(a, x, y []byte) (int, error) { //a Address, subject Address, object Address) (int, error) {
+func DistanceCmp(a, x, y []byte) (int, error) {
 	if len(a) != len(x) || len(a) != len(y) {
 		return 0, errors.New("address length must match")
 	}
 	return ProxCmp(a, x, y), nil
 }
 
-// ProxCmp compares the distances a->target and b->target.
-// Returns -1 if a is closer to target, 1 if b is closer to target
+// ProxCmp compares the distances x->a and y->a
+// Returns -1 if x is closer to a, 1 if y is closer to a
 // and 0 if they are equal.
-//func ProxCmp(a, x, y interface{}) int {
 func ProxCmp(a, x, y []byte) int {
 	for i := range a {
 		dx := x[i] ^ a[i]
