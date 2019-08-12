@@ -19,7 +19,7 @@ package swap
 /*
 This module contains the pricing for message types as constants.
 
-Pricing in Swarm is defined in an internal unit.
+Pricing in Swarm is defined as an internal unit.
 The name of this internal unit is honey.
 The honey unit allows to set prices of messages relative to each other
 independently of any currency.
