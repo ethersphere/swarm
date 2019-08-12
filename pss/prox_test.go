@@ -136,8 +136,8 @@ func (td *testData) init(msgCount int) error {
 		msgAddr := pot.RandomAddress() // we choose message addresses randomly
 		td.recipientAddresses = append(td.recipientAddresses, msgAddr.Bytes())
 		smallestPo := 256
-		var targets []enode.ID
-		var closestPO int
+		var target enode.ID
+		var closestPO int = -1
 
 		// loop through all nodes and find the required and allowed recipients of each message
 		// (for more information, please see the comment to the main test function)
@@ -145,13 +145,17 @@ func (td *testData) init(msgCount int) error {
 			po, _ := pof(td.recipientAddresses[i], td.nodeAddresses[nod.ID()], 0)
 			depth := td.kademlias[nod.ID()].NeighbourhoodDepth()
 
-			// only nodes with closest IDs (wrt the msg address) will be required recipients
+			// only the node that is the closest in terms of distance is the required recipient
 			if po > closestPO {
 				closestPO = po
-				targets = nil
-				targets = append(targets, nod.ID())
+				target = nod.ID()
 			} else if po == closestPO {
-				targets = append(targets, nod.ID())
+				compareResult, err := pot.DistanceCmp(msgAddr.Bytes(), td.nodeAddresses[nod.ID()], td.nodeAddresses[target])
+				if err != nil {
+					return err
+				} else if compareResult == 1 {
+					target = nod.ID()
+				}
 			}
 
 			if po >= depth {
@@ -163,15 +167,20 @@ func (td *testData) init(msgCount int) error {
 			if po < smallestPo {
 				smallestPo = po
 				td.senders[i] = nod.ID()
+			} else if po == smallestPo {
+				compareResult, err := pot.DistanceCmp(msgAddr.Bytes(), td.nodeAddresses[nod.ID()], td.nodeAddresses[td.senders[i]])
+				if err != nil {
+					return err
+				} else if compareResult == -1 {
+					td.senders[i] = nod.ID()
+				}
 			}
 		}
 
-		td.requiredMsgCount += len(targets)
-		for _, id := range targets {
-			td.requiredMsgs[id] = append(td.requiredMsgs[id], uint64(i))
-		}
+		td.requiredMsgCount += 1
+		td.requiredMsgs[target] = append(td.requiredMsgs[target], uint64(i))
 
-		log.Debug("nn for msg", "targets", len(targets), "msgidx", i, "msg", common.Bytes2Hex(msgAddr[:8]), "sender", td.senders[i], "senderpo", smallestPo)
+		log.Debug("nn for msg", "msgidx", i, "msg", common.Bytes2Hex(msgAddr[:8]), "sender", td.senders[i], "senderpo", smallestPo, "closestAddr", td.nodeAddresses[target])
 	}
 	log.Debug("recipientAddresses to receive", "count", td.requiredMsgCount)
 	return nil
@@ -439,12 +448,6 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			var deregisters []func()
 			for tpc, hndlrFunc := range handlerContextFuncs {
 				deregisters = append(deregisters, ps.Register(&tpc, hndlrFunc(td, ctx.Config)))
-			}
-
-			// if handshake mode is set, add the controller
-			// TODO: This should be hooked to the handshake test file
-			if useHandshake {
-				SetHandshakeController(ps, NewHandshakeParams())
 			}
 
 			// we expose some api calls for cheating
