@@ -178,13 +178,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 
 	nodeID := config.Enode.ID()
-	self.netStore = storage.NewNetStore(lstore, nodeID)
+	self.netStore = storage.NewNetStore(lstore, bzzconfig.OverlayAddr, nodeID)
 
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	self.retrieval = retrieval.New(to, self.netStore)
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
