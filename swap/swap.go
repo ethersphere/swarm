@@ -83,7 +83,7 @@ func NewParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend) *Swap {
 	sw := &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),
@@ -95,7 +95,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		disconnectThreshold: DefaultDisconnectThreshold,
 		oracle:              NewPriceOracle(),
 	}
-	sw.owner = sw.createOwner(prvkey, contract)
+	sw.owner = sw.createOwner(prvkey)
 	return sw
 }
 
@@ -125,12 +125,11 @@ func keyToID(key string, prefix string) enode.ID {
 }
 
 // createOwner assings keys and addresses
-func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
+func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
 		privateKey: prvkey,
 		publicKey:  pubkey,
-		Contract:   contract,
 		address:    crypto.PubkeyToAddress(*pubkey),
 	}
 }
@@ -400,6 +399,11 @@ func (s *Swap) verifyContract(ctx context.Context, address common.Address) error
 	return contract.ValidateCode(ctx, s.backend, address)
 }
 
+// SetChequebookAddr sets the chequebook address
+func (s *Swap) SetChequebookAddr(chequebookAddr common.Address) {
+	s.owner.Contract = chequebookAddr
+}
+
 // getContractOwner retrieve the owner of the chequebook at address from the blockchain
 func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (common.Address, error) {
 	contr, err := contract.InstanceAt(address, s.backend)
@@ -423,7 +427,7 @@ func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) er
 		log.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	s.owner.Contract = address
+	s.SetChequebookAddr(address)
 	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err

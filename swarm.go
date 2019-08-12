@@ -114,25 +114,24 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
-		// if Swap is enabled, we MUST have a contract API
+		// if Swap is enabled, we MUST have an ethereum API
 		if self.config.BackendURL == "" {
-			return nil, errors.New("swap enabled but no contract address given; fatal error condition, aborting")
+			return nil, errors.New("swap enabled but no Ethereum API provider provider given; fatal error condition, aborting")
 		}
-		log.Info("connecting to SWAP API", "url", self.config.BackendURL)
+		log.Info("connecting to Ethereum API for SWAP", "url", self.config.BackendURL)
 		self.backend, err = ethclient.Dial(self.config.BackendURL)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.BackendURL, err)
 		}
-
 		// initialize the balances store
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
 		if err != nil {
 			return nil, err
 		}
-		// create the accounting objects
-		self.swap = swap.New(balancesStore, self.privateKey, self.config.Contract, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
+		// create the SWAP object
+		self.swap = swap.New(balancesStore, self.privateKey, self.backend)
 	}
 
 	config.HiveParams.Discovery = true
@@ -366,11 +365,30 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		err := s.DeploySwap(context.Background())
-		if err != nil {
-			return fmt.Errorf("Unable to deploy swap contract: %v", err)
+		// checking wether chequeBookAddr was set as a config parameter
+		if s.config.ChequebookAddr != common.HexToAddress("") {
+			address := s.config.ChequebookAddr
+			// read the bytecode at passed-in address
+			bytecode, err := s.backend.CodeAt(context.Background(), address, nil) // nil is latest block
+			if err != nil {
+				return fmt.Errorf("Unable to connect to your provided cheqeubook address. Error: %v", err)
+			}
+			// if there lives no bytecode at the address, address is not a smart-contract
+			isContract := len(bytecode) > 0
+			if !isContract {
+				return fmt.Errorf("Provided address %v not a smart-contract", address)
+			}
+			//TODO: verify wether the bytecode which lives at the address is a chequebook (compare the deployedByteCode)
+			s.swap.SetChequebookAddr(address)
+			log.Info("Using the provided address as chequebook", "chequebookAddr", address)
+		} else {
+			log.Info("Deploying new chequebook instance")
+			err := s.DeploySwap(context.Background())
+			if err != nil {
+				return fmt.Errorf("Unable to deploy swap contract: %v", err)
+			}
+			log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 		}
-		log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 	} else {
 		log.Info("SWAP disabled: no chequebook set")
 	}

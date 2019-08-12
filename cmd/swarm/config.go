@@ -178,7 +178,7 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	}
 
 	if chbookaddr := ctx.GlobalString(ChequebookAddrFlag.Name); chbookaddr != "" {
-		currentConfig.Contract = common.HexToAddress(chbookaddr)
+		currentConfig.ChequebookAddr = common.HexToAddress(chbookaddr)
 	}
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
