@@ -394,9 +394,8 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
 	}
 
-	// we need to ignore the error check when loading from the StateStore,
-	// as an error might indicate that there is no existing cheque, which
-	// could mean it's the first interaction, which is absolutely valid
+	// if there is no existing cheque when loading from the store, it means it's the first interaction
+	// this is a valid scenario
 	err = s.loadLastSentCheque(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
