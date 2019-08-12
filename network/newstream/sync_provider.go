@@ -92,7 +92,7 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
 	log.Debug("syncProvider.Get")
-	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetSync, addr)
+	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(addr))
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 	// mark the chunk as Set in order to allow for garbage collection
 	// this can and at some point should be moved to a dedicated method that
 	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
-	err = s.netStore.Store.Set(context.Background(), chunk.ModeSetSync, addr)
+	err = s.netStore.Set(context.Background(), chunk.ModeSetSync, addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return nil, err
@@ -111,7 +111,7 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error) {
 	log.Trace("syncProvider.Put", "addr", addr)
 	ch := chunk.NewChunk(addr, data)
-	seen, err := s.netStore.Store.Put(ctx, chunk.ModePutSync, ch)
+	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch)
 	if seen {
 		log.Trace("syncProvider.Put - chunk already seen", "addr", addr)
 		if putSeenTestHook != nil {
