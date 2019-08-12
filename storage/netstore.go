@@ -18,6 +18,7 @@ package storage
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -143,6 +144,12 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 
 // Close chunk store
 func (n *NetStore) Close() error {
+	fmt.Println("FETCHERS", n.fetchers.Len(), n.LocalID.String()[:16])
+	fmt.Println(n.fetchers.Keys())
+	if n.fetchers.Len() > 0 {
+		panic(0)
+	}
+
 	return n.Store.Close()
 }
 
@@ -233,7 +240,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
 
-		log.Trace("remote.fetch", "ref", ref)
+		log.Trace("remote.fetch", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
 
 		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
 		if err != nil {
@@ -249,7 +256,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 
 		select {
 		case <-fi.Delivered:
-			log.Trace("remote.fetch, chunk delivered", "ref", ref)
+			log.Trace("remote.fetch, chunk delivered", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
 
 			osp.LogFields(olog.Bool("delivered", true))
 			osp.Finish()

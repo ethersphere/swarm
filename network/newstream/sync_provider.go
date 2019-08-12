@@ -57,7 +57,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, syncOnlyWithin
 		syncBinsOnlyWithinDepth: syncOnlyWithinDepth,
 		name:                    syncStreamName,
 		quit:                    make(chan struct{}),
-		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:8])),
+		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
 	}
 	return s
 }
