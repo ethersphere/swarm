@@ -1487,7 +1487,7 @@ func uploadFile(t *testing.T, srv *TestSwarmServer, data []byte) []byte {
 
 func pinFile(t *testing.T, srv *TestSwarmServer, rootHash []byte) []byte {
 	t.Helper()
-	pinResp, err := http.Post(fmt.Sprintf("%s/bzz-pin:/%s?IsRaw=true", srv.URL, string(rootHash)), "text/plain", bytes.NewReader([]byte("")))
+	pinResp, err := http.Post(fmt.Sprintf("%s/bzz-pin:/%s?raw=true", srv.URL, string(rootHash)), "text/plain", bytes.NewReader([]byte("")))
 	if err != nil {
 		t.Fatal(err)
 	}

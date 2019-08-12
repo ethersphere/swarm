@@ -931,7 +931,7 @@ func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isRaw := false
-	isRawString := r.URL.Query().Get("IsRaw")
+	isRawString := r.URL.Query().Get("raw")
 	if strings.ToLower(isRawString) == "true" {
 		isRaw = true
 	}
