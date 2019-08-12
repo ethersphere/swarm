@@ -501,12 +501,12 @@ func newTestCheque() *Cheque {
 	return cheque
 }
 
-// tests if encodeCheque encodes the cheque as expected
-func TestChequeEncode(t *testing.T) {
+// tests if encodeForSignature encodes the cheque as expected
+func TestChequeEncodeForSignature(t *testing.T) {
 	expectedCheque := newTestCheque()
 
 	// encode the cheque
-	encoded, err := expectedCheque.MarshallBinary()
+	encoded, err := expectedCheque.encodeForSignature()
 	if err != nil {
 		t.Fatalf("Unexpected error in MarshallBinary: %v", err)
 	}
