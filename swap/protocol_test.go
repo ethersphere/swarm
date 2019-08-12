@@ -42,6 +42,7 @@ func TestHandshake(t *testing.T) {
 	// setup test swap object
 	swap, dir := newTestSwap(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	ctx := context.Background()
 	testDeploy(ctx, swap.backend, swap)
@@ -114,6 +115,8 @@ func TestEmitCheque(t *testing.T) {
 	debitorSwap, testDir2 := newTestSwap(t)
 	defer os.RemoveAll(testDir1)
 	defer os.RemoveAll(testDir2)
+	defer creditorSwap.Close()
+	defer debitorSwap.Close()
 
 	ctx := context.Background()
 
@@ -197,7 +200,7 @@ func TestEmitCheque(t *testing.T) {
 
 	log.Debug("trigger reading the message on the beneficiary")
 
-	err = debitor.handleEmitChequeMsg(ctx, val.(*EmitChequeMsg))
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, val.(*EmitChequeMsg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,6 +228,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
 	debitorSwap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer debitorSwap.Close()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
@@ -267,6 +271,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	log.Debug("create test swap")
 	creditorSwap, testDir := newTestSwap(t)
 	defer os.RemoveAll(testDir)
+	defer creditorSwap.Close()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)

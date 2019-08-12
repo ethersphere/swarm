@@ -1,4 +1,4 @@
-// Copyright 2019 The Swarm Authors
+// Copyright 2018 The Swarm Authors
 // This file is part of the Swarm library.
 //
 // The Swarm library is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-// Swap represents the SwAP Swarm Accounting Protocol
+// Swap represents the Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
@@ -72,7 +72,7 @@ type Owner struct {
 
 // Params encapsulates param
 type Params struct {
-	InitialDepositAmount uint64 //
+	InitialDepositAmount uint64
 }
 
 // NewParams returns a Params struct filled with default values
@@ -145,37 +145,173 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// load existing balances from the state store
 	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
 		return fmt.Errorf("error while loading balance for peer %s", peer.ID().String())
 	}
 
 	// Check if balance with peer is over the disconnect threshold
-	// It is the creditor who triggers the disconnect from a overdraft creditor,
-	// thus we check for a positive value
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
-		// if so, return error in order to abort the transfer
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
 	}
 
-	// calculate new balance
 	var newBalance int64
 	newBalance, err = s.updateBalance(peer.ID(), amount)
 	if err != nil {
 		return err
 	}
 
-	// Check if balance with peer crosses the threshold
+	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
-		//if so, send cheque
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		return s.sendCheque(peer.ID())
 	}
 
 	return nil
+}
+
+// handleMsg is for handling messages when receiving messages
+func (s *Swap) handleMsg(p *Peer) func(ctx context.Context, msg interface{}) error {
+	return func(ctx context.Context, msg interface{}) error {
+		switch msg := msg.(type) {
+		case *EmitChequeMsg:
+			go s.handleEmitChequeMsg(ctx, p, msg)
+		}
+		return nil
+	}
+}
+
+// handleEmitChequeMsg should be handled by the creditor when it receives
+// a cheque from a debitor
+func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitChequeMsg) error {
+	cheque := msg.Cheque
+	log.Info("received cheque from peer", "peer", p.ID().String())
+	actualAmount, err := s.processAndVerifyCheque(cheque, p)
+	if err != nil {
+		return err
+	}
+
+	log.Debug("received cheque processed and verified", "peer", p.ID().String())
+
+	// reset balance by amount
+	// as this is done by the creditor, receiving the cheque, the amount should be negative,
+	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
+	s.lock.Lock()
+	err = s.resetBalance(p.ID(), 0-int64(cheque.Honey))
+	s.lock.Unlock()
+	if err != nil {
+		return err
+	}
+
+	// cash in cheque
+	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	opts.Context = ctx
+
+	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
+	if err != nil {
+		return err
+	}
+
+	// submit cheque to the blockchain and cashes it directly
+	go func() {
+		// blocks here, as we are waiting for the transaction to be mined
+		receipt, err := otherSwap.SubmitChequeBeneficiary(opts, s.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
+		if err != nil {
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
+			log.Error("error submitting cheque", "err", err)
+			return
+		}
+		log.Debug("submit tx mined", "receipt", receipt)
+
+		receipt, err = otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(actualAmount)))
+		if err != nil {
+			// TODO: do something with the error
+			// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
+			log.Error("error cashing cheque", "err", err)
+			return
+		}
+		log.Info("Cheque successfully submitted and cashed")
+	}()
+	return err
+}
+
+// processAndVerifyCheque verifies the cheque and compares it with the last received cheque
+// if the cheque is valid it will also be saved as the new last cheque
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
+	if err := s.verifyChequeProperties(cheque, p); err != nil {
+		return 0, err
+	}
+
+	lastCheque := s.loadLastReceivedCheque(p)
+
+	// TODO: there should probably be a lock here?
+	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
+	if err != nil {
+		return 0, err
+	}
+
+	actualAmount, err := verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := s.saveLastReceivedCheque(p, cheque); err != nil {
+		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
+	}
+
+	return actualAmount, nil
+}
+
+// verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
+// it does not verify anything that requires knowing the previous cheque
+func (s *Swap) verifyChequeProperties(cheque *Cheque, p *Peer) error {
+	if cheque.Contract != p.contractAddress {
+		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
+	}
+
+	// the beneficiary is the owner of the counterparty swap contract
+	if err := cheque.VerifySig(p.beneficiary); err != nil {
+		return err
+	}
+
+	if cheque.Beneficiary != s.owner.address {
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", s.owner.address, cheque.Beneficiary)
+	}
+
+	if cheque.Timeout != 0 {
+		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
+	}
+
+	return nil
+}
+
+// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
+// furthermore it cheques that the increase in amount is as expected
+// returns the actual amount received in this cheque
+func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
+	actualAmount := cheque.Amount
+
+	if lastCheque != nil {
+		if cheque.Serial <= lastCheque.Serial {
+			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
+		}
+
+		if cheque.Amount <= lastCheque.Amount {
+			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
+		}
+
+		actualAmount -= lastCheque.Amount
+	}
+
+	if expectedAmount != actualAmount {
+		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+	}
+
+	return actualAmount, nil
 }
 
 func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
@@ -186,7 +322,7 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	peerBalance := s.balances[peer]
 	err := s.store.Put(balanceKey(peer), &peerBalance)
 	if err != nil {
-		return 0, fmt.Errorf("error while storing balance for peer %s", peer.String())
+		return 0, err
 	}
 	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(peerBalance, 10))
 	return peerBalance, err
@@ -195,8 +331,6 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 // loadBalance loads balances from the state store (persisted)
 func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	var peerBalance int64
-	//only load if the current instance doesn't already have this peer's
-	//balance in memory
 	if _, ok := s.balances[peer]; !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
 		s.balances[peer] = peerBalance
@@ -206,9 +340,9 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 
 // sendCheque sends a cheque to peer
 func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer, err := s.getPeer(peer)
-	if err != nil {
-		return fmt.Errorf("error while getting peer: %s", err.Error())
+	swapPeer, ok := s.getPeer(peer)
+	if !ok {
+		return fmt.Errorf("error while getting peer: %s", peer)
 	}
 	cheque, err := s.createCheque(peer)
 	if err != nil {
@@ -236,16 +370,16 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	return swapPeer.Send(context.Background(), emit)
 }
 
-// Create a Cheque structure emitted to a specific peer as a beneficiary
-// The serial and amount of the cheque will depend on the last cheque and current balance for this peer
+// createCheque creates a new cheque whose beneficiary will be the peer and
+// whose serial and amount are set based on the last cheque and current balance for this peer
 // The cheque will be signed and point to the issuer's contract
 func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer, err := s.getPeer(peer)
-	if err != nil {
-		return nil, fmt.Errorf("error while getting peer: %s", err.Error())
+	swapPeer, ok := s.getPeer(peer)
+	if !ok {
+		return nil, fmt.Errorf("error while getting peer: %s", peer)
 	}
 	beneficiary := swapPeer.beneficiary
 
@@ -253,16 +387,14 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-peerBalance)
 
-	// convert honey to ETH
 	var amount uint64
 	amount, err = s.oracle.GetPrice(honey)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
 	}
 
-	// we need to ignore the error check when loading from the StateStore,
-	// as an error might indicate that there is no existing cheque, which
-	// could mean it's the first interaction, which is absolutely valid
+	// if there is no existing cheque when loading from the store, it means it's the first interaction
+	// this is a valid scenario
 	err = s.loadLastSentCheque(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
@@ -298,9 +430,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 // Balance returns the balance for a given peer
 func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	var err error
-	// check the balance in memory
 	peerBalance, ok := s.balances[peer]
-	// if not present, check in disk
 	if !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
 	}
@@ -311,7 +441,6 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	// add in-memory balances
 	for peerID, peerBalance := range s.balances {
 		balances[peerID] = peerBalance
 	}
@@ -350,19 +479,24 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	return err
 }
 
-// loadLastReceivedCheque loads the last received cheque for peer
-func (s *Swap) loadLastReceivedCheque(peer enode.ID) (cheque *Cheque) {
+// loadLastReceivedCheque gets the last received cheque for the peer
+// cheque gets loaded from database if not already in memory
+func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.store.Get(receivedChequeKey(peer), &cheque)
+	if p.lastReceivedCheque != nil {
+		return p.lastReceivedCheque
+	}
+	s.store.Get(receivedChequeKey(p.ID()), &cheque)
 	return
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
-func (s *Swap) saveLastReceivedCheque(peer enode.ID, cheque *Cheque) error {
+func (s *Swap) saveLastReceivedCheque(p *Peer, cheque *Cheque) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.store.Put(receivedChequeKey(peer), cheque)
+	p.lastReceivedCheque = cheque
+	return s.store.Put(receivedChequeKey(p.ID()), cheque)
 }
 
 // Close cleans up swap

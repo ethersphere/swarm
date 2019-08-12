@@ -22,16 +22,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/ethersphere/swarm/storage/feed"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
 )
 
 const (
@@ -72,6 +72,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	if err != nil {
 		return nil, err
 	}
+
 	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
 	if err != nil {
 		return nil, err
@@ -93,6 +94,7 @@ func (a *API) NewFeedManifest(ctx context.Context, feed *feed.Feed) (storage.Add
 	if err != nil {
 		return nil, err
 	}
+
 	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
 	if err != nil {
 		return nil, err

@@ -24,20 +24,19 @@ type PriceOracle interface {
 // NewPriceOracle returns the actual oracle to be used for discovering the price
 // For now it will return a default one
 func NewPriceOracle() PriceOracle {
-	return &FixedPriceOracle{
+	return &fixedPriceOracle{
 		honeyPrice: defaultHoneyPrice,
 	}
 }
 
-// FixedPriceOracle is a price oracle which which returns a fixed price.
+// fixedPriceOracle is a price oracle which which returns a fixed price.
 // It is the default price oracle used as a placeholder for this iteration of the implementation.
 // In production this should probably be some on-chain oracle called remotely
-type FixedPriceOracle struct {
+type fixedPriceOracle struct {
 	honeyPrice uint64
 }
 
 // GetPrice returns the actual price for honey
-func (cpo *FixedPriceOracle) GetPrice(honey uint64) (uint64, error) {
-	// otherwise don't refresh the rate and return the latest price
+func (cpo *fixedPriceOracle) GetPrice(honey uint64) (uint64, error) {
 	return honey * cpo.honeyPrice, nil
 }

@@ -32,11 +32,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -46,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/ens"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/fuse"
@@ -56,7 +52,10 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
 )
@@ -68,7 +67,7 @@ var (
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
 )
 
-// Swarm is an object abstracting the complete Swarm stack
+// Swarm abstracts the complete Swarm stack
 type Swarm struct {
 	config            *api.Config        // swarm configuration
 	api               *api.API           // high level api layer (fs/manifest)
@@ -85,6 +84,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
+	pinAPI            *pin.API // API object implements all pinning related commands
 
 	tracerClose io.Closer
 }
@@ -114,24 +114,25 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
-		// if Swap is enabled, we MUST have an ethereum API
-		if self.config.BackendURL == "" {
-			return nil, errors.New("swap enabled but no Ethereum API provider provider given; fatal error condition, aborting")
+		// if Swap is enabled, we MUST have a ethereum API
+		if self.config.SwapBackendURL == "" {
+			return nil, errors.New("swap enabled but no Ethereum API provider given; fatal error condition, aborting")
 		}
-		log.Info("connecting to Ethereum API for SWAP", "url", self.config.BackendURL)
-		self.backend, err = ethclient.Dial(self.config.BackendURL)
+		log.Info("connecting to SWAP API", "url", self.config.SwapBackendURL)
+		self.backend, err = ethclient.Dial(self.config.SwapBackendURL)
 		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.BackendURL, err)
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapBackendURL, err)
 		}
+
 		// initialize the balances store
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
 		if err != nil {
 			return nil, err
 		}
+		// create the accounting objects
+		self.swap = swap.New(balancesStore, self.privateKey, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
-		// create the SWAP object
-		self.swap = swap.New(balancesStore, self.privateKey, self.backend)
 	}
 
 	config.HiveParams.Discovery = true
@@ -239,6 +240,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
+
+	// Instantiate the pinAPI object with the already opened localstore
+	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
@@ -405,11 +409,10 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	if s.ps != nil {
 		s.ps.Start(srv)
 	}
-
 	// start swarm http proxy server
 	if s.config.Port != "" {
 		addr := net.JoinHostPort(s.config.ListenAddr, s.config.Port)
-		server := httpapi.NewServer(s.api, s.config.Cors)
+		server := httpapi.NewServer(s.api, s.pinAPI, s.config.Cors)
 
 		if s.config.Cors != "" {
 			log.Info("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
@@ -546,6 +549,12 @@ func (s *Swarm) APIs() []rpc.API {
 			Service:   protocols.NewAccountingApi(s.accountingMetrics),
 			Public:    false,
 		},
+		{
+			Namespace: "pin",
+			Version:   pin.Version,
+			Service:   s.pinAPI,
+			Public:    false,
+		},
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
@@ -574,12 +583,12 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
-// Info represents serialisable info about swarm
+// Info represents the current Swarm node's configuration
 type Info struct {
 	*api.Config
 }
 
-// Info returns the actual Swarm information
+// Info returns the current Swarm configuration
 func (i *Info) Info() *Info {
 	return i
 }

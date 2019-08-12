@@ -212,7 +212,7 @@ func uploadWithTag(data []byte, endpoint string, tag string) (string, error) {
 		Tag: tag,
 	}
 
-	return swarm.TarUpload("", &client.FileUploader{f}, "", false)
+	return swarm.TarUpload("", &client.FileUploader{f}, "", false, false)
 }
 
 func digest(r io.Reader) ([]byte, error) {

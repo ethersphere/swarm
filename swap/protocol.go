@@ -19,7 +19,6 @@ package swap
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -31,23 +30,25 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
-// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
-var ErrEmptyAddressInSignature = errors.New("empty address in handshake")
+var (
+	// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
+	ErrEmptyAddressInSignature = errors.New("empty address in handshake")
 
-// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
-// structure of the HandshakeMsg
-var ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
+	// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
+	// structure of the HandshakeMsg
+	ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
 
-// Spec is the swap protocol specification
-var Spec = &protocols.Spec{
-	Name:       "swap",
-	Version:    1,
-	MaxMsgSize: 10 * 1024 * 1024,
-	Messages: []interface{}{
-		HandshakeMsg{},
-		EmitChequeMsg{},
-	},
-}
+	// Spec is the swap protocol specification
+	Spec = &protocols.Spec{
+		Name:       "swap",
+		Version:    1,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			HandshakeMsg{},
+			EmitChequeMsg{},
+		},
+	}
+)
 
 // Protocols is a node.Service interface method
 func (s *Swap) Protocols() []p2p.Protocol {
@@ -81,6 +82,7 @@ func (s *Swap) Start(server *p2p.Server) error {
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
+	log.Info("Swap service stopping")
 	return nil
 }
 
@@ -95,14 +97,14 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	return s.verifyContract(context.TODO(), handshake.ContractAddress)
+	return s.verifyContract(context.Background(), handshake.ContractAddress)
 }
 
 // run is the actual swap protocol run method
 func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
-	handshake, err := protoPeer.Handshake(context.TODO(), &HandshakeMsg{
+	handshake, err := protoPeer.Handshake(context.Background(), &HandshakeMsg{
 		ContractAddress: s.owner.Contract,
 	}, s.verifyHandshake)
 	if err != nil {
@@ -114,7 +116,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return ErrInvalidHandshakeMsg
 	}
 
-	beneficiary, err := s.getContractOwner(context.TODO(), response.ContractAddress)
+	beneficiary, err := s.getContractOwner(context.Background(), response.ContractAddress)
 	if err != nil {
 		return err
 	}
@@ -123,7 +125,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	s.addPeer(swapPeer)
 	defer s.removePeer(swapPeer)
 
-	return swapPeer.Run(swapPeer.handleMsg)
+	return swapPeer.Run(s.handleMsg(swapPeer))
 }
 
 func (s *Swap) removePeer(p *Peer) {
@@ -138,13 +140,9 @@ func (s *Swap) addPeer(p *Peer) {
 	s.peers[p.ID()] = p
 }
 
-func (s *Swap) getPeer(id enode.ID) (*Peer, error) {
-	var err error
-	peer := s.peers[id]
-	if peer == nil {
-		err = fmt.Errorf("peer %s not found", id.String())
-	}
-	return peer, err
+func (s *Swap) getPeer(id enode.ID) (*Peer, bool) {
+	peer, ok := s.peers[id]
+	return peer, ok
 }
 
 type swapAPI interface {

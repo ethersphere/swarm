@@ -60,7 +60,7 @@ func init() {
 const clusterSize = 3
 
 func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, "")
+	return swarmhttp.NewServer(api, nil, "")
 }
 func TestMain(m *testing.M) {
 	// check if we have been reexec'd
