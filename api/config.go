@@ -52,7 +52,7 @@ type Config struct {
 	BaseKey       []byte
 
 	// Swap configs
-	SwapBackendURL     string
+	SwapBackendURL string
 	SwapEnabled    bool
 	ChequebookAddr common.Address //TODO: update documentation
 	// TODO: Add swap.Params --> define! (economic parameters)
@@ -101,11 +101,7 @@ func NewConfig() (c *Config) {
 		DeliverySkipCheck:    true,
 		SyncUpdateDelay:      15 * time.Second,
 		SwapEnabled:          false,
-<<<<<<< HEAD
-		BackendURL:           "",
-=======
 		SwapBackendURL:       "",
->>>>>>> origin/incentives
 	}
 
 	return

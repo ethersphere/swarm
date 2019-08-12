@@ -460,7 +460,7 @@ func newTestSwap(t *testing.T) (*Swap, string) {
 		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
 	}, gasLimit)
 
-	swap := New(stateStore, key, common.Address{}, defaultBackend)
+	swap := New(stateStore, key, defaultBackend)
 	defaultBackend.Commit()
 	return swap, dir
 }
