@@ -37,5 +37,5 @@ const (
 	defaultHarddepositTimeoutDuration = 24 * time.Hour
 
 	// While Swap is unstable, it's only allowed to be run under a specific network ID
-	AllowedNetworkID = 5
+	AllowedNetworkID = 4
 )

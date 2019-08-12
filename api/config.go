@@ -55,7 +55,6 @@ type Config struct {
 	SwapBackendURL string
 	SwapEnabled    bool
 	ChequebookAddr common.Address //TODO: update documentation
-	// TODO: Add swap.Params --> define! (economic parameters)
 
 	*network.HiveParams
 	Pss                  *pss.Params
