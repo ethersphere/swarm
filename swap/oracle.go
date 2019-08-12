@@ -38,6 +38,5 @@ type fixedPriceOracle struct {
 
 // GetPrice returns the actual price for honey
 func (cpo *fixedPriceOracle) GetPrice(honey uint64) (uint64, error) {
-	// otherwise don't refresh the rate and return the latest price
 	return honey * cpo.honeyPrice, nil
 }
