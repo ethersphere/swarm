@@ -165,6 +165,16 @@ func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error
 		default:
 		}
 
+		// handleMsgPauser should not be nil only in tests.
+		// It does not use mutex lock protection and because of that
+		// it must be set before the SlipStream is constructed and
+		// reset when it is closed, in tests.
+		// Production performance impact can be considered as
+		// neglectable as nil check is a ns order operation.
+		if handleMsgPauser != nil {
+			handleMsgPauser.wait()
+		}
+
 		s.handlersWg.Add(1)
 		go func() {
 			defer s.handlersWg.Done()
@@ -191,6 +201,16 @@ func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error
 		}()
 		return nil
 	}
+}
+
+// Used to pause any message handling in tests for
+// synchronizing desired states.
+var handleMsgPauser pauser
+
+type pauser interface {
+	pause()
+	resume()
+	wait()
 }
 
 // handleStreamInfoReq handles the StreamInfoReq message.

@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -130,11 +131,14 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 			bucket.Store(simulation.BucketKeyKademlia, kad)
 		}
 
-		netStore := storage.NewNetStore(localStore, n.ID())
+		netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 		lnetStore := storage.NewLNetStore(netStore)
 		fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(bucketKeyLocalStore, localStore)
+
+		ret := retrieval.New(kad, netStore, kad.BaseAddr())
+		netStore.RemoteGet = ret.RequestFromPeers
 
 		if o.InitialChunkCount > 0 {
 			_, err := uploadChunks(context.Background(), localStore, o.InitialChunkCount)
@@ -274,4 +278,38 @@ func TestMain(m *testing.M) {
 		}
 	}()
 	os.Exit(m.Run())
+}
+
+// syncPauser implements pauser interface used only in tests.
+type syncPauser struct {
+	c   *sync.Cond
+	cMu sync.Mutex
+	mu  sync.RWMutex
+}
+
+func (p *syncPauser) pause() {
+	p.mu.Lock()
+	if p.c == nil {
+		p.c = sync.NewCond(&p.cMu)
+	}
+	p.mu.Unlock()
+}
+
+func (p *syncPauser) resume() {
+	p.c.L.Lock()
+	p.c.Broadcast()
+	p.c.L.Unlock()
+	p.mu.Lock()
+	p.c = nil
+	p.mu.Unlock()
+}
+
+func (p *syncPauser) wait() {
+	p.mu.RLock()
+	if p.c != nil {
+		p.c.L.Lock()
+		p.c.Wait()
+		p.c.L.Unlock()
+	}
+	p.mu.RUnlock()
 }
