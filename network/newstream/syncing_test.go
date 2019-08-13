@@ -44,6 +44,11 @@ var timeout = 90 * time.Second
 
 // TestTwoNodesSyncWithGaps tests that syncing works with gaps in the localstore intervals
 func TestTwoNodesSyncWithGaps(t *testing.T) {
+	// construct a pauser before simulation is started and reset it to nil after all streams are closed
+	// to avoid the need for protecting handleMsgPauser with a lock in production code.
+	handleMsgPauser = new(syncPauser)
+	defer func() { handleMsgPauser = nil }()
+
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
 		t.Helper()
 
@@ -130,12 +135,12 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			gaps:           [][2]uint64{{5, 10}},
 			liveChunkCount: 100,
 		},
-		//{
-		//name:           "live and history with live gap",
-		//chunkCount:     100,
-		//liveChunkCount: 100,
-		//liveGaps:       [][2]uint64{{105, 110}},
-		//},
+		{
+			name:           "live and history with live gap",
+			chunkCount:     100,
+			liveChunkCount: 100,
+			liveGaps:       [][2]uint64{{105, 110}},
+		},
 		{
 			name:           "live and history with gaps",
 			chunkCount:     100,
@@ -191,6 +196,10 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			}
 
 			if tc.liveChunkCount > 0 {
+				// pause syncing so that the chunks in the live gap
+				// are not synced before they are removed
+				handleMsgPauser.pause()
+
 				chunks = append(chunks, mustUploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
 
 				totalChunkCount, err = getChunkCount(uploadStore)
@@ -203,6 +212,9 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 				}
 
 				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
+
+				// resume syncing
+				handleMsgPauser.resume()
 
 				err = waitChunks(syncStore, totalChunkCount-removedCount, time.Minute)
 				if err != nil {
