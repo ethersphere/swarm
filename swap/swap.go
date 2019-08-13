@@ -501,8 +501,8 @@ func (s *Swap) saveLastReceivedCheque(p *Peer, cheque *Cheque) error {
 }
 
 // Close cleans up swap
-func (s *Swap) Close() {
-	s.store.Close()
+func (s *Swap) Close() error {
+	return s.store.Close()
 }
 
 // resetBalance is called:
