@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package newstream
+package stream
 
 import (
 	"encoding/hex"
@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/bitvector"
-	"github.com/ethersphere/swarm/network/stream/intervals"
+	"github.com/ethersphere/swarm/network/intervals"
 	"github.com/ethersphere/swarm/state"
 )
 
