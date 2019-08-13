@@ -923,7 +923,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 
 	var tag *chunk.Tag
 	if fileAddr == nil {
-		tagString := r.URL.Query().Get("tagId")
+		tagString := r.URL.Query().Get("Id")
 		if tagString == "" {
 			getTagFail.Inc(1)
 			respondError(w, r, "Missing one of the mandatory argument", http.StatusBadRequest)
@@ -933,7 +933,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		u64, err := strconv.ParseUint(tagString, 10, 32)
 		if err != nil {
 			getTagFail.Inc(1)
-			respondError(w, r, "Invalid tagId argument", http.StatusBadRequest)
+			respondError(w, r, "Invalid Id argument", http.StatusBadRequest)
 			return
 		}
 		tagId := uint32(u64)
