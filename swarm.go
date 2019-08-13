@@ -133,6 +133,30 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.swap = swap.New(balancesStore, self.privateKey, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
+		// checking wether chequeBookAddr was set as a config parameter
+		if self.config.ChequebookAddr != common.HexToAddress("") {
+			address := self.config.ChequebookAddr
+			// read the bytecode at passed-in address
+			bytecode, err := self.backend.CodeAt(context.Background(), address, nil) // nil is latest block
+			if err != nil {
+				return nil, fmt.Errorf("Unable to connect to your provided cheqeubook address. Error: %v", err)
+			}
+			// if there lives no bytecode at the address, address is not a smart-contract
+			isContract := len(bytecode) > 0
+			if !isContract {
+				return nil, fmt.Errorf("Provided address %v not a smart-contract", address)
+			}
+			//TODO: verify wether the bytecode which lives at the address is a chequebook (compare the deployedByteCode)
+			self.swap.NewInstanceAt(address, self.backend)
+			log.Info("Using the provided address as chequebook", "chequebookAddr", address)
+		} else {
+			log.Info("Deploying new chequebook instance")
+			err := self.DeploySwap(context.Background())
+			if err != nil {
+				return nil, fmt.Errorf("Unable to deploy swap contract: %v", err)
+			}
+			log.Info("SWAP contract deployed", "contract info", self.swap.DeploySuccess())
+		}
 	}
 
 	config.HiveParams.Discovery = true
@@ -367,35 +391,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	// update uaddr to correct enode
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
-
-	if s.config.SwapEnabled {
-		// checking wether chequeBookAddr was set as a config parameter
-		if s.config.ChequebookAddr != common.HexToAddress("") {
-			address := s.config.ChequebookAddr
-			// read the bytecode at passed-in address
-			bytecode, err := s.backend.CodeAt(context.Background(), address, nil) // nil is latest block
-			if err != nil {
-				return fmt.Errorf("Unable to connect to your provided cheqeubook address. Error: %v", err)
-			}
-			// if there lives no bytecode at the address, address is not a smart-contract
-			isContract := len(bytecode) > 0
-			if !isContract {
-				return fmt.Errorf("Provided address %v not a smart-contract", address)
-			}
-			//TODO: verify wether the bytecode which lives at the address is a chequebook (compare the deployedByteCode)
-			s.swap.SetChequebookAddr(address)
-			log.Info("Using the provided address as chequebook", "chequebookAddr", address)
-		} else {
-			log.Info("Deploying new chequebook instance")
-			err := s.DeploySwap(context.Background())
-			if err != nil {
-				return fmt.Errorf("Unable to deploy swap contract: %v", err)
-			}
-			log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
-		}
-	} else {
-		log.Info("SWAP disabled: no chequebook set")
-	}
 
 	log.Info("Starting bzz service")
 

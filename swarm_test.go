@@ -28,8 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/swarm/network"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -229,11 +227,25 @@ func TestNewSwarmFailure(t *testing.T) {
 			},
 		},
 		{
-			name: "with swap enabled and default network ID",
+			name: "with swap enabled and non-allowed network ID",
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
-				config.NetworkID = network.DefaultNetworkID
+				config.NetworkID = 1 // one is mainNet
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s != nil {
+					t.Error("swarm struct is not nil")
+				}
+			},
+		},
+		{
+			name: "with swap enabled and a non-contract chequeBookAddr passed",
+			configure: func(config *api.Config) {
+				config.SwapBackendURL = ipcEndpoint
+				config.SwapEnabled = true
+				config.NetworkID = swap.AllowedNetworkID
+				config.ChequebookAddr = common.HexToAddress("0")
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {

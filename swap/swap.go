@@ -528,6 +528,18 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 	return s.deploy(ctx, backend, path)
 }
 
+// NewInstanceAt creates a new instance of the chequebook contract at address and sets chequebookAddr
+func (s *Swap) NewInstanceAt(address common.Address, backend swap.Backend) error {
+	c, err := contract.InstanceAt(address, backend)
+	if err != nil {
+		return err
+	}
+	s.contract = c
+	s.SetChequebookAddr(address)
+
+	return nil
+}
+
 // verifyContract checks if the bytecode found at address matches the expected bytecode
 func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
 	return contract.ValidateCode(ctx, s.backend, address)
@@ -548,7 +560,7 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// deploy deploys the Swap contract
+// deploy deploys the Swap contract, creates an instance of the contract and sets the chequebookAddr
 func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
