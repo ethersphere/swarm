@@ -980,7 +980,7 @@ func (s *Server) HandleGetPins(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.get.pin", "ruid", ruid, "uri", r.RequestURI)
 
-	pinnedFiles, err := s.pinAPI.ListPinFiles()
+	pinnedFiles, err := s.pinAPI.ListPins()
 	if err != nil {
 		getPinFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("error getting pinned files: %s", err), http.StatusInternalServerError)

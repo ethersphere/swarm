@@ -127,7 +127,7 @@ func TestWalker(t *testing.T) {
 	}
 }
 
-// TestListPinInfo tests the ListPinFiles command by pinning and unpinning a collection
+// TestListPinInfo tests the ListPins command by pinning and unpinning a collection
 // twice and check if this gets reflected properly in the data structure
 func TestListPinInfo(t *testing.T) {
 	p, f, closeFunc := getPinApiAndFileStore(t)
@@ -141,21 +141,21 @@ func TestListPinInfo(t *testing.T) {
 		t.Fatalf("Could not pin " + err.Error())
 	}
 
-	// Get the list of pinned files by calling the ListPinFiles command
-	pinInfo, err := p.ListPinFiles()
+	// Get the list of pinned files by calling the ListPins command
+	pinsInfo, err := p.ListPins()
 	if err != nil {
-		t.Fatalf("Error executing ListPinFiles command")
+		t.Fatalf("Error executing ListPins command")
 	}
 
 	// Check if the uploaded collection is in the list files data structure
-	fileInfo, err := getFileInfo(pinInfo, hash)
+	pinInfo, err := getPinInfo(pinsInfo, hash)
 	if err != nil {
 		t.Fatalf("uploaded collection not pinned")
 	}
-	if fileInfo.PinCounter != 1 {
-		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.PinCounter)
+	if pinInfo.PinCounter != 1 {
+		t.Fatalf("pincounter expected is 1 got is %d", pinInfo.PinCounter)
 	}
-	if fileInfo.IsRaw {
+	if pinInfo.IsRaw {
 		t.Fatalf("IsRaw expected is false got is true")
 	}
 
@@ -165,17 +165,17 @@ func TestListPinInfo(t *testing.T) {
 		t.Fatalf("Could not pin " + err.Error())
 	}
 
-	// Get the list of pinned files by calling the ListPinFiles command
-	pinInfo, err = p.ListPinFiles()
+	// Get the list of pinned files by calling the ListPins command
+	pinsInfo, err = p.ListPins()
 	if err != nil {
-		t.Fatalf("Error executing ListPinFiles command")
+		t.Fatalf("Error executing ListPins command")
 	}
-	fileInfo, err = getFileInfo(pinInfo, hash)
+	pinInfo, err = getPinInfo(pinsInfo, hash)
 	if err != nil {
 		t.Fatalf("hash not pinned ")
 	}
-	if fileInfo.PinCounter != 2 {
-		t.Fatalf("pincounter expected is 2 got is %d", fileInfo.PinCounter)
+	if pinInfo.PinCounter != 2 {
+		t.Fatalf("pincounter expected is 2 got is %d", pinInfo.PinCounter)
 	}
 
 	// Unpin it and check if the counter decrements
@@ -184,17 +184,17 @@ func TestListPinInfo(t *testing.T) {
 		t.Fatalf("Could not unpin " + err.Error())
 	}
 
-	// Get the list of pinned files by calling the ListPinFiles command
-	pinInfo, err = p.ListPinFiles()
+	// Get the list of pinned files by calling the ListPins command
+	pinsInfo, err = p.ListPins()
 	if err != nil {
-		t.Fatalf("Error executing ListPinFiles command")
+		t.Fatalf("Error executing ListPins command")
 	}
-	fileInfo, err = getFileInfo(pinInfo, hash)
+	pinInfo, err = getPinInfo(pinsInfo, hash)
 	if err != nil {
 		t.Fatalf("collection totally unpinned")
 	}
-	if fileInfo.PinCounter != 1 {
-		t.Fatalf("pincounter expected is 1 got is %d", fileInfo.PinCounter)
+	if pinInfo.PinCounter != 1 {
+		t.Fatalf("pincounter expected is 1 got is %d", pinInfo.PinCounter)
 	}
 
 	// Unpin it final time and the entry should not be there
@@ -203,12 +203,12 @@ func TestListPinInfo(t *testing.T) {
 		t.Fatalf("Could not unpin " + err.Error())
 	}
 
-	// Get the list of pinned files by calling the ListPinFiles command
-	pinInfo, err = p.ListPinFiles()
+	// Get the list of pinned files by calling the ListPins command
+	pinsInfo, err = p.ListPins()
 	if err != nil {
-		t.Fatalf("Error executing ListPinFiles command")
+		t.Fatalf("Error executing ListPins command")
 	}
-	_, err = getFileInfo(pinInfo, hash)
+	_, err = getPinInfo(pinsInfo, hash)
 	if err == nil {
 		t.Fatalf("uploaded collection is still pinned")
 	}
@@ -404,12 +404,12 @@ func failIfNotPinned(t *testing.T, p *API, rootHash []byte, pinCounter uint64, i
 		}
 	}
 
-	pinnedFiles, err := p.ListPinFiles()
+	pinnedFiles, err := p.ListPins()
 	if err != nil {
 		t.Fatalf("Could not load pin state from state store")
 	}
 
-	fileInfo, err := getFileInfo(pinnedFiles, rootHash)
+	fileInfo, err := getPinInfo(pinnedFiles, rootHash)
 	if err != nil {
 		t.Fatalf("Fileinfo not present in state store")
 	}
@@ -543,11 +543,11 @@ func getChunks(t *testing.T, bin uint8, addrs map[string]int, addrLock *sync.RWM
 	}
 }
 
-func getFileInfo(pinInfo []FileInfo, hash storage.Address) (fileInfo FileInfo, err error) {
+func getPinInfo(pinInfo []PinInfo, hash storage.Address) (PinInfo, error) {
 	for _, fi := range pinInfo {
 		if bytes.Equal(fi.Address, hash) {
 			return fi, nil
 		}
 	}
-	return FileInfo{}, errors.New("Fileinfo not found")
+	return PinInfo{}, errors.New("Pininfo not found")
 }

@@ -41,17 +41,17 @@ var (
 	errInvalidUnmarshallData = errors.New("invalid data length")
 )
 
-// FileInfo is the struct that stores the information about pinned files
+// PinInfo is the struct that stores the information about pinned files
 // This is stored in the state DB with Address as key
-type FileInfo struct {
+type PinInfo struct {
 	Address    storage.Address
 	IsRaw      bool
 	FileSize   uint64
 	PinCounter uint64
 }
 
-// MarshalBinary encodes the FileInfo object in to a binary form for storage
-func (f *FileInfo) MarshalBinary() (data []byte, err error) {
+// MarshalBinary encodes the PinInfo object in to a binary form for storage
+func (f *PinInfo) MarshalBinary() (data []byte, err error) {
 	data = make([]byte, 17)
 	if f.IsRaw {
 		data[0] = 1
@@ -63,8 +63,8 @@ func (f *FileInfo) MarshalBinary() (data []byte, err error) {
 	return data, nil
 }
 
-// UnmarshalBinary decodes the binary form from the state store to the FileInfo object
-func (f *FileInfo) UnmarshalBinary(data []byte) error {
+// UnmarshalBinary decodes the binary form from the state store to the PinInfo object
+func (f *PinInfo) UnmarshalBinary(data []byte) error {
 	if len(data) != 17 {
 		return errInvalidUnmarshallData
 	}
@@ -134,8 +134,8 @@ func (p *API) PinFiles(addr []byte, isRaw bool, credentials string) error {
 		return nil
 	}
 
-	// Check if the root hash is already pinned and add it to the fileInfo struct
-	fileInfo, err := p.getPinnedFile(addr)
+	// Check if the root hash is already pinned and add it to the pinInfo struct
+	pinInfo, err := p.getPinnedFile(addr)
 	if err != nil {
 		// Get the file size from the root chunk first 8 bytes
 		hashFunc := storage.MakeHashFunc(storage.DefaultHash)
@@ -155,7 +155,7 @@ func (p *API) PinFiles(addr []byte, isRaw bool, credentials string) error {
 			return nil
 		}
 
-		fileInfo = FileInfo{
+		pinInfo = PinInfo{
 			Address:    addr,
 			IsRaw:      isRaw,
 			FileSize:   fileSize,
@@ -168,11 +168,11 @@ func (p *API) PinFiles(addr []byte, isRaw bool, credentials string) error {
 			log.Error("Error getting pin counter of root hash.", "rootHash", hex.EncodeToString(addr), "err", err)
 			return nil
 		}
-		fileInfo.PinCounter = pinCounter
+		pinInfo.PinCounter = pinCounter
 	}
 
 	// Store the pinned files in state DB
-	err = p.savePinnedFile(fileInfo)
+	err = p.savePinnedFile(pinInfo)
 	if err != nil {
 		log.Error("Error saving pinned file info to state store.", "rootHash", hex.EncodeToString(addr), "err", err)
 		return nil
@@ -188,7 +188,7 @@ func (p *API) PinFiles(addr []byte, isRaw bool, credentials string) error {
 // have been already pinned using the PinFiles function. This function can
 // be called only from an external command.
 func (p *API) UnpinFiles(addr []byte, credentials string) error {
-	fileInfo, err := p.getPinnedFile(addr)
+	pinInfo, err := p.getPinnedFile(addr)
 	if err != nil {
 		log.Error("Root hash is not pinned", "rootHash", hex.EncodeToString(addr), "err", err)
 		return err
@@ -206,7 +206,7 @@ func (p *API) UnpinFiles(addr []byte, credentials string) error {
 		}
 		return nil
 	}
-	err = p.walkChunksFromRootHash(addr, fileInfo.IsRaw, credentials, walkerFunction)
+	err = p.walkChunksFromRootHash(addr, pinInfo.IsRaw, credentials, walkerFunction)
 	if err != nil {
 		log.Error("Error walking root hash.", "Hash", hex.EncodeToString(addr), "err", err)
 		return nil
@@ -221,8 +221,8 @@ func (p *API) UnpinFiles(addr []byte, credentials string) error {
 			return nil
 		}
 	} else {
-		fileInfo.PinCounter = pinCounter
-		err = p.savePinnedFile(fileInfo)
+		pinInfo.PinCounter = pinCounter
+		err = p.savePinnedFile(pinInfo)
 		if err != nil {
 			log.Error("Error updating file info to state store.", "rootHash", hex.EncodeToString(addr), "err", err)
 			return nil
@@ -233,30 +233,30 @@ func (p *API) UnpinFiles(addr []byte, credentials string) error {
 	return nil
 }
 
-// ListPinFiles functions logs information of all the files that are pinned
+// ListPins functions logs information of all the files that are pinned
 // in the current local node. It displays the root hash of the pinned file
 // or collection. It also display three vital information's
 //     1) Whether the file is a RAW file or not
 //     2) Size of the pinned file or collection
 //     3) the number of times that particular file or collection is pinned.
-func (p *API) ListPinFiles() ([]FileInfo, error) {
-	pinnedFiles := make([]FileInfo, 0)
+func (p *API) ListPins() ([]PinInfo, error) {
+	pinnedFiles := make([]PinInfo, 0)
 	iterFunc := func(key []byte, value []byte) {
 		hash := string(key[4:])
-		fileInfo := FileInfo{}
-		err := fileInfo.UnmarshalBinary(value)
+		pinInfo := PinInfo{}
+		err := pinInfo.UnmarshalBinary(value)
 		if err != nil {
-			log.Debug("Error unmarshaling fileinfo from state store", "Address", hash)
+			log.Debug("Error unmarshaling pininfo from state store", "Address", hash)
 			return
 		}
-		fileInfo.Address, err = hex.DecodeString(hash)
+		pinInfo.Address, err = hex.DecodeString(hash)
 		if err != nil {
-			log.Debug("Error unmarshaling fileinfo from state store", "Address", hash)
+			log.Debug("Error unmarshaling pininfo from state store", "Address", hash)
 			return
 		}
-		log.Trace("Pinned file", "Address", hash, "IsRAW", fileInfo.IsRaw,
-			"FileSize", fileInfo.FileSize, "PinCounter", fileInfo.PinCounter)
-		pinnedFiles = append(pinnedFiles, fileInfo)
+		log.Trace("Pinned file", "Address", hash, "IsRAW", pinInfo.IsRaw,
+			"FileSize", pinInfo.FileSize, "PinCounter", pinInfo.PinCounter)
+		pinnedFiles = append(pinnedFiles, pinInfo)
 	}
 	err := p.state.Iterate("pin_", iterFunc)
 	if err != nil {
@@ -468,9 +468,9 @@ func (p *API) getPinCounterOfChunk(addr chunk.Address) (uint64, error) {
 	return pinnedChunk.PinCounter(), nil
 }
 
-func (p *API) savePinnedFile(fileInfo FileInfo) error {
-	key := "pin_" + hex.EncodeToString(fileInfo.Address)
-	err := p.state.Put(key, &fileInfo)
+func (p *API) savePinnedFile(pinInfo PinInfo) error {
+	key := "pin_" + hex.EncodeToString(pinInfo.Address)
+	err := p.state.Put(key, &pinInfo)
 	return err
 }
 
@@ -480,10 +480,10 @@ func (p *API) removePinnedFile(addr []byte) error {
 	return err
 }
 
-func (p *API) getPinnedFile(addr []byte) (FileInfo, error) {
+func (p *API) getPinnedFile(addr []byte) (PinInfo, error) {
 	key := "pin_" + hex.EncodeToString(addr)
-	fileInfo := FileInfo{}
-	err := p.state.Get(key, &fileInfo)
-	fileInfo.Address = addr
-	return fileInfo, err
+	pinInfo := PinInfo{}
+	err := p.state.Get(key, &pinInfo)
+	pinInfo.Address = addr
+	return pinInfo, err
 }

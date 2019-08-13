@@ -89,7 +89,7 @@ func TestPinUnpinAPI(t *testing.T) {
 
 	// get the list of files pinned
 	pinnedInfo := listPinnedFiles(t, srv)
-	listInfos := make([]pin.FileInfo, 0)
+	listInfos := make([]pin.PinInfo, 0)
 	err := json.Unmarshal(pinnedInfo, &listInfos)
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestPinUnpinAPI(t *testing.T) {
 
 	// get the list of files pinned again
 	unpinnedInfo := listPinnedFiles(t, srv)
-	listInfosUnpin := make([]pin.FileInfo, 0)
+	listInfosUnpin := make([]pin.PinInfo, 0)
 	err = json.Unmarshal(unpinnedInfo, &listInfosUnpin)
 	if err != nil {
 		t.Fatal(err)
