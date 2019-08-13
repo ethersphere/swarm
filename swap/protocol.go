@@ -83,8 +83,7 @@ func (s *Swap) Start(server *p2p.Server) error {
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
 	log.Info("Swap service stopping")
-	s.Close()
-	return nil
+	return s.Close()
 }
 
 // verifyHandshake verifies the chequebook address transmitted in the swap handshake
