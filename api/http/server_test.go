@@ -149,7 +149,7 @@ func TestGetTagUsingTagId(t *testing.T) {
 	tidString := resp.Header.Get(TagHeaderName)
 
 	// get the tag of the above upload using the tagId
-	getBzzURL := fmt.Sprintf("%s/bzz-tag:/?tagId=%s", srv.URL, tidString)
+	getBzzURL := fmt.Sprintf("%s/bzz-tag:/?Id=%s", srv.URL, tidString)
 	getResp, err := http.Get(getBzzURL)
 	if err != nil {
 		t.Fatal(err)
