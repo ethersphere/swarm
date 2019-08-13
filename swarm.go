@@ -455,7 +455,7 @@ func (s *Swarm) Stop() error {
 		s.ps.Stop()
 	}
 	if s.swap != nil {
-		s.swap.Close()
+		s.swap.Stop()
 	}
 	if s.accountingMetrics != nil {
 		s.accountingMetrics.Close()
