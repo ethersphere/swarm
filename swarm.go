@@ -566,7 +566,6 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	if s.config.SwapEnabled {
-		// Swap public API
 		apis = append(apis, s.swap.APIs()...)
 	}
 
