@@ -596,11 +596,9 @@ func (ch *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary commo
 	}
 
 	amount := new(big.Int).Set(ch.Amount)
-	if sum != nil {
-		amount.Sub(amount, sum)
-		if amount.Sign() <= 0 {
-			return nil, fmt.Errorf("incorrect amount: %v <= 0", amount)
-		}
+	amount.Sub(amount, sum)
+	if amount.Sign() <= 0 {
+		return nil, fmt.Errorf("incorrect amount: %v <= 0", amount)
 	}
 
 	pubKey, err := crypto.SigToPub(sigHash(ch.Contract, beneficiary, ch.Amount), ch.Sig)

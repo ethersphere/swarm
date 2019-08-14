@@ -101,7 +101,7 @@ func TestBzzWithFeed(t *testing.T) {
 	`)
 
 	// POST data to bzz and get back a content-addressed **manifest hash** pointing to it.
-	resp, err := http.Post(fmt.Sprintf("%s/bzz:/", srv.URL), "text/plain", bytes.NewReader([]byte(dataBytes)))
+	resp, err := http.Post(fmt.Sprintf("%s/bzz:/", srv.URL), "text/plain", bytes.NewReader(dataBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestBzzWithFeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(retrievedData, []byte(dataBytes)) {
+	if !bytes.Equal(retrievedData, dataBytes) {
 		t.Fatalf("retrieved data mismatch, expected %x, got %x", dataBytes, retrievedData)
 	}
 }
@@ -746,7 +746,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	//post tar stream
 	url := srv.URL + "/bzz:/"
 	if encrypted {
-		url = url + "encrypt"
+		url = url + encryptAddr
 	}
 	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
@@ -863,7 +863,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 		defer cancel()
 		addr := ""
 		if v.toEncrypt {
-			addr = "encrypt"
+			addr = encryptAddr
 		}
 		req, err := http.NewRequest("POST", srv.URL+"/bzz:/"+addr, pr)
 		if err != nil {

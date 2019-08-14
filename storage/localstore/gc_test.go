@@ -200,9 +200,9 @@ func TestPinGC(t *testing.T) {
 		}
 	}
 
-	t.Run("pin Index count", newItemsCountTest(db.pinIndex, int(pinChunksCount)))
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, pinChunksCount))
 
-	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(0)))
+	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, 0))
 
 	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)+pinChunksCount))
 
@@ -278,9 +278,9 @@ func TestGCAfterPin(t *testing.T) {
 		}
 	}
 
-	t.Run("pin Index count", newItemsCountTest(db.pinIndex, int(chunkCount)))
+	t.Run("pin Index count", newItemsCountTest(db.pinIndex, chunkCount))
 
-	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, int(chunkCount)))
+	t.Run("gc exclude index count", newItemsCountTest(db.gcExcludeIndex, chunkCount))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, int(0)))
 

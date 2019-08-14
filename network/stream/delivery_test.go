@@ -271,10 +271,6 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
 	if !bytes.Equal(storedChunk.Data(), chunkData) {
 		t.Fatal("Retrieved chunk has different data than original")
 	}
