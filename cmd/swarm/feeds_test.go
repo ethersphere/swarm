@@ -36,8 +36,8 @@ import (
 
 func TestCLIFeedUpdate(t *testing.T) {
 	srv := swarmhttp.NewTestSwarmServer(t, func(api *api.API) swarmhttp.TestServer {
-		return swarmhttp.NewServer(api, "")
-	}, nil)
+		return swarmhttp.NewServer(api, nil, "")
+	}, nil, nil)
 	log.Info("starting a test swarm server")
 	defer srv.Close()
 

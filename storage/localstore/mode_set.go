@@ -138,9 +138,16 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		item.AccessTimestamp = now()
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pushIndex.DeleteInBatch(batch, item)
-		db.gcIndex.PutInBatch(batch, item)
-		gcSizeChange++
 
+		// Add in gcIndex only if this chunk is not pinned
+		ok, err := db.pinIndex.Has(item)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			db.gcIndex.PutInBatch(batch, item)
+			gcSizeChange++
+		}
 	case chunk.ModeSetRemove:
 		// delete from retrieve, pull, gc
 
@@ -174,6 +181,42 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			gcSizeChange = -1
 		}
 
+	case chunk.ModeSetPin:
+		// Get the existing pin counter of the chunk
+		existingPinCounter := uint64(0)
+		pinnedChunk, err := db.pinIndex.Get(item)
+		if err != nil {
+			if err == leveldb.ErrNotFound {
+				// If this Address is not present in DB, then its a new entry
+				existingPinCounter = 0
+
+				// Add in gcExcludeIndex of the chunk is not pinned already
+				db.gcExcludeIndex.PutInBatch(batch, item)
+			} else {
+				return err
+			}
+		} else {
+			existingPinCounter = pinnedChunk.PinCounter
+		}
+
+		// Otherwise increase the existing counter by 1
+		item.PinCounter = existingPinCounter + 1
+		db.pinIndex.PutInBatch(batch, item)
+	case chunk.ModeSetUnpin:
+		// Get the existing pin counter of the chunk
+		pinnedChunk, err := db.pinIndex.Get(item)
+		if err != nil {
+			return err
+		}
+
+		// Decrement the pin counter or
+		// delete it from pin index if the pin counter has reached 0
+		if pinnedChunk.PinCounter > 1 {
+			item.PinCounter = pinnedChunk.PinCounter - 1
+			db.pinIndex.PutInBatch(batch, item)
+		} else {
+			db.pinIndex.DeleteInBatch(batch, item)
+		}
 	default:
 		return ErrInvalidMode
 	}

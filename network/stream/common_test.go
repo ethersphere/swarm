@@ -403,5 +403,5 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	defer cleanup()
 
 	reader := bytes.NewReader(testData)
-	return fileStore.GetAllReferences(context.Background(), reader, false)
+	return fileStore.GetAllReferences(context.Background(), reader)
 }

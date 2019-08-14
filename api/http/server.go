@@ -44,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/rs/cors"
 )
 
@@ -64,7 +65,8 @@ var (
 )
 
 const (
-	SwarmTagHeaderName = "x-swarm-tag"
+	SwarmTagHeaderName = "x-swarm-tag" // Presence of this in header indicates the tag
+	PinHeaderName      = "x-swarm-pin" // Presence of this in header indicates pinning required
 
 	encryptAddr    = "encrypt"
 	tarContentType = "application/x-tar"
@@ -81,7 +83,7 @@ func (m methodHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-func NewServer(api *api.API, corsString string) *Server {
+func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(corsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -93,7 +95,7 @@ func NewServer(api *api.API, corsString string) *Server {
 		AllowedHeaders: []string{"*"},
 	})
 
-	server := &Server{api: api}
+	server := &Server{api: api, pinAPI: pinAPI}
 
 	defaultMiddlewares := []Adapter{
 		RecoverPanic,
@@ -188,6 +190,7 @@ func (s *Server) ListenAndServe(addr string) error {
 type Server struct {
 	http.Handler
 	api        *api.API
+	pinAPI     *pin.API
 	listenAddr string
 }
 
@@ -260,6 +263,9 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		toEncrypt = true
 	}
 
+	// Set the pinCounter if there is a pin header present in the request
+	headerPin := r.Header.Get(PinHeaderName)
+
 	if uri.Path != "" {
 		postRawFail.Inc(1)
 		respondError(w, r, "raw POST request cannot contain a path", http.StatusBadRequest)
@@ -290,6 +296,16 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug("stored content", "ruid", ruid, "key", addr)
 
+	// Add the root hash of the RAW file in the pinFilesIndex
+	if strings.ToLower(headerPin) == "true" {
+		err = s.pinAPI.PinFiles(addr, true, "")
+		if err != nil {
+			postRawFail.Inc(1)
+			respondError(w, r, fmt.Sprintf("Error pinning file : %s", addr.Hex()), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
@@ -317,6 +333,9 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	if uri.Addr == encryptAddr {
 		toEncrypt = true
 	}
+
+	// Set the pinCounter if there is a pin header present in the request
+	headerPin := r.Header.Get(PinHeaderName)
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != encryptAddr {
@@ -366,6 +385,16 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.Total())
 	tag.DoneSplit(newAddr)
+
+	// Pin the file
+	if strings.ToLower(headerPin) == "true" {
+		err = s.pinAPI.PinFiles(newAddr, false, "")
+		if err != nil {
+			postFilesFail.Inc(1)
+			respondError(w, r, fmt.Sprintf("Error pinning file : %s", newAddr.Hex()), http.StatusInternalServerError)
+			return
+		}
+	}
 
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
@@ -469,6 +498,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	uri := GetURI(r.Context())
 	log.Debug("handle.delete", "ruid", ruid)
 	deleteCount.Inc(1)
+
 	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path)
 	if err != nil {
 		deleteFail.Inc(1)

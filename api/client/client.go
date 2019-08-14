@@ -63,7 +63,7 @@ type Client struct {
 
 // UploadRaw uploads raw data to swarm and returns the resulting hash. If toEncrypt is true it
 // uploads encrypted data
-func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, error) {
+func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool, toPin bool) (string, error) {
 	if size <= 0 {
 		return "", errors.New("data size must be greater than zero")
 	}
@@ -77,6 +77,11 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, err
 	}
 	req.ContentLength = size
 	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("raw_upload_%d", time.Now().Unix()))
+
+	// Set the pinning header if the file needs to be pinned
+	if toPin {
+		req.Header.Set(swarmhttp.PinHeaderName, "true")
+	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -151,11 +156,11 @@ func Open(path string) (*File, error) {
 // (if the manifest argument is non-empty) or creates a new manifest containing
 // the file, returning the resulting manifest hash (the file will then be
 // available at bzz:/<hash>/<path>)
-func (c *Client) Upload(file *File, manifest string, toEncrypt bool) (string, error) {
+func (c *Client) Upload(file *File, manifest string, toEncrypt bool, toPin bool) (string, error) {
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt)
+	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt, toPin)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -185,7 +190,7 @@ func (c *Client) Download(hash, path string) (*File, error) {
 // directory will then be available at bzz:/<hash>/path/to/file), with
 // the file specified in defaultPath being uploaded to the root of the manifest
 // (i.e. bzz:/<hash>/)
-func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bool) (string, error) {
+func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bool, toPin bool) (string, error) {
 	stat, err := os.Stat(dir)
 	if err != nil {
 		return "", err
@@ -200,7 +205,7 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bo
 			return "", fmt.Errorf("default path: %v", err)
 		}
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt)
+	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt, toPin)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
@@ -358,12 +363,13 @@ func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 }
 
 // UploadManifest uploads the given manifest to swarm
-func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool) (string, error) {
+func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool, toPin bool) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return "", err
 	}
-	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
+
+	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt, toPin)
 }
 
 // DownloadManifest downloads a swarm manifest
@@ -498,7 +504,7 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool, toPin bool) (string, error) {
 	ctx, sp := spancontext.StartSpan(context.Background(), "api.client.tarupload")
 	defer sp.Finish()
 
@@ -539,6 +545,11 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 	log.Trace("setting upload tag", "tag", tag)
 
 	req.Header.Set(swarmhttp.SwarmTagHeaderName, tag)
+
+	// Set the pinning header if the file is to be pinned
+	if toPin {
+		req.Header.Set(swarmhttp.PinHeaderName, "true")
+	}
 
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
@@ -591,7 +602,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 
 // MultipartUpload uses the given Uploader to upload files to swarm as a
 // multipart form, returning the resulting manifest hash
-func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error) {
+func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (string, error) {
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
 	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+hash, reqR)
@@ -606,6 +617,9 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 	mw := multipart.NewWriter(reqW)
 	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%q", mw.Boundary()))
 	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
+	if toPin {
+		req.Header.Set(swarmhttp.PinHeaderName, "true")
+	}
 
 	// define an UploadFn which adds files to the multipart form
 	uploadFn := func(file *File) error {
