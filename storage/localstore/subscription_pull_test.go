@@ -578,7 +578,7 @@ func TestAddressInBin(t *testing.T) {
 
 		got := db.po(addr)
 
-		if got != uint8(po) {
+		if got != po {
 			t.Errorf("got po %v, want %v", got, po)
 		}
 	}

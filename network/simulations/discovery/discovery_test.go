@@ -320,9 +320,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
-			panic(err)
-		}
-		if err != nil {
 			return nil, fmt.Errorf("error starting node: %s", err)
 		}
 		if err := net.Start(node.ID()); err != nil {

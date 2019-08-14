@@ -53,7 +53,7 @@ const (
 // 5. imports the exported datastore
 // 6. fetches the uploaded random file from the second node
 func TestCLISwarmExportImport(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 	cluster := newTestCluster(t, 1)
@@ -123,7 +123,7 @@ func TestCLISwarmExportImport(t *testing.T) {
 // 5. import the dump
 // 6. file should be accessible
 func TestExportLegacyToNew(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip() // this should be reenabled once the appveyor tests underlying issue is fixed
 	}
 	/*

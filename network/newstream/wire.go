@@ -111,7 +111,7 @@ type GetRange struct {
 	Ruid      uint
 	Stream    ID
 	From      uint64
-	To        uint64 `rlp:nil`
+	To        uint64 `rlp:"nil"`
 	BatchSize uint
 	Roundtrip bool
 }

@@ -1,0 +1,13 @@
+linters-settings:
+  goconst:
+    # minimal length of string constant, 3 by default
+    min-len: 3
+    # minimal occurrences count to trigger, 3 by default
+    min-occurrences: 5
+
+issues:
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
