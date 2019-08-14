@@ -62,6 +62,12 @@ var (
 	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
+	getPinCount     = metrics.NewRegisteredCounter("api.http.get.pin.count", nil)
+	getPinFail      = metrics.NewRegisteredCounter("api.http.get.pin.fail", nil)
+	postPinCount    = metrics.NewRegisteredCounter("api.http.post.pin.count", nil)
+	postPinFail     = metrics.NewRegisteredCounter("api.http.post.pin.fail", nil)
+	deletePinCount  = metrics.NewRegisteredCounter("api.http.delete.pin.count", nil)
+	deletePinFail   = metrics.NewRegisteredCounter("api.http.delete.pin.fail", nil)
 )
 
 const (
@@ -165,7 +171,20 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
-
+	mux.Handle("/bzz-pin:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetPins),
+			defaultMiddlewares...,
+		),
+		"POST": Adapt(
+			http.HandlerFunc(server.HandlePin),
+			defaultPostMiddlewares...,
+		),
+		"DELETE": Adapt(
+			http.HandlerFunc(server.HandleUnpin),
+			defaultMiddlewares...,
+		),
+	})
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleRootPaths),
@@ -898,6 +917,81 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+}
+
+// HandlePin takes a root hash as argument and pins a given file or collection in the local Swarm DB
+func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
+	postPinCount.Inc(1)
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	fileAddr := uri.Address()
+	log.Debug("handle.post.pin", "ruid", ruid, "uri", r.RequestURI)
+
+	if fileAddr == nil {
+		postPinFail.Inc(1)
+		respondError(w, r, "missig hash to pin ", http.StatusBadRequest)
+		return
+	}
+
+	isRaw := false
+	isRawString := r.URL.Query().Get("raw")
+	if strings.ToLower(isRawString) == "true" {
+		isRaw = true
+	}
+
+	err := s.pinAPI.PinFiles(fileAddr, isRaw, "")
+	if err != nil {
+		postPinFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Debug("pinned content", "ruid", ruid, "key", fileAddr.Hex())
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleUnpin takes a root hash as argument and unpins the file or collection from the local Swarm DB
+func (s *Server) HandleUnpin(w http.ResponseWriter, r *http.Request) {
+	deletePinCount.Inc(1)
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	fileAddr := uri.Address()
+	log.Debug("handle.delete.pin", "ruid", ruid, "uri", r.RequestURI)
+
+	if fileAddr == nil {
+		deletePinFail.Inc(1)
+		respondError(w, r, "missig hash to unpin ", http.StatusBadRequest)
+		return
+	}
+
+	err := s.pinAPI.UnpinFiles(fileAddr, "")
+	if err != nil {
+		deletePinFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Debug("unpinned content", "ruid", ruid, "key", fileAddr.Hex())
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleGetPins return information about all the hashes pinned at this moment
+func (s *Server) HandleGetPins(w http.ResponseWriter, r *http.Request) {
+	getPinCount.Inc(1)
+	ruid := GetRUID(r.Context())
+	log.Debug("handle.get.pin", "ruid", ruid, "uri", r.RequestURI)
+
+	pinnedFiles, err := s.pinAPI.ListPins()
+	if err != nil {
+		getPinFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("error getting pinned files: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&pinnedFiles)
 }
 
 // calculateNumberOfChunks calculates the number of chunks in an arbitrary content length

@@ -42,6 +42,7 @@ import (
 	"github.com/ethersphere/swarm/api"
 	swarmhttp "github.com/ethersphere/swarm/api/http"
 	"github.com/ethersphere/swarm/internal/cmdtest"
+	"github.com/ethersphere/swarm/storage/pin"
 )
 
 var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
@@ -59,8 +60,8 @@ func init() {
 
 const clusterSize = 3
 
-func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, nil, "")
+func serverFunc(api *api.API, pinAPI *pin.API) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, pinAPI, "")
 }
 func TestMain(m *testing.M) {
 	// check if we have been reexec'd
