@@ -79,24 +79,20 @@ func (ts *Tags) Get(uid uint32) (*Tag, error) {
 
 // GetByAddress returns the underlying tag for the address or an error if not found
 func (ts *Tags) GetByAddress(address []byte) (*Tag, error) {
-	t := &Tag{}
-	found := false
+	var t *Tag
 	ts.tags.Range(func(key interface{}, value interface{}) bool {
 		rcvdTag := value.(*Tag)
 		if bytes.Equal(rcvdTag.Address, address) {
 			t = rcvdTag
-			found = true
 			return false
 		}
 		return true
 	})
 
-	if found {
-		return t, nil
-	} else {
+	if t == nil {
 		return nil, errTagNotFound
 	}
-
+	return t, nil
 }
 
 // GetFromContext gets a tag from the tag uid stored in the context
