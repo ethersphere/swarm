@@ -410,7 +410,7 @@ func compareNodeBinsToStreams(t *testing.T, onesCursors map[string]uint64, other
 		if err != nil {
 			return err
 		}
-		if othersBins[id] != uint64(cur) {
+		if othersBins[id] != cur {
 			return fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", id, cur, othersBins[id])
 		}
 	}
@@ -431,7 +431,7 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 		if uint(bin) < depth {
 			return fmt.Errorf("cursor at bin %d should not exist. depth %d", bin, depth)
 		}
-		if othersBins[bin] != uint64(cur) {
+		if othersBins[bin] != cur {
 			return fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
 		}
 	}
