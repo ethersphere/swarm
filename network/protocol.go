@@ -359,7 +359,6 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
-	fmt.Printf("check handshake %v\n", rhs.Capabilities.get(0))
 	// temporary check for valid capability settings, legacy full/light
 	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
