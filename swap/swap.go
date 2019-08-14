@@ -84,10 +84,11 @@ func NewParams() *Params {
 
 // New - swap constructor
 func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
-	sw := &Swap{
+	return &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),
 		backend:             backend,
+		owner:               createOwner(prvkey, contract),
 		cheques:             make(map[enode.ID]*Cheque),
 		peers:               make(map[enode.ID]*Peer),
 		params:              NewParams(),
@@ -95,8 +96,6 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		disconnectThreshold: DefaultDisconnectThreshold,
 		oracle:              NewPriceOracle(),
 	}
-	sw.owner = sw.createOwner(prvkey, contract)
-	return sw
 }
 
 const (
@@ -125,7 +124,7 @@ func keyToID(key string, prefix string) enode.ID {
 }
 
 // createOwner assings keys and addresses
-func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
+func createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
 		privateKey: prvkey,
