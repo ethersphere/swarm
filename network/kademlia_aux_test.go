@@ -51,26 +51,6 @@ func TestKademliaGet(t *testing.T) {
 	k.On(peerFourFirst)
 	k.On(peerFourSecond)
 
-	//	peers, _ := k.GetConnsBin(addrBytes, 255)
-	//	for _, p := range peers {
-	//		t.Logf("peer %x", p.Address())
-	//	}
-	//
-	//	peers, _ = k.GetConnsBin(addrBytes, 64)
-	//	for _, p := range peers {
-	//		t.Logf("peer %x", p.Address())
-	//	}
-	//
-	//	peers, _ = k.GetConnsBin(addrBytes, 63)
-	//	for _, p := range peers {
-	//		t.Logf("peer %x", p.Address())
-	//	}
-	//
-	//	peers, _ = k.GetConnsBin(addrBytes[:1], 64)
-	//	for _, p := range peers {
-	//		t.Logf("peer %x", p.Address())
-	//	}
-
 	bzzConfig := &BzzConfig{
 		OverlayAddr:  addrBytes,
 		UnderlayAddr: addrBytes,
