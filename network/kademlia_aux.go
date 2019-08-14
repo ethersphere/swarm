@@ -4,9 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/log"
 )
+
+type APIPeer struct {
+	*Peer
+	ID enode.ID
+	Po int
+}
 
 type NotificationPeer struct {
 	Peer *BzzAddr
@@ -56,9 +62,9 @@ func (k *Kademlia) GetDepth() (int, error) {
 }
 
 // TODO: return po from rpc
-func (k *Kademlia) GetConnsBin(addr []byte, farthestPo int, closestPo int) ([]*Peer, error) {
+func (k *Kademlia) GetConnsBin(addr []byte, farthestPo int, closestPo int) ([]*APIPeer, error) {
 
-	var peers []*Peer
+	var peers []*APIPeer
 
 	matchPo := -1
 	k.EachConn(addr, closestPo, func(sp *Peer, po int) bool {
@@ -69,14 +75,13 @@ func (k *Kademlia) GetConnsBin(addr []byte, farthestPo int, closestPo int) ([]*P
 		} else if po < farthestPo {
 			return false
 		}
-		peers = append(peers, sp)
-		log.Warn("found peer", "peer", sp.Peer)
+		peers = append(peers, &APIPeer{
+			Peer: sp,
+			ID:   sp.BzzPeer.Peer.ID(),
+			Po:   po,
+		})
 		return true
 	})
-	if matchPo == -1 {
-		matchPo = 0
-	}
-	log.Debug("matchpo", "po", matchPo)
 
 	return peers, nil
 }

@@ -1223,7 +1223,7 @@ func worker(id int, jobs <-chan Job, rpcs map[enode.ID]*rpc.Client, pubkeys map[
 }
 
 func TestNetwork(t *testing.T) {
-	t.Run("16/1000/4/sim", testNetwork)
+	t.Run("16/1000/32/sim", testNetwork)
 }
 
 // params in run name:

@@ -289,26 +289,25 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return pp.Run(p.handle)
 }
 
-func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
+//func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
+func (p *Pss) getPeer(enodeId enode.ID) (pp *protocols.Peer, ok bool) {
 	p.peersMu.RLock()
 	defer p.peersMu.RUnlock()
-	//pp, ok = p.peers[peer.Peer.Info().ID]
-	log.Warn("in getpeer", "peer", peer.Peer)
-	pp, ok = p.peers[peer.Peer.ID().String()]
+	pp, ok = p.peers[enodeId.String()]
 	return
 }
 
 func (p *Pss) addPeer(peer *protocols.Peer) {
 	p.peersMu.Lock()
 	defer p.peersMu.Unlock()
-	p.peers[peer.Peer.Info().ID] = peer
+	p.peers[peer.Peer.ID().String()] = peer
 }
 
 func (p *Pss) removePeer(peer *protocols.Peer) {
 	p.peersMu.Lock()
 	defer p.peersMu.Unlock()
-	log.Trace("removing peer", "id", peer.Peer.Info().ID)
-	delete(p.peers, peer.Peer.Info().ID)
+	log.Trace("removing peer", "id", peer.Peer.ID().String())
+	delete(p.peers, peer.Peer.ID().String())
 }
 
 func (p *Pss) APIs() []rpc.API {
@@ -569,17 +568,16 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 		return false
 	}
 
-	var depth uint8
-	err := p.kadRpc.Call(&depth, "hive_baseAddr")
+	var depth int
+	err := p.kadRpc.Call(&depth, "hive_getDepth")
 	if err != nil {
 		log.Error("kad rpc error", "err", err)
 		return false
 	}
-	//depth := p.Kademlia.NeighbourhoodDepth()
 	po, _ := network.Pof(p.baseAddr, msg.To, 0)
-	log.Trace("selfpossible", "po", po, "depth", depth)
+	log.Error("selfpossible", "po", po, "depth", depth)
 
-	return depth <= uint8(po)
+	return depth <= po
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -725,23 +723,8 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 var sendFunc = sendMsg
 
 // tries to send a message, returns true if successful
-func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
-	//var isPssEnabled bool
-	//	info := sp.Info()
-	//	for _, capability := range info.Caps {
-	//		if capability == p.capstring {
-	//			isPssEnabled = true
-	//			break
-	//		}
-	//	}
-	//	if !isPssEnabled {
-	//		log.Error("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
-	//		return false
-	//	}
-
-	// get the protocol peer from the forwarding peer cache
-	log.Warn("in sendmsg", "peer", sp.BzzPeer.Peer)
-	pp, ok := p.getPeer(sp.BzzPeer.Peer)
+func sendMsg(p *Pss, enodeId enode.ID, msg *PssMsg) bool {
+	pp, ok := p.getPeer(enodeId)
 	if !ok {
 		log.Warn("peer no longer in our list, dropping message")
 		return false
@@ -805,31 +788,39 @@ func (p *Pss) forward(msg *PssMsg) error {
 		onlySendOnce = true
 	}
 
-	var lastPo int = 255
-OUTER:
-	for lastPo != 0 {
-		var peers []*network.Peer
+	var lastPo int = 256
+	for lastPo >= 0 {
+		var peers []*network.APIPeer
 		err = p.kadRpc.Call(&peers, "hive_getConnsBin", to, 0, lastPo)
 		if err != nil {
+			log.Error("getconns failed", "err", err)
+			lastPo = -1
+			break
+		} else if len(peers) == 0 {
+			lastPo = -1
 			break
 		}
-		log.Warn("peers", "len", len(peers), "p", peers)
+		log.Info("sending gegconne", "po", lastPo, "to", to)
 		for _, sp := range peers {
 			lastPo, _ = pof(msg.To, sp.Address(), 0)
 			if lastPo < broadcastThreshold && sent > 0 {
-				break OUTER
+				lastPo = -1
+				break
 			}
-			if sendFunc(p, sp, msg) {
+			if sendFunc(p, sp.ID, msg) {
 				sent++
 				if onlySendOnce {
-					break OUTER
+					lastPo = -1
+					break
 				}
 
 				// stop iterating if successfully sent to the exact recipient (perfect match of full address)
 				if lastPo == network.AddressLengthBits {
-					break OUTER
+					lastPo = -1
+					break
 				}
 			}
+			lastPo -= 1
 		}
 	}
 
