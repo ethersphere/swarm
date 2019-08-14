@@ -10,6 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
+var (
+	AddressLength     = 32
+	AddressLengthBits = AddressLength * 8
+)
+
 // BzzAddr implements the PeerAddr interface
 type BzzAddr struct {
 	OAddr []byte
