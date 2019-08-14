@@ -46,6 +46,7 @@ var timeout = 90 * time.Second
 func TestTwoNodesSyncWithGaps(t *testing.T) {
 	// construct a pauser before simulation is started and reset it to nil after all streams are closed
 	// to avoid the need for protecting handleMsgPauser with a lock in production code.
+	t.Logf("TestTwoNodesSyncWithGaps")
 	handleMsgPauser = new(syncPauser)
 	defer func() { handleMsgPauser = nil }()
 
@@ -150,6 +151,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Logf(tc.name)
 			sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 				"bzz-sync": newSyncSimServiceFunc(nil),
 			})
@@ -228,6 +230,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 // TestTheeNodesUnionHistoricalSync brings up three nodes, uploads content too all of them and then
 // asserts that all of them have the union of all 3 local stores (depth is assumed to be 0)
 func TestThreeNodesUnionHistoricalSync(t *testing.T) {
+	t.Logf("TestThreeNodesUnionHistoricalSync")
 	nodes := 3
 	chunkCount := 1000
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -272,6 +275,8 @@ func TestThreeNodesUnionHistoricalSync(t *testing.T) {
 // TestFullSync performs a series of subtests where a number of nodes are
 // connected to the single (chunk uploading) node.
 func TestFullSync(t *testing.T) {
+
+	t.Logf("TestFullSync")
 	for _, tc := range []struct {
 		name          string
 		chunkCount    uint64
@@ -319,6 +324,8 @@ func TestFullSync(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
+			t.Logf(tc.name)
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 				"bzz-sync": newSyncSimServiceFunc(nil),
 			})
@@ -639,6 +646,7 @@ func catchDuplicateChunkSync(t *testing.T) (validate func()) {
 // The test checks that EVERY chunk that exists a node which is not the pivot, according to
 // its PO, and kademlia table of the pivot - exists on the pivot node and does not exist on other nodes
 func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
+	t.Logf("TestStarNetworkSyncWithBogusNodes")
 	var (
 		chunkCount    = 500
 		nodeCount     = 12
