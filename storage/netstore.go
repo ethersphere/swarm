@@ -147,19 +147,20 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 
 // Close chunk store
 func (n *NetStore) Close() error {
-	n.logger.Error("FETCHERS", "len", n.fetchers.Len(), "localID", n.LocalID)
+	n.putMu.Lock()
+	defer n.putMu.Unlock()
+	if n.fetchers.Len() > 0 {
+		n.logger.Warn("netstore shutting down, fetchers not empty", "len", n.fetchers.Len(), "localID", n.LocalID)
+	}
+
 	for _, fname := range n.fetchers.Keys() {
 		v, loaded := n.fetchers.Get(fname.(string))
 		if !loaded {
 			panic("not loaded")
 		}
 		f := v.(*Fetcher)
-		n.logger.Error("fetcher", "key", fname, "isSyncer", f.RequestedBySyncer)
+		n.logger.Warn("fetcher", "key", fname, "isSyncer", f.RequestedBySyncer)
 	}
-	if n.fetchers.Len() > 0 {
-		panic(0)
-	}
-
 	return n.Store.Close()
 }
 
