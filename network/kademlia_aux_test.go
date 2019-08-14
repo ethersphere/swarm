@@ -23,6 +23,7 @@ func testKadBzzAddrFromAddress(addr pot.Address) *BzzAddr {
 	}
 }
 
+// TODO: return po from rpc
 func TestKademliaGet(t *testing.T) {
 	addr := pot.RandomAddress()
 	addrBytes := addr.Bytes()
@@ -48,7 +49,7 @@ func TestKademliaGet(t *testing.T) {
 	rpcClient := rpc.DialInProc(rpcSrv)
 	rpcSrv.RegisterName("bzz", NewBzz(bzzConfig, k, nil, nil, nil))
 	peersRpc := []*Peer{}
-	err := rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 8)
+	err := rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 0, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestKademliaGet(t *testing.T) {
 	}
 
 	peersRpc = []*Peer{}
-	err = rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 7)
+	err = rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 0, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ func TestKademliaGet(t *testing.T) {
 	}
 
 	peersRpc = []*Peer{}
-	err = rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 6)
+	err = rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 0, 6)
 	if err != nil {
 		t.Fatal(err)
 	}

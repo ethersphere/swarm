@@ -1850,8 +1850,12 @@ func newServices(allowRaw bool) adapters.Services {
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			pskad := kademlia(ctx.Config.ID)
-			ps, err := New(pskad, pssp)
+			pssp.RPCDialer = func() (*rpc.Client, error) {
+				return ctx.DialRPC(ctx.Config.ID)
+			}
+			//pskad := kademlia(ctx.Config.ID)
+			//ps, err := New(pskad, pssp)
+			ps, err := New(nil, pssp)
 			if err != nil {
 				return nil, err
 			}
