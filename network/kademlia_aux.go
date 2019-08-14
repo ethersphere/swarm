@@ -20,6 +20,10 @@ type KademliaNotification struct {
 	Serial uint16
 }
 
+func (kn KademliaNotification) String() string {
+	return fmt.Sprintf("%d:%d", kn.Serial, kn.Depth)
+}
+
 func (k *Kademlia) notify(depth uint8, serial uint16, peers ...*NotificationPeer) {
 	k.notifyLock.RLock()
 	defer k.notifyLock.RUnlock()
@@ -61,9 +65,12 @@ func (k *Kademlia) GetConnsBin(addr []byte, closestPo int) ([]*Peer, error) {
 	pof := pot.DefaultPof(neighbourhoodDepth)
 
 	// soft threshold for msg broadcast
-	broadcastThreshold, _ := pof(padAddr, k.BaseAddr(), 0)
-	if broadcastThreshold > luminosityRadius {
-		broadcastThreshold = luminosityRadius
+	var broadcastThreshold int
+	if luminosityRadius < AddressLengthBits {
+		broadcastThreshold, _ = pof(padAddr, k.BaseAddr(), 0)
+		if broadcastThreshold > luminosityRadius {
+			broadcastThreshold = luminosityRadius
+		}
 	}
 
 	// if measured from the recipient address as opposed to the base address (see Kademlia.EachConn

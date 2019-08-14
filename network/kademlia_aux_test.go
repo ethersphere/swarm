@@ -1,6 +1,8 @@
 package network
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rpc"
@@ -27,29 +29,14 @@ func TestKademliaGet(t *testing.T) {
 	kp := NewKadParams()
 	k := NewKademlia(addrBytes, kp)
 
-	bzzAddrOne := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 8))
-	bzzAddrTwoFirst := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 16))
-	bzzAddrTwoSecond := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 16))
-	bzzAddrFourFirst := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 64))
-	bzzAddrFourSecond := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 64))
-
-	peerOne := testKadPeerFromAddress(bzzAddrOne, k)
-	peerFourFirst := testKadPeerFromAddress(bzzAddrTwoFirst, k)
-	peerFourSecond := testKadPeerFromAddress(bzzAddrTwoSecond, k)
-	peerTwoFirst := testKadPeerFromAddress(bzzAddrFourFirst, k)
-	peerTwoSecond := testKadPeerFromAddress(bzzAddrFourSecond, k)
-
-	k.Register(bzzAddrOne)
-	k.Register(bzzAddrFourFirst)
-	k.Register(bzzAddrFourSecond)
-	k.Register(bzzAddrTwoFirst)
-	k.Register(bzzAddrTwoSecond)
-
-	k.On(peerOne)
-	k.On(peerTwoFirst)
-	k.On(peerTwoSecond)
-	k.On(peerFourFirst)
-	k.On(peerFourSecond)
+	var bzzAddrFill []*BzzAddr
+	var peerFill []*Peer
+	for i := 0; i < 8; i++ {
+		bzzAddrFill = append(bzzAddrFill, testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, i)))
+		peerFill = append(peerFill, testKadPeerFromAddress(bzzAddrFill[i], k))
+		k.Register(bzzAddrFill[i])
+		k.On(peerFill[i])
+	}
 
 	bzzConfig := &BzzConfig{
 		OverlayAddr:  addrBytes,
@@ -60,13 +47,64 @@ func TestKademliaGet(t *testing.T) {
 	rpcSrv := rpc.NewServer()
 	rpcClient := rpc.DialInProc(rpcSrv)
 	rpcSrv.RegisterName("bzz", NewBzz(bzzConfig, k, nil, nil, nil))
-	var peersRpc []*Peer
-	err := rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 63)
+	peersRpc := []*Peer{}
+	err := rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	for _, p := range peersRpc {
 		t.Logf("peer %x", p.Address())
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	msgC := make(chan KademliaNotification)
+	sub, err := rpcClient.Subscribe(ctx, "bzz", msgC, "receive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Unsubscribe()
+
+	bzzAddrExtra := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 7))
+	peerExtra := testKadPeerFromAddress(bzzAddrExtra, k)
+	k.Register(bzzAddrExtra)
+	notification := <-msgC
+	if notification.Depth != 6 || notification.Serial != 6 {
+		t.Fatalf("Expected depth/serial 6/6, got %d/%d", notification.Depth, notification.Serial)
+	}
+
+	k.On(peerExtra)
+	notification = <-msgC
+	if notification.Depth != 7 || notification.Serial != 7 {
+		t.Fatalf("Expected depth/serial 7/7, got %d/%d", notification.Depth, notification.Serial)
+	}
+
+	peersRpc = []*Peer{}
+	err = rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range peersRpc {
+		if !bytes.Equal(p.BzzAddr.OAddr, bzzAddrExtra.OAddr) && !bytes.Equal(p.BzzAddr.OAddr, bzzAddrFill[7].OAddr) {
+			t.Fatalf("Unexpected peer %s", p.BzzAddr.OAddr)
+		}
+	}
+
+	peersRpc = []*Peer{}
+	err = rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range peersRpc {
+		if !bytes.Equal(p.BzzAddr.OAddr, bzzAddrFill[6].OAddr) {
+			t.Fatalf("Unexpected peer %s", p.BzzAddr.OAddr)
+		}
+	}
+	t.Log(k)
+
+	k.Off(peerFill[2])
+	notification = <-msgC
+	if notification.Depth != 2 || notification.Serial != 8 {
+		t.Fatalf("Expected depth/serial 7/7, got %d/%d", notification.Depth, notification.Serial)
 	}
 }
