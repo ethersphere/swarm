@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/log"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )
 
@@ -282,7 +281,6 @@ func TestProtocolHook(t *testing.T) {
 	}
 
 	testHook.mu.Lock()
-	log.Warn("SENT msg:", "msg", testHook.msg)
 	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "handshake" {
 		t.Fatal("Expected msg to be set, but it is not")
 	}

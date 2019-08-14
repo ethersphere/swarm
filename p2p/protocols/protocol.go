@@ -212,7 +212,7 @@ type Peer struct {
 func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	encode := encodeWithContext
 	decode := decodeWithContext
-	if spec.DisableContext || !tracing.Enabled {
+	if spec == nil || spec.DisableContext || !tracing.Enabled {
 		encode = encodeWithoutContext
 		decode = decodeWithoutContext
 	}
