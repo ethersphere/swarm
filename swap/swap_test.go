@@ -218,7 +218,6 @@ func TestStoreBalances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(peer2Balance)
 	// store balance for each peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
 	comparePeerBalance(t, s, testPeer2ID, peer2Balance)
