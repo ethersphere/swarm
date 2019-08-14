@@ -540,6 +540,7 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
 				case <-quitC:
 				}
+				wg.Done()
 				return
 			}
 			metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
@@ -548,6 +549,7 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 				case errC <- fmt.Errorf("chunk %v-%v incomplete; key: %s, data length %v", off, off+treeSize, fmt.Sprintf("%x", childAddress), l):
 				case <-quitC:
 				}
+				wg.Done()
 				return
 			}
 			if soff < off {
