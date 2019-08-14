@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 	sv "github.com/ethersphere/swarm/version"
@@ -92,6 +93,10 @@ type Kademlia struct {
 	nDepth     int             // stores the last neighbourhood depth
 	nDepthMu   sync.RWMutex    // protects neighbourhood depth nDepth
 	nDepthSig  []chan struct{} // signals when neighbourhood depth nDepth is changed
+
+	notifyLock   sync.RWMutex
+	subs         map[rpc.ID]*rpc.Notifier
+	changeSerial uint16
 }
 
 type KademliaInfo struct {
@@ -114,6 +119,7 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
+		subs:      make(map[rpc.ID]*rpc.Notifier),
 	}
 }
 
@@ -151,7 +157,9 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 
 	metrics.GetOrRegisterCounter("kad.register", nil).Inc(1)
 
-	var known, size int
+	var known int
+	//pos := make([]int, len(peers))
+	var notificationPeers []*NotificationPeer
 	for _, p := range peers {
 		log.Trace("kademlia trying to register", "addr", p)
 		// error if self received, peer should know better
@@ -160,7 +168,8 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 			return fmt.Errorf("add peers: %x is self", k.base)
 		}
 		var found bool
-		k.addrs, _, found, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
+		var po int
+		k.addrs, po, found, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
 			// if not found
 			if v == nil {
 				log.Trace("registering new peer", "addr", p)
@@ -182,10 +191,14 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 		if found {
 			known++
 		}
-		size++
+		notificationPeers = append(notificationPeers, &NotificationPeer{
+			Peer: p,
+			Po:   po,
+		})
 	}
 
-	k.setNeighbourhoodDepth()
+	depth, _ := k.updateNeighbourhoodDepth()
+	go k.notify(depth, k.changeSerial, notificationPeers...)
 	return nil
 }
 
@@ -311,7 +324,8 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	metrics.GetOrRegisterCounter("kad.on", nil).Inc(1)
 
 	var ins bool
-	k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
+	var po int
+	k.conns, po, _, _ = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
 		// if not found live
 		if v == nil {
 			ins = true
@@ -329,26 +343,25 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 			return a
 		})
 	}
-	// calculate if depth of saturation changed
-	depth := uint8(k.saturation())
-	var changed bool
-	if depth != k.depth {
-		changed = true
-		k.depth = depth
+	depth, change := k.updateNeighbourhoodDepth()
+	notificationPeer := &NotificationPeer{
+		Peer: p.BzzAddr,
+		Po:   po,
 	}
-	k.setNeighbourhoodDepth()
-	return k.depth, changed
+	go k.notify(depth, k.changeSerial, notificationPeer)
+	return uint8(depth), change
 }
 
 // setNeighbourhoodDepth calculates neighbourhood depth with depthForPot,
 // sets it to the nDepth and sends a signal to every nDepthSig channel.
-func (k *Kademlia) setNeighbourhoodDepth() {
+func (k *Kademlia) updateNeighbourhoodDepth() (uint8, bool) {
 	nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	var changed bool
 	k.nDepthMu.Lock()
 	if nDepth != k.nDepth {
 		k.nDepth = nDepth
 		changed = true
+		k.changeSerial += 1
 	}
 	k.nDepthMu.Unlock()
 
@@ -363,6 +376,7 @@ func (k *Kademlia) setNeighbourhoodDepth() {
 			}
 		}
 	}
+	return uint8(nDepth), changed
 }
 
 // NeighbourhoodDepth returns the value calculated by depthForPot function
@@ -423,11 +437,18 @@ func (k *Kademlia) Off(p *Peer) {
 	}
 
 	if del {
-		k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(_ pot.Val) pot.Val {
+		var po int
+		k.conns, po, _, _ = pot.Swap(k.conns, p, Pof, func(_ pot.Val) pot.Val {
 			// v cannot be nil, but no need to check
 			return nil
 		})
-		k.setNeighbourhoodDepth()
+		depth, _ := k.updateNeighbourhoodDepth()
+		notificationPeer := &NotificationPeer{
+			Peer: p.BzzAddr,
+			Po:   po,
+		}
+		// TODO why doesn't Off() return a change like On() does?!
+		go k.notify(depth, k.changeSerial, notificationPeer)
 	}
 }
 
