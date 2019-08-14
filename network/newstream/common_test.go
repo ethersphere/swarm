@@ -45,7 +45,7 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 5, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
 	update   = flag.Bool("update", false, "Update golden files in testdata directory")
 )
 
