@@ -152,7 +152,6 @@ github.com/ethereum/go-ethereum/eth/filters
 github.com/ethereum/go-ethereum/common/prque
 github.com/ethereum/go-ethereum/consensus/misc
 github.com/ethereum/go-ethereum/metrics/prometheus
-github.com/ethereum/go-ethereum/p2p/testing
 github.com/ethereum/go-ethereum/internal/ethapi
 github.com/ethereum/go-ethereum/signer/core
 github.com/ethereum/go-ethereum/accounts/usbwallet/trezor
