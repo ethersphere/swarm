@@ -3,6 +3,7 @@ package network
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -50,23 +51,42 @@ func TestKademliaGet(t *testing.T) {
 	k.On(peerFourFirst)
 	k.On(peerFourSecond)
 
-	peers, po, _ := k.GetConnsBin(addrBytes, 255)
-	for _, p := range peers {
-		t.Logf("po: %v peer %x", po, p.Address())
+	//	peers, _ := k.GetConnsBin(addrBytes, 255)
+	//	for _, p := range peers {
+	//		t.Logf("peer %x", p.Address())
+	//	}
+	//
+	//	peers, _ = k.GetConnsBin(addrBytes, 64)
+	//	for _, p := range peers {
+	//		t.Logf("peer %x", p.Address())
+	//	}
+	//
+	//	peers, _ = k.GetConnsBin(addrBytes, 63)
+	//	for _, p := range peers {
+	//		t.Logf("peer %x", p.Address())
+	//	}
+	//
+	//	peers, _ = k.GetConnsBin(addrBytes[:1], 64)
+	//	for _, p := range peers {
+	//		t.Logf("peer %x", p.Address())
+	//	}
+
+	bzzConfig := &BzzConfig{
+		OverlayAddr:  addrBytes,
+		UnderlayAddr: addrBytes,
+		HiveParams:   NewHiveParams(),
+		NetworkID:    42,
+	}
+	rpcSrv := rpc.NewServer()
+	rpcClient := rpc.DialInProc(rpcSrv)
+	rpcSrv.RegisterName("bzz", NewBzz(bzzConfig, k, nil, nil, nil))
+	var peersRpc []*Peer
+	err := rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 63)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	peers, po, _ = k.GetConnsBin(addrBytes, 64)
-	for _, p := range peers {
-		t.Logf("po: %v peer %x", po, p.Address())
-	}
-
-	peers, po, _ = k.GetConnsBin(addrBytes, 63)
-	for _, p := range peers {
-		t.Logf("po: %v peer %x", po, p.Address())
-	}
-
-	peers, po, _ = k.GetConnsBin(addrBytes[:1], 64)
-	for _, p := range peers {
-		t.Logf("po: %v peer %x", po, p.Address())
+	for _, p := range peersRpc {
+		t.Logf("peer %x", p.Address())
 	}
 }

@@ -1,10 +1,11 @@
 package network
 
 import (
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 )
 
-func (k *Kademlia) GetConnsBin(addr []byte, closestPo int) ([]*Peer, int, error) {
+func (k *Kademlia) GetConnsBin(addr []byte, closestPo int) ([]*Peer, error) {
 	neighbourhoodDepth := k.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
@@ -31,7 +32,7 @@ func (k *Kademlia) GetConnsBin(addr []byte, closestPo int) ([]*Peer, int, error)
 
 	var peers []*Peer
 	if closestPo < broadcastThreshold {
-		return peers, 0, nil
+		return peers, nil
 	}
 
 	matchPo := -1
@@ -49,6 +50,7 @@ func (k *Kademlia) GetConnsBin(addr []byte, closestPo int) ([]*Peer, int, error)
 	if matchPo == -1 {
 		matchPo = 0
 	}
+	log.Debug("matchpo", "po", matchPo)
 
-	return peers, matchPo, nil
+	return peers, nil
 }
