@@ -245,7 +245,7 @@ func TestRequestFromPeers(t *testing.T) {
 
 	to.On(peer)
 
-	s := New(to, nil)
+	s := New(to, nil, to.BaseAddr())
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.Background(), req)
@@ -276,7 +276,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 	to.On(peer)
 
-	r := New(to, nil)
+	r := New(to, nil, to.BaseAddr())
 	req := storage.NewRequest(storage.Address(hash0[:]))
 
 	// making a request which should return with "no peer found"
@@ -291,7 +291,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 func TestHasPriceImplementation(t *testing.T) {
 	addr := network.RandomAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
-	r := New(to, nil)
+	r := New(to, nil, to.BaseAddr())
 
 	if r.prices == nil {
 		t.Fatal("No prices implementation available for retrieve protocol")
@@ -329,7 +329,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		bucket.Store(simulation.BucketKeyKademlia, kad)
 	}
 
-	netStore := storage.NewNetStore(localStore, n.ID())
+	netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
@@ -344,7 +344,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := New(kad, netStore)
+	r := New(kad, netStore, kad.BaseAddr())
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)
