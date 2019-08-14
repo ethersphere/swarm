@@ -454,7 +454,7 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 // trigger different cursor requests from the pivot to the other node, these requests are being intercepted
 // by a mock Stream handler which later on sends the replies to those requests in different order.
 // the test finishes after the random replies are processed and the correct cursors are asserted according to the
-// real kademlia depth. This test is to accomodate for possible race conditions where multiple cursors requests are
+// real kademlia depth. This test is to accommodate for possible race conditions where multiple cursors requests are
 // sent but the kademlia depth keeps changing. This in turn causes to possibly discard some contents of those requests which
 // are still in flight and which responses' are not yet processed
 func TestCorrectCursorsExchangeRace(t *testing.T) {

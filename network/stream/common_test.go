@@ -119,11 +119,11 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 		return nil, nil, nil, err
 	}
 
-	netStore := storage.NewNetStore(localStore, n.ID())
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	delivery := NewDelivery(kad, netStore)
 
 	bucket.Store(bucketKeyStore, localStore)
@@ -161,7 +161,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 		return nil, nil, nil, nil, err
 	}
 
-	netStore := storage.NewNetStore(localStore, enode.ID(addr.Under()))
+	netStore := storage.NewNetStore(localStore, to.BaseAddr(), addr.ID())
 
 	delivery := NewDelivery(to, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers
