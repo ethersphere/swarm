@@ -49,7 +49,8 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 PublicAPI
 	store               state.Store          // store is needed in order to keep balances and cheques across sessions
-	lock                sync.RWMutex         // lock the store
+	lock                sync.RWMutex         // lock accounting
+	mapLock             sync.RWMutex         // lock for maps
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of cheques for each peer
 	peers               map[enode.ID]*Peer   // map of all swap Peers
@@ -87,10 +88,10 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),
-		backend:             backend,
-		owner:               createOwner(prvkey, contract),
 		cheques:             make(map[enode.ID]*Cheque),
 		peers:               make(map[enode.ID]*Peer),
+		backend:             backend,
+		owner:               createOwner(prvkey, contract),
 		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
@@ -151,7 +152,11 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	}
 
 	// Check if balance with peer is over the disconnect threshold
-	if s.balances[peer.ID()] >= s.disconnectThreshold {
+	balance, exists := s.getBalance(peer.ID())
+	if !exists {
+		return fmt.Errorf("peer %v does not exist", peer.ID())
+	}
+	if balance >= s.disconnectThreshold {
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
 	}
 
@@ -170,6 +175,32 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	}
 
 	return nil
+}
+
+func (s *Swap) getBalance(id enode.ID) (int64, bool) {
+	s.mapLock.RLock()
+	defer s.mapLock.RUnlock()
+	peerBalance, exists := s.balances[id]
+	return peerBalance, exists
+}
+
+func (s *Swap) setBalance(id enode.ID, balance int64) {
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+	s.balances[id] = balance
+}
+
+func (s *Swap) getCheque(id enode.ID) (*Cheque, bool) {
+	s.mapLock.RLock()
+	defer s.mapLock.RUnlock()
+	peerCheque, exists := s.cheques[id]
+	return peerCheque, exists
+}
+
+func (s *Swap) setCheque(id enode.ID, cheque *Cheque) {
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+	s.cheques[id] = cheque
 }
 
 // handleMsg is for handling messages when receiving messages
@@ -317,23 +348,27 @@ func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount 
 func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
-	s.balances[peer] += amount
+	balance, exists := s.getBalance(peer)
+	if !exists {
+		return 0, fmt.Errorf("peer %v does not exist", peer)
+	}
+	newBalance := balance + amount
+	s.setBalance(peer, newBalance)
 	//save the new balance to the state store
-	peerBalance := s.balances[peer]
-	err := s.store.Put(balanceKey(peer), &peerBalance)
+	err := s.store.Put(balanceKey(peer), &newBalance)
 	if err != nil {
 		return 0, err
 	}
-	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(peerBalance, 10))
-	return peerBalance, err
+	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(newBalance, 10))
+	return newBalance, err
 }
 
 // loadBalance loads balances from the state store (persisted)
 func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	var peerBalance int64
-	if _, ok := s.balances[peer]; !ok {
+	if _, ok := s.getBalance(peer); !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
-		s.balances[peer] = peerBalance
+		s.setBalance(peer, peerBalance)
 	}
 	return
 }
@@ -383,7 +418,10 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	}
 	beneficiary := swapPeer.beneficiary
 
-	peerBalance := s.balances[peer]
+	peerBalance, exists := s.getBalance(peer)
+	if !exists {
+		return nil, fmt.Errorf("peer not found %v: ", peer)
+	}
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-peerBalance)
 
@@ -430,7 +468,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 // Balance returns the balance for a given peer
 func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	var err error
-	peerBalance, ok := s.balances[peer]
+	peerBalance, ok := s.getBalance(peer)
 	if !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
 	}
@@ -441,9 +479,11 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
+	s.mapLock.RLock()
 	for peerID, peerBalance := range s.balances {
 		balances[peerID] = peerBalance
 	}
+	s.mapLock.RUnlock()
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
