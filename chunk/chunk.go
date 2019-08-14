@@ -38,11 +38,14 @@ var (
 type Chunk interface {
 	Address() Address
 	Data() []byte
+	PinCounter() uint64
+	WithPinCounter(p uint64) Chunk
 }
 
 type chunk struct {
-	addr  Address
-	sdata []byte
+	addr       Address
+	sdata      []byte
+	pinCounter uint64
 }
 
 func NewChunk(addr Address, data []byte) Chunk {
@@ -52,12 +55,21 @@ func NewChunk(addr Address, data []byte) Chunk {
 	}
 }
 
+func (c *chunk) WithPinCounter(p uint64) Chunk {
+	c.pinCounter = p
+	return c
+}
+
 func (c *chunk) Address() Address {
 	return c.addr
 }
 
 func (c *chunk) Data() []byte {
 	return c.sdata
+}
+
+func (c *chunk) PinCounter() uint64 {
+	return c.pinCounter
 }
 
 func (self *chunk) String() string {
@@ -136,6 +148,8 @@ func (m ModeGet) String() string {
 		return "Sync"
 	case ModeGetLookup:
 		return "Lookup"
+	case ModeGetPin:
+		return "PinLookup"
 	default:
 		return "Unknown"
 	}
@@ -149,6 +163,8 @@ const (
 	ModeGetSync
 	// ModeGetLookup: when accessed to lookup a a chunk in feeds or other places
 	ModeGetLookup
+	// ModeGetPin: used when a pinned chunk is accessed
+	ModeGetPin
 )
 
 // ModePut enumerates different Putter modes.
@@ -188,6 +204,10 @@ func (m ModeSet) String() string {
 		return "Sync"
 	case ModeSetRemove:
 		return "Remove"
+	case ModeSetPin:
+		return "ModeSetPin"
+	case ModeSetUnpin:
+		return "ModeSetUnpin"
 	default:
 		return "Unknown"
 	}
@@ -201,6 +221,10 @@ const (
 	ModeSetSync
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove
+	// ModeSetPin: when a chunk is pinned during upload or separately
+	ModeSetPin
+	// ModeSetUnpin: when a chunk is unpinned using a command locally
+	ModeSetUnpin
 )
 
 // Descriptor holds information required for Pull syncing. This struct

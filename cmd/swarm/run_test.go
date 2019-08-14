@@ -60,7 +60,7 @@ func init() {
 const clusterSize = 3
 
 func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, "")
+	return swarmhttp.NewServer(api, nil, "")
 }
 func TestMain(m *testing.M) {
 	// check if we have been reexec'd
@@ -246,7 +246,7 @@ func getTestAccount(t *testing.T, dir string) (conf *node.Config, account accoun
 	}
 
 	// use a unique IPCPath when running tests on Windows
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		conf.IPCPath = fmt.Sprintf("bzzd-%s.ipc", account.Address.String())
 	}
 
@@ -258,7 +258,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 	node := &testNode{Dir: dir}
 
 	// use a unique IPCPath when running tests on Windows
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		conf.IPCPath = fmt.Sprintf("bzzd-%s.ipc", bzzaccount)
 	}
 

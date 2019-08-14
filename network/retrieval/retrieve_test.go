@@ -397,13 +397,13 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	defer cleanup()
 
 	reader := bytes.NewReader(testData)
-	return fileStore.GetAllReferences(context.Background(), reader, false)
+	return fileStore.GetAllReferences(context.Background(), reader)
 }
 
 func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
 	chunks = make(map[string]struct{})
 	for po := uint8(0); po <= chunk.MaxPO; po++ {
-		last, err := store.LastPullSubscriptionBinID(uint8(po))
+		last, err := store.LastPullSubscriptionBinID(po)
 		if err != nil {
 			return nil, err
 		}

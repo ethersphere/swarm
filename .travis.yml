@@ -1,13 +1,29 @@
 language: go
 go_import_path: github.com/ethersphere/swarm
 sudo: false
+env:
+  global:
+    - GO111MODULE=on
+    - GOFLAGS=-mod=vendor
 branches:
   only:
     - master
     - /v(\d+\.)(\d+\.)(\d)/
-matrix:
+jobs:
   include:
-    - os: linux
+    # This builder only tests code linters on latest version of Go
+    - stage: lint
+      os: linux
+      dist: trusty
+      go: 1.12.x
+      env:
+        - lint
+      script:
+        - go run build/ci.go lint
+
+    # Go 1.11.x is needed because of the Ubuntu PPA builds
+    - stage: build
+      os: linux
       dist: trusty
       sudo: required
       go: 1.11.x
@@ -19,7 +35,8 @@ matrix:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
-    - os: linux
+    - stage: build
+      os: linux
       dist: trusty
       sudo: required
       go: 1.12.x
@@ -30,7 +47,8 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    - os: osx
+    - stage: build
+      os: osx
       go: 1.12.x
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
@@ -45,17 +63,9 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    # This builder only tests code linters on latest version of Go
-    - os: linux
-      dist: trusty
-      go: 1.12.x
-      env:
-        - lint
-      script:
-        - go run build/ci.go lint
-
     # This builder does the Ubuntu PPA upload
-    - if: type = push
+    - stage: deploy
+      if: type = push
       os: linux
       dist: trusty
       go: 1.12.x
@@ -75,7 +85,8 @@ matrix:
         - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user ethswarm -signer "Ethereum Swarm Linux Builder <swarm@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: type = push
+    - stage: deploy
+      if: type = push
       os: linux
       dist: trusty
       sudo: required
@@ -107,7 +118,8 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: type = push
+    - stage: deploy
+      if: type = push
       os: linux
       dist: trusty
       services:
@@ -133,7 +145,8 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload ethswarm/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: type = push
+    - stage: deploy
+      if: type = push
       os: osx
       go: 1.12.x
       env:
@@ -144,7 +157,8 @@ matrix:
 
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: type = cron
+    - stage: cleanup
+      if: type = cron
       os: linux
       dist: trusty
       go: 1.12.x

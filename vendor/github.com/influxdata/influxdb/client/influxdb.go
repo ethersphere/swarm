@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,15 @@ type Query struct {
 	//
 	// Chunked must be set to true for this option to be used.
 	ChunkSize int
+
+	// NodeID sets the data node to use for the query results. This option only
+	// has any effect in the enterprise version of the software where there can be
+	// more than one data node and is primarily useful for analyzing differences in
+	// data. The default behavior is to automatically select the appropriate data
+	// nodes to retrieve all of the data. On a database where the number of data nodes
+	// is greater than the replication factor, it is expected that setting this option
+	// will only retrieve partial data.
+	NodeID int
 }
 
 // ParseConnectionString will parse a string to create a valid connection URL
@@ -74,12 +84,16 @@ func ParseConnectionString(path string, ssl bool) (url.URL, error) {
 
 	u := url.URL{
 		Scheme: "http",
+		Host:   host,
 	}
 	if ssl {
 		u.Scheme = "https"
+		if port != 443 {
+			u.Host = net.JoinHostPort(host, strconv.Itoa(port))
+		}
+	} else if port != 80 {
+		u.Host = net.JoinHostPort(host, strconv.Itoa(port))
 	}
-
-	u.Host = net.JoinHostPort(host, strconv.Itoa(port))
 
 	return u, nil
 }
@@ -187,8 +201,8 @@ func (c *Client) Query(q Query) (*Response, error) {
 // It uses a context that can be cancelled by the command line client
 func (c *Client) QueryContext(ctx context.Context, q Query) (*Response, error) {
 	u := c.url
+	u.Path = path.Join(u.Path, "query")
 
-	u.Path = "query"
 	values := u.Query()
 	values.Set("q", q.Command)
 	values.Set("db", q.Database)
@@ -197,6 +211,9 @@ func (c *Client) QueryContext(ctx context.Context, q Query) (*Response, error) {
 		if q.ChunkSize > 0 {
 			values.Set("chunk_size", strconv.Itoa(q.ChunkSize))
 		}
+	}
+	if q.NodeID > 0 {
+		values.Set("node_id", strconv.Itoa(q.NodeID))
 	}
 	if c.precision != "" {
 		values.Set("epoch", c.precision)
@@ -264,7 +281,7 @@ func (c *Client) QueryContext(ctx context.Context, q Query) (*Response, error) {
 // If an error occurs, Response may contain additional information if populated.
 func (c *Client) Write(bp BatchPoints) (*Response, error) {
 	u := c.url
-	u.Path = "write"
+	u.Path = path.Join(u.Path, "write")
 
 	var b bytes.Buffer
 	for _, p := range bp.Points {
@@ -306,7 +323,7 @@ func (c *Client) Write(bp BatchPoints) (*Response, error) {
 
 	precision := bp.Precision
 	if precision == "" {
-		precision = "ns"
+		precision = c.precision
 	}
 
 	params := req.URL.Query()
@@ -342,7 +359,7 @@ func (c *Client) Write(bp BatchPoints) (*Response, error) {
 // If an error occurs, Response may contain additional information if populated.
 func (c *Client) WriteLineProtocol(data, database, retentionPolicy, precision, writeConsistency string) (*Response, error) {
 	u := c.url
-	u.Path = "write"
+	u.Path = path.Join(u.Path, "write")
 
 	r := strings.NewReader(data)
 
@@ -387,8 +404,9 @@ func (c *Client) WriteLineProtocol(data, database, retentionPolicy, precision, w
 // Ping returns how long the request took, the version of the server it connected to, and an error if one occurred.
 func (c *Client) Ping() (time.Duration, string, error) {
 	now := time.Now()
+
 	u := c.url
-	u.Path = "ping"
+	u.Path = path.Join(u.Path, "ping")
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {

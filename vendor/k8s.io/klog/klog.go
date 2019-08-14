@@ -20,26 +20,26 @@
 //
 // Basic examples:
 //
-//	klog.Info("Prepare to repel boarders")
+//	glog.Info("Prepare to repel boarders")
 //
-//	klog.Fatalf("Initialization failed: %s", err)
+//	glog.Fatalf("Initialization failed: %s", err)
 //
 // See the documentation for the V function for an explanation of these examples:
 //
-//	if klog.V(2) {
-//		klog.Info("Starting transaction...")
+//	if glog.V(2) {
+//		glog.Info("Starting transaction...")
 //	}
 //
-//	klog.V(2).Infoln("Processed", nItems, "elements")
+//	glog.V(2).Infoln("Processed", nItems, "elements")
 //
 // Log output is buffered and written periodically using Flush. Programs
 // should call Flush before exiting to guarantee all log output is written.
 //
-// By default, all log statements write to standard error.
+// By default, all log statements write to files in a temporary directory.
 // This package provides several flags that modify this behavior.
 // As a result, flag.Parse must be called before any logging is done.
 //
-//	-logtostderr=true
+//	-logtostderr=false
 //		Logs are written to standard error instead of to files.
 //	-alsologtostderr=false
 //		Logs are written to standard error as well as to files.
@@ -827,7 +827,7 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 
 // timeoutFlush calls Flush and returns when it completes or after timeout
 // elapses, whichever happens first.  This is needed because the hooks invoked
-// by Flush may deadlock when klog.Fatal is called from a hook that holds
+// by Flush may deadlock when glog.Fatal is called from a hook that holds
 // a lock.
 func timeoutFlush(timeout time.Duration) {
 	done := make(chan bool, 1)
@@ -838,7 +838,7 @@ func timeoutFlush(timeout time.Duration) {
 	select {
 	case <-done:
 	case <-time.After(timeout):
-		fmt.Fprintln(os.Stderr, "klog: Flush took longer than", timeout)
+		fmt.Fprintln(os.Stderr, "glog: Flush took longer than", timeout)
 	}
 }
 
@@ -1094,9 +1094,9 @@ type Verbose bool
 // The returned value is a boolean of type Verbose, which implements Info, Infoln
 // and Infof. These methods will write to the Info log if called.
 // Thus, one may write either
-//	if klog.V(2) { klog.Info("log this") }
+//	if glog.V(2) { glog.Info("log this") }
 // or
-//	klog.V(2).Info("log this")
+//	glog.V(2).Info("log this")
 // The second form is shorter but the first is cheaper if logging is off because it does
 // not evaluate its arguments.
 //
@@ -1170,7 +1170,7 @@ func InfoDepth(depth int, args ...interface{}) {
 }
 
 // Infoln logs to the INFO log.
-// Arguments are handled in the manner of fmt.Println; a newline is always appended.
+// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
 func Infoln(args ...interface{}) {
 	logging.println(infoLog, args...)
 }
@@ -1194,7 +1194,7 @@ func WarningDepth(depth int, args ...interface{}) {
 }
 
 // Warningln logs to the WARNING and INFO logs.
-// Arguments are handled in the manner of fmt.Println; a newline is always appended.
+// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
 func Warningln(args ...interface{}) {
 	logging.println(warningLog, args...)
 }
@@ -1218,7 +1218,7 @@ func ErrorDepth(depth int, args ...interface{}) {
 }
 
 // Errorln logs to the ERROR, WARNING, and INFO logs.
-// Arguments are handled in the manner of fmt.Println; a newline is always appended.
+// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
 func Errorln(args ...interface{}) {
 	logging.println(errorLog, args...)
 }
@@ -1244,7 +1244,7 @@ func FatalDepth(depth int, args ...interface{}) {
 
 // Fatalln logs to the FATAL, ERROR, WARNING, and INFO logs,
 // including a stack trace of all running goroutines, then calls os.Exit(255).
-// Arguments are handled in the manner of fmt.Println; a newline is always appended.
+// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
 func Fatalln(args ...interface{}) {
 	logging.println(fatalLog, args...)
 }

@@ -142,7 +142,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
-		tag, err := ts.New(s, int64(n))
+		tag, err := ts.Create(s, int64(n))
 		if err != nil {
 			t.Fatal(err)
 		}

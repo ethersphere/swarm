@@ -487,7 +487,7 @@ func retrieveF(
 // putString provides singleton manifest creation on top of api.API
 func putString(ctx context.Context, a *api.API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	r := strings.NewReader(content)
-	tag, err := a.Tags.New("unnamed-tag", 0)
+	tag, err := a.Tags.Create("unnamed-tag", 0)
 
 	log.Trace("created new tag", "uid", tag.Uid)
 

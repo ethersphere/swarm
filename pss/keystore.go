@@ -33,18 +33,18 @@ type KeyStore struct {
 	w *whisper.Whisper // key and encryption backend
 
 	mx                       sync.RWMutex
-	pubKeyPool               map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
-	symKeyPool               map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
-	symKeyDecryptCache       []*string                     // fast lookup of symkeys recently used for decryption; last used is on top of stack
-	symKeyDecryptCacheCursor int                           // modular cursor pointing to last used, wraps on symKeyDecryptCache array
+	pubKeyPool               map[string]map[Topic]*peer // mapping of hex public keys to peer address by topic.
+	symKeyPool               map[string]map[Topic]*peer // mapping of symkeyids to peer address by topic.
+	symKeyDecryptCache       []*string                  // fast lookup of symkeys recently used for decryption; last used is on top of stack
+	symKeyDecryptCacheCursor int                        // modular cursor pointing to last used, wraps on symKeyDecryptCache array
 }
 
 func loadKeyStore() *KeyStore {
 	return &KeyStore{
 		w: whisper.New(&whisper.DefaultConfig),
 
-		pubKeyPool:         make(map[string]map[Topic]*pssPeer),
-		symKeyPool:         make(map[string]map[Topic]*pssPeer),
+		pubKeyPool:         make(map[string]map[Topic]*peer),
+		symKeyPool:         make(map[string]map[Topic]*peer),
 		symKeyDecryptCache: make([]*string, defaultSymKeyCacheCapacity),
 	}
 }
@@ -65,14 +65,14 @@ func (ks *KeyStore) isPubKeyStored(key string) bool {
 	return ok
 }
 
-func (ks *KeyStore) getPeerSym(symkeyid string, topic Topic) (*pssPeer, bool) {
+func (ks *KeyStore) getPeerSym(symkeyid string, topic Topic) (*peer, bool) {
 	ks.mx.RLock()
 	defer ks.mx.RUnlock()
 	psp, ok := ks.symKeyPool[symkeyid][topic]
 	return psp, ok
 }
 
-func (ks *KeyStore) getPeerPub(pubkeyid string, topic Topic) (*pssPeer, bool) {
+func (ks *KeyStore) getPeerPub(pubkeyid string, topic Topic) (*peer, bool) {
 	ks.mx.RLock()
 	defer ks.mx.RUnlock()
 	psp, ok := ks.pubKeyPool[pubkeyid][topic]
@@ -91,12 +91,12 @@ func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, addre
 		return fmt.Errorf("invalid public key: %v", pubkey)
 	}
 	pubkeyid := common.ToHex(pubkeybytes)
-	psp := &pssPeer{
+	psp := &peer{
 		address: address,
 	}
 	ks.mx.Lock()
 	if _, ok := ks.pubKeyPool[pubkeyid]; !ok {
-		ks.pubKeyPool[pubkeyid] = make(map[Topic]*pssPeer)
+		ks.pubKeyPool[pubkeyid] = make(map[Topic]*peer)
 	}
 	ks.pubKeyPool[pubkeyid][topic] = psp
 	ks.mx.Unlock()
@@ -107,13 +107,13 @@ func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, addre
 // adds a symmetric key to the pss key pool, and optionally adds the key to the
 // collection of keys used to attempt symmetric decryption of incoming messages
 func (ks *KeyStore) addSymmetricKeyToPool(keyid string, topic Topic, address PssAddress, addtocache bool, protected bool) {
-	psp := &pssPeer{
+	psp := &peer{
 		address:   address,
 		protected: protected,
 	}
 	ks.mx.Lock()
 	if _, ok := ks.symKeyPool[keyid]; !ok {
-		ks.symKeyPool[keyid] = make(map[Topic]*pssPeer)
+		ks.symKeyPool[keyid] = make(map[Topic]*peer)
 	}
 	ks.symKeyPool[keyid][topic] = psp
 	ks.mx.Unlock()

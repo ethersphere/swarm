@@ -127,8 +127,8 @@ func TestSnapshotCreate(t *testing.T) {
 			// as strings to every node sorted services
 			sort.Strings(wantServices)
 
-			for i, n := range snap.Nodes {
-				gotServices := n.Node.Config.Services
+			for i := 0; i < len(snap.Nodes); i++ {
+				gotServices := snap.Nodes[i].Node.Config.Services
 				sort.Strings(gotServices)
 				if fmt.Sprint(gotServices) != fmt.Sprint(wantServices) {
 					t.Errorf("got services %v for node %v, want %v", gotServices, i, wantServices)

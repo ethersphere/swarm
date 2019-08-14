@@ -171,6 +171,10 @@ var (
 		Name:  "bootnode-mode",
 		Usage: "Run Swarm in Bootnode mode",
 	}
+	SwarmDisableAutoConnectFlag = cli.BoolFlag{
+		Name:  "disable-auto-connect",
+		Usage: "Disables the peer discovery mechanism in the hive protocol as well as the auto connect loop (manual peer addition)",
+	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",
 		Usage: "User-defined name for the new feed, limited to 32 characters. If combined with topic, it will refer to a subtopic with this name",
@@ -195,5 +199,9 @@ var (
 	SwarmLegacyFlag = cli.BoolFlag{
 		Name:  "legacy",
 		Usage: "Use this flag when importing a db export from a legacy local store database dump (for schemas older than 'sanctuary')",
+	}
+	SwarmPinFlag = cli.BoolFlag{
+		Name:  "pin",
+		Usage: "Use this flag to pin the file after upload is complete. This flag is used when uploading a file.",
 	}
 )

@@ -21,6 +21,7 @@ package api
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -28,13 +29,11 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"mime"
 	"net/http"
 	"path"
-	"strings"
-
-	"bytes"
-	"mime"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -47,8 +46,7 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
-
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -400,6 +398,8 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 	return
 }
 
+// Delete handles removing a file from the manifest.
+// This creates a new manifest without the given path
 func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
 	apiDeleteCount.Inc(1)
 	uri, err := Parse("bzz:/" + addr)

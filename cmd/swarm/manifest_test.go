@@ -32,7 +32,7 @@ import (
 // TestManifestChange tests manifest add, update and remove
 // cli commands without encryption.
 func TestManifestChange(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
@@ -42,7 +42,7 @@ func TestManifestChange(t *testing.T) {
 // TestManifestChange tests manifest add, update and remove
 // cli commands with encryption enabled.
 func TestManifestChangeEncrypted(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
@@ -58,7 +58,7 @@ func TestManifestChangeEncrypted(t *testing.T) {
 // Argument encrypt controls whether to use encryption or not.
 func testManifestChange(t *testing.T, encrypt bool) {
 	t.Parallel()
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	tmp, err := ioutil.TempDir("", "swarm-manifest-test")
@@ -410,7 +410,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 // TestNestedDefaultEntryUpdate tests if the default entry is updated
 // if the file in nested manifest used for it is also updated.
 func TestNestedDefaultEntryUpdate(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
@@ -421,7 +421,7 @@ func TestNestedDefaultEntryUpdate(t *testing.T) {
 // of encrypted upload is updated if the file in nested manifest
 // used for it is also updated.
 func TestNestedDefaultEntryUpdateEncrypted(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
@@ -430,7 +430,7 @@ func TestNestedDefaultEntryUpdateEncrypted(t *testing.T) {
 
 func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 	t.Parallel()
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	tmp, err := ioutil.TempDir("", "swarm-manifest-test")

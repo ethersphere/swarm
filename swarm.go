@@ -32,11 +32,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -46,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/fuse"
@@ -57,7 +53,10 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
 )
@@ -87,6 +86,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
+	pinAPI            *pin.API // API object implements all pinning related commands
 
 	tracerClose io.Closer
 }
@@ -121,6 +121,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	log.Debug("Setting up Swarm service components")
 
 	config.HiveParams.Discovery = true
+
+	if config.DisableAutoConnect {
+		config.HiveParams.DisableAutoConnect = true
+	}
 
 	bzzconfig := &network.BzzConfig{
 		NetworkID:    config.NetworkID,
@@ -215,7 +219,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, newstream.Spec, retrieval.Spec, self.newstreamer.Run, self.retrieval.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	self.ps, err = pss.NewPss(to, config.Pss)
+	self.ps, err = pss.New(to, config.Pss)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +228,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
+
+	// Instantiate the pinAPI object with the already opened localstore
+	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
@@ -374,11 +381,10 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	if s.ps != nil {
 		s.ps.Start(srv)
 	}
-
 	// start swarm http proxy server
 	if s.config.Port != "" {
 		addr := net.JoinHostPort(s.config.ListenAddr, s.config.Port)
-		server := httpapi.NewServer(s.api, s.config.Cors)
+		server := httpapi.NewServer(s.api, s.pinAPI, s.config.Cors)
 
 		if s.config.Cors != "" {
 			log.Info("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
@@ -522,6 +528,12 @@ func (s *Swarm) APIs() []rpc.API {
 			Namespace: "accounting",
 			Version:   protocols.AccountingVersion,
 			Service:   protocols.NewAccountingApi(s.accountingMetrics),
+			Public:    false,
+		},
+		{
+			Namespace: "pin",
+			Version:   pin.Version,
+			Service:   s.pinAPI,
 			Public:    false,
 		},
 	}

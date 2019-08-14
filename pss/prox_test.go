@@ -132,7 +132,7 @@ func (td *testData) init(msgCount int) error {
 		td.nodeAddresses[nodeId] = kad.BaseAddr()
 	}
 
-	for i := 0; i < int(msgCount); i++ {
+	for i := 0; i < msgCount; i++ {
 		msgAddr := pot.RandomAddress() // we choose message addresses randomly
 		td.recipientAddresses = append(td.recipientAddresses, msgAddr.Bytes())
 		smallestPo := 256
@@ -421,7 +421,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			pssp := NewPssParams().WithPrivateKey(privkey)
+			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
@@ -430,7 +430,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			ps, err := NewPss(pskad, pssp)
+			ps, err := New(pskad, pssp)
 			if err != nil {
 				return nil, nil, err
 			}

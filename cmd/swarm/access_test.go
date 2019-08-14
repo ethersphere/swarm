@@ -43,12 +43,14 @@ import (
 const (
 	hashRegexp = `[a-f\d]{128}`
 	data       = "notsorandomdata"
+
+	goosWindows = "windows"
 )
 
 var DefaultCurve = crypto.S256()
 
 func TestACT(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
@@ -161,7 +163,7 @@ func testPassword(t *testing.T, cluster *testCluster) {
 
 	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
-	hash, err := client.UploadManifest(&m, false)
+	hash, err := client.UploadManifest(&m, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +339,7 @@ func testPK(t *testing.T, cluster *testCluster) {
 	}
 	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
-	hash, err := client.UploadManifest(&m, false)
+	hash, err := client.UploadManifest(&m, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
