@@ -86,6 +86,7 @@ type Bzz struct {
 func (b *Bzz) Start(srv *p2p.Server) error {
 	newaddr := b.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
+	b.Hive.Start(srv)
 	return nil
 }
 
@@ -144,14 +145,14 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Run:      b.runBzz,
 			NodeInfo: b.NodeInfo,
 		},
-		//		{
-		//			Name:     DiscoverySpec.Name,
-		//			Version:  DiscoverySpec.Version,
-		//			Length:   DiscoverySpec.Length(),
-		//			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run),
-		//			NodeInfo: b.Hive.NodeInfo,
-		//			PeerInfo: b.Hive.PeerInfo,
-		//		},
+		{
+			Name:     DiscoverySpec.Name,
+			Version:  DiscoverySpec.Version,
+			Length:   DiscoverySpec.Length(),
+			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run),
+			NodeInfo: b.Hive.NodeInfo,
+			PeerInfo: b.Hive.PeerInfo,
+		},
 	}
 	//	if b.streamerSpec != nil && b.streamerRun != nil {
 	//		protocol = append(protocol, p2p.Protocol{

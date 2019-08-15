@@ -90,21 +90,22 @@ type Swarm struct {
 	tracerClose io.Closer
 }
 
-type Service interface {
-	node.Service
-}
-
 // NewSwarm creates a new swarm service instance
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
 //func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
-func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []Service, err error) {
+func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []node.ServiceConstructor, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty public key")
 	}
 	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty bzz key")
+	}
+
+	rpcInprocServer := rpc.NewServer()
+	rpcInprocDialer := func() (*rpc.Client, error) {
+		return rpc.DialInProc(rpcInprocServer), nil
 	}
 
 	//	var backend chequebook.Backend
@@ -225,8 +226,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []Service, er
 	}
 	//self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
 	//streamer := stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
-	streamer := stream.NewRegistry(nodeID, delivery, netStore, stateStore, registryOptions, swap)
-	svcs = append(svcs, streamer)
+	streamerFunc := func(ctx *node.ServiceContext) (node.Service, error) {
+		streamer := stream.NewRegistry(nodeID, delivery, netStore, stateStore, registryOptions, swap)
+		return streamer, nil
+	}
+	svcs = append(svcs, streamerFunc)
 
 	//tags := chunk.NewTags() //todo load from state store
 
@@ -239,16 +243,24 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []Service, er
 	log.Debug("Setup local storage")
 
 	//bzz := network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
-	bzz := network.NewBzz(bzzconfig, stateStore)
-	svcs = append(svcs, bzz)
+	bzzFunc := func(ctx *node.ServiceContext) (node.Service, error) {
+		bzz := network.NewBzz(bzzconfig, stateStore)
+		return bzz, nil
+	}
+	svcs = append(svcs, bzzFunc)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	//ps, err := pss.New(to, config.Pss)
-	ps, err := pss.New(nil, config.Pss)
-	if err != nil {
-		return nil, err
+	psFunc := func(ctx *node.ServiceContext) (node.Service, error) {
+		config.Pss.RPCDialer = rpcInprocDialer
+		ps, err := pss.New(nil, config.Pss)
+		rpcInprocServer.RegisterName("pss", ps)
+		if err != nil {
+			return nil, err
+		}
+		return ps, nil
 	}
-	svcs = append(svcs, ps)
+	svcs = append(svcs, psFunc)
 	//	if pss.IsActiveHandshake {
 	//		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	//	}

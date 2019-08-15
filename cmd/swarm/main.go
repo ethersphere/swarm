@@ -287,6 +287,9 @@ func bzzd(ctx *cli.Context) error {
 		cfg.DataDir = bzzconfig.Path
 	}
 
+	// IPC path set
+	//bzzconfig.IPCPath = cfg.IPCPath
+
 	//optionally set the bootnodes before configuring the node
 	setSwarmBootstrapNodes(ctx, &cfg)
 	//setup the ethereum node
@@ -310,6 +313,7 @@ func bzzd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	//register BZZ as node.Service in the ethereum node
 	err = registerBzzService(bzzconfig, stack)
 	if err != nil {
@@ -348,23 +352,24 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) error {
 		return err
 	}
 	for _, svc := range svcs {
-		boot := func(_ *node.ServiceContext) (node.Service, error) {
-			//var nodeStore *mock.NodeStore
-			//		if bzzconfig.GlobalStoreAPI != "" {
-			//			// connect to global store
-			//			client, err := rpc.Dial(bzzconfig.GlobalStoreAPI)
-			//			if err != nil {
-			//				return nil, fmt.Errorf("global store: %v", err)
-			//			}
-			//			globalStore := mockrpc.NewGlobalStore(client)
-			//			// create a node store for this swarm key on global store
-			//			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
-			//		}
-			return svc, nil
-			//svcs := swarm.NewSwarm(bzzconfig, nodeStore)
-			//register within the ethereum node
-		}
-		if err := stack.Register(boot); err != nil {
+		//boot := func(_ *node.ServiceContext) (node.Service, error) {
+		//var nodeStore *mock.NodeStore
+		//		if bzzconfig.GlobalStoreAPI != "" {
+		//			// connect to global store
+		//			client, err := rpc.Dial(bzzconfig.GlobalStoreAPI)
+		//			if err != nil {
+		//				return nil, fmt.Errorf("global store: %v", err)
+		//			}
+		//			globalStore := mockrpc.NewGlobalStore(client)
+		//			// create a node store for this swarm key on global store
+		//			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
+		//		}
+		//	return svc, nil
+		//svcs := swarm.NewSwarm(bzzconfig, nodeStore)
+		//register within the ethereum node
+		//}
+		//if err := stack.Register(boot); err != nil {
+		if err := stack.Register(svc); err != nil {
 			//			utils.Fatalf("Failed to register the Swarm service: %v", err)
 			return fmt.Errorf("Failed to register the Swarm service: %v", err)
 		}
