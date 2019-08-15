@@ -74,10 +74,10 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 
 	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
-		s.logger.Debug("already have data", "ref", hex.EncodeToString(key))
+		//s.logger.Debug("already have data", "ref", hex.EncodeToString(key))
 		return loaded, nil
 	}
-	s.logger.Debug("we need data", "ref", hex.EncodeToString(key))
+	//s.logger.Debug("we need data", "ref", hex.EncodeToString(key))
 	return ok, func(ctx context.Context) error {
 		select {
 		case <-fi.Delivered:
