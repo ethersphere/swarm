@@ -108,7 +108,7 @@ func (c *Capabilities) add(cp *Capability) error {
 
 // gets the capability with the specified module id
 // returns nil if the id doesn't exist
-func (c Capabilities) get(id CapabilityId) *Capability {
+func (c *Capabilities) get(id CapabilityId) *Capability {
 	idx, ok := c.idx[id]
 	if !ok {
 		return nil
@@ -117,7 +117,7 @@ func (c Capabilities) get(id CapabilityId) *Capability {
 }
 
 // String Implements Stringer interface
-func (c Capabilities) String() (s string) {
+func (c *Capabilities) String() (s string) {
 	for _, cp := range c.Caps {
 		if s != "" {
 			s += ","
