@@ -510,6 +510,8 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
+// To be called with mutex already held
+// Caller must be careful that the same cheque isn't concurrently read and written by multiple routines
 func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	//only load if the current instance doesn't already have this peer's
 	//last cheque in memory
