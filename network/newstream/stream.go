@@ -166,6 +166,9 @@ func (s *SlipStream) HandleMsg(p *Peer) func(context.Context, interface{}) error
 		case <-s.quit:
 			// no message handling if we quit
 			return nil
+		case <-p.quit:
+			// peer has been removed, quit
+			return nil
 		default:
 		}
 
@@ -253,6 +256,9 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 
 	select {
 	case <-s.quit:
+		return
+	case <-p.quit:
+		// peer has been removed, quit
 		return
 	default:
 	}
@@ -416,6 +422,9 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 
 	if e {
 		select {
+		case <-s.quit:
+			// quitting, return
+			return
 		case <-p.quit:
 			p.logger.Debug("not sending batch due to shutdown")
 			// prevent sending an empty batch that resulted from db shutdown
@@ -487,6 +496,9 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 	if e {
 		p.logger.Debug("interval is empty for requested range", "empty?", e, "hashes", len(h)/HashSize, "ruid", msg.Ruid)
 		select {
+		case <-s.quit:
+			// quitting, return
+			return
 		case <-p.quit:
 			// prevent sending an empty batch that resulted from db shutdown
 			return
@@ -684,6 +696,10 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 			return
 		}
 	case <-s.quit:
+		close(w.done)
+		return
+	case <-p.quit:
+		close(w.done)
 		return
 	}
 	cur, ok := p.getCursor(w.stream)
@@ -776,6 +792,13 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 			cd.Chunks = append(cd.Chunks, chunkD)
 			if frameSize == maxFrame {
 				//send the batch
+				select {
+				case <-p.quit:
+					return
+				case <-s.quit:
+					return
+				default:
+				}
 				go func(cd *ChunkDelivery) {
 					p.logger.Debug("sending chunk delivery")
 					if err := p.Send(ctx, cd); err != nil {
@@ -822,6 +845,8 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 		select {
 		case w.chunks <- c:
 		case <-s.quit:
+			return
+		case <-p.quit:
 			return
 		}
 	}
