@@ -22,7 +22,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"path/filepath"
 	"strings"
@@ -34,14 +33,12 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
-	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/stream"
@@ -52,8 +49,6 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
-	"github.com/ethersphere/swarm/storage/pin"
-	"github.com/ethersphere/swarm/swap"
 )
 
 var (
@@ -62,28 +57,6 @@ var (
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
 )
-
-// the swarm stack
-type Swarm struct {
-	config            *api.Config        // swarm configuration
-	api               *api.API           // high level api layer (fs/manifest)
-	dns               api.Resolver       // DNS registrar
-	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	streamer          *stream.Registry
-	bzz               *network.Bzz       // the logistic manager
-	backend           chequebook.Backend // simple blockchain Backend
-	privateKey        *ecdsa.PrivateKey
-	netStore          *storage.NetStore
-	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
-	ps                *pss.Pss
-	swap              *swap.Swap
-	stateStore        *state.DBStore
-	accountingMetrics *protocols.AccountingMetrics
-	cleanupFuncs      []func() error
-	pinAPI            *pin.API // API object implements all pinning related commands
-
-	tracerClose io.Closer
-}
 
 // NewSwarm creates a new swarm service instance
 // implements node.Service
@@ -290,21 +263,6 @@ func detectEnsAddr(client *rpc.Client) (common.Address, error) {
 	default:
 		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
 	}
-}
-
-// SetChequebook ensures that the local checquebook is set up on chain.
-func (s *Swarm) SetChequebook(ctx context.Context) error {
-	err := s.config.Swap.SetChequebook(ctx, s.backend, s.config.Path)
-	if err != nil {
-		return err
-	}
-	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
-	return nil
-}
-
-// RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
-func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
-	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
 // serialisable info about swarm
