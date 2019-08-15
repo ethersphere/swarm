@@ -50,10 +50,12 @@ type Swap struct {
 	api                 PublicAPI
 	store               state.Store          // store is needed in order to keep balances and cheques across sessions
 	accountingLock      sync.RWMutex         // lock for data consistency in accounting function
-	mapLock             sync.RWMutex         // lock for maps
 	balances            map[enode.ID]int64   // map of balances for each peer
+	balancesLock        sync.RWMutex         // lock for balances map
 	cheques             map[enode.ID]*Cheque // map of cheques for each peer
+	chequesLock         sync.RWMutex         // lock for cheques map
 	peers               map[enode.ID]*Peer   // map of all swap Peers
+	peersLock           sync.RWMutex         // lock for peers map
 	backend             contract.Backend     // the backend (blockchain) used
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
@@ -178,28 +180,28 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 }
 
 func (s *Swap) getBalance(id enode.ID) (int64, bool) {
-	s.mapLock.RLock()
-	defer s.mapLock.RUnlock()
+	s.balancesLock.RLock()
+	defer s.balancesLock.RUnlock()
 	peerBalance, exists := s.balances[id]
 	return peerBalance, exists
 }
 
 func (s *Swap) setBalance(id enode.ID, balance int64) {
-	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
+	s.balancesLock.Lock()
+	defer s.balancesLock.Unlock()
 	s.balances[id] = balance
 }
 
 func (s *Swap) getCheque(id enode.ID) (*Cheque, bool) {
-	s.mapLock.RLock()
-	defer s.mapLock.RUnlock()
+	s.chequesLock.RLock()
+	defer s.chequesLock.RUnlock()
 	peerCheque, exists := s.cheques[id]
 	return peerCheque, exists
 }
 
 func (s *Swap) setCheque(id enode.ID, cheque *Cheque) {
-	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
+	s.chequesLock.Lock()
+	defer s.chequesLock.Unlock()
 	s.cheques[id] = cheque
 }
 
@@ -483,11 +485,11 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	s.mapLock.RLock()
+	s.balancesLock.RLock()
 	for peerID, peerBalance := range s.balances {
 		balances[peerID] = peerBalance
 	}
-	s.mapLock.RUnlock()
+	s.balancesLock.RUnlock()
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
