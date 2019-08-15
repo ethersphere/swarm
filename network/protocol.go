@@ -94,7 +94,6 @@ func (b *Bzz) Start(srv *p2p.Server) error {
 // * bzz config
 // * overlay driver
 // * peer store
-//func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
 func NewBzz(config *BzzConfig, store state.Store) *Bzz {
 
 	kp := NewKadParams()

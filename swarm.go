@@ -24,10 +24,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net"
-	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -41,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
-	httpapi "github.com/ethersphere/swarm/api/http"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
@@ -58,7 +54,6 @@ import (
 	"github.com/ethersphere/swarm/storage/mock"
 	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
-	"github.com/ethersphere/swarm/tracing"
 )
 
 var (
@@ -94,7 +89,6 @@ type Swarm struct {
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
-//func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
 func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []node.ServiceConstructor, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty public key")
@@ -155,10 +149,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []node.Servic
 	nodeID := config.Enode.ID()
 	netStore := storage.NewNetStore(lstore, nodeID)
 
-	//	to := network.NewKademlia(
-	//		common.FromHex(config.BzzKey),
-	//		network.NewKadParams(),
-	//	)
 	delivery := stream.NewDelivery(nil, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers
 
@@ -179,7 +169,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []node.Servic
 		streamer := stream.NewRegistry(nodeID, delivery, netStore, stateStore, registryOptions, swap)
 		return streamer, nil
 	}
-	svcs = append(svcs, streamerFunc)
+	_ = streamerFunc
 
 	log.Debug("Setup local storage")
 

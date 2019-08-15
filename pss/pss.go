@@ -121,7 +121,6 @@ func (params *Params) WithPrivateKey(privatekey *ecdsa.PrivateKey) *Params {
 // Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
 // and message forwarding. Implements node.Service
 type Pss struct {
-	//*network.Kademlia // we can get the Kademlia address from this
 	baseAddr []byte
 	*KeyStore
 
@@ -173,7 +172,6 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		Version: protocolVersion,
 	}
 	ps := &Pss{
-		//Kademlia: k,
 		KeyStore: loadKeyStore(),
 
 		privateKey: params.privateKey,
@@ -288,7 +286,6 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return pp.Run(p.handle)
 }
 
-//func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
 func (p *Pss) getPeer(enodeId enode.ID) (pp *protocols.Peer, ok bool) {
 	p.peersMu.RLock()
 	defer p.peersMu.RUnlock()
