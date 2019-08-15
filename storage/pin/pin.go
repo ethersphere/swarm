@@ -244,7 +244,7 @@ func (p *API) ListPins() ([]PinInfo, error) {
 	iterFunc := func(key []byte, value []byte) (stop bool, err error) {
 		hash := string(key[4:])
 		pinInfo := PinInfo{}
-		err := pinInfo.UnmarshalBinary(value)
+		err = pinInfo.UnmarshalBinary(value)
 		if err != nil {
 			log.Debug("Error unmarshaling pininfo from state store", "Address", hash)
 			return true, err

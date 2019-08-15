@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )
 
 /*
