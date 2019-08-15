@@ -274,7 +274,7 @@ func TestAddressMatch(t *testing.T) {
 		return rpc.DialInProc(rpcSrv), nil
 	}
 	pssp.RPCDialer = rpcDial
-	ps, err := New(nil, pssp)
+	ps, err := New(pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -342,7 +342,7 @@ func TestAddressMatchProx(t *testing.T) {
 		return rpc.DialInProc(rpcSrv), nil
 	}
 	pssp.RPCDialer = rpcDial
-	ps, err := New(nil, pssp)
+	ps, err := New(pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -1794,21 +1794,6 @@ func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error
 
 func newServices(allowRaw bool) adapters.Services {
 	stateStore := state.NewInmemoryStore()
-	kademlias := make(map[enode.ID]*network.Kademlia)
-	kademlia := func(id enode.ID) *network.Kademlia {
-		if k, ok := kademlias[id]; ok {
-			return k
-		}
-		params := network.NewKadParams()
-		params.NeighbourhoodSize = 2
-		params.MaxBinSize = 3
-		params.MinBinSize = 1
-		params.MaxRetries = 1000
-		params.RetryExponent = 2
-		params.RetryInterval = 1000000
-		kademlias[id] = network.NewKademlia(id[:], params)
-		return kademlias[id]
-	}
 	return adapters.Services{
 		protocolName: func(ctx *adapters.ServiceContext) (node.Service, error) {
 			// execadapter does not exec init()
@@ -1823,9 +1808,7 @@ func newServices(allowRaw bool) adapters.Services {
 			pssp.RPCDialer = func() (*rpc.Client, error) {
 				return ctx.DialRPC(ctx.Config.ID)
 			}
-			//pskad := kademlia(ctx.Config.ID)
-			//ps, err := New(pskad, pssp)
-			ps, err := New(nil, pssp)
+			ps, err := New(pssp)
 			if err != nil {
 				return nil, err
 			}
@@ -1870,7 +1853,7 @@ func newServices(allowRaw bool) adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
+			return network.NewBzz(config, stateStore), nil
 		},
 	}
 }
@@ -1894,7 +1877,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Param
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-	ps, err := New(nil, pp)
+	ps, err := New(pp)
 	if err != nil {
 		return nil
 	}

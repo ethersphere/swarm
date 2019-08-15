@@ -182,7 +182,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []node.Servic
 	// Pss = postal service over swarm (devp2p over bzz)
 	psFunc := func(ctx *node.ServiceContext) (node.Service, error) {
 		config.Pss.RPCDialer = rpcInprocDialer
-		ps, err := pss.New(nil, config.Pss)
+		ps, err := pss.New(config.Pss)
 		rpcInprocServer.RegisterName("pss", ps)
 		if err != nil {
 			return nil, err

@@ -161,7 +161,7 @@ func (p *Pss) String() string {
 //
 // In addition to params, it takes a swarm network Kademlia
 // and a FileStore storage for message cache storage.
-func New(k *network.Kademlia, params *Params) (*Pss, error) {
+func New(params *Params) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")
 	} else if params.RPCDialer == nil {

@@ -160,8 +160,7 @@ func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 		NetworkID:    DefaultTestNetworkID,
 		LightNode:    lightNode,
 	}
-	kad := NewKademlia(addr.OAddr, NewKadParams())
-	bzz := NewBzz(config, kad, nil, nil, nil)
+	bzz := NewBzz(config, nil)
 	return bzz
 }
 

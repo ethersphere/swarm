@@ -5,15 +5,28 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 )
 
-func testKadPeerFromAddress(bzzAddr *BzzAddr, k *Kademlia) *Peer {
+func testKadPeerFromAddress(bzzAddr *BzzAddr, k *Kademlia) (*Peer, error) {
+	privKey, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+	enodeId := enode.PubkeyToIDV4(&privKey.PublicKey)
+	p2pPeer := p2p.NewPeer(enodeId, enodeId.String(), []p2p.Cap{})
+	protoPeer := protocols.NewPeer(p2pPeer, nil, nil)
+
 	return NewPeer(&BzzPeer{
 		BzzAddr:   bzzAddr,
 		LightNode: false,
-	}, k)
+		Peer:      protoPeer,
+	}, k), err
 }
 
 func testKadBzzAddrFromAddress(addr pot.Address) *BzzAddr {
@@ -27,17 +40,6 @@ func testKadBzzAddrFromAddress(addr pot.Address) *BzzAddr {
 func TestKademliaGet(t *testing.T) {
 	addr := pot.RandomAddress()
 	addrBytes := addr.Bytes()
-	kp := NewKadParams()
-	k := NewKademlia(addrBytes, kp)
-
-	var bzzAddrFill []*BzzAddr
-	var peerFill []*Peer
-	for i := 0; i < 8; i++ {
-		bzzAddrFill = append(bzzAddrFill, testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, i)))
-		peerFill = append(peerFill, testKadPeerFromAddress(bzzAddrFill[i], k))
-		k.Register(bzzAddrFill[i])
-		k.On(peerFill[i])
-	}
 
 	bzzConfig := &BzzConfig{
 		OverlayAddr:  addrBytes,
@@ -45,9 +47,25 @@ func TestKademliaGet(t *testing.T) {
 		HiveParams:   NewHiveParams(),
 		NetworkID:    42,
 	}
+	bzz := NewBzz(bzzConfig, nil)
+	k := bzz.Kademlia
+
+	var bzzAddrFill []*BzzAddr
+	var peerFill []*Peer
+	for i := 0; i < 8; i++ {
+		bzzAddrFill = append(bzzAddrFill, testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, i)))
+		p, err := testKadPeerFromAddress(bzzAddrFill[i], k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		peerFill = append(peerFill, p)
+		k.Register(bzzAddrFill[i])
+		k.On(peerFill[i])
+	}
+
 	rpcSrv := rpc.NewServer()
 	rpcClient := rpc.DialInProc(rpcSrv)
-	rpcSrv.RegisterName("bzz", NewBzz(bzzConfig, k, nil, nil, nil))
+	rpcSrv.RegisterName("bzz", bzz)
 	peersRpc := []*Peer{}
 	err := rpcClient.Call(&peersRpc, "bzz_getConnsBin", addrBytes, 0, 8)
 	if err != nil {
@@ -67,7 +85,10 @@ func TestKademliaGet(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	bzzAddrExtra := testKadBzzAddrFromAddress(pot.RandomAddressAt(addr, 7))
-	peerExtra := testKadPeerFromAddress(bzzAddrExtra, k)
+	peerExtra, err := testKadPeerFromAddress(bzzAddrExtra, k)
+	if err != nil {
+		t.Fatal(err)
+	}
 	k.Register(bzzAddrExtra)
 	notification := <-msgC
 	if notification.Depth != 6 || notification.Serial != 6 {
