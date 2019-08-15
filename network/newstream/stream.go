@@ -884,7 +884,6 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 					w.hashes[c.Address().Hex()] = false
 					p.mtx.Unlock()
 					v := atomic.AddUint64(&w.remaining, ^uint64(0))
-					p.logger.Trace("got chunk from peer", "addr", cc.Address(), "left", v)
 					if v == 0 {
 						p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
 						close(errc)
@@ -935,7 +934,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 				iterate = false
 				break
 			}
-			s.logger.Trace("got address on subscribe", "address", d.Address.String(), "ident", batchStart, "key", key)
+			//s.logger.Trace("got address on subscribe", "address", d.Address.String(), "ident", batchStart, "key", key)
 			batch = append(batch, d.Address[:]...)
 			batchSize++
 			if batchStartID == nil {
@@ -947,7 +946,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 			if batchSize >= BatchSize {
 				iterate = false
 				metrics.GetOrRegisterCounter("stream.serverCollectBatch.full-batch", nil).Inc(1)
-				p.logger.Trace("pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", *batchStartID, "batchEndID", batchEndID)
+				//p.logger.Trace("pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", *batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
 				timer = time.NewTimer(batchTimeout)
@@ -962,7 +961,6 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 			// return batch if new chunks are not received after some time
 			iterate = false
 			metrics.GetOrRegisterCounter("stream.serverCollectBatch.timer-expire", nil).Inc(1)
-			p.logger.Trace("pull subscription timer expired", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-p.quit:
 			iterate = false
 			p.logger.Trace("pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
