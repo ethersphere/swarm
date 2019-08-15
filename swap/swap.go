@@ -49,7 +49,7 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 PublicAPI
 	store               state.Store          // store is needed in order to keep balances and cheques across sessions
-	lock                sync.RWMutex         // lock accounting
+	accountingLock      sync.RWMutex         // lock for data consistency in accounting function
 	mapLock             sync.RWMutex         // lock for maps
 	balances            map[enode.ID]int64   // map of balances for each peer
 	cheques             map[enode.ID]*Cheque // map of cheques for each peer
@@ -143,8 +143,8 @@ func (s *Swap) DeploySuccess() string {
 // Add is the (sole) accounting function
 // Swap implements the protocols.Balance interface
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.accountingLock.Lock()
+	defer s.accountingLock.Unlock()
 
 	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
@@ -229,9 +229,9 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	s.lock.Lock()
+	s.accountingLock.Lock()
 	err = s.resetBalance(p.ID(), 0-int64(cheque.Honey))
-	s.lock.Unlock()
+	s.accountingLock.Unlock()
 	if err != nil {
 		return err
 	}
@@ -522,8 +522,8 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 // loadLastReceivedCheque gets the last received cheque for the peer
 // cheque gets loaded from database if not already in memory
 func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.accountingLock.Lock()
+	defer s.accountingLock.Unlock()
 	if p.lastReceivedCheque != nil {
 		return p.lastReceivedCheque
 	}
@@ -533,8 +533,8 @@ func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p *Peer, cheque *Cheque) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.accountingLock.Lock()
+	defer s.accountingLock.Unlock()
 	p.lastReceivedCheque = cheque
 	return s.store.Put(receivedChequeKey(p.ID()), cheque)
 }
