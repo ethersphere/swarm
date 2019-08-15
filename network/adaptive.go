@@ -7,18 +7,18 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// CapabilityId defines a unique type of capability
-type CapabilityId uint64
+// CapabilityID defines a unique type of capability
+type CapabilityID uint64
 
 // Capability contains a bit vector of flags that define what capability a node has in a specific module
 // The module is defined by the Id.
 type Capability struct {
-	Id  CapabilityId
+	Id  CapabilityID
 	Cap []bool
 }
 
 // NewCapability initializes a new Capability with the given id and specified number of bits in the vector
-func NewCapability(id CapabilityId, bitCount int) *Capability {
+func NewCapability(id CapabilityID, bitCount int) *Capability {
 	return &Capability{
 		Id:  id,
 		Cap: make([]bool, bitCount),
@@ -46,7 +46,7 @@ func (c *Capability) Unset(idx int) error {
 }
 
 // String implements Stringer interface
-func (c Capability) String() (s string) {
+func (c *Capability) String() (s string) {
 	s = fmt.Sprintf("%d:", c.Id)
 	for _, b := range c.Cap {
 		if b {
@@ -82,7 +82,7 @@ func isSameBools(left []bool, right []bool) bool {
 // It is used both to store the capabilities in the node, and
 // to communicate the node capabilities to its peers
 type Capabilities struct {
-	idx  map[CapabilityId]int // maps the CapabilityIds to their position in the Caps vector
+	idx  map[CapabilityID]int // maps the CapabilityIDs to their position in the Caps vector
 	Caps []*Capability
 	mu   sync.Mutex
 }
@@ -90,7 +90,7 @@ type Capabilities struct {
 // NewCapabilities initializes a new Capabilities object
 func NewCapabilities() *Capabilities {
 	return &Capabilities{
-		idx: make(map[CapabilityId]int),
+		idx: make(map[CapabilityID]int),
 	}
 }
 
@@ -108,7 +108,7 @@ func (c *Capabilities) add(cp *Capability) error {
 
 // gets the capability with the specified module id
 // returns nil if the id doesn't exist
-func (c *Capabilities) get(id CapabilityId) *Capability {
+func (c *Capabilities) get(id CapabilityID) *Capability {
 	idx, ok := c.idx[id]
 	if !ok {
 		return nil
@@ -133,7 +133,7 @@ func (c *Capabilities) String() (s string) {
 func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 
 	// make sure we have a pristine receiver
-	c.idx = make(map[CapabilityId]int)
+	c.idx = make(map[CapabilityID]int)
 	c.Caps = []*Capability{}
 
 	// discard the Capabilities struct list item
