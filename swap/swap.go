@@ -345,6 +345,8 @@ func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount 
 	return actualAmount, nil
 }
 
+// To be called with mutex already held
+// Caller must be careful that the same balance isn't concurrently read and written by multiple routines
 func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
@@ -364,6 +366,8 @@ func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 }
 
 // loadBalance loads balances from the state store (persisted)
+// To be called with mutex already held
+// Caller must be careful that the same balance isn't concurrently read and written by multiple routines
 func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	var peerBalance int64
 	if _, ok := s.getBalance(peer); !ok {
