@@ -269,7 +269,21 @@ func TestAddressMatch(t *testing.T) {
 	}
 	privkey, err := w.GetPrivateKey(keys)
 	pssp := NewParams().WithPrivateKey(privkey)
-	ps, err := New(kad, pssp)
+	rpcSrv := rpc.NewServer()
+	rpcDial := func() (*rpc.Client, error) {
+		return rpc.DialInProc(rpcSrv), nil
+	}
+	pssp.RPCDialer = rpcDial
+	ps, err := New(nil, pssp)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	ps.baseAddr = localaddr
+	rpcSrv.RegisterName("pss", ps)
+	hp := network.NewHiveParams()
+	hive := network.NewHive(hp, kad, nil)
+	rpcSrv.RegisterName("hive", hive)
+	ps.kadRpc, err = ps.rpcDialer()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -323,7 +337,21 @@ func TestAddressMatchProx(t *testing.T) {
 	// set up pss
 	privKey, err := crypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
-	ps, err := New(kad, pssp)
+	rpcSrv := rpc.NewServer()
+	rpcDial := func() (*rpc.Client, error) {
+		return rpc.DialInProc(rpcSrv), nil
+	}
+	pssp.RPCDialer = rpcDial
+	ps, err := New(nil, pssp)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	ps.baseAddr = localAddr
+	rpcSrv.RegisterName("pss", ps)
+	hp := network.NewHiveParams()
+	hive := network.NewHive(hp, kad, nil)
+	rpcSrv.RegisterName("hive", hive)
+	ps.kadRpc, err = ps.rpcDialer()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -754,8 +782,9 @@ func TestRawAllow(t *testing.T) {
 		t.Fatal(err)
 	}
 	baseAddr := network.RandomAddr()
-	kad := network.NewKademlia((baseAddr).Over(), network.NewKadParams())
+	kad := network.NewKademlia(baseAddr.Over(), network.NewKadParams())
 	ps := newTestPss(privKey, kad, nil)
+	ps.baseAddr = baseAddr.Address()
 	defer ps.Stop()
 	topic := BytesToTopic([]byte{0x2a})
 
@@ -778,6 +807,7 @@ func TestRawAllow(t *testing.T) {
 		raw: true,
 	})
 	pssMsg.To = baseAddr.OAddr
+	log.Warn("oaddr", "addR", baseAddr.Address())
 	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 	pssMsg.Payload = &whisper.Envelope{
 		Topic: whisper.TopicType(topic),

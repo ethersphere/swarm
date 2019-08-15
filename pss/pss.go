@@ -212,18 +212,17 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) Start(srv *p2p.Server) error {
+	// async because it freezes the startup if not, need better solution
 	go func(p *Pss) {
 		rpcClient, err := p.rpcDialer()
 		if err != nil {
 			log.Error(err.Error())
-			//return err
 		}
 		p.kadRpc = rpcClient
 
 		err = p.kadRpc.Call(&p.baseAddr, "hive_baseAddr")
 		if err != nil {
 			log.Error(err.Error())
-			//return err
 		}
 	}(p)
 
@@ -575,7 +574,6 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 		return false
 	}
 	po, _ := network.Pof(p.baseAddr, msg.To, 0)
-	log.Error("selfpossible", "po", po, "depth", depth)
 
 	return depth <= po
 }

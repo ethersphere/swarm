@@ -423,6 +423,9 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
+			pssp.RPCDialer = func() (*rpc.Client, error) {
+				return ctx.DialRPC(ctx.Config.ID)
+			}
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
@@ -430,7 +433,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			ps, err := New(pskad, pssp)
+			ps, err := New(nil, pssp)
 			if err != nil {
 				return nil, nil, err
 			}
