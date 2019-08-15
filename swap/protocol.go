@@ -129,18 +129,20 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 }
 
 func (s *Swap) removePeer(p *Peer) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.peersLock.Lock()
+	defer s.peersLock.Unlock()
 	delete(s.peers, p.ID())
 }
 
 func (s *Swap) addPeer(p *Peer) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.peersLock.Lock()
+	defer s.peersLock.Unlock()
 	s.peers[p.ID()] = p
 }
 
 func (s *Swap) getPeer(id enode.ID) (*Peer, bool) {
+	s.peersLock.RLock()
+	defer s.peersLock.RUnlock()
 	peer, ok := s.peers[id]
 	return peer, ok
 }
