@@ -206,16 +206,17 @@ func TestStoreBalances(t *testing.T) {
 	// modify balances both in memory and in store
 	peerBalance, err := s.updateBalance(testPeerID, 29)
 	if err != nil {
-		t.Error("Unexpected balance update failure.")
+		t.Fatal(err)
 	}
 	// store balance for peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
 
 	// update balances for second peer
 	testPeer2ID := enode.HexID("fdbb55b4d9b0011c93e736bb1b736013943890f2a08640f89de00e738a8b7986")
+	s.balances[testPeer2ID] = 144
 	peer2Balance, err := s.updateBalance(testPeer2ID, -76)
 	if err != nil {
-		t.Error("Unexpected balance update failure.")
+		t.Fatal(err)
 	}
 	// store balance for each peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
