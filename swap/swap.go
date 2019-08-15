@@ -49,7 +49,7 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 PublicAPI
 	store               state.Store          // store is needed in order to keep balances and cheques across sessions
-	accountingLock      sync.RWMutex         // lock for data consistency in accounting function
+	accountingLock      sync.RWMutex         // lock for data consistency in accounting-related functions
 	balances            map[enode.ID]int64   // map of balances for each peer
 	balancesLock        sync.RWMutex         // lock for balances map
 	cheques             map[enode.ID]*Cheque // map of cheques for each peer
@@ -380,6 +380,8 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 }
 
 // sendCheque sends a cheque to peer
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
 func (s *Swap) sendCheque(peer enode.ID) error {
 	swapPeer, ok := s.getPeer(peer)
 	if !ok {
@@ -414,6 +416,8 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 // createCheque creates a new cheque whose beneficiary will be the peer and
 // whose serial and amount are set based on the last cheque and current balance for this peer
 // The cheque will be signed and point to the issuer's contract
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
 func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
