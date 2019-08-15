@@ -32,11 +32,12 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/testutil"
 )
 
-func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, nil, "")
+func serverFunc(api *api.API, pinAPI *pin.API) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, pinAPI, "")
 }
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm

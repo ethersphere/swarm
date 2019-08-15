@@ -42,7 +42,7 @@ func init() {
 }
 
 func TestSwarmUp(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
@@ -173,7 +173,7 @@ func testDefault(t *testing.T, cluster *testCluster, toEncrypt bool) {
 		}
 	}
 
-	timeout := time.Duration(2 * time.Second)
+	timeout := 2 * time.Second
 	httpClient := http.Client{
 		Timeout: timeout,
 	}

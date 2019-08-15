@@ -65,11 +65,19 @@ var (
 	getTagCount     = metrics.NewRegisteredCounter("api.http.get.tag.count", nil)
 	getTagNotFound  = metrics.NewRegisteredCounter("api.http.get.tag.notfound", nil)
 	getTagFail      = metrics.NewRegisteredCounter("api.http.get.tag.fail", nil)
+	getPinCount     = metrics.NewRegisteredCounter("api.http.get.pin.count", nil)
+	getPinFail      = metrics.NewRegisteredCounter("api.http.get.pin.fail", nil)
+	postPinCount    = metrics.NewRegisteredCounter("api.http.post.pin.count", nil)
+	postPinFail     = metrics.NewRegisteredCounter("api.http.post.pin.fail", nil)
+	deletePinCount  = metrics.NewRegisteredCounter("api.http.delete.pin.count", nil)
+	deletePinFail   = metrics.NewRegisteredCounter("api.http.delete.pin.fail", nil)
 )
 
 const (
-	TagHeaderName = "x-swarm-tag"
-	PinHeaderName = "x-swarm-pin" // Presence of this in header indicates pinning required
+	TagHeaderName  = "x-swarm-tag" // Presence of this in header indicates the tag
+	PinHeaderName  = "x-swarm-pin" // Presence of this in header indicates pinning required
+	encryptAddr    = "encrypt"
+	tarContentType = "application/x-tar"
 )
 
 type methodHandler map[string]http.Handler
@@ -171,6 +179,20 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
+	mux.Handle("/bzz-pin:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetPins),
+			defaultMiddlewares...,
+		),
+		"POST": Adapt(
+			http.HandlerFunc(server.HandlePin),
+			defaultPostMiddlewares...,
+		),
+		"DELETE": Adapt(
+			http.HandlerFunc(server.HandleUnpin),
+			defaultMiddlewares...,
+		),
+	})
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleRootPaths),
@@ -201,7 +223,7 @@ type Server struct {
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
-	if r.Header.Get("Accept") == "application/x-tar" {
+	if r.Header.Get("Accept") == tarContentType {
 		uri := GetURI(r.Context())
 		_, credentials, _ := r.BasicAuth()
 		reader, err := s.api.GetDirectoryTar(r.Context(), s.api.Decryptor(r.Context(), credentials), uri)
@@ -216,7 +238,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		}
 		defer reader.Close()
 
-		w.Header().Set("Content-Type", "application/x-tar")
+		w.Header().Set("Content-Type", tarContentType)
 
 		fileName := uri.Addr
 		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
@@ -264,7 +286,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 
 	toEncrypt := false
 	uri := GetURI(r.Context())
-	if uri.Addr == "encrypt" {
+	if uri.Addr == encryptAddr {
 		toEncrypt = true
 	}
 
@@ -277,7 +299,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if uri.Addr != "" && uri.Addr != "encrypt" {
+	if uri.Addr != "" && uri.Addr != encryptAddr {
 		postRawFail.Inc(1)
 		respondError(w, r, "raw POST request addr can only be empty or \"encrypt\"", http.StatusBadRequest)
 		return
@@ -336,7 +358,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	toEncrypt := false
 	uri := GetURI(r.Context())
-	if uri.Addr == "encrypt" {
+	if uri.Addr == encryptAddr {
 		toEncrypt = true
 	}
 
@@ -344,7 +366,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	headerPin := r.Header.Get(PinHeaderName)
 
 	var addr storage.Address
-	if uri.Addr != "" && uri.Addr != "encrypt" {
+	if uri.Addr != "" && uri.Addr != encryptAddr {
 		addr, err = s.api.Resolve(r.Context(), uri.Addr)
 		if err != nil {
 			postFilesFail.Inc(1)
@@ -363,7 +385,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
-		case "application/x-tar":
+		case tarContentType:
 			_, err := s.handleTarUpload(r, mw)
 			if err != nil {
 				respondError(w, r, fmt.Sprintf("error uploading tarball: %v", err), http.StatusInternalServerError)
@@ -965,6 +987,81 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, "marshalling error", http.StatusInternalServerError)
 		return
 	}
+}
+
+// HandlePin takes a root hash as argument and pins a given file or collection in the local Swarm DB
+func (s *Server) HandlePin(w http.ResponseWriter, r *http.Request) {
+	postPinCount.Inc(1)
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	fileAddr := uri.Address()
+	log.Debug("handle.post.pin", "ruid", ruid, "uri", r.RequestURI)
+
+	if fileAddr == nil {
+		postPinFail.Inc(1)
+		respondError(w, r, "missig hash to pin ", http.StatusBadRequest)
+		return
+	}
+
+	isRaw := false
+	isRawString := r.URL.Query().Get("raw")
+	if strings.ToLower(isRawString) == "true" {
+		isRaw = true
+	}
+
+	err := s.pinAPI.PinFiles(fileAddr, isRaw, "")
+	if err != nil {
+		postPinFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Debug("pinned content", "ruid", ruid, "key", fileAddr.Hex())
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleUnpin takes a root hash as argument and unpins the file or collection from the local Swarm DB
+func (s *Server) HandleUnpin(w http.ResponseWriter, r *http.Request) {
+	deletePinCount.Inc(1)
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	fileAddr := uri.Address()
+	log.Debug("handle.delete.pin", "ruid", ruid, "uri", r.RequestURI)
+
+	if fileAddr == nil {
+		deletePinFail.Inc(1)
+		respondError(w, r, "missig hash to unpin ", http.StatusBadRequest)
+		return
+	}
+
+	err := s.pinAPI.UnpinFiles(fileAddr, "")
+	if err != nil {
+		deletePinFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("error pinning file %s: %s", fileAddr.Hex(), err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Debug("unpinned content", "ruid", ruid, "key", fileAddr.Hex())
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleGetPins return information about all the hashes pinned at this moment
+func (s *Server) HandleGetPins(w http.ResponseWriter, r *http.Request) {
+	getPinCount.Inc(1)
+	ruid := GetRUID(r.Context())
+	log.Debug("handle.get.pin", "ruid", ruid, "uri", r.RequestURI)
+
+	pinnedFiles, err := s.pinAPI.ListPins()
+	if err != nil {
+		getPinFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("error getting pinned files: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&pinnedFiles)
 }
 
 // calculateNumberOfChunks calculates the number of chunks in an arbitrary content length

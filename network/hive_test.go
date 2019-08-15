@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/state"
 )
 

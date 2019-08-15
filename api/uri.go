@@ -86,7 +86,7 @@ func Parse(rawuri string) (*URI, error) {
 
 	// check the scheme is valid
 	switch uri.Scheme {
-	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzz-hash", "bzz-feed", "bzz-tag":
+	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzz-hash", "bzz-feed", "bzz-tag", "bzz-pin":
 	default:
 		return nil, fmt.Errorf("unknown scheme %q", u.Scheme)
 	}
@@ -109,6 +109,7 @@ func Parse(rawuri string) (*URI, error) {
 	return uri, nil
 }
 
+// Tag returns the string representation of the tag uri scheme
 func (u *URI) Tag() bool {
 	return u.Scheme == "bzz-tag"
 }
@@ -131,6 +132,11 @@ func (u *URI) List() bool {
 
 func (u *URI) Hash() bool {
 	return u.Scheme == "bzz-hash"
+}
+
+// Pin returns the string representation of the pin uri scheme
+func (u *URI) Pin() bool {
+	return u.Scheme == "bzz-pin"
 }
 
 func (u *URI) String() string {

@@ -24,11 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	pq "github.com/ethersphere/swarm/network/priorityqueue"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -269,10 +269,6 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		}
 		storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, chunkKey)
 		time.Sleep(50 * time.Millisecond)
-	}
-
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
 	}
 
 	if !bytes.Equal(storedChunk.Data(), chunkData) {

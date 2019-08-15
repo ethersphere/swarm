@@ -775,7 +775,7 @@ func (t *Pot) String() string {
 
 func (t *Pot) sstring(indent string) string {
 	if t == nil {
-		return "<nil>"
+		return nilString
 	}
 	var s string
 	indent += "  "

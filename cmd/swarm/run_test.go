@@ -42,6 +42,7 @@ import (
 	"github.com/ethersphere/swarm/api"
 	swarmhttp "github.com/ethersphere/swarm/api/http"
 	"github.com/ethersphere/swarm/internal/cmdtest"
+	"github.com/ethersphere/swarm/storage/pin"
 )
 
 var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
@@ -59,8 +60,8 @@ func init() {
 
 const clusterSize = 3
 
-func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, nil, "")
+func serverFunc(api *api.API, pinAPI *pin.API) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, pinAPI, "")
 }
 func TestMain(m *testing.M) {
 	// check if we have been reexec'd
@@ -246,7 +247,7 @@ func getTestAccount(t *testing.T, dir string) (conf *node.Config, account accoun
 	}
 
 	// use a unique IPCPath when running tests on Windows
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		conf.IPCPath = fmt.Sprintf("bzzd-%s.ipc", account.Address.String())
 	}
 
@@ -258,7 +259,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 	node := &testNode{Dir: dir}
 
 	// use a unique IPCPath when running tests on Windows
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		conf.IPCPath = fmt.Sprintf("bzzd-%s.ipc", bzzaccount)
 	}
 
