@@ -385,7 +385,7 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (s *Swarm) Start(srv *p2p.Server) error {
+func (s *Swarm) Start_(srv *p2p.Server) error {
 	startTime := time.Now()
 
 	//s.tracerClose = tracing.Closer
@@ -472,7 +472,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 
 // implements the node.Service interface
 // stops all component services.
-func (s *Swarm) Stop() error {
+func (s *Swarm) Stop_() error {
 	if s.tracerClose != nil {
 		err := s.tracerClose.Close()
 		tracing.FinishSpans()
@@ -517,7 +517,7 @@ func (s *Swarm) Stop() error {
 }
 
 // Protocols implements the node.Service interface
-func (s *Swarm) Protocols() (protos []p2p.Protocol) {
+func (s *Swarm) Protocols_() (protos []p2p.Protocol) {
 	if s.config.BootnodeMode {
 		protos = append(protos, s.bzz.Protocols()...)
 	} else {
@@ -532,7 +532,7 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 
 // implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
-func (s *Swarm) APIs() []rpc.API {
+func (s *Swarm) APIs_() []rpc.API {
 	apis := []rpc.API{
 		// public APIs
 		{
