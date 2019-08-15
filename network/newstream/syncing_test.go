@@ -202,21 +202,12 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 
 				chunks = append(chunks, mustUploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
 
-				totalChunkCount, err = getChunkCount(uploadStore)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if want := tc.chunkCount + tc.liveChunkCount; totalChunkCount != want {
-					t.Errorf("uploaded %v chunks, want %v", totalChunkCount, want)
-				}
-
 				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
 
 				// resume syncing
 				handleMsgPauser.resume()
 
-				err = waitChunks(syncStore, totalChunkCount-removedCount, time.Minute)
+				err = waitChunks(syncStore, tc.chunkCount+tc.liveChunkCount-removedCount, time.Minute)
 				if err != nil {
 					t.Fatal(err)
 				}
