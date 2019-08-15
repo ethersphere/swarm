@@ -106,8 +106,8 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 // when nodes enter the kademlia of the pivot node
 func TestNodesCorrectBinsDynamic(t *testing.T) {
 	const (
-		nodeCount  = 8
-		chunkCount = 1000
+		nodeCount  = 6
+		chunkCount = 500
 	)
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{

@@ -696,10 +696,8 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 			return
 		}
 	case <-s.quit:
-		close(w.done)
 		return
 	case <-p.quit:
-		close(w.done)
 		return
 	}
 	cur, ok := p.getCursor(w.stream)
