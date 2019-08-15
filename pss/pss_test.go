@@ -745,66 +745,6 @@ OUTER:
 	}
 }
 
-// forwarding should skip peers that do not have matching pss capabilities
-func TestPeerCapabilityMismatch(t *testing.T) {
-
-	// create privkey for forwarder node
-	privkey, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// initialize kad
-	baseaddr := network.RandomAddr()
-	kad := network.NewKademlia((baseaddr).Over(), network.NewKadParams())
-	rw := &p2p.MsgPipeRW{}
-
-	// one peer has a mismatching version of pss
-	wrongpssaddr := network.RandomAddr()
-	wrongpsscap := p2p.Cap{
-		Name:    protocolName,
-		Version: 0,
-	}
-	nid := enode.ID{0x01}
-	wrongpsspeer := network.NewPeer(&network.BzzPeer{
-		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(wrongpssaddr.Over()), []p2p.Cap{wrongpsscap}), rw, nil),
-		BzzAddr: &network.BzzAddr{OAddr: wrongpssaddr.Over(), UAddr: nil},
-	}, kad)
-
-	// one peer doesn't even have pss (boo!)
-	nopssaddr := network.RandomAddr()
-	nopsscap := p2p.Cap{
-		Name:    "nopss",
-		Version: 1,
-	}
-	nid = enode.ID{0x02}
-	nopsspeer := network.NewPeer(&network.BzzPeer{
-		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
-		BzzAddr: &network.BzzAddr{OAddr: nopssaddr.Over(), UAddr: nil},
-	}, kad)
-
-	// add peers to kademlia and activate them
-	// it's safe so don't check errors
-	kad.Register(wrongpsspeer.BzzAddr)
-	kad.On(wrongpsspeer)
-	kad.Register(nopsspeer.BzzAddr)
-	kad.On(nopsspeer)
-
-	// create pss
-	pssmsg := &PssMsg{
-		To:      []byte{},
-		Expire:  uint32(time.Now().Add(time.Second).Unix()),
-		Payload: &whisper.Envelope{},
-	}
-	ps := newTestPss(privkey, kad, nil)
-	defer ps.Stop()
-
-	// run the forward
-	// it is enough that it completes; trying to send to incapable peers would create segfault
-	ps.forward(pssmsg)
-
-}
-
 // verifies that message handlers for raw messages only are invoked when minimum one handler for the topic exists in which raw messages are explicitly allowed
 func TestRawAllow(t *testing.T) {
 
@@ -1915,14 +1855,20 @@ func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Param
 	}
 
 	// create pss
+	rpcSrv := rpc.NewServer()
+	rpcDial := func() (*rpc.Client, error) {
+		return rpc.DialInProc(rpcSrv), nil
+	}
 	pp := NewParams().WithPrivateKey(privkey)
+	pp.RPCDialer = rpcDial
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-	ps, err := New(kad, pp)
+	ps, err := New(nil, pp)
 	if err != nil {
 		return nil
 	}
+	rpcSrv.RegisterName("pss", NewAPI(ps))
 	ps.Start(nil)
 
 	return ps
