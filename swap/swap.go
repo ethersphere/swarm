@@ -385,7 +385,7 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 	}
 
 	log.Info("sending cheque", "serial", cheque.ChequeParams.Serial, "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
-	s.cheques[peer] = cheque
+	s.setCheque(peer, cheque)
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
 	if err != nil {
@@ -437,10 +437,10 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
-	lastCheque := s.cheques[peer]
+	lastCheque, exists := s.getCheque(peer)
 
 	serial := uint64(1)
-	if lastCheque != nil {
+	if exists {
 		cheque = &Cheque{
 			ChequeParams: ChequeParams{
 				Serial: lastCheque.Serial + serial,
@@ -510,10 +510,10 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	//only load if the current instance doesn't already have this peer's
 	//last cheque in memory
 	var cheque *Cheque
-	if _, ok := s.cheques[peer]; !ok {
+	if _, ok := s.getCheque(peer); !ok {
 		err = s.store.Get(sentChequeKey(peer), &cheque)
 		if err == nil {
-			s.cheques[peer] = cheque
+			s.setCheque(peer, cheque)
 		}
 	}
 	return err
