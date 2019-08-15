@@ -330,7 +330,6 @@ func (p *Pss) addAPI(api rpc.API) {
 
 // Returns the swarm Kademlia address of the pss node
 func (p *Pss) BaseAddr() []byte {
-	//return p.Kademlia.BaseAddr()
 	return p.baseAddr
 }
 

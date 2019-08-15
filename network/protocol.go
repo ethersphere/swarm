@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	//"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -106,14 +105,7 @@ func NewBzz(config *BzzConfig, store state.Store) *Bzz {
 		LightNode:  config.LightNode,
 		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes: make(map[enode.ID]*HandshakeMsg),
-		//streamerRun:  streamerRun,
-		//streamerSpec: streamerSpec,
 	}
-
-	//	if config.BootnodeMode {
-	//		bzz.streamerRun = nil
-	//		bzz.streamerSpec = nil
-	//	}
 
 	return bzz
 }
@@ -154,14 +146,6 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			PeerInfo: b.Hive.PeerInfo,
 		},
 	}
-	//	if b.streamerSpec != nil && b.streamerRun != nil {
-	//		protocol = append(protocol, p2p.Protocol{
-	//			Name:    b.streamerSpec.Name,
-	//			Version: b.streamerSpec.Version,
-	//			Length:  b.streamerSpec.Length(),
-	//			Run:     b.RunProtocol(b.streamerSpec, b.streamerRun),
-	//		})
-	//	}
 	return protocol
 }
 
