@@ -270,8 +270,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (svcs []node.Servic
 	// Instantiate the pinAPI object with the already opened localstore
 	//self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
 
-	self.sfs = fuse.NewSwarmFS(self.api)
-	log.Debug("Initialized FUSE filesystem")
+	//self.sfs = fuse.NewSwarmFS(self.api)
+	//log.Debug("Initialized FUSE filesystem")
 
 	return svcs, nil
 }
