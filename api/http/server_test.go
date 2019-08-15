@@ -1470,7 +1470,7 @@ func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header
 
 func uploadFile(t *testing.T, srv *TestSwarmServer, data []byte) []byte {
 	t.Helper()
-	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader([]byte(data)))
+	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
