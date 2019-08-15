@@ -149,7 +149,11 @@ func (s *SlipStream) Run(bp *network.BzzPeer) error {
 
 	go sp.InitProviders()
 
-	return sp.Peer.Run(s.HandleMsg(sp))
+	err := sp.Peer.Run(s.HandleMsg(sp))
+	if err != nil {
+		sp.logger.Error("error in run function", "err", err)
+	}
+	return err
 }
 
 // HandleMsg is the main message handler for the stream protocol

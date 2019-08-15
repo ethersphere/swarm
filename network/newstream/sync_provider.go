@@ -175,6 +175,7 @@ var (
 //  - depth changes, and peer stays in depth, but we need more or less
 // peer connects and disconnects quickly
 func (s *syncProvider) InitPeer(p *Peer) {
+	p.logger.Debug("syncProvider.InitPeer")
 	timer := time.NewTimer(SyncInitBackoff)
 	defer timer.Stop()
 
@@ -210,7 +211,10 @@ func (s *syncProvider) InitPeer(p *Peer) {
 			depth = ndepth
 		case <-s.quit:
 			return
+		case <-p.quit:
+			return
 		}
+
 	}
 }
 
