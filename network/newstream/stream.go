@@ -866,30 +866,28 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 				}
 				p.mtx.RUnlock()
 				cc := chunk.NewChunk(c.Address(), c.Data())
-				go func() {
-					ctx := context.TODO()
-					seen, err := provider.Put(ctx, cc.Address(), cc.Data())
-					if err != nil {
-						if err == storage.ErrChunkInvalid {
-							streamChunkDeliveryFail.Inc(1)
-							p.Drop()
-							return
-						}
-					}
-					if seen {
-						streamSeenChunkDelivery.Inc(1)
-						p.logger.Error("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
-					}
-					p.mtx.Lock()
-					w.hashes[c.Address().Hex()] = false
-					p.mtx.Unlock()
-					v := atomic.AddUint64(&w.remaining, ^uint64(0))
-					if v == 0 {
-						p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
-						close(errc)
+				ctx := context.TODO()
+				seen, err := provider.Put(ctx, cc.Address(), cc.Data())
+				if err != nil {
+					if err == storage.ErrChunkInvalid {
+						streamChunkDeliveryFail.Inc(1)
+						p.Drop()
 						return
 					}
-				}()
+				}
+				if seen {
+					streamSeenChunkDelivery.Inc(1)
+					p.logger.Error("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
+				}
+				p.mtx.Lock()
+				w.hashes[c.Address().Hex()] = false
+				p.mtx.Unlock()
+				v := atomic.AddUint64(&w.remaining, ^uint64(0))
+				if v == 0 {
+					p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
+					close(errc)
+					return
+				}
 			case <-p.quit:
 				return
 			case <-w.done:

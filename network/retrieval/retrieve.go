@@ -382,19 +382,17 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		mode = chunk.ModePutRequest
 	}
 
-	p.logger.Trace("handle.chunk.delivery", "ref", msg.Addr)
+	defer osp.Finish()
 
-	go func() {
-		defer osp.Finish()
-		p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
-		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
-		if err != nil {
-			if err == storage.ErrChunkInvalid {
-				p.Drop()
-			}
+	p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
+	_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+	if err != nil {
+		if err == storage.ErrChunkInvalid {
+			p.Drop()
 		}
-		p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
-	}()
+	}
+	p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
+
 	return nil
 }
 
