@@ -40,13 +40,13 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
+	//"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 	bzzapi "github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/internal/debug"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
-	"github.com/ethersphere/swarm/storage/mock"
-	mockrpc "github.com/ethersphere/swarm/storage/mock/rpc"
+	//	"github.com/ethersphere/swarm/storage/mock"
+	//mockrpc "github.com/ethersphere/swarm/storage/mock/rpc"
 	"github.com/ethersphere/swarm/tracing"
 	sv "github.com/ethersphere/swarm/version"
 
@@ -311,7 +311,10 @@ func bzzd(ctx *cli.Context) error {
 		return err
 	}
 	//register BZZ as node.Service in the ethereum node
-	registerBzzService(bzzconfig, stack)
+	err = registerBzzService(bzzconfig, stack)
+	if err != nil {
+		return err
+	}
 	//start the node
 	utils.StartNode(stack)
 
@@ -337,26 +340,36 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
-func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
+func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) error {
 	//define the swarm service boot function
-	boot := func(_ *node.ServiceContext) (node.Service, error) {
-		var nodeStore *mock.NodeStore
-		if bzzconfig.GlobalStoreAPI != "" {
-			// connect to global store
-			client, err := rpc.Dial(bzzconfig.GlobalStoreAPI)
-			if err != nil {
-				return nil, fmt.Errorf("global store: %v", err)
-			}
-			globalStore := mockrpc.NewGlobalStore(client)
-			// create a node store for this swarm key on global store
-			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
+	//svcs, err := swarm.NewSwarm(bzzconfig, nodeStore)
+	svcs, err := swarm.NewSwarm(bzzconfig, nil)
+	if err != nil {
+		return err
+	}
+	for _, svc := range svcs {
+		boot := func(_ *node.ServiceContext) (node.Service, error) {
+			//var nodeStore *mock.NodeStore
+			//		if bzzconfig.GlobalStoreAPI != "" {
+			//			// connect to global store
+			//			client, err := rpc.Dial(bzzconfig.GlobalStoreAPI)
+			//			if err != nil {
+			//				return nil, fmt.Errorf("global store: %v", err)
+			//			}
+			//			globalStore := mockrpc.NewGlobalStore(client)
+			//			// create a node store for this swarm key on global store
+			//			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
+			//		}
+			return svc, nil
+			//svcs := swarm.NewSwarm(bzzconfig, nodeStore)
+			//register within the ethereum node
 		}
-		return swarm.NewSwarm(bzzconfig, nodeStore)
+		if err := stack.Register(boot); err != nil {
+			//			utils.Fatalf("Failed to register the Swarm service: %v", err)
+			return fmt.Errorf("Failed to register the Swarm service: %v", err)
+		}
 	}
-	//register within the ethereum node
-	if err := stack.Register(boot); err != nil {
-		utils.Fatalf("Failed to register the Swarm service: %v", err)
-	}
+	return nil
 }
 
 // getOrCreateAccount returns the address and associated private key for a bzzaccount

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/state"
 )
@@ -78,6 +79,21 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 		Store:      store,
 		peers:      make(map[enode.ID]*BzzPeer),
 	}
+}
+
+// APIs returns the APIs offered by bzz
+// * hive
+// Bzz implements the node.Service interface
+func (h *Hive) APIs() []rpc.API {
+	return []rpc.API{{
+		Namespace: "hive",
+		Version:   "3.0",
+		Service:   HiveAPI{h.Kademlia},
+	}}
+}
+
+type HiveAPI struct {
+	*Kademlia
 }
 
 // Start stars the hive, receives p2p.Server only at startup
