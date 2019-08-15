@@ -47,7 +47,7 @@ const (
 type Tag struct {
 	Uid       uint32    // a unique identifier for this tag
 	Name      string    // a name tag for this tag
-	Address   Address   // the associated swarm hash for this tag
+	Address   string    // the associated swarm hash for this tag
 	total     int64     // total chunks belonging to a tag
 	split     int64     // number of chunks already processed by splitter for hashing
 	seen      int64     // number of chunks already seen
@@ -115,7 +115,7 @@ func (t *Tag) Total() int64 {
 func (t *Tag) DoneSplit(address Address) int64 {
 	total := atomic.LoadInt64(&t.split)
 	atomic.StoreInt64(&t.total, total)
-	t.Address = address
+	t.Address = hex.EncodeToString(address)
 	return total
 }
 
@@ -171,7 +171,7 @@ func (tag *Tag) MarshalBinary() (data []byte, err error) {
 	n = binary.PutVarint(intBuffer, int64(len(tag.Address)))
 	buffer = append(buffer, intBuffer[:n]...)
 
-	buffer = append(buffer, tag.Address[:]...)
+	buffer = append(buffer, []byte(tag.Address)...)
 
 	buffer = append(buffer, []byte(tag.Name)...)
 
@@ -200,7 +200,7 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 	t, n = binary.Varint(buffer)
 	buffer = buffer[n:]
 	if t > 0 {
-		tag.Address = buffer[:t]
+		tag.Address = string(buffer[:t])
 	}
 	tag.Name = string(buffer[t:])
 
@@ -238,7 +238,7 @@ func (t *Tag) MarshalJSON() ([]byte, error) {
 	j := jsonTag{
 		Uid:       t.Uid,
 		Name:      t.Name,
-		Address:   hex.EncodeToString(t.Address),
+		Address:   t.Address,
 		Total:     t.total,
 		Split:     t.split,
 		Seen:      t.seen,
@@ -258,11 +258,7 @@ func (t *Tag) UnmarshalJSON(b []byte) error {
 	}
 	t.Uid = mTag.Uid
 	t.Name = mTag.Name
-	addStr, err := hex.DecodeString(mTag.Address)
-	if err != nil {
-		return err
-	}
-	t.Address = addStr
+	t.Address = mTag.Address
 	t.total = mTag.Total
 	t.split = mTag.Split
 	t.seen = mTag.Seen

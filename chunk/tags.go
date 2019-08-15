@@ -17,7 +17,6 @@
 package chunk
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/rand"
@@ -78,11 +77,11 @@ func (ts *Tags) Get(uid uint32) (*Tag, error) {
 }
 
 // GetByAddress returns the underlying tag for the address or an error if not found
-func (ts *Tags) GetByAddress(address []byte) (*Tag, error) {
+func (ts *Tags) GetByAddress(address string) (*Tag, error) {
 	var t *Tag
 	ts.tags.Range(func(key interface{}, value interface{}) bool {
 		rcvdTag := value.(*Tag)
-		if bytes.Equal(rcvdTag.Address, address) {
+		if rcvdTag.Address == address {
 			t = rcvdTag
 			return false
 		}

@@ -22,6 +22,7 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -968,7 +969,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 
-		tagByFile, err := s.api.Tags.GetByAddress(fileAddr)
+		tagByFile, err := s.api.Tags.GetByAddress(hex.EncodeToString(fileAddr))
 		if err != nil {
 			getTagNotFound.Inc(1)
 			respondError(w, r, "Tag not found", http.StatusNotFound)

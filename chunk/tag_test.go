@@ -17,7 +17,6 @@
 package chunk
 
 import (
-	"bytes"
 	"sync"
 	"testing"
 	"time"
@@ -184,7 +183,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 // tag Address (byte slice) contains some arbitrary value
 func TestMarshallingWithAddr(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
-	tg.Address = []byte{0, 1, 2, 3, 4, 5, 6}
+	tg.Address = "0123456"
 
 	for _, f := range allStates {
 		tg.Inc(f)
@@ -224,13 +223,12 @@ func TestMarshallingWithAddr(t *testing.T) {
 		t.Fatalf("tag addresses length mismatch, want %d, got %d", len(tg.Address), len(unmarshalledTag.Address))
 	}
 
-	if !bytes.Equal(unmarshalledTag.Address, tg.Address) {
+	if unmarshalledTag.Address != tg.Address {
 		t.Fatalf("expected tag address to be %v got %v", unmarshalledTag.Address, tg.Address)
 	}
 }
 
 // TestMarshallingNoAddress tests that marshalling and unmarshalling is done correctly
-// when the tag Address (byte slice) is empty in this case
 func TestMarshallingNoAddr(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
 	for _, f := range allStates {
@@ -272,9 +270,10 @@ func TestMarshallingNoAddr(t *testing.T) {
 	}
 }
 
+// TestJsonMarshallingUnMarshalling tests that json marshalling and unmarshalling is done correctly
 func TestJsonMarshallingUnMarshalling(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
-	tg.Address = []byte{0, 1, 2, 3, 4, 5, 6}
+	tg.Address = "0123456"
 
 	b, err := tg.MarshalJSON()
 	if err != nil {
@@ -310,7 +309,7 @@ func TestJsonMarshallingUnMarshalling(t *testing.T) {
 		t.Fatalf("tag addresses length mismatch, want %d, got %d", len(tg.Address), len(unmarshalledTag.Address))
 	}
 
-	if !bytes.Equal(unmarshalledTag.Address, tg.Address) {
+	if unmarshalledTag.Address != tg.Address {
 		t.Fatalf("expected tag address to be %v got %v", unmarshalledTag.Address, tg.Address)
 	}
 

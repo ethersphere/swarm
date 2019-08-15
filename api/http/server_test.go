@@ -110,12 +110,8 @@ func TestGetTagUsingHash(t *testing.T) {
 	}
 
 	// check if the tag has valid values
-	rcvdAddress, err := hex.DecodeString(string(rootHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(tag.Address, rcvdAddress) {
-		t.Fatalf("retrieved address mismatch, expected %x, got %x", rcvdAddress, tag.Address)
+	if tag.Address != string(rootHash) {
+		t.Fatalf("retrieved address mismatch, expected %x, got %x", string(rootHash), tag.Address)
 	}
 
 	if tag.Total() != 4 {
@@ -170,12 +166,8 @@ func TestGetTagUsingTagId(t *testing.T) {
 	}
 
 	// check if the received tags has valid values
-	rcvdAddress, err := hex.DecodeString(string(rootHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(tag.Address, rcvdAddress) {
-		t.Fatalf("retrieved address mismatch, expected %x, got %x", rcvdAddress, tag.Address)
+	if tag.Address != string(rootHash) {
+		t.Fatalf("retrieved address mismatch, expected %x, got %x", string(rootHash), tag.Address)
 	}
 
 	if tag.Total() != 4 {
