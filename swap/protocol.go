@@ -121,7 +121,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return err
 	}
 
-	swapPeer := NewPeer(protoPeer, s, s.backend, beneficiary, response.ContractAddress)
+	swapPeer := NewPeer(protoPeer, s, beneficiary, response.ContractAddress)
 	s.addPeer(swapPeer)
 	defer s.removePeer(swapPeer)
 
