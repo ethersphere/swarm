@@ -440,19 +440,19 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
 	s.balancesLock.RLock()
-	for peerID, peerBalance := range s.balances {
-		balances[peerID] = peerBalance
+	for peer, peerBalance := range s.balances {
+		balances[peer] = peerBalance
 	}
 	s.balancesLock.RUnlock()
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peerID := keyToID(string(key), balancePrefix)
-		if _, peerHasBalance := balances[peerID]; !peerHasBalance {
+		peer := keyToID(string(key), balancePrefix)
+		if _, peerHasBalance := balances[peer]; !peerHasBalance {
 			var peerBalance int64
 			err = json.Unmarshal(value, &peerBalance)
 			if err == nil {
-				balances[peerID] = peerBalance
+				balances[peer] = peerBalance
 			}
 		}
 		return stop, err
@@ -509,9 +509,9 @@ func (s *Swap) Close() error {
 // resetBalance is called:
 // * for the creditor: upon receiving the cheque
 // * for the debitor: after sending the cheque
-func (s *Swap) resetBalance(peerID enode.ID, amount int64) error {
-	log.Debug("resetting balance for peer", "peer", peerID.String(), "amount", amount)
-	_, err := s.updateBalance(peerID, amount)
+func (s *Swap) resetBalance(peer enode.ID, amount int64) error {
+	log.Debug("resetting balance for peer", "peer", peer.String(), "amount", amount)
+	_, err := s.updateBalance(peer, amount)
 	return err
 }
 
