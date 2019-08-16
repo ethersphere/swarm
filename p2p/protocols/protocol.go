@@ -29,8 +29,6 @@ devp2p subprotocols by abstracting away code standardly shared by protocols.
 package protocols
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -42,9 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/tracing"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 // error codes used by this  protocol scheme
@@ -115,13 +111,6 @@ func errorf(code int, format string, params ...interface{}) *Error {
 	}
 }
 
-// WrappedMsg is used to propagate marshalled context alongside message payloads
-type WrappedMsg struct {
-	Context []byte
-	Size    uint32
-	Payload []byte
-}
-
 //For accounting, the design is to allow the Spec to describe which and how its messages are priced
 //To access this functionality, we provide a Hook interface which will call accounting methods
 //NOTE: there could be more such (horizontal) hooks in the future
@@ -157,6 +146,10 @@ type Spec struct {
 	initOnce sync.Once
 	codes    map[reflect.Type]uint64
 	types    map[uint64]reflect.Type
+
+	// if the protocol does not allow extending the p2p msg to propagate context
+	// even if context not disabled, context will propagate only tracing is enabled
+	DisableContext bool
 }
 
 func (s *Spec) init() {
@@ -208,17 +201,27 @@ type Peer struct {
 	*p2p.Peer                   // the p2p.Peer object representing the remote
 	rw        p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
 	spec      *Spec
+	encode    func(context.Context, interface{}) (interface{}, int, error)
+	decode    func(p2p.Msg) (context.Context, []byte, error)
 }
 
 // NewPeer constructs a new peer
 // this constructor is called by the p2p.Protocol#Run function
 // the first two arguments are the arguments passed to p2p.Protocol.Run function
 // the third argument is the Spec describing the protocol
-func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
+func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
+	encode := encodeWithContext
+	decode := decodeWithContext
+	if spec == nil || spec.DisableContext || !tracing.Enabled {
+		encode = encodeWithoutContext
+		decode = decodeWithoutContext
+	}
 	return &Peer{
-		Peer: p,
-		rw:   rw,
-		spec: spec,
+		Peer:   peer,
+		rw:     rw,
+		spec:   spec,
+		encode: encode,
+		decode: decode,
 	}
 }
 
@@ -234,7 +237,6 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 				metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
 				log.Error("peer.handleIncoming", "err", err)
 			}
-
 			return err
 		}
 	}
@@ -256,51 +258,32 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	metrics.GetOrRegisterCounter("peer.send", nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.send.%T", msg), nil).Inc(1)
 
-	var b bytes.Buffer
-	if tracing.Enabled {
-		writer := bufio.NewWriter(&b)
-
-		tracer := opentracing.GlobalTracer()
-
-		sctx := spancontext.FromContext(ctx)
-
-		if sctx != nil {
-			err := tracer.Inject(
-				sctx,
-				opentracing.Binary,
-				writer)
-			if err != nil {
-				return err
-			}
-		}
-
-		writer.Flush()
-	}
-
-	r, err := rlp.EncodeToBytes(msg)
-	if err != nil {
-		return err
-	}
-
-	wmsg := WrappedMsg{
-		Context: b.Bytes(),
-		Size:    uint32(len(r)),
-		Payload: r,
-	}
-
-	//if the accounting hook is set, call it
-	if p.spec.Hook != nil {
-		err := p.spec.Hook.Send(p, wmsg.Size, msg)
-		if err != nil {
-			p.Drop()
-			return err
-		}
-	}
-
 	code, found := p.spec.GetCode(msg)
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
+
+	wmsg, size, err := p.encode(ctx, msg)
+	if err != nil {
+		return err
+	}
+
+	// if size is not set by the wrapper, need to serialise
+	if size == 0 {
+		r, err := rlp.EncodeToBytes(msg)
+		if err != nil {
+			return err
+		}
+		size = len(r)
+	}
+	// if the accounting hook is set, call it
+	if p.spec.Hook != nil {
+		err = p.spec.Hook.Send(p, uint32(size), msg)
+		if err != nil {
+			return err
+		}
+	}
+
 	return p2p.Send(p.rw, code, wmsg)
 }
 
@@ -324,44 +307,23 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		return errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
 	}
 
-	// unmarshal wrapped msg, which might contain context
-	var wmsg WrappedMsg
-	err = msg.Decode(&wmsg)
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
-
-	ctx := context.Background()
-
-	// if tracing is enabled and the context coming within the request is
-	// not empty, try to unmarshal it
-	if tracing.Enabled && len(wmsg.Context) > 0 {
-		var sctx opentracing.SpanContext
-
-		tracer := opentracing.GlobalTracer()
-		sctx, err = tracer.Extract(
-			opentracing.Binary,
-			bytes.NewReader(wmsg.Context))
-		if err != nil {
-			log.Error(err.Error())
-			return err
-		}
-
-		ctx = spancontext.WithContext(ctx, sctx)
-	}
-
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
 		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
 	}
-	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
+
+	ctx, msgBytes, err := p.decode(msg)
+	if err != nil {
+		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
+	}
+
+	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
 
-	//if the accounting hook is set, call it
+	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
-		err := p.spec.Hook.Receive(p, wmsg.Size, val)
+		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
 		if err != nil {
 			return err
 		}

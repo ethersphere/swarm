@@ -249,9 +249,7 @@ func TestProtocolHook(t *testing.T) {
 	runFunc := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		peer := NewPeer(p, rw, spec)
 		ctx := context.TODO()
-		err := peer.Send(ctx, &dummyMsg{
-			Content: "handshake"})
-
+		err := peer.Send(ctx, &dummyMsg{Content: "handshake"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -281,6 +279,7 @@ func TestProtocolHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	testHook.mu.Lock()
 	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "handshake" {
 		t.Fatal("Expected msg to be set, but it is not")
@@ -291,8 +290,8 @@ func TestProtocolHook(t *testing.T) {
 	if testHook.peer == nil {
 		t.Fatal("Expected peer to be set, is nil")
 	}
-	if peerId := testHook.peer.ID(); peerId != tester.Nodes[0].ID() && peerId != tester.Nodes[1].ID() {
-		t.Fatalf("Expected peer ID to be set correctly, but it is not (got %v, exp %v or %v", peerId, tester.Nodes[0].ID(), tester.Nodes[1].ID())
+	if peerID := testHook.peer.ID(); peerID != tester.Nodes[0].ID() && peerID != tester.Nodes[1].ID() {
+		t.Fatalf("Expected peer ID to be set correctly, but it is not (got %v, exp %v or %v", peerID, tester.Nodes[0].ID(), tester.Nodes[1].ID())
 	}
 	if testHook.size != 11 { //11 is the length of the encoded message
 		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
@@ -309,11 +308,10 @@ func TestProtocolHook(t *testing.T) {
 		},
 	})
 
-	<-testHook.waitC
-
 	if err != nil {
 		t.Fatal(err)
 	}
+	<-testHook.waitC
 
 	testHook.mu.Lock()
 	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "response" {
@@ -600,24 +598,15 @@ func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 }
 
 func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
-	enc := bytes.NewReader(d.getDummyMsg())
+	r, err := rlp.EncodeToBytes(d.msg)
+	if err != nil {
+		return p2p.Msg{}, err
+	}
+	enc := bytes.NewReader(r)
 	return p2p.Msg{
 		Code:       d.code,
 		Size:       d.size,
 		Payload:    enc,
 		ReceivedAt: time.Now(),
 	}, nil
-}
-
-func (d *dummyRW) getDummyMsg() []byte {
-	r, _ := rlp.EncodeToBytes(d.msg)
-	var b bytes.Buffer
-	wmsg := WrappedMsg{
-		Context: b.Bytes(),
-		Size:    uint32(len(r)),
-		Payload: r,
-	}
-	rr, _ := rlp.EncodeToBytes(wmsg)
-	d.size = uint32(len(rr))
-	return rr
 }
