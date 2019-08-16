@@ -169,6 +169,7 @@ func (h *hasherStore) startWait(ctx context.Context) {
 		// if all the chunks have been submitted and all of them are stored, then we can return
 		if done {
 			if nrStoredChunks >= atomic.LoadUint64(&h.nrChunks) {
+				h.waitC <- nil
 				break
 			}
 		}
