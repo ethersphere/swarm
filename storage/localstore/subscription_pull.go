@@ -90,7 +90,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					// until chunk descriptor is sent
 					// break the iteration
-					if until > 0 && item.BinID >= until {
+					if until > 0 && item.BinID > until {
 						return true, errStopSubscription
 					}
 					select {
