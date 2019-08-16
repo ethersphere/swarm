@@ -395,36 +395,37 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 
 	// if there is no existing cheque when loading from the store, it means it's the first interaction
 	// this is a valid scenario
-	err = s.loadLastSentCheque(peer)
+	serial, total, err := s.getLastChequeValues(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
-	lastCheque, exists := s.getCheque(peer)
 
-	serial := uint64(1)
-	if exists {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: lastCheque.Serial + serial,
-				Amount: lastCheque.Amount + amount,
-			},
-		}
-	} else {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: serial,
-				Amount: amount,
-			},
-		}
+	cheque = &Cheque{
+		ChequeParams: ChequeParams{
+			Serial:      serial + 1,
+			Amount:      total + amount,
+			Timeout:     defaultCashInDelay,
+			Contract:    s.owner.Contract,
+			Honey:       honey,
+			Beneficiary: beneficiary,
+		},
 	}
-	cheque.ChequeParams.Timeout = defaultCashInDelay
-	cheque.ChequeParams.Contract = s.owner.Contract
-	cheque.ChequeParams.Honey = honey
-	cheque.Beneficiary = beneficiary
-
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
+}
+
+func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
+	err = s.loadLastSentCheque(peer)
+	if err != nil {
+		return
+	}
+	lastCheque, exists := s.getCheque(peer)
+	if exists {
+		serial = lastCheque.Serial
+		total = lastCheque.Amount
+	}
+	return
 }
 
 // Balance returns the balance for a given peer
