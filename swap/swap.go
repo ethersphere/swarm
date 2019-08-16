@@ -417,6 +417,9 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 
 func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
 	err = s.loadLastSentCheque(peer)
+	if err != nil {
+		return
+	}
 	lastCheque, exists := s.getCheque(peer)
 	if exists {
 		serial = lastCheque.Serial
