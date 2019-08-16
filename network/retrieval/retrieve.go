@@ -161,9 +161,11 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
 		case *RetrieveRequest:
-			go r.handleRetrieveRequest(ctx, p, msg)
+			r.handleRetrieveRequest(ctx, p, msg)
+			return nil
 		case *ChunkDelivery:
-			go r.handleChunkDelivery(ctx, p, msg)
+			return r.handleChunkDelivery(ctx, p, msg)
+
 		}
 		return nil
 	}
@@ -330,7 +332,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		p.logger.Debug("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
+		p.logger.Error("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
 		return
 	}
 
@@ -381,18 +383,19 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		// do not sync if peer that is sending us a chunk is closer to the chunk then we are
 		mode = chunk.ModePutRequest
 	}
+	go func() {
+		defer osp.Finish()
 
-	defer osp.Finish()
-
-	p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
-	_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
-	if err != nil {
-		if err == storage.ErrChunkInvalid {
-			p.Drop()
+		p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
+		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+		if err != nil {
+			p.logger.Error("netstore error putting chunk to localstore", "err", err)
+			if err == storage.ErrChunkInvalid {
+				p.Drop()
+			}
 		}
-	}
-	p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
-
+		p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
+	}()
 	return nil
 }
 
