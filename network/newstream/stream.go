@@ -41,6 +41,11 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
+const (
+	HashSize  = 32
+	BatchSize = 64
+)
+
 var (
 	// Compile time interface check
 	_ node.Service = (*SlipStream)(nil)
@@ -304,7 +309,7 @@ func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *Str
 		p.logger.Debug("setting stream cursor", "stream", s.Stream, "cursor", s.Cursor)
 		p.setCursor(s.Stream, s.Cursor)
 
-		if streamAutostart {
+		if provider.Autostart() {
 			if s.Cursor > 0 {
 				p.logger.Debug("requesting history stream", "stream", s.Stream, "cursor", s.Cursor)
 
@@ -902,7 +907,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 500 * time.Millisecond
+	const batchTimeout = 1000 * time.Millisecond
 
 	var (
 		batch        []byte

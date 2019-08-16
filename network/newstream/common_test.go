@@ -167,7 +167,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 			return nil, nil, err
 		}
 
-		sp := NewSyncProvider(netStore, kad, o.SyncOnlyWithinDepth)
+		sp := NewSyncProvider(netStore, kad, true, o.SyncOnlyWithinDepth)
 		ss := o.StreamConstructorFunc(store, addr.Over(), sp)
 
 		cleanup = func() {
