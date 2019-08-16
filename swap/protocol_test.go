@@ -60,7 +60,7 @@ func TestHandshake(t *testing.T) {
 	cheque := newTestCheque()
 
 	// sign the cheque
-	cheque.Signature, err = swap.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(swap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestEmitCheque(t *testing.T) {
 			Timeout:     0,
 		},
 	}
-	cheque.Signature, err = debitorSwap.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
