@@ -370,7 +370,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		err := s.DeploySwap(context.Background())
+		err := s.deploySwap(context.Background())
 		if err != nil {
 			return fmt.Errorf("Unable to deploy swap contract: %v", err)
 		}
@@ -548,8 +548,8 @@ func (s *Swarm) APIs() []rpc.API {
 	return apis
 }
 
-// DeploySwap ensures that Swap is set up on chain.
-func (s *Swarm) DeploySwap(ctx context.Context) error {
+// deploySwap ensures that Swap is set up on chain.
+func (s *Swarm) deploySwap(ctx context.Context) error {
 	return s.swap.Deploy(ctx, s.backend, s.config.Path)
 }
 
