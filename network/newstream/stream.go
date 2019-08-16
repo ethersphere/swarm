@@ -632,7 +632,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 
 	var wantedHashesMsg WantedHashes
 
-	errc := s.clientSealBatch(p, provider, w)
+	errc := s.clientSealBatch(ctx, p, provider, w)
 
 	if ctr == 0 {
 		// this handles the case that there are no hashes we are interested in (ctr==0)
@@ -764,7 +764,6 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 		Ruid: msg.Ruid,
 	}
 	for i := 0; i < l; i++ {
-		p.logger.Trace("peer wants hash?", "ruid", offer.ruid, "wants?", want.Get(i))
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
@@ -793,13 +792,11 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 					return
 				default:
 				}
-				go func(cd *ChunkDelivery) {
-					p.logger.Debug("sending chunk delivery")
-					if err := p.Send(ctx, cd); err != nil {
-						p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
-						p.Drop()
-					}
-				}(cd)
+				p.logger.Debug("sending chunk delivery")
+				if err := p.Send(ctx, cd); err != nil {
+					p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
+					p.Drop()
+				}
 				frameSize = 0
 				cd = &ChunkDelivery{
 					Ruid: msg.Ruid,
@@ -847,7 +844,7 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 	p.logger.Debug("done writing batch to chunks channel")
 }
 
-func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) <-chan error {
+func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan error {
 	p.logger.Debug("stream.clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
 	errc := make(chan error)
 	go func() {
@@ -866,7 +863,6 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 				}
 				p.mtx.RUnlock()
 				cc := chunk.NewChunk(c.Address(), c.Data())
-				ctx := context.TODO()
 				seen, err := provider.Put(ctx, cc.Address(), cc.Data())
 				if err != nil {
 					if err == storage.ErrChunkInvalid {
@@ -877,7 +873,7 @@ func (s *SlipStream) clientSealBatch(p *Peer, provider StreamProvider, w *want) 
 				}
 				if seen {
 					streamSeenChunkDelivery.Inc(1)
-					p.logger.Error("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
+					p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
 				}
 				p.mtx.Lock()
 				w.hashes[c.Address().Hex()] = false

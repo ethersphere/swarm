@@ -74,10 +74,8 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 
 	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
-		//s.logger.Debug("already have data", "ref", hex.EncodeToString(key))
 		return loaded, nil
 	}
-	//s.logger.Debug("we need data", "ref", hex.EncodeToString(key))
 	return ok, func(ctx context.Context) error {
 		select {
 		case <-fi.Delivered:
@@ -100,7 +98,7 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 	// mark the chunk as Set in order to allow for garbage collection
 	// this can and at some point should be moved to a dedicated method that
 	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
-	err = s.netStore.Set(context.Background(), chunk.ModeSetSync, addr)
+	err = s.netStore.Set(ctx, chunk.ModeSetSync, addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return nil, err
