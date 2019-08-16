@@ -162,7 +162,6 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 		switch msg := msg.(type) {
 		case *RetrieveRequest:
 			r.handleRetrieveRequest(ctx, p, msg)
-			return nil
 		case *ChunkDelivery:
 			return r.handleChunkDelivery(ctx, p, msg)
 
