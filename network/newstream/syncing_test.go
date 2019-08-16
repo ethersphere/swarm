@@ -722,7 +722,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 			if err != nil {
 				return err
 			}
-
+			log.Debug("done getting all refs")
 			for _, c := range chunkAddrs {
 				proxData := chunkProxData{
 					addr:                      c,
