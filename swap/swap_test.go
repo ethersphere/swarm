@@ -858,7 +858,7 @@ func TestPeerVerifyChequeProperties(t *testing.T) {
 	testCheque := newTestCheque()
 	testCheque.Signature = testChequeSig
 
-	if err := swap.verifyChequeProperties(testCheque, peer); err != nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err != nil {
 		t.Fatalf("failed to verify cheque properties: %s", err.Error())
 	}
 }
@@ -872,7 +872,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	// cheque with an invalid signature
 	testCheque := newTestCheque()
 	testCheque.Signature = manipulateSignature(testChequeSig)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with invalid signature")
 	}
 
@@ -880,7 +880,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	testCheque = newTestCheque()
 	testCheque.Contract = beneficiaryAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong contract")
 	}
 
@@ -888,7 +888,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	testCheque = newTestCheque()
 	testCheque.Beneficiary = ownerAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
 	}
 
@@ -896,7 +896,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	testCheque = newTestCheque()
 	testCheque.Timeout = 10
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with non-zero timeout")
 	}
 }
@@ -910,7 +910,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase
 
-	actualAmount, err := verifyChequeAgainstLast(newCheque, oldCheque, increase)
+	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
 	if err != nil {
 		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
 	}
@@ -929,7 +929,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque := newTestCheque()
 	newCheque.Amount = oldCheque.Amount + increase
 
-	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same serial")
 	}
 
@@ -938,7 +938,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque = newTestCheque()
 	newCheque.Serial = oldCheque.Serial + 1
 
-	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
 	}
 
@@ -948,7 +948,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase + 5
 
-	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
 	}
 }
