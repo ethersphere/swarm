@@ -422,7 +422,7 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	cheque.ChequeParams.Honey = honey
 	cheque.Beneficiary = beneficiary
 
-	cheque.Signature, err = s.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
 }
@@ -515,11 +515,6 @@ func (s *Swap) resetBalance(peerID enode.ID, amount int64) error {
 	log.Debug("resetting balance for peer", "peer", peerID.String(), "amount", amount)
 	_, err := s.updateBalance(peerID, amount)
 	return err
-}
-
-// signContent signs the cheque with the owners private key
-func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
-	return cheque.Sign(s.owner.privateKey)
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
