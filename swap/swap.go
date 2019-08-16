@@ -274,7 +274,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
 func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
-	if err := s.verifyChequeProperties(cheque, p); err != nil {
+	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
 		return 0, err
 	}
 
@@ -286,7 +286,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 		return 0, err
 	}
 
-	actualAmount, err := verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, expectedAmount)
 	if err != nil {
 		return 0, err
 	}
@@ -294,54 +294,6 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	if err := s.saveLastReceivedCheque(p, cheque); err != nil {
 		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
-	}
-
-	return actualAmount, nil
-}
-
-// verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
-// it does not verify anything that requires knowing the previous cheque
-func (s *Swap) verifyChequeProperties(cheque *Cheque, p *Peer) error {
-	if cheque.Contract != p.contractAddress {
-		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
-	}
-
-	// the beneficiary is the owner of the counterparty swap contract
-	if err := cheque.VerifySig(p.beneficiary); err != nil {
-		return err
-	}
-
-	if cheque.Beneficiary != s.owner.address {
-		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", s.owner.address, cheque.Beneficiary)
-	}
-
-	if cheque.Timeout != 0 {
-		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
-	}
-
-	return nil
-}
-
-// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
-// furthermore it cheques that the increase in amount is as expected
-// returns the actual amount received in this cheque
-func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
-	actualAmount := cheque.Amount
-
-	if lastCheque != nil {
-		if cheque.Serial <= lastCheque.Serial {
-			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
-		}
-
-		if cheque.Amount <= lastCheque.Amount {
-			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
-		}
-
-		actualAmount -= lastCheque.Amount
-	}
-
-	if expectedAmount != actualAmount {
-		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
 	}
 
 	return actualAmount, nil
