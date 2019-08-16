@@ -543,7 +543,7 @@ func TestSignContent(t *testing.T) {
 	swap.owner.privateKey = ownerKey
 
 	// sign the cheque
-	sig, err := swap.signContent(expectedCheque)
+	sig, err := expectedCheque.Sign(swap.owner.privateKey)
 	// expected value (computed through truffle/js)
 	expected := testChequeSig
 	if err != nil {
@@ -680,7 +680,7 @@ func TestContractIntegration(t *testing.T) {
 
 	cheque := newTestCheque()
 	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
-	cheque.Signature, err = issuerSwap.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
