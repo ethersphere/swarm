@@ -427,19 +427,14 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 	return cheque, err
 }
 
-func (s *Swap) getLastChequeValues(peer enode.ID) (uint64, uint64, error) {
-	// if there is no existing cheque when loading from the store, it means it's the first interaction
-	// this is a valid scenario
-	err := s.loadLastSentCheque(peer)
-	if err != nil && err != state.ErrNotFound {
-		return 0, 0, err
-	}
-
+func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
+	err = s.loadLastSentCheque(peer)
 	lastCheque, exists := s.getCheque(peer)
 	if exists {
-		return lastCheque.Serial, lastCheque.Amount, nil
+		serial = lastCheque.Serial
+		total = lastCheque.Amount
 	}
-	return 1, 0, nil
+	return
 }
 
 // Balance returns the balance for a given peer
