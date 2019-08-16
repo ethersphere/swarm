@@ -173,7 +173,11 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
-		return s.sendCheque(peer.ID())
+		swapPeer, ok := s.getPeer(peer.ID())
+		if !ok {
+			return fmt.Errorf("peer %s not found", peer)
+		}
+		return s.sendCheque(swapPeer)
 	}
 
 	return nil
@@ -334,12 +338,9 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 // sendCheque sends a cheque to peer
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
-func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer, ok := s.getPeer(peer)
-	if !ok {
-		return fmt.Errorf("error while getting peer: %s", peer)
-	}
-	cheque, err := s.createCheque(peer)
+func (s *Swap) sendCheque(swapPeer *Peer) error {
+	peer := swapPeer.ID()
+	cheque, err := s.createCheque(swapPeer)
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
@@ -370,14 +371,11 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 // The cheque will be signed and point to the issuer's contract
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
-func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
+func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer, ok := s.getPeer(peer)
-	if !ok {
-		return nil, fmt.Errorf("error while getting peer: %s", peer)
-	}
+	peer := swapPeer.ID()
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance, exists := s.getBalance(peer)
@@ -395,36 +393,37 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 
 	// if there is no existing cheque when loading from the store, it means it's the first interaction
 	// this is a valid scenario
-	err = s.loadLastSentCheque(peer)
+	serial, total, err := s.getLastChequeValues(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
-	lastCheque, exists := s.getCheque(peer)
 
-	serial := uint64(1)
-	if exists {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: lastCheque.Serial + serial,
-				Amount: lastCheque.Amount + amount,
-			},
-		}
-	} else {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: serial,
-				Amount: amount,
-			},
-		}
+	cheque = &Cheque{
+		ChequeParams: ChequeParams{
+			Serial:      serial + 1,
+			Amount:      total + amount,
+			Timeout:     defaultCashInDelay,
+			Contract:    s.owner.Contract,
+			Honey:       honey,
+			Beneficiary: beneficiary,
+		},
 	}
-	cheque.ChequeParams.Timeout = defaultCashInDelay
-	cheque.ChequeParams.Contract = s.owner.Contract
-	cheque.ChequeParams.Honey = honey
-	cheque.Beneficiary = beneficiary
-
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
+}
+
+func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
+	err = s.loadLastSentCheque(peer)
+	if err != nil {
+		return
+	}
+	lastCheque, exists := s.getCheque(peer)
+	if exists {
+		serial = lastCheque.Serial
+		total = lastCheque.Amount
+	}
+	return
 }
 
 // Balance returns the balance for a given peer
@@ -442,19 +441,19 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
 	s.balancesLock.RLock()
-	for peerID, peerBalance := range s.balances {
-		balances[peerID] = peerBalance
+	for peer, peerBalance := range s.balances {
+		balances[peer] = peerBalance
 	}
 	s.balancesLock.RUnlock()
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peerID := keyToID(string(key), balancePrefix)
-		if _, peerHasBalance := balances[peerID]; !peerHasBalance {
+		peer := keyToID(string(key), balancePrefix)
+		if _, peerHasBalance := balances[peer]; !peerHasBalance {
 			var peerBalance int64
 			err = json.Unmarshal(value, &peerBalance)
 			if err == nil {
-				balances[peerID] = peerBalance
+				balances[peer] = peerBalance
 			}
 		}
 		return stop, err
@@ -511,9 +510,9 @@ func (s *Swap) Close() error {
 // resetBalance is called:
 // * for the creditor: upon receiving the cheque
 // * for the debitor: after sending the cheque
-func (s *Swap) resetBalance(peerID enode.ID, amount int64) error {
-	log.Debug("resetting balance for peer", "peer", peerID.String(), "amount", amount)
-	_, err := s.updateBalance(peerID, amount)
+func (s *Swap) resetBalance(peer enode.ID, amount int64) error {
+	log.Debug("resetting balance for peer", "peer", peer.String(), "amount", amount)
+	_, err := s.updateBalance(peer, amount)
 	return err
 }
 
