@@ -41,6 +41,7 @@ type syncProvider struct {
 
 	name                    string
 	syncBinsOnlyWithinDepth bool
+	autostart               bool
 	quit                    chan struct{}
 
 	logger log.Logger
@@ -50,11 +51,12 @@ type syncProvider struct {
 // NOTE: syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
 // established only within depth ( >=depth ). This is needed for Push Sync. When set to false, the streams are
 // established on all bins as they did traditionally with Pull Sync.
-func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, syncOnlyWithinDepth bool) StreamProvider {
+func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
 	s := &syncProvider{
 		netStore:                ns,
 		kad:                     kad,
 		syncBinsOnlyWithinDepth: syncOnlyWithinDepth,
+		autostart:               autostart,
 		name:                    syncStreamName,
 		quit:                    make(chan struct{}),
 		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
@@ -357,5 +359,7 @@ func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
 func (s *syncProvider) StreamName() string { return s.name }
 
 func (s *syncProvider) Boundedness() bool { return false }
+
+func (s *syncProvider) Autostart() bool { return s.autostart }
 
 func (s *syncProvider) Close() { close(s.quit) }

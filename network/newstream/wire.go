@@ -68,6 +68,8 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
+	Autostart() bool
+
 	Boundedness() bool
 
 	Close()

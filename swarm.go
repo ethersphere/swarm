@@ -202,11 +202,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
-	//if !config.SyncEnabled || config.LightNodeEnabled {
-	//syncing = stream.SyncingDisabled
-	//}
+	syncing := true
+	if !config.SyncEnabled || config.LightNodeEnabled {
+		syncing = false
+	}
 
-	syncProvider := newstream.NewSyncProvider(self.netStore, to, false)
+	syncProvider := newstream.NewSyncProvider(self.netStore, to, syncing, false)
 	self.newstreamer = newstream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
 	tags := chunk.NewTags() //todo load from state store
 

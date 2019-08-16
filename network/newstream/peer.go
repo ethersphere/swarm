@@ -31,11 +31,6 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-const (
-	HashSize  = 32
-	BatchSize = 32
-)
-
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
