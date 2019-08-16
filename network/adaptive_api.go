@@ -37,7 +37,8 @@ func (a *CapabilitiesAPI) MatchCapability(id CapabilityID, idx int) (bool, error
 	c := a.get(id)
 	if c == nil {
 		return false, fmt.Errorf("Capability %d not registered", id)
-	} else if idx > len(c.Cap)-1 {
+	}
+	if idx > len(c.Cap)-1 {
 		return false, fmt.Errorf("Capability %d idx %d out of range", id, idx)
 	}
 	return c.Cap[idx], nil
