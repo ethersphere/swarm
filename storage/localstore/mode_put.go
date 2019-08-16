@@ -18,13 +18,11 @@ package localstore
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -135,7 +133,6 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 			triggerPullFeed = true
 			db.pushIndex.PutInBatch(batch, item)
 			triggerPushFeed = true
-			log.Trace("putting chunk to db", "base", hex.EncodeToString(db.baseKey), "binID", item.BinID, "addr", hex.EncodeToString(item.Address), "po", db.po(item.Address))
 		}
 
 	case chunk.ModePutSync:
