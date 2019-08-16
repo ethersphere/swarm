@@ -309,7 +309,7 @@ func TestResetBalance(t *testing.T) {
 	debitorSwap.peers[creditor.ID()] = creditor
 
 	// now simulate sending the cheque to the creditor from the debitor
-	debitorSwap.sendCheque(creditor.ID())
+	debitorSwap.sendCheque(creditor)
 	// the debitor should have already reset its balance
 	if debitorSwap.balances[creditor.ID()] != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditor.ID()])
