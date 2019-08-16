@@ -544,10 +544,8 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:    testChequeContract,
-			Serial:      uint64(1),
 			Amount:      uint64(42),
 			Honey:       uint64(42),
-			Timeout:     uint64(0),
 			Beneficiary: beneficiaryAddress,
 		},
 	}
@@ -906,14 +904,6 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
 	}
-
-	// cheque with non-zero timeout
-	testCheque = newTestCheque()
-	testCheque.Timeout = 10
-	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
-		t.Fatalf("accepted cheque with non-zero timeout")
-	}
 }
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher serial and amount
@@ -922,7 +912,6 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
-	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase
 
 	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
@@ -939,19 +928,9 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	increase := uint64(10)
 
-	// cheque with higher amount but same serial
+	// cheque with same or lower amount
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
-	newCheque.Amount = oldCheque.Amount + increase
-
-	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
-		t.Fatal("accepted a cheque with same serial")
-	}
-
-	// cheque with higher serial but same amount
-	oldCheque = newTestCheque()
-	newCheque = newTestCheque()
-	newCheque.Serial = oldCheque.Serial + 1
 
 	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
@@ -960,7 +939,6 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase + 5
 
 	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
@@ -987,13 +965,12 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).Serial != cheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
+	if swap.loadLastReceivedCheque(peer).Amount != cheque.Amount {
+		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, cheque.Amount)
 	}
 
 	// create another cheque with higher serial and amount
 	otherCheque := newTestCheque()
-	otherCheque.Serial = cheque.Serial + 1
 	otherCheque.Amount = cheque.Amount + 10
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
@@ -1003,8 +980,8 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).Serial != otherCheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, otherCheque.Serial)
+	if swap.loadLastReceivedCheque(peer).Amount != otherCheque.Amount {
+		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, otherCheque.Amount)
 	}
 }
 
@@ -1026,33 +1003,20 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 		t.Fatal("accecpted an invalid cheque as first cheque")
 	}
 
-	// valid cheque with serial 5
+	// valid cheque
 	cheque = newTestCheque()
-	cheque.Serial = 5
 	cheque.Signature, _ = cheque.Sign(ownerKey)
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if swap.loadLastReceivedCheque(peer).Serial != cheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
-	}
-
-	// invalid cheque because serial is lower
-	otherCheque := newTestCheque()
-	otherCheque.Serial = cheque.Serial - 1
-	otherCheque.Amount = cheque.Amount + 10
-	otherCheque.Honey = 10
-	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
-
-	if _, err := swap.processAndVerifyCheque(otherCheque, peer); err == nil {
-		t.Fatal("accepted a cheque with lower serial")
+	if swap.loadLastReceivedCheque(peer).Amount != cheque.Amount {
+		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, cheque.Amount)
 	}
 
 	// invalid cheque because amount is lower
-	otherCheque = newTestCheque()
-	otherCheque.Serial = cheque.Serial + 1
+	otherCheque := newTestCheque()
 	otherCheque.Amount = cheque.Amount - 10
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
@@ -1062,8 +1026,8 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 
 	// check that no invalid cheque was saved
-	if swap.loadLastReceivedCheque(peer).Serial != cheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
+	if swap.loadLastReceivedCheque(peer).Amount != cheque.Amount {
+		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, cheque.Amount)
 	}
 }
 

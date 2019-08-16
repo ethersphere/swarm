@@ -150,7 +150,6 @@ func TestEmitCheque(t *testing.T) {
 			Beneficiary: creditorSwap.owner.address,
 			Amount:      42,
 			Honey:       42,
-			Timeout:     0,
 		},
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)

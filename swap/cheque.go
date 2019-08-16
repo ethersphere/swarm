@@ -90,19 +90,11 @@ func (cheque *Cheque) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 
 // Equal checks if other has the same fields
 func (cheque *Cheque) Equal(other *Cheque) bool {
-	if cheque.Serial != other.Serial {
-		return false
-	}
-
 	if cheque.Beneficiary != other.Beneficiary {
 		return false
 	}
 
 	if cheque.Amount != other.Amount {
-		return false
-	}
-
-	if cheque.Timeout != other.Timeout {
 		return false
 	}
 
@@ -133,10 +125,6 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", expectedBeneficiary, cheque.Beneficiary)
 	}
 
-	if cheque.Timeout != 0 {
-		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
-	}
-
 	return nil
 }
 
@@ -147,10 +135,6 @@ func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount
 	actualAmount := cheque.Amount
 
 	if lastCheque != nil {
-		if cheque.Serial <= lastCheque.Serial {
-			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
-		}
-
 		if cheque.Amount <= lastCheque.Amount {
 			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
 		}

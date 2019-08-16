@@ -342,7 +342,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
 
-	log.Info("sending cheque", "serial", cheque.ChequeParams.Serial, "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	log.Info("sending cheque", "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.setCheque(peer, cheque)
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
@@ -390,16 +390,14 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 
 	// if there is no existing cheque when loading from the store, it means it's the first interaction
 	// this is a valid scenario
-	serial, total, err := s.getLastChequeValues(peer)
+	total, err := s.getLastChequeValues(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
-			Serial:      serial + 1,
 			Amount:      total + amount,
-			Timeout:     defaultCashInDelay,
 			Contract:    s.owner.Contract,
 			Honey:       honey,
 			Beneficiary: beneficiary,
@@ -410,14 +408,13 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	return cheque, err
 }
 
-func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
+func (s *Swap) getLastChequeValues(peer enode.ID) (total uint64, err error) {
 	err = s.loadLastSentCheque(peer)
 	if err != nil {
 		return
 	}
 	lastCheque, exists := s.getCheque(peer)
 	if exists {
-		serial = lastCheque.Serial
 		total = lastCheque.Amount
 	}
 	return
