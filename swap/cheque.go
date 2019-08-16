@@ -28,21 +28,14 @@ import (
 
 // encodeForSignature encodes the cheque in the format used in the signing procedure
 func (cheque *Cheque) encodeForSignature() []byte {
-	serialBytes := make([]byte, 32)
 	amountBytes := make([]byte, 32)
-	timeoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	binary.BigEndian.PutUint64(serialBytes[24:], cheque.Serial)
 	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
-	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
 	// construct the actual cheque
 	input := cheque.Contract.Bytes()
 	input = append(input, cheque.Beneficiary.Bytes()...)
-	input = append(input, serialBytes[:]...)
 	input = append(input, amountBytes[:]...)
-	input = append(input, timeoutBytes[:]...)
-
 	return input
 }
 

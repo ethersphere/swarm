@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethersphere/swarm/contracts/swap/contract"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 )
 
 var (
@@ -63,16 +63,14 @@ func InstanceAt(address common.Address, backend bind.ContractBackend) (Contract,
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
-	// SubmitChequeBeneficiary submits a cheque to a given beneficiary
-	SubmitChequeBeneficiary(opts *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
-	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Receipt, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// Cheques returns the last cheque for the given address
-	Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error)
+	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
 }
 
 // ChequeResult is needed because the underlying `Cheques` method returns an untyped struct
@@ -95,7 +93,7 @@ func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Ad
 	if err != nil {
 		return err
 	}
-	referenceCode := common.FromHex(contract.ContractDeployedCode)
+	referenceCode := common.FromHex(contract.SimpleSwapDeployedCode)
 	if !bytes.Equal(codeReadFromAddress, referenceCode) {
 		return ErrNotASwapContract
 	}
@@ -133,18 +131,8 @@ func (s simpleContract) ContractParams() *Params {
 }
 
 // Cheques returns the last cheque from the smart contract
-func (s simpleContract) Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error) {
-	r, err := s.instance.Cheques(opts, addr)
-	if err != nil {
-		return nil, err
-	}
-	result := &ChequeResult{
-		Serial:      r.Serial,
-		Amount:      r.Amount,
-		PaidOut:     r.PaidOut,
-		CashTimeout: r.CashTimeout,
-	}
-	return result, nil
+func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
+	return s.instance.PaidOut(opts, addr)
 }
 
 // Issuer returns the contract owner from the blockchain
@@ -153,17 +141,8 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 }
 
 // SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
-func (s simpleContract) SubmitChequeBeneficiary(auth *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error) {
-	tx, err := s.instance.SubmitChequeBeneficiary(auth, serial, amount, timeout, ownerSig)
-	if err != nil {
-		return nil, err
-	}
-	return WaitFunc(auth, backend, tx)
-}
-
-// CashChequeBeneficiary cashes the cheque.
-func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error) {
-	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, requestPayout)
+func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Receipt, error) {
+	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {
 		return nil, err
 	}

@@ -41,8 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -54,8 +54,8 @@ var (
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
-	testChequeSig      = common.Hex2Bytes("fd3f73c7a708bb4e42471b76dabee2a0c1b9af29efb7eadb37f206bf871b81cf0c7987ad89633be930a63eba9e793cc77896131de7d9740b49da80c23c217c621c")
-	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
+	testChequeSig      = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
+	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
 	gasLimit           = uint64(8000000)
 	testBackend        *swapTestBackend
 )
@@ -478,8 +478,8 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 // During tests, because the submit and cashing in of cheques are async, we should wait for the function to be returned
 // Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
 // causing subsequent TX to possibly fail due to nonce mismatch
-func testSubmitChequeAndCash(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
-	submitChequeAndCash(s, otherSwap, opts, actualAmount, cheque)
+func testSubmitChequeAndCash(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+	cashCheque(s, otherSwap, opts, cheque)
 	// close the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
 		if stb.submitDone != nil {
@@ -562,7 +562,7 @@ func TestChequeEncodeForSignature(t *testing.T) {
 	// encode the cheque
 	encoded := expectedCheque.encodeForSignature()
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000000")
+	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe000000000000000000000000000000000000000000000000000000000000002a")
 	if !bytes.Equal(encoded, expected) {
 		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x", expected, encoded)
 	}
@@ -575,7 +575,7 @@ func TestChequeSigHash(t *testing.T) {
 	// compute the hash that will be signed
 	hash := expectedCheque.sigHash()
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("291619739fc0008915f09989411d22a29ea62eb39d86ed094ef51d6a420a1358")
+	expected := common.Hex2Bytes("354a78a181b24d0beb1606cd9f525e6068e8e5dd96747468c21f2ecc89cb0bad")
 	if !bytes.Equal(hash, expected) {
 		t.Fatalf("Unexpected sigHash of cheque. Expected: %x, result is: %x", expected, hash)
 	}
@@ -692,13 +692,13 @@ func setupContractTest() func() {
 	// we overwrite the waitForTx function with one which the simulated backend
 	// immediately commits
 	currentWaitFunc := cswap.WaitFunc
-	defaultSubmitChequeAndCash = testSubmitChequeAndCash
+	defaultCashCheque = testSubmitChequeAndCash
 	// overwrite only for the duration of the test, so...
 	cswap.WaitFunc = testWaitForTx
 	return func() {
 		// ...we need to set it back to original when done
 		cswap.WaitFunc = currentWaitFunc
-		defaultSubmitChequeAndCash = submitChequeAndCash
+		defaultCashCheque = cashCheque
 	}
 }
 
@@ -743,40 +743,6 @@ func TestContractIntegration(t *testing.T) {
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	receipt, err := issuerSwap.contract.SubmitChequeBeneficiary(
-		opts,
-		testBackend,
-		big.NewInt(int64(cheque.Serial)),
-		big.NewInt(int64(cheque.Amount)),
-		big.NewInt(int64(cheque.Timeout)),
-		cheque.Signature)
-
-	testBackend.Commit()
-
-	// check if success
-	if receipt.Status != 1 {
-		t.Fatalf("Bad status %d", receipt.Status)
-	}
-
-	log.Debug("check cheques state")
-
-	// check state, check that cheque is indeed there
-	result, err := issuerSwap.contract.Cheques(nil, beneficiaryAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Serial.Uint64() != cheque.Serial {
-		t.Fatalf("Wrong serial %d", result.Serial)
-	}
-	if result.Amount.Uint64() != cheque.Amount {
-		t.Fatalf("Wrong amount %d", result.Amount)
-	}
-	log.Debug("cheques result", "result", result)
-
-	// go forward in time
-	testBackend.AdjustTime(30 * time.Second)
-
-	payoutAmount := int64(20)
 	// test cashing in, for this we need balance in the contract
 	// => send some money
 	log.Debug("send money to contract")
@@ -787,7 +753,7 @@ func TestContractIntegration(t *testing.T) {
 	depoTx := types.NewTransaction(
 		nonce,
 		issuerSwap.owner.Contract,
-		big.NewInt(payoutAmount),
+		big.NewInt(int64(cheque.Amount)),
 		50000,
 		big.NewInt(int64(0)),
 		[]byte{},
@@ -799,7 +765,7 @@ func TestContractIntegration(t *testing.T) {
 	testBackend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(payoutAmount))
+	receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.Amount)), cheque.Signature)
 	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
@@ -808,15 +774,15 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatalf("Bad status %d", receipt.Status)
 	}
 
-	// check again the status, check paid out is increase by amount
-	result, err = issuerSwap.contract.Cheques(nil, beneficiaryAddress)
+	// check state, check that cheque is indeed there
+	result, err := issuerSwap.contract.PaidOut(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("cheques result", "result", result)
-	if result.PaidOut.Int64() != payoutAmount {
-		t.Fatalf("Expected paid out amount to be %d, but is %d", payoutAmount, result.PaidOut)
+	if result.Uint64() != cheque.Amount {
+		t.Fatalf("Wrong cumulative payout %d", result)
 	}
+	log.Debug("cheques result", "result", result)
 }
 
 // when testing, we don't need to wait for a transaction to be mined

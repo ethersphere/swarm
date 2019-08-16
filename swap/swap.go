@@ -220,14 +220,14 @@ func (s *Swap) handleMsg(p *Peer) func(ctx context.Context, msg interface{}) err
 	}
 }
 
-var defaultSubmitChequeAndCash = submitChequeAndCash
+var defaultCashCheque = cashCheque
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a debitor
 func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
 	log.Info("received cheque from peer", "peer", p.ID().String())
-	actualAmount, err := s.processAndVerifyCheque(cheque, p)
+	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
@@ -253,16 +253,16 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 
 	// submit cheque and cash in async, otherwise this blocks here until the TX is mined
-	go defaultSubmitChequeAndCash(s, otherSwap, opts, actualAmount, cheque)
+	go defaultCashCheque(s, otherSwap, opts, cheque)
 
 	return err
 }
 
-// submitChequeAndCash should be called async as it blocks until the transaction(s) are mined
-// The function submits the cheque to the blockchain and then cashes it in directly
-func submitChequeAndCash(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
+// cashCheque should be called async as it blocks until the transaction(s) are mined
+// The function cashes the cheque by sending it to the blockchain
+func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	receipt, err := otherSwap.SubmitChequeBeneficiary(opts, s.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
+	receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.Amount)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
@@ -270,15 +270,6 @@ func submitChequeAndCash(s *Swap, otherSwap contract.Contract, opts *bind.Transa
 		return
 	}
 	log.Debug("submit tx mined", "receipt", receipt)
-
-	receipt, err = otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(actualAmount)))
-	if err != nil {
-		// TODO: do something with the error
-		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		log.Error("error cashing cheque", "err", err)
-		return
-	}
-	log.Info("Cheque successfully submitted and cashed")
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
