@@ -173,7 +173,11 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
-		return s.sendCheque(peer.ID())
+		swapPeer, ok := s.getPeer(peer.ID())
+		if !ok {
+			return fmt.Errorf("error while getting peer: %s", peer)
+		}
+		return s.sendCheque(swapPeer)
 	}
 
 	return nil
@@ -334,12 +338,9 @@ func (s *Swap) loadBalance(peer enode.ID) (err error) {
 // sendCheque sends a cheque to peer
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
-func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer, ok := s.getPeer(peer)
-	if !ok {
-		return fmt.Errorf("error while getting peer: %s", peer)
-	}
-	cheque, err := s.createCheque(peer)
+func (s *Swap) sendCheque(swapPeer *Peer) error {
+	peer := swapPeer.Peer.ID()
+	cheque, err := s.createCheque(swapPeer)
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
@@ -370,14 +371,11 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 // The cheque will be signed and point to the issuer's contract
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
-func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
+func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer, ok := s.getPeer(peer)
-	if !ok {
-		return nil, fmt.Errorf("error while getting peer: %s", peer)
-	}
+	peer := swapPeer.Peer.ID()
 	beneficiary := swapPeer.beneficiary
 
 	peerBalance, exists := s.getBalance(peer)
