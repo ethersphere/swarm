@@ -864,31 +864,35 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address)
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop()
+					p.mtx.RLock()
 					return
 				}
 				p.mtx.RUnlock()
-				cc := chunk.NewChunk(c.Address(), c.Data())
-				seen, err := provider.Put(ctx, cc.Address(), cc.Data())
-				if err != nil {
-					if err == storage.ErrChunkInvalid {
-						streamChunkDeliveryFail.Inc(1)
-						p.Drop()
+				go func() {
+					cc := chunk.NewChunk(c.Address(), c.Data())
+					seen, err := provider.Put(ctx, cc.Address(), cc.Data())
+					if err != nil {
+						if err == storage.ErrChunkInvalid {
+							streamChunkDeliveryFail.Inc(1)
+							p.Drop()
+							return
+						}
+						p.logger.Error("clientSealBatch error putting chunk", "err", err)
+					}
+					if seen {
+						streamSeenChunkDelivery.Inc(1)
+						p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
+					}
+					p.mtx.Lock()
+					w.hashes[c.Address().Hex()] = false
+					p.mtx.Unlock()
+					v := atomic.AddUint64(&w.remaining, ^uint64(0))
+					if v == 0 {
+						p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
+						close(errc)
 						return
 					}
-				}
-				if seen {
-					streamSeenChunkDelivery.Inc(1)
-					p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
-				}
-				p.mtx.Lock()
-				w.hashes[c.Address().Hex()] = false
-				p.mtx.Unlock()
-				v := atomic.AddUint64(&w.remaining, ^uint64(0))
-				if v == 0 {
-					p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
-					close(errc)
-					return
-				}
+				}()
 			case <-p.quit:
 				return
 			case <-w.done:
