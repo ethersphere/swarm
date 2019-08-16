@@ -83,7 +83,7 @@ func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 	return nil
 }
 
-// Sign returns a signature for the cheque with supplied private key
+// Sign returns the cheque's signature with supplied private key
 func (cheque *Cheque) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 	sig, err := crypto.Sign(cheque.sigHash(), prv)
 	if err != nil {
