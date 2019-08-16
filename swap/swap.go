@@ -410,7 +410,6 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 			Beneficiary: beneficiary,
 		},
 	}
-
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
