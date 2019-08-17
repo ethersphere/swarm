@@ -792,13 +792,6 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 				return
 			}
 
-			defer func(addr chunk.Address) {
-				err := provider.Set(ctx, addr)
-				if err != nil {
-					p.logger.Error("error setting chunk as synced", "addr", addr, "err", err)
-				}
-			}(hash)
-
 			chunkD := DeliveredChunk{
 				Addr: hash,
 				Data: data,
@@ -835,6 +828,16 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 		if err := p.Send(ctx, cd); err != nil {
 			p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
 			p.Drop()
+		}
+	}
+
+	for i := 0; i < l; i++ {
+		if want.Get(i) {
+			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
+			err := provider.Set(ctx, hash)
+			if err != nil {
+				p.logger.Error("error setting chunk as synced", "addr", hash, "err", err)
+			}
 		}
 	}
 }
