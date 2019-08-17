@@ -269,9 +269,6 @@ func (s *SlipStream) handleStreamInfoReq(ctx context.Context, p *Peer, msg *Stre
 	}
 }
 
-// TODO: provide this option value from StreamProvider?
-var streamAutostart = true
-
 // handleStreamInfoRes handles the StreamInfoRes message.
 // this message is handled by the CLIENT (*Peer is the server in this case)
 func (st *SlipStream) handleStreamInfoRes(ctx context.Context, p *Peer, msg *StreamInfoRes) {
@@ -911,7 +908,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 1000 * time.Millisecond
+	const batchTimeout = 100 * time.Millisecond
 
 	var (
 		batch        []byte
