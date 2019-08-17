@@ -67,6 +67,10 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
 	s.logger.Debug("syncProvider.NeedData", "key", hex.EncodeToString(key))
 	start := time.Now()
+	defer func(start time.Time) {
+		end := time.Since(start)
+		s.logger.Debug("syncProvider.NeedData ended", "took", end)
+	}(start)
 
 	select {
 	case <-s.quit:
@@ -92,24 +96,37 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
 	log.Debug("syncProvider.Get")
+	start := time.Now()
+	defer func(start time.Time) {
+		end := time.Since(start)
+		s.logger.Debug("syncProvider.Get ended", "took", end)
+	}(start)
 	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(addr))
 	if err != nil {
-		return nil, err
-	}
-
-	// mark the chunk as Set in order to allow for garbage collection
-	// this can and at some point should be moved to a dedicated method that
-	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
-	err = s.netStore.Set(ctx, chunk.ModeSetSync, addr)
-	if err != nil {
-		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return nil, err
 	}
 	return ch.Data(), nil
 }
 
+func (s *syncProvider) Set(ctx context.Context, addr chunk.Address) error {
+	// mark the chunk as Set in order to allow for garbage collection
+	// this can and at some point should be moved to a dedicated method that
+	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
+	err := s.netStore.Set(ctx, chunk.ModeSetSync, addr)
+	if err != nil {
+		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
+		return err
+	}
+	return nil
+}
+
 func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error) {
 	log.Trace("syncProvider.Put", "addr", addr)
+	start := time.Now()
+	defer func(start time.Time) {
+		end := time.Since(start)
+		s.logger.Debug("syncProvider.Put ended", "took", end)
+	}(start)
 	ch := chunk.NewChunk(addr, data)
 	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch)
 	if seen {
