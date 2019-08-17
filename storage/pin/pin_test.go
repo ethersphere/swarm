@@ -231,7 +231,7 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, func()) {
 		t.Fatalf("could not create localstore. Error: %s", err.Error())
 	}
 	tags := chunk.NewTags()
-	fileStore := storage.NewFileStore(lStore, storage.NewFileStoreParams(), tags)
+	fileStore := storage.NewFileStore(lStore, lStore, storage.NewFileStoreParams(), tags)
 
 	// Swarm feeds test setup
 	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")

@@ -213,7 +213,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
-	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
+	self.fileStore = storage.NewFileStore(lnetStore, localStore, self.config.FileStoreParams, tags)
 
 	log.Debug("Setup local storage")
 
