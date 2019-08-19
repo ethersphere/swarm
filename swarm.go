@@ -369,7 +369,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		err := s.deploySwap(context.Background())
+		err := s.swap.Deploy(context.Background(), s.backend, s.config.Path)
 		if err != nil {
 			return fmt.Errorf("Unable to deploy swap contract: %v", err)
 		}
@@ -545,11 +545,6 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	return apis
-}
-
-// deploySwap ensures that Swap is set up on chain.
-func (s *Swarm) deploySwap(ctx context.Context) error {
-	return s.swap.Deploy(ctx, s.backend, s.config.Path)
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
