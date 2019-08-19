@@ -453,7 +453,6 @@ func (p *Peer) runUpdateSyncing() {
 			return
 		}
 	}
-	log.Debug("update syncing subscriptions: exiting", "peer", p.ID())
 }
 
 // updateSyncSubscriptions accepts two slices of integers, the first one

@@ -96,7 +96,7 @@ func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
 	}
 	if resp.Content != exp.Content {
 		// if !bytes.Equal(resp.Content, exp.Content)
-		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Content))
+		t.Errorf("incorrect content. expected '%s...', got '%s...'", exp.Content, resp.Content)
 	}
 }
 

@@ -49,10 +49,13 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 PublicAPI
 	store               state.Store          // store is needed in order to keep balances and cheques across sessions
-	lock                sync.RWMutex         // lock the store
+	accountingLock      sync.RWMutex         // lock for data consistency in accounting-related functions
 	balances            map[enode.ID]int64   // map of balances for each peer
+	balancesLock        sync.RWMutex         // lock for balances map
 	cheques             map[enode.ID]*Cheque // map of cheques for each peer
+	chequesLock         sync.RWMutex         // lock for cheques map
 	peers               map[enode.ID]*Peer   // map of all swap Peers
+	peersLock           sync.RWMutex         // lock for peers map
 	backend             contract.Backend     // the backend (blockchain) used
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
@@ -125,7 +128,7 @@ func keyToID(key string, prefix string) enode.ID {
 }
 
 // createOwner assings keys and addresses
-func (s *Swap) createOwner(prvkey *ecdsa.PrivateKey) *Owner {
+func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
 		privateKey: prvkey,
@@ -142,8 +145,8 @@ func (s *Swap) DeploySuccess() string {
 // Add is the (sole) accounting function
 // Swap implements the protocols.Balance interface
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.accountingLock.Lock()
+	defer s.accountingLock.Unlock()
 
 	err = s.loadBalance(peer.ID())
 	if err != nil && err != state.ErrNotFound {
@@ -151,7 +154,11 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	}
 
 	// Check if balance with peer is over the disconnect threshold
-	if s.balances[peer.ID()] >= s.disconnectThreshold {
+	balance, exists := s.getBalance(peer.ID())
+	if !exists {
+		return fmt.Errorf("peer %v does not exist", peer.ID())
+	}
+	if balance >= s.disconnectThreshold {
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
 	}
 
@@ -166,10 +173,40 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	if newBalance <= -s.paymentThreshold {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
-		return s.sendCheque(peer.ID())
+		swapPeer, ok := s.getPeer(peer.ID())
+		if !ok {
+			return fmt.Errorf("peer %s not found", peer)
+		}
+		return s.sendCheque(swapPeer)
 	}
 
 	return nil
+}
+
+func (s *Swap) getBalance(id enode.ID) (int64, bool) {
+	s.balancesLock.RLock()
+	defer s.balancesLock.RUnlock()
+	peerBalance, exists := s.balances[id]
+	return peerBalance, exists
+}
+
+func (s *Swap) setBalance(id enode.ID, balance int64) {
+	s.balancesLock.Lock()
+	defer s.balancesLock.Unlock()
+	s.balances[id] = balance
+}
+
+func (s *Swap) getCheque(id enode.ID) (*Cheque, bool) {
+	s.chequesLock.RLock()
+	defer s.chequesLock.RUnlock()
+	peerCheque, exists := s.cheques[id]
+	return peerCheque, exists
+}
+
+func (s *Swap) setCheque(id enode.ID, cheque *Cheque) {
+	s.chequesLock.Lock()
+	defer s.chequesLock.Unlock()
+	s.cheques[id] = cheque
 }
 
 // handleMsg is for handling messages when receiving messages
@@ -198,9 +235,9 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	s.lock.Lock()
+	s.accountingLock.Lock()
 	err = s.resetBalance(p.ID(), 0-int64(cheque.Honey))
-	s.lock.Unlock()
+	s.accountingLock.Unlock()
 	if err != nil {
 		return err
 	}
@@ -241,7 +278,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
 func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
-	if err := s.verifyChequeProperties(cheque, p); err != nil {
+	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
 		return 0, err
 	}
 
@@ -253,7 +290,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 		return 0, err
 	}
 
-	actualAmount, err := verifyChequeAgainstLast(cheque, lastCheque, expectedAmount)
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, expectedAmount)
 	if err != nil {
 		return 0, err
 	}
@@ -266,91 +303,50 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	return actualAmount, nil
 }
 
-// verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
-// it does not verify anything that requires knowing the previous cheque
-func (s *Swap) verifyChequeProperties(cheque *Cheque, p *Peer) error {
-	if cheque.Contract != p.contractAddress {
-		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
-	}
-
-	// the beneficiary is the owner of the counterparty swap contract
-	if err := cheque.VerifySig(p.beneficiary); err != nil {
-		return err
-	}
-
-	if cheque.Beneficiary != s.owner.address {
-		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", s.owner.address, cheque.Beneficiary)
-	}
-
-	if cheque.Timeout != 0 {
-		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
-	}
-
-	return nil
-}
-
-// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
-// furthermore it cheques that the increase in amount is as expected
-// returns the actual amount received in this cheque
-func verifyChequeAgainstLast(cheque *Cheque, lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
-	actualAmount := cheque.Amount
-
-	if lastCheque != nil {
-		if cheque.Serial <= lastCheque.Serial {
-			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
-		}
-
-		if cheque.Amount <= lastCheque.Amount {
-			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
-		}
-
-		actualAmount -= lastCheque.Amount
-	}
-
-	if expectedAmount != actualAmount {
-		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
-	}
-
-	return actualAmount, nil
-}
-
+// To be called with mutex already held
+// Caller must be careful that the same balance isn't concurrently read and written by multiple routines
 func (s *Swap) updateBalance(peer enode.ID, amount int64) (int64, error) {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
-	s.balances[peer] += amount
+	balance, exists := s.getBalance(peer)
+	if !exists {
+		return 0, fmt.Errorf("peer %v does not exist", peer)
+	}
+	newBalance := balance + amount
+	s.setBalance(peer, newBalance)
 	//save the new balance to the state store
-	peerBalance := s.balances[peer]
-	err := s.store.Put(balanceKey(peer), &peerBalance)
+	err := s.store.Put(balanceKey(peer), &newBalance)
 	if err != nil {
 		return 0, err
 	}
-	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(peerBalance, 10))
-	return peerBalance, err
+	log.Debug("balance for peer after accounting", "peer", peer.String(), "balance", strconv.FormatInt(newBalance, 10))
+	return newBalance, err
 }
 
 // loadBalance loads balances from the state store (persisted)
+// To be called with mutex already held
+// Caller must be careful that the same balance isn't concurrently read and written by multiple routines
 func (s *Swap) loadBalance(peer enode.ID) (err error) {
 	var peerBalance int64
-	if _, ok := s.balances[peer]; !ok {
+	if _, ok := s.getBalance(peer); !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
-		s.balances[peer] = peerBalance
+		s.setBalance(peer, peerBalance)
 	}
 	return
 }
 
 // sendCheque sends a cheque to peer
-func (s *Swap) sendCheque(peer enode.ID) error {
-	swapPeer, ok := s.getPeer(peer)
-	if !ok {
-		return fmt.Errorf("error while getting peer: %s", peer)
-	}
-	cheque, err := s.createCheque(peer)
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
+func (s *Swap) sendCheque(swapPeer *Peer) error {
+	peer := swapPeer.ID()
+	cheque, err := s.createCheque(swapPeer)
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
 
 	log.Info("sending cheque", "serial", cheque.ChequeParams.Serial, "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
-	s.cheques[peer] = cheque
+	s.setCheque(peer, cheque)
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
 	if err != nil {
@@ -373,17 +369,19 @@ func (s *Swap) sendCheque(peer enode.ID) error {
 // createCheque creates a new cheque whose beneficiary will be the peer and
 // whose serial and amount are set based on the last cheque and current balance for this peer
 // The cheque will be signed and point to the issuer's contract
-func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
+func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	swapPeer, ok := s.getPeer(peer)
-	if !ok {
-		return nil, fmt.Errorf("error while getting peer: %s", peer)
-	}
+	peer := swapPeer.ID()
 	beneficiary := swapPeer.beneficiary
 
-	peerBalance := s.balances[peer]
+	peerBalance, exists := s.getBalance(peer)
+	if !exists {
+		return nil, fmt.Errorf("peer not found %v: ", peer)
+	}
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-peerBalance)
 
@@ -395,42 +393,43 @@ func (s *Swap) createCheque(peer enode.ID) (*Cheque, error) {
 
 	// if there is no existing cheque when loading from the store, it means it's the first interaction
 	// this is a valid scenario
-	err = s.loadLastSentCheque(peer)
+	serial, total, err := s.getLastChequeValues(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
-	lastCheque := s.cheques[peer]
 
-	serial := uint64(1)
-	if lastCheque != nil {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: lastCheque.Serial + serial,
-				Amount: lastCheque.Amount + amount,
-			},
-		}
-	} else {
-		cheque = &Cheque{
-			ChequeParams: ChequeParams{
-				Serial: serial,
-				Amount: amount,
-			},
-		}
+	cheque = &Cheque{
+		ChequeParams: ChequeParams{
+			Serial:      serial + 1,
+			Amount:      total + amount,
+			Timeout:     defaultCashInDelay,
+			Contract:    s.owner.Contract,
+			Honey:       honey,
+			Beneficiary: beneficiary,
+		},
 	}
-	cheque.ChequeParams.Timeout = defaultCashInDelay
-	cheque.ChequeParams.Contract = s.owner.Contract
-	cheque.ChequeParams.Honey = honey
-	cheque.Beneficiary = beneficiary
-
-	cheque.Signature, err = s.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
+}
+
+func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
+	err = s.loadLastSentCheque(peer)
+	if err != nil {
+		return
+	}
+	lastCheque, exists := s.getCheque(peer)
+	if exists {
+		serial = lastCheque.Serial
+		total = lastCheque.Amount
+	}
+	return
 }
 
 // Balance returns the balance for a given peer
 func (s *Swap) Balance(peer enode.ID) (int64, error) {
 	var err error
-	peerBalance, ok := s.balances[peer]
+	peerBalance, ok := s.getBalance(peer)
 	if !ok {
 		err = s.store.Get(balanceKey(peer), &peerBalance)
 	}
@@ -441,18 +440,20 @@ func (s *Swap) Balance(peer enode.ID) (int64, error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
-	for peerID, peerBalance := range s.balances {
-		balances[peerID] = peerBalance
+	s.balancesLock.RLock()
+	for peer, peerBalance := range s.balances {
+		balances[peer] = peerBalance
 	}
+	s.balancesLock.RUnlock()
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peerID := keyToID(string(key), balancePrefix)
-		if _, peerHasBalance := balances[peerID]; !peerHasBalance {
+		peer := keyToID(string(key), balancePrefix)
+		if _, peerHasBalance := balances[peer]; !peerHasBalance {
 			var peerBalance int64
 			err = json.Unmarshal(value, &peerBalance)
 			if err == nil {
-				balances[peerID] = peerBalance
+				balances[peer] = peerBalance
 			}
 		}
 		return stop, err
@@ -466,14 +467,16 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
+// To be called with mutex already held
+// Caller must be careful that the same cheque isn't concurrently read and written by multiple routines
 func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 	//only load if the current instance doesn't already have this peer's
 	//last cheque in memory
 	var cheque *Cheque
-	if _, ok := s.cheques[peer]; !ok {
+	if _, ok := s.getCheque(peer); !ok {
 		err = s.store.Get(sentChequeKey(peer), &cheque)
 		if err == nil {
-			s.cheques[peer] = cheque
+			s.setCheque(peer, cheque)
 		}
 	}
 	return err
@@ -482,8 +485,8 @@ func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
 // loadLastReceivedCheque gets the last received cheque for the peer
 // cheque gets loaded from database if not already in memory
 func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.accountingLock.Lock()
+	defer s.accountingLock.Unlock()
 	if p.lastReceivedCheque != nil {
 		return p.lastReceivedCheque
 	}
@@ -493,29 +496,24 @@ func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p *Peer, cheque *Cheque) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.accountingLock.Lock()
+	defer s.accountingLock.Unlock()
 	p.lastReceivedCheque = cheque
 	return s.store.Put(receivedChequeKey(p.ID()), cheque)
 }
 
 // Close cleans up swap
-func (s *Swap) Close() {
-	s.store.Close()
+func (s *Swap) Close() error {
+	return s.store.Close()
 }
 
 // resetBalance is called:
 // * for the creditor: upon receiving the cheque
 // * for the debitor: after sending the cheque
-func (s *Swap) resetBalance(peerID enode.ID, amount int64) error {
-	log.Debug("resetting balance for peer", "peer", peerID.String(), "amount", amount)
-	_, err := s.updateBalance(peerID, amount)
+func (s *Swap) resetBalance(peer enode.ID, amount int64) error {
+	log.Debug("resetting balance for peer", "peer", peer.String(), "amount", amount)
+	_, err := s.updateBalance(peer, amount)
 	return err
-}
-
-// signContent signs the cheque with the owners private key
-func (s *Swap) signContent(cheque *Cheque) ([]byte, error) {
-	return cheque.Sign(s.owner.privateKey)
 }
 
 // GetParams returns contract parameters (Bin, ABI) from the contract
@@ -560,7 +558,7 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// deploy deploys the Swap contract, creates an instance of the contract and sets the chequebookAddr
+// deploy deploys the Swap contract
 func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value

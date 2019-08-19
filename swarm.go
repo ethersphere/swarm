@@ -474,7 +474,7 @@ func (s *Swarm) Stop() error {
 		s.ps.Stop()
 	}
 	if s.swap != nil {
-		s.swap.Close()
+		s.swap.Stop()
 	}
 	if s.accountingMetrics != nil {
 		s.accountingMetrics.Close()
@@ -549,12 +549,6 @@ func (s *Swarm) APIs() []rpc.API {
 			Service:   protocols.NewAccountingApi(s.accountingMetrics),
 			Public:    false,
 		},
-		{
-			Namespace: "pin",
-			Version:   pin.Version,
-			Service:   s.pinAPI,
-			Public:    false,
-		},
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
@@ -572,8 +566,13 @@ func (s *Swarm) APIs() []rpc.API {
 	return apis
 }
 
+<<<<<<< HEAD
 // DeploySwap ensures that Swap is set up on chain.
 func (s *Swarm) DeploySwap(ctx context.Context) error {
+=======
+// deploySwap ensures that Swap is set up on chain.
+func (s *Swarm) deploySwap(ctx context.Context) error {
+>>>>>>> incentives
 	return s.swap.Deploy(ctx, s.backend, s.config.Path)
 }
 

@@ -63,6 +63,7 @@ func InstanceAt(address common.Address, backend bind.ContractBackend) (Contract,
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
+<<<<<<< HEAD
 	// Submit a cheque to the beneficiary
 	SubmitChequeBeneficiary(opts *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error)
 	// Cash the cheque by the beneficiary
@@ -72,6 +73,17 @@ type Contract interface {
 	// Return the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// Return the last cheque for the given address
+=======
+	// SubmitChequeBeneficiary submits a cheque to a given beneficiary
+	SubmitChequeBeneficiary(opts *bind.TransactOpts, backend Backend, serial *big.Int, amount *big.Int, timeout *big.Int, ownerSig []byte) (*types.Receipt, error)
+	// CashChequeBeneficiary cashes the cheque by the beneficiary
+	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, requestPayout *big.Int) (*types.Receipt, error)
+	// ContractParams returns contract info (e.g. deployed address)
+	ContractParams() *Params
+	// Issuer returns the contract owner from the blockchain
+	Issuer(opts *bind.CallOpts) (common.Address, error)
+	// Cheques returns the last cheque for the given address
+>>>>>>> incentives
 	Cheques(opts *bind.CallOpts, addr common.Address) (*ChequeResult, error)
 }
 

@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )
 
 /*
@@ -60,7 +60,7 @@ func TestHandshake(t *testing.T) {
 	cheque := newTestCheque()
 
 	// sign the cheque
-	cheque.Signature, err = swap.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(swap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +143,8 @@ func TestEmitCheque(t *testing.T) {
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "dreditor", []p2p.Cap{})
 	dProtoPeer := protocols.NewPeer(dPtpPeer, drw, Spec)
 	// create the Swap protocol peers
-	creditor := NewPeer(cProtoPeer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
-	debitor := NewPeer(dProtoPeer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	creditor := NewPeer(cProtoPeer, debitorSwap, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dProtoPeer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
 	// set balance artificially
 	creditorSwap.balances[debitor.ID()] = 42
@@ -165,7 +165,7 @@ func TestEmitCheque(t *testing.T) {
 			Timeout:     0,
 		},
 	}
-	cheque.Signature, err = debitorSwap.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
-	creditor := NewPeer(cPeer.Peer, debitorSwap, debitorSwap.backend, common.Address{}, common.Address{})
+	creditor := NewPeer(cPeer.Peer, debitorSwap, common.Address{}, common.Address{})
 	// set the creditor as peer into the debitor's swap
 	debitorSwap.peers[creditor.ID()] = creditor
 
@@ -275,7 +275,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
-	debitor := NewPeer(cPeer.Peer, creditorSwap, creditorSwap.backend, common.Address{}, common.Address{})
+	debitor := NewPeer(cPeer.Peer, creditorSwap, common.Address{}, common.Address{})
 	// set the debitor as peer into the creditor's swap
 	creditorSwap.peers[debitor.ID()] = debitor
 

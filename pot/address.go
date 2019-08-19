@@ -19,13 +19,17 @@ package pot
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+const nilString = "<nil>"
 
 var (
 	zerosBin = Address{}.Bin()
@@ -75,22 +79,57 @@ func (a Address) Bytes() []byte {
 	return a[:]
 }
 
-// ProxCmp compares the distances a->target and b->target.
-// Returns -1 if a is closer to target, 1 if b is closer to target
-// and 0 if they are equal.
-func ProxCmp(a, x, y interface{}) int {
-	return proxCmp(ToBytes(a), ToBytes(x), ToBytes(y))
+// Distance returns the distance between address x and address y as a (comparable) big integer using the distance metric defined in the swarm specification
+// Fails if not all addresses are of equal length
+func Distance(x, y []byte) (*big.Int, error) {
+	distanceBytes, err := DistanceRaw(x, y)
+	if err != nil {
+		return nil, err
+	}
+	r := big.NewInt(0)
+	r.SetBytes(distanceBytes)
+	return r, nil
 }
 
-func proxCmp(a, x, y []byte) int {
+// DistanceRaw returns the distance between address x and address y in big-endian binary format using the distance metric defined in the swarm specfication
+// Fails if not all addresses are of equal length
+func DistanceRaw(x, y []byte) ([]byte, error) {
+	if len(x) != len(y) {
+		return nil, errors.New("address length must match")
+	}
+	c := NewAddressFromBytes(make([]byte, len(x)))
+	for i, addr := range x {
+		c[i] = addr ^ y[i]
+	}
+	return c.Bytes(), nil
+}
+
+// DistanceCmp compares x and y to a in terms of the distance metric defined in the swarm specfication
+// it returns:
+// 	1 if x is closer to a than y
+// 	0 if x and y are equally far apart from (this means that x and y are the same address)
+// 	-1 if x is farther from a than y
+// Fails if not all addresses are of equal length
+func DistanceCmp(a, x, y []byte) (int, error) {
+	if len(a) != len(x) || len(a) != len(y) {
+		return 0, errors.New("address length must match")
+	}
+	return ProxCmp(a, x, y), nil
+}
+
+// ProxCmp compares the distances x->a and y->a
+// Returns -1 if x is closer to a, 1 if y is closer to a
+// and 0 if they are equal.
+func ProxCmp(a, x, y []byte) int {
 	for i := range a {
 		dx := x[i] ^ a[i]
 		dy := y[i] ^ a[i]
-		if dx > dy {
+		if dx == dy {
+			continue
+		} else if dx > dy {
 			return 1
-		} else if dx < dy {
-			return -1
 		}
+		return -1
 	}
 	return 0
 }
@@ -198,7 +237,7 @@ func proximityOrder(one, other []byte, pos int) (int, bool) {
 // Label displays the node's key in binary format
 func Label(v Val) string {
 	if v == nil {
-		return "<nil>"
+		return nilString
 	}
 	if s, ok := v.(fmt.Stringer); ok {
 		return s.String()

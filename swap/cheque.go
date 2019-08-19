@@ -27,7 +27,7 @@ import (
 )
 
 // encodeForSignature encodes the cheque in the format used in the signing procedure
-func (cheque *Cheque) encodeForSignature() ([]byte, error) {
+func (cheque *Cheque) encodeForSignature() []byte {
 	serialBytes := make([]byte, 32)
 	amountBytes := make([]byte, 32)
 	timeoutBytes := make([]byte, 32)
@@ -43,13 +43,13 @@ func (cheque *Cheque) encodeForSignature() ([]byte, error) {
 	input = append(input, amountBytes[:]...)
 	input = append(input, timeoutBytes[:]...)
 
-	return input, nil
+	return input
 }
 
 // sigHash hashes the cheque using the prefix that would be added by eth_Sign
 func (cheque *Cheque) sigHash() []byte {
 	// we can ignore the error because it is always nil
-	encoded, _ := cheque.encodeForSignature()
+	encoded := cheque.encodeForSignature()
 	input := crypto.Keccak256(encoded)
 	withPrefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
 	return crypto.Keccak256([]byte(withPrefix))
@@ -83,7 +83,7 @@ func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 	return nil
 }
 
-// Sign signs the cheque with supplied private key
+// Sign returns the cheque's signature with supplied private key
 func (cheque *Cheque) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 	sig, err := crypto.Sign(cheque.sigHash(), prv)
 	if err != nil {
@@ -122,4 +122,52 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 	}
 
 	return true
+}
+
+// verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
+// it does not verify anything that requires knowing the previous cheque
+func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common.Address) error {
+	if cheque.Contract != p.contractAddress {
+		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
+	}
+
+	// the beneficiary is the owner of the counterparty swap contract
+	if err := cheque.VerifySig(p.beneficiary); err != nil {
+		return err
+	}
+
+	if cheque.Beneficiary != expectedBeneficiary {
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", expectedBeneficiary, cheque.Beneficiary)
+	}
+
+	if cheque.Timeout != 0 {
+		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
+	}
+
+	return nil
+}
+
+// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
+// furthermore it cheques that the increase in amount is as expected
+// returns the actual amount received in this cheque
+func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
+	actualAmount := cheque.Amount
+
+	if lastCheque != nil {
+		if cheque.Serial <= lastCheque.Serial {
+			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
+		}
+
+		if cheque.Amount <= lastCheque.Amount {
+			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
+		}
+
+		actualAmount -= lastCheque.Amount
+	}
+
+	if expectedAmount != actualAmount {
+		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+	}
+
+	return actualAmount, nil
 }

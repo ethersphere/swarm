@@ -179,7 +179,7 @@ func TestPotRemove(t *testing.T) {
 	pof := DefaultPof(8)
 	n := NewPot(newTestAddr("00111100", 0), 0)
 	n, _, _ = Remove(n, newTestAddr("00111100", 0), pof)
-	exp := "<nil>"
+	exp := nilString
 	got := Label(n.Pin())
 	if got != exp {
 		t.Fatalf("incorrect pinned value. Expected %v, got %v", exp, got)

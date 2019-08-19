@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -32,18 +31,16 @@ var ErrDontOwe = errors.New("no negative balance")
 type Peer struct {
 	*protocols.Peer
 	swap               *Swap
-	backend            contract.Backend
 	beneficiary        common.Address
 	contractAddress    common.Address
 	lastReceivedCheque *Cheque
 }
 
 // NewPeer creates a new swap Peer instance
-func NewPeer(p *protocols.Peer, s *Swap, backend contract.Backend, beneficiary common.Address, contractAddress common.Address) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) *Peer {
 	return &Peer{
 		Peer:            p,
 		swap:            s,
-		backend:         backend,
 		beneficiary:     beneficiary,
 		contractAddress: contractAddress,
 	}

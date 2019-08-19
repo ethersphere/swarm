@@ -77,7 +77,7 @@ func TestLookup(t *testing.T) {
 
 	var lastData *Data
 	for i := uint64(0); i < 12; i++ {
-		t := uint64(now - Year*3 + i*Month)
+		t := now - Year*3 + i*Month
 		data := Data{
 			Payload: t, //our "payload" will be the timestamp itself.
 			Time:    t,
@@ -415,7 +415,7 @@ func TestHighFreqUpdates(t *testing.T) {
 
 	var lastData *Data
 	for i := uint64(0); i <= 994; i++ {
-		T := uint64(now - 1000 + i)
+		T := now - 1000 + i
 		data := Data{
 			Payload: T, //our "payload" will be the timestamp itself.
 			Time:    T,
@@ -471,7 +471,7 @@ func TestHighFreqUpdates(t *testing.T) {
 			// ### 3.3.- Test multiple lookups at different intervals
 			timeElapsed = stopwatch.Measure(func() {
 				for i := uint64(0); i <= 10; i++ {
-					T := uint64(now - 1000 + i)
+					T := now - 1000 + i
 					value, err := algo.Lookup(context.Background(), T, lookup.NoClue, readFunc)
 					if err != nil {
 						t.Fatal(err)
@@ -509,7 +509,7 @@ func TestSparseUpdates(t *testing.T) {
 	var lastData *Data
 	for i := uint64(0); i < 3; i++ {
 		for j := uint64(0); j < 10; j++ {
-			T := uint64(Year*5*i + j) // write a burst of 10 updates every 5 years 3 times starting in Jan 1st 1970 and then silence
+			T := Year*5*i + j // write a burst of 10 updates every 5 years 3 times starting in Jan 1st 1970 and then silence
 			data := Data{
 				Payload: T, //our "payload" will be the timestamp itself.
 				Time:    T,

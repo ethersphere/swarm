@@ -189,11 +189,13 @@ $ git clone git@github.com:nirname/swarm.git $GOPATH/src/github.com/ethersphere/
 
 ### Vendored Dependencies
 
-All dependencies are tracked in the `vendor` directory. We use `govendor` to manage them.
+Vendoring is done by Makefile rule `make vendor` which uses `go mod vendor` and additionally copies cgo dependencies into `vendor` directory from go modules cache.
 
-If you want to add a new dependency, run `govendor fetch <import-path>`, then commit the result.
+If you want to add a new dependency, run `GO111MODULE=on go get <import-path>`, vendor it `make vendor`, then commit the result.
 
-If you want to update all dependencies to their latest upstream version, run `govendor fetch +v`.
+If you want to update all dependencies to their latest upstream version, run `GO111MODULE=on go get -u all` and vendor them with `make vendor`.
+
+By default, `go` tool will use dependencies defined in `go.mod` file from modules cache. In order to import code from `vendor` directory, an additional flag `-mod=vendor` must be provided when calling `go run`, `go test`, `go build` and `go install`. If `vendor` directory is in sync with `go.mod` file by updating it with `make vendor`, there should be no difference to use the flag or not. All Swarm build tools are using code only from the `vendor` directory and it is encouraged to do the same in the development process, as well.
 
 
 ### Testing

@@ -206,16 +206,17 @@ func TestStoreBalances(t *testing.T) {
 	// modify balances both in memory and in store
 	peerBalance, err := s.updateBalance(testPeerID, 29)
 	if err != nil {
-		t.Error("Unexpected balance update failure.")
+		t.Fatal(err)
 	}
 	// store balance for peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
 
 	// update balances for second peer
 	testPeer2ID := enode.HexID("fdbb55b4d9b0011c93e736bb1b736013943890f2a08640f89de00e738a8b7986")
+	s.balances[testPeer2ID] = 144
 	peer2Balance, err := s.updateBalance(testPeer2ID, -76)
 	if err != nil {
-		t.Error("Unexpected balance update failure.")
+		t.Fatal(err)
 	}
 	// store balance for each peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
@@ -295,8 +296,8 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	creditor := NewPeer(cPeer.Peer, debitorSwap, debitorSwap.backend, creditorSwap.owner.address, debitorSwap.owner.Contract)
-	debitor := NewPeer(dPeer.Peer, creditorSwap, creditorSwap.backend, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	creditor := NewPeer(cPeer.Peer, debitorSwap, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dPeer.Peer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
 	// set balances arbitrarily
 	testAmount := int64(DefaultPaymentThreshold + 42)
@@ -308,7 +309,7 @@ func TestResetBalance(t *testing.T) {
 	debitorSwap.peers[creditor.ID()] = creditor
 
 	// now simulate sending the cheque to the creditor from the debitor
-	debitorSwap.sendCheque(creditor.ID())
+	debitorSwap.sendCheque(creditor)
 	// the debitor should have already reset its balance
 	if debitorSwap.balances[creditor.ID()] != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditor.ID()])
@@ -460,7 +461,7 @@ func newTestSwap(t *testing.T) (*Swap, string) {
 		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
 	}, gasLimit)
 
-	swap := New(stateStore, key, defaultBackend)
+	swap := New(stateStore, key, common.Address{}, defaultBackend)
 	defaultBackend.Commit()
 	return swap, dir
 }
@@ -506,10 +507,7 @@ func TestChequeEncodeForSignature(t *testing.T) {
 	expectedCheque := newTestCheque()
 
 	// encode the cheque
-	encoded, err := expectedCheque.encodeForSignature()
-	if err != nil {
-		t.Fatalf("Unexpected error in MarshallBinary: %v", err)
-	}
+	encoded := expectedCheque.encodeForSignature()
 	// expected value (computed through truffle/js)
 	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000000")
 	if !bytes.Equal(encoded, expected) {
@@ -545,7 +543,7 @@ func TestSignContent(t *testing.T) {
 	swap.owner.privateKey = ownerKey
 
 	// sign the cheque
-	sig, err := swap.signContent(expectedCheque)
+	sig, err := expectedCheque.Sign(swap.owner.privateKey)
 	// expected value (computed through truffle/js)
 	expected := testChequeSig
 	if err != nil {
@@ -682,7 +680,7 @@ func TestContractIntegration(t *testing.T) {
 
 	cheque := newTestCheque()
 	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
-	cheque.Signature, err = issuerSwap.signContent(cheque)
+	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -795,7 +793,7 @@ func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer swap.Close()
 
-	testPeer := NewPeer(newDummyPeer().Peer, swap, swap.backend, common.Address{}, common.Address{})
+	testPeer := NewPeer(newDummyPeer().Peer, swap, common.Address{}, common.Address{})
 	testCheque := newTestCheque()
 
 	if err := swap.saveLastReceivedCheque(testPeer, testCheque); err != nil {
@@ -820,7 +818,7 @@ func newTestSwapAndPeer(t *testing.T) (*Swap, *Peer, string) {
 	swap, dir := newTestSwap(t)
 	// owner address is the beneficiary (counterparty) for the peer
 	// that's because we expect cheques we receive to be signed by the address we would issue cheques to
-	peer := NewPeer(newDummyPeer().Peer, swap, nil, ownerAddress, testChequeContract)
+	peer := NewPeer(newDummyPeer().Peer, swap, ownerAddress, testChequeContract)
 	// we need to adjust the owner address on swap because we will issue cheques to beneficiaryAddress
 	swap.owner.address = beneficiaryAddress
 	return swap, peer, dir
@@ -857,7 +855,7 @@ func TestPeerVerifyChequeProperties(t *testing.T) {
 	testCheque := newTestCheque()
 	testCheque.Signature = testChequeSig
 
-	if err := swap.verifyChequeProperties(testCheque, peer); err != nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err != nil {
 		t.Fatalf("failed to verify cheque properties: %s", err.Error())
 	}
 }
@@ -871,7 +869,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	// cheque with an invalid signature
 	testCheque := newTestCheque()
 	testCheque.Signature = manipulateSignature(testChequeSig)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with invalid signature")
 	}
 
@@ -879,7 +877,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	testCheque = newTestCheque()
 	testCheque.Contract = beneficiaryAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong contract")
 	}
 
@@ -887,7 +885,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	testCheque = newTestCheque()
 	testCheque.Beneficiary = ownerAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
 	}
 
@@ -895,7 +893,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	testCheque = newTestCheque()
 	testCheque.Timeout = 10
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
-	if err := swap.verifyChequeProperties(testCheque, peer); err == nil {
+	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with non-zero timeout")
 	}
 }
@@ -909,7 +907,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase
 
-	actualAmount, err := verifyChequeAgainstLast(newCheque, oldCheque, increase)
+	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
 	if err != nil {
 		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
 	}
@@ -928,7 +926,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque := newTestCheque()
 	newCheque.Amount = oldCheque.Amount + increase
 
-	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same serial")
 	}
 
@@ -937,7 +935,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque = newTestCheque()
 	newCheque.Serial = oldCheque.Serial + 1
 
-	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
 	}
 
@@ -947,7 +945,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	newCheque.Serial = oldCheque.Serial + 1
 	newCheque.Amount = oldCheque.Amount + increase + 5
 
-	if _, err := verifyChequeAgainstLast(newCheque, oldCheque, increase); err == nil {
+	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
 	}
 }

@@ -113,7 +113,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 			uri := GetURI(r.Context())
 			if uri != nil {
 				log.Debug("got uri from context")
-				if uri.Addr == "encrypt" {
+				if uri.Addr == encryptAddr {
 					estimatedTotal = calculateNumberOfChunks(r.ContentLength, true)
 				} else {
 					estimatedTotal = calculateNumberOfChunks(r.ContentLength, false)
@@ -138,7 +138,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 func InstrumentOpenTracing(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uri := GetURI(r.Context())
-		if uri == nil || r.Method == "" || (uri != nil && uri.Scheme == "") {
+		if uri == nil || r.Method == "" || uri.Scheme == "" {
 			h.ServeHTTP(w, r) // soft fail
 			return
 		}

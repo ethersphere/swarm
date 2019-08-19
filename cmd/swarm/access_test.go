@@ -43,12 +43,14 @@ import (
 const (
 	hashRegexp = `[a-f\d]{128}`
 	data       = "notsorandomdata"
+
+	goosWindows = "windows"
 )
 
 var DefaultCurve = crypto.S256()
 
 func TestACT(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip()
 	}
 
