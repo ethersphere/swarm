@@ -60,7 +60,7 @@ var (
 	streamBatchFail               = metrics.GetOrRegisterCounter("network.stream.batch_fail", nil)
 	streamChunkDeliveryFail       = metrics.GetOrRegisterCounter("network.stream.delivery_fail", nil)
 	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network.stream.next_interval_fail", nil)
-	lastReceivedChunksMsg         = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
+	lastReceivedChunksMsg         = metrics.NewRegisteredGauge("network.stream.received_chunks", nil)
 
 	streamPeersCount = metrics.GetOrRegisterGauge("network.stream.peers", nil)
 
