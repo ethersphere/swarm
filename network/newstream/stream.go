@@ -52,7 +52,7 @@ var (
 
 	// Metrics
 	processReceivedChunksMsgCount = metrics.GetOrRegisterCounter("network.stream.received_chunks_msg", nil)
-	processReceivedChunksCount    = metrics.GetOrRegisterCounter("network.stream.received_chunks_msg", nil)
+	processReceivedChunksCount    = metrics.GetOrRegisterCounter("network.stream.received_chunks", nil)
 	streamSeenChunkDelivery       = metrics.GetOrRegisterCounter("network.stream.seen_chunk_delivery", nil)
 	streamEmptyWantedHashes       = metrics.GetOrRegisterCounter("network.stream.empty_wanted_hashes", nil)
 	streamWantedHashes            = metrics.GetOrRegisterCounter("network.stream.wanted_hashes", nil)
