@@ -51,10 +51,11 @@ var (
 	_ node.Service = (*SlipStream)(nil)
 
 	// Metrics
-	processReceivedChunksCount = metrics.NewRegisteredCounter("network.stream.received_chunks", nil)
-	streamSeenChunkDelivery    = metrics.NewRegisteredCounter("network.stream.seen_chunk_delivery", nil)
-	streamEmptyWantedHashes    = metrics.NewRegisteredCounter("network.stream.empty_wanted_hashes", nil)
-	streamWantedHashes         = metrics.NewRegisteredCounter("network.stream.wanted_hashes", nil)
+	processReceivedChunksMsgCount = metrics.NewRegisteredCounter("network.stream.received_chunks_msg", nil)
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.stream.received_chunks_msg", nil)
+	streamSeenChunkDelivery       = metrics.NewRegisteredCounter("network.stream.seen_chunk_delivery", nil)
+	streamEmptyWantedHashes       = metrics.NewRegisteredCounter("network.stream.empty_wanted_hashes", nil)
+	streamWantedHashes            = metrics.NewRegisteredCounter("network.stream.wanted_hashes", nil)
 
 	streamBatchFail               = metrics.NewRegisteredCounter("network.stream.batch_fail", nil)
 	streamChunkDeliveryFail       = metrics.NewRegisteredCounter("network.stream.delivery_fail", nil)
@@ -471,8 +472,7 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleGetRange ended", "took", end)
+		metrics.GetOrRegisterResettingTimer("stream.handle_get_range.total-time", nil).UpdateSince(start)
 	}(start)
 
 	provider := s.getProvider(msg.Stream)
@@ -547,8 +547,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	p.logger.Debug("stream.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	start := time.Now()
 	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleOfferedHashes ended", "took", end)
+		metrics.GetOrRegisterResettingTimer("stream.handle_offered_hashes.total-time", nil).UpdateSince(start)
 	}(start)
 
 	hashes := msg.Hashes
@@ -589,7 +588,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		}
 		cur, ok := p.getCursor(w.stream)
 		if !ok {
-			metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
+			metrics.NewRegisteredCounter("network.stream.quit_unwanted", nil).Inc(1)
 			p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
 			return
 		}
@@ -711,7 +710,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	}
 	cur, ok := p.getCursor(w.stream)
 	if !ok {
-		metrics.NewRegisteredCounter("network.stream.quit_unwanted.count", nil).Inc(1)
+		metrics.NewRegisteredCounter("network.stream.quit_unwanted", nil).Inc(1)
 		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
 		return
 	}
@@ -739,8 +738,7 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid, "bv", msg.BitVector)
 	start := time.Now()
 	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleWantedHashes ended", "took", end)
+		metrics.GetOrRegisterResettingTimer("stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
 	}(start)
 
 	p.mtx.RLock()
@@ -844,12 +842,11 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 
 func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("peer.handleChunkDelivery", "ruid", msg.Ruid, "chunks", len(msg.Chunks))
-	processReceivedChunksCount.Inc(1)
+	processReceivedChunksMsgCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 	start := time.Now()
 	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleChunkDelivery ended", "took", end)
+		metrics.GetOrRegisterResettingTimer("stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
 	}(start)
 
 	p.mtx.RLock()
@@ -883,8 +880,7 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 	go func() {
 		start := time.Now()
 		defer func(start time.Time) {
-			end := time.Since(start)
-			p.logger.Debug("clientSealBatch ended", "took", end)
+			metrics.GetOrRegisterResettingTimer("stream.client_seal_batch.total-time", nil).UpdateSince(start)
 		}(start)
 		for {
 			select {
@@ -892,6 +888,7 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 				if !ok {
 					p.logger.Error("want chanks returned on !ok")
 				}
+				processReceivedChunksCount.Inc(1)
 				p.mtx.RLock()
 				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
 					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address)
@@ -940,10 +937,6 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
 	p.logger.Debug("stream.CollectBatch", "from", from, "to", to)
 	batchStart := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleOfferedHashes ended", "took", end)
-	}(batchStart)
 
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
@@ -966,7 +959,6 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 			timer.Stop()
 		}
 		end := time.Since(batchStart)
-		p.logger.Debug("serverCollectBatch ended", "took", end)
 	}(batchStart)
 
 	for iterate := true; iterate; {
