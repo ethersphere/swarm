@@ -387,7 +387,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 			log.Info("Using the provided address as chequebook", "chequebookAddr", address)
 		} else {
 			log.Info("Deploying new chequebook instance")
-			err := s.DeploySwap(context.Background())
+			err := s.deploySwap(context.Background())
 			if err != nil {
 				return fmt.Errorf("Unable to deploy swap contract: %v", err)
 			}
@@ -566,13 +566,8 @@ func (s *Swarm) APIs() []rpc.API {
 	return apis
 }
 
-<<<<<<< HEAD
-// DeploySwap ensures that Swap is set up on chain.
-func (s *Swarm) DeploySwap(ctx context.Context) error {
-=======
 // deploySwap ensures that Swap is set up on chain.
 func (s *Swarm) deploySwap(ctx context.Context) error {
->>>>>>> incentives
 	return s.swap.Deploy(ctx, s.backend, s.config.Path)
 }
 

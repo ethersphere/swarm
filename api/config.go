@@ -54,10 +54,7 @@ type Config struct {
 	// Swap configs
 	SwapBackendURL string
 	SwapEnabled    bool
-<<<<<<< HEAD
 	ChequebookAddr common.Address //TODO: update documentation
-=======
->>>>>>> incentives
 
 	*network.HiveParams
 	Pss                  *pss.Params

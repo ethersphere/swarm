@@ -98,7 +98,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Back
 		disconnectThreshold: DefaultDisconnectThreshold,
 		oracle:              NewPriceOracle(),
 	}
-	sw.owner = sw.createOwner(prvkey)
+	sw.owner = createOwner(prvkey)
 	return sw
 }
 
