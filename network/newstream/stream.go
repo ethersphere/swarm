@@ -51,14 +51,14 @@ var (
 	_ node.Service = (*SlipStream)(nil)
 
 	// Metrics
-	processReceivedChunksCount = metrics.NewRegisteredCounter("network.stream.received_chunks.count", nil)
-	streamSeenChunkDelivery    = metrics.NewRegisteredCounter("network.stream.seen_chunk_delivery.count", nil)
-	streamEmptyWantedHashes    = metrics.NewRegisteredCounter("network.stream.empty_wanted_hashes.count", nil)
-	streamWantedHashes         = metrics.NewRegisteredCounter("network.stream.wanted_hashes.count", nil)
+	processReceivedChunksCount = metrics.NewRegisteredCounter("network.stream.received_chunks", nil)
+	streamSeenChunkDelivery    = metrics.NewRegisteredCounter("network.stream.seen_chunk_delivery", nil)
+	streamEmptyWantedHashes    = metrics.NewRegisteredCounter("network.stream.empty_wanted_hashes", nil)
+	streamWantedHashes         = metrics.NewRegisteredCounter("network.stream.wanted_hashes", nil)
 
-	streamBatchFail               = metrics.NewRegisteredCounter("network.stream.batch_fail.count", nil)
-	streamChunkDeliveryFail       = metrics.NewRegisteredCounter("network.stream.delivery_fail.count", nil)
-	streamRequestNextIntervalFail = metrics.NewRegisteredCounter("network.stream.next_interval_fail.count", nil)
+	streamBatchFail               = metrics.NewRegisteredCounter("network.stream.batch_fail", nil)
+	streamChunkDeliveryFail       = metrics.NewRegisteredCounter("network.stream.delivery_fail", nil)
+	streamRequestNextIntervalFail = metrics.NewRegisteredCounter("network.stream.next_interval_fail", nil)
 	lastReceivedChunksMsg         = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
 	// Protocol spec
