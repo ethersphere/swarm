@@ -476,7 +476,7 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("stream.handle_get_range.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
 	}(start)
 
 	provider := s.getProvider(msg.Stream)
@@ -551,7 +551,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	p.logger.Debug("stream.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("stream.handle_offered_hashes.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_offered_hashes.total-time", nil).UpdateSince(start)
 	}(start)
 
 	hashes := msg.Hashes
@@ -742,7 +742,7 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid, "bv", msg.BitVector)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
 	}(start)
 
 	p.mtx.RLock()
@@ -850,7 +850,7 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
 	}(start)
 
 	p.mtx.RLock()
@@ -884,7 +884,7 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 	go func() {
 		start := time.Now()
 		defer func(start time.Time) {
-			metrics.GetOrRegisterResettingTimer("stream.client_seal_batch.total-time", nil).UpdateSince(start)
+			metrics.GetOrRegisterResettingTimer("network.stream.client_seal_batch.total-time", nil).UpdateSince(start)
 		}(start)
 		for {
 			select {
@@ -957,8 +957,8 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 	)
 
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("stream.server_collect_batch.total-time", nil).UpdateSince(start)
-		metrics.GetOrRegisterCounter("stream.server_collect_batch.batch-size", nil).Inc(int64(batchSize))
+		metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterCounter("network.stream.server_collect_batch.batch-size", nil).Inc(int64(batchSize))
 		if timer != nil {
 			timer.Stop()
 		}
@@ -981,7 +981,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 			batchEndID = d.BinID
 			if batchSize >= BatchSize {
 				iterate = false
-				metrics.GetOrRegisterCounter("stream.serverCollectBatch.full-batch", nil).Inc(1)
+				metrics.GetOrRegisterCounter("network.stream.server_collect_batch.full-batch", nil).Inc(1)
 				//p.logger.Trace("pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", *batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
@@ -996,7 +996,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 		case <-timerC:
 			// return batch if new chunks are not received after some time
 			iterate = false
-			metrics.GetOrRegisterCounter("stream.serverCollectBatch.timer-expire", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network.stream.serverCollectBatch.timer-expire", nil).Inc(1)
 		case <-p.quit:
 			iterate = false
 			p.logger.Trace("pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
