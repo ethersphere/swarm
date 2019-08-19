@@ -62,7 +62,7 @@ var (
 	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network.stream.next_interval_fail", nil)
 	lastReceivedChunksMsg         = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
-	streamPeersCount = metrics.GetOrRegisterCounter("network.stream.peers", nil)
+	streamPeersCount = metrics.GetOrRegisterGauge("network.stream.peers", nil)
 
 	// Protocol spec
 	Spec = &protocols.Spec{
@@ -132,14 +132,14 @@ func (s *SlipStream) getPeer(id enode.ID) *Peer {
 }
 
 func (s *SlipStream) addPeer(p *Peer) {
-	streamPeersCount.Inc(1)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.peers[p.ID()] = p
+
+	streamPeersCount.Update(int64(len(s.peers)))
 }
 
 func (s *SlipStream) removePeer(p *Peer) {
-	streamPeersCount.Dec(1)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, found := s.peers[p.ID()]; found {
@@ -149,6 +149,7 @@ func (s *SlipStream) removePeer(p *Peer) {
 	} else {
 		p.logger.Warn("peer was marked for removal but not found") // todo: this could possibly be removed
 	}
+	streamPeersCount.Update(int64(len(s.peers)))
 }
 
 // Run is being dispatched when 2 nodes connect
