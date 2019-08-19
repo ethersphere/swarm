@@ -108,9 +108,6 @@ func NewNetStore(store chunk.Store, baseAddr []byte, localID enode.ID) *NetStore
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
 func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool, error) {
-	n.putMu.Lock()
-	defer n.putMu.Unlock()
-
 	n.logger.Trace("netstore.put", "ref", ch.Address().String(), "mode", mode)
 
 	// put the chunk to the localstore, there should be no error
@@ -118,6 +115,9 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 	if err != nil {
 		return exists, err
 	}
+
+	n.putMu.Lock()
+	defer n.putMu.Unlock()
 
 	// notify RemoteGet (or SwarmSyncerClient) about a chunk delivery and it being stored
 	fi, ok := n.fetchers.Get(ch.Address().String())
@@ -296,9 +296,6 @@ func (n *NetStore) Has(ctx context.Context, ref Address) (bool, error) {
 // GetOrCreateFetcher returns the Fetcher for a given chunk, if this chunk is not in the LocalStore.
 // If the chunk is in the LocalStore, it returns nil for the Fetcher and ok == false
 func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interestedParty string) (f *Fetcher, loaded bool, ok bool) {
-	n.putMu.Lock()
-	defer n.putMu.Unlock()
-
 	has, err := n.Store.Has(ctx, ref)
 	if err != nil {
 		n.logger.Error(err.Error())
@@ -306,6 +303,8 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 	if has {
 		return nil, false, false
 	}
+	n.putMu.Lock()
+	defer n.putMu.Unlock()
 
 	f = NewFetcher()
 	v, loaded := n.fetchers.Get(ref.String())
