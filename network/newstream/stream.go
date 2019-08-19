@@ -51,16 +51,18 @@ var (
 	_ node.Service = (*SlipStream)(nil)
 
 	// Metrics
-	processReceivedChunksMsgCount = metrics.NewRegisteredCounter("network.stream.received_chunks_msg", nil)
-	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.stream.received_chunks_msg", nil)
-	streamSeenChunkDelivery       = metrics.NewRegisteredCounter("network.stream.seen_chunk_delivery", nil)
-	streamEmptyWantedHashes       = metrics.NewRegisteredCounter("network.stream.empty_wanted_hashes", nil)
-	streamWantedHashes            = metrics.NewRegisteredCounter("network.stream.wanted_hashes", nil)
+	processReceivedChunksMsgCount = metrics.GetOrRegisterCounter("network.stream.received_chunks_msg", nil)
+	processReceivedChunksCount    = metrics.GetOrRegisterCounter("network.stream.received_chunks_msg", nil)
+	streamSeenChunkDelivery       = metrics.GetOrRegisterCounter("network.stream.seen_chunk_delivery", nil)
+	streamEmptyWantedHashes       = metrics.GetOrRegisterCounter("network.stream.empty_wanted_hashes", nil)
+	streamWantedHashes            = metrics.GetOrRegisterCounter("network.stream.wanted_hashes", nil)
 
-	streamBatchFail               = metrics.NewRegisteredCounter("network.stream.batch_fail", nil)
-	streamChunkDeliveryFail       = metrics.NewRegisteredCounter("network.stream.delivery_fail", nil)
-	streamRequestNextIntervalFail = metrics.NewRegisteredCounter("network.stream.next_interval_fail", nil)
+	streamBatchFail               = metrics.GetOrRegisterCounter("network.stream.batch_fail", nil)
+	streamChunkDeliveryFail       = metrics.GetOrRegisterCounter("network.stream.delivery_fail", nil)
+	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network.stream.next_interval_fail", nil)
 	lastReceivedChunksMsg         = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
+
+	streamPeersCount = metrics.GetOrRegisterCounter("network.stream.peers", nil)
 
 	// Protocol spec
 	Spec = &protocols.Spec{
@@ -130,12 +132,14 @@ func (s *SlipStream) getPeer(id enode.ID) *Peer {
 }
 
 func (s *SlipStream) addPeer(p *Peer) {
+	streamPeersCount.Inc(1)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.peers[p.ID()] = p
 }
 
 func (s *SlipStream) removePeer(p *Peer) {
+	streamPeersCount.Dec(1)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, found := s.peers[p.ID()]; found {
@@ -588,7 +592,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 		}
 		cur, ok := p.getCursor(w.stream)
 		if !ok {
-			metrics.NewRegisteredCounter("network.stream.quit_unwanted", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
 			p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
 			return
 		}
@@ -710,7 +714,7 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 	}
 	cur, ok := p.getCursor(w.stream)
 	if !ok {
-		metrics.NewRegisteredCounter("network.stream.quit_unwanted", nil).Inc(1)
+		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
 		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
 		return
 	}
@@ -958,7 +962,6 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 		if timer != nil {
 			timer.Stop()
 		}
-		end := time.Since(batchStart)
 	}(batchStart)
 
 	for iterate := true; iterate; {
