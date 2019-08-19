@@ -469,12 +469,6 @@ func (s *SlipStream) handleGetRangeHead(ctx context.Context, p *Peer, msg *GetRa
 // message so that the client could seal the interval and request the next
 func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange) {
 	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid)
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleGetRange ended", "took", end)
-	}(start)
-
 	provider := s.getProvider(msg.Stream)
 	if provider == nil {
 		// at this point of the message exchange unsupported providers are illegal. drop peer
@@ -491,6 +485,7 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 	}
 	log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", msg.To, "stream", msg.Stream)
 	h, f, t, e, err := s.serverCollectBatch(ctx, p, provider, key, msg.From, *msg.To)
+	// empty batch can be legit, TODO: check which errors should be handled, if any
 	if err != nil {
 		log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
 		p.Drop()
@@ -545,12 +540,6 @@ func (s *SlipStream) handleGetRange(ctx context.Context, p *Peer, msg *GetRange)
 // this message is handled by the CLIENT.
 func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *OfferedHashes) {
 	p.logger.Debug("stream.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleOfferedHashes ended", "took", end)
-	}(start)
-
 	hashes := msg.Hashes
 	lenHashes := len(hashes)
 	if lenHashes%HashSize != 0 {
@@ -737,11 +726,6 @@ func (s *SlipStream) handleOfferedHashes(ctx context.Context, p *Peer, msg *Offe
 // the method is to ensure that all chunks in the requested batch is sent to the client
 func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes) {
 	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid, "bv", msg.BitVector)
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleWantedHashes ended", "took", end)
-	}(start)
 
 	p.mtx.RLock()
 	offer, ok := p.openOffers[msg.Ruid]
@@ -792,13 +776,6 @@ func (s *SlipStream) handleWantedHashes(ctx context.Context, p *Peer, msg *Wante
 				return
 			}
 
-			defer func(addr chunk.Address) {
-				err := provider.Set(ctx, addr)
-				if err != nil {
-					p.logger.Error("error setting chunk as synced", "addr", addr, "err", err)
-				}
-			}(hash)
-
 			chunkD := DeliveredChunk{
 				Addr: hash,
 				Data: data,
@@ -843,11 +820,6 @@ func (s *SlipStream) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chun
 	p.logger.Debug("peer.handleChunkDelivery", "ruid", msg.Ruid, "chunks", len(msg.Chunks))
 	processReceivedChunksCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleChunkDelivery ended", "took", end)
-	}(start)
 
 	p.mtx.RLock()
 	w, ok := p.openWants[msg.Ruid]
@@ -878,11 +850,6 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 	p.logger.Debug("stream.clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
 	errc := make(chan error)
 	go func() {
-		start := time.Now()
-		defer func(start time.Time) {
-			end := time.Since(start)
-			p.logger.Debug("clientSealBatch ended", "took", end)
-		}(start)
 		for {
 			select {
 			case c, ok := <-w.chunks:
@@ -937,15 +904,11 @@ func (s *SlipStream) clientSealBatch(ctx context.Context, p *Peer, provider Stre
 func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
 	p.logger.Debug("stream.CollectBatch", "from", from, "to", to)
 	batchStart := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		p.logger.Debug("handleOfferedHashes ended", "took", end)
-	}(batchStart)
 
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 500 * time.Millisecond
+	const batchTimeout = 100 * time.Millisecond
 
 	var (
 		batch        []byte
@@ -957,13 +920,11 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 	)
 
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("stream.server_collect_batch.total-time", nil).UpdateSince(start)
-		metrics.GetOrRegisterCounter("stream.server_collect_batch.batch-size", nil).Inc(int64(batchSize))
+		metrics.GetOrRegisterResettingTimer("stream.serverCollectBatch.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterCounter("stream.serverCollectBatch.batch-size", nil).Inc(int64(batchSize))
 		if timer != nil {
 			timer.Stop()
 		}
-		end := time.Since(batchStart)
-		p.logger.Debug("serverCollectBatch ended", "took", end)
 	}(batchStart)
 
 	for iterate := true; iterate; {
@@ -973,6 +934,7 @@ func (s *SlipStream) serverCollectBatch(ctx context.Context, p *Peer, provider S
 				iterate = false
 				break
 			}
+			//s.logger.Trace("got address on subscribe", "address", d.Address.String(), "ident", batchStart, "key", key)
 			batch = append(batch, d.Address[:]...)
 			batchSize++
 			if batchStartID == nil {
