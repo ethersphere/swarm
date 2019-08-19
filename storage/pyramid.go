@@ -149,6 +149,7 @@ type PyramidChunker struct {
 	wg          *sync.WaitGroup
 	errC        chan error
 	quitC       chan bool
+	quitOnce    sync.Once
 	rootAddress []byte
 	chunkLevel  [][]*TreeEntry
 }
@@ -218,7 +219,7 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 		close(pc.errC)
 	}()
 
-	defer close(pc.quitC)
+	defer pc.quit()
 	defer pc.putter.Close()
 
 	select {
@@ -250,7 +251,7 @@ func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(cont
 		close(pc.errC)
 	}()
 
-	defer close(pc.quitC)
+	defer pc.quit()
 	defer pc.putter.Close()
 
 	select {
@@ -468,7 +469,7 @@ func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 					break
 				}
 			} else {
-				close(pc.quitC)
+				pc.quit()
 				break
 			}
 		}
@@ -702,4 +703,10 @@ func (pc *PyramidChunker) cleanChunkLevels() {
 			pc.chunkLevel = append(pc.chunkLevel[:i], append(pc.chunkLevel[i+1:], nil)...)
 		}
 	}
+}
+
+func (pc *PyramidChunker) quit() {
+	pc.quitOnce.Do(func() {
+		close(pc.quitC)
+	})
 }
