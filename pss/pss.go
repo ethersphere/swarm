@@ -137,7 +137,8 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *outboxMsg
-	forwardPending  int
+	forwardPending  int          // Number of messages with a booked slot pending to be forwarded.
+	pendingMutex    sync.RWMutex // ForwardPending mutex
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -554,12 +555,19 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
-func (p *Pss) enqueue(msg *PssMsg, retry bool) error {
+// Enqueue a message msg. Pending will be true for messages with a booked slot in the queue
+func (p *Pss) enqueue(msg *PssMsg, pending bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	outboxmsg := newOutboxMsg(msg)
-	adjustedOutboxCapacity := defaultOutboxCapacity - p.forwardPending
-	if retry || p.forwardPending == 0 || len(p.outbox) < adjustedOutboxCapacity {
+	// We mutex between the calculation of the outbox capacity and the introduction in the channel so we make sure nobody
+	// add a message to the queue after checking outboxCapacity
+	mux := sync.Mutex{}
+	mux.Lock()
+	defer mux.Unlock()
+	// adjustedOutboxCapacity is the capacity of the queue after taking into account the pending messages
+	adjustedOutboxCapacity := defaultOutboxCapacity - p.getPending()
+	if pending || len(p.outbox) < adjustedOutboxCapacity { //If pending there is always a slot booked for this message
 		select {
 		case p.outbox <- outboxmsg:
 			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
@@ -569,6 +577,28 @@ func (p *Pss) enqueue(msg *PssMsg, retry bool) error {
 	}
 	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
 	return errors.New("outbox full")
+}
+
+// Access to forwardPending is protected with RWMutex
+
+func (p *Pss) increasePending() {
+	p.pendingMutex.Lock()
+	defer p.pendingMutex.Unlock()
+	metrics.GetOrRegisterCounter("pss.forward.pending", nil).Inc(1)
+	p.forwardPending++
+}
+
+func (p *Pss) decreasePending() {
+	p.pendingMutex.Lock()
+	defer p.pendingMutex.Unlock()
+	metrics.GetOrRegisterCounter("pss.forward.pending", nil).Dec(1)
+	p.forwardPending--
+}
+
+func (p *Pss) getPending() int {
+	p.pendingMutex.Lock()
+	defer p.pendingMutex.Unlock()
+	return p.forwardPending
 }
 
 // Send a raw message (any encryption is responsibility of calling client)
@@ -736,8 +766,9 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
-	metrics.GetOrRegisterCounter("pss.forward.pending", nil).Inc(1)
-	p.forwardPending++
+	// We book a slot in the queue increasing pending messages and release it either after queueing again or successfully sending the message
+	p.increasePending()
+	defer p.decreasePending()
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
@@ -788,8 +819,6 @@ func (p *Pss) forward(msg *PssMsg) error {
 		log.Debug("unable to forward to any peers")
 		if err := p.enqueue(msg, true); err != nil {
 			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
-			metrics.GetOrRegisterCounter("pss.forward.pending", nil).Dec(1)
-			p.forwardPending--
 			log.Error(err.Error())
 			return err
 		}
@@ -797,8 +826,6 @@ func (p *Pss) forward(msg *PssMsg) error {
 
 	// cache the message
 	p.addFwdCache(msg)
-	metrics.GetOrRegisterCounter("pss.forward.pending", nil).Dec(1)
-	p.forwardPending--
 	return nil
 }
 
