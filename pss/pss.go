@@ -565,9 +565,13 @@ func (p *Pss) enqueue(msg *PssMsg, pending bool) error {
 	mux := sync.Mutex{}
 	mux.Lock()
 	defer mux.Unlock()
-	// adjustedOutboxCapacity is the capacity of the queue after taking into account the pending messages
-	adjustedOutboxCapacity := defaultOutboxCapacity - p.getPending()
-	if pending || len(p.outbox) < adjustedOutboxCapacity { //If pending there is always a slot booked for this message
+	pendingSize := p.getPending()
+	// Only allow defaultOutboxCapacity messages at most processed (both enqueued or being forwarded)
+	if pending || pendingSize < defaultOutboxCapacity { //If pending there is already a slot booked for this message
+		if !pending {
+			// We book a slot in the queue increasing pending messages and release it after successfully sending the message
+			p.increasePending()
+		}
 		select {
 		case p.outbox <- outboxmsg:
 			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
@@ -576,7 +580,11 @@ func (p *Pss) enqueue(msg *PssMsg, pending bool) error {
 		}
 	}
 	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-	return errors.New("outbox full")
+	if pending {
+		return errors.New("unexpected outbox full for pending message!")
+	} else {
+		return errors.New("outbox full")
+	}
 }
 
 // Access to forwardPending is protected with RWMutex
@@ -766,9 +774,6 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
-	// We book a slot in the queue increasing pending messages and release it either after queueing again or successfully sending the message
-	p.increasePending()
-	defer p.decreasePending()
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
@@ -820,8 +825,13 @@ func (p *Pss) forward(msg *PssMsg) error {
 		if err := p.enqueue(msg, true); err != nil {
 			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
 			log.Error(err.Error())
+			// Message can't be enqueued, we discard it and decrease counter
+			p.decreasePending()
 			return err
 		}
+	} else {
+		// Message already sent, we can decrease forwardPending counter
+		p.decreasePending()
 	}
 
 	// cache the message
