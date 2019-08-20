@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )
@@ -176,31 +175,7 @@ func TestEmitCheque(t *testing.T) {
 	log.Debug("send the message with the cheque to the beneficiary")
 	go creditor.Send(ctx, emitMsg)
 
-	log.Debug("read the message on the beneficiary through the pipe")
-	msg, err := drw.ReadMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	log.Debug("convert the message to our message type (simulated p2p.protocols)")
-	var wmsg protocols.WrappedMsg
-	err = msg.Decode(&wmsg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	msg.Discard()
-
-	val, ok := Spec.NewMsg(msg.Code)
-	if !ok {
-		t.Fatalf("invalid message code: %v", msg.Code)
-	}
-	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
-		t.Fatalf("decode error <= %v: %v", msg, err)
-	}
-
-	log.Debug("trigger reading the message on the beneficiary")
-
-	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, val.(*EmitChequeMsg))
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
