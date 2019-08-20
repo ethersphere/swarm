@@ -152,15 +152,15 @@ type swapAPI interface {
 	Balances() (map[enode.ID]int64, error)
 }
 
-// PublicAPI would be the public API accessor for protocol methods
-type PublicAPI struct {
+// API would be the API accessor for protocol methods
+type API struct {
 	swapAPI
 	*contract.Params
 }
 
-// NewAPI creates a new PublicAPI instance
-func NewAPI(s *Swap) *PublicAPI {
-	return &PublicAPI{
+// NewAPI creates a new API instance
+func NewAPI(s *Swap) *API {
+	return &API{
 		swapAPI: s,
 		Params:  s.GetParams(),
 	}
