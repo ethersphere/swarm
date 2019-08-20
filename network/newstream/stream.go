@@ -865,6 +865,8 @@ func (s *Registry) client_handleChunkDelivery(ctx context.Context, p *Peer, msg 
 		p.logger.Trace("writing chunk to chunks channel", "caddr", c.Address(), "ruid", msg.Ruid)
 		select {
 		case w.chunks <- c:
+		case <-w.done:
+			return
 		case <-s.quit:
 			return
 		case <-p.quit:
@@ -898,31 +900,29 @@ func (s *Registry) client_sealBatch(ctx context.Context, p *Peer, provider Strea
 					return
 				}
 				p.mtx.RUnlock()
-				go func() {
-					cc := chunk.NewChunk(c.Address(), c.Data())
-					seen, err := provider.Put(ctx, cc.Address(), cc.Data())
-					if err != nil {
-						if err == storage.ErrChunkInvalid {
-							streamChunkDeliveryFail.Inc(1)
-							p.Drop()
-							return
-						}
-						p.logger.Error("clientSealBatch error putting chunk", "err", err)
-					}
-					if seen {
-						streamSeenChunkDelivery.Inc(1)
-						p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
-					}
-					p.mtx.Lock()
-					w.hashes[c.Address().Hex()] = false
-					p.mtx.Unlock()
-					v := atomic.AddUint64(&w.remaining, ^uint64(0))
-					if v == 0 {
-						p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
-						close(errc)
+				cc := chunk.NewChunk(c.Address(), c.Data())
+				seen, err := provider.Put(ctx, cc.Address(), cc.Data())
+				if err != nil {
+					if err == storage.ErrChunkInvalid {
+						streamChunkDeliveryFail.Inc(1)
+						p.Drop()
 						return
 					}
-				}()
+					p.logger.Error("clientSealBatch error putting chunk", "err", err)
+				}
+				if seen {
+					streamSeenChunkDelivery.Inc(1)
+					p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
+				}
+				p.mtx.Lock()
+				w.hashes[c.Address().Hex()] = false
+				p.mtx.Unlock()
+				v := atomic.AddUint64(&w.remaining, ^uint64(0))
+				if v == 0 {
+					p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
+					close(errc)
+					return
+				}
 			case <-p.quit:
 				return
 			case <-w.done:
