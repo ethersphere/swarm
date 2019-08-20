@@ -47,11 +47,12 @@ var (
 	_ node.Service = &Retrieval{}
 
 	// Metrics
-	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks.count", nil)
-	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg.count", nil)
-	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail.count", nil)
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks", nil)
+	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
+	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
 
 	lastReceivedRetrieveChunksMsg = metrics.GetOrRegisterGauge("network.retrieve.received_chunks", nil)
+	retrievalPeers                = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
 	Spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
@@ -107,7 +108,7 @@ func (r *Retrieval) createPriceOracle() {
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
-	mtx      sync.Mutex
+	mtx      sync.RWMutex
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
@@ -133,17 +134,19 @@ func (r *Retrieval) addPeer(p *Peer) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	r.peers[p.ID()] = p
+	retrievalPeers.Update(int64(len(r.peers)))
 }
 
 func (r *Retrieval) removePeer(p *Peer) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	delete(r.peers, p.ID())
+	retrievalPeers.Update(int64(len(r.peers)))
 }
 
 func (r *Retrieval) getPeer(id enode.ID) *Peer {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
 
 	return r.peers[id]
 }
@@ -367,7 +370,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	lastReceivedRetrieveChunksMsg.Update(time.Now().UnixNano())
 
 	// count how many chunks we receive for retrieve requests per peer
-	peermetric := fmt.Sprintf("chunk.delivery.%x", p.BzzAddr.Over()[:16])
+	peermetric := fmt.Sprintf("network.retrieve.chunk.delivery.%x", p.BzzAddr.Over()[:16])
 	metrics.GetOrRegisterCounter(peermetric, nil).Inc(1)
 
 	peerPO := chunk.Proximity(p.BzzAddr.Over(), msg.Addr)
@@ -385,7 +388,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	go func() {
 		defer osp.Finish()
 
-		p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
+		//p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
 		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			p.logger.Error("netstore error putting chunk to localstore", "err", err)
@@ -393,7 +396,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 				p.Drop()
 			}
 		}
-		p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
+		//p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
 }
@@ -409,7 +412,7 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 FINDPEER:
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {
-		r.logger.Trace(err.Error())
+		r.logger.Error(err.Error())
 		return nil, err
 	}
 
