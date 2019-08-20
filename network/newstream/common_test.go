@@ -57,7 +57,7 @@ func init() {
 }
 
 var (
-	serviceNameSlipStream      = "bzz-sync"
+	serviceNameStream          = "bzz-stream"
 	bucketKeyFileStore         = "filestore"
 	bucketKeyLocalStore        = "localstore"
 	bucketKeyInitialBinIndexes = "bin-indexes"
@@ -65,8 +65,8 @@ var (
 	simContextTimeout = 90 * time.Second
 )
 
-func nodeSlipStream(sim *simulation.Simulation, id enode.ID) (s *Registry) {
-	return sim.Service(serviceNameSlipStream, id).(*Registry)
+func nodeRegistry(sim *simulation.Simulation, id enode.ID) (s *Registry) {
+	return sim.Service(serviceNameStream, id).(*Registry)
 }
 
 func nodeFileStore(sim *simulation.Simulation, id enode.ID) (s *storage.FileStore) {
