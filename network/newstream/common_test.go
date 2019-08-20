@@ -65,8 +65,8 @@ var (
 	simContextTimeout = 90 * time.Second
 )
 
-func nodeSlipStream(sim *simulation.Simulation, id enode.ID) (s *SlipStream) {
-	return sim.Service(serviceNameSlipStream, id).(*SlipStream)
+func nodeSlipStream(sim *simulation.Simulation, id enode.ID) (s *Registry) {
+	return sim.Service(serviceNameSlipStream, id).(*Registry)
 }
 
 func nodeFileStore(sim *simulation.Simulation, id enode.ID) (s *storage.FileStore) {

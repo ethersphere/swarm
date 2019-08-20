@@ -373,7 +373,7 @@ func waitForCursors(t *testing.T, sim *simulation.Simulation, pivotEnode, lookup
 	var got int
 	for i := 0; i < 1000; i++ { // 10s total wait
 		time.Sleep(10 * time.Millisecond)
-		s, ok := sim.Service(serviceNameSlipStream, pivotEnode).(*SlipStream)
+		s, ok := sim.Service(serviceNameSlipStream, pivotEnode).(*Registry)
 		if !ok {
 			continue
 		}

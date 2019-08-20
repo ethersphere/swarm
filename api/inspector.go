@@ -33,10 +33,10 @@ type Inspector struct {
 	api      *API
 	hive     *network.Hive
 	netStore *storage.NetStore
-	stream   *newstream.SlipStream
+	stream   *newstream.Registry
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *newstream.SlipStream) *Inspector {
+func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *newstream.Registry) *Inspector {
 	return &Inspector{api, hive, netStore, pullSyncer}
 }
 
