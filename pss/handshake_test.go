@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network/simulation"
 )
 
 // asymmetrical key exchange between two directly connected peers
@@ -43,9 +44,11 @@ func testHandshake(t *testing.T) {
 	addrsizestring := strings.Split(t.Name(), "/")
 	addrsize, _ = strconv.ParseInt(addrsizestring[1], 10, 0)
 
+	sim := simulation.NewInProc(newServices(false))
+	defer sim.Close()
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
-	clients, err := setupNetwork(2, true)
+	clients, err := setupNetwork(sim, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
