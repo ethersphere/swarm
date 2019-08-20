@@ -877,8 +877,8 @@ func TestRawAllow(t *testing.T) {
 // tests that the API layer can handle edge case values
 func TestApi(t *testing.T) {
 	sim := simulation.NewInProc(newServices(true))
-
 	defer sim.Close()
+
 	clients, err := setupNetwork(sim, 2)
 	if err != nil {
 		t.Fatal(err)
