@@ -29,173 +29,218 @@ import (
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
 func TestModePutRequest(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	ch := generateTestRandomChunk()
+			chunks := generateTestRandomChunks(tc.count)
 
-	// keep the record when the chunk is stored
-	var storeTimestamp int64
+			// keep the record when the chunk is stored
+			var storeTimestamp int64
 
-	t.Run("first put", func(t *testing.T) {
-		wantTimestamp := time.Now().UTC().UnixNano()
-		defer setNow(func() (t int64) {
-			return wantTimestamp
-		})()
+			t.Run("first put", func(t *testing.T) {
+				wantTimestamp := time.Now().UTC().UnixNano()
+				defer setNow(func() (t int64) {
+					return wantTimestamp
+				})()
 
-		storeTimestamp = wantTimestamp
+				storeTimestamp = wantTimestamp
 
-		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
+				_, err := db.Put(context.Background(), chunk.ModePutRequest, chunks...)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp))
+				for _, ch := range chunks {
+					newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
+				}
 
-		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
+				newItemsCountTest(db.gcIndex, tc.count)(t)
+				newIndexGCSizeTest(db)(t)
+			})
 
-		t.Run("gc size", newIndexGCSizeTest(db))
-	})
+			t.Run("second put", func(t *testing.T) {
+				wantTimestamp := time.Now().UTC().UnixNano()
+				defer setNow(func() (t int64) {
+					return wantTimestamp
+				})()
 
-	t.Run("second put", func(t *testing.T) {
-		wantTimestamp := time.Now().UTC().UnixNano()
-		defer setNow(func() (t int64) {
-			return wantTimestamp
-		})()
+				_, err := db.Put(context.Background(), chunk.ModePutRequest, chunks...)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
-		if err != nil {
-			t.Fatal(err)
-		}
+				for _, ch := range chunks {
+					newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, wantTimestamp)(t)
+				}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, wantTimestamp))
-
-		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
-
-		t.Run("gc size", newIndexGCSizeTest(db))
-	})
+				newItemsCountTest(db.gcIndex, tc.count)(t)
+				newIndexGCSizeTest(db)(t)
+			})
+		})
+	}
 }
 
 // TestModePutSync validates ModePutSync index values on the provided DB.
 func TestModePutSync(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	wantTimestamp := time.Now().UTC().UnixNano()
-	defer setNow(func() (t int64) {
-		return wantTimestamp
-	})()
+			wantTimestamp := time.Now().UTC().UnixNano()
+			defer setNow(func() (t int64) {
+				return wantTimestamp
+			})()
 
-	ch := generateTestRandomChunk()
+			chunks := generateTestRandomChunks(tc.count)
 
-	_, err := db.Put(context.Background(), chunk.ModePutSync, ch)
-	if err != nil {
-		t.Fatal(err)
+			_, err := db.Put(context.Background(), chunk.ModePutSync, chunks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			binIDs := make(map[uint8]uint64)
+
+			for _, ch := range chunks {
+				po := db.po(ch.Address())
+				binIDs[po]++
+
+				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
+				newPullIndexTest(db, ch, binIDs[po], nil)(t)
+			}
+		})
 	}
-
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
-
-	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 }
 
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
 func TestModePutUpload(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	wantTimestamp := time.Now().UTC().UnixNano()
-	defer setNow(func() (t int64) {
-		return wantTimestamp
-	})()
+			wantTimestamp := time.Now().UTC().UnixNano()
+			defer setNow(func() (t int64) {
+				return wantTimestamp
+			})()
 
-	ch := generateTestRandomChunk()
+			chunks := generateTestRandomChunks(tc.count)
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			binIDs := make(map[uint8]uint64)
+
+			for _, ch := range chunks {
+				po := db.po(ch.Address())
+				binIDs[po]++
+
+				newRetrieveIndexesTest(db, ch, wantTimestamp, 0)(t)
+				newPullIndexTest(db, ch, binIDs[po], nil)(t)
+				newPushIndexTest(db, ch, wantTimestamp, nil)(t)
+			}
+		})
 	}
-
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
-
-	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
-
-	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, nil))
 }
 
 // TestModePutUpload_parallel uploads chunks in parallel
 // and validates if all chunks can be retrieved with correct data.
 func TestModePutUpload_parallel(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range []struct {
+		name  string
+		count int
+	}{
+		{
+			name:  "one",
+			count: 1,
+		},
+		{
+			name:  "two",
+			count: 2,
+		},
+		{
+			name:  "eight",
+			count: 8,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	chunkCount := 1000
-	workerCount := 100
+			uploadsCount := 100
+			workerCount := 100
 
-	chunkChan := make(chan chunk.Chunk)
-	errChan := make(chan error)
-	doneChan := make(chan struct{})
-	defer close(doneChan)
+			chunksChan := make(chan []chunk.Chunk)
+			errChan := make(chan error)
+			doneChan := make(chan struct{})
+			defer close(doneChan)
 
-	// start uploader workers
-	for i := 0; i < workerCount; i++ {
-		go func(i int) {
-			for {
-				select {
-				case ch, ok := <-chunkChan:
-					if !ok {
+			// start uploader workers
+			for i := 0; i < workerCount; i++ {
+				go func(i int) {
+					for {
+						select {
+						case chunks, ok := <-chunksChan:
+							if !ok {
+								return
+							}
+							_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+							select {
+							case errChan <- err:
+							case <-doneChan:
+							}
+						case <-doneChan:
+							return
+						}
+					}
+				}(i)
+			}
+
+			chunks := make([]chunk.Chunk, 0)
+			var chunksMu sync.Mutex
+
+			// send chunks to workers
+			go func() {
+				for i := 0; i < uploadsCount; i++ {
+					chs := generateTestRandomChunks(tc.count)
+					select {
+					case chunksChan <- chs:
+					case <-doneChan:
 						return
 					}
-					_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
-					select {
-					case errChan <- err:
-					case <-doneChan:
-					}
-				case <-doneChan:
-					return
+					chunksMu.Lock()
+					chunks = append(chunks, chs...)
+					chunksMu.Unlock()
+				}
+
+				close(chunksChan)
+			}()
+
+			// validate every error from workers
+			for i := 0; i < uploadsCount; i++ {
+				err := <-errChan
+				if err != nil {
+					t.Fatal(err)
 				}
 			}
-		}(i)
-	}
 
-	chunks := make([]chunk.Chunk, 0)
-	var chunksMu sync.Mutex
-
-	// send chunks to workers
-	go func() {
-		for i := 0; i < chunkCount; i++ {
-			chunk := generateTestRandomChunk()
-			select {
-			case chunkChan <- chunk:
-			case <-doneChan:
-				return
-			}
+			// get every chunk and validate its data
 			chunksMu.Lock()
-			chunks = append(chunks, chunk)
-			chunksMu.Unlock()
-		}
-
-		close(chunkChan)
-	}()
-
-	// validate every error from workers
-	for i := 0; i < chunkCount; i++ {
-		err := <-errChan
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// get every chunk and validate its data
-	chunksMu.Lock()
-	defer chunksMu.Unlock()
-	for _, ch := range chunks {
-		got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(got.Data(), ch.Data()) {
-			t.Fatalf("got chunk %s data %x, want %x", ch.Address().Hex(), got.Data(), ch.Data())
-		}
+			defer chunksMu.Unlock()
+			for _, ch := range chunks {
+				got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(got.Data(), ch.Data()) {
+					t.Fatalf("got chunk %s data %x, want %x", ch.Address().Hex(), got.Data(), ch.Data())
+				}
+			}
+		})
 	}
 }
 
@@ -203,66 +248,100 @@ func TestModePutUpload_parallel(t *testing.T) {
 // and validates that all relevant indexes have only one item
 // in them.
 func TestModePut_sameChunk(t *testing.T) {
-	ch := generateTestRandomChunk()
-
-	for _, tc := range []struct {
-		name      string
-		mode      chunk.ModePut
-		pullIndex bool
-		pushIndex bool
-	}{
-		{
-			name:      "ModePutRequest",
-			mode:      chunk.ModePutRequest,
-			pullIndex: false,
-			pushIndex: false,
-		},
-		{
-			name:      "ModePutUpload",
-			mode:      chunk.ModePutUpload,
-			pullIndex: true,
-			pushIndex: true,
-		},
-		{
-			name:      "ModePutSync",
-			mode:      chunk.ModePutSync,
-			pullIndex: true,
-			pushIndex: false,
-		},
-	} {
+	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, cleanupFunc := newTestDB(t, nil)
-			defer cleanupFunc()
+			chunks := generateTestRandomChunks(tc.count)
 
-			for i := 0; i < 10; i++ {
-				exists, err := db.Put(context.Background(), tc.mode, ch)
-				if err != nil {
-					t.Fatal(err)
-				}
-				switch exists {
-				case false:
-					if i != 0 {
-						t.Fatal("should not exist only on first Put")
-					}
-				case true:
-					if i == 0 {
-						t.Fatal("should exist on all cases other than the first one")
-					}
-				}
+			for _, tcn := range []struct {
+				name      string
+				mode      chunk.ModePut
+				pullIndex bool
+				pushIndex bool
+			}{
+				{
+					name:      "ModePutRequest",
+					mode:      chunk.ModePutRequest,
+					pullIndex: false,
+					pushIndex: false,
+				},
+				{
+					name:      "ModePutUpload",
+					mode:      chunk.ModePutUpload,
+					pullIndex: true,
+					pushIndex: true,
+				},
+				{
+					name:      "ModePutSync",
+					mode:      chunk.ModePutSync,
+					pullIndex: true,
+					pushIndex: false,
+				},
+			} {
+				t.Run(tcn.name, func(t *testing.T) {
+					t.Parallel()
 
-				count := func(b bool) (c int) {
-					if b {
-						return 1
-					}
-					return 0
-				}
+					db, cleanupFunc := newTestDB(t, nil)
+					defer cleanupFunc()
 
-				newItemsCountTest(db.retrievalDataIndex, 1)(t)
-				newItemsCountTest(db.pullIndex, count(tc.pullIndex))(t)
-				newItemsCountTest(db.pushIndex, count(tc.pushIndex))(t)
+					for i := 0; i < 10; i++ {
+						exist, err := db.Put(context.Background(), tcn.mode, chunks...)
+						if err != nil {
+							t.Fatal(err)
+						}
+						for _, exists := range exist {
+							switch exists {
+							case false:
+								if i != 0 {
+									t.Fatal("should not exist only on first Put")
+								}
+							case true:
+								if i == 0 {
+									t.Fatal("should exist on all cases other than the first one")
+								}
+							}
+						}
+
+						count := func(b bool) (c int) {
+							if b {
+								return tc.count
+							}
+							return 0
+						}
+
+						newItemsCountTest(db.retrievalDataIndex, tc.count)(t)
+						newItemsCountTest(db.pullIndex, count(tcn.pullIndex))(t)
+						newItemsCountTest(db.pushIndex, count(tcn.pushIndex))(t)
+					}
+				})
 			}
 		})
 	}
+}
+
+var multiChunkTestCases = []struct {
+	name  string
+	count int
+}{
+	{
+		name:  "one",
+		count: 1,
+	},
+	{
+		name:  "two",
+		count: 2,
+	},
+	{
+		name:  "eight",
+		count: 8,
+	},
+	{
+		name:  "hundred",
+		count: 100,
+	},
+	{
+		name:  "thousand",
+		count: 1000,
+	},
 }
 
 // BenchmarkPutUpload runs a series of benchmarks that upload
