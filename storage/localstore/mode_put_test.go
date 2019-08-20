@@ -356,6 +356,32 @@ func TestPutDuplicateChunks(t *testing.T) {
 	}
 }
 
+var multiChunkTestCases = []struct {
+	name  string
+	count int
+}{
+	{
+		name:  "one",
+		count: 1,
+	},
+	{
+		name:  "two",
+		count: 2,
+	},
+	{
+		name:  "eight",
+		count: 8,
+	},
+	{
+		name:  "hundred",
+		count: 100,
+	},
+	{
+		name:  "thousand",
+		count: 1000,
+	},
+}
+
 // BenchmarkPutUpload runs a series of benchmarks that upload
 // a specific number of chunks in parallel.
 //
