@@ -103,39 +103,43 @@ func NewNetStore(store chunk.Store, localID enode.ID) *NetStore {
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
-func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool, error) {
+func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([]bool, error) {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
-	log.Trace("netstore.put", "ref", ch.Address().String(), "mode", mode)
+	for i, ch := range chs {
+		log.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
+	}
 
 	// put the chunk to the localstore, there should be no error
-	exists, err := n.Store.Put(ctx, mode, ch)
+	exist, err := n.Store.Put(ctx, mode, chs...)
 	if err != nil {
-		return exists, err
+		return nil, err
 	}
 
-	// notify RemoteGet (or SwarmSyncerClient) about a chunk delivery and it being stored
-	fi, ok := n.fetchers.Get(ch.Address().String())
-	if ok {
-		// we need SafeClose, because it is possible for a chunk to both be
-		// delivered through syncing and through a retrieve request
-		fii := fi.(*Fetcher)
-		fii.SafeClose()
-		log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
+	for _, ch := range chs {
+		// notify RemoteGet (or SwarmSyncerClient) about a chunk delivery and it being stored
+		fi, ok := n.fetchers.Get(ch.Address().String())
+		if ok {
+			// we need SafeClose, because it is possible for a chunk to both be
+			// delivered through syncing and through a retrieve request
+			fii := fi.(*Fetcher)
+			fii.SafeClose()
+			log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
 
-		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
-		// helper snippet to log if a chunk took way to long to be delivered
-		slowChunkDeliveryThreshold := 5 * time.Second
-		if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
-			log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
+			// helper snippet to log if a chunk took way to long to be delivered
+			slowChunkDeliveryThreshold := 5 * time.Second
+			if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
+				log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
+			}
+
+			n.fetchers.Remove(ch.Address().String())
 		}
-
-		n.fetchers.Remove(ch.Address().String())
 	}
 
-	return exists, nil
+	return exist, nil
 }
 
 // Close chunk store

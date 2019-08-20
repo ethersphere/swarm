@@ -275,7 +275,7 @@ func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 		}()
 		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
 		h.tag.Inc(chunk.StateStored)
-		if seen {
+		if err != nil && seen[0] {
 			h.tag.Inc(chunk.StateSeen)
 		}
 		select {
