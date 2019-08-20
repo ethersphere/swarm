@@ -44,7 +44,7 @@ type StreamProvider interface {
 	Get(ctx context.Context, addr chunk.Address) ([]byte, error)
 
 	// Put a certain chunk into the local storage
-	Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error)
+	Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error)
 	Set(ctx context.Context, addr chunk.Address) error
 
 	// Subscribe to a data stream from an arbitrary data source

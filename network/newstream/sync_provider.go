@@ -120,20 +120,22 @@ func (s *syncProvider) Set(ctx context.Context, addr chunk.Address) error {
 	return nil
 }
 
-func (s *syncProvider) Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error) {
-	log.Trace("syncProvider.Put", "addr", addr)
+func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error) {
+	log.Trace("syncProvider.Put")
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
 		s.logger.Debug("syncProvider.Put ended", "took", end)
 	}(start)
-	ch := chunk.NewChunk(addr, data)
-	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch)
-	if seen {
-		log.Trace("syncProvider.Put - chunk already seen", "addr", addr)
-		if putSeenTestHook != nil {
-			// call the test function if it is set
-			putSeenTestHook(addr, s.netStore.LocalID)
+	//ch := chunk.NewChunk(addr, data)
+	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch...)
+	for i, v := range seen {
+		if v {
+			log.Trace("syncProvider.Put - chunk already seen", "addr", ch[i].Address())
+			if putSeenTestHook != nil {
+				// call the test function if it is set
+				putSeenTestHook(ch[i].Address(), s.netStore.LocalID)
+			}
 		}
 	}
 	return seen, err

@@ -860,11 +860,34 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	}
 
 	p.logger.Debug("delivering chunks for peer", "chunks", len(msg.Chunks))
+	chunks := []chunk.Chunk{}
 	for _, dc := range msg.Chunks {
 		c := chunk.NewChunk(dc.Addr, dc.Data)
-		p.logger.Trace("writing chunk to chunks channel", "caddr", c.Address(), "ruid", msg.Ruid)
+		chunks = append(chunks, c)
+	}
+	provider := r.getProvider(w.stream)
+	if provider == nil {
+		p.Drop()
+	}
+	seen, err := provider.Put(ctx, chunks...)
+	if err != nil {
+		if err == storage.ErrChunkInvalid {
+			streamChunkDeliveryFail.Inc(1)
+			p.Drop()
+			return
+		}
+		p.logger.Error("clientHandleChunkDelivery error putting chunk", "err", err)
+	}
+	for _, v := range seen {
+		if v {
+			streamSeenChunkDelivery.Inc(1)
+			//p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
+		}
+	}
+
+	for _, dc := range chunks {
 		select {
-		case w.chunks <- c:
+		case w.chunks <- dc:
 		case <-w.done:
 			return
 		case <-r.quit:
@@ -900,20 +923,8 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 					return
 				}
 				p.mtx.RUnlock()
-				cc := chunk.NewChunk(c.Address(), c.Data())
-				seen, err := provider.Put(ctx, cc.Address(), cc.Data())
-				if err != nil {
-					if err == storage.ErrChunkInvalid {
-						streamChunkDeliveryFail.Inc(1)
-						p.Drop()
-						return
-					}
-					p.logger.Error("clientSealBatch error putting chunk", "err", err)
-				}
-				if seen {
-					streamSeenChunkDelivery.Inc(1)
-					p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
-				}
+				//cc := chunk.NewChunk(c.Address(), c.Data())
+				//seen, err := provider.Put(ctx, cc.Address(), cc.Data())
 				p.mtx.Lock()
 				w.hashes[c.Address().Hex()] = false
 				p.mtx.Unlock()
