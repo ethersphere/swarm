@@ -66,10 +66,10 @@ func TestHandshake(t *testing.T) {
 	}
 
 	// run the exchange:
-	// trigger a `ChequeRequestMsg`
-	// expect a `EmitChequeMsg` with a valid cheque
+	// trigger a `EmitChequeMsg`
+	// expect HandshakeMsg on each node
 	err = protocolTester.TestExchanges(p2ptest.Exchange{
-		Label: "TestRequestCheque",
+		Label: "TestHandshake",
 		Triggers: []p2ptest.Trigger{
 			{
 				Code: 1,

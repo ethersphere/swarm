@@ -47,7 +47,7 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api                 PublicAPI
+	api                 API
 	store               state.Store          // store is needed in order to keep balances and cheques across sessions
 	accountingLock      sync.RWMutex         // lock for data consistency in accounting-related functions
 	balances            map[enode.ID]int64   // map of balances for each peer
