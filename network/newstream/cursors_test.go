@@ -562,7 +562,7 @@ CHECKSTREAMS:
 
 	for i := len(streamInfoRes); i > 0; i-- {
 		v := popRandomResponse()
-		pivotStream.client_handleStreamInfoRes(context.Background(), otherPeer, v)
+		pivotStream.clientHandleStreamInfoRes(context.Background(), otherPeer, v)
 	}
 
 	//get the pivot cursors for peer, assert equal to what is in `sub`
