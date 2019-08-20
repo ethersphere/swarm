@@ -47,7 +47,7 @@ var (
 	_ node.Service = &Retrieval{}
 
 	// Metrics
-	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks", nil)
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks_handled", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
 	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
 
