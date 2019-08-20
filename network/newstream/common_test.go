@@ -221,7 +221,7 @@ func uploadChunks(ctx context.Context, store chunk.Store, count uint64) (chunks 
 		if err != nil {
 			return nil, err
 		}
-		if exists {
+		if exists[0] {
 			return nil, errors.New("generated already existing chunk")
 		}
 		chunks = append(chunks, c.Address())
