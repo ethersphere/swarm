@@ -56,7 +56,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	)
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameSlipStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
+		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
 			InitialChunkCount: chunkCount,
 		}),
 	})
@@ -80,8 +80,8 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 
 		idOne := nodeIDs[0]
 		idOther := nodeIDs[1]
-		onesCursors := nodeSlipStream(sim, idOne).getPeer(idOther).getCursorsCopy()
-		othersCursors := nodeSlipStream(sim, idOther).getPeer(idOne).getCursorsCopy()
+		onesCursors := nodeRegistry(sim, idOne).getPeer(idOther).getCursorsCopy()
+		othersCursors := nodeRegistry(sim, idOther).getPeer(idOne).getCursorsCopy()
 
 		onesBins := nodeInitialBinIndexes(sim, idOne)
 		othersBins := nodeInitialBinIndexes(sim, idOther)
@@ -111,7 +111,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	)
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameSlipStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
+		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
 			InitialChunkCount: chunkCount,
 		}),
 	})
@@ -133,7 +133,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
-		pivotSyncer := nodeSlipStream(sim, idPivot)
+		pivotSyncer := nodeRegistry(sim, idPivot)
 		pivotKademlia := nodeKademlia(sim, idPivot)
 		pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
 
@@ -195,7 +195,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	const chunkCount = 1000
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameSlipStream: newSyncSimServiceFunc(nil),
+		serviceNameStream: newSyncSimServiceFunc(nil),
 	})
 	defer sim.Close()
 
@@ -323,7 +323,7 @@ func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulati
 	nodeCount := 5
 
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameSlipStream: newSyncSimServiceFunc(nil),
+		serviceNameStream: newSyncSimServiceFunc(nil),
 	})
 
 	nodeIDs, err := sim.AddNodesAndConnectStar(nodeCount)
@@ -373,7 +373,7 @@ func waitForCursors(t *testing.T, sim *simulation.Simulation, pivotEnode, lookup
 	var got int
 	for i := 0; i < 1000; i++ { // 10s total wait
 		time.Sleep(10 * time.Millisecond)
-		s, ok := sim.Service(serviceNameSlipStream, pivotEnode).(*Registry)
+		s, ok := sim.Service(serviceNameStream, pivotEnode).(*Registry)
 		if !ok {
 			continue
 		}
@@ -501,7 +501,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		},
 	}
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameSlipStream: newSyncSimServiceFunc(opts),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	})
 	defer sim.Close()
 
@@ -528,7 +528,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	pivotKad := nodeKademlia(sim, pivot)
 	pivotAddr := pot.NewAddressFromBytes(pivotKad.BaseAddr())
-	pivotStream := nodeSlipStream(sim, pivot)
+	pivotStream := nodeRegistry(sim, pivot)
 
 	otherBase := nodeKademlia(sim, other).BaseAddr()
 	otherPeer := pivotStream.getPeer(other)
