@@ -173,8 +173,6 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 	ref := req.Addr
 
-	n.logger.Trace("netstore.get", "ref", ref.String())
-
 	ch, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
 		// TODO: fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
@@ -182,7 +180,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			n.logger.Error("localstore get error", "err", err)
 		}
 
-		n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+		//n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
