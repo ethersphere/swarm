@@ -521,11 +521,6 @@ func (s *Swap) GetParams() *swap.Params {
 	return s.contract.ContractParams()
 }
 
-// Deploy deploys a new swap contract
-func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
-	return s.deploy(ctx, backend, path)
-}
-
 // verifyContract checks if the bytecode found at address matches the expected bytecode
 func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
 	return contract.ValidateCode(ctx, s.backend, address)
@@ -541,8 +536,8 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// deploy deploys the Swap contract
-func (s *Swap) deploy(ctx context.Context, backend swap.Backend, path string) error {
+// Deploy deploys the Swap contract
+func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
