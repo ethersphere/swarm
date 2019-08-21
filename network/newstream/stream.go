@@ -368,7 +368,7 @@ func (r *Registry) clientRequestStreamRange(ctx context.Context, p *Peer, stream
 	if err != nil {
 		return err
 	}
-	p.logger.Debug("peer.requestStreamRange nextInterval", "stream", stream, "cursor", cursor, "from", from)
+	p.logger.Debug("stream.requestStreamRange nextInterval", "stream", stream, "cursor", cursor, "from", from)
 	if from > cursor || empty {
 		p.logger.Debug("peer.requestStreamRange stream finished", "stream", stream, "cursor", cursor)
 		// stream finished. quit
@@ -406,10 +406,12 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 }
 
 func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange) {
-	p.logger.Debug("peer.handleGetRangeHead", "ruid", msg.Ruid)
+	p.logger.Debug("stream.handleGetRangeHead", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
+		t := time.Since(start)
+		p.logger.Debug("stream.handleGetRangeHead finished", "took", t)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).Update(t)
 	}(start)
 
 	provider := r.getProvider(msg.Stream)
@@ -487,7 +489,9 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
+		t := time.Since(start)
+		p.logger.Debug("stream.handleGetRange finished", "took", t)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).Update(t)
 	}(start)
 
 	provider := r.getProvider(msg.Stream)
