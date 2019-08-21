@@ -137,6 +137,7 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *outboxMsg
+	outboxMutex     sync.Mutex   // We mutex between the calculation of the outbox capacity and the introduction in the channel
 	forwardPending  int          // Number of messages with a booked slot pending to be forwarded.
 	pendingMutex    sync.RWMutex // ForwardPending mutex
 
@@ -560,14 +561,12 @@ func (p *Pss) enqueue(msg *PssMsg, pending bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	outboxmsg := newOutboxMsg(msg)
-	// We mutex between the calculation of the outbox capacity and the introduction in the channel so we make sure nobody
-	// add a message to the queue after checking outboxCapacity
-	mux := sync.Mutex{}
-	mux.Lock()
-	defer mux.Unlock()
+
+	p.outboxMutex.Lock()
+	defer p.outboxMutex.Unlock()
 	pendingSize := p.getPending()
 	// Only allow defaultOutboxCapacity messages at most processed (both enqueued or being forwarded)
-	if pending || pendingSize < defaultOutboxCapacity { //If pending there is already a slot booked for this message
+	if pending || pendingSize < cap(p.outbox) { //If pending there is already a slot booked for this message
 		if !pending {
 			// We book a slot in the queue increasing pending messages and release it after successfully sending the message
 			p.increasePending()
@@ -604,8 +603,8 @@ func (p *Pss) decreasePending() {
 }
 
 func (p *Pss) getPending() int {
-	p.pendingMutex.Lock()
-	defer p.pendingMutex.Unlock()
+	p.pendingMutex.RLock()
+	defer p.pendingMutex.RUnlock()
 	return p.forwardPending
 }
 

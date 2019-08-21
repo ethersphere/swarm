@@ -495,6 +495,133 @@ func TestAddressMatchProx(t *testing.T) {
 	}
 }
 
+func TestMessageEnqueued(t *testing.T) {
+
+	// setup
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	addr := make([]byte, 32)
+	addr[0] = 0x01
+	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
+	outboxCapacity := 2
+	ps.outbox = make(chan *outboxMsg, outboxCapacity)
+
+	dequeue := func() *PssMsg {
+		select {
+		case oMsg := <-ps.outbox:
+			return oMsg.msg
+		default:
+			return nil
+		}
+	}
+
+	messageAddr := addr
+	topic := [4]byte{}
+	data := []byte{0x66, 0x6f, 0x6f}
+
+	msg := testMessage(messageAddr, topic, data)
+
+	err = ps.enqueue(msg, false)
+	if err != nil && ps.forwardPending != 1 {
+		t.Fatal("Message should have space for enqueuing")
+	}
+	t.Log("Message enqueued", "Outbox len", len(ps.outbox))
+
+	oMsg := dequeue()
+	if oMsg == nil {
+		t.Fatal("Message should have been dequeued")
+	}
+	if ps.forwardPending != 1 {
+		t.Fatal("Pending message should still be 1")
+	}
+}
+
+// Test a race condition enqueueing two new messages and a pending message in an outbox of capacity 2
+func TestMessageEnqueuedRaceCondition(t *testing.T) {
+
+	// setup
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	addr := make([]byte, 32)
+	addr[0] = 0x01
+	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
+	outboxCapacity := 2
+	ps.outbox = make(chan *outboxMsg, outboxCapacity)
+
+	topic := [4]byte{}
+	data := []byte{0x66, 0x6f, 0x6f}
+
+	finish := make(chan struct{})
+	var errorCount int
+	var enqueuedPending bool
+	newMsg := func(iteration int) {
+		err := ps.enqueue(testMessage(addr, topic, data), false)
+		if err != nil {
+			log.Debug("Expected error enqueued for new message", "iteration", iteration)
+			errorCount++
+		} else {
+			log.Debug("Enqueued new message", "Outbox length", len(ps.outbox), "iteration", iteration)
+		}
+		finish <- struct{}{}
+	}
+
+	reEnqueue := func(iteration int) {
+		time.Sleep(1 * time.Millisecond)
+		err := ps.enqueue(testMessage(addr, topic, data), true)
+		if err != nil {
+			enqueuedPending = false
+			log.Error("Unexpected error for pending message", "iteration", iteration)
+		} else {
+			enqueuedPending = true
+			log.Debug("Enqueued pending message", "Outbox length", len(ps.outbox), "iteration", iteration)
+		}
+		finish <- struct{}{}
+	}
+
+	for iteration := 0; iteration < 300; iteration++ {
+		log.Debug("------New Iteration-----", "iteration", iteration)
+		ps.forwardPending = 1
+		ps.outbox = make(chan *outboxMsg, outboxCapacity)
+		enqueuedPending = false
+		errorCount = 0
+
+		go newMsg(iteration)
+		go newMsg(iteration)
+		go reEnqueue(iteration)
+
+		for i := 0; i < 3; i++ {
+			<-finish
+		}
+		if errorCount < 1 {
+			t.Fatal("One of the new message should have failed", "iteration", iteration)
+		}
+		outboxLength := len(ps.outbox)
+		if outboxLength != 2 {
+			t.Fatal("There should be two messages enqueued", "Outbox length", outboxLength, "iteration", iteration)
+		}
+		if !enqueuedPending {
+			t.Fatal("Pending message could not be enqueued", "iteration", iteration)
+		}
+	}
+}
+
+func testMessage(messageAddr []byte, topic [4]byte, data []byte) *PssMsg {
+	msg := newPssMsg(&msgParams{})
+	msg.To = messageAddr
+	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
+	msg.Payload = &whisper.Envelope{
+		Topic: topic,
+		Data:  data,
+	}
+	return msg
+}
+
 // verify that message queueing happens when it should, and that expired and corrupt messages are dropped
 func TestMessageProcessing(t *testing.T) {
 
@@ -1901,7 +2028,13 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 }
 
+// New Test Pss that will be started
 func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Params) *Pss {
+	return newTestPssStart(privkey, kad, ppextra, true)
+}
+
+// New Test Pss but with a parameter to select if the pss process should start
+func newTestPssStart(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Params, start bool) *Pss {
 	nid := enode.PubkeyToIDV4(&privkey.PublicKey)
 	// set up routing if kademlia is not passed to us
 	if kad == nil {
@@ -1919,7 +2052,9 @@ func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Param
 	if err != nil {
 		return nil
 	}
-	ps.Start(nil)
+	if start {
+		ps.Start(nil)
+	}
 
 	return ps
 }
