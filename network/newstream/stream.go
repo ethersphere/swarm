@@ -43,7 +43,7 @@ import (
 
 const (
 	HashSize  = 32
-	BatchSize = 64
+	BatchSize = 32
 )
 
 var (
@@ -60,6 +60,8 @@ var (
 	streamBatchFail               = metrics.GetOrRegisterCounter("network.stream.batch_fail", nil)
 	streamChunkDeliveryFail       = metrics.GetOrRegisterCounter("network.stream.delivery_fail", nil)
 	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network.stream.next_interval_fail", nil)
+	headBatchSizeGauge            = metrics.GetOrRegisterGauge("network.stream.batch_size_head", nil)
+	batchSizeGauge                = metrics.GetOrRegisterGauge("network.stream.batch_size", nil)
 	lastReceivedChunksMsg         = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
 	streamPeersCount = metrics.GetOrRegisterGauge("network.stream.peers", nil)
@@ -426,7 +428,6 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 			// quitting, return
 			return
 		case <-p.quit:
-			p.logger.Debug("not sending batch due to shutdown")
 			// prevent sending an empty batch that resulted from db shutdown
 			return
 		default:
@@ -536,9 +537,18 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		Hashes:    h,
 	}
 	l := len(h) / HashSize
+	if *msg.To == 0 {
+		headBatchSizeGauge.Update(int64(l))
+	} else {
+		batchSizeGauge.Update(int64(l))
+	}
 	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", l)
 	if err := p.Send(ctx, offered); err != nil {
 		p.logger.Error("erroring sending offered hashes", "ruid", msg.Ruid, "err", err)
+		p.mtx.Lock()
+		delete(p.openOffers, msg.Ruid)
+		p.mtx.Unlock()
+		p.Drop()
 	}
 }
 
@@ -952,7 +962,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 500 * time.Millisecond
+	const batchTimeout = 100 * time.Millisecond
 
 	var (
 		batch        []byte
@@ -964,7 +974,11 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	)
 
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil).UpdateSince(start)
+		if to == 0 {
+			metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil).UpdateSince(start)
+		} else {
+			metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil).UpdateSince(start)
+		}
 		metrics.GetOrRegisterCounter("network.stream.server_collect_batch.batch-size", nil).Inc(int64(batchSize))
 		if timer != nil {
 			timer.Stop()
@@ -989,7 +1003,6 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 			if batchSize >= BatchSize {
 				iterate = false
 				metrics.GetOrRegisterCounter("network.stream.server_collect_batch.full-batch", nil).Inc(1)
-				//p.logger.Trace("pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", *batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
 				timer = time.NewTimer(batchTimeout)
@@ -1003,7 +1016,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 		case <-timerC:
 			// return batch if new chunks are not received after some time
 			iterate = false
-			metrics.GetOrRegisterCounter("network.stream.serverCollectBatch.timer-expire", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network.stream.server_collect_batch.timer-expire", nil).Inc(1)
 		case <-p.quit:
 			iterate = false
 			p.logger.Trace("pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
