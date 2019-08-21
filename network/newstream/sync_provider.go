@@ -31,9 +31,11 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/storage"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const syncStreamName = "SYNC"
+const cacheCapacity = 10000
 
 type syncProvider struct {
 	netStore *storage.NetStore
@@ -44,6 +46,8 @@ type syncProvider struct {
 	autostart               bool
 	quit                    chan struct{}
 
+	cache *lru.Cache
+
 	logger log.Logger
 }
 
@@ -52,16 +56,21 @@ type syncProvider struct {
 // established only within depth ( >=depth ). This is needed for Push Sync. When set to false, the streams are
 // established on all bins as they did traditionally with Pull Sync.
 func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
-	s := &syncProvider{
+	c, err := lru.New(cacheCapacity)
+	if err != nil {
+		panic(err)
+	}
+
+	return &syncProvider{
 		netStore:                ns,
 		kad:                     kad,
 		syncBinsOnlyWithinDepth: syncOnlyWithinDepth,
 		autostart:               autostart,
 		name:                    syncStreamName,
 		quit:                    make(chan struct{}),
+		cache:                   c,
 		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
 	}
-	return s
 }
 
 func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
@@ -101,11 +110,19 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 		end := time.Since(start)
 		s.logger.Debug("syncProvider.Get ended", "took", end)
 	}(start)
-	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(addr))
-	if err != nil {
-		return nil, err
+	var data []byte
+	v, ok := s.cache.Get(addr.String())
+	if !ok {
+		ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(addr))
+		if err != nil {
+			return nil, err
+		}
+		s.cache.Add(addr.String(), ch.Data())
+		return ch.Data(), nil
+	} else {
+		data = v.([]byte)
 	}
-	return ch.Data(), nil
+	return data, nil
 }
 
 func (s *syncProvider) Set(ctx context.Context, addr chunk.Address) error {
@@ -138,6 +155,11 @@ func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []boo
 			}
 		}
 	}
+	go func(chunks ...chunk.Chunk) {
+		for _, c := range chunks {
+			s.cache.Add(c.Address().String(), c.Data())
+		}
+	}(ch...)
 	return seen, err
 }
 
