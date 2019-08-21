@@ -42,8 +42,9 @@ import (
 )
 
 const (
-	HashSize  = 32
-	BatchSize = 16
+	HashSize            = 32
+	BatchSize           = 16
+	concurrentIterators = 6
 )
 
 var (
@@ -70,6 +71,7 @@ var (
 	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
 	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
 
+	iteratorPool = make(chan struct{}, concurrentIterators)
 	// Protocol spec
 	Spec = &protocols.Spec{
 		Name:       "bzz-stream",
@@ -502,6 +504,12 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		p.Drop()
 		return
 	}
+	l := len(h) / HashSize
+	if *msg.To == 0 {
+		headBatchSizeGauge.Update(int64(l))
+	} else {
+		batchSizeGauge.Update(int64(l))
+	}
 	if e {
 		p.logger.Debug("interval is empty for requested range", "empty?", e, "hashes", len(h)/HashSize, "ruid", msg.Ruid)
 		select {
@@ -539,12 +547,6 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		Ruid:      msg.Ruid,
 		LastIndex: t,
 		Hashes:    h,
-	}
-	l := len(h) / HashSize
-	if *msg.To == 0 {
-		headBatchSizeGauge.Update(int64(l))
-	} else {
-		batchSizeGauge.Update(int64(l))
 	}
 	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", l)
 	if err := p.Send(ctx, offered); err != nil {
@@ -793,6 +795,8 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	cd := &ChunkDelivery{
 		Ruid: msg.Ruid,
 	}
+	iteratorPool <- struct{}{}
+	defer func() { <-iteratorPool }()
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
