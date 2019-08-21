@@ -118,8 +118,10 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 			return nil, err
 		}
 		s.cache.Add(addr.String(), ch.Data())
+		metrics.GetOrRegisterCounter("network.stream.sync_provider.cachemiss", nil).Inc(1)
 		return ch.Data(), nil
 	} else {
+		metrics.GetOrRegisterCounter("network.stream.sync_provider.cachehit", nil).Inc(1)
 		data = v.([]byte)
 	}
 	return data, nil
