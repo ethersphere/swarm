@@ -802,7 +802,11 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	}
 
 	frameSize := 0
-	const maxFrame = BatchSize
+	var maxFrame = BatchSize / 4 // should be BatchSize but testing to see if this makes a difference as its the major change from existing stream pkg
+	if maxFrame < 1 {
+		maxFrame = 1
+	}
+
 	cd := &ChunkDelivery{
 		Ruid: msg.Ruid,
 	}
