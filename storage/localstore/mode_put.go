@@ -194,7 +194,7 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 	return exists, gcSizeChange, nil
 }
 
-// putRequest adds an Item to the batch by updating required indexes:
+// putUpload adds an Item to the batch by updating required indexes:
 //  - put to indexes: retrieve, push, pull
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
@@ -218,7 +218,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	return false, nil
 }
 
-// putRequest adds an Item to the batch by updating required indexes:
+// putSync adds an Item to the batch by updating required indexes:
 //  - put to indexes: retrieve, pull
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
