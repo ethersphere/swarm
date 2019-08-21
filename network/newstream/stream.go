@@ -71,7 +71,6 @@ var (
 	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
 	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
 
-	iteratorPool = make(chan struct{}, concurrentIterators)
 	// Protocol spec
 	Spec = &protocols.Spec{
 		Name:       "bzz-stream",
@@ -97,7 +96,8 @@ type Registry struct {
 	peers          map[enode.ID]*Peer
 	baseKey        []byte
 
-	providers map[string]StreamProvider
+	providers   map[string]StreamProvider
+	iteratorSem chan struct{}
 
 	spec *protocols.Spec
 
@@ -116,6 +116,7 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 		quit:           make(chan struct{}),
 		baseKey:        baseKey,
 		logger:         log.New("base", hex.EncodeToString(baseKey)),
+		iteratorSem:    make(chan struct{}, concurrentIterators),
 		spec:           Spec,
 	}
 	for _, p := range providers {
@@ -406,6 +407,11 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 
 func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange) {
 	p.logger.Debug("peer.handleGetRangeHead", "ruid", msg.Ruid)
+	start := time.Now()
+	defer func(start time.Time) {
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
+	}(start)
+
 	provider := r.getProvider(msg.Stream)
 	if provider == nil {
 		// at this point of the message exchange unsupported providers are illegal. drop peer
@@ -463,8 +469,9 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 		LastIndex: t,
 		Hashes:    h,
 	}
-	i := len(h) / HashSize
-	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestfrom", msg.From, "requestto", msg.To, "hashes", i)
+	l := len(h) / HashSize
+	headBatchSizeGauge.Update(int64(l))
+	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestfrom", msg.From, "requestto", msg.To, "hashes", l)
 	if err := p.Send(ctx, offered); err != nil {
 		p.logger.Error("erroring sending offered hashes", "ruid", msg.Ruid, "err", err)
 		p.mtx.Lock()
@@ -505,11 +512,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		return
 	}
 	l := len(h) / HashSize
-	if *msg.To == 0 {
-		headBatchSizeGauge.Update(int64(l))
-	} else {
-		batchSizeGauge.Update(int64(l))
-	}
+	batchSizeGauge.Update(int64(l))
 	if e {
 		p.logger.Debug("interval is empty for requested range", "empty?", e, "hashes", len(h)/HashSize, "ruid", msg.Ruid)
 		select {
@@ -795,8 +798,8 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	cd := &ChunkDelivery{
 		Ruid: msg.Ruid,
 	}
-	iteratorPool <- struct{}{}
-	defer func() { <-iteratorPool }()
+	r.iteratorSem <- struct{}{}
+	defer func() { <-r.iteratorSem }()
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
@@ -983,6 +986,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 
 	defer func(start time.Time) {
 		t := time.Since(start)
+		p.logger.Trace("server collect batch ended", "took", t)
 		if to == 0 {
 			collectBatchLiveTimer.Update(t)
 		} else {
