@@ -147,11 +147,8 @@ type Spec struct {
 	codes    map[reflect.Type]uint64
 	types    map[uint64]reflect.Type
 
-<<<<<<< HEAD
 	// if the protocol allows for extending the p2p msg to propagate context
 	// even if set to true context will propagate only if the remote peer supports it
-=======
->>>>>>> a7dbd37ee00ce50aef6f66172ce03e36549ef421
 	// if the protocol does not allow extending the p2p msg to propagate context
 	// even if context not disabled, context will propagate only tracing is enabled
 	DisableContext bool
