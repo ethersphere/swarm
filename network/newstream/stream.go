@@ -838,7 +838,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 					return
 				default:
 				}
-				p.logger.Debug("sending chunk delivery")
 				if err := p.Send(ctx, cd); err != nil {
 					p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
 					p.Drop()
@@ -871,7 +870,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 }
 
 func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
-	p.logger.Debug("peer.handleChunkDelivery", "ruid", msg.Ruid, "chunks", len(msg.Chunks))
+	//p.logger.Debug("peer.handleChunkDelivery", "ruid", msg.Ruid, "chunks", len(msg.Chunks))
 	processReceivedChunksMsgCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 	start := time.Now()
@@ -889,7 +888,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		return
 	}
 
-	p.logger.Debug("delivering chunks for peer", "chunks", len(msg.Chunks))
+	//p.logger.Debug("delivering chunks for peer", "chunks", len(msg.Chunks))
 	chunks := []chunk.Chunk{}
 	for _, dc := range msg.Chunks {
 		c := chunk.NewChunk(dc.Addr, dc.Data)

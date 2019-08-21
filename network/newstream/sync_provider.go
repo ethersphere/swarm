@@ -74,7 +74,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 }
 
 func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
-	s.logger.Debug("syncProvider.NeedData", "key", hex.EncodeToString(key))
+	//s.logger.Debug("syncProvider.NeedData", "key", hex.EncodeToString(key))
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -104,7 +104,7 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 }
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
-	log.Debug("syncProvider.Get")
+	//log.Debug("syncProvider.Get")
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -150,7 +150,7 @@ func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []boo
 	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch...)
 	for i, v := range seen {
 		if v {
-			log.Trace("syncProvider.Put - chunk already seen", "addr", ch[i].Address())
+			//log.Trace("syncProvider.Put - chunk already seen", "addr", ch[i].Address())
 			if putSeenTestHook != nil {
 				// call the test function if it is set
 				putSeenTestHook(ch[i].Address(), s.netStore.LocalID)
