@@ -411,9 +411,7 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 	p.logger.Debug("stream.handleGetRangeHead", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		t := time.Since(start)
-		p.logger.Debug("stream.handleGetRangeHead finished", "took", t)
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).Update(t)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
 	}(start)
 
 	provider := r.getProvider(msg.Stream)
@@ -491,9 +489,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		t := time.Since(start)
-		p.logger.Debug("stream.handleGetRange finished", "took", t)
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).Update(t)
+		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
 	}(start)
 
 	provider := r.getProvider(msg.Stream)
@@ -823,8 +819,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 				p.Drop()
 				return
 			}
-			took := time.Since(start)
-			actualGetTimer.Update(took)
+			actualGetTimer.UpdateSince(start)
 			chunkD := DeliveredChunk{
 				Addr: hash,
 				Data: data,
@@ -1002,9 +997,9 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 		t := time.Since(start)
 		p.logger.Trace("server collect batch ended", "took", t)
 		if to == 0 {
-			collectBatchLiveTimer.Update(t)
+			collectBatchLiveTimer.UpdateSince(start)
 		} else {
-			collectBatchHistoryTimer.Update(t)
+			collectBatchHistoryTimer.UpdateSince(start)
 		}
 		if timer != nil {
 			timer.Stop()
