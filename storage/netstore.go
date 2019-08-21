@@ -135,7 +135,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			// helper snippet to log if a chunk took way to long to be delivered
 			slowChunkDeliveryThreshold := 5 * time.Second
 			if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
-				metrics.GetOrRegisterCounter("netstore.slow_chunk_delivery").Inc(1)
+				metrics.GetOrRegisterCounter("netstore.slow_chunk_delivery", nil).Inc(1)
 				log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 			}
 			n.fetchers.Remove(ch.Address().String())
