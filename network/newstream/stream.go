@@ -71,6 +71,8 @@ var (
 	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
 	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
 
+	activeBatchTimeout = 20 * time.Second
+
 	// Protocol spec
 	Spec = &protocols.Spec{
 		Name:       "bzz-stream",
@@ -713,12 +715,14 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			return
 		}
 		close(w.done)
-	case <-time.After(20 * time.Second):
-		log.Error("batch has timed out", "ruid", w.ruid)
+	case <-time.After(activeBatchTimeout):
+		p.logger.Error("batch has timed out", "ruid", w.ruid)
 		close(w.done)
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
+		p.Drop()
+		return
 	case <-w.done:
 		p.logger.Debug("batch empty, sealing interval", "ruid", w.ruid)
 		if err := p.sealWant(w); err != nil {
