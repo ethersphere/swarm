@@ -344,6 +344,44 @@ var multiChunkTestCases = []struct {
 	},
 }
 
+// TestPutDuplicateChunks validates the expected behaviour for
+// passing duplicate chunks to the Put method.
+func TestPutDuplicateChunks(t *testing.T) {
+	for _, mode := range []chunk.ModePut{
+		chunk.ModePutUpload,
+		chunk.ModePutRequest,
+		chunk.ModePutSync,
+	} {
+		t.Run(mode.String(), func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
+
+			ch := generateTestRandomChunk()
+
+			exist, err := db.Put(context.Background(), mode, ch, ch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if exist[0] {
+				t.Error("first chunk should not exist")
+			}
+			if !exist[1] {
+				t.Error("second chunk should exist")
+			}
+
+			newItemsCountTest(db.retrievalDataIndex, 1)(t)
+
+			got, err := db.Get(context.Background(), chunk.ModeGetLookup, ch.Address())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got.Address(), ch.Address()) {
+				t.Errorf("got chunk address %s, want %s", got.Address().Hex(), ch.Address().Hex())
+			}
+		})
+	}
+}
+
 // BenchmarkPutUpload runs a series of benchmarks that upload
 // a specific number of chunks in parallel.
 //

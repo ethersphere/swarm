@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -44,11 +45,13 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, chs ...chunk.Chunk) (
 	return exist, err
 }
 
-// put stores Chunks to database and updates other
-// indexes. It acquires lockAddr to protect two calls
-// of this function for the same address in parallel.
-// Item fields Address and Data must not be
-// with their nil values.
+// put stores Chunks to database and updates other indexes. It acquires lockAddr
+// to protect two calls of this function for the same address in parallel. Item
+// fields Address and Data must not be with their nil values. If chunks with the
+// same address are passed in arguments, only the first chunk will be stored,
+// and following ones will have exist set to true for their index in exist
+// slice. This is the same behaviour as if the same chunks are passed one by one
+// in multiple put method calls.
 func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
@@ -73,6 +76,10 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 	switch mode {
 	case chunk.ModePutRequest:
 		for i, ch := range chs {
+			if containsChunk(ch.Address(), chs[:i]...) {
+				exist[i] = true
+				continue
+			}
 			exists, c, err := db.putRequest(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
@@ -83,6 +90,10 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 
 	case chunk.ModePutUpload:
 		for i, ch := range chs {
+			if containsChunk(ch.Address(), chs[:i]...) {
+				exist[i] = true
+				continue
+			}
 			exists, err := db.putUpload(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
@@ -98,6 +109,10 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 
 	case chunk.ModePutSync:
 		for i, ch := range chs {
+			if containsChunk(ch.Address(), chs[:i]...) {
+				exist[i] = true
+				continue
+			}
 			exists, err := db.putSync(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
@@ -253,4 +268,15 @@ func (db *DB) incBinID(binIDs map[uint8]uint64, po uint8) (id uint64, err error)
 	}
 	binIDs[po]++
 	return binIDs[po], nil
+}
+
+// containsChunk returns true if the chunk with a specific address
+// is present in the provided chunk slice.
+func containsChunk(addr chunk.Address, chs ...chunk.Chunk) bool {
+	for _, c := range chs {
+		if bytes.Equal(addr, c.Address()) {
+			return true
+		}
+	}
+	return false
 }
