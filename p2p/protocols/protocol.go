@@ -18,7 +18,7 @@
 Package protocols is an extension to p2p. It offers a user friendly simple way to define
 devp2p subprotocols by abstracting away code standardly shared by protocols.
 
-* automate assigments of code indexes to messages
+* automate assignments of code indexes to messages
 * automate RLP decoding/encoding based on reflecting
 * provide the forever loop to read incoming messages
 * standardise error handling related to communication
@@ -36,11 +36,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/tracing"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/tracing"
+	"github.com/ethersphere/go-ethereum/metrics"
+
 )
 
 // error codes used by this  protocol scheme
@@ -149,6 +150,8 @@ type Spec struct {
 
 	// if the protocol allows for extending the p2p msg to propagate context
 	// even if set to true context will propagate only if the remote peer supports it
+	// if the protocol does not allow extending the p2p msg to propagate context
+	// even if context not disabled, context will propagate only tracing is enabled
 	DisableContext bool
 }
 
@@ -212,7 +215,7 @@ type Peer struct {
 func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	encode := encodeWithContext
 	decode := decodeWithContext
-	if spec.DisableContext || !tracing.Enabled {
+	if spec == nil || spec.DisableContext || !tracing.Enabled {
 		encode = encodeWithoutContext
 		decode = decodeWithoutContext
 	}

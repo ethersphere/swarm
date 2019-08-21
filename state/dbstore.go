@@ -23,6 +23,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // ErrNotFound is returned when no results are returned from the database
@@ -34,6 +35,7 @@ type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
+	Iterate(prefix string, iterFunc func([]byte, []byte)) (err error)
 	Close() error
 }
 
@@ -103,6 +105,17 @@ func (s *DBStore) Put(key string, i interface{}) (err error) {
 // Delete removes entries stored under a specific key.
 func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
+}
+
+// Iterate entries which has a specific prefix
+// The key and value may be modified in the iterFunc
+func (s *DBStore) Iterate(prefix string, iterFunc func([]byte, []byte)) (err error) {
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
+	for iter.Next() {
+		iterFunc(iter.Key(), iter.Value())
+	}
+	iter.Release()
+	return iter.Error()
 }
 
 // Close releases the resources used by the underlying LevelDB.

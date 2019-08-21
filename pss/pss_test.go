@@ -1880,10 +1880,6 @@ func newServices(allowRaw bool) adapters.Services {
 				Service:   NewAPITest(ps),
 				Public:    false,
 			})
-			if err != nil {
-				log.Error("Couldnt register pss protocol", "err", err)
-				os.Exit(1)
-			}
 			pssprotocols[ctx.Config.ID.String()] = &protoCtrl{
 				C:        ping.OutC,
 				protocol: pp,

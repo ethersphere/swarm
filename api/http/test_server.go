@@ -21,25 +21,36 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/localstore"
+	"github.com/ethersphere/swarm/storage/pin"
 )
 
 type TestServer interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver) *TestSwarmServer {
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API, *pin.API) TestServer, resolver api.Resolver,
+	o *localstore.Options) *TestSwarmServer {
+
 	swarmDir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	localStore, err := localstore.New(swarmDir, make([]byte, 32), nil)
+
+	stateStore, err := state.NewDBStore(filepath.Join(swarmDir, "state-store.db"))
+	if err != nil {
+		t.Fatalf("could not create state store. Error: %s", err.Error())
+	}
+
+	localStore, err := localstore.New(swarmDir, make([]byte, 32), o)
 	if err != nil {
 		os.RemoveAll(swarmDir)
 		t.Fatal(err)
@@ -60,7 +71,8 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	}
 
 	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags)
-	apiServer := httptest.NewServer(serverFunc(swarmApi))
+	pinAPI := pin.NewAPI(localStore, stateStore, nil, tags, swarmApi)
+	apiServer := httptest.NewServer(serverFunc(swarmApi, pinAPI))
 
 	tss := &TestSwarmServer{
 		Server:    apiServer,

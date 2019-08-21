@@ -32,43 +32,52 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/testutil"
 )
 
-func serverFunc(api *api.API) swarmhttp.TestServer {
-	return swarmhttp.NewServer(api, "")
+func serverFunc(api *api.API, pinAPI *pin.API) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, pinAPI, "")
 }
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
 func TestClientUploadDownloadRaw(t *testing.T) {
-	testClientUploadDownloadRaw(false, t)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
+	defer srv.Close()
+
+	data := []byte("foo123")
+	testClientUploadDownloadRaw(srv, false, t, data, false)
+
+	// check the tag was created successfully
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 1, 1, 0, 1)
 }
 
 func TestClientUploadDownloadRawEncrypted(t *testing.T) {
+
 	if testutil.RaceEnabled {
 		t.Skip("flaky with -race on Travis")
 		// See: https://github.com/ethersphere/go-ethereum/issues/1254
 	}
 
-	testClientUploadDownloadRaw(true, t)
-}
-
-func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
-	client := NewClient(srv.URL)
-
-	// upload some raw data
 	data := []byte("foo123")
-	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testClientUploadDownloadRaw(srv, true, t, data, false)
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
 	testutil.CheckTag(t, tag, 1, 1, 0, 1)
+}
+
+func testClientUploadDownloadRaw(srv *swarmhttp.TestSwarmServer, toEncrypt bool, t *testing.T, data []byte, toPin bool) string {
+	client := NewClient(srv.URL)
+
+	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt, toPin)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// check we can download the same data
 	res, isEncrypted, err := client.DownloadRaw(hash)
@@ -86,6 +95,8 @@ func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	if !bytes.Equal(gotData, data) {
 		t.Fatalf("expected downloaded data to be %q, got %q", data, gotData)
 	}
+
+	return hash
 }
 
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
@@ -98,12 +109,13 @@ func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
 	testClientUploadDownloadFiles(true, t)
 }
 
-func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) string {
+
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
-	upload := func(manifest, path string, data []byte) string {
+	upload := func(manifest, path string, data []byte, toPin bool) string {
 		file := &File{
 			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 			ManifestEntry: api.ManifestEntry{
@@ -112,7 +124,7 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest, toEncrypt)
+		hash, err := client.Upload(file, manifest, toEncrypt, toPin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,25 +153,27 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 
 	// upload a file to the root of a manifest
 	rootData := []byte("some-data")
-	rootHash := upload("", "", rootData)
+	rootHash := upload("", "", rootData, false)
 
 	// check we can download the root file
 	checkDownload(rootHash, "", rootData)
 
 	// upload another file to the same manifest
 	otherData := []byte("some-other-data")
-	newHash := upload(rootHash, "some/other/path", otherData)
+	newHash := upload(rootHash, "some/other/path", otherData, false)
 
 	// check we can download both files from the new manifest
 	checkDownload(newHash, "", rootData)
 	checkDownload(newHash, "some/other/path", otherData)
 
 	// replace the root file with different data
-	newHash = upload(newHash, "", otherData)
+	newHash = upload(newHash, "", otherData, false)
 
 	// check both files have the other data
 	checkDownload(newHash, "", otherData)
 	checkDownload(newHash, "some/other/path", otherData)
+
+	return newHash
 }
 
 var testDirFiles = []string{
@@ -194,10 +208,10 @@ func newTestDirectory(t *testing.T) string {
 	return dir
 }
 
-// TestClientUploadDownloadDirectory tests uploading and downloading a
+// TestClientUploadDownloadDirectory tests uploading and downloading
 // directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -206,7 +220,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	// upload the directory
 	client := NewClient(srv.URL)
 	defaultPath := testDirFiles[0]
-	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
+	hash, err := client.UploadDirectory(dir, defaultPath, "", false, false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -267,14 +281,14 @@ func TestClientFileListEncrypted(t *testing.T) {
 }
 
 func testClientFileList(toEncrypt bool, t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "", toEncrypt)
+	hash, err := client.UploadDirectory(dir, "", "", toEncrypt, false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -325,14 +339,14 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
 // upload
 func TestClientMultipartUpload(t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
 	// note: this test should result in SEEN chunks. assert accordingly
-	data := []byte("some-data")
 	uploader := UploaderFunc(func(upload UploadFn) error {
 		for _, name := range testDirFiles {
+			data := []byte(name)
 			file := &File{
 				ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 				ManifestEntry: api.ManifestEntry{
@@ -350,14 +364,14 @@ func TestClientMultipartUpload(t *testing.T) {
 
 	// upload the files as a multipart upload
 	client := NewClient(srv.URL)
-	hash, err := client.MultipartUpload("", uploader)
+	hash, err := client.MultipartUpload("", uploader, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 9, 9, 7, 9)
+	testutil.CheckTag(t, tag, 9, 9, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {
@@ -370,8 +384,9 @@ func TestClientMultipartUpload(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(gotData, data) {
-			t.Fatalf("expected data to be %q, got %q", data, gotData)
+		// The content is the file name just to make them different
+		if !bytes.Equal(gotData, []byte(path)) {
+			t.Fatalf("expected data to be %q, got %q", path, gotData)
 		}
 	}
 	for _, file := range testDirFiles {
@@ -398,7 +413,7 @@ func TestClientBzzWithFeed(t *testing.T) {
 	signer, _ := newTestSigner()
 
 	// Initialize a Swarm test server
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	swarmClient := NewClient(srv.URL)
 	defer srv.Close()
 
@@ -433,7 +448,7 @@ func TestClientBzzWithFeed(t *testing.T) {
 	}
 
 	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
-	manifestAddressHex, err := swarmClient.Upload(f, "", false)
+	manifestAddressHex, err := swarmClient.Upload(f, "", false, false)
 	if err != nil {
 		t.Fatalf("Error creating manifest: %s", err)
 	}
@@ -516,7 +531,7 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
 	client := NewClient(srv.URL)
 	defer srv.Close()
 

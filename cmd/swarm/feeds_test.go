@@ -31,13 +31,14 @@ import (
 	swarmhttp "github.com/ethersphere/swarm/api/http"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/testutil"
 )
 
 func TestCLIFeedUpdate(t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, func(api *api.API) swarmhttp.TestServer {
-		return swarmhttp.NewServer(api, "")
-	}, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, func(api *api.API, pinAPI *pin.API) swarmhttp.TestServer {
+		return swarmhttp.NewServer(api, nil, "")
+	}, nil, nil)
 	log.Info("starting a test swarm server")
 	defer srv.Close()
 

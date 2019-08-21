@@ -76,7 +76,6 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
-	return nil
 }
 
 type offer struct {

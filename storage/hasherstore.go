@@ -152,7 +152,11 @@ func (h *hasherStore) startWait(ctx context.Context) {
 		select {
 		// if context is done earlier, just return with the error
 		case <-ctx.Done():
-			h.waitC <- ctx.Err()
+			select {
+			case h.waitC <- ctx.Err():
+			case <-h.quitC:
+			}
+			return
 		// doneC is closed if all chunks have been submitted, from then we just wait until all of them are also stored
 		case <-doneC:
 			done = true
@@ -160,7 +164,11 @@ func (h *hasherStore) startWait(ctx context.Context) {
 		// a chunk has been stored, if err is nil, then successfully, so increase the stored chunk counter
 		case err := <-h.errC:
 			if err != nil {
-				h.waitC <- err
+				select {
+				case h.waitC <- err:
+				case <-h.quitC:
+				}
+				return
 			}
 			nrStoredChunks++
 		}
