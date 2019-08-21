@@ -108,7 +108,6 @@ func NewNetStore(store chunk.Store, baseAddr []byte, localID enode.ID) *NetStore
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
 func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([]bool, error) {
-
 	for i, ch := range chs {
 		log.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
 	}
@@ -136,6 +135,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			// helper snippet to log if a chunk took way to long to be delivered
 			slowChunkDeliveryThreshold := 5 * time.Second
 			if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
+				metrics.GetOrRegisterCounter("netstore.slow_chunk_delivery").Inc(1)
 				log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 			}
 
