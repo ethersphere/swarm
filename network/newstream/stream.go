@@ -70,8 +70,8 @@ var (
 
 	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
 	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
-
-	activeBatchTimeout = 20 * time.Second
+	actualGetTimer           = metrics.GetOrRegisterResettingTimer("network.stream.provider_get_time", nil)
+	activeBatchTimeout       = 20 * time.Second
 
 	// Protocol spec
 	Spec = &protocols.Spec{
@@ -816,13 +816,15 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
+			start := time.Now()
 			data, err := provider.Get(ctx, hash)
 			if err != nil {
 				p.logger.Error("handleWantedHashesMsg", "hash", hash, "err", err)
 				p.Drop()
 				return
 			}
-
+			took := time.Since(start)
+			actualGetTimer.Update(took)
 			chunkD := DeliveredChunk{
 				Addr: hash,
 				Data: data,
