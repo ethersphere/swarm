@@ -27,103 +27,132 @@ import (
 
 // TestModeSetAccess validates ModeSetAccess index values on the provided DB.
 func TestModeSetAccess(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	ch := generateTestRandomChunk()
+			chunks := generateTestRandomChunks(tc.count)
 
-	wantTimestamp := time.Now().UTC().UnixNano()
-	defer setNow(func() (t int64) {
-		return wantTimestamp
-	})()
+			wantTimestamp := time.Now().UTC().UnixNano()
+			defer setNow(func() (t int64) {
+				return wantTimestamp
+			})()
 
-	err := db.Set(context.Background(), chunk.ModeSetAccess, ch.Address())
-	if err != nil {
-		t.Fatal(err)
+			err := db.Set(context.Background(), chunk.ModeSetAccess, chunkAddresses(chunks)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			binIDs := make(map[uint8]uint64)
+
+			for _, ch := range chunks {
+				po := db.po(ch.Address())
+				binIDs[po]++
+
+				newPullIndexTest(db, ch, binIDs[po], nil)(t)
+				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+			}
+
+			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+
+			t.Run("pull index count", newItemsCountTest(db.pullIndex, tc.count))
+
+			t.Run("gc size", newIndexGCSizeTest(db))
+		})
 	}
-
-	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, 1))
-
-	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, 1))
-
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
-
-	t.Run("gc size", newIndexGCSizeTest(db))
 }
 
 // TestModeSetSync validates ModeSetSync index values on the provided DB.
 func TestModeSetSync(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	ch := generateTestRandomChunk()
+			chunks := generateTestRandomChunks(tc.count)
 
-	wantTimestamp := time.Now().UTC().UnixNano()
-	defer setNow(func() (t int64) {
-		return wantTimestamp
-	})()
+			wantTimestamp := time.Now().UTC().UnixNano()
+			defer setNow(func() (t int64) {
+				return wantTimestamp
+			})()
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = db.Set(context.Background(), chunk.ModeSetSync, chunkAddresses(chunks)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			binIDs := make(map[uint8]uint64)
+
+			for _, ch := range chunks {
+				po := db.po(ch.Address())
+				binIDs[po]++
+
+				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
+				newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
+				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+			}
+
+			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+
+			t.Run("gc size", newIndexGCSizeTest(db))
+		})
 	}
-
-	err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp))
-
-	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound))
-
-	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, 1))
-
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
-
-	t.Run("gc size", newIndexGCSizeTest(db))
 }
 
 // TestModeSetRemove validates ModeSetRemove index values on the provided DB.
 func TestModeSetRemove(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
 
-	ch := generateTestRandomChunk()
+			chunks := generateTestRandomChunks(tc.count)
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = db.Set(context.Background(), chunk.ModeSetRemove, chunkAddresses(chunks)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			t.Run("retrieve indexes", func(t *testing.T) {
+				for _, ch := range chunks {
+					wantErr := leveldb.ErrNotFound
+					_, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
+					if err != wantErr {
+						t.Errorf("got error %v, want %v", err, wantErr)
+					}
+
+					// access index should not be set
+					_, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
+					if err != wantErr {
+						t.Errorf("got error %v, want %v", err, wantErr)
+					}
+				}
+
+				t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
+
+				t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
+			})
+
+			for _, ch := range chunks {
+				newPullIndexTest(db, ch, 0, leveldb.ErrNotFound)(t)
+			}
+
+			t.Run("pull index count", newItemsCountTest(db.pullIndex, 0))
+
+			t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
+
+			t.Run("gc size", newIndexGCSizeTest(db))
+		})
 	}
-
-	err = db.Set(context.Background(), chunk.ModeSetRemove, ch.Address())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("retrieve indexes", func(t *testing.T) {
-		wantErr := leveldb.ErrNotFound
-		_, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
-		if err != wantErr {
-			t.Errorf("got error %v, want %v", err, wantErr)
-		}
-		t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
-
-		// access index should not be set
-		_, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
-		if err != wantErr {
-			t.Errorf("got error %v, want %v", err, wantErr)
-		}
-		t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
-	})
-
-	t.Run("pull index", newPullIndexTest(db, ch, 0, leveldb.ErrNotFound))
-
-	t.Run("pull index count", newItemsCountTest(db.pullIndex, 0))
-
-	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
-
-	t.Run("gc size", newIndexGCSizeTest(db))
 }
