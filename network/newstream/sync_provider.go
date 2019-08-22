@@ -86,6 +86,10 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 		return false, nil
 	default:
 	}
+	a := chunk.Address(key)
+	if s.cache.Contains(a.String()) {
+		return true, nil
+	}
 
 	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {

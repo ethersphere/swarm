@@ -644,7 +644,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		hash := hashes[i : i+HashSize]
 		p.logger.Trace("peer offered hash", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
 		c := chunk.Address(hash)
-
+		//if c := r.cache.Contains() {}
 		if _, wait := provider.NeedData(ctx, hash); wait != nil {
 			ctr++
 			w.hashes[c.Hex()] = true
