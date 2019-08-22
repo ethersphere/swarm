@@ -262,7 +262,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.Amount)), cheque.Signature)
+	receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
@@ -342,7 +342,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
 
-	log.Info("sending cheque", "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	log.Info("sending cheque", "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.setCheque(peer, cheque)
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
@@ -355,7 +355,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 	}
 
 	// reset balance;
-	err = s.resetBalance(peer, int64(cheque.Amount))
+	err = s.resetBalance(peer, int64(cheque.CumulativePayout))
 	if err != nil {
 		return err
 	}
@@ -397,10 +397,10 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
-			Amount:      total + amount,
-			Contract:    s.owner.Contract,
-			Honey:       honey,
-			Beneficiary: beneficiary,
+			CumulativePayout: total + amount,
+			Contract:         s.owner.Contract,
+			Honey:            honey,
+			Beneficiary:      beneficiary,
 		},
 	}
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
@@ -415,7 +415,7 @@ func (s *Swap) getLastChequeValues(peer enode.ID) (total uint64, err error) {
 	}
 	lastCheque, exists := s.getCheque(peer)
 	if exists {
-		total = lastCheque.Amount
+		total = lastCheque.CumulativePayout
 	}
 	return
 }

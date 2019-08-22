@@ -543,10 +543,10 @@ func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:    testChequeContract,
-			Amount:      uint64(42),
-			Honey:       uint64(42),
-			Beneficiary: beneficiaryAddress,
+			Contract:         testChequeContract,
+			CumulativePayout: uint64(42),
+			Honey:            uint64(42),
+			Beneficiary:      beneficiaryAddress,
 		},
 	}
 
@@ -751,7 +751,7 @@ func TestContractIntegration(t *testing.T) {
 	depoTx := types.NewTransaction(
 		nonce,
 		issuerSwap.owner.Contract,
-		big.NewInt(int64(cheque.Amount)),
+		big.NewInt(int64(cheque.CumulativePayout)),
 		50000,
 		big.NewInt(int64(0)),
 		[]byte{},
@@ -763,7 +763,7 @@ func TestContractIntegration(t *testing.T) {
 	testBackend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.Amount)), cheque.Signature)
+	receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
@@ -777,7 +777,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Uint64() != cheque.Amount {
+	if result.Uint64() != cheque.CumulativePayout {
 		t.Fatalf("Wrong cumulative payout %d", result)
 	}
 	log.Debug("cheques result", "result", result)
@@ -912,7 +912,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
-	newCheque.Amount = oldCheque.Amount + increase
+	newCheque.CumulativePayout = oldCheque.CumulativePayout + increase
 
 	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
 	if err != nil {
@@ -939,7 +939,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	newCheque.Amount = oldCheque.Amount + increase + 5
+	newCheque.CumulativePayout = oldCheque.CumulativePayout + increase + 5
 
 	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
@@ -960,18 +960,18 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if actualAmount != cheque.Amount {
-		t.Fatalf("computed wrong actual amount: was %d, expected: %d", actualAmount, cheque.Amount)
+	if actualAmount != cheque.CumulativePayout {
+		t.Fatalf("computed wrong actual amount: was %d, expected: %d", actualAmount, cheque.CumulativePayout)
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).Amount != cheque.Amount {
-		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, cheque.Amount)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
 	// create another cheque with higher serial and amount
 	otherCheque := newTestCheque()
-	otherCheque.Amount = cheque.Amount + 10
+	otherCheque.CumulativePayout = cheque.CumulativePayout + 10
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
@@ -980,8 +980,8 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).Amount != otherCheque.Amount {
-		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, otherCheque.Amount)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != otherCheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, otherCheque.CumulativePayout)
 	}
 }
 
@@ -1011,13 +1011,13 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if swap.loadLastReceivedCheque(peer).Amount != cheque.Amount {
-		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, cheque.Amount)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
 	// invalid cheque because amount is lower
 	otherCheque := newTestCheque()
-	otherCheque.Amount = cheque.Amount - 10
+	otherCheque.CumulativePayout = cheque.CumulativePayout - 10
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
@@ -1026,8 +1026,8 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 
 	// check that no invalid cheque was saved
-	if swap.loadLastReceivedCheque(peer).Amount != cheque.Amount {
-		t.Fatalf("last received cheque has wrong amount, was: %d, expected: %d", peer.lastReceivedCheque.Amount, cheque.Amount)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 }
 

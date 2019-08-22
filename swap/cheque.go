@@ -28,14 +28,14 @@ import (
 
 // encodeForSignature encodes the cheque in the format used in the signing procedure
 func (cheque *Cheque) encodeForSignature() []byte {
-	amountBytes := make([]byte, 32)
+	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
+	binary.BigEndian.PutUint64(cumulativePayoutBytes[24:], cheque.CumulativePayout)
 	// construct the actual cheque
 	input := cheque.Contract.Bytes()
 	input = append(input, cheque.Beneficiary.Bytes()...)
-	input = append(input, amountBytes[:]...)
+	input = append(input, cumulativePayoutBytes[:]...)
 	return input
 }
 
@@ -94,7 +94,7 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 		return false
 	}
 
-	if cheque.Amount != other.Amount {
+	if cheque.CumulativePayout != other.CumulativePayout {
 		return false
 	}
 
@@ -132,14 +132,14 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 // furthermore it cheques that the increase in amount is as expected
 // returns the actual amount received in this cheque
 func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
-	actualAmount := cheque.Amount
+	actualAmount := cheque.CumulativePayout
 
 	if lastCheque != nil {
-		if cheque.Amount <= lastCheque.Amount {
-			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
+		if cheque.CumulativePayout <= lastCheque.CumulativePayout {
+			return 0, fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %d, was: %d", lastCheque.CumulativePayout, cheque.CumulativePayout)
 		}
 
-		actualAmount -= lastCheque.Amount
+		actualAmount -= lastCheque.CumulativePayout
 	}
 
 	if expectedAmount != actualAmount {

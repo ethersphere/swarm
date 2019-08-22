@@ -22,10 +22,10 @@ import (
 
 // ChequeParams encapsulate all cheque parameters
 type ChequeParams struct {
-	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
-	Beneficiary common.Address // address of the beneficiary, the contract which will redeem the cheque
-	Amount      uint64         // cumulative amount of the cheque in currency
-	Honey       uint64         // amount of honey which resulted in the cumulative currency difference
+	Contract         common.Address // address of chequebook, needed to avoid cross-contract submission
+	Beneficiary      common.Address // address of the beneficiary, the contract which will redeem the cheque
+	CumulativePayout uint64         // cumulative amount of the cheque in currency
+	Honey            uint64         // amount of honey which resulted in the cumulative currency difference
 }
 
 // Cheque encapsulates the parameters and the signature

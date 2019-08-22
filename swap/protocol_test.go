@@ -146,10 +146,10 @@ func TestEmitCheque(t *testing.T) {
 	log.Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:    debitorSwap.owner.Contract,
-			Beneficiary: creditorSwap.owner.address,
-			Amount:      42,
-			Honey:       42,
+			Contract:         debitorSwap.owner.Contract,
+			Beneficiary:      creditorSwap.owner.address,
+			CumulativePayout: 42,
+			Honey:            42,
 		},
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
@@ -234,8 +234,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 	cheque := debitorSwap.cheques[creditor.ID()]
 	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
-	if cheque.Amount != expectedAmount {
-		t.Fatalf("Expected cheque amount to be %d, but is %d", expectedAmount, cheque.Amount)
+	if cheque.CumulativePayout != expectedAmount {
+		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
 	}
 
 }
