@@ -22,7 +22,6 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -412,7 +411,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
 	}
 
-	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.Total())
+	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.TotalCounter())
 	tag.DoneSplit(newAddr)
 
 	// Pin the file
@@ -969,7 +968,7 @@ func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 
-		tagByFile, err := s.api.Tags.GetByAddress(hex.EncodeToString(fileAddr))
+		tagByFile, err := s.api.Tags.GetByAddress(fileAddr)
 		if err != nil {
 			getTagNotFound.Inc(1)
 			respondError(w, r, "Tag not found", http.StatusNotFound)

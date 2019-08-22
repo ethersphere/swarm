@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ var (
 
 // TestTagSingleIncrements tests if Inc increments the tag state value
 func TestTagSingleIncrements(t *testing.T) {
-	tg := &Tag{total: 10}
+	tg := &Tag{Total: 10}
 
 	tc := []struct {
 		state    uint32
@@ -58,7 +59,7 @@ func TestTagSingleIncrements(t *testing.T) {
 
 // TestTagStatus is a unit test to cover Tag.Status method functionality
 func TestTagStatus(t *testing.T) {
-	tg := &Tag{total: 10}
+	tg := &Tag{Total: 10}
 	tg.Inc(StateSeen)
 	tg.Inc(StateSent)
 	tg.Inc(StateSynced)
@@ -86,7 +87,7 @@ func TestTagStatus(t *testing.T) {
 			t.Fatalf("should be %d, got %d", v.expVal, val)
 		}
 		if total != v.expTotal {
-			t.Fatalf("expected total to be %d, got %d", v.expTotal, total)
+			t.Fatalf("expected Total to be %d, got %d", v.expTotal, total)
 		}
 	}
 }
@@ -95,7 +96,7 @@ func TestTagStatus(t *testing.T) {
 func TestTagETA(t *testing.T) {
 	now := time.Now()
 	maxDiff := 100000 // 100 microsecond
-	tg := &Tag{total: 10, startedAt: now}
+	tg := &Tag{Total: 10, StartedAt: now}
 	time.Sleep(100 * time.Millisecond)
 	tg.Inc(StateSplit)
 	eta, err := tg.ETA(StateSplit)
@@ -183,7 +184,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 // tag Address (byte slice) contains some arbitrary value
 func TestMarshallingWithAddr(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
-	tg.Address = "0123456"
+	tg.Address = []byte{0, 1, 2, 3, 4, 5, 6}
 
 	for _, f := range allStates {
 		tg.Inc(f)
@@ -215,15 +216,15 @@ func TestMarshallingWithAddr(t *testing.T) {
 		}
 	}
 
-	if unmarshalledTag.Total() != tg.Total() {
-		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
+	if unmarshalledTag.TotalCounter() != tg.TotalCounter() {
+		t.Fatalf("tag names not equal. want %d got %d", tg.TotalCounter(), unmarshalledTag.TotalCounter())
 	}
 
 	if len(unmarshalledTag.Address) != len(tg.Address) {
 		t.Fatalf("tag addresses length mismatch, want %d, got %d", len(tg.Address), len(unmarshalledTag.Address))
 	}
 
-	if unmarshalledTag.Address != tg.Address {
+	if !bytes.Equal(unmarshalledTag.Address, tg.Address) {
 		t.Fatalf("expected tag address to be %v got %v", unmarshalledTag.Address, tg.Address)
 	}
 }
@@ -261,56 +262,11 @@ func TestMarshallingNoAddr(t *testing.T) {
 		}
 	}
 
-	if unmarshalledTag.Total() != tg.Total() {
-		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
+	if unmarshalledTag.TotalCounter() != tg.TotalCounter() {
+		t.Fatalf("tag names not equal. want %d got %d", tg.TotalCounter(), unmarshalledTag.TotalCounter())
 	}
 
 	if len(unmarshalledTag.Address) != len(tg.Address) {
 		t.Fatalf("expected tag addresses to be equal length")
 	}
-}
-
-// TestJsonMarshallingUnMarshalling tests that json marshalling and unmarshalling is done correctly
-func TestJsonMarshallingUnMarshalling(t *testing.T) {
-	tg := NewTag(111, "test/tag", 10)
-	tg.Address = "0123456"
-
-	b, err := tg.MarshalJSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	unmarshalledTag := &Tag{}
-	err = unmarshalledTag.UnmarshalJSON(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if unmarshalledTag.Uid != tg.Uid {
-		t.Fatalf("tag uids not equal. want %d got %d", tg.Uid, unmarshalledTag.Uid)
-	}
-
-	if unmarshalledTag.Name != tg.Name {
-		t.Fatalf("tag names not equal. want %s got %s", tg.Name, unmarshalledTag.Name)
-	}
-
-	for _, state := range allStates {
-		uv, tv := unmarshalledTag.Get(state), tg.Get(state)
-		if uv != tv {
-			t.Fatalf("state %d inconsistent. expected %d to equal %d", state, uv, tv)
-		}
-	}
-
-	if unmarshalledTag.Total() != tg.Total() {
-		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
-	}
-
-	if len(unmarshalledTag.Address) != len(tg.Address) {
-		t.Fatalf("tag addresses length mismatch, want %d, got %d", len(tg.Address), len(unmarshalledTag.Address))
-	}
-
-	if unmarshalledTag.Address != tg.Address {
-		t.Fatalf("expected tag address to be %v got %v", unmarshalledTag.Address, tg.Address)
-	}
-
 }

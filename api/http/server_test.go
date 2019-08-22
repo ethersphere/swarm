@@ -76,7 +76,7 @@ func TestGetTagUsingHash(t *testing.T) {
 
 	// upload a file
 	data := testutil.RandomBytes(1, 10000)
-	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader([]byte(data)))
+	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,12 +110,16 @@ func TestGetTagUsingHash(t *testing.T) {
 	}
 
 	// check if the tag has valid values
-	if tag.Address != string(rootHash) {
+	rcvdAddress, err := hex.DecodeString(string(rootHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(tag.Address, rcvdAddress) {
 		t.Fatalf("retrieved address mismatch, expected %x, got %x", string(rootHash), tag.Address)
 	}
 
-	if tag.Total() != 4 {
-		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.Total())
+	if tag.TotalCounter() != 4 {
+		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.TotalCounter())
 	}
 
 	if !strings.HasPrefix(tag.Name, "unnamed_tag_") {
@@ -131,7 +135,7 @@ func TestGetTagUsingTagId(t *testing.T) {
 
 	// upload a file
 	data := testutil.RandomBytes(1, 10000)
-	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader([]byte(data)))
+	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,12 +170,16 @@ func TestGetTagUsingTagId(t *testing.T) {
 	}
 
 	// check if the received tags has valid values
-	if tag.Address != string(rootHash) {
+	rcvdAddress, err := hex.DecodeString(string(rootHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(tag.Address, rcvdAddress) {
 		t.Fatalf("retrieved address mismatch, expected %x, got %x", string(rootHash), tag.Address)
 	}
 
-	if tag.Total() != 4 {
-		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.Total())
+	if tag.TotalCounter() != 4 {
+		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.TotalCounter())
 	}
 
 	if !strings.HasPrefix(tag.Name, "unnamed_tag_") {
