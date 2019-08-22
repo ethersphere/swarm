@@ -423,8 +423,6 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	}
 	swap.store = nil
 
-	time.Sleep(500 * time.Microsecond)
-
 	stateStore, err := state.NewDBStore(testDir)
 	defer stateStore.Close()
 	if err != nil {
@@ -461,9 +459,9 @@ func newTestSwap(t *testing.T) (*Swap, string) {
 	gasLimit := uint64(8000000)
 	owner := crypto.PubkeyToAddress(key.PublicKey)
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		owner:              {Balance: big.NewInt(1000000000)},
-		ownerAddress:       {Balance: big.NewInt(1000000000)},
-		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
+		owner:              {Balance: big.NewInt(10000000)},
+		ownerAddress:       {Balance: big.NewInt(10000000)},
+		beneficiaryAddress: {Balance: big.NewInt(10000000)},
 	}, gasLimit)
 
 	swap := New(stateStore, key, common.Address{}, defaultBackend)
