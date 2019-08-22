@@ -98,8 +98,7 @@ type Registry struct {
 	peers          map[enode.ID]*Peer
 	baseKey        []byte
 
-	providers   map[string]StreamProvider
-	iteratorSem chan struct{}
+	providers map[string]StreamProvider
 
 	spec *protocols.Spec
 
@@ -118,7 +117,6 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 		quit:           make(chan struct{}),
 		baseKey:        baseKey,
 		logger:         log.New("base", hex.EncodeToString(baseKey)),
-		iteratorSem:    make(chan struct{}, concurrentIterators),
 		spec:           Spec,
 	}
 	for _, p := range providers {
@@ -644,7 +642,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		hash := hashes[i : i+HashSize]
 		p.logger.Trace("peer offered hash", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
 		c := chunk.Address(hash)
-		//if c := r.cache.Contains() {}
 		if _, wait := provider.NeedData(ctx, hash); wait != nil {
 			ctr++
 			w.hashes[c.Hex()] = true
@@ -806,8 +803,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	cd := &ChunkDelivery{
 		Ruid: msg.Ruid,
 	}
-	r.iteratorSem <- struct{}{}
-	defer func() { <-r.iteratorSem }()
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
