@@ -417,8 +417,13 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	tmpBalance := swap.balances[testPeer.ID()]
 	swap.store.Put(testPeer.ID().String(), &tmpBalance)
 
-	swap.store.Close()
+	err := swap.store.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	swap.store = nil
+
+	time.Sleep(500 * time.Microsecond)
 
 	stateStore, err := state.NewDBStore(testDir)
 	defer stateStore.Close()
