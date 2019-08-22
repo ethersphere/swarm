@@ -243,7 +243,7 @@ func (d *Descriptor) String() string {
 
 type Store interface {
 	Get(ctx context.Context, mode ModeGet, addr Address) (ch Chunk, err error)
-	Put(ctx context.Context, mode ModePut, ch Chunk) (exists bool, err error)
+	Put(ctx context.Context, mode ModePut, chs ...Chunk) (exist []bool, err error)
 	Has(ctx context.Context, addr Address) (yes bool, err error)
 	Set(ctx context.Context, mode ModeSet, addr Address) (err error)
 	LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
@@ -256,7 +256,7 @@ type Validator interface {
 	Validate(ch Chunk) bool
 }
 
-// ValidatorStore encapsulates Store by decorting the Put method
+// ValidatorStore encapsulates Store by decorating the Put method
 // with validators check.
 type ValidatorStore struct {
 	Store
@@ -272,14 +272,25 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 	}
 }
 
-// Put overrides Store put method with validators check. If one of the validators
-// return true, the chunk is considered valid and Store Put method is called.
-// If all validators return false, ErrChunkInvalid is returned.
-func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, ch Chunk) (exists bool, err error) {
-	for _, v := range s.validators {
-		if v.Validate(ch) {
-			return s.Store.Put(ctx, mode, ch)
+// Put overrides Store put method with validators check. For Put to succeed,
+// all provided chunks must be validated with true by one of the validators.
+func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (exist []bool, err error) {
+	for _, ch := range chs {
+		if !s.validate(ch) {
+			return nil, ErrChunkInvalid
 		}
 	}
-	return false, ErrChunkInvalid
+	return s.Store.Put(ctx, mode, chs...)
+}
+
+// validate returns true if one of the validators
+// return true. If all validators return false,
+// the chunk is considered invalid.
+func (s *ValidatorStore) validate(ch Chunk) bool {
+	for _, v := range s.validators {
+		if v.Validate(ch) {
+			return true
+		}
+	}
+	return false
 }

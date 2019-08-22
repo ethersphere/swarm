@@ -225,12 +225,17 @@ func NewMapChunkStore() *MapChunkStore {
 	}
 }
 
-func (m *MapChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) (bool, error) {
+func (m *MapChunkStore) Put(_ context.Context, _ chunk.ModePut, chs ...Chunk) ([]bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	_, exists := m.chunks[ch.Address().Hex()]
-	m.chunks[ch.Address().Hex()] = ch
-	return exists, nil
+
+	exist := make([]bool, len(chs))
+	for i, ch := range chs {
+		addr := ch.Address().Hex()
+		_, exist[i] = m.chunks[addr]
+		m.chunks[addr] = ch
+	}
+	return exist, nil
 }
 
 func (m *MapChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
