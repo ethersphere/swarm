@@ -37,3 +37,18 @@ func (db *DB) Has(ctx context.Context, addr chunk.Address) (bool, error) {
 	}
 	return has, err
 }
+
+// HasMulti returns a slice of booleans which represent if the provided chunks
+// are stored in database.
+func (db *DB) HasMulti(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
+	metricName := "localstore.HasMulti"
+
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+
+	have, err := db.retrievalDataIndex.Have(addressesToItems(addrs...)...)
+	if err != nil {
+		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+	}
+	return have, err
+}
