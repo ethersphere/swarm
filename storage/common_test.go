@@ -257,7 +257,7 @@ func (m *MapChunkStore) Has(ctx context.Context, ref Address) (has bool, err err
 	return has, nil
 }
 
-func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	return nil
 }
 

@@ -232,7 +232,7 @@ func (f *FakeChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (C
 	panic("FakeChunkStore doesn't support Get")
 }
 
-func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	panic("FakeChunkStore doesn't support Set")
 }
 
