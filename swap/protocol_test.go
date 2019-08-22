@@ -18,7 +18,6 @@ package swap
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -39,9 +38,8 @@ func TestHandshake(t *testing.T) {
 	var err error
 
 	// setup test swap object
-	swap, dir := newTestSwap(t)
-	defer os.RemoveAll(dir)
-	defer swap.Close()
+	swap, clean := newTestSwap(t)
+	defer clean()
 
 	ctx := context.Background()
 	testDeploy(ctx, swap.backend, swap)
@@ -110,12 +108,10 @@ func TestHandshake(t *testing.T) {
 // and handles the cheque.
 func TestEmitCheque(t *testing.T) {
 	log.Debug("set up test swaps")
-	creditorSwap, testDir1 := newTestSwap(t)
-	debitorSwap, testDir2 := newTestSwap(t)
-	defer os.RemoveAll(testDir1)
-	defer os.RemoveAll(testDir2)
-	defer creditorSwap.Close()
-	defer debitorSwap.Close()
+	creditorSwap, clean1 := newTestSwap(t)
+	debitorSwap, clean2 := newTestSwap(t)
+	defer clean1()
+	defer clean2()
 
 	ctx := context.Background()
 
@@ -186,9 +182,8 @@ func TestEmitCheque(t *testing.T) {
 // It is the debitor who triggers cheques
 func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
-	debitorSwap, testDir := newTestSwap(t)
-	defer os.RemoveAll(testDir)
-	defer debitorSwap.Close()
+	debitorSwap, clean := newTestSwap(t)
+	defer clean()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
@@ -229,9 +224,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 // It is the creditor who triggers the disconnect from a overdraft creditor
 func TestTriggerDisconnectThreshold(t *testing.T) {
 	log.Debug("create test swap")
-	creditorSwap, testDir := newTestSwap(t)
-	defer os.RemoveAll(testDir)
-	defer creditorSwap.Close()
+	creditorSwap, clean := newTestSwap(t)
+	defer clean()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
