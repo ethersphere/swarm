@@ -126,23 +126,10 @@ func TestEmitCheque(t *testing.T) {
 	debitorSwap.backend.(*backends.SimulatedBackend).Commit()
 
 	log.Debug("create peer instances")
-	// create Peer instances
-	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
-	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 
-	// in order to be able to model as realistically as possible sending and receiving, let's use a MsgPipe
-	// a MsgPipe is a duplex read-write object, write to one end and read from the other
-
-	// create the message pipe
-	crw, drw := p2p.MsgPipe()
-	// create the creditor peer
-	cPtpPeer := p2p.NewPeer(enode.ID{}, "creditor", []p2p.Cap{})
-	cProtoPeer := protocols.NewPeer(cPtpPeer, crw, Spec)
 	// create the debitor peer
-	dPtpPeer := p2p.NewPeer(enode.ID{}, "dreditor", []p2p.Cap{})
-	dProtoPeer := protocols.NewPeer(dPtpPeer, drw, Spec)
-	// create the Swap protocol peers
-	creditor := NewPeer(cProtoPeer, debitorSwap, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
+	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
 	debitor := NewPeer(dProtoPeer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
 	// set balance artificially
@@ -172,8 +159,6 @@ func TestEmitCheque(t *testing.T) {
 	emitMsg := &EmitChequeMsg{
 		Cheque: cheque,
 	}
-	log.Debug("send the message with the cheque to the beneficiary")
-	go creditor.Send(ctx, emitMsg)
 
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
 	if err != nil {
