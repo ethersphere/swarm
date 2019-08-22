@@ -158,9 +158,9 @@ func (f Index) Has(keyFields Item) (bool, error) {
 	return f.db.Has(key)
 }
 
-// Have accepts multiple multiple key fields represented as Item to check if
+// HasMulti accepts multiple multiple key fields represented as Item to check if
 // there this Item's encoded key is stored in the index for each of them.
-func (f Index) Have(items ...Item) ([]bool, error) {
+func (f Index) HasMulti(items ...Item) ([]bool, error) {
 	have := make([]bool, len(items))
 	snapshot, err := f.db.ldb.GetSnapshot()
 	if err != nil {
