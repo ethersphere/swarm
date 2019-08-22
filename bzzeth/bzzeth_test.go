@@ -17,7 +17,6 @@
 package bzzeth
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"os"
@@ -27,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/network"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )
 
@@ -156,92 +154,4 @@ func TestBzzBzzHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-}
-
-func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, offered []HeaderHash, wanted [][]byte) error {
-	return tester.TestExchanges(
-		p2ptest.Exchange{
-			Label: "NewBlockHeaders",
-			Triggers: []p2ptest.Trigger{
-				{
-					Code: 1,
-					Msg: NewBlockHeaders{
-						Headers: offered,
-					},
-					Peer: peerID,
-				},
-			},
-			Expects: []p2ptest.Expect{
-				{
-					Code: 2,
-					Msg: GetBlockHeaders{
-						ID:     requestID,
-						Hashes: wanted,
-					},
-					Peer: peerID,
-				},
-			},
-		})
-}
-
-// Test bzzeth full eth node sends new block header hashes
-// respond with a GetBlockHeaders requesting headers falling inte
-func TestNewBlockHeaders(t *testing.T) {
-	// bzz pivot - full eth node peer
-	// NewBlockHeaders trigger, expect
-	tester, _, teardown, err := newBzzEthTester()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardown()
-
-	offered := make([]HeaderHash, 256)
-	for i := 0; i < len(offered); i++ {
-		offered[i] = HeaderHash{crypto.Keccak256([]byte{uint8(i)}), []byte{uint8(i)}}
-	}
-
-	// redefine wantHeadeFunc for this test
-	defer func(f func([]byte, *network.Kademlia) bool) {
-		wantHeaderFunc = f
-	}(wantHeaderFunc)
-	wantedIndexes := []int{1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233}
-	wantHeaderFunc = func(hash []byte, _ *network.Kademlia) bool {
-		for _, i := range wantedIndexes {
-			if bytes.Equal(hash, offered[i].Hash) {
-				return true
-			}
-		}
-		return false
-	}
-
-	wanted := make([][]byte, len(wantedIndexes))
-	for i, w := range wantedIndexes {
-		wanted[i] = crypto.Keccak256([]byte{uint8(w)})
-	}
-
-	// overwrite newRequestIDFunc to be deterministic
-	defer func(f func() uint32) {
-		newRequestIDFunc = f
-	}(newRequestIDFunc)
-
-	newRequestIDFunc = func() uint32 {
-		return 42
-	}
-
-	node := tester.Nodes[0]
-
-	err = handshakeExchange(tester, node.ID(), true, true)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	err = newBlockHeaderExchange(tester, node.ID(), 42, offered, wanted)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// TODO: subsequent NewBlockHeaders msg are not allowed
-	// TODO: headers found in localstore should not be requested
-	// TODO: after requested headers arrive and are stored
-	// TODO: unrequested header delivery drops
 }
