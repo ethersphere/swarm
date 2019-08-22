@@ -828,6 +828,7 @@ func newTestSwapAndPeer(t *testing.T) (*Swap, *Peer, string) {
 func TestPeerSaveAndLoadLastReceivedCheque(t *testing.T) {
 	swap, peer, dir := newTestSwapAndPeer(t)
 	defer os.RemoveAll(dir)
+	defer swap.Close()
 
 	testCheque := newTestCheque()
 
