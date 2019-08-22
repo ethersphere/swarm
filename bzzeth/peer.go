@@ -17,6 +17,7 @@
 package bzzeth
 
 import (
+	"context"
 	"math/rand"
 	"sync"
 
@@ -141,6 +142,21 @@ func (r *requests) get(id uint32) (*request, bool) {
 	req, ok := r.r[id]
 	r.mtx.RUnlock()
 	return req, ok
+}
+
+// getBlockHeaders sends a GetBlockHeaders message to the remote peer requesting headers by their _hashes_
+// and delivers the actual block header responses to the deliveries channel
+func (p *Peer) getBlockHeaders(ctx context.Context, hashes [][]byte, deliveries chan []byte) (*request, error) {
+	req := p.requests.create(deliveries)
+	err := p.Send(ctx, &GetBlockHeaders{
+		ID:     newRequestIDFunc(),
+		Hashes: hashes,
+	})
+	if err != nil {
+		req.cancel()
+		return nil, err
+	}
+	return req, nil
 }
 
 // this function is called to check if the remote peer is another swarm node
