@@ -297,6 +297,9 @@ func (n *NetStore) Has(ctx context.Context, ref Address) (bool, error) {
 // GetOrCreateFetcher returns the Fetcher for a given chunk, if this chunk is not in the LocalStore.
 // If the chunk is in the LocalStore, it returns nil for the Fetcher and ok == false
 func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interestedParty string) (f *Fetcher, loaded bool, ok bool) {
+	n.putMu.Lock()
+	defer n.putMu.Unlock()
+
 	has, err := n.Store.Has(ctx, ref)
 	if err != nil {
 		n.logger.Error(err.Error())
@@ -304,9 +307,6 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 	if has {
 		return nil, false, false
 	}
-	n.putMu.Lock()
-	defer n.putMu.Unlock()
-
 	f = NewFetcher()
 	v, loaded := n.fetchers.Get(ref.String())
 	n.logger.Trace("netstore.has-with-callback.loadorstore", "localID", n.LocalID.String()[:16], "ref", ref.String(), "loaded", loaded, "createdBy", interestedParty)
