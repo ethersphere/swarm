@@ -38,7 +38,7 @@ func TestHandshake(t *testing.T) {
 	var err error
 
 	// setup test swap object
-	swap, clean := newTestSwap(t)
+	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
 	ctx := context.Background()
@@ -108,8 +108,8 @@ func TestHandshake(t *testing.T) {
 // and handles the cheque.
 func TestEmitCheque(t *testing.T) {
 	log.Debug("set up test swaps")
-	creditorSwap, clean1 := newTestSwap(t)
-	debitorSwap, clean2 := newTestSwap(t)
+	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
+	debitorSwap, clean2 := newTestSwap(t, ownerKey)
 	defer clean1()
 	defer clean2()
 
@@ -182,7 +182,7 @@ func TestEmitCheque(t *testing.T) {
 // It is the debitor who triggers cheques
 func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
-	debitorSwap, clean := newTestSwap(t)
+	debitorSwap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
 	// create a dummy pper
@@ -224,7 +224,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 // It is the creditor who triggers the disconnect from a overdraft creditor
 func TestTriggerDisconnectThreshold(t *testing.T) {
 	log.Debug("create test swap")
-	creditorSwap, clean := newTestSwap(t)
+	creditorSwap, clean := newTestSwap(t, beneficiaryKey)
 	defer clean()
 
 	// create a dummy pper
