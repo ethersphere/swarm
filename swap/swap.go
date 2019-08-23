@@ -382,7 +382,10 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	if !exists {
 		return nil, fmt.Errorf("peer not found %v: ", peer)
 	}
-	// the balance should be negative here, we take the absolute value:
+	if peerBalance >= 0 {
+		return nil, fmt.Errorf("expected negative balance, found: %d", peerBalance)
+	}
+	// the balance should be negative here, take the absolute value
 	honey := uint64(-peerBalance)
 
 	var amount uint64
