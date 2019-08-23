@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/network/simulation"
 )
 
 type protoCtrl struct {
@@ -55,13 +54,12 @@ func testProtocol(t *testing.T) {
 
 	topic := PingTopic.String()
 
-	sim := simulation.NewInProc(newServices(false))
-	defer sim.Close()
-
-	clients, err := setupNetwork(sim, 2)
+	clients, closeSimFunc, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
+
 	var loaddrhex string
 	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
 	if err != nil {

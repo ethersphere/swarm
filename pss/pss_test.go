@@ -876,13 +876,11 @@ func TestRawAllow(t *testing.T) {
 
 // tests that the API layer can handle edge case values
 func TestApi(t *testing.T) {
-	sim := simulation.NewInProc(newServices(true))
-	defer sim.Close()
-
-	clients, err := setupNetwork(sim, 2)
+	clients, closeSimFunc, err := setupNetwork(2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	topic := "0xdeadbeef"
 
@@ -920,13 +918,11 @@ func testSendRaw(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("raw send test", "addrsize", addrsize)
 
-	sim := simulation.NewInProc(newServices(true))
-	defer sim.Close()
-
-	clients, err := setupNetwork(sim, 2)
+	clients, closeSimFunc, err := setupNetwork(2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	topic := "0xdeadbeef"
 
@@ -1005,13 +1001,11 @@ func testSendSym(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("sym send test", "addrsize", addrsize)
 
-	sim := simulation.NewInProc(newServices(false))
-	defer sim.Close()
-
-	clients, err := setupNetwork(sim, 2)
+	clients, closeSimFunc, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var topic string
 	err = clients[0].Call(&topic, "pss_stringToTopic", "foo:42")
@@ -1123,13 +1117,11 @@ func testSendAsym(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("asym send test", "addrsize", addrsize)
 
-	sim := simulation.NewInProc(newServices(false))
-	defer sim.Close()
-
-	clients, err := setupNetwork(sim, 2)
+	clients, closeSimFunc, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var topic string
 	err = clients[0].Call(&topic, "pss_stringToTopic", "foo:42")
@@ -1434,13 +1426,11 @@ outer:
 func TestDeduplication(t *testing.T) {
 	var err error
 
-	sim := simulation.NewInProc(newServices(false))
-	defer sim.Close()
-
-	clients, err := setupNetwork(sim, 3)
+	clients, closeSimFunc, err := setupNetwork(3, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var addrsize = 32
 	var loaddrhex string
@@ -1686,6 +1676,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		}
 	}
 }
+
 func BenchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	for i := 100; i < 100000; i = i * 10 {
 		for j := 32; j < 10000; j = j * 8 {
@@ -1769,23 +1760,34 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 }
 
-// setup network in a simulation
+// setup simulated network with bzz/discovery and pss services.
 // connects nodes in a circle
-func setupNetwork(sim *simulation.Simulation, numnodes int) (clients []*rpc.Client, err error) {
+// if allowRaw is set, omission of builtin pss encryption is enabled (see PssParams)
+func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, closeSimFunc func(), err error) {
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
-		return nil, fmt.Errorf("minimum two nodes in network")
+		return nil, nil, fmt.Errorf("minimum two nodes in network")
 	}
-	sim.AddNodesAndConnectRing(numnodes) //Already starts the nodes
+	sim := simulation.NewInProc(newServices(allowRaw))
+	closeSimFunc = sim.Close
+	if numnodes == 2 {
+		_, err = sim.AddNodesAndConnectChain(numnodes)
+
+	} else {
+		_, err = sim.AddNodesAndConnectRing(numnodes)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
 	nodes := sim.Net.GetNodes()
 	for id, node := range nodes {
 		client, err := node.Client()
 		if err != nil {
-			return nil, fmt.Errorf("error getting the nodes clients")
+			return nil, nil, fmt.Errorf("error getting the nodes clients")
 		}
 		clients[id] = client
 	}
-	return clients, nil
+	return clients, closeSimFunc, nil
 }
 
 func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
@@ -1858,13 +1860,12 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			if useHandshake {
 				SetHandshakeController(ps, NewHandshakeParams())
 			}
-			var cleanupFuncs []func()
-			cleanupFuncs = append(cleanupFuncs, ps.Register(&PingTopic, &handler{
+			cleanupFunc := ps.Register(&PingTopic, &handler{
 				f: pp.Handle,
 				caps: &handlerCaps{
 					raw: true,
 				},
-			}))
+			})
 			ps.addAPI(rpc.API{
 				Namespace: "psstest",
 				Version:   "0.3",
@@ -1876,11 +1877,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 				protocol: pp,
 				run:      p2pp.Run,
 			}
-			return ps, func() {
-				for i := len(cleanupFuncs); i > 0; i-- {
-					cleanupFuncs[i-1]()
-				}
-			}, nil
+			return ps, cleanupFunc, nil
 
 		},
 	}
