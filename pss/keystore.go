@@ -25,12 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/log"
 )
 
 type KeyStore struct {
-	w *whisper.Whisper // key and encryption backend
+	backend CryptoBackend // key and encryption backend
 
 	mx                       sync.RWMutex
 	pubKeyPool               map[string]map[Topic]*peer // mapping of hex public keys to peer address by topic.
@@ -41,7 +40,7 @@ type KeyStore struct {
 
 func loadKeyStore() *KeyStore {
 	return &KeyStore{
-		w: whisper.New(&whisper.DefaultConfig),
+		backend: NewCryptoBackend(),
 
 		pubKeyPool:         make(map[string]map[Topic]*peer),
 		symKeyPool:         make(map[string]map[Topic]*peer),
@@ -150,12 +149,12 @@ func (ks *KeyStore) getPeerAddress(keyid string, topic Topic) (PssAddress, error
 // encapsulating the decrypted message, and the whisper backend id
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted.
-func (ks *KeyStore) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
+func (ks *KeyStore) processSym(envelope *Envelope) (*ReceivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
 
 	for i := ks.symKeyDecryptCacheCursor; i > ks.symKeyDecryptCacheCursor-cap(ks.symKeyDecryptCache) && i > 0; i-- {
 		symkeyid := ks.symKeyDecryptCache[i%cap(ks.symKeyDecryptCache)]
-		symkey, err := ks.w.GetSymKey(*symkeyid)
+		symkey, err := ks.backend.GetSymKey(*symkeyid)
 		if err != nil {
 			continue
 		}
@@ -184,7 +183,7 @@ func (ks *KeyStore) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMes
 // encapsulating the decrypted message, and the byte representation of
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted.
-func (ks *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
+func (ks *Pss) processAsym(envelope *Envelope) (*ReceivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
 
 	recvmsg, err := envelope.OpenAsymmetric(ks.privateKey)
@@ -241,7 +240,7 @@ func (ks *Pss) cleanKeys() (count int) {
 
 // Automatically generate a new symkey for a topic and address hint
 func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache bool) (string, error) {
-	keyid, err := ks.w.GenerateSymKey()
+	keyid, err := ks.backend.GenerateSymKey()
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addToCache, false)
 	}
@@ -251,7 +250,7 @@ func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToC
 // Returns a symmetric key byte sequence stored in the whisper backend by its unique id.
 // Passes on the error value from the whisper backend.
 func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
-	return ks.w.GetSymKey(symkeyid)
+	return ks.backend.GetSymKey(symkeyid)
 }
 
 // Links a peer symmetric key (arbitrary byte sequence) to a topic.
@@ -273,7 +272,7 @@ func (ks *KeyStore) SetSymmetricKey(key []byte, topic Topic, address PssAddress,
 }
 
 func (ks *KeyStore) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
-	keyid, err := ks.w.AddSymKeyDirect(key)
+	keyid, err := ks.backend.AddSymKeyDirect(key)
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addtocache, protected)
 	}

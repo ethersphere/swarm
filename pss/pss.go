@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -459,12 +458,12 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
-	var recvmsg *whisper.ReceivedMessage
+	var recvmsg *ReceivedMessage
 	var payload []byte
 	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error)
+	var keyFunc func(envelope *Envelope) (*ReceivedMessage, string, PssAddress, error)
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
@@ -582,9 +581,9 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsgParams := &msgParams{
 		raw: true,
 	}
-	payload := &whisper.Envelope{
+	payload := &Envelope{
 		Data:  msg,
-		Topic: whisper.TopicType(topic),
+		Topic: topic,
 	}
 
 	pssMsg := newPssMsg(pssMsgParams)
@@ -643,14 +642,11 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	} else if c < p.paddingByteSize {
 		return fmt.Errorf("invalid padding length: %d", c)
 	}
-	wparams := &whisper.MessageParams{
-		TTL:      defaultWhisperTTL,
-		Src:      p.privateKey,
-		Topic:    whisper.TopicType(topic),
-		WorkTime: defaultWhisperWorkTime,
-		PoW:      defaultWhisperPoW,
-		Payload:  msg,
-		Padding:  padding,
+	wparams := &MessageParams{
+		Src:     p.privateKey,
+		Topic:   topic,
+		Payload: msg,
+		Padding: padding,
 	}
 	if asymmetric {
 		pk, err := crypto.UnmarshalPubkey(key)
@@ -662,16 +658,9 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		wparams.KeySym = key
 	}
 	// set up outgoing message container, which does encryption and envelope wrapping
-	woutmsg, err := whisper.NewSentMessage(wparams)
+	envelope, err := NewSentEnvelope(wparams)
 	if err != nil {
-		return fmt.Errorf("failed to generate whisper message encapsulation: %v", err)
-	}
-	// performs encryption.
-	// Does NOT perform / performs negligible PoW due to very low difficulty setting
-	// after this the message is ready for sending
-	envelope, err := woutmsg.Wrap(wparams)
-	if err != nil {
-		return fmt.Errorf("failed to perform whisper encryption: %v", err)
+		return fmt.Errorf("failed to perform message encapsulation and encryption: %v", err)
 	}
 	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
 

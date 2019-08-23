@@ -41,8 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
-
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -54,8 +52,7 @@ var (
 	initOnce        = sync.Once{}
 	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
 	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
-	w               *whisper.Whisper
-	wapi            *whisper.PublicWhisperAPI
+	cryptoBackend   CryptoBackend
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -79,8 +76,7 @@ func initTest() {
 			h := log.CallerFileHandler(hf)
 			log.Root().SetHandler(h)
 
-			w = whisper.New(&whisper.DefaultConfig)
-			wapi = whisper.NewPublicWhisperAPI(w)
+			cryptoBackend = NewCryptoBackend()
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
@@ -159,8 +155,8 @@ func TestCache(t *testing.T) {
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, err := cryptoBackend.NewKeyPair(ctx)
+	privkey, err := cryptoBackend.GetPrivateKey(keys)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,31 +166,24 @@ func TestCache(t *testing.T) {
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
-	wparams := &whisper.MessageParams{
-		TTL:      defaultWhisperTTL,
-		Src:      privkey,
-		Dst:      &privkey.PublicKey,
-		Topic:    whisper.TopicType(PingTopic),
-		WorkTime: defaultWhisperWorkTime,
-		PoW:      defaultWhisperPoW,
-		Payload:  data,
+	wparams := &MessageParams{
+		Dst:     &privkey.PublicKey,
+		Topic:   PingTopic,
+		Payload: data,
 	}
-	woutmsg, err := whisper.NewSentMessage(wparams)
-	env, err := woutmsg.Wrap(wparams)
+	env, err := NewSentEnvelope(wparams)
 	msg := &PssMsg{
 		Payload: env,
 		To:      to,
 	}
 	wparams.Payload = datatwo
-	woutmsg, err = whisper.NewSentMessage(wparams)
-	envtwo, err := woutmsg.Wrap(wparams)
+	envtwo, err := NewSentEnvelope(wparams)
 	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
 	}
 	wparams.Payload = datathree
-	woutmsg, err = whisper.NewSentMessage(wparams)
-	envthree, err := woutmsg.Wrap(wparams)
+	envthree, err := NewSentEnvelope(wparams)
 	msgthree := &PssMsg{
 		Payload: envthree,
 		To:      to,
@@ -260,11 +249,11 @@ func TestAddressMatch(t *testing.T) {
 	kad := network.NewKademlia(localaddr, kadparams)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
+	keys, err := cryptoBackend.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
-	privkey, err := w.GetPrivateKey(keys)
+	privkey, err := cryptoBackend.GetPrivateKey(keys)
 	pssp := NewParams().WithPrivateKey(privkey)
 	ps, err := New(kad, pssp)
 	if err != nil {
@@ -423,8 +412,8 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &whisper.Envelope{
-			Topic: whisper.TopicType(topic),
+		pssMsg.Payload = &Envelope{
+			Topic: topic,
 			Data:  data[:],
 		}
 
@@ -454,8 +443,8 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &whisper.Envelope{
-			Topic: whisper.TopicType(topic),
+		pssMsg.Payload = &Envelope{
+			Topic: topic,
 			Data:  data[:],
 		}
 
@@ -478,8 +467,8 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &whisper.Envelope{
-			Topic: whisper.TopicType(topic),
+		pssMsg.Payload = &Envelope{
+			Topic: topic,
 			Data:  []byte(remotePotAddr.String()),
 		}
 
@@ -511,7 +500,7 @@ func TestMessageProcessing(t *testing.T) {
 	msg := newPssMsg(&msgParams{})
 	msg.To = addr
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Payload = &whisper.Envelope{
+	msg.Payload = &Envelope{
 		Topic: [4]byte{},
 		Data:  []byte{0x66, 0x6f, 0x6f},
 	}
@@ -621,21 +610,21 @@ func TestKeys(t *testing.T) {
 	// make our key and init pss with it
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	ourkeys, err := wapi.NewKeyPair(ctx)
+	ourkeys, err := cryptoBackend.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("create 'our' key fail")
 	}
 	ctx, cancel2 := context.WithTimeout(context.Background(), time.Second)
 	defer cancel2()
-	theirkeys, err := wapi.NewKeyPair(ctx)
+	theirkeys, err := cryptoBackend.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("create 'their' key fail")
 	}
-	ourprivkey, err := w.GetPrivateKey(ourkeys)
+	ourprivkey, err := cryptoBackend.GetPrivateKey(ourkeys)
 	if err != nil {
 		t.Fatalf("failed to retrieve 'our' private key")
 	}
-	theirprivkey, err := w.GetPrivateKey(theirkeys)
+	theirprivkey, err := cryptoBackend.GetPrivateKey(theirkeys)
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
@@ -659,12 +648,12 @@ func TestKeys(t *testing.T) {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
 
-	// get the key back from whisper, check that it's still the same
-	outkeyback, err := ps.w.GetSymKey(outkeyid)
+	// get the key back from cryto backend, check that it's still the same
+	outkeyback, err := ps.backend.GetSymKey(outkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	inkey, err := ps.w.GetSymKey(inkeyid)
+	inkey, err := ps.backend.GetSymKey(inkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -791,7 +780,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	pssmsg := &PssMsg{
 		To:      []byte{},
 		Expire:  uint32(time.Now().Add(time.Second).Unix()),
-		Payload: &whisper.Envelope{},
+		Payload: &Envelope{},
 	}
 	ps := newTestPss(privkey, kad, nil)
 	defer ps.Stop()
@@ -836,8 +825,8 @@ func TestRawAllow(t *testing.T) {
 	})
 	pssMsg.To = baseAddr.OAddr
 	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-	pssMsg.Payload = &whisper.Envelope{
-		Topic: whisper.TopicType(topic),
+	pssMsg.Payload = &Envelope{
+		Topic: topic,
 	}
 	ps.handle(context.TODO(), pssMsg)
 	if receives > 0 {
@@ -1532,8 +1521,8 @@ func benchmarkSymKeySend(b *testing.B) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, err := cryptoBackend.NewKeyPair(ctx)
+	privkey, err := cryptoBackend.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
@@ -1545,7 +1534,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
-	symkey, err := ps.w.GetSymKey(symkeyid)
+	symkey, err := ps.backend.GetSymKey(symkeyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey: %v", err)
 	}
@@ -1577,8 +1566,8 @@ func benchmarkAsymKeySend(b *testing.B) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, err := cryptoBackend.NewKeyPair(ctx)
+	privkey, err := cryptoBackend.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
@@ -1624,8 +1613,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	var keyid string
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, err := cryptoBackend.NewKeyPair(ctx)
+	privkey, err := cryptoBackend.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1640,26 +1629,19 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
-		symkey, err := ps.w.GetSymKey(keyid)
+		symkey, err := ps.backend.GetSymKey(keyid)
 		if err != nil {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
-		wparams := &whisper.MessageParams{
-			TTL:      defaultWhisperTTL,
-			KeySym:   symkey,
-			Topic:    whisper.TopicType(topic),
-			WorkTime: defaultWhisperWorkTime,
-			PoW:      defaultWhisperPoW,
-			Payload:  []byte("xyzzy"),
-			Padding:  []byte("1234567890abcdef"),
+		wparams := &MessageParams{
+			KeySym:  symkey,
+			Topic:   topic,
+			Payload: []byte("xyzzy"),
+			Padding: []byte("1234567890abcdef"),
 		}
-		woutmsg, err := whisper.NewSentMessage(wparams)
+		env, err := NewSentEnvelope(wparams)
 		if err != nil {
-			b.Fatalf("could not create whisper message: %v", err)
-		}
-		env, err := woutmsg.Wrap(wparams)
-		if err != nil {
-			b.Fatalf("could not generate whisper envelope: %v", err)
+			b.Fatalf("could not generate envelope: %v", err)
 		}
 		ps.Register(&topic, &handler{
 			f: noopHandlerFunc,
@@ -1708,8 +1690,8 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	addr := make([]PssAddress, keycount)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, err := cryptoBackend.NewKeyPair(ctx)
+	privkey, err := cryptoBackend.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1725,26 +1707,19 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 
 	}
-	symkey, err := ps.w.GetSymKey(keyid)
+	symkey, err := ps.backend.GetSymKey(keyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
-	wparams := &whisper.MessageParams{
-		TTL:      defaultWhisperTTL,
-		KeySym:   symkey,
-		Topic:    whisper.TopicType(topic),
-		WorkTime: defaultWhisperWorkTime,
-		PoW:      defaultWhisperPoW,
-		Payload:  []byte("xyzzy"),
-		Padding:  []byte("1234567890abcdef"),
+	wparams := &MessageParams{
+		KeySym:  symkey,
+		Topic:   topic,
+		Payload: []byte("xyzzy"),
+		Padding: []byte("1234567890abcdef"),
 	}
-	woutmsg, err := whisper.NewSentMessage(wparams)
+	env, err := NewSentEnvelope(wparams)
 	if err != nil {
-		b.Fatalf("could not create whisper message: %v", err)
-	}
-	env, err := woutmsg.Wrap(wparams)
-	if err != nil {
-		b.Fatalf("could not generate whisper envelope: %v", err)
+		b.Fatalf("could not generate envelope: %v", err)
 	}
 	ps.Register(&topic, &handler{
 		f: noopHandlerFunc,
@@ -1833,8 +1808,8 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := wapi.NewKeyPair(ctxlocal)
-			privkey, err := w.GetPrivateKey(keys)
+			keys, err := cryptoBackend.NewKeyPair(ctxlocal)
+			privkey, err := cryptoBackend.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)

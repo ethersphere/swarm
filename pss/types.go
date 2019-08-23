@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -37,6 +36,7 @@ const (
 const (
 	pssControlSym = 1
 	pssControlRaw = 1 << 1
+	TopicLength   = 4 // in bytes Taken from Whisper
 )
 
 var (
@@ -46,7 +46,7 @@ var (
 )
 
 // Topic is the PSS encapsulation of the Whisper topic type
-type Topic whisper.TopicType
+type Topic [TopicLength]byte
 
 func (t *Topic) String() string {
 	return hexutil.Encode(t[:])
@@ -135,7 +135,7 @@ type PssMsg struct {
 	To      []byte
 	Control []byte
 	Expire  uint32
-	Payload *whisper.Envelope
+	Payload *Envelope
 }
 
 func newPssMsg(param *msgParams) *PssMsg {
@@ -158,7 +158,7 @@ func (msg *PssMsg) isSym() bool {
 func (msg *PssMsg) serialize() []byte {
 	rlpdata, _ := rlp.EncodeToBytes(struct {
 		To      []byte
-		Payload *whisper.Envelope
+		Payload *Envelope
 	}{
 		To:      msg.To,
 		Payload: msg.Payload,
@@ -226,5 +226,5 @@ func BytesToTopic(b []byte) Topic {
 	defer topicHashMutex.Unlock()
 	topicHashFunc.Reset()
 	topicHashFunc.Write(b)
-	return Topic(whisper.BytesToTopic(topicHashFunc.Sum(nil)))
+	return WBytesToTopic(topicHashFunc.Sum(nil))
 }
