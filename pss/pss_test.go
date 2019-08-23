@@ -166,24 +166,25 @@ func TestCache(t *testing.T) {
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
-	wparams := &MessageParams{
+	mparams := &messageParams{
+		Src:     privkey,
 		Dst:     &privkey.PublicKey,
 		Topic:   PingTopic,
 		Payload: data,
 	}
-	env, err := NewSentEnvelope(wparams)
+	env, err := newSentEnvelope(mparams)
 	msg := &PssMsg{
 		Payload: env,
 		To:      to,
 	}
-	wparams.Payload = datatwo
-	envtwo, err := NewSentEnvelope(wparams)
+	mparams.Payload = datatwo
+	envtwo, err := newSentEnvelope(mparams)
 	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
 	}
-	wparams.Payload = datathree
-	envthree, err := NewSentEnvelope(wparams)
+	mparams.Payload = datathree
+	envthree, err := newSentEnvelope(mparams)
 	msgthree := &PssMsg{
 		Payload: envthree,
 		To:      to,
@@ -412,7 +413,7 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &Envelope{
+		pssMsg.Payload = &envelope{
 			Topic: topic,
 			Data:  data[:],
 		}
@@ -443,7 +444,7 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &Envelope{
+		pssMsg.Payload = &envelope{
 			Topic: topic,
 			Data:  data[:],
 		}
@@ -467,7 +468,7 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &Envelope{
+		pssMsg.Payload = &envelope{
 			Topic: topic,
 			Data:  []byte(remotePotAddr.String()),
 		}
@@ -500,7 +501,7 @@ func TestMessageProcessing(t *testing.T) {
 	msg := newPssMsg(&msgParams{})
 	msg.To = addr
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Payload = &Envelope{
+	msg.Payload = &envelope{
 		Topic: [4]byte{},
 		Data:  []byte{0x66, 0x6f, 0x6f},
 	}
@@ -780,7 +781,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	pssmsg := &PssMsg{
 		To:      []byte{},
 		Expire:  uint32(time.Now().Add(time.Second).Unix()),
-		Payload: &Envelope{},
+		Payload: &envelope{},
 	}
 	ps := newTestPss(privkey, kad, nil)
 	defer ps.Stop()
@@ -825,7 +826,7 @@ func TestRawAllow(t *testing.T) {
 	})
 	pssMsg.To = baseAddr.OAddr
 	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-	pssMsg.Payload = &Envelope{
+	pssMsg.Payload = &envelope{
 		Topic: topic,
 	}
 	ps.handle(context.TODO(), pssMsg)
@@ -1633,13 +1634,13 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
-		wparams := &MessageParams{
+		mparams := &messageParams{
 			KeySym:  symkey,
 			Topic:   topic,
 			Payload: []byte("xyzzy"),
 			Padding: []byte("1234567890abcdef"),
 		}
-		env, err := NewSentEnvelope(wparams)
+		env, err := newSentEnvelope(mparams)
 		if err != nil {
 			b.Fatalf("could not generate envelope: %v", err)
 		}
@@ -1711,13 +1712,13 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
-	wparams := &MessageParams{
+	mparams := &messageParams{
 		KeySym:  symkey,
 		Topic:   topic,
 		Payload: []byte("xyzzy"),
 		Padding: []byte("1234567890abcdef"),
 	}
-	env, err := NewSentEnvelope(wparams)
+	env, err := newSentEnvelope(mparams)
 	if err != nil {
 		b.Fatalf("could not generate envelope: %v", err)
 	}

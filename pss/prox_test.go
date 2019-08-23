@@ -425,7 +425,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			// execadapter does not exec init()
 			initTest()
 
-			// create keys in whisper and set up the pss object
+			// create keys in crypto backend and set up the pss object
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second*3)
 			defer cancel()
 			keys, err := cryptoBackend.NewKeyPair(ctxlocal)

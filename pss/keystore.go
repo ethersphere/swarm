@@ -145,11 +145,11 @@ func (ks *KeyStore) getPeerAddress(keyid string, topic Topic) (PssAddress, error
 }
 
 // Attempt to decrypt, validate and unpack a symmetrically encrypted message.
-// If successful, returns the unpacked whisper ReceivedMessage struct
-// encapsulating the decrypted message, and the whisper backend id
+// If successful, returns the unpacked receivedMessage struct
+// encapsulating the decrypted message, and the crypto backend id
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted.
-func (ks *KeyStore) processSym(envelope *Envelope) (*ReceivedMessage, string, PssAddress, error) {
+func (ks *KeyStore) processSym(envelope *envelope) (*receivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
 
 	for i := ks.symKeyDecryptCacheCursor; i > ks.symKeyDecryptCacheCursor-cap(ks.symKeyDecryptCache) && i > 0; i-- {
@@ -158,11 +158,11 @@ func (ks *KeyStore) processSym(envelope *Envelope) (*ReceivedMessage, string, Ps
 		if err != nil {
 			continue
 		}
-		recvmsg, err := envelope.OpenSymmetric(symkey)
+		recvmsg, err := envelope.openSymmetric(symkey)
 		if err != nil {
 			continue
 		}
-		if !recvmsg.ValidateAndParse() {
+		if !recvmsg.validateAndParse() {
 			return nil, "", nil, errors.New("symmetrically encrypted message has invalid signature or is corrupt")
 		}
 		var from PssAddress
@@ -179,19 +179,19 @@ func (ks *KeyStore) processSym(envelope *Envelope) (*ReceivedMessage, string, Ps
 }
 
 // Attempt to decrypt, validate and unpack an asymmetrically encrypted message.
-// If successful, returns the unpacked whisper ReceivedMessage struct
+// If successful, returns the unpacked receivedMessage struct
 // encapsulating the decrypted message, and the byte representation of
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted.
-func (ks *Pss) processAsym(envelope *Envelope) (*ReceivedMessage, string, PssAddress, error) {
+func (ks *Pss) processAsym(envelope *envelope) (*receivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
 
-	recvmsg, err := envelope.OpenAsymmetric(ks.privateKey)
+	recvmsg, err := envelope.openAsymmetric(ks.privateKey)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
 	// check signature (if signed), strip padding
-	if !recvmsg.ValidateAndParse() {
+	if !recvmsg.validateAndParse() {
 		return nil, "", nil, errors.New("invalid message")
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
@@ -247,8 +247,8 @@ func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToC
 	return keyid, err
 }
 
-// Returns a symmetric key byte sequence stored in the whisper backend by its unique id.
-// Passes on the error value from the whisper backend.
+// Returns a symmetric key byte sequence stored in the crypto backend by its unique id.
+// Passes on the error value from the crypto backend.
 func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
 	return ks.backend.GetSymKey(symkeyid)
 }
@@ -257,13 +257,13 @@ func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
 //
 // This is required for symmetrically encrypted message exchange on the given topic.
 //
-// The key is stored in the whisper backend.
+// The key is stored in the crypto backend.
 //
 // If addtocache is set to true, the key will be added to the cache of keys
 // used to attempt symmetric decryption of incoming messages.
 //
 // Returns a string id that can be used to retrieve the key bytes
-// from the whisper backend (see pss.GetSymmetricKey())
+// from the crypto backend (see pss.GetSymmetricKey())
 func (ks *KeyStore) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
 	if err := validateAddress(address); err != nil {
 		return "", err

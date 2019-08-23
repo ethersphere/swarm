@@ -458,12 +458,12 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
-	var recvmsg *ReceivedMessage
+	var recvmsg *receivedMessage
 	var payload []byte
 	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(envelope *Envelope) (*ReceivedMessage, string, PssAddress, error)
+	var keyFunc func(envelope *envelope) (*receivedMessage, string, PssAddress, error)
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
@@ -581,7 +581,7 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsgParams := &msgParams{
 		raw: true,
 	}
-	payload := &Envelope{
+	payload := &envelope{
 		Data:  msg,
 		Topic: topic,
 	}
@@ -626,7 +626,7 @@ func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
-// It generates an whisper envelope for the specified recipient and topic,
+// It generates an envelope for the specified recipient and topic,
 // and wraps the message payload in it.
 // TODO: Implement proper message padding
 func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []byte) error {
@@ -642,7 +642,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	} else if c < p.paddingByteSize {
 		return fmt.Errorf("invalid padding length: %d", c)
 	}
-	wparams := &MessageParams{
+	mparams := &messageParams{
 		Src:     p.privateKey,
 		Topic:   topic,
 		Payload: msg,
@@ -653,16 +653,16 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		if err != nil {
 			return fmt.Errorf("Cannot unmarshal pubkey: %x", key)
 		}
-		wparams.Dst = pk
+		mparams.Dst = pk
 	} else {
-		wparams.KeySym = key
+		mparams.KeySym = key
 	}
 	// set up outgoing message container, which does encryption and envelope wrapping
-	envelope, err := NewSentEnvelope(wparams)
+	envelope, err := newSentEnvelope(mparams)
 	if err != nil {
 		return fmt.Errorf("failed to perform message encapsulation and encryption: %v", err)
 	}
-	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", common.ToHex(mparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
 
 	// prepare for devp2p transport
 	pssMsgParams := &msgParams{

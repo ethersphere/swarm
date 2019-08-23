@@ -135,7 +135,7 @@ type PssMsg struct {
 	To      []byte
 	Control []byte
 	Expire  uint32
-	Payload *Envelope
+	Payload *envelope
 }
 
 func newPssMsg(param *msgParams) *PssMsg {
@@ -158,7 +158,7 @@ func (msg *PssMsg) isSym() bool {
 func (msg *PssMsg) serialize() []byte {
 	rlpdata, _ := rlp.EncodeToBytes(struct {
 		To      []byte
-		Payload *Envelope
+		Payload *envelope
 	}{
 		To:      msg.To,
 		Payload: msg.Payload,
@@ -226,5 +226,5 @@ func BytesToTopic(b []byte) Topic {
 	defer topicHashMutex.Unlock()
 	topicHashFunc.Reset()
 	topicHashFunc.Write(b)
-	return WBytesToTopic(topicHashFunc.Sum(nil))
+	return toTopic(topicHashFunc.Sum(nil))
 }

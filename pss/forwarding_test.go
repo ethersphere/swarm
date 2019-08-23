@@ -349,7 +349,7 @@ func newTestMsg(addr []byte) *PssMsg {
 	msg := newPssMsg(&msgParams{})
 	msg.To = addr[:]
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Payload = &Envelope{
+	msg.Payload = &envelope{
 		Topic: [4]byte{},
 		Data:  []byte("i have nothing to hide"),
 	}

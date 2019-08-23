@@ -16,17 +16,15 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
 )
 
 var (
-	loglevel = flag.Int("l", 3, "loglevel")
-	psses    map[string]*pss.Pss
-	w        *whisper.Whisper
-	wapi     *whisper.PublicWhisperAPI
+	loglevel      = flag.Int("l", 3, "loglevel")
+	psses         map[string]*pss.Pss
+	cryptoBackend pss.CryptoBackend
 )
 
 func init() {
@@ -36,8 +34,7 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	w = whisper.New(&whisper.DefaultConfig)
-	wapi = whisper.NewPublicWhisperAPI(w)
+	cryptoBackend = pss.NewCryptoBackend()
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -230,11 +227,11 @@ func newServices(allowRaw bool) adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := wapi.NewKeyPair(ctxlocal)
+			keys, err := cryptoBackend.NewKeyPair(ctxlocal)
 			if err != nil {
 				return nil, err
 			}
-			privkey, err := w.GetPrivateKey(keys)
+			privkey, err := cryptoBackend.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
