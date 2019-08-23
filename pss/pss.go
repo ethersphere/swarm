@@ -580,10 +580,10 @@ func (p *Pss) enqueue(msg *PssMsg, pending bool) error {
 	}
 	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
 	if pending {
-		return errors.New("unexpected outbox full for pending message!")
-	} else {
-		return errors.New("outbox full")
+		log.Crit("unexpected outbox full for pending message!")
+		panic(errors.New("unexpected outbox full for pending message!"))
 	}
+	return errors.New("outbox full")
 }
 
 // Access to forwardPending is protected with RWMutex
