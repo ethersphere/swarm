@@ -19,22 +19,22 @@ package les
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -43,6 +43,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
+
+var errTooManyInvalidRequest = errors.New("too many invalid requests made")
 
 const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
@@ -84,6 +86,7 @@ type BlockChain interface {
 
 type txPool interface {
 	AddRemotes(txs []*types.Transaction) []error
+	AddRemotesSync(txs []*types.Transaction) []error
 	Status(hashes []common.Hash) []core.TxStatus
 }
 
@@ -97,7 +100,7 @@ type ProtocolManager struct {
 	networkId uint64 // The identity of network.
 
 	txpool       txPool
-	txrelay      *LesTxRelay
+	txrelay      *lesTxRelay
 	blockchain   BlockChain
 	chainDb      ethdb.Database
 	odr          *LesOdr
@@ -111,6 +114,8 @@ type ProtocolManager struct {
 	fetcher      *lightFetcher
 	ulc          *ulc
 	peers        *peerSet
+	checkpoint   *params.TrustedCheckpoint
+	reg          *checkpointOracle // If reg == nil, it means the checkpoint registrar is not activated
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
@@ -119,31 +124,17 @@ type ProtocolManager struct {
 
 	wg       *sync.WaitGroup
 	eventMux *event.TypeMux
-	logger   *csvlogger.Logger
 
 	// Callbacks
 	synced func() bool
+
+	// Testing fields
+	addTxsSync bool
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(
-	chainConfig *params.ChainConfig,
-	indexerConfig *light.IndexerConfig,
-	client bool,
-	networkId uint64,
-	mux *event.TypeMux,
-	engine consensus.Engine,
-	peers *peerSet,
-	blockchain BlockChain,
-	txpool txPool,
-	chainDb ethdb.Database,
-	odr *LesOdr,
-	txrelay *LesTxRelay,
-	serverPool *serverPool,
-	quitSync chan struct{},
-	wg *sync.WaitGroup,
-	ulcConfig *eth.ULCConfig, synced func() bool) (*ProtocolManager, error) {
+func NewProtocolManager(chainConfig *params.ChainConfig, checkpoint *params.TrustedCheckpoint, indexerConfig *light.IndexerConfig, ulcServers []string, ulcFraction int, client bool, networkId uint64, mux *event.TypeMux, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, serverPool *serverPool, registrar *checkpointOracle, quitSync chan struct{}, wg *sync.WaitGroup, synced func() bool) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		client:      client,
@@ -155,13 +146,14 @@ func NewProtocolManager(
 		odr:         odr,
 		networkId:   networkId,
 		txpool:      txpool,
-		txrelay:     txrelay,
 		serverPool:  serverPool,
+		reg:         registrar,
 		peers:       peers,
 		newPeerCh:   make(chan *peer),
 		quitSync:    quitSync,
 		wg:          wg,
 		noMorePeers: make(chan struct{}),
+		checkpoint:  checkpoint,
 		synced:      synced,
 	}
 	if odr != nil {
@@ -169,20 +161,24 @@ func NewProtocolManager(
 		manager.reqDist = odr.retriever.dist
 	}
 
-	if ulcConfig != nil {
-		manager.ulc = newULC(ulcConfig)
+	if ulcServers != nil {
+		ulc, err := newULC(ulcServers, ulcFraction)
+		if err != nil {
+			log.Warn("Failed to initialize ultra light client", "err", err)
+		} else {
+			manager.ulc = ulc
+		}
 	}
-
 	removePeer := manager.removePeer
 	if disableClientRemovePeer {
 		removePeer = func(id string) {}
 	}
 	if client {
-		var checkpoint uint64
-		if cht, ok := params.TrustedCheckpoints[blockchain.Genesis().Hash()]; ok {
-			checkpoint = (cht.SectionIndex+1)*params.CHTFrequency - 1
+		var checkpointNumber uint64
+		if checkpoint != nil {
+			checkpointNumber = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 		}
-		manager.downloader = downloader.New(checkpoint, chainDb, nil, manager.eventMux, nil, blockchain, removePeer)
+		manager.downloader = downloader.New(checkpointNumber, chainDb, nil, manager.eventMux, nil, blockchain, removePeer)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
@@ -259,11 +255,11 @@ func (pm *ProtocolManager) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWrit
 }
 
 func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	var isTrusted bool
-	if pm.isULCEnabled() {
-		isTrusted = pm.ulc.isTrusted(p.ID())
+	var trusted bool
+	if pm.ulc != nil {
+		trusted = pm.ulc.trusted(p.ID())
 	}
-	return newPeer(pv, nv, isTrusted, p, newMeteredMsgWriter(rw))
+	return newPeer(pv, nv, trusted, p, newMeteredMsgWriter(rw))
 }
 
 // handle is the callback invoked to manage the life cycle of a les peer. When
@@ -272,11 +268,12 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Ignore maxPeers if this is a trusted peer
 	// In server mode we try to check into the client pool after handshake
 	if pm.client && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
-		pm.logger.Event("Rejected (too many peers), " + p.id)
+		clientRejectedMeter.Mark(1)
 		return p2p.DiscTooManyPeers
 	}
 	// Reject light clients if server is not synced.
 	if !pm.client && !pm.synced() {
+		clientRejectedMeter.Mark(1)
 		return p2p.DiscRequested
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
@@ -291,7 +288,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	)
 	if err := p.Handshake(td, hash, number, genesis.Hash(), pm.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
-		pm.logger.Event("Handshake error: " + err.Error() + ", " + p.id)
+		clientErrorMeter.Mark(1)
 		return err
 	}
 	if p.fcClient != nil {
@@ -304,14 +301,20 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	// Register the peer locally
 	if err := pm.peers.Register(p); err != nil {
+		clientErrorMeter.Mark(1)
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		pm.logger.Event("Peer registration error: " + err.Error() + ", " + p.id)
 		return err
 	}
-	pm.logger.Event("Connection established, " + p.id)
+	if !pm.client && p.balanceTracker == nil {
+		// add dummy balance tracker for tests
+		p.balanceTracker = &balanceTracker{}
+		p.balanceTracker.init(&mclock.System{}, 1)
+	}
+	connectedAt := time.Now()
 	defer func() {
-		pm.logger.Event("Closed connection, " + p.id)
+		p.balanceTracker = nil
 		pm.removePeer(p.id)
+		connectionTimer.UpdateSince(connectedAt)
 	}()
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
@@ -327,11 +330,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			pm.serverPool.registered(p.poolEntry)
 		}
 	}
-
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			pm.logger.Event("Message handling error: " + err.Error() + ", " + p.id)
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			if p.fcServer != nil {
 				p.fcServer.DumpLogs()
@@ -406,6 +407,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	var deliverMsg *Msg
+	balanceTracker := p.balanceTracker
 
 	sendResponse := func(reqID, amount uint64, reply *reply, servingTime uint64) {
 		p.responseLock.Lock()
@@ -424,6 +426,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			realCost = pm.server.costTracker.realCost(servingTime, msg.Size, replySize)
 			if amount != 0 {
 				pm.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
+				balanceTracker.requestCost(realCost)
 			}
 		} else {
 			realCost = maxCost
@@ -455,7 +458,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-
+		if err := req.sanityCheck(); err != nil {
+			return err
+		}
 		update, size := req.Update.decode()
 		if p.rejectUpdate(size) {
 			return errResp(ErrRequestRejected, "")
@@ -524,6 +529,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
 					}
 					if origin == nil {
+						atomic.AddUint32(&p.invalidCount, 1)
 						break
 					}
 					headers = append(headers, origin)
@@ -570,7 +576,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						} else {
 							unknown = true
 						}
-
 					case !query.Reverse:
 						// Number based traversal towards the leaf block
 						query.Origin.Number += query.Skip + 1
@@ -628,15 +633,18 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						sendResponse(req.ReqID, 0, nil, task.servingTime)
 						return
 					}
+					// Retrieve the requested block body, stopping if enough was found
 					if bytes >= softResponseLimit {
 						break
 					}
-					// Retrieve the requested block body, stopping if enough was found
-					if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-						if data := rawdb.ReadBodyRLP(pm.chainDb, hash, *number); len(data) != 0 {
-							bodies = append(bodies, data)
-							bytes += len(data)
-						}
+					number := rawdb.ReadHeaderNumber(pm.chainDb, hash)
+					if number == nil {
+						atomic.AddUint32(&p.invalidCount, 1)
+						continue
+					}
+					if data := rawdb.ReadBodyRLP(pm.chainDb, hash, *number); len(data) != 0 {
+						bodies = append(bodies, data)
+						bytes += len(data)
 					}
 				}
 				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyBlockBodiesRLP(req.ReqID, bodies), task.done())
@@ -691,6 +699,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					number := rawdb.ReadHeaderNumber(pm.chainDb, request.BHash)
 					if number == nil {
 						p.Log().Warn("Failed to retrieve block num for code", "hash", request.BHash)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					header := rawdb.ReadHeader(pm.chainDb, request.BHash, *number)
@@ -698,11 +707,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						p.Log().Warn("Failed to retrieve header for code", "block", *number, "hash", request.BHash)
 						continue
 					}
+					// Refuse to search stale state data in the database since looking for
+					// a non-exist key is kind of expensive.
+					local := pm.blockchain.CurrentHeader().Number.Uint64()
+					if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
+						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
+						atomic.AddUint32(&p.invalidCount, 1)
+						continue
+					}
 					triedb := pm.blockchain.StateCache().TrieDB()
 
 					account, err := pm.getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
 					if err != nil {
 						p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					code, err := triedb.Node(common.BytesToHash(account.CodeHash))
@@ -769,9 +787,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					}
 					// Retrieve the requested block's receipts, skipping if unknown to us
 					var results types.Receipts
-					if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-						results = rawdb.ReadRawReceipts(pm.chainDb, hash, *number)
+					number := rawdb.ReadHeaderNumber(pm.chainDb, hash)
+					if number == nil {
+						atomic.AddUint32(&p.invalidCount, 1)
+						continue
 					}
+					results = rawdb.ReadRawReceipts(pm.chainDb, hash, *number)
 					if results == nil {
 						if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 							continue
@@ -846,13 +867,27 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 						if number = rawdb.ReadHeaderNumber(pm.chainDb, request.BHash); number == nil {
 							p.Log().Warn("Failed to retrieve block num for proof", "hash", request.BHash)
+							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
 						if header = rawdb.ReadHeader(pm.chainDb, request.BHash, *number); header == nil {
 							p.Log().Warn("Failed to retrieve header for proof", "block", *number, "hash", request.BHash)
 							continue
 						}
+						// Refuse to search stale state data in the database since looking for
+						// a non-exist key is kind of expensive.
+						local := pm.blockchain.CurrentHeader().Number.Uint64()
+						if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
+							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
+							atomic.AddUint32(&p.invalidCount, 1)
+							continue
+						}
 						root = header.Root
+					}
+					// If a header lookup failed (non existent), ignore subsequent requests for the same header
+					if root == (common.Hash{}) {
+						atomic.AddUint32(&p.invalidCount, 1)
+						continue
 					}
 					// Open the account or storage trie for the request
 					statedb := pm.blockchain.StateCache()
@@ -870,6 +905,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						account, err := pm.getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
 						if err != nil {
 							p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
 						trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.AccKey), account.Root)
@@ -1021,7 +1057,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					hash := tx.Hash()
 					stats[i] = pm.txStatus(hash)
 					if stats[i].Status == core.TxStatusUnknown {
-						if errs := pm.txpool.AddRemotes([]*types.Transaction{tx}); errs[0] != nil {
+						addFn := pm.txpool.AddRemotes
+						// Add txs synchronously for testing purpose
+						if pm.addTxsSync {
+							addFn = pm.txpool.AddRemotesSync
+						}
+						if errs := addFn([]*types.Transaction{tx}); errs[0] != nil {
 							stats[i].Error = errs[0].Error()
 							continue
 						}
@@ -1088,7 +1129,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.freezeServer(true)
 		pm.retriever.frozen(p)
-		p.Log().Warn("Service stopped")
+		p.Log().Debug("Service stopped")
 
 	case ResumeMsg:
 		if pm.odr == nil {
@@ -1100,7 +1141,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.fcServer.ResumeFreeze(bv)
 		p.freezeServer(false)
-		p.Log().Warn("Service resumed")
+		p.Log().Debug("Service resumed")
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1115,6 +1156,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return err
 			}
 		}
+	}
+	// If the client has made too much invalid request(e.g. request a non-exist data),
+	// reject them to prevent SPAM attack.
+	if atomic.LoadUint32(&p.invalidCount) > maxRequestErrors {
+		return errTooManyInvalidRequest
 	}
 	return nil
 }
@@ -1170,14 +1216,6 @@ func (pm *ProtocolManager) txStatus(hash common.Hash) light.TxStatus {
 		}
 	}
 	return stat
-}
-
-// isULCEnabled returns true if we can use ULC
-func (pm *ProtocolManager) isULCEnabled() bool {
-	if pm.ulc == nil || len(pm.ulc.trustedKeys) == 0 {
-		return false
-	}
-	return true
 }
 
 // downloaderPeerNotify implements peerSetNotify

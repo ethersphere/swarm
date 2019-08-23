@@ -32,9 +32,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/cmd/swarm/testdata"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm"
+	"github.com/ethersphere/swarm/cmd/testdata"
 	"github.com/ethersphere/swarm/testutil"
 )
 
