@@ -565,7 +565,7 @@ func (p *Pss) enqueue(msg *PssMsg, pending bool) error {
 	p.outboxMutex.Lock()
 	defer p.outboxMutex.Unlock()
 	pendingSize := p.getPending()
-	// Only allow defaultOutboxCapacity messages at most processed (both enqueued or being forwarded)
+	// Only allow capacity of outbox messages at most processed (both enqueued or being forwarded)
 	if pending || pendingSize < cap(p.outbox) { //If pending there is already a slot booked for this message
 		if !pending {
 			// We book a slot in the queue increasing pending messages and release it after successfully sending the message
