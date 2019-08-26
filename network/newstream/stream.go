@@ -42,9 +42,8 @@ import (
 )
 
 const (
-	HashSize            = 32
-	BatchSize           = 64
-	concurrentIterators = 6
+	HashSize  = 32
+	BatchSize = 128
 )
 
 var (
@@ -853,14 +852,15 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		}
 	}
 
+	var addrs []chunk.Address
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
-			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
-			err := provider.Set(ctx, hash)
-			if err != nil {
-				p.logger.Error("error setting chunk as synced", "addr", hash, "err", err)
-			}
+			addrs = append(addrs, offer.hashes[i*HashSize:(i+1)*HashSize])
 		}
+	}
+	err = provider.Set(ctx, addrs...)
+	if err != nil {
+		p.logger.Error("error setting chunk as synced", "addrs", addrs, "err", err)
 	}
 }
 
