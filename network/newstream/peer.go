@@ -44,7 +44,8 @@ type Peer struct {
 	streamCursors   map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
 	openWants       map[uint]*want    // maintain open wants on the client side
 	openOffers      map[uint]offer    // maintain open offers on the server side
-	quit            chan struct{}     // closed when peer is going offline
+
+	quit chan struct{} // closed when peer is going offline
 }
 
 // NewPeer is the constructor for Peer

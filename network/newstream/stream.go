@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -636,21 +635,31 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	}
 
 	var ctr uint64 = 0
-
+	iaddr := 0
+	addresses := make([]chunk.Address, lenHashes/HashSize)
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
-		p.logger.Trace("peer offered hash", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
-		c := chunk.Address(hash)
-		if _, wait := provider.NeedData(ctx, hash); wait != nil {
+		addresses[iaddr] = hash
+		iaddr++
+	}
+	has, err := provider.MultiNeedData(ctx, addresses...)
+	log.Error("has", "has", has, "addresses", addresses)
+	if err != nil {
+		p.logger.Error("multi need data returned an error, dropping peer", "err", err)
+		p.Drop()
+		return
+	}
+	for i, have := range has {
+		if !have {
 			ctr++
-			w.hashes[c.Hex()] = true
-			want.Set(i / HashSize)
-			p.logger.Trace("need data", "need", "true", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
+			log.Error("want hash", "hash", addresses[i].Hex())
+			want.Set(i)
+			w.hashes[addresses[i].Hex()] = true
 		} else {
-			p.logger.Trace("dont need data", "need", "false", "ref", fmt.Sprintf("%x", hash), "ruid", msg.Ruid)
-			w.hashes[c.Hex()] = false
+			w.hashes[addresses[i].Hex()] = false
 		}
 	}
+	log.Error("want chunks", "chunks", w.hashes)
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 
@@ -794,7 +803,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	}
 
 	frameSize := 0
-	var maxFrame = 1 // BatchSize / 4 // should be BatchSize but testing to see if this makes a difference as its the major change from existing stream pkg
+	var maxFrame = BatchSize / 4 // should be BatchSize but testing to see if this makes a difference as its the major change from existing stream pkg
 	if maxFrame < 1 {
 		maxFrame = 1
 	}

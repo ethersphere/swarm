@@ -107,6 +107,43 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 	}
 }
 
+func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
+	start := time.Now()
+	defer func(start time.Time) {
+		end := time.Since(start)
+		s.logger.Debug("syncProvider.NeedData ended", "took", end)
+	}(start)
+	select {
+	case <-s.quit:
+		return []bool{}, nil
+	default:
+	}
+	has, err := s.netStore.Store.HasMulti(ctx, addrs...)
+	if err != nil {
+		return []bool{}, err
+	}
+
+	for i, have := range has {
+		if !have {
+			key := addrs[i]
+			fi, _, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
+			if !ok {
+				continue
+			}
+
+			go func() {
+				select {
+				case <-fi.Delivered:
+					metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
+				case <-time.After(timeouts.SyncerClientWaitTimeout):
+					metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
+				}
+			}()
+		}
+	}
+	return has, nil
+}
+
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
 	//log.Debug("syncProvider.Get")
 	start := time.Now()

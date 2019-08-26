@@ -87,6 +87,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 
 				iterStart := time.Now()
 				var count int
+				db.iteratorSem <- struct{}{}
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					// until chunk descriptor is sent
 					// break the iteration
@@ -126,6 +127,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					SkipStartFromItem: !first,
 					Prefix:            []byte{bin},
 				})
+				<-db.iteratorSem
 
 				totalTimeMetric(metricName+".iter", iterStart)
 
