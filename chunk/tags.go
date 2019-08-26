@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math/rand"
@@ -46,8 +47,8 @@ func (ts *Tags) Create(s string, total int64) (*Tag, error) {
 	t := &Tag{
 		Uid:       ts.rng.Uint32(),
 		Name:      s,
-		startedAt: time.Now(),
-		total:     total,
+		StartedAt: time.Now(),
+		Total:     total,
 	}
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
@@ -67,13 +68,31 @@ func (ts *Tags) All() (t []*Tag) {
 	return t
 }
 
-// Get returns the undelying tag for the uid or an error if not found
+// Get returns the underlying tag for the uid or an error if not found
 func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	t, ok := ts.tags.Load(uid)
 	if !ok {
 		return nil, errors.New("tag not found")
 	}
 	return t.(*Tag), nil
+}
+
+// GetByAddress returns the underlying tag for the address or an error if not found
+func (ts *Tags) GetByAddress(address Address) (*Tag, error) {
+	var t *Tag
+	ts.tags.Range(func(key interface{}, value interface{}) bool {
+		rcvdTag := value.(*Tag)
+		if bytes.Equal(rcvdTag.Address, address) {
+			t = rcvdTag
+			return false
+		}
+		return true
+	})
+
+	if t == nil {
+		return nil, errTagNotFound
+	}
+	return t, nil
 }
 
 // GetFromContext gets a tag from the tag uid stored in the context

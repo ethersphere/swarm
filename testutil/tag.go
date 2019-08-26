@@ -44,7 +44,7 @@ func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int64) {
 		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
 	}
 
-	tTotal := tag.Total()
+	tTotal := tag.TotalCounter()
 	if tTotal != total {
 		t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)
 	}

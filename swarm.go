@@ -82,6 +82,7 @@ type Swarm struct {
 	ps                *pss.Pss
 	swap              *swap.Swap
 	stateStore        *state.DBStore
+	tags              *chunk.Tags
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
 	pinAPI            *pin.API // API object implements all pinning related commands
@@ -212,11 +213,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
-	tags := chunk.NewTags() //todo load from state store
+	self.tags = chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
-	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
+	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, self.tags)
 
 	log.Debug("Setup local storage")
 
@@ -231,10 +232,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
 
 	// Instantiate the pinAPI object with the already opened localstore
-	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
+	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, self.tags, self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")

@@ -239,12 +239,13 @@ func (p *API) UnpinFiles(addr []byte, credentials string) error {
 //     1) Whether the file is a RAW file or not
 //     2) Size of the pinned file or collection
 //     3) the number of times that particular file or collection is pinned.
+
 func (p *API) ListPins() ([]PinInfo, error) {
 	pinnedFiles := make([]PinInfo, 0)
-	iterFunc := func(key []byte, value []byte) {
+	iterFunc := func(key []byte, value []byte) (stop bool, err error) {
 		hash := string(key[4:])
 		pinInfo := PinInfo{}
-		err := pinInfo.UnmarshalBinary(value)
+		err = pinInfo.UnmarshalBinary(value)
 		if err != nil {
 			log.Debug("Error unmarshaling pininfo from state store", "Address", hash)
 			return
@@ -257,6 +258,7 @@ func (p *API) ListPins() ([]PinInfo, error) {
 		log.Trace("Pinned file", "Address", hash, "IsRAW", pinInfo.IsRaw,
 			"FileSize", pinInfo.FileSize, "PinCounter", pinInfo.PinCounter)
 		pinnedFiles = append(pinnedFiles, pinInfo)
+		return true, nil
 	}
 	err := p.state.Iterate("pin_", iterFunc)
 	if err != nil {
