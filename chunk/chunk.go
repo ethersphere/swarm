@@ -246,6 +246,7 @@ type Store interface {
 	GetMulti(ctx context.Context, mode ModeGet, addrs ...Address) (ch []Chunk, err error)
 	Put(ctx context.Context, mode ModePut, chs ...Chunk) (exist []bool, err error)
 	Has(ctx context.Context, addr Address) (yes bool, err error)
+	HasMulti(ctx context.Context, addrs ...Address) (yes []bool, err error)
 	Set(ctx context.Context, mode ModeSet, addr Address) (err error)
 	LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
 	SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan Descriptor, stop func())

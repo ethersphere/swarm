@@ -270,6 +270,17 @@ func (m *MapChunkStore) Has(ctx context.Context, ref Address) (has bool, err err
 	return has, nil
 }
 
+func (m *MapChunkStore) HasMulti(ctx context.Context, refs ...Address) (have []bool, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	have = make([]bool, len(refs))
+	for i, ref := range refs {
+		_, have[i] = m.chunks[ref.Hex()]
+	}
+	return have, nil
+}
+
 func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
 	return nil
 }

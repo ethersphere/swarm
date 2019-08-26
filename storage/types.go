@@ -227,6 +227,11 @@ func (f *FakeChunkStore) Has(_ context.Context, ref Address) (bool, error) {
 	panic("FakeChunkStore doesn't support Has")
 }
 
+// HasMulti doesn't do anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) HasMulti(_ context.Context, refs ...Address) ([]bool, error) {
+	panic("FakeChunkStore doesn't support HasMulti")
+}
+
 // Get doesn't store anything it is just here to implement ChunkStore
 func (f *FakeChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")

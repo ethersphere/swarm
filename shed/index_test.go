@@ -1022,3 +1022,85 @@ func TestIncByteSlice(t *testing.T) {
 		}
 	}
 }
+
+// TestIndex_HasMulti validates that HasMulti returns a correct
+// slice of booleans for provided Items.
+func TestIndex_HasMulti(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items := []Item{
+		{
+			Address: []byte("hash-01"),
+			Data:    []byte("data94"),
+		},
+		{
+			Address: []byte("hash-03"),
+			Data:    []byte("data33"),
+		},
+		{
+			Address: []byte("hash-05"),
+			Data:    []byte("data55"),
+		},
+		{
+			Address: []byte("hash-02"),
+			Data:    []byte("data21"),
+		},
+		{
+			Address: []byte("hash-06"),
+			Data:    []byte("data8"),
+		},
+	}
+	missingItem := Item{
+		Address: []byte("hash-10"),
+		Data:    []byte("data0"),
+	}
+
+	batch := new(leveldb.Batch)
+	for _, i := range items {
+		index.PutInBatch(batch, i)
+	}
+	err = db.WriteBatch(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := index.HasMulti(items[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got[0] {
+		t.Error("first item not found")
+	}
+
+	got, err = index.HasMulti(missingItem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0] {
+		t.Error("missing item found")
+	}
+
+	got, err = index.HasMulti(items...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []bool{true, true, true, true, true}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	got, err = index.HasMulti(append(items, missingItem)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []bool{true, true, true, true, true, false}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}

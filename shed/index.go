@@ -189,6 +189,28 @@ func (f Index) Has(keyFields Item) (bool, error) {
 	return f.db.Has(key)
 }
 
+// HasMulti accepts multiple multiple key fields represented as Item to check if
+// there this Item's encoded key is stored in the index for each of them.
+func (f Index) HasMulti(items ...Item) ([]bool, error) {
+	have := make([]bool, len(items))
+	snapshot, err := f.db.ldb.GetSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	defer snapshot.Release()
+	for i, keyFields := range items {
+		key, err := f.encodeKeyFunc(keyFields)
+		if err != nil {
+			return nil, err
+		}
+		have[i], err = snapshot.Has(key, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return have, nil
+}
+
 // Put accepts Item to encode information from it
 // and save it to the database.
 func (f Index) Put(i Item) (err error) {
