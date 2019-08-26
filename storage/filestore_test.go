@@ -49,7 +49,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 	defer localStore.Close()
 
-	fileStore := NewFileStore(localStore, localStore, NewFileStoreParams(), chunk.NewTags())
+	fileStore := NewFileStore(localStore, NewFileStoreParams(), chunk.NewTags())
 
 	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
@@ -114,7 +114,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	}
 	defer localStore.Close()
 
-	fileStore := NewFileStore(localStore, localStore, NewFileStoreParams(), chunk.NewTags())
+	fileStore := NewFileStore(localStore, NewFileStoreParams(), chunk.NewTags())
 	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
 	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
@@ -183,7 +183,7 @@ func TestGetAllReferences(t *testing.T) {
 	}
 	defer localStore.Close()
 
-	fileStore := NewFileStore(localStore, localStore, NewFileStoreParams(), chunk.NewTags())
+	fileStore := NewFileStore(localStore, NewFileStoreParams(), chunk.NewTags())
 
 	// testRuns[i] and expectedLen[i] are dataSize and expected length respectively
 	testRuns := []int{1024, 8192, 16000, 30000, 1000000}

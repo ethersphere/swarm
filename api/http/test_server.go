@@ -57,7 +57,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API, *pin.API) TestSe
 	}
 
 	tags := chunk.NewTags()
-	fileStore := storage.NewFileStore(localStore, localStore, storage.NewFileStoreParams(), tags)
+	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams(), tags)
 
 	// Swarm feeds test setup
 	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
