@@ -76,7 +76,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool, toPin bool) 
 		return "", err
 	}
 	req.ContentLength = size
-	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("raw_upload_%d", time.Now().Unix()))
+	req.Header.Set(swarmhttp.TagHeaderName, fmt.Sprintf("raw_upload_%d", time.Now().Unix()))
 
 	// Set the pinning header if the file needs to be pinned
 	if toPin {
@@ -544,7 +544,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 	}
 	log.Trace("setting upload tag", "tag", tag)
 
-	req.Header.Set(swarmhttp.SwarmTagHeaderName, tag)
+	req.Header.Set(swarmhttp.TagHeaderName, tag)
 
 	// Set the pinning header if the file is to be pinned
 	if toPin {
@@ -616,7 +616,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 
 	mw := multipart.NewWriter(reqW)
 	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%q", mw.Boundary()))
-	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
+	req.Header.Set(swarmhttp.TagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
 	if toPin {
 		req.Header.Set(swarmhttp.PinHeaderName, "true")
 	}

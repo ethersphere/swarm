@@ -248,6 +248,19 @@ func (m *MapChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Ch
 	return chunk, nil
 }
 
+func (m *MapChunkStore) GetMulti(_ context.Context, _ chunk.ModeGet, refs ...Address) (chunks []Chunk, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, ref := range refs {
+		chunk := m.chunks[ref.Hex()]
+		if chunk == nil {
+			return nil, ErrChunkNotFound
+		}
+		chunks = append(chunks, chunk)
+	}
+	return chunks, nil
+}
+
 // Need to implement Has from SyncChunkStore
 func (m *MapChunkStore) Has(ctx context.Context, ref Address) (has bool, err error) {
 	m.mu.RLock()
@@ -255,6 +268,17 @@ func (m *MapChunkStore) Has(ctx context.Context, ref Address) (has bool, err err
 
 	_, has = m.chunks[ref.Hex()]
 	return has, nil
+}
+
+func (m *MapChunkStore) HasMulti(ctx context.Context, refs ...Address) (have []bool, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	have = make([]bool, len(refs))
+	for i, ref := range refs {
+		_, have[i] = m.chunks[ref.Hex()]
+	}
+	return have, nil
 }
 
 func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
