@@ -117,6 +117,72 @@ func (params *Params) WithPrivateKey(privatekey *ecdsa.PrivateKey) *Params {
 	return params
 }
 
+type outbox struct {
+	queue   []*outboxMsg
+	slots   chan int
+	process chan int
+	quitC   chan struct{}
+}
+
+func newOutbox(capacity int) outbox {
+	outbox := outbox{
+		queue:   make([]*outboxMsg, capacity),
+		slots:   make(chan int, capacity),
+		process: make(chan int),
+		quitC:   make(chan struct{}),
+	}
+	// fill up outbox slots
+	for i := 0; i < cap(outbox.slots); i++ {
+		outbox.slots <- i
+	}
+	return outbox
+}
+
+func (o outbox) len() int {
+	return cap(o.slots) - len(o.slots)
+}
+
+// enqueue a new element in the outbox if there is any slot available.
+// Then send it to process. This method is blocking in the process channel!
+func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
+	// first we try to obtain a slot in the outbox
+	select {
+	case slot := <-o.slots:
+		o.queue[slot] = outboxmsg
+		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+		// we send this message slot to process
+		select {
+		case o.process <- slot:
+		case <-o.quitC:
+		}
+		return nil
+	default:
+		metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
+		return errors.New("outbox full")
+	}
+}
+
+func (o outbox) msg(slot int) *outboxMsg {
+	return o.queue[slot]
+}
+
+func (o outbox) free(slot int) {
+	o.slots <- slot
+}
+
+func (o outbox) reenqueue(slot int) {
+	select {
+	case o.process <- slot:
+	case <-o.quitC:
+	}
+
+}
+
+func (o *outbox) close() {
+	close(o.quitC)
+	close(o.process)
+}
+
 // Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
 // and message forwarding. Implements node.Service
 type Pss struct {
@@ -136,7 +202,8 @@ type Pss struct {
 	msgTTL          time.Duration
 	paddingByteSize int
 	capstring       string
-	outbox          chan *outboxMsg
+	outbox          outbox
+	forwardFunc     func(msg *PssMsg) bool // Allows plugin functions for testing
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -178,7 +245,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       c.String(),
-		outbox:          make(chan *outboxMsg, defaultOutboxCapacity),
+		outbox:          newOutbox(defaultOutboxCapacity),
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
@@ -189,6 +256,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 			},
 		},
 	}
+	ps.forwardFunc = ps.forward
 
 	for i := 0; i < hasherCount; i++ {
 		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
@@ -219,21 +287,29 @@ func (p *Pss) Start(srv *p2p.Server) error {
 			}
 		}
 	}()
-	go func() {
-		for {
-			select {
-			case msg := <-p.outbox:
-				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
 
-				err := p.forward(msg.msg)
-				if err != nil {
-					log.Error(err.Error())
-					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+	// In any case, if the message
+	// forwarding fails, the node should try to forward it to the next best peer, until the message is
+	// successfully forwarded to at least one peer.
+	go func() {
+		for slot := range p.outbox.process {
+			go func(slot int) {
+				msg := p.outbox.msg(slot)
+				sent := p.forwardFunc(msg.msg)
+				if sent {
+					// free the outbox slot
+					p.outbox.free(slot)
+					metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(p.outbox.len()))
+				} else {
+					// if we failed to send to anyone, re-insert message in the send-queue
+					log.Debug("unable to forward to any peers", "slot", slot)
+					// reenqueue the message for processing
+					p.outbox.reenqueue(slot)
+					log.Debug("Message reenqued", "slot", slot)
 				}
 				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
-			case <-p.quitC:
-				return
-			}
+
+			}(slot)
 		}
 	}()
 	log.Info("Started Pss")
@@ -243,6 +319,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 
 func (p *Pss) Stop() error {
 	log.Info("Pss shutting down")
+	p.outbox.close()
 	close(p.quitC)
 	return nil
 }
@@ -557,16 +634,8 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	outboxmsg := newOutboxMsg(msg)
-	select {
-	case p.outbox <- outboxmsg:
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
 
-		return nil
-	default:
-	}
-
-	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-	return errors.New("outbox full")
+	return p.outbox.enqueue(outboxmsg)
 }
 
 // Send a raw message (any encryption is responsibility of calling client)
@@ -729,10 +798,9 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // If the recipient address (or partial address) is within the neighbourhood depth of the forwarding
 // node, then it will be forwarded to all the nearest neighbours of the forwarding node. In case of
 // partial address, it should be forwarded to all the peers matching the partial address, if there
-// are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
-// forwarding fails, the node should try to forward it to the next best peer, until the message is
-// successfully forwarded to at least one peer.
-func (p *Pss) forward(msg *PssMsg) error {
+// are any; otherwise only to one peer, closest to the recipient address.
+// Returns true if the message has been forwarded to at least one recipient
+func (p *Pss) forward(msg *PssMsg) bool {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
@@ -779,19 +847,10 @@ func (p *Pss) forward(msg *PssMsg) error {
 		return true
 	})
 
-	// if we failed to send to anyone, re-insert message in the send-queue
-	if sent == 0 {
-		log.Debug("unable to forward to any peers")
-		if err := p.enqueue(msg); err != nil {
-			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
-			log.Error(err.Error())
-			return err
-		}
-	}
-
 	// cache the message
 	p.addFwdCache(msg)
-	return nil
+
+	return sent > 0
 }
 
 /////////////////////////////////////////////////////////////////////

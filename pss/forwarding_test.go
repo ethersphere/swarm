@@ -261,8 +261,11 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 	}
 
 	msg := newTestMsg(recipientAddr)
-	ps.forward(msg)
+	sent := ps.forward(msg)
 
+	if !sent {
+		t.Fatal(fmt.Sprintf("test [%s]\nmsg can't be forwarded", c.name))
+	}
 	// check test results
 	var fail bool
 	precision := len(recipientAddr)
