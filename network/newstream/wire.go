@@ -45,7 +45,7 @@ type StreamProvider interface {
 
 	// Put a certain chunk into the local storage
 	Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error)
-	Set(ctx context.Context, addr chunk.Address) error
+	Set(ctx context.Context, addrs ...chunk.Address) error
 
 	// Subscribe to a data stream from an arbitrary data source
 	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())

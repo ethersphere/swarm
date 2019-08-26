@@ -168,11 +168,11 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 	return data, nil
 }
 
-func (s *syncProvider) Set(ctx context.Context, addr chunk.Address) error {
+func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 	// mark the chunk as Set in order to allow for garbage collection
 	// this can and at some point should be moved to a dedicated method that
 	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
-	err := s.netStore.Set(ctx, chunk.ModeSetSync, addr)
+	err := s.netStore.Set(ctx, chunk.ModeSetSync, addrs...)
 	if err != nil {
 		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return err
