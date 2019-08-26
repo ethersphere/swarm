@@ -465,7 +465,6 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 	t.Helper()
 	swap, dir := newBaseTestSwap(t, key)
 	clean := func() {
-		swap.backend = nil
 		swap.Close()
 		os.RemoveAll(dir)
 	}
