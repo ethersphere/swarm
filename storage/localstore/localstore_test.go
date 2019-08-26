@@ -195,6 +195,15 @@ func generateTestRandomChunks(count int) []chunk.Chunk {
 	return chunks
 }
 
+// chunkAddresses return chunk addresses of provided chunks.
+func chunkAddresses(chunks []chunk.Chunk) []chunk.Address {
+	addrs := make([]chunk.Address, len(chunks))
+	for i, ch := range chunks {
+		addrs[i] = ch.Address()
+	}
+	return addrs
+}
+
 // TestGenerateTestRandomChunk validates that
 // generateTestRandomChunk returns random data by comparing
 // two generated chunks.

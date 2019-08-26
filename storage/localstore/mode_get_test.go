@@ -135,6 +135,31 @@ func TestModeGetRequest(t *testing.T) {
 
 		t.Run("gc size", newIndexGCSizeTest(db))
 	})
+
+	t.Run("multi", func(t *testing.T) {
+		got, err := db.GetMulti(context.Background(), chunk.ModeGetRequest, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// wait for update gc goroutine to be done
+		<-testHookUpdateGCChan
+
+		if !bytes.Equal(got[0].Address(), ch.Address()) {
+			t.Errorf("got chunk address %x, want %x", got[0].Address(), ch.Address())
+		}
+
+		if !bytes.Equal(got[0].Data(), ch.Data()) {
+			t.Errorf("got chunk data %x, want %x", got[0].Data(), ch.Data())
+		}
+
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, uploadTimestamp, uploadTimestamp))
+
+		t.Run("gc index", newGCIndexTest(db, ch, uploadTimestamp, uploadTimestamp, 1))
+
+		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
+	})
 }
 
 // TestModeGetSync validates ModeGetSync index values on the provided DB.
@@ -172,6 +197,21 @@ func TestModeGetSync(t *testing.T) {
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
+
+	t.Run("multi", func(t *testing.T) {
+		got, err := db.GetMulti(context.Background(), chunk.ModeGetSync, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !bytes.Equal(got[0].Address(), ch.Address()) {
+			t.Errorf("got chunk address %x, want %x", got[0].Address(), ch.Address())
+		}
+
+		if !bytes.Equal(got[0].Data(), ch.Data()) {
+			t.Errorf("got chunk data %x, want %x", got[0].Data(), ch.Data())
+		}
+	})
 }
 
 // setTestHookUpdateGC sets testHookUpdateGC and
