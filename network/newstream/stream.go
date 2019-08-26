@@ -976,7 +976,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 100 * time.Millisecond
+	const batchTimeout = 2 * time.Second
 
 	var (
 		batch        []byte
