@@ -984,7 +984,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 2 * time.Second
+	const batchTimeout = 1 * time.Second
 
 	var (
 		batch        []byte
@@ -1106,17 +1106,14 @@ func (r *Registry) APIs() []rpc.API {
 	return nil
 }
 
-func (r *Registry) Close() {
-}
-
 func (r *Registry) Start(server *p2p.Server) error {
-	r.logger.Debug("slip stream starting")
+	r.logger.Debug("stream registry starting")
 
 	return nil
 }
 
 func (r *Registry) Stop() error {
-	log.Debug("slip stream stopping")
+	log.Debug("stream registry stopping")
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
@@ -1130,7 +1127,7 @@ func (r *Registry) Stop() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		log.Error("slip stream closed with still active handlers")
+		log.Error("stream closed with still active handlers")
 	}
 
 	for _, v := range r.providers {

@@ -48,7 +48,6 @@ var (
 	// Limit the number of goroutines created by Getters
 	// that call updateGC function. Value 0 sets no limit.
 	maxParallelUpdateGC = 1000
-	maxIterators        = 5
 )
 
 // DB is the local store implementation and holds
@@ -107,8 +106,7 @@ type DB struct {
 
 	baseKey []byte
 
-	batchMu     sync.Mutex
-	iteratorSem chan struct{}
+	batchMu sync.Mutex
 
 	// this channel is closed when close function is called
 	// to terminate other goroutines
@@ -155,7 +153,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		collectGarbageTrigger:    make(chan struct{}, 1),
 		close:                    make(chan struct{}),
 		collectGarbageWorkerDone: make(chan struct{}),
-		iteratorSem:              make(chan struct{}, maxIterators),
 	}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity
