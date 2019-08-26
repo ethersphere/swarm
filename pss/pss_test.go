@@ -518,11 +518,7 @@ func TestMessageEnqueued(t *testing.T) {
 		}
 	}
 
-	messageAddr := addr
-	topic := [4]byte{}
-	data := []byte{0x66, 0x6f, 0x6f}
-
-	msg := testMessage(messageAddr, topic, data)
+	msg := testRandomMessage()
 
 	err = ps.enqueue(msg, false)
 	if err != nil && ps.forwardPending != 1 {
@@ -554,14 +550,11 @@ func TestMessageEnqueuedRaceCondition(t *testing.T) {
 	outboxCapacity := 2
 	ps.outbox = make(chan *outboxMsg, outboxCapacity)
 
-	topic := [4]byte{}
-	data := []byte{0x66, 0x6f, 0x6f}
-
 	finish := make(chan struct{})
 	var errorCount int
 	var enqueuedPending bool
 	newMsg := func(iteration int) {
-		err := ps.enqueue(testMessage(addr, topic, data), false)
+		err := ps.enqueue(testRandomMessage(), false)
 		if err != nil {
 			log.Debug("Expected error enqueued for new message", "iteration", iteration)
 			errorCount++
@@ -573,7 +566,7 @@ func TestMessageEnqueuedRaceCondition(t *testing.T) {
 
 	reEnqueue := func(iteration int) {
 		time.Sleep(1 * time.Millisecond)
-		err := ps.enqueue(testMessage(addr, topic, data), true)
+		err := ps.enqueue(testRandomMessage(), true)
 		if err != nil {
 			enqueuedPending = false
 			log.Error("Unexpected error for pending message", "iteration", iteration)
@@ -611,13 +604,15 @@ func TestMessageEnqueuedRaceCondition(t *testing.T) {
 	}
 }
 
-func testMessage(messageAddr []byte, topic [4]byte, data []byte) *PssMsg {
+func testRandomMessage() *PssMsg {
+	addr := make([]byte, 32)
+	addr[0] = 0x01
 	msg := newPssMsg(&msgParams{})
-	msg.To = messageAddr
+	msg.To = addr
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	msg.Payload = &whisper.Envelope{
-		Topic: topic,
-		Data:  data,
+		Topic: [4]byte{},
+		Data:  []byte{0x66, 0x6f, 0x6f},
 	}
 	return msg
 }
