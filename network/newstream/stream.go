@@ -42,9 +42,8 @@ import (
 )
 
 const (
-	HashSize            = 32
-	BatchSize           = 64
-	concurrentIterators = 6
+	HashSize  = 32
+	BatchSize = 128
 )
 
 var (
@@ -976,7 +975,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
-	const batchTimeout = 100 * time.Millisecond
+	const batchTimeout = 2 * time.Second
 
 	var (
 		batch        []byte
