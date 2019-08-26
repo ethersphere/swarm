@@ -210,7 +210,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	syncProvider := newstream.NewSyncProvider(self.netStore, to, syncing, false)
 	self.newstreamer = newstream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
-	tags := chunk.NewTags() //todo load from state store
+	self.tags = chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
