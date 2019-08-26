@@ -241,7 +241,7 @@ func (f *FakeChunkStore) GetMulti(_ context.Context, _ chunk.ModeGet, refs ...Ad
 	panic("FakeChunkStore doesn't support GetMulti")
 }
 
-func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	panic("FakeChunkStore doesn't support Set")
 }
 
