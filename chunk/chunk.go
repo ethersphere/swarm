@@ -243,6 +243,7 @@ func (d *Descriptor) String() string {
 
 type Store interface {
 	Get(ctx context.Context, mode ModeGet, addr Address) (ch Chunk, err error)
+	GetMulti(ctx context.Context, mode ModeGet, addrs ...Address) (ch []Chunk, err error)
 	Put(ctx context.Context, mode ModePut, chs ...Chunk) (exist []bool, err error)
 	Has(ctx context.Context, addr Address) (yes bool, err error)
 	Set(ctx context.Context, mode ModeSet, addr Address) (err error)

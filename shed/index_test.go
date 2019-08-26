@@ -49,7 +49,7 @@ var retrievalIndexFuncs = IndexFuncs{
 	},
 }
 
-// TestIndex validates put, get, has and delete functions of the Index implementation.
+// TestIndex validates put, get, fill, has and delete functions of the Index implementation.
 func TestIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
@@ -282,6 +282,68 @@ func TestIndex(t *testing.T) {
 		if err != wantErr {
 			t.Fatalf("got error %v, want %v", err, wantErr)
 		}
+	})
+
+	t.Run("fill", func(t *testing.T) {
+		want := []Item{
+			{
+				Address:        []byte("put-hash-1"),
+				Data:           []byte("DATA123"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+			{
+				Address:        []byte("put-hash-32"),
+				Data:           []byte("DATA124"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+			{
+				Address:        []byte("put-hash-42"),
+				Data:           []byte("DATA125"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+			{
+				Address:        []byte("put-hash-71"),
+				Data:           []byte("DATA126"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+		}
+
+		for _, item := range want {
+			err := index.Put(item)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		items := make([]Item, len(want))
+		for i, w := range want {
+			items[i] = Item{
+				Address: w.Address,
+			}
+		}
+		err = index.Fill(items)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range items {
+			checkItem(t, items[i], want[i])
+		}
+
+		t.Run("not found", func(t *testing.T) {
+			items := make([]Item, len(want))
+			for i, w := range want {
+				items[i] = Item{
+					Address: w.Address,
+				}
+			}
+			items = append(items, Item{
+				Address: []byte("put-hash-missing"),
+			})
+			want := leveldb.ErrNotFound
+			err := index.Fill(items)
+			if err != want {
+				t.Errorf("got error %v, want %v", err, want)
+			}
+		})
 	})
 }
 
