@@ -654,8 +654,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			ctr++
 			want.Set(i)
 			w.hashes[addresses[i].Hex()] = true
-		} else {
-			w.hashes[addresses[i].Hex()] = false
 		}
 	}
 

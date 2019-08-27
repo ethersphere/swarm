@@ -111,44 +111,47 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 }
 
 func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
-	s.cacheMtx.Lock()
-	defer s.cacheMtx.Unlock()
+	wants := make([]bool, len(addrs))
+
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
 		s.logger.Debug("syncProvider.NeedData ended", "took", end)
 	}(start)
+
 	select {
 	case <-s.quit:
-		return []bool{}, nil
+		return wants, nil
 	default:
 	}
-	wants := make([]bool, len(addrs))
-	//noCacheHit := []chunk.Address{}
-	indices := make(map[string]int)
+
+	check := make([]chunk.Address, 0)
+	indexes := make([]int, 0)
+
+	s.cacheMtx.Lock()
+
 	for i, addr := range addrs {
-		//if !s.cache.Contains(addr.Hex()) {
-		//metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
-		//noCacheHit = append(noCacheHit, addr)
-		indices[addr.String()] = i
-		//} else {
-		//metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
-		//}
+		if !s.cache.Contains(addr.Hex()) {
+			check = append(check, addr)
+			indexes = append(indexes, i)
+			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
+		} else {
+			wants[i] = true
+			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
+		}
 	}
-	// if its in the cache - we dont need it
-	// if it isnt - fallback to the localstore.
-	// instead of returning a bool array - return the array of addresses we need
-	has, err := s.netStore.Store.HasMulti(ctx, addrs...)
+
+	has, err := s.netStore.Store.HasMulti(ctx, check...)
 	if err != nil {
+		s.cacheMtx.Unlock()
 		return nil, err
 	}
-	for i, have := range has {
-		//idx := indices[noCacheHit[i].Hex()]
-		idx := indices[addrs[i].Hex()]
-		if !have {
-			key := addrs[idx]
 
-			fi, _, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
+	s.cacheMtx.Unlock()
+
+	for i, have := range has {
+		if !have {
+			fi, _, ok := s.netStore.GetOrCreateFetcher(ctx, check[i], "syncer")
 			if !ok {
 				continue
 			}
@@ -162,7 +165,7 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 				}
 			}()
 		} else {
-			wants[idx] = true
+			wants[indexes[i]] = true
 		}
 	}
 	return wants, nil
