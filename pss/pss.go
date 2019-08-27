@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -38,7 +39,6 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/storage"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -150,7 +150,7 @@ type Pss struct {
 }
 
 func (p *Pss) String() string {
-	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), common.ToHex(crypto.FromECDSAPub(&p.privateKey.PublicKey)))
+	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), hex.EncodeToString(crypto.FromECDSAPub(&p.privateKey.PublicKey)))
 }
 
 // Creates a new Pss instance.
@@ -190,7 +190,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	}
 
 	for i := 0; i < hasherCount; i++ {
-		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
+		hashfunc := sha3.NewLegacyKeccak256()
 		ps.hashPool.Put(hashfunc)
 	}
 
@@ -236,7 +236,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 		}
 	}()
 	log.Info("Started Pss")
-	log.Info("Loaded EC keys", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(crypto.CompressPubkey(p.PublicKey())))
+	log.Info("Loaded EC keys", "pubkey", hex.EncodeToString(crypto.FromECDSAPub(p.PublicKey())), "secp256", hex.EncodeToString(crypto.CompressPubkey(p.PublicKey())))
 	return nil
 }
 
@@ -401,26 +401,26 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T", msg)
 	}
-	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Payload.Topic[:]))
+	psstopic := pssmsg.Payload.Topic
+
+	log.Trace("handler", "self", label(p.BaseAddr()), "topic", label(psstopic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
-		log.Warn("pss filtered expired message", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
+		log.Warn("pss filtered expired message", "self", label(p.BaseAddr()), "to", label(pssmsg.To))
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
-		log.Trace("pss relay block-cache match (process)", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", (common.ToHex(pssmsg.To)))
+		log.Trace("pss relay block-cache match (process)", "self", label(p.BaseAddr()), "to", label(pssmsg.To))
 		return nil
 	}
 	p.addFwdCache(pssmsg)
 
-	psstopic := Topic(pssmsg.Payload.Topic)
-
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
 	if pssmsg.isRaw() {
-		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
+		if capabilities, ok := p.getTopicHandlerCaps(Topic(psstopic)); ok {
 			if !capabilities.raw {
-				log.Debug("No handler for raw message", "topic", psstopic)
+				log.Debug("No handler for raw message", "topic", label(psstopic[:]))
 				return nil
 			}
 		}
@@ -432,16 +432,16 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
 	var isProx bool
-	if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
+	if capabilities, ok := p.getTopicHandlerCaps(Topic(psstopic)); ok {
 		isProx = capabilities.prox
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
-		log.Trace("pss msg forwarding ===>", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
+		log.Trace("pss msg forwarding ===>", "self", label(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss msg processing <===", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
+	log.Trace("pss msg processing <===", "self", label(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(psstopic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
@@ -506,7 +506,7 @@ func (p *Pss) executeHandlers(topic Topic, payload []byte, from PssAddress, raw 
 	defer metrics.GetOrRegisterResettingTimer("pss.execute-handlers", nil).UpdateSince(time.Now())
 
 	handlers := p.getHandlers(topic)
-	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
+	peer := p2p.NewPeer(enode.ID{}, hex.EncodeToString(from), []p2p.Cap{})
 	for _, h := range handlers {
 		if !h.caps.raw && raw {
 			log.Warn("norawhandler")
@@ -530,7 +530,7 @@ func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
 
 // test match of leftmost bytes in given message to node's Kademlia address
 func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
-	local := p.Kademlia.BaseAddr()
+	local := p.BaseAddr()
 
 	// if a partial address matches we are possible recipient regardless of prox
 	// if not and prox is not set, we are surely not
@@ -541,7 +541,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 		return false
 	}
 
-	depth := p.Kademlia.NeighbourhoodDepth()
+	depth := p.NeighbourhoodDepth()
 	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
@@ -672,7 +672,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	if err != nil {
 		return fmt.Errorf("failed to perform whisper encryption: %v", err)
 	}
-	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", label(wparams.Payload), "to", label(to), "asym", asymmetric, "key", label(key))
 
 	// prepare for devp2p transport
 	pssMsgParams := &msgParams{
@@ -701,7 +701,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 		}
 	}
 	if !isPssEnabled {
-		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", fmt.Sprintf("%x", sp.BzzAddr.Address()))
+		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", label(sp.BzzAddr.Address()))
 		return false
 	}
 
@@ -736,7 +736,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
-	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
+	neighbourhoodDepth := p.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
 	// but the luminosity is less. here luminosity equals the number of bits given in the destination address.
@@ -761,7 +761,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		onlySendOnce = true
 	}
 
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
+	p.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
 		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
@@ -810,7 +810,14 @@ func (p *Pss) cleanFwdCache() {
 }
 
 func label(b []byte) string {
-	return fmt.Sprintf("%04x", b[:2])
+	if len(b) == 0 {
+		return "-"
+	}
+	l := 2
+	if len(b) == 1 {
+		l = 1
+	}
+	return fmt.Sprintf("%04x", b[:l])
 }
 
 // add a message to the cache
@@ -841,7 +848,7 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 	entry, ok := p.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
-			log.Trace("unexpired cache", "digest", fmt.Sprintf("%x", digest))
+			log.Trace("unexpired cache", "self", label(p.BaseAddr()), "digest", label(digest[:]), "to", label(msg.To))
 			metrics.GetOrRegisterCounter("pss.checkfwdcache.unexpired", nil).Inc(1)
 			return true
 		}
