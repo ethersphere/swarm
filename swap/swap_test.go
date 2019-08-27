@@ -307,8 +307,7 @@ func TestResetBalance(t *testing.T) {
 	// deploying would strictly speaking not be necessary, as the signing would also just work
 	// with empty contract addresses. Nevertheless to avoid later suprises and for
 	// coherence and clarity we deploy here so that we get a simulated contract address
-	var err error
-	err = testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	err := testDeploy(ctx, creditorSwap.backend, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}

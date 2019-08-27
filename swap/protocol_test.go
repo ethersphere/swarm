@@ -119,8 +119,7 @@ func TestEmitCheque(t *testing.T) {
 	ctx := context.Background()
 
 	log.Debug("deploy to simulated backend")
-	var err error
-	err = testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	err := testDeploy(ctx, creditorSwap.backend, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
