@@ -763,13 +763,16 @@ func TestContractIntegration(t *testing.T) {
 	testBackend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if receipt.Status != 1 {
 		t.Fatalf("Bad status %d", receipt.Status)
+	}
+	if cashResult.Bounced {
+		t.Fatal("cashing bounced")
 	}
 
 	// check state, check that cheque is indeed there

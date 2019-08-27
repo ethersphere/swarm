@@ -48,7 +48,7 @@ type Backend interface {
 // Deploy deploys an instance of the underlying contract and returns its `Contract` abstraction
 func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (common.Address, Contract, *types.Transaction, error) {
 	addr, tx, s, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: s}
+	c := simpleContract{instance: s, address: addr}
 	return addr, c, tx, err
 }
 
@@ -57,14 +57,14 @@ func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
 func InstanceAt(address common.Address, backend bind.ContractBackend) (Contract, error) {
 	simple, err := contract.NewSimpleSwap(address, backend)
-	c := simpleContract{instance: simple}
+	c := simpleContract{instance: simple, address: address}
 	return c, err
 }
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
-	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Receipt, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
@@ -79,6 +79,16 @@ type ChequeResult struct {
 	Amount      *big.Int
 	PaidOut     *big.Int
 	CashTimeout *big.Int
+}
+
+type CashChequeResult struct {
+	Beneficiary      common.Address
+	Recipient        common.Address
+	Caller           common.Address
+	TotalPayout      *big.Int
+	CumulativePayout *big.Int
+	CallerPayout     *big.Int
+	Bounced          bool
 }
 
 // Params encapsulates some contract parameters (currently mostly informational)
@@ -120,6 +130,7 @@ func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) 
 
 type simpleContract struct {
 	instance *contract.SimpleSwap
+	address  common.Address
 }
 
 // ContractParams returns contract information
@@ -141,10 +152,35 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 }
 
 // SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
-func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Receipt, error) {
+func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
 	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return WaitFunc(auth, backend, tx)
+	receipt, err := WaitFunc(auth, backend, tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	result := &CashChequeResult{
+		Bounced: false,
+	}
+
+	for _, log := range receipt.Logs {
+		if log.Address != s.address {
+			continue
+		}
+		if event, err := s.instance.ParseChequeCashed(*log); err == nil {
+			result.Beneficiary = event.Beneficiary
+			result.Caller = event.Caller
+			result.CallerPayout = event.CallerPayout
+			result.TotalPayout = event.TotalPayout
+			result.CumulativePayout = event.CumulativePayout
+			result.Recipient = event.Recipient
+		} else if _, err := s.instance.ParseChequeBounced(*log); err == nil {
+			result.Bounced = true
+		}
+	}
+
+	return result, receipt, nil
 }

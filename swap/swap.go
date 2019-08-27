@@ -262,13 +262,20 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		log.Error("error submitting cheque", "err", err)
+		log.Error("error cashing cheque", "err", err)
 		return
 	}
+
+	if result.Bounced {
+		log.Error("cheque bounced", "tx", receipt.TxHash)
+		return
+		// TODO: do something here
+	}
+
 	log.Debug("submit tx mined", "receipt", receipt)
 }
 
