@@ -107,7 +107,7 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 	}
 }
 
-func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
+func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]chunk.Address, error) {
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -115,17 +115,31 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 	}(start)
 	select {
 	case <-s.quit:
-		return []bool{}, nil
+		return []chunk.Address{}, nil
 	default:
 	}
-	has, err := s.netStore.Store.HasMulti(ctx, addrs...)
-	if err != nil {
-		return []bool{}, err
-	}
 
+	noCacheHit := []chunk.Address{}
+	for _, addr := range addrs {
+		if !s.cache.Contains(addr.Hex()) {
+			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
+			noCacheHit = append(noCacheHit, addr)
+		} else {
+			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
+		}
+	}
+	// if its in the cache - we dont need it
+	// if it isnt - fallback to the localstore.
+	// instead of returning a bool array - return the array of addresses we need
+	has, err := s.netStore.Store.HasMulti(ctx, noCacheHit...)
+	if err != nil {
+		return []chunk.Address{}, err
+	}
+	needRefs := []chunk.Address{}
 	for i, have := range has {
 		if !have {
 			key := addrs[i]
+			needRefs = append(needRefs, key)
 			fi, _, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 			if !ok {
 				continue
@@ -141,7 +155,7 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 			}()
 		}
 	}
-	return has, nil
+	return needRefs, nil
 }
 
 func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
@@ -151,6 +165,9 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 		end := time.Since(start)
 		s.logger.Debug("syncProvider.Get ended", "took", end)
 	}(start)
+	// iterate over the array - if it is in the cache - pull it out
+	// if not - save in a slice and fallback later to localstore in one go
+	//
 	var data []byte
 	v, ok := s.cache.Get(addr.String())
 	if !ok {

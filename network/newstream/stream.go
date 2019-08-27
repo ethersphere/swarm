@@ -640,26 +640,20 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 		addresses[iaddr] = hash
+		w.hashes[addresses[iaddr].Hex()] = false // pad this with false, toggle the ones we need later to true
 		iaddr++
 	}
-	has, err := provider.MultiNeedData(ctx, addresses...)
-	log.Error("has", "has", has, "addresses", addresses)
+	refs, err := provider.MultiNeedData(ctx, addresses...)
 	if err != nil {
 		p.logger.Error("multi need data returned an error, dropping peer", "err", err)
 		p.Drop()
 		return
 	}
-	for i, have := range has {
-		if !have {
-			ctr++
-			log.Error("want hash", "hash", addresses[i].Hex())
-			want.Set(i)
-			w.hashes[addresses[i].Hex()] = true
-		} else {
-			w.hashes[addresses[i].Hex()] = false
-		}
+	for i, ref := range refs {
+		ctr++
+		want.Set(i)
+		w.hashes[ref.Hex()] = true
 	}
-	log.Error("want chunks", "chunks", w.hashes)
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 
