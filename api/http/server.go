@@ -360,7 +360,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	_, sp := spancontext.StartSpan(tag.Tctx, "http.post")
+	_, sp := spancontext.StartSpan(tag.Context(), "http.post")
 	defer sp.Finish()
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
