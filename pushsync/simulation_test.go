@@ -18,6 +18,8 @@ package pushsync
 
 import (
 	"context"
+	"encoding/hex"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -47,45 +49,56 @@ var (
 	bucketKeyNetStore   = simulation.BucketKey("netstore")
 )
 
+var (
+	nodeCntFlag   = flag.Int("nodes", 16, "number of nodes in simulation")
+	chunkCntFlag  = flag.Int("chunks", 16, "number of chunks per upload in simulation")
+	testCasesFlag = flag.Int("cases", 16, "number of concurrent upload-download cases to test in simulation")
+)
+
 // test syncer using pss
 // the test
 // * creates a simulation with connectivity loaded from a snapshot
-// * for each trial, two nodes are chosen randomly, an uploader and a downloader
+// * for each test case, two nodes are chosen randomly, an uploader and a downloader
 // * uploader uploads a number of chunks
 // * wait until the uploaded chunks are synced
 // * downloader downloads the chunk
-// Trials are run concurrently
+// Testcasrs are run concurrently
 func TestPushSyncSimulation(t *testing.T) {
-	nodeCnt := 16
-	chunkCnt := 500
-	testcases := 10
-	err := testSyncerWithPubSub(t, nodeCnt, chunkCnt, testcases, newServiceFunc)
+	nodeCnt := *nodeCntFlag
+	chunkCnt := *chunkCntFlag
+	testcases := *testCasesFlag
+
+	err := testSyncerWithPubSub(nodeCnt, chunkCnt, testcases, newServiceFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
-	t.Helper()
+func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-		"streamer": sf,
+		"pushsync": sf,
 	})
 	defer sim.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	err := sim.UploadSnapshot(ctx, fmt.Sprintf("../../network/stream/testing/snapshot_%d.json", nodeCnt))
+	err := sim.UploadSnapshot(ctx, fmt.Sprintf("../network/stream/testing/snapshot_%d.json", nodeCnt))
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 
-	log.Info("Snapshot loaded")
-	time.Sleep(2 * time.Second)
+	log.Debug("Snapshot loaded")
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		time.Sleep(2 * time.Second)
 		errc := make(chan error)
-		for i := 0; i < testcases; i++ {
-			go uploadAndDownload(ctx, sim, errc, nodeCnt, chunkCnt, i)
+		for j := 0; j < testcases; j++ {
+			j := j
+			go func() {
+				err := uploadAndDownload(ctx, sim, nodeCnt, chunkCnt, j)
+				select {
+				case errc <- err:
+				case <-ctx.Done():
+				}
+			}()
 		}
 		i := 0
 		for err := range errc {
@@ -94,14 +107,14 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, testcases int, sf sim
 			}
 			i++
 			if i >= testcases {
-				break
+				return nil
 			}
 		}
 		return nil
 	})
 
 	if result.Error != nil {
-		t.Fatalf("simulation error: %v", result.Error)
+		return fmt.Errorf("simulation error: %v", result.Error)
 	}
 	return nil
 }
@@ -116,13 +129,12 @@ func pickNodes(n int) (i, j int) {
 	return
 }
 
-func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, errc chan error, nodeCnt, chunkCnt, i int) {
+func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt, chunkCnt, i int) error {
 	// chose 2 random nodes as uploader and downloader
 	u, d := pickNodes(nodeCnt)
 	// setup uploader node
 	uid := sim.UpNodeIDs()[u]
-	val, _ := sim.NodeItem(uid, bucketKeyPushSyncer)
-	p := val.(*Pusher)
+	p := sim.MustNodeItem(uid, bucketKeyPushSyncer).(*Pusher)
 	// setup downloader node
 	did := sim.UpNodeIDs()[d]
 	// the created tag indicates the uploader and downloader nodes
@@ -130,28 +142,26 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, errc cha
 	log.Debug("uploading", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
 	tag, what, err := upload(ctx, p.store.(*localstore.DB), p.tags, tagname, chunkCnt)
 	if err != nil {
-		select {
-		case errc <- err:
-		case <-ctx.Done():
-			return
-		}
-		return
+		return err
 	}
+	log.Debug("uploaded", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
 
-	// wait till synced
-	for !tag.DoneSyncing() {
-		time.Sleep(100 * time.Millisecond)
+	// wait till pushsync is done
+	syncTimeout := 30 * time.Second
+	sctx, cancel := context.WithTimeout(ctx, syncTimeout)
+	err = tag.WaitTillDone(sctx, chunk.StateSynced)
+	if err != nil {
+		log.Debug("tag", "tag", tag)
+		cancel()
+		return fmt.Errorf("error waiting syncing: %v", err)
 	}
+	cancel()
 
-	log.Debug("synced", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
 	log.Debug("downloading", "peer", did, "chunks", chunkCnt, "tagname", tagname)
-	val, _ = sim.NodeItem(did, bucketKeyNetStore)
-	netstore := val.(*storage.NetStore)
-	select {
-	case errc <- download(ctx, netstore, what):
-	case <-ctx.Done():
-	}
-	log.Debug("downloaded", "peer", did, "chunks", chunkCnt, "tagname", tagname)
+	netstore := sim.MustNodeItem(did, bucketKeyNetStore).(*storage.NetStore)
+	err = download(ctx, netstore, what)
+	log.Debug("downloaded", "peer", did, "chunks", chunkCnt, "tagname", tagname, "err", err)
+	return err
 }
 
 // newServiceFunc constructs a minimal service needed for a simulation test for Push Sync, namely:
@@ -184,29 +194,29 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 
-	// streamer
+	// // streamer for retrieval
 	delivery := stream.NewDelivery(kad, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers
 
 	bucket.Store(bucketKeyNetStore, netStore)
 
+	// set up syncer
 	noSyncing := &stream.RegistryOptions{Syncing: stream.SyncingDisabled, SyncUpdateDelay: 50 * time.Millisecond}
 	r := stream.NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), noSyncing, nil)
 
 	pubSub := pss.NewPubSub(ps)
-
-	// set up syncer
-	p := NewPusher(lstore, pubSub, chunk.NewTags(), kad)
+	// setup pusher
+	p := NewPusher(lstore, pubSub, chunk.NewTags())
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(netStore, pubSub, kad, p.pushReceipt)
+	s := NewStorer(netStore, pubSub)
 
 	cleanup := func() {
+		r.Close()
 		p.Close()
 		s.Close()
 		netStore.Close()
-		r.Close()
 		os.RemoveAll(dir)
 	}
 
@@ -247,7 +257,10 @@ func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, 
 	for i := 0; i < n; i++ {
 		ch := storage.GenerateRandomChunk(int64(chunk.DefaultSize))
 		addrs = append(addrs, ch.Address())
-		store.Put(ctx, chunk.ModePutUpload, ch.WithTagID(tag.Uid))
+		_, err := store.Put(ctx, chunk.ModePutUpload, ch.WithTagID(tag.Uid))
+		if err != nil {
+			return nil, nil, err
+		}
 		tag.Inc(chunk.StateStored)
 	}
 	return tag, addrs, nil
@@ -258,6 +271,7 @@ func download(ctx context.Context, store *storage.NetStore, addrs []storage.Addr
 	for _, addr := range addrs {
 		go func(addr storage.Address) {
 			_, err := store.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(addr))
+			log.Debug("Get", "addr", hex.EncodeToString(addr[:]), "err", err)
 			select {
 			case errc <- err:
 			case <-ctx.Done():

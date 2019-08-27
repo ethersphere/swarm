@@ -34,6 +34,7 @@ type PubSub interface {
 	Register(topic string, prox bool, handler func(msg []byte, p *p2p.Peer) error) func()
 	Send(to []byte, topic string, msg []byte) error
 	BaseAddr() []byte
+	IsClosestTo([]byte) bool
 }
 
 // chunkMsg is the message construct to send chunks to their local neighbourhood
@@ -48,9 +49,8 @@ type chunkMsg struct {
 // it is currently a notification only (contains no proof) sent to the originator
 // Nonce is there to make multiple responses immune to deduplication cache
 type receiptMsg struct {
-	Addr   []byte
-	Origin []byte
-	Nonce  []byte
+	Addr  []byte // chunk address
+	Nonce []byte // nonce to make multiple instances of send immune to deduplication cache
 }
 
 func decodeChunkMsg(msg []byte) (*chunkMsg, error) {
