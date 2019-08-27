@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -163,13 +164,18 @@ func TestEmitCheque(t *testing.T) {
 	defer cleanup()
 
 	// now we need to create the channel...
-	errc = make(chan error)
+	testBackend.submitDone = make(chan struct{})
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
-	<-errc
+	select {
+	case <-testBackend.submitDone:
+		log.Debug("submit and cash transactions completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for submit and cash transactions to complete")
+	}
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// check that the balance has been reset
 	if creditorSwap.balances[debitor.ID()] != 0 {

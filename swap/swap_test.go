@@ -57,8 +57,7 @@ var (
 	testChequeSig      = common.Hex2Bytes("fd3f73c7a708bb4e42471b76dabee2a0c1b9af29efb7eadb37f206bf871b81cf0c7987ad89633be930a63eba9e793cc77896131de7d9740b49da80c23c217c621c")
 	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
 	gasLimit           = uint64(8000000)
-	testBackend        *backends.SimulatedBackend
-	errc               chan error
+	testBackend        *swapTestBackend
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -69,6 +68,14 @@ type booking struct {
 	peer   *protocols.Peer
 }
 
+// swapTestBackend encapsulates the SimulatedBackend and can offer
+// additional properties for the tests
+type swapTestBackend struct {
+	*backends.SimulatedBackend
+	// the async submit and cashing go routine needs synchronization for tests
+	submitDone chan struct{}
+}
+
 func init() {
 	flag.Parse()
 	mrand.Seed(time.Now().UnixNano())
@@ -76,16 +83,21 @@ func init() {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
+	// create a single backend for all tests
 	testBackend = newTestBackend()
+	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	testBackend.Commit()
 }
 
-func newTestBackend() *backends.SimulatedBackend {
+// newTestBackend creates a new test backend instance
+func newTestBackend() *swapTestBackend {
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
 		ownerAddress:       {Balance: big.NewInt(1000000000)},
 		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
 	}, gasLimit)
-	return defaultBackend
+	return &swapTestBackend{
+		SimulatedBackend: defaultBackend,
+	}
 }
 
 // Test getting a peer's balance
@@ -339,7 +351,7 @@ func TestResetBalance(t *testing.T) {
 		Cheque: cheque,
 	}
 	// now we need to create the channel...
-	errc = make(chan error)
+	testBackend.submitDone = make(chan struct{})
 	// ...and trigger message handling on the receiver side (creditor)
 	// remember that debitor is the model of the remote node for the creditor...
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
@@ -347,7 +359,12 @@ func TestResetBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
-	<-errc
+	select {
+	case <-testBackend.submitDone:
+		log.Debug("submit and cash transactions completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for submit and cash transactions to complete")
+	}
 	// finally check that the creditor also successfully reset the balances
 	if creditorSwap.balances[debitor.ID()] != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", creditorSwap.balances[debitor.ID()])
@@ -458,11 +475,13 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 // During tests, because the submit and cashing in of cheques are async, we should wait for the function to be returned
 // Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
 // causing subsequent TX to possibly fail due to nonce mismatch
-func testSubmitChequeAndCash(ctx context.Context, s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
-	submitChequeAndCash(ctx, s, otherSwap, opts, actualAmount, cheque)
+func testSubmitChequeAndCash(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
+	submitChequeAndCash(s, otherSwap, opts, actualAmount, cheque)
 	// close the channel, signals to clients that this function actually finished
-	if errc != nil {
-		close(errc)
+	if stb, ok := s.backend.(*swapTestBackend); ok {
+		if stb.submitDone != nil {
+			close(stb.submitDone)
+		}
 	}
 }
 

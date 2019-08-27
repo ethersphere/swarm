@@ -253,14 +253,14 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 
 	// submit cheque and cash in async, otherwise this blocks here until the TX is mined
-	go defaultSubmitChequeAndCash(ctx, s, otherSwap, opts, actualAmount, cheque)
+	go defaultSubmitChequeAndCash(s, otherSwap, opts, actualAmount, cheque)
 
 	return err
 }
 
 // submitChequeAndCash should be called async as it blocks until the transaction(s) are mined
 // The function submits the cheque to the blockchain and then cashes it in directly
-func submitChequeAndCash(ctx context.Context, s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
+func submitChequeAndCash(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
 	receipt, err := otherSwap.SubmitChequeBeneficiary(opts, s.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
 	if err != nil {
