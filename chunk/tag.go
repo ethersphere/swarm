@@ -59,8 +59,8 @@ type Tag struct {
 	StartedAt time.Time // tag started to calculate ETA
 
 	// end-to-end tag tracing
-	Tctx context.Context  // tracing context
-	Span opentracing.Span // tracing root span TODO: should it be exported?
+	ctx  context.Context  // tracing context
+	span opentracing.Span // tracing root span
 }
 
 // New creates a new tag, stores it by the name and returns it
@@ -73,16 +73,22 @@ func NewTag(uid uint32, s string, total int64) *Tag {
 		Total:     total,
 	}
 
-	t.Tctx, t.Span = spancontext.StartSpan(context.Background(), "new.upload.tag")
+	t.ctx, t.span = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t
 }
 
-func (t *Tag) FinishRootSpan() {
-	t.Span.Finish()
+// Context accessor
+func (t *Tag) Context() context.Context {
+	return t.ctx
 }
 
-// Inc increments the count for a state
-func (t *Tag) Inc(state State) {
+// FinishRootSpan closes the pushsync span of the tags
+func (t *Tag) FinishRootSpan() {
+	t.span.Finish()
+}
+
+// IncN increments the count for a state
+func (t *Tag) IncN(state State, n int) {
 	var v *int64
 	switch state {
 	case StateSplit:
@@ -96,7 +102,12 @@ func (t *Tag) Inc(state State) {
 	case StateSynced:
 		v = &t.Synced
 	}
-	atomic.AddInt64(v, 1)
+	atomic.AddInt64(v, int64(n))
+}
+
+// Inc increments the count for a state
+func (t *Tag) Inc(state State) {
+	t.IncN(state, 1)
 }
 
 // Get returns the count for a state on a tag
@@ -122,14 +133,30 @@ func (t *Tag) TotalCounter() int64 {
 	return atomic.LoadInt64(&t.Total)
 }
 
-func (t *Tag) DoneSyncing() bool {
-	n, total, err := t.Status(StateSynced)
-
-	if err == nil && n == total {
-		return true
+// WaitTillDone returns without error once the tag is complete
+// wrt the state given as argument
+// it returns an error if the context is done
+func (t *Tag) WaitTillDone(ctx context.Context, s State) error {
+	if t.Done(s) {
+		return nil
 	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			if t.Done(s) {
+				return nil
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
 
-	return false
+// Done returns true if tag is complete wrt the state given as argument
+func (t *Tag) Done(s State) bool {
+	n, total, err := t.Status(s)
+	return err == nil && n == total
 }
 
 // DoneSplit sets total count to SPLIT count and sets the associated swarm hash for this tag
@@ -192,9 +219,7 @@ func (tag *Tag) MarshalBinary() (data []byte, err error) {
 
 	n = binary.PutVarint(intBuffer, int64(len(tag.Address)))
 	buffer = append(buffer, intBuffer[:n]...)
-
-	buffer = append(buffer, tag.Address...)
-
+	buffer = append(buffer, tag.Address[:]...)
 	buffer = append(buffer, []byte(tag.Name)...)
 
 	return buffer, nil
