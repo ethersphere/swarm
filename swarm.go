@@ -52,13 +52,13 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	pssmessage "github.com/ethersphere/swarm/pss/message"
+	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
 	"github.com/ethersphere/swarm/storage/pin"
-	"github.com/ethersphere/swarm/storage/pushsync"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
 )
@@ -238,10 +238,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	pubsub := pss.NewPubSub(self.ps)
-	self.pushSync = pushsync.NewPusher(localStore, pubsub, tags)
+	self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
 	self.storer = pushsync.NewStorer(self.netStore, pubsub)
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
 
 	// Instantiate the pinAPI object with the already opened localstore
 	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, self.tags, self.api)

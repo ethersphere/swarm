@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,13 +31,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
 )
 
 var (
-	loglevel = flag.Int("loglevel", 3, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 0, "verbosity of logs")
 )
 
 func init() {
@@ -47,18 +45,34 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
+type testPubSub struct {
+	*loopBack
+	isClosestTo func([]byte) bool
+}
+
+var testBaseAddr = make([]byte, 32)
+
+// BaseAddr needed to implement PubSub interface
+// in the testPubSub, this address has no relevant and is given only for logging
+func (tps *testPubSub) BaseAddr() []byte {
+	return testBaseAddr
+}
+
+// IsClosestTo needed to implement PubSub interface
+func (tps *testPubSub) IsClosestTo(addr []byte) bool {
+	return tps.isClosestTo(addr)
+}
+
 // loopback implements PubSub as a central subscription engine,
 // ie a msg sent is received by all handlers registered for the topic
 type loopBack struct {
 	async    bool
-	addr     []byte
 	handlers map[string][]func(msg []byte, p *p2p.Peer) error
 }
 
 func newLoopBack(async bool) *loopBack {
 	return &loopBack{
 		async:    async,
-		addr:     make([]byte, 32),
 		handlers: make(map[string][]func(msg []byte, p *p2p.Peer) error),
 	}
 }
@@ -73,7 +87,12 @@ func (lb *loopBack) Register(topic string, _ bool, handler func(msg []byte, p *p
 // that topic
 func (lb *loopBack) Send(to []byte, topic string, msg []byte) error {
 	if lb.async {
-		go lb.send(to, topic, msg)
+		go func() {
+			if !delayResponse() {
+				return
+			}
+			lb.send(to, topic, msg)
+		}()
 		return nil
 	}
 	return lb.send(to, topic, msg)
@@ -82,16 +101,13 @@ func (lb *loopBack) Send(to []byte, topic string, msg []byte) error {
 func (lb *loopBack) send(to []byte, topic string, msg []byte) error {
 	p := p2p.NewPeer(enode.ID{}, "", nil)
 	for _, handler := range lb.handlers[topic] {
+		log.Debug("handling message", "topic", topic, "to", hex.EncodeToString(to))
 		if err := handler(msg, p); err != nil {
+			log.Warn("error handling message", "topic", topic, "to", hex.EncodeToString(to))
 			return err
 		}
 	}
 	return nil
-}
-
-// BaseAddr needed to implement PubSub interface
-func (lb *loopBack) BaseAddr() []byte {
-	return lb.addr
 }
 
 // testPushSyncIndex mocks localstore and provides subscription and setting synced status
@@ -120,9 +136,9 @@ func newTestPushSyncIndex(chunkCnt int, tagIDs []uint32, tags *chunk.Tags, sent 
 // we keep track of an index so that each call to SubscribePush knows where to start
 // generating the new fake hashes
 // Before the new fake hashes it iterates over hashes not synced yet
-func (t *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chunk, func()) {
+func (tp *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chunk, func()) {
 	chunks := make(chan storage.Chunk)
-	tagCnt := len(t.tagIDs)
+	tagCnt := len(tp.tagIDs)
 	quit := make(chan struct{})
 	stop := func() { close(quit) }
 	go func() {
@@ -132,14 +148,17 @@ func (t *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chunk
 			// generate fake hashes that encode the chunk order
 			addr := make([]byte, 32)
 			binary.BigEndian.PutUint64(addr, uint64(i))
+			tagID := tp.tagIDs[i%tagCnt]
 			// remember when the chunk was put
 			// if sent again, dont modify the time
-			t.sent.Store(i, time.Now())
-			// increment stored count on tag
-			tagID := t.tagIDs[i%tagCnt]
-			if tag, _ := t.tags.Get(tagID); tag != nil {
-				tag.Inc(chunk.StateStored)
+			_, loaded := tp.sent.LoadOrStore(i, time.Now())
+			if !loaded {
+				// increment stored count on tag
+				if tag, _ := tp.tags.Get(tagID); tag != nil {
+					tag.Inc(chunk.StateStored)
+				}
 			}
+			tp.sent.Store(i, time.Now())
 			select {
 			// chunks have no data and belong to tag i%tagCount
 			case chunks <- storage.NewChunk(addr, nil).WithTagID(tagID):
@@ -149,27 +168,26 @@ func (t *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chunk
 			}
 		}
 		// push the chunks already pushed but not yet synced
-		t.sent.Range(func(k, _ interface{}) bool {
-			log.Debug("resending", "cur", k)
+		tp.sent.Range(func(k, _ interface{}) bool {
+			log.Debug("resending", "idx", k)
 			return feed(k.(int))
 		})
 		// generate the new chunks from t.i
-		for t.i < t.total && feed(t.i) {
-			t.i++
+		for tp.i < tp.total && feed(tp.i) {
+			tp.i++
 		}
-
-		log.Debug("sent all chunks", "total", t.total)
+		log.Debug("sent chunks", "sent", tp.i, "total", tp.total)
 		close(chunks)
 	}()
 	return chunks, stop
 }
 
-func (t *testPushSyncIndex) Set(ctx context.Context, _ chunk.ModeSet, addrs ...storage.Address) error {
+func (tp *testPushSyncIndex) Set(ctx context.Context, _ chunk.ModeSet, addrs ...storage.Address) error {
 	for _, addr := range addrs {
-		cur := int(binary.BigEndian.Uint64(addr[:8]))
-		t.sent.Delete(cur)
-		t.synced <- cur
-		log.Debug("set chunk synced", "cur", cur, "addr", addr)
+		idx := int(binary.BigEndian.Uint64(addr[:8]))
+		tp.sent.Delete(idx)
+		tp.synced <- idx
+		log.Debug("set chunk synced", "idx", idx, "addr", addr)
 	}
 	return nil
 }
@@ -193,18 +211,15 @@ func delayResponse() bool {
 // after a random delay
 // The test checks:
 // - if sync function is called on chunks in order of insertion (FIFO)
-// - repeated sending is attempted only if retryInterval time passed
 // - already synced chunks are not resynced
 // - if no more data inserted, the db is emptied shortly
 func TestPusher(t *testing.T) {
-
 	timeout := 10 * time.Second
-	chunkCnt := 200
+	chunkCnt := 1024
 	tagCnt := 4
 
 	errc := make(chan error)
 	sent := &sync.Map{}
-	sendTimes := make(map[int]time.Time)
 	synced := make(map[int]int)
 	quit := make(chan struct{})
 	defer close(quit)
@@ -216,7 +231,7 @@ func TestPusher(t *testing.T) {
 		}
 	}
 
-	ps := newLoopBack(false)
+	lb := newLoopBack(false)
 
 	max := 0 // the highest index sent so far
 	respond := func(msg []byte, _ *p2p.Peer) error {
@@ -226,29 +241,11 @@ func TestPusher(t *testing.T) {
 			return nil
 		}
 		// check outgoing chunk messages
-		cur := int(binary.BigEndian.Uint64(chmsg.Addr[:8]))
-		if cur > max {
-			errf("incorrect order of chunks from db chunk #%d before #%d", cur, max)
+		idx := int(binary.BigEndian.Uint64(chmsg.Addr[:8]))
+		if idx > max {
+			errf("incorrect order of chunks from db chunk #%d before #%d", idx, max)
 			return nil
 		}
-		v, found := sent.Load(cur)
-		previouslySentAt, repeated := sendTimes[cur]
-		if !found {
-			if !repeated {
-				errf("chunk #%d not sent but received", cur)
-			}
-			return nil
-		}
-		sentAt := v.(time.Time)
-		if repeated {
-			// expect at least retryInterval since previous push
-			if expectedAt := previouslySentAt.Add(retryInterval); expectedAt.After(sentAt) {
-				errf("resync chunk #%d too early. previously sent at %v, next at %v < expected at %v", cur, previouslySentAt, sentAt, expectedAt)
-				return nil
-			}
-		}
-		// remember the latest time sent
-		sendTimes[cur] = sentAt
 		max++
 		// respond ~ mock storer protocol
 		go func() {
@@ -257,14 +254,14 @@ func TestPusher(t *testing.T) {
 			if err != nil {
 				errf("error encoding receipt message: %v", err)
 			}
-			log.Debug("chunk sent", "addr", hex.EncodeToString(receipt.Addr))
+			log.Debug("chunk sent", "idx", idx)
 			// random delay to allow retries
 			if !delayResponse() {
-				log.Debug("chunk/receipt lost", "addr", hex.EncodeToString(receipt.Addr))
+				log.Debug("chunk/receipt lost", "idx", idx)
 				return
 			}
-			log.Debug("store chunk,  send receipt", "addr", hex.EncodeToString(receipt.Addr))
-			err = ps.Send(chmsg.Origin, pssReceiptTopic, rmsg)
+			log.Debug("store chunk,  send receipt", "idx", idx)
+			err = lb.Send(chmsg.Origin, pssReceiptTopic, rmsg)
 			if err != nil {
 				errf("error sending receipt message: %v", err)
 			}
@@ -272,13 +269,12 @@ func TestPusher(t *testing.T) {
 		return nil
 	}
 	// register the respond function
-	ps.Register(pssChunkTopic, false, respond)
+	lb.Register(pssChunkTopic, false, respond)
 	tags, tagIDs := setupTags(chunkCnt, tagCnt)
 	// construct the mock push sync index iterator
 	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
 	// start push syncing in a go routine
-	kad := network.NewKademlia(nil, network.NewKadParams())
-	p := NewPusher(tp, ps, tags, kad)
+	p := NewPusher(tp, &testPubSub{lb, func([]byte) bool { return false }}, tags)
 	defer p.Close()
 	// collect synced chunks until all chunks synced
 	// wait on errc for errors on any thread
@@ -286,7 +282,6 @@ func TestPusher(t *testing.T) {
 	for {
 		select {
 		case i := <-tp.synced:
-			sent.Delete(i)
 			n := synced[i]
 			synced[i] = n + 1
 			if len(synced) == chunkCnt {
@@ -327,95 +322,32 @@ func checkTags(t *testing.T, expTotal int, tagIDs []uint32, tags *chunk.Tags) {
 	for _, tagID := range tagIDs {
 		tag, err := tags.Get(tagID)
 		if err != nil {
-			t.Fatalf("expected no error getting tag '%v', got %v", tagID, err)
+			t.Fatalf("expected no error getting tag %v, got %v", tagID, err)
+		}
+		// the tag is adjusted after the store.Set calls show
+		err = tag.WaitTillDone(context.Background(), chunk.StateSynced)
+		if err != nil {
+			t.Fatalf("error waiting for syncing on tag %v: %v", tagID, err)
 		}
 		n, total, err := tag.Status(chunk.StateSent)
 		if err != nil {
-			t.Fatalf("getting status for tag '%v', expected no error, got %v", tagID, err)
+			t.Fatalf("getting status for tag %v, expected no error, got %v", tagID, err)
 		}
 		if int(n) != expTotal {
-			t.Fatalf("expected Sent count on tag '%v' to be %v, got %v", tagID, expTotal, n)
+			t.Fatalf("expected Sent count on tag %v to be %v, got %v", tagID, expTotal, n)
 		}
 		if int(total) != expTotal {
-			t.Fatalf("expected Sent count on tag '%v' to be %v, got %v", tagID, expTotal, n)
+			t.Fatalf("expected Sent total count on tag %v to be %v, got %v", tagID, expTotal, n)
 		}
 		n, total, err = tag.Status(chunk.StateSynced)
 		if err != nil {
-			t.Fatalf("getting status for tag '%v', expected no error, got %v", tagID, err)
+			t.Fatalf("getting status for tag %v, expected no error, got %v\n%v", tagID, err, tag)
 		}
 		if int(n) != expTotal {
-			t.Fatalf("expected Sent count on tag '%v' to be %v, got %v", tagID, expTotal, n)
+			t.Fatalf("expected Synced count on tag %v to be %v, got %v\n%v", tagID, expTotal, n, tag)
 		}
 		if int(total) != expTotal {
-			t.Fatalf("expected Sent count on tag '%v' to be %v, got %v", tagID, expTotal, n)
+			t.Fatalf("expected Synced total count on tag %v to be %v, got %v", tagID, expTotal, n)
 		}
 	}
-}
-
-type testStore struct {
-	store *sync.Map
-}
-
-func (t *testStore) Put(_ context.Context, _ chunk.ModePut, ch chunk.Chunk) (bool, error) {
-	cur := binary.BigEndian.Uint64(ch.Address()[:8])
-	var storedCnt uint32 = 1
-	v, loaded := t.store.LoadOrStore(cur, &storedCnt)
-	if loaded {
-		atomic.AddUint32(v.(*uint32), 1)
-	}
-	return false, nil
-}
-
-// TestPushSyncAndStoreWithLoopbackPubSub tests the push sync protocol
-// push syncer node communicate with storers via mock PubSub
-func TestPushSyncAndStoreWithLoopbackPubSub(t *testing.T) {
-	timeout := 10 * time.Second
-	chunkCnt := 2000
-	tagCnt := 4
-	storerCnt := 3
-	sent := &sync.Map{}
-	store := &sync.Map{}
-	// mock pubsub messenger
-	ps := newLoopBack(true)
-
-	tags, tagIDs := setupTags(chunkCnt, tagCnt)
-	// construct the mock push sync index iterator
-	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
-	// neighbourhood function mocked
-	nnf := func(storage.Address) bool { return true }
-	// start push syncing in a go routine
-	p := NewPusher(tp, ps, tags, nnf)
-	defer p.Close()
-
-	// set up a number of storers
-	storers := make([]*Storer, storerCnt)
-	for i := 0; i < storerCnt; i++ {
-		storers[i] = NewStorer(&testStore{store}, ps, nnf, p.pushReceipt)
-	}
-
-	synced := 0
-	for {
-		select {
-		case i := <-tp.synced:
-			synced++
-			sent.Delete(i)
-			if synced == chunkCnt {
-				expTotal := chunkCnt / tagCnt
-				checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
-				for i := uint64(0); i < uint64(chunkCnt); i++ {
-					v, ok := store.Load(i)
-					if !ok {
-						t.Fatalf("chunk %v not stored", i)
-					}
-					if cnt := *(v.(*uint32)); cnt != uint32(storerCnt) {
-						t.Fatalf("chunk %v expected to be saved %v times, got %v", i, storerCnt, cnt)
-					}
-				}
-				return
-			}
-		case <-time.After(timeout):
-			t.Fatalf("timeout waiting for all chunks to be synced")
-		}
-	}
-
 }
