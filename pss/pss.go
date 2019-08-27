@@ -477,7 +477,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	if pssmsg.Flags.Raw {
 		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
 			if !capabilities.raw {
-				log.Debug("No handler for raw message", "topic", psstopic)
+				log.Debug("No handler for raw message", "topic", label(psstopic[:]))
 				return nil
 			}
 		}
@@ -489,7 +489,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
 	var isProx bool
-	if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
+	if capabilities, ok := p.getTopicHandlerCaps(Topic(psstopic)); ok {
 		isProx = capabilities.prox
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
@@ -560,7 +560,7 @@ func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddre
 	defer metrics.GetOrRegisterResettingTimer("pss.execute-handlers", nil).UpdateSince(time.Now())
 
 	handlers := p.getHandlers(topic)
-	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
+	peer := p2p.NewPeer(enode.ID{}, hex.EncodeToString(from), []p2p.Cap{})
 	for _, h := range handlers {
 		if !h.caps.raw && raw {
 			log.Warn("norawhandler")
@@ -595,7 +595,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 		return false
 	}
 
-	depth := p.Kademlia.NeighbourhoodDepth()
+	depth := p.NeighbourhoodDepth()
 	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
@@ -725,7 +725,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 		}
 	}
 	if !isPssEnabled {
-		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", fmt.Sprintf("%x", sp.BzzAddr.Address()))
+		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", label(sp.BzzAddr.Address()))
 		return false
 	}
 
@@ -760,7 +760,7 @@ func (p *Pss) forward(msg *message.Message) error {
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
-	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
+	neighbourhoodDepth := p.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
 	// but the luminosity is less. here luminosity equals the number of bits given in the destination address.
@@ -785,7 +785,7 @@ func (p *Pss) forward(msg *message.Message) error {
 		onlySendOnce = true
 	}
 
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
+	p.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
 		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
@@ -812,7 +812,14 @@ func (p *Pss) forward(msg *message.Message) error {
 	}
 }
 func label(b []byte) string {
-	return fmt.Sprintf("%04x", b[:2])
+	if len(b) == 0 {
+		return "-"
+	}
+	l := 2
+	if len(b) == 1 {
+		l = 1
+	}
+	return fmt.Sprintf("%04x", b[:l])
 }
 
 // add a message to the cache

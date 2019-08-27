@@ -16,7 +16,10 @@
 
 package pss
 
-import "github.com/ethereum/go-ethereum/p2p"
+import (
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethersphere/swarm/network"
+)
 
 // PubSub implements the pushsync.PubSub interface using pss
 type PubSub struct {
@@ -32,7 +35,18 @@ func NewPubSub(p *Pss) *PubSub {
 
 // BaseAddr returns Kademlia base address
 func (p *PubSub) BaseAddr() []byte {
-	return p.pss.Kademlia.BaseAddr()
+	return p.pss.BaseAddr()
+}
+
+func isPssPeer(bp *network.BzzPeer) bool {
+	return bp.HasCap(protocolName)
+}
+
+// IsClosestTo returns true is self is the closest known node to addr
+// as uniquely defined by the MSB XOR distance
+// among pss capable peers
+func (p *PubSub) IsClosestTo(addr []byte) bool {
+	return p.pss.IsClosestTo(addr, isPssPeer)
 }
 
 // Register registers a handler
