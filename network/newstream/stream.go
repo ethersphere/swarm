@@ -43,7 +43,7 @@ import (
 
 const (
 	HashSize  = 32
-	BatchSize = 64
+	BatchSize = 128
 )
 
 var (
