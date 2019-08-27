@@ -53,7 +53,7 @@ func (ts *Tags) Create(s string, total int64) (*Tag, error) {
 		return nil, errExists
 	}
 
-	t.Tctx, t.Span = spancontext.StartSpan(context.Background(), "new.upload.tag")
+	t.ctx, t.span = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t, nil
 }
 

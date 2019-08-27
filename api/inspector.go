@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
@@ -54,7 +55,7 @@ func (i *Inspector) IsPushSynced(tagname string) bool {
 
 	for _, t := range tags {
 		if t.Name == tagname {
-			ds := t.DoneSyncing()
+			ds := t.Done(chunk.StateSynced)
 
 			log.Debug("found tag", "tagname", tagname, "done-syncing", ds)
 
