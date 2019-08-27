@@ -137,9 +137,10 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *outboxMsg
-	outboxMutex     sync.Mutex   // We mutex between the calculation of the outbox capacity and the introduction in the channel
-	forwardPending  int          // Number of messages with a booked slot pending to be forwarded.
-	pendingMutex    sync.RWMutex // ForwardPending mutex
+	outboxMutex     sync.Mutex              // We mutex between the calculation of the outbox capacity and the introduction in the channel
+	forwardPending  int                     // Number of messages with a booked slot pending to be forwarded.
+	pendingMutex    sync.RWMutex            // ForwardPending mutex
+	forwardFunc     func(msg *PssMsg) error // Allows plugin functions for testing
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -192,6 +193,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 			},
 		},
 	}
+	ps.forwardFunc = ps.forward
 
 	for i := 0; i < hasherCount; i++ {
 		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
@@ -224,16 +226,19 @@ func (p *Pss) Start(srv *p2p.Server) error {
 	}()
 	go func() {
 		for {
+
 			select {
 			case msg := <-p.outbox:
-				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
+				go func(msg *outboxMsg) {
+					metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
 
-				err := p.forward(msg.msg)
-				if err != nil {
-					log.Error(err.Error())
-					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
-				}
-				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+					err := p.forwardFunc(msg.msg)
+					if err != nil {
+						log.Error(err.Error())
+						metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+					}
+					metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+				}(msg)
 			case <-p.quitC:
 				return
 			}
