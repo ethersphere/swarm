@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -43,6 +42,7 @@ func TestHandshake(t *testing.T) {
 
 	ctx := context.Background()
 	testDeploy(ctx, swap.backend, swap)
+	testBackend.Commit()
 	// setup the protocolTester, which will allow protocol testing by sending messages
 	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
 
@@ -116,10 +116,14 @@ func TestEmitCheque(t *testing.T) {
 	ctx := context.Background()
 
 	log.Debug("deploy to simulated backend")
-	testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	var err error
+	err = testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testBackend.Commit()
 	testDeploy(ctx, debitorSwap.backend, debitorSwap)
-	creditorSwap.backend.(*backends.SimulatedBackend).Commit()
-	debitorSwap.backend.(*backends.SimulatedBackend).Commit()
+	testBackend.Commit()
 
 	log.Debug("create peer instances")
 
@@ -137,7 +141,6 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	log.Debug("create a cheque")
-	var err error
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:    debitorSwap.owner.Contract,
@@ -155,11 +158,18 @@ func TestEmitCheque(t *testing.T) {
 	emitMsg := &EmitChequeMsg{
 		Cheque: cheque,
 	}
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
 
+	// now we need to create the channel...
+	errc = make(chan error)
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
+	<-errc
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// check that the balance has been reset
 	if creditorSwap.balances[debitor.ID()] != 0 {
@@ -184,6 +194,10 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
 	debitorSwap, clean := newTestSwap(t, ownerKey)
 	defer clean()
+
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
