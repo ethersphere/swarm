@@ -17,6 +17,8 @@
 package pss
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -25,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/storage"
 )
@@ -154,16 +155,17 @@ func (msg *PssMsg) isSym() bool {
 	return msg.Control[0]&pssControlSym > 0
 }
 
-// serializes the message for use in cache
+// serializes the message for use in fwd cache. Uses golang's gob encoder
 func (msg *PssMsg) serialize() []byte {
-	rlpdata, _ := rlp.EncodeToBytes(struct {
+	var b bytes.Buffer
+	gob.NewEncoder(&b).Encode(struct {
 		To      []byte
 		Payload *whisper.Envelope
 	}{
 		To:      msg.To,
 		Payload: msg.Payload,
 	})
-	return rlpdata
+	return b.Bytes()
 }
 
 // String representation of PssMsg
