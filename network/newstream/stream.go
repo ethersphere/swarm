@@ -698,7 +698,28 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		p.Drop()
 		return
 	}
-
+	cur, ok := p.getCursor(w.stream)
+	if !ok {
+		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
+		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
+		select {
+		case <-w.done:
+		default:
+			close(w.done)
+		}
+		p.mtx.Lock()
+		delete(p.openWants, msg.Ruid)
+		p.mtx.Unlock()
+		return
+	}
+	if w.head {
+		if err := r.clientRequestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
+			streamRequestNextIntervalFail.Inc(1)
+			p.logger.Error("error requesting next interval from peer", "err", err)
+			p.Drop()
+			return
+		}
+	}
 	select {
 	case err := <-errc:
 		if err != nil {
@@ -733,21 +754,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	case <-p.quit:
 		return
 	}
-	cur, ok := p.getCursor(w.stream)
-	if !ok {
-		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
-		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
-		return
-	}
-	p.logger.Debug("batch finished, requesting next", "ruid", w.ruid, "stream", w.stream)
-	if w.head {
-		if err := r.clientRequestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
-			streamRequestNextIntervalFail.Inc(1)
-			p.logger.Error("error requesting next interval from peer", "err", err)
-			p.Drop()
-			return
-		}
-	} else {
+	if !w.head {
 		if err := r.clientRequestStreamRange(ctx, p, w.stream, cur); err != nil {
 			streamRequestNextIntervalFail.Inc(1)
 			p.logger.Error("error requesting next interval from peer", "err", err)
