@@ -569,51 +569,31 @@ func (k *Kademlia) callable(e *entry) bool {
 	return true
 }
 
-func (k *Kademlia) CloserPeerThanMeXOR(addr []byte) bool {
-	var ret bool
-
-	myDistance := make([]byte, 32)
-	chunk.XOR(myDistance, k.BaseAddr(), addr)
-
+// IsClosestTo returns true if self is the closest peer to addr among filtered peers
+// ie. return false iff there is a peer that
+// - filter(bzzpeer) == true AND
+// - pot.DistanceCmp(addr, peeraddress, selfaddress) == 1
+func (k *Kademlia) IsClosestTo(addr []byte, filter func(*BzzPeer) bool) (closest bool) {
+	myPo := chunk.Proximity(addr, k.BaseAddr())
 	// iterate connection in kademlia
+	closest = true
 	k.EachConn(addr, 255, func(p *Peer, po int) bool {
-		if !p.BzzPeer.Peer.HasCap("pss") {
+		if !filter(p.BzzPeer) {
 			return true
 		}
-
-		otherDistance := make([]byte, 32)
-		chunk.XOR(otherDistance, p.Over(), addr)
-
-		if bytes.Compare(myDistance, otherDistance) == 1 {
-			ret = true
+		if po != myPo {
+			closest = po < myPo
 			return false
 		}
-
+		// if proximity order of closest PO nodes equal our own,
+		// then use XOR-based DistanceCmp and return if self is not closest
+		if d, _ := pot.DistanceCmp(addr, p.Over(), k.BaseAddr()); d == 1 {
+			closest = false
+			return false
+		}
 		return true
 	})
-
-	return ret
-}
-
-func (k *Kademlia) CloserPeerThanMe(addr []byte) bool {
-	var ret bool
-
-	myPo, _ := Pof(k.BaseAddr(), addr, 0)
-
-	// iterate connection in kademlia
-	k.EachConn(addr, 255, func(p *Peer, po int) bool {
-		if !p.BzzPeer.Peer.HasCap("pss") {
-			return true
-		}
-
-		if po > myPo {
-			ret = true
-		}
-
-		return false
-	})
-
-	return ret
+	return closest
 }
 
 // BaseAddr return the kademlia base address
