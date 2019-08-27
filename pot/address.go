@@ -114,7 +114,7 @@ func DistanceCmp(a, x, y []byte) (int, error) {
 	if len(a) != len(x) || len(a) != len(y) {
 		return 0, errors.New("address length must match")
 	}
-	return ProxCmp(a, x, y), nil
+	return ProxCmp(a, y, x), nil
 }
 
 // ProxCmp compares the distances x->a and y->a
