@@ -19,8 +19,8 @@ package swap
 import (
 	"context"
 	"testing"
+	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -42,7 +42,10 @@ func TestHandshake(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	testDeploy(ctx, swap.backend, swap)
+	err = testDeploy(ctx, swap.backend, swap)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// setup the protocolTester, which will allow protocol testing by sending messages
 	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
 
@@ -116,10 +119,15 @@ func TestEmitCheque(t *testing.T) {
 	ctx := context.Background()
 
 	log.Debug("deploy to simulated backend")
-	testDeploy(ctx, creditorSwap.backend, creditorSwap)
-	testDeploy(ctx, debitorSwap.backend, debitorSwap)
-	creditorSwap.backend.(*backends.SimulatedBackend).Commit()
-	debitorSwap.backend.(*backends.SimulatedBackend).Commit()
+	var err error
+	err = testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	log.Debug("create peer instances")
 
@@ -137,7 +145,6 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	log.Debug("create a cheque")
-	var err error
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:    debitorSwap.owner.Contract,
@@ -155,10 +162,22 @@ func TestEmitCheque(t *testing.T) {
 	emitMsg := &EmitChequeMsg{
 		Cheque: cheque,
 	}
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
 
+	// now we need to create the channel...
+	testBackend.submitDone = make(chan struct{})
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
+	select {
+	case <-testBackend.submitDone:
+		log.Debug("submit and cash transactions completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for submit and cash transactions to complete")
 	}
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// check that the balance has been reset
@@ -184,6 +203,10 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
 	debitorSwap, clean := newTestSwap(t, ownerKey)
 	defer clean()
+
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
