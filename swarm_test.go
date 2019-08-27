@@ -28,11 +28,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethersphere/swarm/network"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/swap"
 )
 
 // TestNewSwarm validates Swarm fields in repsect to the provided configuration.
@@ -109,8 +112,9 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ipcEndpoint
+				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
+				config.NetworkID = swap.AllowedNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s.backend == nil {
@@ -121,20 +125,8 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap disabled",
 			configure: func(config *api.Config) {
-				config.SwapAPI = ipcEndpoint
+				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = false
-			},
-			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s.backend != nil {
-					t.Error("backend is not nil")
-				}
-			},
-		},
-		{
-			name: "with swap enabled and api endpoint blank",
-			configure: func(config *api.Config) {
-				config.SwapAPI = ""
-				config.SwapEnabled = true
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s.backend != nil {
@@ -184,6 +176,100 @@ func TestNewSwarm(t *testing.T) {
 
 			s, err := NewSwarm(config, nil)
 			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tc.check != nil {
+				tc.check(t, s, config)
+			}
+		})
+	}
+}
+
+// TestNewSwarmFailure validates that invalid Swarm fields in repsect to the provided configuration cause a failure.
+func TestNewSwarmFailure(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swarm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// a simple rpc endpoint for testing dialing
+	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
+
+	// windows namedpipes are not on filesystem but on NPFS
+	if runtime.GOOS == "windows" {
+		b := make([]byte, 8)
+		rand.Read(b)
+		ipcEndpoint = `\\.\pipe\TestSwarm-` + hex.EncodeToString(b)
+	}
+
+	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	defer server.Stop()
+
+	for _, tc := range []struct {
+		name      string
+		configure func(*api.Config)
+		check     func(*testing.T, *Swarm, *api.Config)
+	}{
+		{
+			name: "with swap enabled and api endpoint blank",
+			configure: func(config *api.Config) {
+				config.SwapBackendURL = ""
+				config.SwapEnabled = true
+				config.NetworkID = swap.AllowedNetworkID
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s != nil {
+					t.Error("swarm struct is not nil")
+				}
+			},
+		},
+		{
+			name: "with swap enabled and default network ID",
+			configure: func(config *api.Config) {
+				config.SwapBackendURL = ipcEndpoint
+				config.SwapEnabled = true
+				config.NetworkID = network.DefaultNetworkID
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s != nil {
+					t.Error("swarm struct is not nil")
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := api.NewConfig()
+
+			dir, err := ioutil.TempDir("", "swarm")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(dir)
+
+			config.Path = dir
+
+			privkey, err := crypto.GenerateKey()
+			if err != nil {
+				t.Fatal(err)
+			}
+			nodekey, err := crypto.GenerateKey()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			config.Init(privkey, nodekey)
+
+			if tc.configure != nil {
+				tc.configure(config)
+			}
+
+			s, err := NewSwarm(config, nil)
+			if err == nil {
 				t.Fatal(err)
 			}
 
