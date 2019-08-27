@@ -233,6 +233,8 @@ func init() {
 }
 
 func main() {
+	runtime.SetMutexProfileFraction(1)
+
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
