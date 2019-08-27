@@ -307,10 +307,15 @@ func TestResetBalance(t *testing.T) {
 	// deploying would strictly speaking not be necessary, as the signing would also just work
 	// with empty contract addresses. Nevertheless to avoid later suprises and for
 	// coherence and clarity we deploy here so that we get a simulated contract address
-	testDeploy(ctx, creditorSwap.backend, creditorSwap)
-	testBackend.Commit()
-	testDeploy(ctx, debitorSwap.backend, debitorSwap)
-	testBackend.Commit()
+	var err error
+	err = testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// create Peer instances
 	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
@@ -340,7 +345,6 @@ func TestResetBalance(t *testing.T) {
 		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditor.ID()])
 	}
 
-	var err error
 	// now load the cheque that the debitor created...
 	cheque := debitorSwap.cheques[creditor.ID()]
 	if cheque == nil {
@@ -720,7 +724,6 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testBackend.Commit()
 
 	log.Debug("deployed. signing cheque")
 
@@ -835,6 +838,7 @@ func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err err
 	opts.Context = ctx
 
 	swap.owner.Contract, swap.contract, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	testBackend.Commit()
 
 	return err
 }

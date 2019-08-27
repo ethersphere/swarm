@@ -42,8 +42,10 @@ func TestHandshake(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	testDeploy(ctx, swap.backend, swap)
-	testBackend.Commit()
+	err = testDeploy(ctx, swap.backend, swap)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// setup the protocolTester, which will allow protocol testing by sending messages
 	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
 
@@ -122,9 +124,10 @@ func TestEmitCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testBackend.Commit()
-	testDeploy(ctx, debitorSwap.backend, debitorSwap)
-	testBackend.Commit()
+	err = testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	log.Debug("create peer instances")
 
