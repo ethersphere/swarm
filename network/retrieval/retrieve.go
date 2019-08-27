@@ -396,7 +396,6 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 				p.Drop()
 			}
 		}
-		//p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
 }

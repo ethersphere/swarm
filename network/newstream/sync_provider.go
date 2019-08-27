@@ -87,7 +87,7 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 	default:
 	}
 	a := chunk.Address(key)
-	if s.cache.Contains(a.String()) {
+	if s.cache.Contains(a.Hex()) {
 		return true, nil
 	}
 
@@ -158,8 +158,7 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 	return needRefs, nil
 }
 
-func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, error) {
-	//log.Debug("syncProvider.Get")
+func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error) {
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -167,22 +166,30 @@ func (s *syncProvider) Get(ctx context.Context, addr chunk.Address) ([]byte, err
 	}(start)
 	// iterate over the array - if it is in the cache - pull it out
 	// if not - save in a slice and fallback later to localstore in one go
-	//
-	var data []byte
-	v, ok := s.cache.Get(addr.String())
-	if !ok {
-		ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(addr))
-		if err != nil {
-			return nil, err
+	retChunks := make([]chunk.Chunk, len(addr))
+	lsChunks := []chunk.Address{}
+	indices := make(map[string]int)
+	for i, a := range addr {
+		if v, ok := s.cache.Get(a.Hex()); ok {
+			retChunks[i] = chunk.NewChunk(a, v.([]byte))
+			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachehit", nil).Inc(1)
+		} else {
+			lsChunks = append(lsChunks, a)
+			indices[a.String()] = i
+			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachemiss", nil).Inc(1)
 		}
-		s.cache.Add(addr.String(), ch.Data())
-		metrics.GetOrRegisterCounter("network.stream.sync_provider.cachemiss", nil).Inc(1)
-		return ch.Data(), nil
-	} else {
-		metrics.GetOrRegisterCounter("network.stream.sync_provider.cachehit", nil).Inc(1)
-		data = v.([]byte)
 	}
-	return data, nil
+
+	chunks, err := s.netStore.GetMulti(ctx, chunk.ModeGetSync, lsChunks...)
+	if err != nil {
+		return nil, err
+	}
+	for _, ch := range chunks {
+		ch := ch
+		s.cache.Add(ch.Address().Hex(), ch.Data())
+		retChunks[indices[ch.Address().String()]] = ch
+	}
+	return retChunks, nil
 }
 
 func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
@@ -204,7 +211,6 @@ func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []boo
 		end := time.Since(start)
 		s.logger.Debug("syncProvider.Put ended", "took", end)
 	}(start)
-	//ch := chunk.NewChunk(addr, data)
 	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch...)
 	for i, v := range seen {
 		if v {
@@ -217,7 +223,7 @@ func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []boo
 	}
 	go func(chunks ...chunk.Chunk) {
 		for _, c := range chunks {
-			s.cache.Add(c.Address().String(), c.Data())
+			s.cache.Add(c.Address().Hex(), c.Data())
 		}
 	}(ch...)
 	return seen, err

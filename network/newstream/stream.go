@@ -42,7 +42,7 @@ import (
 
 const (
 	HashSize  = 32
-	BatchSize = 128
+	BatchSize = 64
 )
 
 var (
@@ -640,7 +640,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 		addresses[iaddr] = hash
-		w.hashes[addresses[iaddr].Hex()] = false // pad this with false, toggle the ones we need later to true
 		iaddr++
 	}
 	refs, err := provider.MultiNeedData(ctx, addresses...)
@@ -797,7 +796,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	}
 
 	frameSize := 0
-	var maxFrame = BatchSize / 4 // should be BatchSize but testing to see if this makes a difference as its the major change from existing stream pkg
+	var maxFrame = BatchSize /// 4 // should be BatchSize but testing to see if this makes a difference as its the major change from existing stream pkg
 	if maxFrame < 1 {
 		maxFrame = 1
 	}
@@ -805,46 +804,49 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	cd := &ChunkDelivery{
 		Ruid: msg.Ruid,
 	}
+	wantHashes := []chunk.Address{}
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
-			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
 			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
-			start := time.Now()
-			data, err := provider.Get(ctx, hash)
-			if err != nil {
-				p.logger.Error("handleWantedHashesMsg", "hash", hash, "err", err)
-				p.Drop()
+			wantHashes = append(wantHashes, hash)
+		}
+	}
+	chunks, err := provider.Get(ctx, wantHashes...)
+	if err != nil {
+		p.logger.Error("handleWantedHashesMsg", "err", err)
+		p.Drop()
+		return
+	}
+	for _, v := range chunks {
+		chunkD := DeliveredChunk{
+			Addr: v.Address(),
+			Data: v.Data(),
+		}
+
+		//collect the chunk into the batch
+		frameSize++
+
+		cd.Chunks = append(cd.Chunks, chunkD)
+		if frameSize == maxFrame {
+			//send the batch
+			select {
+			case <-p.quit:
 				return
+			case <-r.quit:
+				return
+			default:
 			}
-			actualGetTimer.UpdateSince(start)
-			chunkD := DeliveredChunk{
-				Addr: hash,
-				Data: data,
+			if err := p.Send(ctx, cd); err != nil {
+				p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
+				p.Drop()
 			}
-
-			//collect the chunk into the batch
-			frameSize++
-
-			cd.Chunks = append(cd.Chunks, chunkD)
-			if frameSize == maxFrame {
-				//send the batch
-				select {
-				case <-p.quit:
-					return
-				case <-r.quit:
-					return
-				default:
-				}
-				if err := p.Send(ctx, cd); err != nil {
-					p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
-					p.Drop()
-				}
-				frameSize = 0
-				cd = &ChunkDelivery{
-					Ruid: msg.Ruid,
-				}
+			frameSize = 0
+			cd = &ChunkDelivery{
+				Ruid: msg.Ruid,
 			}
 		}
+
 	}
 
 	// send anything that we might have left in the batch
@@ -907,8 +909,8 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	}
 	for _, v := range seen {
 		if v {
+			//this is possible when the same chunk is asked from multiple peers
 			streamSeenChunkDelivery.Inc(1)
-			//p.logger.Warn("chunk already seen!", "caddr", c.Address()) //this is possible when the same chunk is asked from multiple peers
 		}
 	}
 
@@ -944,16 +946,15 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				p.mtx.RLock()
 				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
 					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address)
+					panic("err")
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop()
 					p.mtx.RLock()
 					return
 				}
 				p.mtx.RUnlock()
-				//cc := chunk.NewChunk(c.Address(), c.Data())
-				//seen, err := provider.Put(ctx, cc.Address(), cc.Data())
 				p.mtx.Lock()
-				w.hashes[c.Address().Hex()] = false
+				delete(w.hashes, c.Address().Hex())
 				p.mtx.Unlock()
 				v := atomic.AddUint64(&w.remaining, ^uint64(0))
 				if v == 0 {

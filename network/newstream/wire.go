@@ -41,7 +41,7 @@ type StreamProvider interface {
 	NeedData(ctx context.Context, key []byte) (need bool, wait func(context.Context) error)
 	MultiNeedData(ctx context.Context, addr ...chunk.Address) ([]chunk.Address, error)
 	// Get a particular chunk identified by addr from the local storage
-	Get(ctx context.Context, addr chunk.Address) ([]byte, error)
+	Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error)
 
 	// Put a certain chunk into the local storage
 	Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error)
