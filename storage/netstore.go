@@ -101,7 +101,7 @@ func NewNetStore(store chunk.Store, baseAddr []byte, localID enode.ID) *NetStore
 		fetchers: fetchers,
 		Store:    store,
 		LocalID:  localID,
-		logger:   log.New("base", hex.EncodeToString(baseAddr)),
+		logger:   log.New("base", hex.EncodeToString(baseAddr)[:16]),
 	}
 }
 
@@ -112,7 +112,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 	defer n.putMu.Unlock()
 
 	for i, ch := range chs {
-		log.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
+		n.logger.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
 	}
 	// put the chunk to the localstore, there should be no error
 	exist, err := n.Store.Put(ctx, mode, chs...)
@@ -128,7 +128,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			// delivered through syncing and through a retrieve request
 			fii := fi.(*Fetcher)
 			fii.SafeClose()
-			log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
+			n.logger.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
 
 			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
@@ -136,7 +136,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			slowChunkDeliveryThreshold := 5 * time.Second
 			if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
 				metrics.GetOrRegisterCounter("netstore.slow_chunk_delivery", nil).Inc(1)
-				log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
+				n.logger.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 			}
 			n.fetchers.Remove(ch.Address().String())
 		}

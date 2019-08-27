@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -642,17 +643,22 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		addresses[iaddr] = hash
 		iaddr++
 	}
-	refs, err := provider.MultiNeedData(ctx, addresses...)
+	hasses, err := provider.MultiNeedData(ctx, addresses...)
 	if err != nil {
 		p.logger.Error("multi need data returned an error, dropping peer", "err", err)
 		p.Drop()
 		return
 	}
-	for i, ref := range refs {
-		ctr++
-		want.Set(i)
-		w.hashes[ref.Hex()] = true
+	for i, has := range hasses {
+		if !has {
+			ctr++
+			want.Set(i)
+			w.hashes[addresses[i].Hex()] = true
+		} else {
+			w.hashes[addresses[i].Hex()] = false
+		}
 	}
+
 	cc := make(chan chunk.Chunk)
 	dc := make(chan error)
 
@@ -805,11 +811,20 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		Ruid: msg.Ruid,
 	}
 	wantHashes := []chunk.Address{}
+	s1 := make(map[string]bool)
+	s2 := make(map[string]bool)
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
 			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
 			wantHashes = append(wantHashes, hash)
+		}
+	}
+	for _, v := range wantHashes {
+		if _, ok := s1[v.String()]; ok {
+			panic("seen s1")
+		} else {
+			s1[v.String()] = true
 		}
 	}
 	chunks, err := provider.Get(ctx, wantHashes...)
@@ -819,15 +834,22 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		return
 	}
 	for _, v := range chunks {
+		if _, ok := s2[v.Address().String()]; ok {
+			panic("seen s2")
+		} else {
+			s2[v.Address().String()] = true
+		}
+	}
+	for _, v := range chunks {
 		chunkD := DeliveredChunk{
 			Addr: v.Address(),
 			Data: v.Data(),
 		}
+		cd.Chunks = append(cd.Chunks, chunkD)
 
 		//collect the chunk into the batch
 		frameSize++
 
-		cd.Chunks = append(cd.Chunks, chunkD)
 		if frameSize == maxFrame {
 			//send the batch
 			select {
@@ -840,6 +862,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 			if err := p.Send(ctx, cd); err != nil {
 				p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
 				p.Drop()
+				return
 			}
 			frameSize = 0
 			cd = &ChunkDelivery{
@@ -887,12 +910,14 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		p.Drop()
 		return
 	}
-
-	//p.logger.Debug("delivering chunks for peer", "chunks", len(msg.Chunks))
-	chunks := []chunk.Chunk{}
-	for _, dc := range msg.Chunks {
-		c := chunk.NewChunk(dc.Addr, dc.Data)
-		chunks = append(chunks, c)
+	s0 := make(map[string]bool)
+	chunks := make([]chunk.Chunk, len(msg.Chunks))
+	for i, dc := range msg.Chunks {
+		if _, ok := s0[dc.Addr.Hex()]; ok {
+			panic("seen already")
+		}
+		s0[dc.Addr.Hex()] = true
+		chunks[i] = chunk.NewChunk(dc.Addr, dc.Data)
 	}
 	provider := r.getProvider(w.stream)
 	if provider == nil {
@@ -906,6 +931,8 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 			return
 		}
 		p.logger.Error("clientHandleChunkDelivery error putting chunk", "err", err)
+		panic(err)
+
 	}
 	for _, v := range seen {
 		if v {
@@ -917,6 +944,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	for _, dc := range chunks {
 		select {
 		case w.chunks <- dc:
+			p.logger.Trace("sending chunk down the pipe", "addr", dc.Address())
 		case <-w.done:
 			return
 		case <-r.quit:
@@ -940,13 +968,13 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 			select {
 			case c, ok := <-w.chunks:
 				if !ok {
-					p.logger.Error("want chanks returned on !ok")
+					return
 				}
 				processReceivedChunksCount.Inc(1)
 				p.mtx.RLock()
 				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
-					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address)
-					panic("err")
+					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address())
+					panic(fmt.Errorf("got an unsolicited chunk from peer! peer %s caddr %s", p.ID(), c.Address()))
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop()
 					p.mtx.RLock()
@@ -958,7 +986,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				p.mtx.Unlock()
 				v := atomic.AddUint64(&w.remaining, ^uint64(0))
 				if v == 0 {
-					p.logger.Debug("done receiving chunks for open want", "ruid", w.ruid)
+					p.logger.Trace("done receiving chunks for open want", "ruid", w.ruid)
 					close(errc)
 					return
 				}

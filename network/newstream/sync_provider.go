@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -45,6 +46,8 @@ type syncProvider struct {
 	syncBinsOnlyWithinDepth bool
 	autostart               bool
 	quit                    chan struct{}
+
+	cacheMtx sync.Mutex
 
 	cache *lru.Cache
 
@@ -107,7 +110,9 @@ func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, w
 	}
 }
 
-func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]chunk.Address, error) {
+func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
+	s.cacheMtx.Lock()
+	defer s.cacheMtx.Unlock()
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -115,31 +120,34 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 	}(start)
 	select {
 	case <-s.quit:
-		return []chunk.Address{}, nil
+		return []bool{}, nil
 	default:
 	}
-
-	noCacheHit := []chunk.Address{}
-	for _, addr := range addrs {
-		if !s.cache.Contains(addr.Hex()) {
-			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
-			noCacheHit = append(noCacheHit, addr)
-		} else {
-			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
-		}
+	wants := make([]bool, len(addrs))
+	//noCacheHit := []chunk.Address{}
+	indices := make(map[string]int)
+	for i, addr := range addrs {
+		//if !s.cache.Contains(addr.Hex()) {
+		//metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
+		//noCacheHit = append(noCacheHit, addr)
+		indices[addr.String()] = i
+		//} else {
+		//metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
+		//}
 	}
 	// if its in the cache - we dont need it
 	// if it isnt - fallback to the localstore.
 	// instead of returning a bool array - return the array of addresses we need
-	has, err := s.netStore.Store.HasMulti(ctx, noCacheHit...)
+	has, err := s.netStore.Store.HasMulti(ctx, addrs...)
 	if err != nil {
-		return []chunk.Address{}, err
+		return nil, err
 	}
-	needRefs := []chunk.Address{}
 	for i, have := range has {
+		//idx := indices[noCacheHit[i].Hex()]
+		idx := indices[addrs[i].Hex()]
 		if !have {
-			key := addrs[i]
-			needRefs = append(needRefs, key)
+			key := addrs[idx]
+
 			fi, _, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 			if !ok {
 				continue
@@ -153,12 +161,16 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 					metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
 				}
 			}()
+		} else {
+			wants[idx] = true
 		}
 	}
-	return needRefs, nil
+	return wants, nil
 }
 
 func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error) {
+	s.cacheMtx.Lock()
+	defer s.cacheMtx.Unlock()
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -205,7 +217,8 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 }
 
 func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error) {
-	log.Trace("syncProvider.Put")
+	s.cacheMtx.Lock()
+	defer s.cacheMtx.Unlock()
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
