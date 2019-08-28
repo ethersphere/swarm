@@ -149,8 +149,8 @@ func TestEmitCheque(t *testing.T) {
 			Contract:         debitorSwap.owner.Contract,
 			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: 42,
-			Honey:            42,
 		},
+		Honey: 42,
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {

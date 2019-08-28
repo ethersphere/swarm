@@ -27,7 +27,7 @@ import (
 )
 
 // encodeForSignature encodes the cheque in the format used in the signing procedure
-func (cheque *Cheque) encodeForSignature() []byte {
+func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
@@ -40,7 +40,7 @@ func (cheque *Cheque) encodeForSignature() []byte {
 }
 
 // sigHash hashes the cheque using the prefix that would be added by eth_Sign
-func (cheque *Cheque) sigHash() []byte {
+func (cheque *ChequeParams) sigHash() []byte {
 	// we can ignore the error because it is always nil
 	encoded := cheque.encodeForSignature()
 	input := crypto.Keccak256(encoded)
@@ -77,7 +77,7 @@ func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 }
 
 // Sign returns the cheque's signature with supplied private key
-func (cheque *Cheque) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
+func (cheque *ChequeParams) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 	sig, err := crypto.Sign(cheque.sigHash(), prv)
 	if err != nil {
 		return nil, err

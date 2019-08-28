@@ -545,9 +545,9 @@ func newTestCheque() *Cheque {
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
 			CumulativePayout: uint64(42),
-			Honey:            uint64(42),
 			Beneficiary:      beneficiaryAddress,
 		},
+		Honey: uint64(42),
 	}
 
 	return cheque

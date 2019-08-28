@@ -406,9 +406,9 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 		ChequeParams: ChequeParams{
 			CumulativePayout: total + amount,
 			Contract:         s.owner.Contract,
-			Honey:            honey,
 			Beneficiary:      beneficiary,
 		},
+		Honey: honey,
 	}
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
