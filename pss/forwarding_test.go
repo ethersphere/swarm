@@ -261,10 +261,10 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 	}
 
 	msg := newTestMsg(recipientAddr)
-	sent := ps.forward(msg)
+	err := ps.forward(msg)
 
-	if !sent {
-		t.Fatal(fmt.Sprintf("test [%s]\nmsg can't be forwarded", c.name))
+	if err != nil {
+		t.Fatal(fmt.Sprintf("test [%s]\nmsg can't be forwarded. Expected no error but got %v", c.name, err.Error()))
 	}
 	// check test results
 	var fail bool

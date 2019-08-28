@@ -122,14 +122,16 @@ type outbox struct {
 	slots   chan int
 	process chan int
 	quitC   chan struct{}
+	forward func(msg *PssMsg) error
 }
 
-func newOutbox(capacity int) outbox {
+func newOutbox(capacity int, quitC chan struct{}, forward func(msg *PssMsg) error) outbox {
 	outbox := outbox{
 		queue:   make([]*outboxMsg, capacity),
 		slots:   make(chan int, capacity),
 		process: make(chan int),
-		quitC:   make(chan struct{}),
+		quitC:   quitC,
+		forward: forward,
 	}
 	// fill up outbox slots
 	for i := 0; i < cap(outbox.slots); i++ {
@@ -162,6 +164,27 @@ func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
 	}
 }
 
+func (o *outbox) processOutbox() {
+	for slot := range o.process {
+		go func(slot int) {
+			msg := o.msg(slot)
+			metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+			if err := o.forward(msg.msg); err != nil {
+				metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+				// if we failed to forward, re-insert message in the queue
+				log.Debug(err.Error())
+				// reenqueue the message for processing
+				o.reenqueue(slot)
+				log.Debug("Message re-enqued", "slot", slot)
+				return
+			}
+			// free the outbox slot
+			o.free(slot)
+			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+		}(slot)
+	}
+}
+
 func (o outbox) msg(slot int) *outboxMsg {
 	return o.queue[slot]
 }
@@ -176,11 +199,6 @@ func (o outbox) reenqueue(slot int) {
 	case <-o.quitC:
 	}
 
-}
-
-func (o *outbox) close() {
-	close(o.quitC)
-	close(o.process)
 }
 
 // Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
@@ -203,7 +221,6 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          outbox
-	forwardFunc     func(msg *PssMsg) bool // Allows plugin functions for testing
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -245,7 +262,6 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       c.String(),
-		outbox:          newOutbox(defaultOutboxCapacity),
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
@@ -256,7 +272,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 			},
 		},
 	}
-	ps.forwardFunc = ps.forward
+	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
 
 	for i := 0; i < hasherCount; i++ {
 		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
@@ -288,30 +304,9 @@ func (p *Pss) Start(srv *p2p.Server) error {
 		}
 	}()
 
-	// In any case, if the message
-	// forwarding fails, the node should try to forward it to the next best peer, until the message is
-	// successfully forwarded to at least one peer.
-	go func() {
-		for slot := range p.outbox.process {
-			go func(slot int) {
-				msg := p.outbox.msg(slot)
-				sent := p.forwardFunc(msg.msg)
-				if sent {
-					// free the outbox slot
-					p.outbox.free(slot)
-					metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(p.outbox.len()))
-				} else {
-					// if we failed to send to anyone, re-insert message in the send-queue
-					log.Debug("unable to forward to any peers", "slot", slot)
-					// reenqueue the message for processing
-					p.outbox.reenqueue(slot)
-					log.Debug("Message reenqued", "slot", slot)
-				}
-				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+	// Forward outbox messages
+	go p.outbox.processOutbox()
 
-			}(slot)
-		}
-	}()
 	log.Info("Started Pss")
 	log.Info("Loaded EC keys", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(crypto.CompressPubkey(p.PublicKey())))
 	return nil
@@ -319,7 +314,6 @@ func (p *Pss) Start(srv *p2p.Server) error {
 
 func (p *Pss) Stop() error {
 	log.Info("Pss shutting down")
-	p.outbox.close()
 	close(p.quitC)
 	return nil
 }
@@ -798,9 +792,10 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // If the recipient address (or partial address) is within the neighbourhood depth of the forwarding
 // node, then it will be forwarded to all the nearest neighbours of the forwarding node. In case of
 // partial address, it should be forwarded to all the peers matching the partial address, if there
-// are any; otherwise only to one peer, closest to the recipient address.
-// Returns true if the message has been forwarded to at least one recipient
-func (p *Pss) forward(msg *PssMsg) bool {
+// are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
+//// forwarding fails, the node should try to forward it to the next best peer, until the message is
+//// successfully forwarded to at least one peer.
+func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
@@ -850,7 +845,11 @@ func (p *Pss) forward(msg *PssMsg) bool {
 	// cache the message
 	p.addFwdCache(msg)
 
-	return sent > 0
+	if sent == 0 {
+		return errors.New("unable to forward to any peers")
+	} else {
+		return nil
+	}
 }
 
 /////////////////////////////////////////////////////////////////////

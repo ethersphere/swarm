@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -511,65 +512,67 @@ func TestMessageOutbox(t *testing.T) {
 	addr := make([]byte, 32)
 	addr[0] = 0x01
 	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-	defer ps.Stop()
 	outboxCapacity := 2
 
-	processed := make([]*PssMsg, 0)
 	successC := make(chan struct{})
-	ps.outbox = newOutbox(outboxCapacity)
-	forward := func(msg *PssMsg) bool {
-		processed = append(processed, msg)
+	forward := func(msg *PssMsg) error {
 		successC <- struct{}{}
-		return true
+		return nil
 	}
-	ps.forwardFunc = forward
+	ps.outbox = newOutbox(outboxCapacity, ps.quitC, forward)
 
 	ps.Start(nil)
+	defer ps.Stop()
+
 	err = ps.enqueue(testRandomMessage())
 	if err != nil {
-		t.Fatal("Message should have space for enqueuing")
+		t.Fatalf("expected no error, got %v", err)
 	}
 	usedSlots := ps.outbox.len()
 	if usedSlots != 1 {
-		t.Fatal("Outbox len should be 1 before finish processing")
+		t.Fatalf("incorrect outbox length. expected 1, got %v", usedSlots)
 	}
 	t.Log("Message enqueued", "Outbox len", ps.outbox.len())
 
-	<-successC
-	if len(processed) != 1 {
-		t.Fatal("There should be one message processed")
+	select {
+	case <-successC:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for success forward")
 	}
 
 	failed := make([]*PssMsg, 0)
 	failedC := make(chan struct{})
 	continueC := make(chan struct{})
-	failedForward := func(msg *PssMsg) bool {
-		failed = append(processed, msg)
+	failedForward := func(msg *PssMsg) error {
+		failed = append(failed, msg)
 		failedC <- struct{}{}
 		<-continueC
-		return false
+		return errors.New("Forced test error forwarding message")
 	}
 
-	ps.forwardFunc = failedForward
+	ps.outbox.forward = failedForward
 
 	err = ps.enqueue(testRandomMessage())
 	if err != nil {
-		t.Fatal("Message should have space for enqueuing")
+		t.Fatalf("Expected no error enqueing, got %v", err.Error())
 	}
 
-	<-failedC
-	if len(failed) == 0 {
-		t.Fatal("There should be one failed messages")
+	select {
+	case <-failedC:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for failing forward")
 	}
-	if len(processed) > 1 {
-		t.Fatal("There should be only one message processed")
+
+	if len(failed) == 0 {
+		t.Fatal("Incorrect number of failed messages, expected 1 got 0")
 	}
 	// The message will be retried once we send to continueC, so first, we change the forward function
-	ps.forwardFunc = forward
+	ps.outbox.forward = forward
 	continueC <- struct{}{}
-	<-successC
-	if len(processed) != 2 {
-		t.Fatal("There should be two message processed", "len(processed)", len(processed))
+	select {
+	case <-successC:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for second success forward")
 	}
 
 }
@@ -587,19 +590,39 @@ func TestOutboxFull(t *testing.T) {
 	defer ps.Stop()
 	outboxCapacity := 2
 
-	processed := make([]*PssMsg, 0)
 	procChan := make(chan struct{})
-	ps.outbox = newOutbox(outboxCapacity)
-	succesForward := func(msg *PssMsg) bool {
-		log.Info("Processing message")
+	succesForward := func(msg *PssMsg) error {
 		<-procChan
 		log.Info("Message processed")
-		processed = append(processed, msg)
-		return true
+		return nil
 	}
-	ps.forwardFunc = succesForward
+	ps.outbox = newOutbox(outboxCapacity, ps.quitC, succesForward)
 
 	ps.Start(nil)
+
+	err = ps.enqueue(testRandomMessage())
+	if err != nil {
+		t.Fatalf("expected no error enqueing first message, got %v", err)
+	}
+	err = ps.enqueue(testRandomMessage())
+	if err != nil {
+		t.Fatalf("expected no error enqueing second message, got %v", err)
+	}
+	//As we haven't signaled procChan, the messages are still in the outbox
+
+	err = ps.enqueue(testRandomMessage())
+	if err == nil {
+		t.Fatalf("expected error enqueing third message, instead got nil")
+	}
+	procChan<- struct{}{}
+	procChan<- struct{}{}
+	//Must wait a bit for the routines processing the messages to free the slots
+	time.Sleep(1 * time.Millisecond)
+	//There should be slots again in the outbox
+	err = ps.enqueue(testRandomMessage())
+	if err != nil {
+		t.Fatalf("expected no error enqueing fourth message, got %v", err)
+	}
 }
 
 // Stopping ps in the middle of a message process should not produce an error trying to write in a closed channel
@@ -615,13 +638,11 @@ func TestMessageOutboxClose(t *testing.T) {
 	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
 
 	procChan := make(chan struct{})
-	succesForward := func(msg *PssMsg) bool {
-		log.Info("Processing message")
+	succesForward := func(msg *PssMsg) error {
 		<-procChan
-		log.Info("Message processed")
-		return true
+		return errors.New("Forced error while testing")
 	}
-	ps.forwardFunc = succesForward
+	ps.outbox.forward = succesForward
 
 	ps.Start(nil)
 	err = ps.enqueue(testRandomMessage())
@@ -1810,33 +1831,39 @@ func benchmarkMessageProcessing(b *testing.B, failProb float32) {
 	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
 
 	numMessages := 200000
-	ps.outbox = newOutbox(numMessages)
 	failed := 0
 	procChan := make(chan struct{}, numMessages)
-	succesForward := func(msg *PssMsg) bool {
+	forward := func(msg *PssMsg) error {
 		roll := rand.Float32()
-		if failProb > roll {
+		if roll < failProb {
 			failed++
-			return false
+			return errors.New(fmt.Sprintf("Forced test error forwarding message. roll: %.2f", roll))
 		} else {
 			procChan <- struct{}{}
-			return true
+			return nil
 		}
-
 	}
-	ps.forwardFunc = succesForward
+	ps.outbox = newOutbox(numMessages, ps.quitC, forward)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	ps.Start(nil)
 	defer ps.Stop()
 
-	for i := 0; i < numMessages; i++ {
-		go func() { ps.enqueue(testRandomMessage()) }()
-	}
+	for i := 0; i < b.N; i++ {
+		for i := 0; i < numMessages; i++ {
+			go func() { ps.enqueue(testRandomMessage()) }()
+		}
 
-	for i := 0; i < numMessages; i++ {
-		<-procChan
+		timeoutC := time.After(5 * time.Second)
+		for i := 0; i < numMessages; {
+			select {
+			case <-procChan:
+				i++
+			case <-timeoutC:
+				b.Fatal("timeout processing messages", "numProcessed", i)
+			}
+		}
 	}
 }
 
