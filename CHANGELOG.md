@@ -1,4 +1,4 @@
-## v0.4.4 (Unreleased)
+## v0.5.0 (Unreleased)
 
  ### Notes
 

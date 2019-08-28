@@ -185,6 +185,52 @@ func generateTestRandomChunk() chunk.Chunk {
 	return chunk.NewChunk(key, data)
 }
 
+// generateTestRandomChunks generates a slice of random
+// Chunks by using generateTestRandomChunk function.
+func generateTestRandomChunks(count int) []chunk.Chunk {
+	chunks := make([]chunk.Chunk, count)
+	for i := 0; i < count; i++ {
+		chunks[i] = generateTestRandomChunk()
+	}
+	return chunks
+}
+
+// chunkAddresses return chunk addresses of provided chunks.
+func chunkAddresses(chunks []chunk.Chunk) []chunk.Address {
+	addrs := make([]chunk.Address, len(chunks))
+	for i, ch := range chunks {
+		addrs[i] = ch.Address()
+	}
+	return addrs
+}
+
+// Standard test cases to validate multi chunk operations.
+var multiChunkTestCases = []struct {
+	name  string
+	count int
+}{
+	{
+		name:  "one",
+		count: 1,
+	},
+	{
+		name:  "two",
+		count: 2,
+	},
+	{
+		name:  "eight",
+		count: 8,
+	},
+	{
+		name:  "hundred",
+		count: 100,
+	},
+	{
+		name:  "thousand",
+		count: 1000,
+	},
+}
+
 // TestGenerateTestRandomChunk validates that
 // generateTestRandomChunk returns random data by comparing
 // two generated chunks.
@@ -219,6 +265,8 @@ func TestGenerateTestRandomChunk(t *testing.T) {
 // chunk values are in the retrieval indexes.
 func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 		if err != nil {
 			t.Fatal(err)
@@ -238,6 +286,8 @@ func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTim
 // chunk values are in the retrieval indexes when access time must be stored.
 func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		item, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
 		if err != nil {
 			t.Fatal(err)
@@ -258,6 +308,8 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, ac
 // chunk values are in the pull index.
 func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		item, err := db.pullIndex.Get(shed.Item{
 			Address: ch.Address(),
 			BinID:   binID,
@@ -275,6 +327,8 @@ func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) fun
 // chunk values are in the push index.
 func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		item, err := db.pushIndex.Get(shed.Item{
 			Address:        ch.Address(),
 			StoreTimestamp: storeTimestamp,
@@ -292,6 +346,8 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 // chunk values are in the push index.
 func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64, binID uint64) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		item, err := db.gcIndex.Get(shed.Item{
 			Address:         chunk.Address(),
 			BinID:           binID,
@@ -308,6 +364,8 @@ func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp i
 // an index contains expected number of key/value pairs.
 func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		var c int
 		err := i.Iterate(func(item shed.Item) (stop bool, err error) {
 			c++
@@ -326,6 +384,8 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 // value is the same as the number of items in DB.gcIndex.
 func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Helper()
+
 		var want uint64
 		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			want++
@@ -354,6 +414,8 @@ type testIndexChunk struct {
 // testItemsOrder tests the order of chunks in the index. If sortFunc is not nil,
 // chunks will be sorted with it before validation.
 func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
+	t.Helper()
+
 	newItemsCountTest(i, len(chunks))(t)
 
 	if sortFunc != nil {

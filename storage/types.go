@@ -218,8 +218,8 @@ type FakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) (bool, error) {
-	return false, nil
+func (f *FakeChunkStore) Put(_ context.Context, _ chunk.ModePut, ch ...Chunk) ([]bool, error) {
+	return make([]bool, len(ch)), nil
 }
 
 // Has doesn't do anything it is just here to implement ChunkStore
@@ -227,12 +227,21 @@ func (f *FakeChunkStore) Has(_ context.Context, ref Address) (bool, error) {
 	panic("FakeChunkStore doesn't support Has")
 }
 
+// HasMulti doesn't do anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) HasMulti(_ context.Context, refs ...Address) ([]bool, error) {
+	panic("FakeChunkStore doesn't support HasMulti")
+}
+
 // Get doesn't store anything it is just here to implement ChunkStore
 func (f *FakeChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
 }
 
-func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+func (f *FakeChunkStore) GetMulti(_ context.Context, _ chunk.ModeGet, refs ...Address) ([]Chunk, error) {
+	panic("FakeChunkStore doesn't support GetMulti")
+}
+
+func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	panic("FakeChunkStore doesn't support Set")
 }
 

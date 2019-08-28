@@ -32,7 +32,7 @@ import (
 // TestDB_collectGarbageWorker tests garbage collection runs
 // by uploading and syncing a number of chunks.
 func TestDB_collectGarbageWorker(t *testing.T) {
-	testDB_collectGarbageWorker(t)
+	testDBCollectGarbageWorker(t)
 }
 
 // TestDB_collectGarbageWorker_multipleBatches tests garbage
@@ -44,13 +44,12 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 	defer func(s uint64) { gcBatchSize = s }(gcBatchSize)
 	gcBatchSize = 2
 
-	testDB_collectGarbageWorker(t)
+	testDBCollectGarbageWorker(t)
 }
 
-// testDB_collectGarbageWorker is a helper test function to test
+// testDBCollectGarbageWorker is a helper test function to test
 // garbage collection runs by uploading and syncing a number of chunks.
-func testDB_collectGarbageWorker(t *testing.T) {
-	t.Helper()
+func testDBCollectGarbageWorker(t *testing.T) {
 
 	chunkCount := 150
 

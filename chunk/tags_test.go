@@ -30,12 +30,12 @@ func TestAll(t *testing.T) {
 		t.Fatalf("expected length to be 2 got %d", len(all))
 	}
 
-	if n := all[0].Total(); n != 1 {
-		t.Fatalf("expected tag 0 total to be 1 got %d", n)
+	if n := all[0].TotalCounter(); n != 1 {
+		t.Fatalf("expected tag 0 Total to be 1 got %d", n)
 	}
 
-	if n := all[1].Total(); n != 1 {
-		t.Fatalf("expected tag 1 total to be 1 got %d", n)
+	if n := all[1].TotalCounter(); n != 1 {
+		t.Fatalf("expected tag 1 Total to be 1 got %d", n)
 	}
 
 	ts.Create("3", 1)

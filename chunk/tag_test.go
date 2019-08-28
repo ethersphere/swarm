@@ -29,7 +29,7 @@ var (
 
 // TestTagSingleIncrements tests if Inc increments the tag state value
 func TestTagSingleIncrements(t *testing.T) {
-	tg := &Tag{total: 10}
+	tg := &Tag{Total: 10}
 
 	tc := []struct {
 		state    uint32
@@ -59,7 +59,7 @@ func TestTagSingleIncrements(t *testing.T) {
 
 // TestTagStatus is a unit test to cover Tag.Status method functionality
 func TestTagStatus(t *testing.T) {
-	tg := &Tag{total: 10}
+	tg := &Tag{Total: 10}
 	tg.Inc(StateSeen)
 	tg.Inc(StateSent)
 	tg.Inc(StateSynced)
@@ -87,7 +87,7 @@ func TestTagStatus(t *testing.T) {
 			t.Fatalf("should be %d, got %d", v.expVal, val)
 		}
 		if total != v.expTotal {
-			t.Fatalf("expected total to be %d, got %d", v.expTotal, total)
+			t.Fatalf("expected Total to be %d, got %d", v.expTotal, total)
 		}
 	}
 }
@@ -96,7 +96,7 @@ func TestTagStatus(t *testing.T) {
 func TestTagETA(t *testing.T) {
 	now := time.Now()
 	maxDiff := 100000 // 100 microsecond
-	tg := &Tag{total: 10, startedAt: now}
+	tg := &Tag{Total: 10, StartedAt: now}
 	time.Sleep(100 * time.Millisecond)
 	tg.Inc(StateSplit)
 	eta, err := tg.ETA(StateSplit)
@@ -216,8 +216,8 @@ func TestMarshallingWithAddr(t *testing.T) {
 		}
 	}
 
-	if unmarshalledTag.Total() != tg.Total() {
-		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
+	if unmarshalledTag.TotalCounter() != tg.TotalCounter() {
+		t.Fatalf("tag names not equal. want %d got %d", tg.TotalCounter(), unmarshalledTag.TotalCounter())
 	}
 
 	if len(unmarshalledTag.Address) != len(tg.Address) {
@@ -230,7 +230,6 @@ func TestMarshallingWithAddr(t *testing.T) {
 }
 
 // TestMarshallingNoAddress tests that marshalling and unmarshalling is done correctly
-// when the tag Address (byte slice) is empty in this case
 func TestMarshallingNoAddr(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
 	for _, f := range allStates {
@@ -263,8 +262,8 @@ func TestMarshallingNoAddr(t *testing.T) {
 		}
 	}
 
-	if unmarshalledTag.Total() != tg.Total() {
-		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
+	if unmarshalledTag.TotalCounter() != tg.TotalCounter() {
+		t.Fatalf("tag names not equal. want %d got %d", tg.TotalCounter(), unmarshalledTag.TotalCounter())
 	}
 
 	if len(unmarshalledTag.Address) != len(tg.Address) {
