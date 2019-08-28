@@ -1940,13 +1940,22 @@ func benchmarkMessageProcessing(b *testing.B, failProb float32) {
 	ps.Start(nil)
 	defer ps.Stop()
 
-	for i := 0; i < numMessages; i++ {
-		go func() { ps.enqueue(testRandomMessage(), false) }()
+	for i := 0; i < b.N; i++ {
+		for i := 0; i < numMessages; i++ {
+			go func() { ps.enqueue(testRandomMessage(), false) }()
+		}
+
+		timeoutC := time.After(10 * time.Second)
+		for i := 0; i < numMessages ;{
+			select {
+			case <- procChan:
+				i++
+			case <- timeoutC:
+				b.Fatal("timeout processing messages", "numProcessed", i)
+			}
+		}
 	}
 
-	for i := 0; i < numMessages; i++ {
-		<-procChan
-	}
 }
 
 // setup simulated network with bzz/discovery and pss services.
