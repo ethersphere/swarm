@@ -60,27 +60,26 @@ func (p *peers) get(id enode.ID) *Peer {
 
 func (p *peers) add(peer *Peer) {
 	p.mtx.Lock()
-	defer p.mtx.Unlock()
 	p.peers[peer.ID()] = peer
+	p.mtx.Unlock()
 }
 
 func (p *peers) remove(peer *Peer) {
 	p.mtx.Lock()
-	defer p.mtx.Unlock()
 	delete(p.peers, peer.ID())
+	p.mtx.Unlock()
 }
 
 // getEthPeer finds a peer that serves headers and calls the function argument on this peer
-// TODO: implement load balancing of requests in case of multiple peers
-func (p *peers) getEth() (peer *Peer) {
+func (p *peers) getEth() *Peer {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
-	for _, peer = range p.peers {
+	for _, peer := range p.peers {
 		if peer.serveHeaders {
-			break
+			return peer
 		}
 	}
-	return peer
+	return nil
 }
 
 // requests represents the peer specific pool of open requests
@@ -90,12 +89,12 @@ type requests struct {
 }
 
 type request struct {
-	hashes map[string]bool
-	c      chan []byte
-	cancel func()
+	hashes map[string]bool // remembers the block hashes that are requested in this connection
+	c      chan []byte     // channel in which the receoved block headers are passed on
+	cancel func()          // function to call in case of cancellation of the GetBlockHeaders event
 }
 
-// newRequestIDFunc is used to generated unique ID for requests
+// newRequestIDFunc is used to generate unique ID for requests
 // tests can reassign for deterministic ids
 var newRequestIDFunc = newRequestID
 
@@ -127,20 +126,20 @@ func (r *requests) create(c chan []byte) *request {
 
 func (r *requests) add(id uint32, req *request) {
 	r.mtx.Lock()
-	defer r.mtx.Unlock()
 	r.r[id] = req
+	r.mtx.Unlock()
 }
 
 func (r *requests) remove(id uint32) {
 	r.mtx.Lock()
-	defer r.mtx.Unlock()
 	delete(r.r, id)
+	r.mtx.Unlock()
 }
 
 func (r *requests) get(id uint32) (*request, bool) {
 	r.mtx.RLock()
-	defer r.mtx.RUnlock()
 	req, ok := r.r[id]
+	r.mtx.RUnlock()
 	return req, ok
 }
 

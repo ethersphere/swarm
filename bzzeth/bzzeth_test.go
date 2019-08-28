@@ -41,7 +41,7 @@ func init() {
 }
 
 func newBzzEthTester() (*p2ptest.ProtocolTester, *BzzEth, func(), error) {
-	b := New(nil, nil)
+	b := New()
 
 	prvkey, err := crypto.GenerateKey()
 	if err != nil {

@@ -233,7 +233,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
 
-	self.bzzEth = bzzeth.New(self.netStore, to)
+	self.bzzEth = bzzeth.New()
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.New(to, config.Pss)

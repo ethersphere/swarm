@@ -23,9 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
-	"github.com/ethersphere/swarm/storage"
 )
 
 // BzzEth implements node.Service
@@ -33,19 +31,15 @@ var _ node.Service = &BzzEth{}
 
 // BzzEth is a global module handling ethereum state on swarm
 type BzzEth struct {
-	peers    *peers            // bzzeth peer pool
-	netStore *storage.NetStore // netstore to retrieve and store
-	kad      *network.Kademlia // kademlia to determine if a header chunk belongs to us
-	quit     chan struct{}     // quit channel to close go routines
+	peers *peers        // bzzeth peer pool
+	quit  chan struct{} // quit channel to close go routines
 }
 
 // New constructs the BzzEth node service
-func New(ns *storage.NetStore, kad *network.Kademlia) *BzzEth {
+func New() *BzzEth {
 	return &BzzEth{
-		peers:    newPeers(),
-		netStore: ns,
-		kad:      kad,
-		quit:     make(chan struct{}),
+		peers: newPeers(),
+		quit:  make(chan struct{}),
 	}
 }
 
@@ -65,8 +59,10 @@ func (b *BzzEth) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return err
 	}
 	bp.serveHeaders = handshake.(*Handshake).ServeHeaders
-	log.Warn("handshake", "hs", handshake, "peer", bp)
-	// with another swarm node the protocol goes into idle
+	log.Debug("handshake", "hs", handshake, "peer", bp)
+
+	// This protocol is all about interaction between an Eth node and a Swarm Node.
+	// If another swarm node tries to connect then the protocol goes into idle
 	if isSwarmNodeFunc(bp) {
 		<-b.quit
 		return nil
@@ -84,7 +80,6 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 		p.logger.Debug("bzzeth.handleMsg")
 		switch msg.(type) {
 		default:
-			log.Info("Received a message ")
 		}
 		return nil
 	}
