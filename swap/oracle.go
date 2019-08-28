@@ -14,35 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package chunk
+package swap
 
-import "testing"
+// PriceOracle is the interface through which Oracles will deliver prices
+type PriceOracle interface {
+	GetPrice(honey uint64) (uint64, error)
+}
 
-func TestAll(t *testing.T) {
-	ts := NewTags()
-
-	ts.Create("1", 1)
-	ts.Create("2", 1)
-
-	all := ts.All()
-
-	if len(all) != 2 {
-		t.Fatalf("expected length to be 2 got %d", len(all))
+// NewPriceOracle returns the actual oracle to be used for discovering the price
+// It will return a default one
+func NewPriceOracle() PriceOracle {
+	return &fixedPriceOracle{
+		honeyPrice: defaultHoneyPrice,
 	}
+}
 
-	if n := all[0].TotalCounter(); n != 1 {
-		t.Fatalf("expected tag 0 Total to be 1 got %d", n)
-	}
+// fixedPriceOracle is a price oracle which which returns a fixed price
+type fixedPriceOracle struct {
+	honeyPrice uint64
+}
 
-	if n := all[1].TotalCounter(); n != 1 {
-		t.Fatalf("expected tag 1 Total to be 1 got %d", n)
-	}
-
-	ts.Create("3", 1)
-	all = ts.All()
-
-	if len(all) != 3 {
-		t.Fatalf("expected length to be 3 got %d", len(all))
-	}
-
+// GetPrice returns the actual price for honey
+func (cpo *fixedPriceOracle) GetPrice(honey uint64) (uint64, error) {
+	return honey * cpo.honeyPrice, nil
 }

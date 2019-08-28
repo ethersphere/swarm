@@ -50,10 +50,13 @@ type Prices interface {
 	Price(interface{}) *Price
 }
 
+// Payer is the base type to define who pays in an exchange between peers
 type Payer bool
 
 const (
-	Sender   = Payer(true)
+	// Sender declares that a message needs to be paid by the sender of the message
+	Sender = Payer(true)
+	// Receiver declares that a message needs to be paid by the receiver of the message
 	Receiver = Payer(false)
 )
 
@@ -69,8 +72,8 @@ type Price struct {
 // This method then returns the correct signed amount,
 // depending on who pays, which is identified by the `payer` argument:
 // `Send` will pass a `Sender` payer, `Receive` will pass the `Receiver` argument.
-// Thus: If Sending and sender pays, amount positive, otherwise negative
-// If Receiving, and receiver pays, amount positive, otherwise negative
+// Thus: If Sending and sender pays, amount negative, otherwise positive
+// If Receiving, and receiver pays, amount negative, otherwise positive
 func (p *Price) For(payer Payer, size uint32) int64 {
 	price := p.Value
 	if p.PerByte {
@@ -100,6 +103,7 @@ type Accounting struct {
 	Prices  // interface to prices logic
 }
 
+// NewAccounting creates a new instance of Accounting
 func NewAccounting(balance Balance, po Prices) *Accounting {
 	ah := &Accounting{
 		Prices:  po,

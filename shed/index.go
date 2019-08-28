@@ -147,6 +147,37 @@ func (f Index) Get(keyFields Item) (out Item, err error) {
 	return out.Merge(keyFields), nil
 }
 
+// Fill populates fields on provided items that are part of the
+// encoded value by getting them based on information passed in their
+// fields. Every item must have all fields needed for encoding the
+// key set. The passed slice items will be changed so that they
+// contain data from the index values. No new slice is allocated.
+// This function uses a single leveldb snapshot.
+func (f Index) Fill(items []Item) (err error) {
+	snapshot, err := f.db.ldb.GetSnapshot()
+	if err != nil {
+		return err
+	}
+	defer snapshot.Release()
+
+	for i, item := range items {
+		key, err := f.encodeKeyFunc(item)
+		if err != nil {
+			return err
+		}
+		value, err := snapshot.Get(key, nil)
+		if err != nil {
+			return err
+		}
+		v, err := f.decodeValueFunc(item, value)
+		if err != nil {
+			return err
+		}
+		items[i] = v.Merge(item)
+	}
+	return nil
+}
+
 // Has accepts key fields represented as Item to check
 // if there this Item's encoded key is stored in
 // the index.
@@ -156,6 +187,28 @@ func (f Index) Has(keyFields Item) (bool, error) {
 		return false, err
 	}
 	return f.db.Has(key)
+}
+
+// HasMulti accepts multiple multiple key fields represented as Item to check if
+// there this Item's encoded key is stored in the index for each of them.
+func (f Index) HasMulti(items ...Item) ([]bool, error) {
+	have := make([]bool, len(items))
+	snapshot, err := f.db.ldb.GetSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	defer snapshot.Release()
+	for i, keyFields := range items {
+		key, err := f.encodeKeyFunc(keyFields)
+		if err != nil {
+			return nil, err
+		}
+		have[i], err = snapshot.Has(key, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return have, nil
 }
 
 // Put accepts Item to encode information from it

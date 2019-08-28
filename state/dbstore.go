@@ -35,7 +35,7 @@ type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
-	Iterate(prefix string, iterFunc func([]byte, []byte)) (err error)
+	Iterate(prefix string, iterFunc iterFunction) (err error)
 	Close() error
 }
 
@@ -107,14 +107,26 @@ func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
 }
 
-// Iterate entries which has a specific prefix
-// The key and value may be modified in the iterFunc
-func (s *DBStore) Iterate(prefix string, iterFunc func([]byte, []byte)) (err error) {
+// iterFunction is a function called on every key/value pair obtained
+// through iterating the store.
+// If true is returned in the stop variable, iteration will
+// stop, and by returning the error, that error will be
+// propagated to the called iterator method on Iterate.
+type iterFunction func(key, value []byte) (stop bool, err error)
+
+// Iterate entries (key/value pair) which have keys matching the given prefix
+func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {
 	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
+	defer iter.Release()
 	for iter.Next() {
-		iterFunc(iter.Key(), iter.Value())
+		stop, err := iterFunc(iter.Key(), iter.Value())
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
 	}
-	iter.Release()
 	return iter.Error()
 }
 

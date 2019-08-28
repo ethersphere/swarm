@@ -332,6 +332,8 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 
 func newTestNode(t *testing.T, dir string) *testNode {
 
+	t.Helper()
+
 	conf, account := getTestAccount(t, dir)
 	ks := keystore.NewKeyStore(path.Join(dir, "keystore"), 1<<18, 1)
 
@@ -342,7 +344,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 	// assign ports
 	ports, err := getAvailableTCPPorts(2)
 	if err != nil {
-		t.Fatal(err)
+		return nil
 	}
 	p2pPort := ports[0]
 	httpPort := ports[1]
@@ -386,7 +388,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		}
 	}
 	if node.Client == nil {
-		t.Fatal(err)
+		t.Fatal("Expected nil node")
 	}
 
 	// load info
