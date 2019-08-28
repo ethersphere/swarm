@@ -413,7 +413,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	}
 	p.addFwdCache(pssmsg)
 
-	psstopic := Topic(pssmsg.Payload.Topic)
+	psstopic := pssmsg.Payload.Topic
 
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
@@ -466,7 +466,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	var keyFunc func(envelope *envelope) (*receivedMessage, string, PssAddress, error)
 
 	envelope := pssmsg.Payload
-	psstopic := Topic(envelope.Topic)
+	psstopic := envelope.Topic
 
 	if raw {
 		payload = pssmsg.Payload.Data

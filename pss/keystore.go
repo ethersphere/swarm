@@ -167,8 +167,8 @@ func (ks *KeyStore) processSym(envelope *envelope) (*receivedMessage, string, Ps
 		}
 		var from PssAddress
 		ks.mx.RLock()
-		if ks.symKeyPool[*symkeyid][Topic(envelope.Topic)] != nil {
-			from = ks.symKeyPool[*symkeyid][Topic(envelope.Topic)].address
+		if ks.symKeyPool[*symkeyid][envelope.Topic] != nil {
+			from = ks.symKeyPool[*symkeyid][envelope.Topic].address
 		}
 		ks.mx.RUnlock()
 		ks.symKeyDecryptCacheCursor++
@@ -197,8 +197,8 @@ func (ks *Pss) processAsym(envelope *envelope) (*receivedMessage, string, PssAdd
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
 	var from PssAddress
 	ks.mx.RLock()
-	if ks.pubKeyPool[pubkeyid][Topic(envelope.Topic)] != nil {
-		from = ks.pubKeyPool[pubkeyid][Topic(envelope.Topic)].address
+	if ks.pubKeyPool[pubkeyid][envelope.Topic] != nil {
+		from = ks.pubKeyPool[pubkeyid][envelope.Topic].address
 	}
 	ks.mx.RUnlock()
 	return recvmsg, pubkeyid, from, nil
