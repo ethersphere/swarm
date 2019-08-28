@@ -76,7 +76,7 @@ type Swarm struct {
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
 	bzzEth            *bzzeth.BzzEth
-	bzz               *network.Bzz       // the logistic manager
+	bzz               *network.Bzz // the logistic manager
 	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
