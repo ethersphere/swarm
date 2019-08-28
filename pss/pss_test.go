@@ -614,8 +614,8 @@ func TestOutboxFull(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error enqueing third message, instead got nil")
 	}
-	procChan<- struct{}{}
-	procChan<- struct{}{}
+	procChan <- struct{}{}
+	procChan <- struct{}{}
 	//Must wait a bit for the routines processing the messages to free the slots
 	time.Sleep(1 * time.Millisecond)
 	//There should be slots again in the outbox
@@ -1831,12 +1831,10 @@ func benchmarkMessageProcessing(b *testing.B, failProb float32) {
 	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
 
 	numMessages := 200000
-	failed := 0
 	procChan := make(chan struct{}, numMessages)
 	forward := func(msg *PssMsg) error {
 		roll := rand.Float32()
 		if roll < failProb {
-			failed++
 			return errors.New(fmt.Sprintf("Forced test error forwarding message. roll: %.2f", roll))
 		} else {
 			procChan <- struct{}{}
