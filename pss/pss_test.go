@@ -1835,7 +1835,7 @@ func benchmarkMessageProcessing(b *testing.B, failProb float32) {
 	forward := func(msg *PssMsg) error {
 		roll := rand.Float32()
 		if roll < failProb {
-			return errors.New(fmt.Sprintf("Forced test error forwarding message. roll: %.2f", roll))
+			return fmt.Errorf("Forced test error forwarding message. roll: %.2f", roll)
 		} else {
 			procChan <- struct{}{}
 			return nil
