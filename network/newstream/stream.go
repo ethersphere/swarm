@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -816,8 +815,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		Ruid: msg.Ruid,
 	}
 	wantHashes := []chunk.Address{}
-	s1 := make(map[string]bool)
-	s2 := make(map[string]bool)
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
@@ -825,25 +822,11 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 			wantHashes = append(wantHashes, hash)
 		}
 	}
-	for _, v := range wantHashes {
-		if _, ok := s1[v.String()]; ok {
-			panic("seen s1")
-		} else {
-			s1[v.String()] = true
-		}
-	}
 	chunks, err := provider.Get(ctx, wantHashes...)
 	if err != nil {
 		p.logger.Error("handleWantedHashesMsg", "err", err)
 		p.Drop()
 		return
-	}
-	for _, v := range chunks {
-		if _, ok := s2[v.Address().String()]; ok {
-			panic("seen s2")
-		} else {
-			s2[v.Address().String()] = true
-		}
 	}
 	for _, v := range chunks {
 		chunkD := DeliveredChunk{
@@ -915,13 +898,8 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		p.Drop()
 		return
 	}
-	s0 := make(map[string]bool)
 	chunks := make([]chunk.Chunk, len(msg.Chunks))
 	for i, dc := range msg.Chunks {
-		if _, ok := s0[dc.Addr.Hex()]; ok {
-			panic("seen already")
-		}
-		s0[dc.Addr.Hex()] = true
 		chunks[i] = chunk.NewChunk(dc.Addr, dc.Data)
 	}
 	provider := r.getProvider(w.stream)
@@ -936,8 +914,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 			return
 		}
 		p.logger.Error("clientHandleChunkDelivery error putting chunk", "err", err)
-		panic(err)
-
+		return
 	}
 	for _, v := range seen {
 		if v {
@@ -979,7 +956,6 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				p.mtx.RLock()
 				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
 					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address())
-					panic(fmt.Errorf("got an unsolicited chunk from peer! peer %s caddr %s", p.ID(), c.Address()))
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop()
 					p.mtx.RLock()
