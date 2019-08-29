@@ -140,11 +140,11 @@ func (s *Swap) addPeer(p *Peer) {
 	s.peers[p.ID()] = p
 }
 
-func (s *Swap) getPeer(id enode.ID) (*Peer, bool) {
+func (s *Swap) getPeer(id enode.ID) *Peer {
 	s.peersLock.RLock()
 	defer s.peersLock.RUnlock()
-	peer, ok := s.peers[id]
-	return peer, ok
+	peer := s.peers[id]
+	return peer
 }
 
 type swapAPI interface {
