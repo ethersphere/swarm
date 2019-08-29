@@ -22,10 +22,10 @@ import (
 )
 
 var (
-	loglevel      = flag.Int("loglevel", 3, "logging verbosity")
-	psses         map[string]*pss.Pss
-	cryptoUtils   pss.CryptoUtils
-	cryptoBackend pss.CryptoBackend
+	loglevel    = flag.Int("loglevel", 3, "logging verbosity")
+	psses       map[string]*pss.Pss
+	cryptoUtils pss.CryptoUtils
+	crypto      pss.CryptoBackend
 )
 
 func init() {
@@ -36,7 +36,7 @@ func init() {
 	log.Root().SetHandler(h)
 
 	cryptoUtils = pss.NewCryptoUtils()
-	cryptoBackend = pss.NewCryptoBackend()
+	crypto = pss.NewCryptoBackend()
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -137,7 +137,7 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubkey, err := cryptoBackend.UnmarshalPubkey(pubkeybytes)
+	pubkey, err := crypto.UnmarshalPubkey(pubkeybytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func newServices(allowRaw bool) adapters.Services {
 				return nil, err
 			}
 			//psses[common.ToHex(cryptoUtils.FromECDSAPub(&privkey.PublicKey))] = ps
-			psses[hexutil.Encode(cryptoBackend.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
