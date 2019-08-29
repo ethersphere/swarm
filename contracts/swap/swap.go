@@ -69,26 +69,19 @@ type Contract interface {
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
-	// Cheques returns the last cheque for the given address
+	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
 }
 
-// ChequeResult is needed because the underlying `Cheques` method returns an untyped struct
-type ChequeResult struct {
-	Serial      *big.Int
-	Amount      *big.Int
-	PaidOut     *big.Int
-	CashTimeout *big.Int
-}
-
+// CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
 type CashChequeResult struct {
-	Beneficiary      common.Address
-	Recipient        common.Address
-	Caller           common.Address
-	TotalPayout      *big.Int
-	CumulativePayout *big.Int
-	CallerPayout     *big.Int
-	Bounced          bool
+	Beneficiary      common.Address // beneficiary of the cheque
+	Recipient        common.Address // address which received the funds
+	Caller           common.Address // caller of cashCheque
+	TotalPayout      *big.Int       // total amount that was paid out in this call
+	CumulativePayout *big.Int       // cumulative payout of the cheque that was cashed
+	CallerPayout     *big.Int       // payout for the caller of cashCheque
+	Bounced          bool           // indicates wether parts of the cheque bounced
 }
 
 // Params encapsulates some contract parameters (currently mostly informational)
@@ -151,7 +144,7 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 	return s.instance.Issuer(opts)
 }
 
-// SubmitChequeBeneficiary prepares to send a call to submitChequeBeneficiary and blocks until the transaction is mined.
+// CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
 func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
 	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {
