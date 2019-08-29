@@ -321,8 +321,8 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	creditor := NewPeer(cPeer.Peer, debitorSwap, creditorSwap.owner.address, debitorSwap.owner.Contract)
-	debitor := NewPeer(dPeer.Peer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	creditor := NewPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
 	// set balances arbitrarily
 	testAmount := int64(DefaultPaymentThreshold + 42)
@@ -847,7 +847,7 @@ func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
-	testPeer := NewPeer(newDummyPeer().Peer, swap, common.Address{}, common.Address{})
+	testPeer := NewPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	testCheque := newTestCheque()
 
 	if err := swap.saveLastReceivedCheque(testPeer, testCheque); err != nil {
@@ -872,7 +872,7 @@ func newTestSwapAndPeer(t *testing.T, key *ecdsa.PrivateKey) (*Swap, *Peer, func
 	swap, clean := newTestSwap(t, key)
 	// owner address is the beneficiary (counterparty) for the peer
 	// that's because we expect cheques we receive to be signed by the address we would issue cheques to
-	peer := NewPeer(newDummyPeer().Peer, swap, ownerAddress, testChequeContract)
+	peer := NewPeer(newDummyPeer().Peer, ownerAddress, testChequeContract)
 	// we need to adjust the owner address on swap because we will issue cheques to beneficiaryAddress
 	swap.owner.address = beneficiaryAddress
 	return swap, peer, clean
