@@ -131,7 +131,7 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
 	}
 
-	// the beneficiary is the owner of the counterparty swap contract
+	// the beneficiary is the issuer of the counterparty swap contract
 	if err := cheque.VerifySig(p.beneficiary); err != nil {
 		return err
 	}

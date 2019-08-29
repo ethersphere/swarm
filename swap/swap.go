@@ -57,7 +57,7 @@ type Swap struct {
 	peers               map[enode.ID]*Peer   // map of all swap Peers
 	peersLock           sync.RWMutex         // lock for peers map
 	backend             contract.Backend     // the backend (blockchain) used
-	owner               *Owner               // contract access
+	issuer              *Issuer              // Issuer contract access
 	params              *Params              // economic and operational parameters
 	contract            swap.Contract        // reference to the smart contract
 	oracle              PriceOracle          // the oracle providing the ether price for honey
@@ -65,10 +65,10 @@ type Swap struct {
 	disconnectThreshold int64                // balance difference required for dropping peer
 }
 
-// Owner encapsulates information related to accessing the contract
-type Owner struct {
+// Issuer encapsulates information related to accessing the contract
+type Issuer struct {
 	Contract   common.Address    // address of swap contract
-	address    common.Address    // owner address
+	address    common.Address    // issuer address
 	privateKey *ecdsa.PrivateKey // private key
 	publicKey  *ecdsa.PublicKey  // public key
 }
@@ -93,7 +93,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		cheques:             make(map[enode.ID]*Cheque),
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
-		owner:               createOwner(prvkey, contract),
+		issuer:              createIssuer(prvkey, contract),
 		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
@@ -126,10 +126,10 @@ func keyToID(key string, prefix string) enode.ID {
 	return enode.HexID(key[len(prefix):])
 }
 
-// createOwner assings keys and addresses
-func createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
+// createIssuer assings keys and addresses
+func createIssuer(prvkey *ecdsa.PrivateKey, contract common.Address) *Issuer {
 	pubkey := &prvkey.PublicKey
-	return &Owner{
+	return &Issuer{
 		privateKey: prvkey,
 		publicKey:  pubkey,
 		Contract:   contract,
@@ -139,7 +139,7 @@ func createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
 
 // DeploySuccess is for convenience log output
 func (s *Swap) DeploySuccess() string {
-	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.owner.Contract.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
+	return fmt.Sprintf("contract: %s, issuer: %s, deposit: %v, signer: %x", s.issuer.Contract.Hex(), s.issuer.address.Hex(), s.params.InitialDepositAmount, s.issuer.publicKey)
 }
 
 // Add is the (sole) accounting function
@@ -244,7 +244,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	opts := bind.NewKeyedTransactor(s.issuer.privateKey)
 	opts.Context = ctx
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
@@ -271,7 +271,7 @@ func submitChequeAndCash(s *Swap, otherSwap contract.Contract, opts *bind.Transa
 	}
 	log.Debug("submit tx mined", "receipt", receipt)
 
-	receipt, err = otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(actualAmount)))
+	receipt, err = otherSwap.CashChequeBeneficiary(opts, s.backend, s.issuer.Contract, big.NewInt(int64(actualAmount)))
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
@@ -284,7 +284,7 @@ func submitChequeAndCash(s *Swap, otherSwap contract.Contract, opts *bind.Transa
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
 func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
-	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
+	if err := cheque.verifyChequeProperties(p, s.issuer.address); err != nil {
 		return 0, err
 	}
 
@@ -409,12 +409,12 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 			Serial:      serial + 1,
 			Amount:      total + amount,
 			Timeout:     defaultCashInDelay,
-			Contract:    s.owner.Contract,
+			Contract:    s.issuer.Contract,
 			Honey:       honey,
 			Beneficiary: beneficiary,
 		},
 	}
-	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
+	cheque.Signature, err = cheque.Sign(s.issuer.privateKey)
 
 	return cheque, err
 }
@@ -532,8 +532,8 @@ func (s *Swap) verifyContract(ctx context.Context, address common.Address) error
 	return contract.ValidateCode(ctx, s.backend, address)
 }
 
-// getContractOwner retrieve the owner of the chequebook at address from the blockchain
-func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (common.Address, error) {
+// getContractIssuer retrieve the issuer of the chequebook at address from the blockchain
+func (s *Swap) getContractIssuer(ctx context.Context, address common.Address) (common.Address, error) {
 	contr, err := contract.InstanceAt(address, s.backend)
 	if err != nil {
 		return common.Address{}, err
@@ -544,32 +544,32 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 
 // Deploy deploys the Swap contract
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
-	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	opts := bind.NewKeyedTransactor(s.issuer.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	log.Info("deploying new swap", "owner", opts.From.Hex())
-	address, err := s.deployLoop(opts, backend, s.owner.address, defaultHarddepositTimeoutDuration)
+	log.Info("deploying new swap", "issuer", opts.From.Hex())
+	address, err := s.deployLoop(opts, backend, s.issuer.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
 		log.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	s.owner.Contract = address
-	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
+	s.issuer.Contract = address
+	log.Info("swap deployed", "address", address.Hex(), "issuer", opts.From.Hex())
 
 	return err
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
-func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
+func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, issuer common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
 
-		if _, s.contract, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+		if _, s.contract, tx, err = contract.Deploy(opts, backend, issuer, defaultHarddepositTimeoutDuration); err != nil {
 			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}

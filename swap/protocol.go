@@ -105,7 +105,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	protoPeer := protocols.NewPeer(p, rw, Spec)
 
 	handshake, err := protoPeer.Handshake(context.Background(), &HandshakeMsg{
-		ContractAddress: s.owner.Contract,
+		ContractAddress: s.issuer.Contract,
 	}, s.verifyHandshake)
 	if err != nil {
 		return err
@@ -116,7 +116,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return ErrInvalidHandshakeMsg
 	}
 
-	beneficiary, err := s.getContractOwner(context.Background(), response.ContractAddress)
+	beneficiary, err := s.getContractIssuer(context.Background(), response.ContractAddress)
 	if err != nil {
 		return err
 	}

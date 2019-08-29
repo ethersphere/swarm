@@ -38,7 +38,7 @@ func TestHandshake(t *testing.T) {
 	var err error
 
 	// setup test swap object
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, issuerKey)
 	defer clean()
 
 	ctx := context.Background()
@@ -47,7 +47,7 @@ func TestHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
+	protocolTester := p2ptest.NewProtocolTester(swap.issuer.privateKey, 2, swap.run)
 
 	// shortcut to creditor node
 	debitor := protocolTester.Nodes[0]
@@ -60,7 +60,7 @@ func TestHandshake(t *testing.T) {
 	cheque := newTestCheque()
 
 	// sign the cheque
-	cheque.Signature, err = cheque.Sign(swap.owner.privateKey)
+	cheque.Signature, err = cheque.Sign(swap.issuer.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,14 +83,14 @@ func TestHandshake(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &HandshakeMsg{
-					ContractAddress: swap.owner.Contract,
+					ContractAddress: swap.issuer.Contract,
 				},
 				Peer: creditor.ID(),
 			},
 			{
 				Code: 0,
 				Msg: &HandshakeMsg{
-					ContractAddress: swap.owner.Contract,
+					ContractAddress: swap.issuer.Contract,
 				},
 				Peer: debitor.ID(),
 			},
@@ -112,7 +112,7 @@ func TestHandshake(t *testing.T) {
 func TestEmitCheque(t *testing.T) {
 	log.Debug("set up test swaps")
 	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
-	debitorSwap, clean2 := newTestSwap(t, ownerKey)
+	debitorSwap, clean2 := newTestSwap(t, issuerKey)
 	defer clean1()
 	defer clean2()
 
@@ -133,7 +133,7 @@ func TestEmitCheque(t *testing.T) {
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
 	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
-	debitor := NewPeer(dProtoPeer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dProtoPeer, creditorSwap, debitorSwap.issuer.address, debitorSwap.issuer.Contract)
 
 	// set balance artificially
 	creditorSwap.balances[debitor.ID()] = 42
@@ -146,14 +146,14 @@ func TestEmitCheque(t *testing.T) {
 	log.Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:    debitorSwap.owner.Contract,
-			Beneficiary: creditorSwap.owner.address,
+			Contract:    debitorSwap.issuer.Contract,
+			Beneficiary: creditorSwap.issuer.address,
 			Amount:      42,
 			Honey:       42,
 			Timeout:     0,
 		},
 	}
-	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
+	cheque.Signature, err = cheque.Sign(debitorSwap.issuer.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestEmitCheque(t *testing.T) {
 // It is the debitor who triggers cheques
 func TestTriggerPaymentThreshold(t *testing.T) {
 	log.Debug("create test swap")
-	debitorSwap, clean := newTestSwap(t, ownerKey)
+	debitorSwap, clean := newTestSwap(t, issuerKey)
 	defer clean()
 
 	// setup the wait for mined transaction function for testing
