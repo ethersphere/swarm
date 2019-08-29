@@ -47,7 +47,7 @@ type syncProvider struct {
 	autostart               bool
 	quit                    chan struct{}
 
-	cacheMtx sync.Mutex
+	cacheMtx sync.RWMutex
 
 	cache *lru.Cache
 
@@ -128,8 +128,7 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 	check := make([]chunk.Address, 0)
 	indexes := make([]int, 0)
 
-	s.cacheMtx.Lock()
-
+	s.cacheMtx.RLock()
 	for i, addr := range addrs {
 		if !s.cache.Contains(addr.Hex()) {
 			check = append(check, addr)
@@ -140,14 +139,12 @@ func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
 		}
 	}
+	s.cacheMtx.RUnlock()
 
 	has, err := s.netStore.Store.HasMulti(ctx, check...)
 	if err != nil {
-		s.cacheMtx.Unlock()
 		return nil, err
 	}
-
-	s.cacheMtx.Unlock()
 
 	for i, have := range has {
 		if !have {
@@ -220,8 +217,6 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 }
 
 func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error) {
-	s.cacheMtx.Lock()
-	defer s.cacheMtx.Unlock()
 	start := time.Now()
 	defer func(start time.Time) {
 		end := time.Since(start)
@@ -238,6 +233,8 @@ func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []boo
 		}
 	}
 	go func(chunks ...chunk.Chunk) {
+		s.cacheMtx.Lock()
+		defer s.cacheMtx.Unlock()
 		for _, c := range chunks {
 			s.cache.Add(c.Address().Hex(), c.Data())
 		}
