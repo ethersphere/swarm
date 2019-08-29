@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	loglevel      = flag.Int("l", 3, "loglevel")
+	loglevel      = flag.Int("loglevel", 3, "logging verbosity")
 	psses         map[string]*pss.Pss
+	cryptoUtils   pss.CryptoUtils
 	cryptoBackend pss.CryptoBackend
 )
 
@@ -34,6 +35,7 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
+	cryptoUtils = pss.NewCryptoUtils()
 	cryptoBackend = pss.NewCryptoBackend()
 	psses = make(map[string]*pss.Pss)
 }
@@ -135,7 +137,7 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubkey, err := crypto.UnmarshalPubkey(pubkeybytes)
+	pubkey, err := cryptoBackend.UnmarshalPubkey(pubkeybytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,11 +229,11 @@ func newServices(allowRaw bool) adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := cryptoBackend.NewKeyPair(ctxlocal)
+			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
 			if err != nil {
 				return nil, err
 			}
-			privkey, err := cryptoBackend.GetPrivateKey(keys)
+			privkey, err := cryptoUtils.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
@@ -243,8 +245,8 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			//psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
-			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			//psses[common.ToHex(cryptoUtils.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(cryptoBackend.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {

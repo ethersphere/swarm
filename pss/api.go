@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
@@ -118,13 +117,13 @@ func (pssapi *API) BaseAddr() (PssAddress, error) {
 // Retrieves the node's public key in hex form
 func (pssapi *API) GetPublicKey() (keybytes hexutil.Bytes) {
 	key := pssapi.Pss.PublicKey()
-	keybytes = crypto.FromECDSAPub(key)
+	keybytes = pssapi.Pss.Crypto.FromECDSAPub(key)
 	return keybytes
 }
 
 // Set Public key to associate with a particular Pss peer
 func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic Topic, addr PssAddress) error {
-	pk, err := crypto.UnmarshalPubkey(pubkey)
+	pk, err := pssapi.Pss.Crypto.UnmarshalPubkey(pubkey)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkey)
 	}

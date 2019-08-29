@@ -425,11 +425,11 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			// execadapter does not exec init()
 			initTest()
 
-			// create keys in crypto backend and set up the pss object
+			// create keys in cryptoUtils and set up the pss object
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second*3)
 			defer cancel()
-			keys, err := cryptoBackend.NewKeyPair(ctxlocal)
-			privkey, err := cryptoBackend.GetPrivateKey(keys)
+			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
+			privkey, err := cryptoUtils.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)

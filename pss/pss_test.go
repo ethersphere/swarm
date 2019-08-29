@@ -34,7 +34,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -52,7 +51,7 @@ var (
 	initOnce        = sync.Once{}
 	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
 	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
-	cryptoBackend   CryptoBackend
+	cryptoUtils     CryptoUtils
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -76,7 +75,7 @@ func initTest() {
 			h := log.CallerFileHandler(hf)
 			log.Root().SetHandler(h)
 
-			cryptoBackend = NewCryptoBackend()
+			cryptoUtils = NewCryptoUtils()
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
@@ -155,8 +154,8 @@ func TestCache(t *testing.T) {
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := cryptoBackend.NewKeyPair(ctx)
-	privkey, err := cryptoBackend.GetPrivateKey(keys)
+	keys, err := cryptoUtils.NewKeyPair(ctx)
+	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,11 +249,11 @@ func TestAddressMatch(t *testing.T) {
 	kad := network.NewKademlia(localaddr, kadparams)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := cryptoBackend.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
-	privkey, err := cryptoBackend.GetPrivateKey(keys)
+	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	pssp := NewParams().WithPrivateKey(privkey)
 	ps, err := New(kad, pssp)
 	if err != nil {
@@ -308,7 +307,7 @@ func TestAddressMatchProx(t *testing.T) {
 	peerCount := nnPeerCount + 2
 
 	// set up pss
-	privKey, err := crypto.GenerateKey()
+	privKey, err := cryptoUtils.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
 	if err != nil {
@@ -487,7 +486,7 @@ func TestMessageProcessing(t *testing.T) {
 
 	t.Skip("Disabled due to probable faulty logic for outbox expectations")
 	// setup
-	privkey, err := crypto.GenerateKey()
+	privkey, err := cryptoUtils.GenerateKey()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -611,21 +610,21 @@ func TestKeys(t *testing.T) {
 	// make our key and init pss with it
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	ourkeys, err := cryptoBackend.NewKeyPair(ctx)
+	ourkeys, err := cryptoUtils.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("create 'our' key fail")
 	}
 	ctx, cancel2 := context.WithTimeout(context.Background(), time.Second)
 	defer cancel2()
-	theirkeys, err := cryptoBackend.NewKeyPair(ctx)
+	theirkeys, err := cryptoUtils.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("create 'their' key fail")
 	}
-	ourprivkey, err := cryptoBackend.GetPrivateKey(ourkeys)
+	ourprivkey, err := cryptoUtils.GetPrivateKey(ourkeys)
 	if err != nil {
 		t.Fatalf("failed to retrieve 'our' private key")
 	}
-	theirprivkey, err := cryptoBackend.GetPrivateKey(theirkeys)
+	theirprivkey, err := cryptoUtils.GetPrivateKey(theirkeys)
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
@@ -649,12 +648,12 @@ func TestKeys(t *testing.T) {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
 
-	// get the key back from cryto backend, check that it's still the same
-	outkeyback, err := ps.backend.GetSymKey(outkeyid)
+	// get the key back from crypto backend, check that it's still the same
+	outkeyback, err := ps.Crypto.GetSymKey(outkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	inkey, err := ps.backend.GetSymKey(inkeyid)
+	inkey, err := ps.Crypto.GetSymKey(inkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -675,7 +674,7 @@ func TestKeys(t *testing.T) {
 // check that we can retrieve previously added public key entires per topic and peer
 func TestGetPublickeyEntries(t *testing.T) {
 
-	privkey, err := crypto.GenerateKey()
+	privkey, err := cryptoUtils.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -688,11 +687,11 @@ func TestGetPublickeyEntries(t *testing.T) {
 	topicaddr[Topic{0x2a}] = peeraddr[:16]
 	topicaddr[Topic{0x02, 0x9a}] = []byte{}
 
-	remoteprivkey, err := crypto.GenerateKey()
+	remoteprivkey, err := cryptoUtils.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	remotepubkeybytes := crypto.FromECDSAPub(&remoteprivkey.PublicKey)
+	remotepubkeybytes := ps.Crypto.FromECDSAPub(&remoteprivkey.PublicKey)
 	remotepubkeyhex := common.ToHex(remotepubkeybytes)
 
 	pssapi := NewAPI(ps)
@@ -736,7 +735,7 @@ OUTER:
 func TestPeerCapabilityMismatch(t *testing.T) {
 
 	// create privkey for forwarder node
-	privkey, err := crypto.GenerateKey()
+	privkey, err := cryptoUtils.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -796,7 +795,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 func TestRawAllow(t *testing.T) {
 
 	// set up pss like so many times before
-	privKey, err := crypto.GenerateKey()
+	privKey, err := cryptoUtils.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1522,8 +1521,8 @@ func benchmarkSymKeySend(b *testing.B) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := cryptoBackend.NewKeyPair(ctx)
-	privkey, err := cryptoBackend.GetPrivateKey(keys)
+	keys, err := cryptoUtils.NewKeyPair(ctx)
+	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
@@ -1535,7 +1534,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
-	symkey, err := ps.backend.GetSymKey(symkeyid)
+	symkey, err := ps.Crypto.GetSymKey(symkeyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey: %v", err)
 	}
@@ -1567,8 +1566,8 @@ func benchmarkAsymKeySend(b *testing.B) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := cryptoBackend.NewKeyPair(ctx)
-	privkey, err := cryptoBackend.GetPrivateKey(keys)
+	keys, err := cryptoUtils.NewKeyPair(ctx)
+	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
@@ -1579,7 +1578,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendAsym(common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
+		ps.SendAsym(common.ToHex(ps.Crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
 	}
 }
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
@@ -1614,8 +1613,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	var keyid string
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := cryptoBackend.NewKeyPair(ctx)
-	privkey, err := cryptoBackend.GetPrivateKey(keys)
+	keys, err := cryptoUtils.NewKeyPair(ctx)
+	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1630,7 +1629,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
-		symkey, err := ps.backend.GetSymKey(keyid)
+		symkey, err := ps.Crypto.GetSymKey(keyid)
 		if err != nil {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
@@ -1691,8 +1690,8 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	addr := make([]PssAddress, keycount)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := cryptoBackend.NewKeyPair(ctx)
-	privkey, err := cryptoBackend.GetPrivateKey(keys)
+	keys, err := cryptoUtils.NewKeyPair(ctx)
+	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1708,7 +1707,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 
 	}
-	symkey, err := ps.backend.GetSymKey(keyid)
+	symkey, err := ps.Crypto.GetSymKey(keyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
@@ -1809,8 +1808,8 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := cryptoBackend.NewKeyPair(ctxlocal)
-			privkey, err := cryptoBackend.GetPrivateKey(keys)
+			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
+			privkey, err := cryptoUtils.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)

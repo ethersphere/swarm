@@ -19,46 +19,86 @@ import (
 	"context"
 	"crypto/ecdsa"
 
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
+
+var cryptoBackend defaultCryptoBackend
 
 type CryptoBackend interface {
 	GetSymKey(id string) ([]byte, error)
 	GenerateSymKey() (string, error)
 	AddSymKeyDirect(bytes []byte) (string, error)
-	GetPrivateKey(id string) (*ecdsa.PrivateKey, error)
-	NewKeyPair(ctx context.Context) (string, error)
+	FromECDSAPub(pub *ecdsa.PublicKey) []byte
+	UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error)
+	CompressPubkey(pubkey *ecdsa.PublicKey) []byte
 }
 
-type whisperCryptoBackend struct {
+//Used only in tests
+type CryptoUtils interface {
+	GenerateKey() (*ecdsa.PrivateKey, error)
+	NewKeyPair(ctx context.Context) (string, error)
+	GetPrivateKey(id string) (*ecdsa.PrivateKey, error)
+}
+
+type defaultCryptoBackend struct {
 	whisper *whisper.Whisper
 	wapi    *whisper.PublicWhisperAPI
 }
 
 func NewCryptoBackend() CryptoBackend {
 	w := whisper.New(&whisper.DefaultConfig)
-	return &whisperCryptoBackend{
+	cryptoBackend = defaultCryptoBackend{
 		whisper: w,
 		wapi:    whisper.NewPublicWhisperAPI(w),
 	}
+	return &cryptoBackend
 }
 
-func (crypto *whisperCryptoBackend) GetSymKey(id string) ([]byte, error) {
+func NewCryptoUtils() CryptoUtils {
+	if cryptoBackend.whisper == nil {
+		NewCryptoBackend()
+	}
+	return &cryptoBackend
+}
+
+func (crypto *defaultCryptoBackend) GetSymKey(id string) ([]byte, error) {
 	return crypto.whisper.GetSymKey(id)
 }
 
-func (crypto *whisperCryptoBackend) GenerateSymKey() (string, error) {
+func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
 	return crypto.whisper.GenerateSymKey()
 }
 
-func (crypto *whisperCryptoBackend) AddSymKeyDirect(bytes []byte) (string, error) {
+func (crypto *defaultCryptoBackend) AddSymKeyDirect(bytes []byte) (string, error) {
 	return crypto.whisper.AddSymKeyDirect(bytes)
 }
 
-func (crypto *whisperCryptoBackend) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
-	return crypto.whisper.GetPrivateKey(id)
+// FromECDSA exports a public key into a binary dump.
+func (crypto *defaultCryptoBackend) FromECDSAPub(pub *ecdsa.PublicKey) []byte {
+	return ethCrypto.FromECDSAPub(pub)
 }
 
-func (crypto *whisperCryptoBackend) NewKeyPair(ctx context.Context) (string, error) {
+// CompressPubkey encodes a public key to the 33-byte compressed format.
+func (crypto *defaultCryptoBackend) CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
+	return ethCrypto.CompressPubkey(pubkey)
+}
+
+// UnmarshalPubkey converts bytes to a secp256k1 public key.
+func (crypto *defaultCryptoBackend) UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
+	return ethCrypto.UnmarshalPubkey(pub)
+}
+
+// CryptoUtils
+
+func (crypto *defaultCryptoBackend) GenerateKey() (*ecdsa.PrivateKey, error) {
+	return ethCrypto.GenerateKey()
+}
+
+func (crypto *defaultCryptoBackend) NewKeyPair(ctx context.Context) (string, error) {
 	return crypto.wapi.NewKeyPair(ctx)
+}
+
+func (crypto *defaultCryptoBackend) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
+	return crypto.whisper.GetPrivateKey(id)
 }
