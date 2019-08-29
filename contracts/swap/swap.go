@@ -35,7 +35,7 @@ import (
 var (
 	// ErrNotASwapContract is given when an address is verified not to have a SWAP contract based on its bytecode
 	ErrNotASwapContract = errors.New("not a swap contract")
-	// ErrTransactionReverted is given when the transaction that submits or cashes a cheque is reverted
+	// ErrTransactionReverted is given when the transaction that cashes a cheque is reverted
 	ErrTransactionReverted = errors.New("Transaction reverted")
 )
 

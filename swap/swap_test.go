@@ -72,8 +72,8 @@ type booking struct {
 // additional properties for the tests
 type swapTestBackend struct {
 	*backends.SimulatedBackend
-	// the async submit and cashing go routine needs synchronization for tests
-	submitDone chan struct{}
+	// the async cashing go routine needs synchronization for tests
+	cashDone chan struct{}
 }
 
 func init() {
@@ -354,19 +354,19 @@ func TestResetBalance(t *testing.T) {
 		Cheque: cheque,
 	}
 	// now we need to create the channel...
-	testBackend.submitDone = make(chan struct{})
+	testBackend.cashDone = make(chan struct{})
 	// ...and trigger message handling on the receiver side (creditor)
 	// remember that debitor is the model of the remote node for the creditor...
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
-	case <-testBackend.submitDone:
-		log.Debug("submit and cash transactions completed and committed")
+	case <-testBackend.cashDone:
+		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
-		t.Fatalf("Timeout waiting for submit and cash transactions to complete")
+		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
 	// finally check that the creditor also successfully reset the balances
 	if creditorSwap.balances[debitor.ID()] != 0 {
@@ -475,15 +475,15 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	}
 }
 
-// During tests, because the submit and cashing in of cheques are async, we should wait for the function to be returned
+// During tests, because the cashing in of cheques is async, we should wait for the function to be returned
 // Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
 // causing subsequent TX to possibly fail due to nonce mismatch
-func testSubmitChequeAndCash(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	cashCheque(s, otherSwap, opts, cheque)
 	// close the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
-		if stb.submitDone != nil {
-			close(stb.submitDone)
+		if stb.cashDone != nil {
+			close(stb.cashDone)
 		}
 	}
 }
@@ -690,7 +690,7 @@ func setupContractTest() func() {
 	// we overwrite the waitForTx function with one which the simulated backend
 	// immediately commits
 	currentWaitFunc := cswap.WaitFunc
-	defaultCashCheque = testSubmitChequeAndCash
+	defaultCashCheque = testCashCheque
 	// overwrite only for the duration of the test, so...
 	cswap.WaitFunc = testWaitForTx
 	return func() {
@@ -909,7 +909,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	}
 }
 
-// TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher serial and amount
+// TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	increase := uint64(10)
 	oldCheque := newTestCheque()
@@ -927,7 +927,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	}
 }
 
-// TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower serial or amount or an unexpected value
+// TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	increase := uint64(10)
 
@@ -972,7 +972,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
-	// create another cheque with higher serial and amount
+	// create another cheque with higher amount
 	otherCheque := newTestCheque()
 	otherCheque.CumulativePayout = cheque.CumulativePayout + 10
 	otherCheque.Honey = 10
@@ -991,7 +991,6 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 // TestPeerProcessAndVerifyChequeInvalid verifies that processAndVerifyCheque does not accept cheques incompatible with the last cheque
 // it first tries to process an invalid cheque
 // then it processes a valid cheque
-// then rejects one with lower serial
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)

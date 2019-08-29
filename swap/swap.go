@@ -252,7 +252,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	// submit cheque and cash in async, otherwise this blocks here until the TX is mined
+	// cash cheque in async, otherwise this blocks here until the TX is mined
 	go defaultCashCheque(s, otherSwap, opts, cheque)
 
 	return err
@@ -276,7 +276,7 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 		// TODO: do something here
 	}
 
-	log.Debug("submit tx mined", "receipt", receipt)
+	log.Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -371,7 +371,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 }
 
 // createCheque creates a new cheque whose beneficiary will be the peer and
-// whose serial and amount are set based on the last cheque and current balance for this peer
+// whose amount is based on the last cheque and current balance for this peer
 // The cheque will be signed and point to the issuer's contract
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines

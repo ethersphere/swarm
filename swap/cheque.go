@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// encodeForSignature encodes the cheque in the format used in the signing procedure
+// encodeForSignature encodes the cheque params in the format used in the signing procedure
 func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
@@ -39,7 +39,7 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	return input
 }
 
-// sigHash hashes the cheque using the prefix that would be added by eth_Sign
+// sigHash hashes the cheque params using the prefix that would be added by eth_Sign
 func (cheque *ChequeParams) sigHash() []byte {
 	// we can ignore the error because it is always nil
 	encoded := cheque.encodeForSignature()
@@ -128,8 +128,7 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 	return nil
 }
 
-// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
-// furthermore it cheques that the increase in amount is as expected
+// verifyChequeAgainstLast verifies that the amount is higher than in the previous cheque and the increase is as expected
 // returns the actual amount received in this cheque
 func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
 	actualAmount := cheque.CumulativePayout

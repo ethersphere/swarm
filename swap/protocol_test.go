@@ -165,17 +165,17 @@ func TestEmitCheque(t *testing.T) {
 	defer cleanup()
 
 	// now we need to create the channel...
-	testBackend.submitDone = make(chan struct{})
+	testBackend.cashDone = make(chan struct{})
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
-	case <-testBackend.submitDone:
-		log.Debug("submit and cash transactions completed and committed")
+	case <-testBackend.cashDone:
+		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
-		t.Fatalf("Timeout waiting for submit and cash transactions to complete")
+		t.Fatalf("Timeout waiting for cash transaction to complete")
 	}
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// check that the balance has been reset
