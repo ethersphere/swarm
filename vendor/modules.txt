@@ -84,7 +84,7 @@ github.com/edsrzf/mmap-go
 # github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa
 github.com/elastic/gosigar
 github.com/elastic/gosigar/sys/windows
-# github.com/ethereum/go-ethereum v0.0.0-20190531093028-7a22da98b9f8
+# github.com/ethereum/go-ethereum v1.9.2
 github.com/ethereum/go-ethereum/accounts/abi/bind
 github.com/ethereum/go-ethereum/common
 github.com/ethereum/go-ethereum/ethclient
@@ -117,6 +117,7 @@ github.com/ethereum/go-ethereum/metrics/exp
 github.com/ethereum/go-ethereum/p2p/enr
 github.com/ethereum/go-ethereum/whisper/whisperv6
 github.com/ethereum/go-ethereum/common/bitutil
+github.com/ethereum/go-ethereum/accounts/external
 github.com/ethereum/go-ethereum/common/mclock
 github.com/ethereum/go-ethereum/p2p/discover
 github.com/ethereum/go-ethereum/p2p/discv5
@@ -124,7 +125,6 @@ github.com/ethereum/go-ethereum/p2p/netutil
 github.com/ethereum/go-ethereum/trie
 github.com/ethereum/go-ethereum/common/math
 github.com/ethereum/go-ethereum/crypto/secp256k1
-github.com/ethereum/go-ethereum/accounts/external
 github.com/ethereum/go-ethereum/accounts/scwallet
 github.com/ethereum/go-ethereum/accounts/usbwallet
 github.com/ethereum/go-ethereum/core/rawdb
@@ -140,11 +140,11 @@ github.com/ethereum/go-ethereum/eth
 github.com/ethereum/go-ethereum/eth/downloader
 github.com/ethereum/go-ethereum/eth/gasprice
 github.com/ethereum/go-ethereum/ethstats
+github.com/ethereum/go-ethereum/graphql
 github.com/ethereum/go-ethereum/les
 github.com/ethereum/go-ethereum/miner
 github.com/ethereum/go-ethereum/internal/jsre
 github.com/ethereum/go-ethereum/internal/web3ext
-github.com/ethereum/go-ethereum/cmd/swarm/testdata
 github.com/ethereum/go-ethereum/p2p/simulations/pipes
 github.com/ethereum/go-ethereum/core/bloombits
 github.com/ethereum/go-ethereum/core/state
@@ -158,9 +158,10 @@ github.com/ethereum/go-ethereum/accounts/usbwallet/trezor
 github.com/ethereum/go-ethereum/ethdb/leveldb
 github.com/ethereum/go-ethereum/ethdb/memorydb
 github.com/ethereum/go-ethereum/crypto/bn256
+github.com/ethereum/go-ethereum/core/forkid
 github.com/ethereum/go-ethereum/eth/fetcher
 github.com/ethereum/go-ethereum/eth/tracers
-github.com/ethereum/go-ethereum/les/csvlogger
+github.com/ethereum/go-ethereum/contracts/checkpointoracle
 github.com/ethereum/go-ethereum/les/flowcontrol
 github.com/ethereum/go-ethereum/light
 github.com/ethereum/go-ethereum/internal/jsre/deps
@@ -168,6 +169,7 @@ github.com/ethereum/go-ethereum/signer/storage
 github.com/ethereum/go-ethereum/crypto/bn256/cloudflare
 github.com/ethereum/go-ethereum/crypto/bn256/google
 github.com/ethereum/go-ethereum/eth/tracers/internal/tracers
+github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract
 # github.com/fatih/color v1.7.0
 github.com/fatih/color
 # github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
@@ -198,6 +200,23 @@ github.com/google/gofuzz
 github.com/googleapis/gnostic/OpenAPIv2
 github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
+# github.com/gorilla/websocket v1.4.0
+github.com/gorilla/websocket
+# github.com/graph-gophers/graphql-go v0.0.0-20190724201507-010347b5f9e6
+github.com/graph-gophers/graphql-go
+github.com/graph-gophers/graphql-go/relay
+github.com/graph-gophers/graphql-go/errors
+github.com/graph-gophers/graphql-go/internal/common
+github.com/graph-gophers/graphql-go/internal/exec
+github.com/graph-gophers/graphql-go/internal/exec/resolvable
+github.com/graph-gophers/graphql-go/internal/exec/selected
+github.com/graph-gophers/graphql-go/internal/query
+github.com/graph-gophers/graphql-go/internal/schema
+github.com/graph-gophers/graphql-go/internal/validation
+github.com/graph-gophers/graphql-go/introspection
+github.com/graph-gophers/graphql-go/log
+github.com/graph-gophers/graphql-go/trace
+github.com/graph-gophers/graphql-go/internal/exec/packer
 # github.com/hashicorp/golang-lru v0.5.3
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
@@ -223,8 +242,8 @@ github.com/jackpal/go-nat-pmp
 github.com/json-iterator/go
 # github.com/julienschmidt/httprouter v1.2.0
 github.com/julienschmidt/httprouter
-# github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
-github.com/karalabe/hid
+# github.com/karalabe/usb v0.0.0-20190819132248-550797b1cad8
+github.com/karalabe/usb
 # github.com/konsorten/go-windows-terminal-sequences v1.0.2
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mattn/go-colorable v0.1.2
@@ -256,7 +275,7 @@ github.com/opencontainers/image-spec/specs-go
 # github.com/opencontainers/runc v0.1.1
 github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
-# github.com/opentracing/opentracing-go v0.0.0-20190218023034-25a84ff92183
+# github.com/opentracing/opentracing-go v1.1.0
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/log
 github.com/opentracing/opentracing-go/ext
@@ -347,8 +366,8 @@ golang.org/x/crypto/openpgp/elgamal
 golang.org/x/crypto/curve25519
 # golang.org/x/net v0.0.0-20190724013045-ca1201d0de80
 golang.org/x/net/context
-golang.org/x/net/websocket
 golang.org/x/net/html
+golang.org/x/net/websocket
 golang.org/x/net/http2
 golang.org/x/net/html/atom
 golang.org/x/net/html/charset

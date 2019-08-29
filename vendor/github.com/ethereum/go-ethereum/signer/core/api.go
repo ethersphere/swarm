@@ -1,18 +1,18 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -22,11 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -42,7 +43,7 @@ const (
 	// ExternalAPIVersion -- see extapi_changelog.md
 	ExternalAPIVersion = "6.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
-	InternalAPIVersion = "6.0.0"
+	InternalAPIVersion = "7.0.0"
 )
 
 // ExternalAPI defines the external API through which signing requests are made.
@@ -124,7 +125,7 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.Manager {
+func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) *accounts.Manager {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -144,14 +145,41 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.
 			backends = append(backends, ledgerhub)
 			log.Debug("Ledger support enabled")
 		}
-		// Start a USB hub for Trezor hardware wallets
-		if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+		// Start a USB hub for Trezor hardware wallets (HID version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithHID(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
 		} else {
 			backends = append(backends, trezorhub)
-			log.Debug("Trezor support enabled")
+			log.Debug("Trezor support enabled via HID")
+		}
+		// Start a USB hub for Trezor hardware wallets (WebUSB version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithWebUSB(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
+		} else {
+			backends = append(backends, trezorhub)
+			log.Debug("Trezor support enabled via WebUSB")
 		}
 	}
+
+	// Start a smart card hub
+	if len(scpath) > 0 {
+		// Sanity check that the smartcard path is valid
+		fi, err := os.Stat(scpath)
+		if err != nil {
+			log.Info("Smartcard socket file missing, disabling", "err", err)
+		} else {
+			if fi.Mode()&os.ModeType != os.ModeSocket {
+				log.Error("Invalid smartcard socket file type", "path", scpath, "type", fi.Mode().String())
+			} else {
+				if schub, err := scwallet.NewHub(scpath, scwallet.Scheme, ksLocation); err != nil {
+					log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
+				} else {
+					backends = append(backends, schub)
+				}
+			}
+		}
+	}
+
 	// Clef doesn't allow insecure http account unlock.
 	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...)
 }
@@ -205,7 +233,7 @@ type (
 		ContentType string                  `json:"content_type"`
 		Address     common.MixedcaseAddress `json:"address"`
 		Rawdata     []byte                  `json:"raw_data"`
-		Message     []*NameValueType        `json:"message"`
+		Messages    []*NameValueType        `json:"messages"`
 		Hash        hexutil.Bytes           `json:"hash"`
 		Meta        Metadata                `json:"meta"`
 	}
@@ -448,22 +476,24 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	return modified
 }
 
-func (api *SignerAPI) lookupPassword(address common.Address) string {
-	return api.credentials.Get(strings.ToLower(address.String()))
+func (api *SignerAPI) lookupPassword(address common.Address) (string, error) {
+	return api.credentials.Get(address.Hex())
 }
+
 func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, prompt string) (string, error) {
-	if pw := api.lookupPassword(address); pw != "" {
+	// Look up the password and return if available
+	if pw, err := api.lookupPassword(address); err == nil {
 		return pw, nil
-	} else {
-		pwResp, err := api.UI.OnInputRequired(UserInputRequest{title, prompt, true})
-		if err != nil {
-			log.Warn("error obtaining password", "error", err)
-			// We'll not forward the error here, in case the error contains info about the response from the UI,
-			// which could leak the password if it was malformed json or something
-			return "", errors.New("internal error")
-		}
-		return pwResp.Text, nil
 	}
+	// Password unavailable, request it from the user
+	pwResp, err := api.UI.OnInputRequired(UserInputRequest{title, prompt, true})
+	if err != nil {
+		log.Warn("error obtaining password", "error", err)
+		// We'll not forward the error here, in case the error contains info about the response from the UI,
+		// which could leak the password if it was malformed json or something
+		return "", errors.New("internal error")
+	}
+	return pwResp.Text, nil
 }
 
 // SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form
@@ -482,7 +512,6 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 			return nil, err
 		}
 	}
-
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),
