@@ -704,6 +704,7 @@ func setupContractTest() func() {
 // First a simulated backend is created, then we deploy the issuer's swap contract.
 // We issue a test cheque with the beneficiary address and on the issuer's contract,
 // and immediately try to cash-in the cheque
+// afterwards it attempts to cash-in a bouncing cheque
 func TestContractIntegration(t *testing.T) {
 
 	log.Debug("creating test swap")
@@ -784,6 +785,28 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatalf("Wrong cumulative payout %d", result)
 	}
 	log.Debug("cheques result", "result", result)
+
+	// create a cheque that will bounce
+	bouncingCheque := newTestCheque()
+	bouncingCheque.ChequeParams.Contract = issuerSwap.owner.Contract
+	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10
+	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.owner.privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Debug("try to cash-in the bouncing cheque")
+	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
+	testBackend.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Status != 1 {
+		t.Fatalf("Bad status %d", receipt.Status)
+	}
+	if !cashResult.Bounced {
+		t.Fatal("cheque did not bounce")
+	}
 }
 
 // when testing, we don't need to wait for a transaction to be mined
