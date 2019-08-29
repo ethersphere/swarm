@@ -425,7 +425,7 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 		if url == "" {
 			continue
 		}
-		node, err := enode.ParseV4(url)
+		node, err := enode.Parse(enode.ValidSchemes, url)
 		if err != nil {
 			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
@@ -501,9 +501,15 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 			} else {
 				backends = append(backends, ledgerhub)
 			}
-			// Start a USB hub for Trezor hardware wallets
-			if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
-				log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+			// Start a USB hub for Trezor hardware wallets (HID version)
+			if trezorhub, err := usbwallet.NewTrezorHubWithHID(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
+			} else {
+				backends = append(backends, trezorhub)
+			}
+			// Start a USB hub for Trezor hardware wallets (WebUSB version)
+			if trezorhub, err := usbwallet.NewTrezorHubWithWebUSB(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
 			} else {
 				backends = append(backends, trezorhub)
 			}

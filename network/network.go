@@ -62,7 +62,7 @@ func RandomAddr() *BzzAddr {
 
 // NewAddr constructs a BzzAddr from a node record.
 func NewAddr(node *enode.Node) *BzzAddr {
-	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.String())}
+	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.URLv4())}
 }
 
 func PrivateKeyToBzzKey(prvKey *ecdsa.PrivateKey) []byte {

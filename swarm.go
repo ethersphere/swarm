@@ -370,7 +370,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	s.tracerClose = tracing.Closer
 
 	// update uaddr to correct enode
-	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
+	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().URLv4()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
