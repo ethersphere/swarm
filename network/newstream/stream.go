@@ -124,39 +124,6 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 	return r
 }
 
-func (r *Registry) getProvider(stream ID) StreamProvider {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-
-	return r.providers[stream.Name]
-}
-
-func (r *Registry) getPeer(id enode.ID) *Peer {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	p := r.peers[id]
-	return p
-}
-
-func (r *Registry) addPeer(p *Peer) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	r.peers[p.ID()] = p
-
-	streamPeersCount.Update(int64(len(r.peers)))
-}
-
-func (r *Registry) removePeer(p *Peer) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	if _, found := r.peers[p.ID()]; found {
-		p.logger.Error("removing peer")
-		delete(r.peers, p.ID())
-		close(p.quit)
-	}
-	streamPeersCount.Update(int64(len(r.peers)))
-}
-
 // Run is being dispatched when 2 nodes connect
 func (r *Registry) Run(bp *network.BzzPeer) error {
 	sp := NewPeer(bp, r.baseKey, r.intervalsStore, r.providers)
@@ -204,18 +171,57 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 			case *StreamInfoRes:
 				r.clientHandleStreamInfoRes(ctx, p, msg)
 			case *GetRange:
+
+				provider := r.getProvider(msg.Stream)
+				if provider == nil {
+					p.logger.Error("unsupported provider", "stream", msg.Stream)
+					p.Drop()
+					return
+				}
 				if msg.To == nil {
 					// handle live
-					r.serverHandleGetRangeHead(ctx, p, msg)
+					r.serverHandleGetRangeHead(ctx, p, msg, provider)
 				} else {
-					r.serverHandleGetRange(ctx, p, msg)
+					// handle bound range
+					r.serverHandleGetRange(ctx, p, msg, provider)
 				}
 			case *OfferedHashes:
-				r.clientHandleOfferedHashes(ctx, p, msg)
+				w, exit := p.getWantOrDrop(msg.Ruid)
+				if exit {
+					return
+				}
+				provider := r.getProvider(w.stream)
+				if provider == nil {
+					p.logger.Error("unsupported provider", "stream", w.stream)
+					p.Drop()
+					return
+				}
+				r.clientHandleOfferedHashes(ctx, p, msg, w, provider)
 			case *WantedHashes:
-				r.serverHandleWantedHashes(ctx, p, msg)
+				o, exit := p.getOfferOrDrop(msg.Ruid)
+				if exit {
+					return
+				}
+				provider := r.getProvider(o.stream)
+				if provider == nil {
+					p.logger.Error("unsupported provider", "stream", o.stream)
+					p.Drop()
+					return
+				}
+				r.serverHandleWantedHashes(ctx, p, msg, o, provider)
 			case *ChunkDelivery:
-				r.clientHandleChunkDelivery(ctx, p, msg)
+				w, exit := p.getWantOrDrop(msg.Ruid)
+				if exit {
+					streamChunkDeliveryFail.Inc(1)
+					return
+				}
+				provider := r.getProvider(w.stream)
+				if provider == nil {
+					p.logger.Error("unsupported provider", "stream", w.stream)
+					p.Drop()
+					return
+				}
+				r.clientHandleChunkDelivery(ctx, p, msg, w, provider)
 			}
 		}()
 		return nil
@@ -234,24 +240,24 @@ type pauser interface {
 
 // serverHandleStreamInfoReq handles the StreamInfoReq message on the server side (Peer is the client)
 func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *StreamInfoReq) {
-	p.logger.Debug("handleStreamInfoReq")
-	streamRes := StreamInfoRes{}
 	if len(msg.Streams) == 0 {
 		p.logger.Error("nil streams msg requested")
 		p.Drop()
 		return
 	}
+
+	streamRes := StreamInfoRes{}
 	for _, v := range msg.Streams {
 		v := v
 		provider := r.getProvider(v)
 		if provider == nil {
 			p.logger.Error("unsupported provider", "stream", v)
-			// tell the other peer we dont support this stream. this is non fatal
+			// TODO: tell the other peer we dont support this stream. this is non fatal
 			// this might not be fatal as we might not support all providers.
 			return
 		}
 
-		streamCursor, err := provider.CursorStr(v.Key)
+		streamCursor, err := provider.Cursor(v.Key)
 		if err != nil {
 			p.logger.Error("error getting cursor for stream key", "name", v.Name, "key", v.Key, "err", err)
 			p.Drop()
@@ -282,8 +288,6 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 
 // clientHandleStreamInfoRes handles the StreamInfoRes message (Peer is the server)
 func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *StreamInfoRes) {
-	p.logger.Debug("handleStreamInfoRes")
-
 	if len(msg.Streams) == 0 {
 		p.logger.Error("StreamInfo response is empty")
 		p.Drop()
@@ -292,14 +296,10 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 
 	for _, s := range msg.Streams {
 		s := s
-		provider := r.getProvider(s.Stream)
-		if provider == nil {
-			// at this point of the message exchange unsupported providers are illegal. drop peer
-			p.logger.Error("unsupported provider", "stream", s.Stream)
-			p.Drop()
+		provider, exit := r.getProviderOrDrop(s.Stream)
+		if exit {
 			return
 		}
-
 		if !provider.WantStream(p, s.Stream) {
 			if _, exists := p.getCursor(s.Stream); exists {
 				p.logger.Debug("stream cursor exists but we don't want it - removing", "stream", s.Stream)
@@ -322,7 +322,7 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 
 				// fetch everything from beginning till s.Cursor
 				go func() {
-					err := r.clientRequestStreamRange(ctx, p, s.Stream, s.Cursor)
+					err := r.clientRequestStreamRange(ctx, p, provider, s.Stream, s.Cursor)
 					if err != nil {
 						p.logger.Error("had an error sending initial GetRange for historical stream", "stream", s.Stream, "err", err)
 						p.Drop()
@@ -348,25 +348,23 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 		}
 	}
 }
+
+// clientRequestStreamHead sends a GetRange message to the server requesting
+// new chunks from the supplied cursor position
 func (r *Registry) clientRequestStreamHead(ctx context.Context, p *Peer, stream ID, from uint64) error {
 	p.logger.Debug("peer.requestStreamHead", "stream", stream, "from", from)
 	return r.clientCreateSendWant(ctx, p, stream, from, nil, true)
 }
 
-func (r *Registry) clientRequestStreamRange(ctx context.Context, p *Peer, stream ID, cursor uint64) error {
+// clientRequestStreamRange sends a GetRange message to the server requesting
+// a bound interval of chunks starting from the current stored interval in the
+// interval store and ending at most in the supplied cursor position
+func (r *Registry) clientRequestStreamRange(ctx context.Context, p *Peer, provider StreamProvider, stream ID, cursor uint64) error {
 	p.logger.Debug("peer.requestStreamRange", "stream", stream, "cursor", cursor)
-	provider := r.getProvider(stream)
-	if provider == nil {
-		// at this point of the message exchange unsupported providers are illegal. drop peer
-		p.logger.Error("unsupported provider", "stream", stream)
-		p.Drop()
-		return nil
-	}
 	from, _, empty, err := p.nextInterval(stream, 0)
 	if err != nil {
 		return err
 	}
-	p.logger.Debug("stream.requestStreamRange nextInterval", "stream", stream, "cursor", cursor, "from", from)
 	if from > cursor || empty {
 		p.logger.Debug("peer.requestStreamRange stream finished", "stream", stream, "cursor", cursor)
 		// stream finished. quit
@@ -387,7 +385,8 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 
 	p.logger.Debug("sending GetRange to peer", "ruid", g.Ruid, "stream", stream)
 
-	w := &want{
+	p.mtx.Lock()
+	p.openWants[g.Ruid] = &want{
 		ruid:      g.Ruid,
 		stream:    g.Stream,
 		from:      g.From,
@@ -396,27 +395,17 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		hashes:    make(map[string]bool),
 		requested: time.Now(),
 	}
-	p.mtx.Lock()
-	p.openWants[w.ruid] = w
 	p.mtx.Unlock()
 
 	return p.Send(ctx, g)
 }
 
-func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange) {
+func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
 	p.logger.Debug("stream.handleGetRangeHead", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
 	}(start)
-
-	provider := r.getProvider(msg.Stream)
-	if provider == nil {
-		// at this point of the message exchange unsupported providers are illegal. drop peer
-		p.logger.Error("unsupported provider", "stream", msg.Stream)
-		p.Drop()
-		return
-	}
 
 	key, err := provider.ParseKey(msg.Stream.Key)
 	if err != nil {
@@ -424,8 +413,7 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 		p.Drop()
 		return
 	}
-	h, f, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, 0)
-	p.logger.Debug("peer.serverCollectBatch", "stream", msg.Stream, "len(h)", len(h), "f", f, "t", t, "e", e, "err", err, "ruid", msg.Ruid, "msg.from", msg.From)
+	h, _, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, 0)
 	if err != nil {
 		p.logger.Error("erroring getting live batch for stream", "stream", msg.Stream, "err", err)
 		p.Drop()
@@ -433,12 +421,11 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 	}
 
 	if e {
+		// prevent sending an empty batch that resulted from db shutdown or peer quit
 		select {
 		case <-r.quit:
-			// quitting, return
 			return
 		case <-p.quit:
-			// prevent sending an empty batch that resulted from db shutdown
 			return
 		default:
 			offered := OfferedHashes{
@@ -469,32 +456,24 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 	}
 	l := len(h) / HashSize
 	headBatchSizeGauge.Update(int64(l))
-	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestfrom", msg.From, "requestto", msg.To, "hashes", l)
 	if err := p.Send(ctx, offered); err != nil {
 		p.logger.Error("erroring sending offered hashes", "ruid", msg.Ruid, "err", err)
 		p.mtx.Lock()
 		delete(p.openOffers, msg.Ruid)
 		p.mtx.Unlock()
+		p.Drop()
 	}
 }
 
-// serverHandleGetRange is handled by the SERVER and sends in response an OfferedHashes message
+// serverHandleGetRange is handled by the server and sends in response an OfferedHashes message
 // in the case that for the specific interval no chunks exist - the server sends an empty OfferedHashes
 // message so that the client could seal the interval and request the next
-func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRange) {
-	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid)
+func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
+	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid, "from", msg.From, "to", msg.To, "stream", msg.Stream)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
 	}(start)
-
-	provider := r.getProvider(msg.Stream)
-	if provider == nil {
-		// at this point of the message exchange unsupported providers are illegal. drop peer
-		p.logger.Error("unsupported provider", "stream", msg.Stream)
-		p.Drop()
-		return
-	}
 
 	key, err := provider.ParseKey(msg.Stream.Key)
 	if err != nil {
@@ -502,37 +481,36 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		p.Drop()
 		return
 	}
-	log.Debug("peer.handleGetRange collecting batch", "from", msg.From, "to", msg.To, "stream", msg.Stream)
 	h, f, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, *msg.To)
 	if err != nil {
-		log.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
+		p.logger.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
 		p.Drop()
 		return
 	}
 	l := len(h) / HashSize
 	batchSizeGauge.Update(int64(l))
+
+	// interval is empty for the requested range, return a message with an empty Hashes value
 	if e {
-		p.logger.Debug("interval is empty for requested range", "empty?", e, "hashes", len(h)/HashSize, "ruid", msg.Ruid)
+		// prevent sending an empty batch that resulted from db shutdown or peer quits
 		select {
 		case <-r.quit:
-			// quitting, return
 			return
 		case <-p.quit:
-			// prevent sending an empty batch that resulted from db shutdown
 			return
 		default:
 			offered := OfferedHashes{
 				Ruid:      msg.Ruid,
-				LastIndex: msg.From,
+				LastIndex: msg.From, //TODO: INCORRECT
 				Hashes:    []byte{},
 			}
 			if err := p.Send(ctx, offered); err != nil {
 				p.logger.Error("erroring sending empty offered hashes", "ruid", msg.Ruid, "err", err)
+				p.Drop()
 			}
 			return
 		}
 	}
-	p.logger.Debug("collected hashes for requested range", "hashes", len(h)/HashSize, "ruid", msg.Ruid)
 	o := offer{
 		ruid:      msg.Ruid,
 		stream:    msg.Stream,
@@ -560,7 +538,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 }
 
 // clientHandleOfferedHashes handles the OfferedHashes wire protocol message (Peer is the server)
-func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *OfferedHashes) {
+func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *OfferedHashes, w *want, provider StreamProvider) {
 	p.logger.Debug("stream.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	start := time.Now()
 	defer func(start time.Time) {
@@ -571,22 +549,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	lenHashes := len(hashes)
 	if lenHashes%HashSize != 0 {
 		p.logger.Error("invalid hashes length", "len", lenHashes, "ruid", msg.Ruid)
-		p.Drop()
-		return
-	}
-
-	p.mtx.RLock()
-	w, ok := p.openWants[msg.Ruid]
-	p.mtx.RUnlock()
-	if !ok {
-		p.logger.Error("ruid not found, dropping peer")
-		p.Drop()
-		return
-	}
-	provider := r.getProvider(w.stream)
-	if provider == nil {
-		// at this point of the message exchange unsupported providers are illegal. drop peer
-		p.logger.Error("unsupported provider", "stream", w.stream)
 		p.Drop()
 		return
 	}
@@ -603,27 +565,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			p.Drop()
 			return
 		}
-		cur, ok := p.getCursor(w.stream)
-		if !ok {
-			metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
-			p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
-			return
-		}
-		if w.head {
-			if err := r.clientRequestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
-				streamRequestNextIntervalFail.Inc(1)
-				p.logger.Error("error requesting next interval from peer", "err", err)
-				p.Drop()
-				return
-			}
-		} else {
-			if err := r.clientRequestStreamRange(ctx, p, w.stream, cur); err != nil {
-				streamRequestNextIntervalFail.Inc(1)
-				p.logger.Error("error requesting next interval from peer", "err", err)
-				p.Drop()
-				return
-			}
-		}
+		r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 		return
 	}
 
@@ -697,28 +639,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		p.Drop()
 		return
 	}
-	cur, ok := p.getCursor(w.stream)
-	if !ok {
-		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
-		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
-		select {
-		case <-w.done:
-		default:
-			close(w.done)
-		}
-		p.mtx.Lock()
-		delete(p.openWants, msg.Ruid)
-		p.mtx.Unlock()
-		return
-	}
-	if w.head {
-		if err := r.clientRequestStreamHead(ctx, p, w.stream, msg.LastIndex+1); err != nil {
-			streamRequestNextIntervalFail.Inc(1)
-			p.logger.Error("error requesting next interval from peer", "err", err)
-			p.Drop()
-			return
-		}
-	}
 	select {
 	case err := <-errc:
 		if err != nil {
@@ -753,60 +673,38 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	case <-p.quit:
 		return
 	}
-	if !w.head {
-		if err := r.clientRequestStreamRange(ctx, p, w.stream, cur); err != nil {
-			streamRequestNextIntervalFail.Inc(1)
-			p.logger.Error("error requesting next interval from peer", "err", err)
-			p.Drop()
-			return
-		}
-	}
+	r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 }
 
 // serverHandleWantedHashes is handled on the server side (Peer is the client) and is dependent on a preceding OfferedHashes message
 // the method is to ensure that all chunks in the requested batch is sent to the client
-func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes) {
-	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid, "bv", msg.BitVector)
+func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes, o offer, provider StreamProvider) {
+	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
 	}(start)
 
-	p.mtx.RLock()
-	offer, ok := p.openOffers[msg.Ruid]
-	p.mtx.RUnlock()
-	if !ok {
-		p.logger.Error("ruid does not exist. dropping peer", "ruid", msg.Ruid)
-		p.Drop()
-		return
-	}
 	defer func() {
 		p.mtx.Lock()
 		delete(p.openOffers, msg.Ruid)
 		p.mtx.Unlock()
 	}()
 
-	provider, ok := p.providers[offer.stream.Name]
-	if !ok {
-		p.logger.Error("no provider found for stream, dropping peer", "stream", offer.stream)
-		p.Drop()
-		return
-	}
-
-	l := len(offer.hashes) / HashSize
+	l := len(o.hashes) / HashSize
 	if len(msg.BitVector) == 0 {
-		p.logger.Debug("peer does not want any hashes in this range", "ruid", offer.ruid)
+		p.logger.Debug("peer does not want any hashes in this range", "ruid", o.ruid)
 		return
 	}
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
-		p.logger.Error("error initiaising bitvector", "l", l, "ll", len(offer.hashes), "err", err)
+		p.logger.Error("error initiaising bitvector", "l", l, "ll", len(o.hashes), "err", err)
 		p.Drop()
 		return
 	}
 
 	frameSize := 0
-	var maxFrame = BatchSize /// 4 // should be BatchSize but testing to see if this makes a difference as its the major change from existing stream pkg
+	var maxFrame = BatchSize / 4
 	if maxFrame < 1 {
 		maxFrame = 1
 	}
@@ -818,7 +716,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
-			hash := offer.hashes[i*HashSize : (i+1)*HashSize]
+			hash := o.hashes[i*HashSize : (i+1)*HashSize]
 			wantHashes = append(wantHashes, hash)
 		}
 	}
@@ -871,7 +769,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	var addrs []chunk.Address
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
-			addrs = append(addrs, offer.hashes[i*HashSize:(i+1)*HashSize])
+			addrs = append(addrs, o.hashes[i*HashSize:(i+1)*HashSize])
 		}
 	}
 	err = provider.Set(ctx, addrs...)
@@ -880,8 +778,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	}
 }
 
-func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
-	//p.logger.Debug("peer.handleChunkDelivery", "ruid", msg.Ruid, "chunks", len(msg.Chunks))
+func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery, w *want, provider StreamProvider) {
 	processReceivedChunksMsgCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 	start := time.Now()
@@ -889,23 +786,11 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
 	}(start)
 
-	p.mtx.RLock()
-	w, ok := p.openWants[msg.Ruid]
-	p.mtx.RUnlock()
-	if !ok {
-		streamChunkDeliveryFail.Inc(1)
-		p.logger.Error("no open offers for for ruid", "ruid", msg.Ruid)
-		p.Drop()
-		return
-	}
 	chunks := make([]chunk.Chunk, len(msg.Chunks))
 	for i, dc := range msg.Chunks {
 		chunks[i] = chunk.NewChunk(dc.Addr, dc.Data)
 	}
-	provider := r.getProvider(w.stream)
-	if provider == nil {
-		p.Drop()
-	}
+
 	seen, err := provider.Put(ctx, chunks...)
 	if err != nil {
 		if err == storage.ErrChunkInvalid {
@@ -926,7 +811,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	for _, dc := range chunks {
 		select {
 		case w.chunks <- dc:
-			p.logger.Trace("sending chunk down the pipe", "addr", dc.Address())
+			// send the chunk to the goroutine that polls batch completion
 		case <-w.done:
 			return
 		case <-r.quit:
@@ -935,7 +820,6 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 			return
 		}
 	}
-	p.logger.Debug("done writing batch to chunks channel")
 }
 
 func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan error {
@@ -982,6 +866,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 	}()
 	return errc
 }
+
 func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
 	p.logger.Debug("stream.CollectBatch", "from", from, "to", to)
 	batchStart := time.Now()
@@ -1058,6 +943,81 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 		return nil, 0, 0, true, nil
 	}
 	return batch, *batchStartID, batchEndID, false, nil
+}
+
+func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider StreamProvider, w *want, lastIndex uint64) {
+	cur, ok := p.getCursor(w.stream)
+	if !ok {
+		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
+		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
+		select {
+		case <-w.done:
+		default:
+			close(w.done)
+		}
+		p.mtx.Lock()
+		delete(p.openWants, w.ruid)
+		p.mtx.Unlock()
+		return
+	}
+	if w.head {
+		if err := r.clientRequestStreamHead(ctx, p, w.stream, lastIndex+1); err != nil {
+			streamRequestNextIntervalFail.Inc(1)
+			p.logger.Error("error requesting next interval from peer", "err", err)
+			p.Drop()
+			return
+		}
+	} else {
+		if err := r.clientRequestStreamRange(ctx, p, provider, w.stream, cur); err != nil {
+			streamRequestNextIntervalFail.Inc(1)
+			p.logger.Error("error requesting next interval from peer", "err", err)
+			p.Drop()
+			return
+		}
+	}
+}
+
+// getProviderOrDrop gets a StreamProvider from the Registry or drops the peer in case it is not supported
+func (r *Registry) getProviderOrDrop(stream ID) (provider StreamProvider, shouldDrop bool) {
+	provider = r.getProvider(stream)
+	if provider == nil {
+		// at this point of the message exchange unsupported providers are illegal. drop peer
+		return nil, true
+	}
+	return provider, false
+}
+
+func (r *Registry) getProvider(stream ID) StreamProvider {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+
+	return r.providers[stream.Name]
+}
+
+func (r *Registry) getPeer(id enode.ID) *Peer {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	p := r.peers[id]
+	return p
+}
+
+func (r *Registry) addPeer(p *Peer) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.peers[p.ID()] = p
+
+	streamPeersCount.Update(int64(len(r.peers)))
+}
+
+func (r *Registry) removePeer(p *Peer) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	if _, found := r.peers[p.ID()]; found {
+		p.logger.Error("removing peer")
+		delete(r.peers, p.ID())
+		close(p.quit)
+	}
+	streamPeersCount.Update(int64(len(r.peers)))
 }
 
 // PeerCurosrs returns a JSON response in which the queried node's

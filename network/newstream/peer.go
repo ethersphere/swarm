@@ -111,25 +111,57 @@ func (p *Peer) InitProviders() {
 	}
 }
 
+// offer represents an open offer from a server to a client as a result of a GetRange message
+// it is stored for reference to requests on the peer.openOffers map
 type offer struct {
-	ruid      uint
-	stream    ID
-	hashes    []byte
-	requested time.Time
+	ruid      uint      // the request uid
+	stream    ID        // the stream id
+	hashes    []byte    // all hashes offered to the client
+	requested time.Time // requested at time
 }
 
+// want represents an open want for a hash range from a client to a server
+// it is stored on the peer.openWants
 type want struct {
-	ruid      uint
-	from      uint64
-	to        *uint64
-	head      bool
-	stream    ID
-	hashes    map[string]bool
-	bv        *bitvector.BitVector
-	requested time.Time
-	remaining uint64
-	chunks    chan chunk.Chunk
-	done      chan error
+	ruid      uint                 // the request uid
+	from      uint64               // want from index
+	to        *uint64              //want to index, nil signifies top of range not yet known
+	head      bool                 // is this the head of the stream? (bound versus tip of the stream; true is tip)
+	stream    ID                   // the stream id
+	hashes    map[string]bool      // key: chunk address, value: wanted yes/no, used to prevent unsolicited chunks
+	bv        *bitvector.BitVector // the bitvector that was sent to the server
+	requested time.Time            // requested at time
+	remaining uint64               // number of remaining chunks to deliver
+	chunks    chan chunk.Chunk     // chunk arrived notification channel
+	done      chan error           // signal polling goroutine to terminate due to empty batch or timeout
+}
+
+// getOfferOrDrop gets on open offer for the requested ruid
+// in case the offer is not found - the peer is dropped
+func (p *Peer) getOfferOrDrop(ruid uint) (o offer, shouldBreak bool) {
+	p.mtx.RLock()
+	o, ok := p.openOffers[ruid]
+	p.mtx.RUnlock()
+	if !ok {
+		p.logger.Error("ruid not found, dropping peer", "ruid", ruid)
+		p.Drop()
+		return o, true
+	}
+	return o, false
+}
+
+// getWantOrDrop gets on open want for the requested ruid
+// in case the want is not found - the peer is dropped
+func (p *Peer) getWantOrDrop(ruid uint) (w *want, shouldBreak bool) {
+	p.mtx.RLock()
+	w, ok := p.openWants[ruid]
+	p.mtx.RUnlock()
+	if !ok {
+		p.logger.Error("ruid not found, dropping peer", "ruid", ruid)
+		p.Drop()
+		return nil, true
+	}
+	return w, false
 }
 
 func (p *Peer) addInterval(stream ID, start, end uint64) (err error) {

@@ -255,7 +255,7 @@ func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to 
 	return s.netStore.SubscribePull(ctx, bin, from, to)
 }
 
-func (s *syncProvider) CursorStr(k string) (cursor uint64, err error) {
+func (s *syncProvider) Cursor(k string) (cursor uint64, err error) {
 	key, err := s.ParseKey(k)
 	if err != nil {
 		// error parsing the stream key,
