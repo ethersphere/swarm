@@ -41,8 +41,9 @@ import (
 )
 
 const (
-	HashSize  = 32
-	BatchSize = 32
+	HashSize     = 32
+	BatchSize    = 32
+	MinFrameSize = 16
 )
 
 var (
@@ -401,7 +402,7 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		to:     to,
 		head:   head,
 		hashes: make(map[string]struct{}),
-		chunks: make(chan chunk.Chunk),
+		chunks: make(chan chunk.Address),
 		closeC: make(chan error),
 
 		requested: time.Now(),
@@ -647,16 +648,17 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		return
 	}
 
-	frameSize := 0
-	var maxFrame = BatchSize / 4
-	if maxFrame < 1 {
-		maxFrame = 1
+	var (
+		cd         = &ChunkDelivery{Ruid: msg.Ruid}
+		wantHashes = []chunk.Address{}
+	)
+
+	maxFrame := MinFrameSize
+	if v := BatchSize / 4; v > maxFrame {
+		maxFrame = v
 	}
 
-	cd := &ChunkDelivery{
-		Ruid: msg.Ruid,
-	}
-	wantHashes := []chunk.Address{}
+	// check which hashes to get from the localstore
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
@@ -664,12 +666,16 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 			wantHashes = append(wantHashes, hash)
 		}
 	}
+
+	// get the chunks from the provider
 	chunks, err := provider.Get(ctx, wantHashes...)
 	if err != nil {
 		p.logger.Error("handleWantedHashesMsg", "err", err)
 		p.Drop()
 		return
 	}
+
+	// append the chunks to the chunk delivery message. when reaching maxFrameSize send the current batch
 	for _, v := range chunks {
 		chunkD := DeliveredChunk{
 			Addr: v.Address(),
@@ -677,11 +683,8 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		}
 		cd.Chunks = append(cd.Chunks, chunkD)
 
-		//collect the chunk into the batch
-		frameSize++
-
-		if frameSize == maxFrame {
-			//send the batch
+		if len(cd.Chunks) == maxFrame {
+			// prevent sending batch on shutdown or peer dropout
 			select {
 			case <-p.quit:
 				return
@@ -689,12 +692,13 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 				return
 			default:
 			}
+
+			//send the batch and reset chunk delivery message
 			if err := p.Send(ctx, cd); err != nil {
 				p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
 				p.Drop()
 				return
 			}
-			frameSize = 0
 			cd = &ChunkDelivery{
 				Ruid: msg.Ruid,
 			}
@@ -702,42 +706,38 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	}
 
 	// send anything that we might have left in the batch
-	if frameSize > 0 {
+	if len(cd.Chunks) > 0 {
 		if err := p.Send(ctx, cd); err != nil {
 			p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
 			p.Drop()
 		}
 	}
 
-	var addrs []chunk.Address
-	for i := 0; i < l; i++ {
-		if want.Get(i) {
-			addrs = append(addrs, o.hashes[i*HashSize:(i+1)*HashSize])
-		}
-	}
-	err = provider.Set(ctx, addrs...)
+	// set the chunks as synced
+	err = provider.Set(ctx, wantHashes...)
 	if err != nil {
-		p.logger.Error("error setting chunk as synced", "addrs", addrs, "err", err)
+		p.logger.Error("error setting chunk as synced", "addrs", wantHashes, "err", err)
 		p.Drop()
 		return
 	}
 }
 
+// clientHandleChunkDelivery handles chunk delivery messages
 func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery, w *want, provider StreamProvider) {
 	p.logger.Debug("clientHandleChunkDelivery", "ruid", msg.Ruid)
 	processReceivedChunksMsgCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
-	r.setLastReceivedChunkTime()
-	start := time.Now()
+	r.setLastReceivedChunkTime() // needed for IsPullSyncing
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
-	}(start)
+	}(time.Now())
 
 	chunks := make([]chunk.Chunk, len(msg.Chunks))
 	for i, dc := range msg.Chunks {
 		chunks[i] = chunk.NewChunk(dc.Addr, dc.Data)
 	}
 
+	// put the chunks to the local store
 	seen, err := provider.Put(ctx, chunks...)
 	if err != nil {
 		if err == storage.ErrChunkInvalid {
@@ -748,28 +748,33 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		p.logger.Error("clientHandleChunkDelivery error putting chunk", "err", err)
 		return
 	}
+
+	// increment seen chunk delivery metric. duplicate delivery is possible when the same chunk is asked from multiple peers, we currently do not limit this
 	for _, v := range seen {
 		if v {
-			//this is possible when the same chunk is asked from multiple peers, we currently do not limit this
 			streamSeenChunkDelivery.Inc(1)
 		}
 	}
 
 	for _, dc := range chunks {
 		select {
-		case w.chunks <- dc:
-			// send the chunk to the goroutine that polls batch completion
+		case w.chunks <- dc.Address():
+			// send the chunk address to the goroutine polling end of batch (clientSealBatch)
 		case <-w.closeC:
 			// batch timeout
 			return
 		case <-r.quit:
+			// shutdown
 			return
 		case <-p.quit:
+			// peer quit
 			return
 		}
 	}
 }
 
+// clientSealBatch seals a given batch (want). it launches a separate goroutine that check every chunk being delivered on the given ruid
+// if an unsolicited chunk is received it drops the peer
 func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan error {
 	p.logger.Debug("clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
 	errc := make(chan error)
@@ -785,17 +790,15 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 					return
 				}
 				processReceivedChunksCount.Inc(1)
-				p.mtx.RLock()
-				if _, ok := w.hashes[c.Address().Hex()]; !ok {
-					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address())
+				p.mtx.Lock()
+				if _, ok := w.hashes[c.Hex()]; !ok {
+					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c)
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop()
-					p.mtx.RLock()
+					p.mtx.Unlock()
 					return
 				}
-				p.mtx.RUnlock()
-				p.mtx.Lock()
-				delete(w.hashes, c.Address().Hex())
+				delete(w.hashes, c.Hex())
 				p.mtx.Unlock()
 				v := atomic.AddUint64(&w.remaining, ^uint64(0))
 				if v == 0 {
@@ -804,11 +807,13 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 					return
 				}
 			case <-p.quit:
+				// peer quit
 				return
 			case <-w.closeC:
 				// batch timeout was signalled
 				return
 			case <-r.quit:
+				// shutdown
 				return
 			}
 		}
@@ -816,12 +821,10 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 	return errc
 }
 
+// serverCollectBatch collects a batch of hashes in response for a GetRange message
+// it will block until at least one hash is received from the provider
 func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
 	p.logger.Debug("serverCollectBatch", "from", from, "to", to)
-	batchStart := time.Now()
-
-	descriptors, stop := provider.Subscribe(ctx, key, from, to)
-	defer stop()
 
 	const batchTimeout = 1 * time.Second
 
@@ -843,7 +846,10 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 		if timer != nil {
 			timer.Stop()
 		}
-	}(batchStart)
+	}(time.Now())
+
+	descriptors, stop := provider.Subscribe(ctx, key, from, to)
+	defer stop()
 
 	for iterate := true; iterate; {
 		select {
@@ -890,6 +896,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	return batch, *batchStartID, batchEndID, false, nil
 }
 
+// requestSubsequentRange checks the cursor for the current stream, and in case needed - requests the next range
 func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider StreamProvider, w *want, lastIndex uint64) {
 	cur, ok := p.getCursor(w.stream)
 	if !ok {

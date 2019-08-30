@@ -130,7 +130,7 @@ type want struct {
 	hashes    map[string]struct{} // key: chunk address, value: wanted yes/no, used to prevent unsolicited chunks
 	requested time.Time           // requested at time
 	remaining uint64              // number of remaining chunks to deliver
-	chunks    chan chunk.Chunk    // chunk arrived notification channel
+	chunks    chan chunk.Address  // chunk arrived notification channel
 	closeC    chan error          // signal polling goroutine to terminate due to empty batch or timeout
 }
 
