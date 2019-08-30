@@ -108,10 +108,11 @@ func (s *DBStore) Delete(key string) (err error) {
 }
 
 // iterFunction is a function called on every key/value pair obtained
+// through iterating the store.
 // If true is returned in the stop variable, iteration will
 // stop, and by returning the error, that error will be
 // propagated to the called iterator method on Iterate.
-type iterFunction func(key []byte, value []byte) (stop bool, err error)
+type iterFunction func(key, value []byte) (stop bool, err error)
 
 // Iterate entries (key/value pair) which have keys matching the given prefix
 func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {

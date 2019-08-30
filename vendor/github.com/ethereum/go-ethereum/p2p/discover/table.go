@@ -85,10 +85,10 @@ type Table struct {
 // transport is implemented by the UDP transports.
 type transport interface {
 	Self() *enode.Node
+	RequestENR(*enode.Node) (*enode.Node, error)
 	lookupRandom() []*enode.Node
 	lookupSelf() []*enode.Node
 	ping(*enode.Node) (seq uint64, err error)
-	requestENR(*enode.Node) (*enode.Node, error)
 }
 
 // bucket contains nodes, ordered by their last activity. the entry
@@ -147,35 +147,18 @@ func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
-	// Find all non-empty buckets and get a fresh slice of their entries.
-	var buckets [][]*node
+	var nodes []*enode.Node
 	for _, b := range &tab.buckets {
-		if len(b.entries) > 0 {
-			buckets = append(buckets, b.entries)
+		for _, n := range b.entries {
+			nodes = append(nodes, unwrapNode(n))
 		}
 	}
-	if len(buckets) == 0 {
-		return 0
+	// Shuffle.
+	for i := 0; i < len(nodes); i++ {
+		j := tab.rand.Intn(len(nodes))
+		nodes[i], nodes[j] = nodes[j], nodes[i]
 	}
-	// Shuffle the buckets.
-	for i := len(buckets) - 1; i > 0; i-- {
-		j := tab.rand.Intn(len(buckets))
-		buckets[i], buckets[j] = buckets[j], buckets[i]
-	}
-	// Move head of each bucket into buf, removing buckets that become empty.
-	var i, j int
-	for ; i < len(buf); i, j = i+1, (j+1)%len(buckets) {
-		b := buckets[j]
-		buf[i] = unwrapNode(b[0])
-		buckets[j] = b[1:]
-		if len(b) == 1 {
-			buckets = append(buckets[:j], buckets[j+1:]...)
-		}
-		if len(buckets) == 0 {
-			break
-		}
-	}
-	return i + 1
+	return copy(buf, nodes)
 }
 
 // getNode returns the node with the given ID or nil if it isn't in the table.
@@ -344,7 +327,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 
 	// Also fetch record if the node replied and returned a higher sequence number.
 	if last.Seq() < remoteSeq {
-		n, err := tab.net.requestENR(unwrapNode(last))
+		n, err := tab.net.RequestENR(unwrapNode(last))
 		if err != nil {
 			tab.log.Debug("ENR request failed", "id", last.ID(), "addr", last.addr(), "err", err)
 		} else {

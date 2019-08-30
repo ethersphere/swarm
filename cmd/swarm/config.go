@@ -66,7 +66,7 @@ const (
 	SwarmEnvPort                 = "SWARM_PORT"
 	SwarmEnvNetworkID            = "SWARM_NETWORK_ID"
 	SwarmEnvSwapEnable           = "SWARM_SWAP_ENABLE"
-	SwarmEnvSwapAPI              = "SWARM_SWAP_API"
+	SwarmEnvSwapBackendURL       = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSyncDisable          = "SWARM_SYNC_DISABLE"
 	SwarmEnvSyncUpdateDelay      = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SwarmEnvMaxStreamPeerServers = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
@@ -229,9 +229,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.DeliverySkipCheck = true
 	}
 
-	currentConfig.SwapAPI = ctx.GlobalString(SwarmSwapAPIFlag.Name)
-	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
-		utils.Fatalf(SwarmErrSwapSetNoAPI)
+	currentConfig.SwapBackendURL = ctx.GlobalString(SwarmSwapBackendURLFlag.Name)
+	if currentConfig.SwapEnabled && currentConfig.SwapBackendURL == "" {
+		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
 	}
 
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {

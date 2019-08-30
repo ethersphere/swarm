@@ -47,7 +47,7 @@ func TestConfigDump(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
+func TestConfigFailsSwapEnabledNoBackendURL(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
@@ -57,7 +57,7 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	}
 
 	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SwarmErrSwapSetNoAPI + "\n")
+	swarm.Expect("Fatal: " + SwarmErrSwapSetNoBackendURL + "\n")
 	swarm.ExpectExit()
 }
 
@@ -316,7 +316,6 @@ func TestConfigFileOverrides(t *testing.T) {
 	defaultConf.Port = httpPort
 	defaultConf.DbCapacity = 9000000
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
-	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
 	//defaultConf.SyncParams.KeyBufferSize = 512
 	//create a TOML string
 	out, err := tomlSettings.Marshal(&defaultConf)
@@ -398,14 +397,6 @@ func TestConfigFileOverrides(t *testing.T) {
 	if info.HiveParams.KeepAliveInterval != 6000000000 {
 		t.Fatalf("Expected HiveParams KeepAliveInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.KeepAliveInterval))
 	}
-
-	if info.Swap.Params.Strategy.AutoCashInterval != 600*time.Second {
-		t.Fatalf("Expected SwapParams AutoCashInterval to be %ds, got %d", 600, info.Swap.Params.Strategy.AutoCashInterval)
-	}
-
-	//	if info.SyncParams.KeyBufferSize != 512 {
-	//		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
-	//	}
 
 	node.Shutdown()
 }
@@ -529,7 +520,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	defaultConf.Port = "8588"
 	defaultConf.DbCapacity = 9000000
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
-	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
 	//defaultConf.SyncParams.KeyBufferSize = 512
 	//create a TOML file
 	out, err := tomlSettings.Marshal(&defaultConf)
@@ -614,14 +604,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	if info.HiveParams.KeepAliveInterval != 6000000000 {
 		t.Fatalf("Expected HiveParams KeepAliveInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.KeepAliveInterval))
 	}
-
-	if info.Swap.Params.Strategy.AutoCashInterval != 600*time.Second {
-		t.Fatalf("Expected SwapParams AutoCashInterval to be %ds, got %d", 600, info.Swap.Params.Strategy.AutoCashInterval)
-	}
-
-	//	if info.SyncParams.KeyBufferSize != 512 {
-	//		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
-	//	}
 
 	node.Shutdown()
 }

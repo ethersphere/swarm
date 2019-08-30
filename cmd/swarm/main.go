@@ -78,8 +78,8 @@ var gitCommit string
 
 //declare a few constant error messages, useful for later error check comparisons in test
 var (
-	SwarmErrNoBZZAccount = "bzzaccount option is required but not set; check your config file, command line or environment variables"
-	SwarmErrSwapSetNoAPI = "SWAP is enabled but --swap-api is not set"
+	SwarmErrNoBZZAccount        = "bzzaccount option is required but not set; check your config file, command line or environment variables"
+	SwarmErrSwapSetNoBackendURL = "SWAP is enabled but --swap-backend-url is not set"
 )
 
 // this help command gets added to any subcommand that does not define it explicitly
@@ -178,7 +178,7 @@ func init() {
 		EnsAPIFlag,
 		SwarmTomlConfigPathFlag,
 		SwarmSwapEnabledFlag,
-		SwarmSwapAPIFlag,
+		SwarmSwapBackendURLFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,

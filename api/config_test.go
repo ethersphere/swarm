@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -57,7 +56,7 @@ func TestConfig(t *testing.T) {
 	if one.PublicKey == "" {
 		t.Fatal("Expected PublicKey to be set")
 	}
-	if one.Swap.PayProfile.Beneficiary == (common.Address{}) && one.SwapEnabled {
+	if one.SwapEnabled && one.SwapBackendURL == "" {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
 	if one.ChunkDbPath == one.Path {

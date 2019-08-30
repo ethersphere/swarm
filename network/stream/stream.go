@@ -34,6 +34,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/swap"
 )
 
 const (
@@ -658,13 +659,13 @@ func (sp *StreamerPrices) Price(msg interface{}) *protocols.Price {
 // Instead of hardcoding the price, get it
 // through a function - it could be quite complex in the future
 func (sp *StreamerPrices) getRetrieveRequestMsgPrice() uint64 {
-	return uint64(1)
+	return swap.RetrieveRequestPrice
 }
 
 // Instead of hardcoding the price, get it
 // through a function - it could be quite complex in the future
-func (sp *StreamerPrices) getChunkDeliveryMsgRetrievalPrice() uint64 {
-	return uint64(1)
+func (sp *StreamerPrices) getChunkDeliveryMsgPrice() uint64 {
+	return swap.ChunkDeliveryPrice
 }
 
 // createPriceOracle sets up a matrix which can be queried to get
@@ -675,7 +676,7 @@ func (r *Registry) createPriceOracle() {
 	}
 	sp.priceMatrix = map[reflect.Type]*protocols.Price{
 		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): {
-			Value:   sp.getChunkDeliveryMsgRetrievalPrice(), // arbitrary price for now
+			Value:   sp.getChunkDeliveryMsgPrice(), // arbitrary price for now
 			PerByte: true,
 			Payer:   protocols.Receiver,
 		},

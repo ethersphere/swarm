@@ -18,9 +18,11 @@ package state
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -71,18 +73,24 @@ func TestDBStore(t *testing.T) {
 
 	testStore(t, store)
 
-	store.Close()
-
 	persistedStore, err := NewDBStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer persistedStore.Close()
 
 	testPersistedStore(t, persistedStore)
+
+	iteratedStore, err := NewDBStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testStoreIterator(t, iteratedStore)
 }
 
 func testStore(t *testing.T, store Store) {
+	defer store.Close()
+
 	ser := &SerializingType{key: "key1", value: "value1"}
 	jsonify := []string{"a", "b", "c"}
 
@@ -99,8 +107,9 @@ func testStore(t *testing.T, store Store) {
 }
 
 func testPersistedStore(t *testing.T, store Store) {
-	ser := &SerializingType{}
+	defer store.Close()
 
+	ser := &SerializingType{}
 	err := store.Get("key1", ser)
 	if err != nil {
 		t.Fatal(err)
@@ -121,5 +130,48 @@ func testPersistedStore(t *testing.T, store Store) {
 	}
 	if as[0] != "a" || as[1] != "b" || as[2] != "c" {
 		t.Fatalf("elements serialized did not match expected values")
+	}
+}
+
+func testStoreIterator(t *testing.T, store Store) {
+	defer store.Close()
+
+	storePrefix := "test_"
+	err := store.Put(storePrefix+"key1", "value1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// do not include prefix in one of the entries
+	err = store.Put("key2", "value2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Put(storePrefix+"key3", "value3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries := make(map[string]string)
+
+	entriesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		var entry string
+		err = json.Unmarshal(value, &entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries[string(key)] = entry
+		return stop, err
+	}
+	err = store.Iterate(storePrefix, entriesIterFunction)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedEntries := map[string]string{"test_key1": "value1", "test_key3": "value3"}
+
+	if !reflect.DeepEqual(entries, expectedEntries) {
+		t.Fatalf("expected store entries to be %v, are %v instead", expectedEntries, entries)
 	}
 }

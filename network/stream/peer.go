@@ -451,6 +451,8 @@ func (p *Peer) runUpdateSyncing() {
 			prevDepth = depth
 		case <-p.streamer.quit:
 			return
+		case <-p.quit:
+			return
 		}
 	}
 }
