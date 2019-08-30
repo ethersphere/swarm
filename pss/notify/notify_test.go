@@ -245,7 +245,6 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			//psses[common.ToHex(cryptoUtils.FromECDSAPub(&privkey.PublicKey))] = ps
 			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
