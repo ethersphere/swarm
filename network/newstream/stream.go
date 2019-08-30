@@ -90,22 +90,17 @@ var (
 // it is instantiated once per stream protocol instance, that is, it should have
 // one instance per node
 type Registry struct {
-	mtx            sync.RWMutex
-	intervalsStore state.Store
-	peers          map[enode.ID]*Peer
-	baseKey        []byte
-
-	providers map[string]StreamProvider
-
-	spec *protocols.Spec
-
-	handlersWg sync.WaitGroup // waits for all handlers to finish in Close method
-	quit       chan struct{}
-
-	lastReceivedChunkTime   time.Time
-	lastReceivedChunkTimeMu sync.RWMutex
-
-	logger log.Logger
+	mtx                     sync.RWMutex
+	intervalsStore          state.Store               // store intervals for all peers
+	peers                   map[enode.ID]*Peer        // peers
+	baseKey                 []byte                    // this node's base address
+	providers               map[string]StreamProvider // stream providers by name of stream
+	spec                    *protocols.Spec           // this protocol's spec
+	handlersWg              sync.WaitGroup            // waits for all handlers to finish in Close method
+	quit                    chan struct{}             // signal shutdown
+	lastReceivedChunkTimeMu sync.RWMutex              // synchronize access to lastReceivedChunkTime
+	lastReceivedChunkTime   time.Time                 // last received chunk time
+	logger                  log.Logger                // the logger for the registry. appends base address to all logs
 }
 
 // New creates a new stream protocol handler
@@ -187,13 +182,14 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 					return
 				}
 				if msg.To == nil {
-					// handle live
+					// handle request for tip of the stream
 					r.serverHandleGetRangeHead(ctx, p, msg, provider)
 				} else {
 					// handle bound range
 					r.serverHandleGetRange(ctx, p, msg, provider)
 				}
 			case *OfferedHashes:
+				// get the existing want for ruid from peer, otherwise drop
 				w, exit := p.getWantOrDrop(msg.Ruid)
 				if exit {
 					return
@@ -206,6 +202,7 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 				}
 				r.clientHandleOfferedHashes(ctx, p, msg, w, provider)
 			case *WantedHashes:
+				// get the existing offer for ruid from peer, otherwise drop
 				o, exit := p.getOfferOrDrop(msg.Ruid)
 				if exit {
 					return
@@ -218,6 +215,7 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 				}
 				r.serverHandleWantedHashes(ctx, p, msg, o, provider)
 			case *ChunkDelivery:
+				// get the existing want for ruid from peer, otherwise drop
 				w, exit := p.getWantOrDrop(msg.Ruid)
 				if exit {
 					streamChunkDeliveryFail.Inc(1)
@@ -248,23 +246,25 @@ type pauser interface {
 
 // serverHandleStreamInfoReq handles the StreamInfoReq message on the server side (Peer is the client)
 func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *StreamInfoReq) {
+	// illegal to request empty streams, drop peer
 	if len(msg.Streams) == 0 {
 		p.logger.Error("nil streams msg requested")
 		p.Drop()
 		return
 	}
 
-	streamRes := StreamInfoRes{}
+	streamRes := &StreamInfoRes{}
 	for _, v := range msg.Streams {
 		v := v
 		provider := r.getProvider(v)
 		if provider == nil {
 			p.logger.Error("unsupported provider", "stream", v)
-			// TODO: tell the other peer we dont support this stream. this is non fatal
-			// this might not be fatal as we might not support all providers.
+			// TODO: tell the other peer we dont support this stream? this is non fatal
+			// this need not be fatal as we might not support all providers
 			return
 		}
 
+		// get the current cursor from the data source
 		streamCursor, err := provider.Cursor(v.Key)
 		if err != nil {
 			p.logger.Error("error getting cursor for stream key", "name", v.Name, "key", v.Key, "err", err)
@@ -279,6 +279,7 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 		streamRes.Streams = append(streamRes.Streams, descriptor)
 	}
 
+	// don't send the message in case we're shutting down or the peer left
 	select {
 	case <-r.quit:
 		// shutdown
@@ -290,7 +291,7 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 	}
 
 	if err := p.Send(ctx, streamRes); err != nil {
-		p.logger.Error("failed to send StreamInfoRes to client", "err", err)
+		p.logger.Error("failed to send StreamInfoRes to peer", "err", err)
 		p.Drop()
 	}
 }
@@ -299,10 +300,18 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *StreamInfoRes) {
 	for _, s := range msg.Streams {
 		s := s
-		provider, exit := r.getProviderOrDrop(s.Stream)
-		if exit {
+
+		// get the provider for this stream
+		provider := r.getProvider(s.Stream)
+		if provider == nil {
+			// at this point of the message exchange unsupported providers are illegal. drop peer
+			p.logger.Error("peer requested unsupported provider. illegal, dropping peer")
+			p.Drop()
 			return
 		}
+
+		// check if we still want the requested stream. due to the fact that under certain conditions we might not
+		// want to handle the stream by the time that StreamInfoRes has been received in response to StreamInfoReq
 		if !provider.WantStream(p, s.Stream) {
 			if _, exists := p.getCursor(s.Stream); exists {
 				p.logger.Debug("stream cursor exists but we don't want it - removing", "stream", s.Stream)
@@ -311,6 +320,7 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 			continue
 		}
 
+		// if the stream cursors exists for this peer - it means that a GetRange operation on it is already in progress
 		if _, exists := p.getCursor(s.Stream); exists {
 			p.logger.Debug("stream cursor already exists, continue to next", "stream", s.Stream)
 			continue
@@ -320,10 +330,11 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 		p.setCursor(s.Stream, s.Cursor)
 
 		if provider.Autostart() {
+			// don't request historical ranges for streams with cursor == 0
 			if s.Cursor > 0 {
 				p.logger.Debug("requesting history stream", "stream", s.Stream, "cursor", s.Cursor)
-
 				// fetch everything from beginning till s.Cursor
+
 				go func() {
 					err := r.clientRequestStreamRange(ctx, p, provider, s.Stream, s.Cursor)
 					if err != nil {
@@ -364,13 +375,16 @@ func (r *Registry) clientRequestStreamHead(ctx context.Context, p *Peer, stream 
 // interval store and ending at most in the supplied cursor position
 func (r *Registry) clientRequestStreamRange(ctx context.Context, p *Peer, provider StreamProvider, stream ID, cursor uint64) error {
 	p.logger.Debug("clientRequestStreamRange", "stream", stream, "cursor", cursor)
+
+	// get the next interval from the intervals store
 	from, _, empty, err := p.nextInterval(stream, 0)
 	if err != nil {
 		return err
 	}
+
+	// nothing to do - the next interval is bigger than the cursor or theinterval is empty
 	if from > cursor || empty {
 		p.logger.Debug("peer.requestStreamRange stream finished", "stream", stream, "cursor", cursor)
-		// stream finished. quit
 		return nil
 	}
 	return r.clientCreateSendWant(ctx, p, stream, from, &cursor, false)
@@ -417,6 +431,8 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 		p.Drop()
 		return
 	}
+
+	// get hashes from the data source for this batch. to is 0 to denote we want whatever comes out of SubscribePull
 	h, _, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, 0)
 	if err != nil {
 		p.logger.Error("erroring getting live batch for stream", "stream", msg.Stream, "err", err)
@@ -962,16 +978,6 @@ func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider
 			return
 		}
 	}
-}
-
-// getProviderOrDrop gets a StreamProvider from the Registry or drops the peer in case it is not supported
-func (r *Registry) getProviderOrDrop(stream ID) (provider StreamProvider, shouldDrop bool) {
-	provider = r.getProvider(stream)
-	if provider == nil {
-		// at this point of the message exchange unsupported providers are illegal. drop peer
-		return nil, true
-	}
-	return provider, false
 }
 
 func (r *Registry) getProvider(stream ID) StreamProvider {
