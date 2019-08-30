@@ -68,7 +68,6 @@ var (
 
 	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
 	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
-	actualGetTimer           = metrics.GetOrRegisterResettingTimer("network.stream.provider_get_time", nil)
 	activeBatchTimeout       = 20 * time.Second
 
 	// Protocol spec
