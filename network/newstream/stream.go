@@ -174,20 +174,13 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 
 				r.clientHandleStreamInfoRes(ctx, p, msg)
 			case *GetRange:
-
 				provider := r.getProvider(msg.Stream)
 				if provider == nil {
 					p.logger.Error("unsupported provider", "stream", msg.Stream)
 					p.Drop()
 					return
 				}
-				if msg.To == nil {
-					// handle request for tip of the stream
-					r.serverHandleGetRangeHead(ctx, p, msg, provider)
-				} else {
-					// handle bound range
-					r.serverHandleGetRange(ctx, p, msg, provider)
-				}
+				r.serverHandleGetRange(ctx, p, msg, provider)
 			case *OfferedHashes:
 				// get the existing want for ruid from peer, otherwise drop
 				w, exit := p.getWantOrDrop(msg.Ruid)
@@ -407,7 +400,7 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		from:   g.From,
 		to:     to,
 		head:   head,
-		hashes: make(map[string]bool),
+		hashes: make(map[string]struct{}),
 		chunks: make(chan chunk.Chunk),
 		closeC: make(chan error),
 
@@ -418,11 +411,18 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 	return p.Send(ctx, g)
 }
 
-func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
-	p.logger.Debug("serverHandleGetRangeHead", "ruid", msg.Ruid)
+// serverHandleGetRange is handled by the server and sends in response an OfferedHashes message
+// in the case that for the specific interval no chunks exist - the server sends an empty OfferedHashes
+// message so that the client could seal the interval and request the next
+func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
+	p.logger.Debug("serverHandleGetRange", "ruid", msg.Ruid, "head?", msg.To == nil)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
+		if msg.To == nil {
+			metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
+		} else {
+			metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
+		}
 	}(start)
 
 	key, err := provider.ParseKey(msg.Stream.Key)
@@ -433,7 +433,11 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 	}
 
 	// get hashes from the data source for this batch. to is 0 to denote we want whatever comes out of SubscribePull
-	h, _, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, 0)
+	to := uint64(0)
+	if msg.To != nil {
+		to = *msg.To
+	}
+	h, _, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, to)
 	if err != nil {
 		p.logger.Error("erroring getting live batch for stream", "stream", msg.Stream, "err", err)
 		p.Drop()
@@ -460,6 +464,7 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 		}
 	}
 
+	// store the offer for the peer
 	p.mtx.Lock()
 	p.openOffers[msg.Ruid] = offer{
 		ruid:      msg.Ruid,
@@ -475,79 +480,11 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 		Hashes:    h,
 	}
 	l := len(h) / HashSize
-	headBatchSizeGauge.Update(int64(l))
-	if err := p.Send(ctx, offered); err != nil {
-		p.logger.Error("erroring sending offered hashes", "ruid", msg.Ruid, "err", err)
-		p.mtx.Lock()
-		delete(p.openOffers, msg.Ruid)
-		p.mtx.Unlock()
-		p.Drop()
+	if msg.To == nil {
+		headBatchSizeGauge.Update(int64(l))
+	} else {
+		batchSizeGauge.Update(int64(l))
 	}
-}
-
-// serverHandleGetRange is handled by the server and sends in response an OfferedHashes message
-// in the case that for the specific interval no chunks exist - the server sends an empty OfferedHashes
-// message so that the client could seal the interval and request the next
-func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
-	p.logger.Debug("serverHandleGetRange", "ruid", msg.Ruid, "from", msg.From, "to", msg.To, "stream", msg.Stream)
-	start := time.Now()
-	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
-	}(start)
-
-	key, err := provider.ParseKey(msg.Stream.Key)
-	if err != nil {
-		p.logger.Error("erroring parsing stream key", "err", err, "stream", msg.Stream)
-		p.Drop()
-		return
-	}
-	h, f, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, *msg.To)
-	if err != nil {
-		p.logger.Error("erroring getting batch for stream", "peer", p.ID(), "stream", msg.Stream, "err", err)
-		p.Drop()
-		return
-	}
-	l := len(h) / HashSize
-	batchSizeGauge.Update(int64(l))
-
-	// interval is empty for the requested range, return a message with an empty Hashes value
-	if e {
-		// prevent sending an empty batch that resulted from db shutdown or peer quits
-		select {
-		case <-r.quit:
-			return
-		case <-p.quit:
-			return
-		default:
-			offered := OfferedHashes{
-				Ruid:      msg.Ruid,
-				LastIndex: msg.From, //TODO: INCORRECT
-				Hashes:    []byte{},
-			}
-			if err := p.Send(ctx, offered); err != nil {
-				p.logger.Error("erroring sending empty offered hashes", "ruid", msg.Ruid, "err", err)
-				p.Drop()
-			}
-			return
-		}
-	}
-	o := offer{
-		ruid:      msg.Ruid,
-		stream:    msg.Stream,
-		hashes:    h,
-		requested: time.Now(),
-	}
-
-	p.mtx.Lock()
-	p.openOffers[msg.Ruid] = o
-	p.mtx.Unlock()
-
-	offered := OfferedHashes{
-		Ruid:      msg.Ruid,
-		LastIndex: t,
-		Hashes:    h,
-	}
-	p.logger.Debug("server offering batch", "ruid", msg.Ruid, "requestFrom", msg.From, "From", f, "requestTo", msg.To, "hashes", l)
 	if err := p.Send(ctx, offered); err != nil {
 		p.logger.Error("erroring sending offered hashes", "ruid", msg.Ruid, "err", err)
 		p.mtx.Lock()
@@ -566,13 +503,11 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	}(start)
 
 	var (
-		hashes           = msg.Hashes
-		lenHashes        = len(hashes)
-		ctr       uint64 = 0                                         // the number of chunks wanted out of the batch
-		addresses        = make([]chunk.Address, lenHashes/HashSize) // the address slice for MultiHas
-
-		wantedHashesMsg = WantedHashes{Ruid: msg.Ruid}
-		errc            <-chan error
+		lenHashes                    = len(msg.Hashes)
+		ctr             uint64       = 0                                         // the number of chunks wanted out of the batch
+		addresses                    = make([]chunk.Address, lenHashes/HashSize) // the address slice for MultiHas
+		wantedHashesMsg              = WantedHashes{Ruid: msg.Ruid}              // the message to send back to the server
+		errc            <-chan error                                             // channel to signal end of batch
 	)
 
 	if lenHashes%HashSize != 0 {
@@ -583,7 +518,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 
 	w.to = &msg.LastIndex // now that we know the range of the batch we can set the upped bound of the interval to the open want
 
-	// this code block handles the case of a gap on the interval on the server side
+	// this code block handles the case of a complete gap on the interval on the server side
 	// lenhashes == 0 means there's no hashes in the requested range with the upper bound of
 	// the LastIndex on the incoming message. we should seal the interval and request the subsequent
 	if lenHashes == 0 {
@@ -604,16 +539,17 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	}
 
 	for i := 0; i < lenHashes; i += HashSize {
-		hash := hashes[i : i+HashSize]
+		hash := msg.Hashes[i : i+HashSize]
 		addresses[i/HashSize] = hash
 	}
 
+	// check which hashes we want
 	if hasses, err := provider.NeedData(ctx, addresses...); err == nil {
 		for i, has := range hasses {
 			if !has {
-				ctr++
-				want.Set(i)
-				w.hashes[addresses[i].Hex()] = true
+				ctr++                                     // increment number of wanted chunks
+				want.Set(i)                               // set the bitvector
+				w.hashes[addresses[i].Hex()] = struct{}{} // set unsolicited chunks guard
 			}
 		}
 	} else {
@@ -622,29 +558,23 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		return
 	}
 
+	// set the number of remaining chunks to ctr
 	atomic.AddUint64(&w.remaining, ctr)
 
+	// this handles the case that there are no hashes we are interested in
+	// we then seal the current interval and request the next batch
 	if ctr == 0 {
-		// this handles the case that there are no hashes we are interested in
-		// we then seal the current interval and request the next batch
 		streamEmptyWantedHashes.Inc(1)
-		wantedHashesMsg.BitVector = []byte{}
+		wantedHashesMsg.BitVector = []byte{} // set the bitvector value to an empty slice, this is to signal the server we dont want any hashes
 		if err := p.sealWant(w); err != nil {
-			p.logger.Error("error persisting interval", "from", w.from, "to", w.to, "err", err)
+			p.logger.Error("error persisting interval", "from", w.from, "to", *w.to, "err", err)
 			p.Drop()
 			return
 		}
-		if err := p.Send(ctx, wantedHashesMsg); err != nil {
-			p.logger.Error("error sending wanted hashes", "err", err)
-			p.Drop()
-			return
-		}
-		r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
-		return
 	} else {
-		// there are some hashes in the offer and we want some
+		// we want some hashes
 		streamWantedHashes.Inc(1)
-		wantedHashesMsg.BitVector = want.Bytes()
+		wantedHashesMsg.BitVector = want.Bytes() // set to bitvector
 
 		errc = r.clientSealBatch(ctx, p, provider, w) // poll for the completion of the batch in a separate goroutine
 	}
@@ -652,6 +582,11 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		p.logger.Error("error sending wanted hashes", "err", err)
 		p.Drop()
+		return
+	}
+	if ctr == 0 {
+		// request the next range in case no chunks wanted
+		r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 		return
 	}
 	select {
@@ -662,6 +597,8 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			p.Drop()
 			return
 		}
+
+		// seal the interval
 		if err := p.sealWant(w); err != nil {
 			p.logger.Error("error persisting interval", "from", w.from, "to", w.to, "err", err)
 			p.Drop()
@@ -669,7 +606,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		}
 	case <-time.After(activeBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
-		close(w.closeC)
+		close(w.closeC) // signal the polling goroutine to terminate
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
@@ -849,7 +786,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				}
 				processReceivedChunksCount.Inc(1)
 				p.mtx.RLock()
-				if wants, ok := w.hashes[c.Address().Hex()]; !ok || !wants {
+				if _, ok := w.hashes[c.Address().Hex()]; !ok {
 					p.logger.Error("got an unsolicited chunk from peer!", "peer", p.ID(), "caddr", c.Address())
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop()
