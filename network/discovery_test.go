@@ -121,7 +121,8 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 		return addrs
 	}
 	register := func(a pot.Address, po int) {
-		discPeer := newDiscPeer(a)
+		addr := pot.RandomAddressAt(a, po)
+		discPeer := newDiscPeer(addr)
 		hive.Register(discPeer.BzzAddr)
 	}
 
