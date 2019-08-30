@@ -103,7 +103,6 @@ type GetRange struct {
 	From      uint64
 	To        *uint64 `rlp:"nil"`
 	BatchSize uint
-	Roundtrip bool
 }
 
 // OfferedHashes is a message sent from the upstream peer to the downstream peer allowing the latter

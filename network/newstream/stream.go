@@ -391,7 +391,6 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		From:      from,
 		To:        to,
 		BatchSize: BatchSize,
-		Roundtrip: true,
 	}
 
 	p.mtx.Lock()
