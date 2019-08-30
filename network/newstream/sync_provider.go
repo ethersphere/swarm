@@ -76,41 +76,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 	}
 }
 
-func (s *syncProvider) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
-	//s.logger.Debug("syncProvider.NeedData", "key", hex.EncodeToString(key))
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		s.logger.Debug("syncProvider.NeedData ended", "took", end)
-	}(start)
-
-	select {
-	case <-s.quit:
-		return false, nil
-	default:
-	}
-	a := chunk.Address(key)
-	if s.cache.Contains(a.Hex()) {
-		return true, nil
-	}
-
-	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
-	if !ok {
-		return loaded, nil
-	}
-	return ok, func(ctx context.Context) error {
-		select {
-		case <-fi.Delivered:
-			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
-		case <-time.After(timeouts.SyncerClientWaitTimeout):
-			metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
-			return fmt.Errorf("chunk not delivered through syncing after %dsec. ref=%s", timeouts.SyncerClientWaitTimeout, fmt.Sprintf("%x", key))
-		}
-		return nil
-	}
-}
-
-func (s *syncProvider) MultiNeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
+func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
 	wants := make([]bool, len(addrs))
 
 	start := time.Now()
@@ -173,9 +139,9 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 	defer s.cacheMtx.Unlock()
 	start := time.Now()
 	defer func(start time.Time) {
-		end := time.Since(start)
-		s.logger.Debug("syncProvider.Get ended", "took", end)
+		metrics.GetOrRegisterResettingTimer("network.stream.sync_provider.get.total-time", nil).UpdateSince(start)
 	}(start)
+
 	// iterate over the array - if it is in the cache - pull it out
 	// if not - save in a slice and fallback later to localstore in one go
 	retChunks := make([]chunk.Chunk, len(addr))

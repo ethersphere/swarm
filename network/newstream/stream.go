@@ -590,7 +590,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		addresses[i/HashSize] = hash
 	}
 
-	if hasses, err := provider.MultiNeedData(ctx, addresses...); err == nil {
+	if hasses, err := provider.NeedData(ctx, addresses...); err == nil {
 		for i, has := range hasses {
 			if !has {
 				ctr++

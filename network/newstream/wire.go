@@ -38,13 +38,15 @@ type StreamProvider interface {
 	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not.
 	// Typically this will involve checking whether a certain chunk exists locally.
 	// In case a chunk does not exist locally - a `wait` function returns upon chunk delivery
-	NeedData(ctx context.Context, key []byte) (need bool, wait func(context.Context) error)
-	MultiNeedData(ctx context.Context, addr ...chunk.Address) ([]bool, error)
-	// Get a particular chunk identified by addr from the local storage
+	NeedData(ctx context.Context, addr ...chunk.Address) ([]bool, error)
+
+	// Get a set of chunks identified by addr from the local storage
 	Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error)
 
-	// Put a certain chunk into the local storage
+	// Put a set of chunks into the local storage
 	Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error)
+
+	// Set a set of chunks as synced in the localstore
 	Set(ctx context.Context, addrs ...chunk.Address) error
 
 	// Subscribe to a data stream from an arbitrary data source
