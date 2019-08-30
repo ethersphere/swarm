@@ -612,44 +612,12 @@ func TestOutboxFull(t *testing.T) {
 		t.Fatalf("expected error enqueing third message, instead got nil")
 	}
 	procChan <- struct{}{}
-	procChan <- struct{}{}
-	//Must wait a bit for the routines processing the messages to free the slots
-	time.Sleep(1 * time.Millisecond)
-	//There should be slots again in the outbox
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error enqueing fourth message, got %v", err)
+	//There should be a slot again in the outbox
+	select {
+	case <-ps.outbox.slots:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for a free slot")
 	}
-}
-
-// Stopping ps in the middle of a message process should not produce an error trying to write in a closed channel
-func TestMessageOutboxClose(t *testing.T) {
-	// setup
-	privkey, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	addr := make([]byte, 32)
-	addr[0] = 0x01
-	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-
-	procChan := make(chan struct{})
-	succesForward := func(msg *PssMsg) error {
-		<-procChan
-		return errors.New("Forced error while testing")
-	}
-	ps.outbox.forward = succesForward
-
-	ps.Start(nil)
-	err = ps.enqueue(testRandomMessage())
-
-	// stopping before processing message
-	ps.Stop()
-
-	// finish processing message
-	procChan <- struct{}{}
-
 }
 
 // set and generate pubkeys and symkeys
@@ -1794,56 +1762,6 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if err := ps.process(pssmsg, false, false); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
-		}
-	}
-}
-
-func BenchmarkMessageProcessing(b *testing.B) {
-	b.Run(fmt.Sprintf("FailProb%.2f", 0.0), func(b *testing.B) { benchmarkMessageProcessing(b, 0.0) })
-	b.Run(fmt.Sprintf("FailProb%.2f", 0.01), func(b *testing.B) { benchmarkMessageProcessing(b, 0.01) })
-	b.Run(fmt.Sprintf("FailProb%.2f", 0.05), func(b *testing.B) { benchmarkMessageProcessing(b, 0.05) })
-}
-
-func benchmarkMessageProcessing(b *testing.B, failProb float32) {
-	rand.Seed(0)
-	// setup
-	privkey, _ := crypto.GenerateKey()
-
-	addr := make([]byte, 32)
-	addr[0] = 0x01
-	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-
-	numMessages := 200000
-	procChan := make(chan struct{}, numMessages)
-	forward := func(msg *PssMsg) error {
-		roll := rand.Float32()
-		if roll < failProb {
-			return fmt.Errorf("Forced test error forwarding message. roll: %.2f", roll)
-		} else {
-			procChan <- struct{}{}
-			return nil
-		}
-	}
-	ps.outbox = newOutbox(numMessages, ps.quitC, forward)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	ps.Start(nil)
-	defer ps.Stop()
-
-	for i := 0; i < b.N; i++ {
-		for i := 0; i < numMessages; i++ {
-			go func() { ps.enqueue(testRandomMessage()) }()
-		}
-
-		timeoutC := time.After(5 * time.Second)
-		for i := 0; i < numMessages; {
-			select {
-			case <-procChan:
-				i++
-			case <-timeoutC:
-				b.Fatal("timeout processing messages", "numProcessed", i)
-			}
 		}
 	}
 }
