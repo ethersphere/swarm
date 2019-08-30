@@ -22,11 +22,8 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,11 +37,12 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/state"
@@ -66,8 +64,6 @@ var (
 func init() {
 	testutil.Init()
 	rand.Seed(time.Now().Unix())
-
-	adapters.RegisterServices(newServices(false))
 	initTest()
 }
 
@@ -873,10 +869,11 @@ func TestRawAllow(t *testing.T) {
 
 // tests that the API layer can handle edge case values
 func TestApi(t *testing.T) {
-	clients, err := setupNetwork(2, true)
+	clients, closeSimFunc, err := setupNetwork(2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	topic := "0xdeadbeef"
 
@@ -914,10 +911,11 @@ func testSendRaw(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("raw send test", "addrsize", addrsize)
 
-	clients, err := setupNetwork(2, true)
+	clients, closeSimFunc, err := setupNetwork(2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	topic := "0xdeadbeef"
 
@@ -996,10 +994,11 @@ func testSendSym(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("sym send test", "addrsize", addrsize)
 
-	clients, err := setupNetwork(2, false)
+	clients, closeSimFunc, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var topic string
 	err = clients[0].Call(&topic, "pss_stringToTopic", "foo:42")
@@ -1111,10 +1110,11 @@ func testSendAsym(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("asym send test", "addrsize", addrsize)
 
-	clients, err := setupNetwork(2, false)
+	clients, closeSimFunc, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var topic string
 	err = clients[0].Call(&topic, "pss_stringToTopic", "foo:42")
@@ -1272,37 +1272,20 @@ func testNetwork(t *testing.T) {
 
 	trigger := make(chan enode.ID)
 
-	var a adapters.NodeAdapter
+	var sim = &simulation.Simulation{}
 	if adapter == "exec" {
-		dirname, err := ioutil.TempDir(".", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		a = adapters.NewExecAdapter(dirname)
-	} else if adapter == "tcp" {
-		a = adapters.NewTCPAdapter(newServices(false))
-	} else if adapter == "sim" {
-		a = adapters.NewSimAdapter(newServices(false))
+		sim, _ = simulation.NewExec(newServices(false))
+	} else if adapter == "tcp" || adapter == "sim" {
+		sim = simulation.NewInProc(newServices(false))
 	}
-	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
-		ID: "0",
-	})
-	defer net.Shutdown()
+	defer sim.Close()
 
-	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%d.json", nodecount))
-	if err != nil {
-		t.Fatal(err)
-	}
-	jsonbyte, err := ioutil.ReadAll(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = net.Load(&snap)
+	net := sim.Net
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	err := sim.UploadSnapshot(ctx, fmt.Sprintf("testdata/snapshot_%d.json", nodecount))
 	if err != nil {
 		//TODO: Fix p2p simulation framework to not crash when loading 32-nodes
 		//t.Fatal(err)
@@ -1406,8 +1389,6 @@ func testNetwork(t *testing.T) {
 	}
 
 	finalmsgcount := 0
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
 outer:
 	for i := 0; i < int(msgcount); i++ {
 		select {
@@ -1438,10 +1419,11 @@ outer:
 func TestDeduplication(t *testing.T) {
 	var err error
 
-	clients, err := setupNetwork(3, false)
+	clients, closeSimFunc, err := setupNetwork(3, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var addrsize = 32
 	var loaddrhex string
@@ -1774,52 +1756,37 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 // setup simulated network with bzz/discovery and pss services.
 // connects nodes in a circle
 // if allowRaw is set, omission of builtin pss encryption is enabled (see PssParams)
-func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error) {
-	nodes := make([]*simulations.Node, numnodes)
+func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, closeSimFunc func(), err error) {
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
-		return nil, fmt.Errorf("Minimum two nodes in network")
+		return nil, nil, fmt.Errorf("minimum two nodes in network")
 	}
-	adapter := adapters.NewSimAdapter(newServices(allowRaw))
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "bzz",
-	})
-	for i := 0; i < numnodes; i++ {
-		nodeconf := adapters.RandomNodeConfig()
-		nodeconf.Services = []string{"bzz", protocolName}
-		nodes[i], err = net.NewNodeWithConfig(nodeconf)
-		if err != nil {
-			return nil, fmt.Errorf("error creating node 1: %v", err)
-		}
-		err = net.Start(nodes[i].ID())
-		if err != nil {
-			return nil, fmt.Errorf("error starting node 1: %v", err)
-		}
-		if i > 0 {
-			err = net.Connect(nodes[i].ID(), nodes[i-1].ID())
-			if err != nil {
-				return nil, fmt.Errorf("error connecting nodes: %v", err)
-			}
-		}
-		clients[i], err = nodes[i].Client()
-		if err != nil {
-			return nil, fmt.Errorf("create node 1 rpc client fail: %v", err)
-		}
+	sim := simulation.NewInProc(newServices(allowRaw))
+	closeSimFunc = sim.Close
+	if numnodes == 2 {
+		_, err = sim.AddNodesAndConnectChain(numnodes)
+
+	} else {
+		_, err = sim.AddNodesAndConnectRing(numnodes)
 	}
-	if numnodes > 2 {
-		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
-		if err != nil {
-			return nil, fmt.Errorf("error connecting first and last nodes")
-		}
+	if err != nil {
+		return nil, nil, err
 	}
-	return clients, nil
+	nodes := sim.Net.GetNodes()
+	for id, node := range nodes {
+		client, err := node.Client()
+		if err != nil {
+			return nil, nil, fmt.Errorf("error getting the nodes clients")
+		}
+		clients[id] = client
+	}
+	return clients, closeSimFunc, nil
 }
 
-func newServices(allowRaw bool) adapters.Services {
+func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 	stateStore := state.NewInmemoryStore()
 	kademlias := make(map[enode.ID]*network.Kademlia)
-	kademlia := func(id enode.ID) *network.Kademlia {
+	kademlia := func(id enode.ID, bzzKey []byte) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
@@ -1830,11 +1797,30 @@ func newServices(allowRaw bool) adapters.Services {
 		params.MaxRetries = 1000
 		params.RetryExponent = 2
 		params.RetryInterval = 1000000
-		kademlias[id] = network.NewKademlia(id[:], params)
+		kademlias[id] = network.NewKademlia(bzzKey, params)
 		return kademlias[id]
 	}
-	return adapters.Services{
-		protocolName: func(ctx *adapters.ServiceContext) (node.Service, error) {
+	return map[string]simulation.ServiceFunc{
+		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			addr := network.NewAddr(ctx.Config.Node())
+			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
+			if err != nil {
+				return nil, nil, err
+			}
+			addr.OAddr = network.PrivateKeyToBzzKey(bzzPrivateKey)
+			bucket.Store(simulation.BucketKeyBzzPrivateKey, bzzPrivateKey)
+			hp := network.NewHiveParams()
+			hp.Discovery = false
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   hp,
+			}
+			pskad := kademlia(ctx.Config.ID, addr.OAddr)
+			bucket.Store(simulation.BucketKeyKademlia, pskad)
+			return network.NewBzz(config, pskad, stateStore, nil, nil), nil, nil
+		},
+		protocolName: func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
 			initTest()
 
@@ -1844,12 +1830,17 @@ func newServices(allowRaw bool) adapters.Services {
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			pskad := kademlia(ctx.Config.ID)
+			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
+			if err != nil {
+				return nil, nil, err
+			}
+			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
+			pskad := kademlia(ctx.Config.ID, bzzKey)
+			bucket.Store(simulation.BucketKeyKademlia, pskad)
 			ps, err := New(pskad, pssp)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-
 			ping := &Ping{
 				OutC: make(chan bool),
 				Pong: true,
@@ -1857,12 +1848,12 @@ func newServices(allowRaw bool) adapters.Services {
 			p2pp := NewPingProtocol(ping)
 			pp, err := RegisterProtocol(ps, &PingTopic, PingProtocol, p2pp, &ProtocolParams{Asymmetric: true})
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if useHandshake {
 				SetHandshakeController(ps, NewHandshakeParams())
 			}
-			ps.Register(&PingTopic, &handler{
+			cleanupFunc := ps.Register(&PingTopic, &handler{
 				f: pp.Handle,
 				caps: &handlerCaps{
 					raw: true,
@@ -1879,18 +1870,8 @@ func newServices(allowRaw bool) adapters.Services {
 				protocol: pp,
 				run:      p2pp.Run,
 			}
-			return ps, nil
-		},
-		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddr(ctx.Config.Node())
-			hp := network.NewHiveParams()
-			hp.Discovery = false
-			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
-			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
+			return ps, cleanupFunc, nil
+
 		},
 	}
 }
@@ -1913,7 +1894,10 @@ func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Param
 	if err != nil {
 		return nil
 	}
-	ps.Start(nil)
+	err = ps.Start(nil)
+	if err != nil {
+		return nil
+	}
 
 	return ps
 }
