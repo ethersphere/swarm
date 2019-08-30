@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/message"
@@ -319,6 +320,7 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 func addPeers(kad *network.Kademlia, addresses []pot.Address) {
 	for _, a := range addresses {
 		p := newTestDiscoveryPeer(a, kad)
+		p.BzzAddr.Capabilities = capability.NewCapabilities()
 		kad.On(p)
 	}
 }

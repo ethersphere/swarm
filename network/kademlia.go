@@ -470,13 +470,11 @@ func (k *Kademlia) SubscribeToNeighbourhoodDepthChange() (c <-chan struct{}, uns
 func (k *Kademlia) Off(p *Peer) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
-	var del bool
 	k.addrs, _, _, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
 		// v cannot be nil, must check otherwise we overwrite entry
 		if v == nil {
 			panic(fmt.Sprintf("connected peer not found %v", p))
 		}
-		del = true
 		return newEntry(p.BzzAddr)
 	})
 	// note the following only ran if the peer was a lightnode

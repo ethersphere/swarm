@@ -8,12 +8,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethersphere/swarm/network/capability"
 )
 
 // BzzAddr implements the PeerAddr interface
 type BzzAddr struct {
-	OAddr []byte
-	UAddr []byte
+	OAddr        []byte
+	UAddr        []byte
+	Capabilities *capability.Capabilities
 }
 
 // Address implements OverlayPeer interface to be used in Overlay.
@@ -42,7 +44,7 @@ func (a *BzzAddr) ID() enode.ID {
 
 // Update updates the underlay address of a peer record
 func (a *BzzAddr) Update(na *BzzAddr) *BzzAddr {
-	return &BzzAddr{a.OAddr, na.UAddr}
+	return &BzzAddr{a.OAddr, na.UAddr, capability.NewCapabilities()}
 }
 
 // String pretty prints the address
@@ -62,7 +64,12 @@ func RandomAddr() *BzzAddr {
 
 // NewAddr constructs a BzzAddr from a node record.
 func NewAddr(node *enode.Node) *BzzAddr {
-	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.URLv4())}
+	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.URLv4()), Capabilities: capability.NewCapabilities()}
+}
+
+func (b *BzzAddr) WithCapabilities(c *capability.Capabilities) *BzzAddr {
+	b.Capabilities = c
+	return b
 }
 
 func PrivateKeyToBzzKey(prvKey *ecdsa.PrivateKey) []byte {

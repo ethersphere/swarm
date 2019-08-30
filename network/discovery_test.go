@@ -127,8 +127,8 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	register := func(a pot.Address, po int) {
 		addr := pot.RandomAddressAt(a, po)
 		bzzAddr := &BzzAddr{OAddr: addr[:]}
-		bzzAddr.WithCapabilities(capability.NewCapabilities())
-		hive.Register(addr)
+		bzzAddr = bzzAddr.WithCapabilities(capability.NewCapabilities())
+		hive.Register(bzzAddr)
 		//	hive.Register(&BzzAddr{OAddr: addr[:]})
 	}
 
@@ -249,7 +249,7 @@ func newDiscPeer(addr pot.Address) (*Peer, error) {
 	}
 	pubKey := pKey.PublicKey
 	nod := enode.NewV4(&pubKey, net.IPv4(127, 0, 0, 1), 0, 0)
-	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String())}
+	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String()), Capabilities: capability.NewCapabilities()}
 	id := nod.ID()
 	p2pPeer := p2p.NewPeer(id, id.String(), nil)
 	return NewPeer(&BzzPeer{
