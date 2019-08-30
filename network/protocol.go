@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
@@ -40,8 +41,8 @@ var (
 	capabilitiesStorer        = 15
 
 	// temporary presets to emulate the legacy LightNode/full node regime
-	fullCapability  *Capability
-	lightCapability *Capability
+	fullCapability  *capability.Capability
+	lightCapability *capability.Capability
 )
 
 const (
@@ -80,19 +81,19 @@ func init() {
 }
 
 // temporary convenience functions for legacy "LightNode"
-func newLightCapability() *Capability {
-	c := NewCapability(0, 16)
+func newLightCapability() *capability.Capability {
+	c := capability.NewCapability(0, 16)
 	c.Set(capabilitiesRetrieve)
 	c.Set(capabilitiesPush)
 	return c
 }
-func isLightCapability(c *Capability) bool {
+func isLightCapability(c *capability.Capability) bool {
 	return lightCapability.IsSameAs(c)
 }
 
 // temporary convenience functions for legacy "full node"
-func newFullCapability() *Capability {
-	c := NewCapability(0, 16)
+func newFullCapability() *capability.Capability {
+	c := capability.NewCapability(0, 16)
 	c.Set(capabilitiesRetrieve)
 	c.Set(capabilitiesPush)
 	c.Set(capabilitiesRelayRetrieve)
@@ -101,7 +102,7 @@ func newFullCapability() *Capability {
 	return c
 }
 
-func isFullCapability(c *Capability) bool {
+func isFullCapability(c *capability.Capability) bool {
 	return fullCapability.IsSameAs(c)
 }
 
@@ -118,15 +119,14 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	NetworkID     uint64
-	LightNode     bool
-	localAddr     *BzzAddr
-	mtx           sync.Mutex
-	handshakes    map[enode.ID]*HandshakeMsg
-	capabilities  *Capabilities // capabilities control and state
-	streamerSpec  *protocols.Spec
-	streamerRun   func(*BzzPeer) error
-	retrievalSpec *protocols.Spec
+	NetworkID    uint64
+	localAddr    *BzzAddr
+	mtx          sync.Mutex
+	handshakes   map[enode.ID]*HandshakeMsg
+	streamerSpec *protocols.Spec
+	streamerRun  func(*BzzPeer) error
+	capabilities *capability.Capabilities // capabilities control and state
+ 	retrievalSpec *protocols.Spec
 	retrievalRun  func(*BzzPeer) error
 }
 
@@ -137,16 +137,15 @@ type Bzz struct {
 // * peer store
 func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, retrievalSpec *protocols.Spec, streamerRun, retrievalRun func(*BzzPeer) error) *Bzz {
 	bzz := &Bzz{
-		Hive:          NewHive(config.HiveParams, kad, store),
-		NetworkID:     config.NetworkID,
-		LightNode:     config.LightNode,
-		localAddr:     &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes:    make(map[enode.ID]*HandshakeMsg),
-		capabilities:  NewCapabilities(),
-		streamerRun:   streamerRun,
-		streamerSpec:  streamerSpec,
-		retrievalRun:  retrievalRun,
+		Hive:         NewHive(config.HiveParams, kad, store),
+		NetworkID:    config.NetworkID,
+		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
+		handshakes:   make(map[enode.ID]*HandshakeMsg),
+		streamerRun:  streamerRun,
+		streamerSpec: streamerSpec,
+    retrievalRun:  retrievalRun,
 		retrievalSpec: retrievalSpec,
+		capabilities: capability.NewCapabilities(),
 	}
 
 	if config.BootnodeMode {
@@ -156,9 +155,9 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 
 	// temporary soon-to-be-legacy light/full, as above
 	if config.LightNode {
-		bzz.capabilities.add(newLightCapability())
+		bzz.capabilities.Add(newLightCapability())
 	} else {
-		bzz.capabilities.add(newFullCapability())
+		bzz.capabilities.Add(newFullCapability())
 	}
 
 	return bzz
@@ -264,7 +263,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			Peer:       protocols.NewPeer(p, rw, spec),
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
-			LightNode:  isLightCapability(handshake.Capabilities.get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
+			LightNode:  isLightCapability(handshake.Capabilities.Get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -349,7 +348,7 @@ type HandshakeMsg struct {
 	Version      uint64
 	NetworkID    uint64
 	Addr         *BzzAddr
-	Capabilities *Capabilities
+	Capabilities *capability.Capabilities
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -374,7 +373,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
 	}
 	// temporary check for valid capability settings, legacy full/light
-	if !isFullCapability(rhs.Capabilities.get(0)) && !isLightCapability(rhs.Capabilities.get(0)) {
+	if !isFullCapability(rhs.Capabilities.Get(0)) && !isLightCapability(rhs.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}
 	return nil
