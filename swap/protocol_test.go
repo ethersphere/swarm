@@ -238,6 +238,19 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
 	}
 
+	// because no other accounting took place in the meantime the balance should be exactly 0
+	if debitorSwap.balances[creditor.ID()] != 0 {
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", debitorSwap.balances[creditor.ID()])
+	}
+
+	// do some accounting again to trigger a second cheque
+	if err = debitorSwap.Add(int64(-DefaultPaymentThreshold), creditor.Peer); err != nil {
+		t.Fatal(err)
+	}
+
+	if debitorSwap.balances[creditor.ID()] != 0 {
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", debitorSwap.balances[creditor.ID()])
+	}
 }
 
 // TestTriggerDisconnectThreshold is to test that no further accounting takes place

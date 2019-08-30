@@ -362,7 +362,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 	}
 
 	// reset balance;
-	err = s.resetBalance(peer, int64(cheque.CumulativePayout))
+	err = s.resetBalance(peer, int64(cheque.Honey))
 	if err != nil {
 		return err
 	}
