@@ -569,3 +569,19 @@ type Info struct {
 func (s *Info) Info() *Info {
 	return s
 }
+
+func (s *Swarm) NetStore() *storage.NetStore {
+	return s.netStore
+}
+
+func (s *Swarm) API() *api.API {
+	return s.api
+}
+
+func (s *Swarm) Bzz() *network.Bzz {
+	return s.bzz
+}
+
+func (s *Swarm) NewStreamer() *newstream.Registry {
+	return s.newstreamer
+}

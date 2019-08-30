@@ -103,6 +103,9 @@ type Registry struct {
 	handlersWg sync.WaitGroup // waits for all handlers to finish in Close method
 	quit       chan struct{}
 
+	lastReceivedChunkTime   time.Time
+	lastReceivedChunkTimeMu sync.RWMutex
+
 	logger log.Logger
 }
 
@@ -772,6 +775,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	p.logger.Debug("clientHandleChunkDelivery", "ruid", msg.Ruid)
 	processReceivedChunksMsgCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
+	r.setLastReceivedChunkTime()
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
@@ -1030,6 +1034,21 @@ func (r *Registry) PeerCursors() string {
 		return ""
 	}
 	return string(pc)
+}
+
+// LastReceivedChunkTime returns the time when the last chunk
+// was received by syncing. This method is used in api.Inspector
+// to detect when the syncing is complete.
+func (r *Registry) LastReceivedChunkTime() time.Time {
+	r.lastReceivedChunkTimeMu.RLock()
+	defer r.lastReceivedChunkTimeMu.RUnlock()
+	return r.lastReceivedChunkTime
+}
+
+func (r *Registry) setLastReceivedChunkTime() {
+	r.lastReceivedChunkTimeMu.Lock()
+	r.lastReceivedChunkTime = time.Now()
+	r.lastReceivedChunkTimeMu.Unlock()
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {
