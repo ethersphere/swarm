@@ -20,7 +20,6 @@ package fuse
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -34,19 +33,10 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
-	colorable "github.com/mattn/go-colorable"
-)
-
-var (
-	loglevel    = flag.Int("loglevel", 4, "verbosity of logs")
-	rawlog      = flag.Bool("rawlog", false, "turn off terminal formatting in logs")
-	longrunning = flag.Bool("longrunning", false, "do run long-running tests")
 )
 
 func init() {
-	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
+	testutil.Init()
 }
 
 type fileInfo struct {
@@ -1634,7 +1624,7 @@ func TestFUSE(t *testing.T) {
 
 	//provide longrunning flag to execute all tests
 	//approx time with longrunning: 140s
-	if *longrunning {
+	if *testutil.Longrunning {
 		t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)
 		t.Run("maxMountsEncrypted", ta.maxMountsEncrypted)
 		t.Run("maxMountsNonEncrypted", ta.maxMountsNonEncrypted)

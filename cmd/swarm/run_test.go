@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -43,9 +42,8 @@ import (
 	swarmhttp "github.com/ethersphere/swarm/api/http"
 	"github.com/ethersphere/swarm/internal/cmdtest"
 	"github.com/ethersphere/swarm/storage/pin"
+	"github.com/ethersphere/swarm/testutil"
 )
-
-var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
 
 func init() {
 	// Run the app if we've been exec'd as "swarm-test" in runSwarm.
@@ -282,7 +280,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 		"--bzzaccount", bzzaccount,
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
-		"--verbosity", fmt.Sprint(*loglevel),
+		"--verbosity", fmt.Sprint(*testutil.Loglevel),
 	)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {
@@ -360,7 +358,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		"--bzzaccount", account.Address.String(),
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
-		"--verbosity", fmt.Sprint(*loglevel),
+		"--verbosity", fmt.Sprint(*testutil.Loglevel),
 	)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {

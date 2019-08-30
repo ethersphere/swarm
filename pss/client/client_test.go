@@ -19,10 +19,8 @@ package client
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -38,6 +36,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 type protoCtrl struct {
@@ -47,10 +46,8 @@ type protoCtrl struct {
 }
 
 var (
-	debugdebugflag = flag.Bool("vv", false, "veryverbose")
-	debugflag      = flag.Bool("v", false, "verbose")
-	w              *whisper.Whisper
-	wapi           *whisper.PublicWhisperAPI
+	w    *whisper.Whisper
+	wapi *whisper.PublicWhisperAPI
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -60,23 +57,12 @@ var (
 var services = newServices()
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
 
-	loglevel := log.LvlInfo
-	if *debugflag {
-		loglevel = log.LvlDebug
-	} else if *debugdebugflag {
-		loglevel = log.LvlTrace
-	}
-
 	psslogmain = log.New("psslog", "*")
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(loglevel, hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
 
 	w = whisper.New(&whisper.DefaultConfig)
 	wapi = whisper.NewPublicWhisperAPI(w)

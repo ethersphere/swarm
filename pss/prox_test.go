@@ -21,6 +21,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 // needed to make the enode id of the receiving node available to the handler for triggers
@@ -211,7 +212,7 @@ func TestProxNetwork(t *testing.T) {
 }
 
 func TestProxNetworkLong(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("8_nodes,_100_messages,_30_seconds", func(t *testing.T) {

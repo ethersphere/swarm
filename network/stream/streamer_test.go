@@ -974,7 +974,7 @@ func TestGetServerSubscriptionsRPC(t *testing.T) {
 	// set the syncUpdateDelay for sync registrations to start
 	syncUpdateDelay := 200 * time.Millisecond
 	// run with more nodes if `longrunning` flag is set
-	if *longrunning {
+	if *testutil.Longrunning {
 		nodeCount = 64
 		syncUpdateDelay = 10 * time.Second
 	}
@@ -1054,7 +1054,7 @@ func TestGetServerSubscriptionsRPC(t *testing.T) {
 	go func() {
 		//for long running sims, waiting 1 sec will not be enough
 		waitDuration := 1 * time.Second
-		if *longrunning {
+		if *testutil.Longrunning {
 			waitDuration = 3 * time.Second
 		}
 		for {

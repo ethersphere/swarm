@@ -23,7 +23,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -52,9 +51,7 @@ import (
 )
 
 func init() {
-	loglevel := flag.Int("loglevel", 2, "loglevel")
-	flag.Parse()
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	testutil.Init()
 }
 
 func serverFunc(api *api.API, pinAPI *pin.API) TestServer {
@@ -947,7 +944,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 
 	// check that the tag was written correctly
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 4, 4, 0, 4)
+	chunk.CheckTag(t, tag, 4, 4, 0, 4)
 
 	swarmHash, err := ioutil.ReadAll(resp2.Body)
 	resp2.Body.Close()
@@ -1083,7 +1080,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 				<-time.After(10 * time.Millisecond)
 			case 1:
 				tag := srv.Tags.All()[0]
-				testutil.CheckTag(t, tag, 0, 0, 0, v.expChunks)
+				chunk.CheckTag(t, tag, 0, 0, 0, v.expChunks)
 				srv.Tags.Delete(tag.Uid)
 				done = true
 			}

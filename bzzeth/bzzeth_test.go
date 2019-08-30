@@ -18,26 +18,17 @@ package bzzeth
 
 import (
 	"errors"
-	"flag"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
-)
-
-var (
-	loglevel = flag.Int("loglevel", 0, "verbosity of logs")
+	"github.com/ethersphere/swarm/testutil"
 )
 
 func init() {
-	flag.Parse()
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	testutil.Init()
 }
 
 func newBzzEthTester() (*p2ptest.ProtocolTester, *BzzEth, func(), error) {

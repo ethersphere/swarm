@@ -3,9 +3,7 @@ package notify
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -20,21 +18,17 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel = flag.Int("l", 3, "loglevel")
-	psses    map[string]*pss.Pss
-	w        *whisper.Whisper
-	wapi     *whisper.PublicWhisperAPI
+	psses map[string]*pss.Pss
+	w     *whisper.Whisper
+	wapi  *whisper.PublicWhisperAPI
 )
 
 func init() {
-	flag.Parse()
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
+	testutil.Init()
 
 	w = whisper.New(&whisper.DefaultConfig)
 	wapi = whisper.NewPublicWhisperAPI(w)

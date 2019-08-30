@@ -18,9 +18,7 @@ package network
 
 import (
 	"crypto/ecdsa"
-	"flag"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +31,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 const (
@@ -41,14 +40,10 @@ const (
 
 var TestProtocolNetworkID = DefaultTestNetworkID
 
-var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
-)
-
 func init() {
-	flag.Parse()
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	testutil.Init()
 }
+
 func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchange {
 	return []p2ptest.Exchange{
 		{
