@@ -1,4 +1,4 @@
-package network
+package capability
 
 import (
 	"testing"

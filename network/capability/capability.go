@@ -1,4 +1,4 @@
-package network
+package capability
 
 import (
 	"fmt"
@@ -95,7 +95,7 @@ func NewCapabilities() *Capabilities {
 }
 
 // adds a capability to the Capabilities collection
-func (c *Capabilities) add(cp *Capability) error {
+func (c *Capabilities) Add(cp *Capability) error {
 	if _, ok := c.idx[cp.Id]; ok {
 		return fmt.Errorf("Capability id %d already registered", cp.Id)
 	}
@@ -108,7 +108,7 @@ func (c *Capabilities) add(cp *Capability) error {
 
 // gets the capability with the specified module id
 // returns nil if the id doesn't exist
-func (c *Capabilities) get(id CapabilityID) *Capability {
+func (c *Capabilities) Get(id CapabilityID) *Capability {
 	idx, ok := c.idx[id]
 	if !ok {
 		return nil
@@ -164,7 +164,7 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 		}
 
 		// Add the entry to the Capabilities array
-		c.add(&cap)
+		c.Add(&cap)
 	}
 
 	return nil
