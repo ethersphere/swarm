@@ -2008,11 +2008,11 @@ func newTestPssStart(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *
 	if err != nil {
 		return nil
 	}
-    if start {
-        err = ps.Start(nil)
-        if err != nil {
-            return nil
-        }
+	if start {
+		err = ps.Start(nil)
+		if err != nil {
+			return nil
+		}
 	}
 
 	return ps
