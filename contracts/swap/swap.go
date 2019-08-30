@@ -134,7 +134,7 @@ func (s simpleContract) ContractParams() *Params {
 	}
 }
 
-// Cheques returns the last cheque from the smart contract
+// PaidOut returns the total paid out amount for the given address
 func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
 	return s.instance.PaidOut(opts, addr)
 }
