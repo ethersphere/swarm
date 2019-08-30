@@ -226,7 +226,7 @@ var defaultCashCheque = cashCheque
 // a cheque from a debitor
 func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
-	log.Info("received cheque from peer", "peer", p.ID().String())
+	log.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
@@ -349,7 +349,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
 
-	log.Info("sending cheque", "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.setCheque(peer, cheque)
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
