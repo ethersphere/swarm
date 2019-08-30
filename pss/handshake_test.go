@@ -45,10 +45,11 @@ func testHandshake(t *testing.T) {
 
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
-	clients, err := setupNetwork(2, true)
+	clients, closeSimFunc, err := setupNetwork(2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
 
 	var topic string
 	err = clients[0].Call(&topic, "pss_stringToTopic", "foo:42")
