@@ -427,6 +427,18 @@ func addressToItem(addr chunk.Address) shed.Item {
 	}
 }
 
+// addressesToItems constructs a slice of Items with only
+// addresses set on them.
+func addressesToItems(addrs ...chunk.Address) []shed.Item {
+	items := make([]shed.Item, len(addrs))
+	for i, addr := range addrs {
+		items[i] = shed.Item{
+			Address: addr,
+		}
+	}
+	return items
+}
+
 // now is a helper function that returns a current unix timestamp
 // in UTC timezone.
 // It is set in the init function for usage in production, and

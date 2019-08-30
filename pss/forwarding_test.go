@@ -26,13 +26,11 @@ type testCase struct {
 	errors    string
 }
 
-var testCases []testCase
-
 // the purpose of this test is to see that pss.forward() function correctly
 // selects the peers for message forwarding, depending on the message address
 // and kademlia constellation.
 func TestForwardBasic(t *testing.T) {
-	t.Skip("Flaky on macOS on local machines")
+	var testCases []testCase
 	baseAddrBytes := make([]byte, 32)
 	for i := 0; i < len(baseAddrBytes); i++ {
 		baseAddrBytes[i] = 0xFF

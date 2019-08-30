@@ -54,10 +54,12 @@ func testProtocol(t *testing.T) {
 
 	topic := PingTopic.String()
 
-	clients, err := setupNetwork(2, false)
+	clients, closeSimFunc, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeSimFunc()
+
 	var loaddrhex string
 	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
 	if err != nil {

@@ -25,7 +25,7 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/edsrzf/mmap-go v0.0.0-20160512033002-935e0e8a636c // indirect
 	github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa // indirect
-	github.com/ethereum/go-ethereum v0.0.0-20190531093028-7a22da98b9f8
+	github.com/ethereum/go-ethereum v1.9.2
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
 	github.com/gballet/go-libpcsclite v0.0.0-20190528105824-2fd9b619dd3c // indirect
@@ -36,13 +36,15 @@ require (
 	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/googleapis/gnostic v0.0.0-20190624222214-25d8b0b66985 // indirect
 	github.com/gorilla/mux v1.7.3 // indirect
+	github.com/gorilla/websocket v1.4.0 // indirect
+	github.com/graph-gophers/graphql-go v0.0.0-20190724201507-010347b5f9e6 // indirect
 	github.com/hashicorp/golang-lru v0.5.3
 	github.com/howeyc/fsnotify v0.0.0-20151003194602-f0c08ee9c607 // indirect
 	github.com/huin/goupnp v0.0.0-20161224104101-679507af18f3 // indirect
 	github.com/influxdata/influxdb v0.0.0-20180221223340-01288bdb0883 // indirect
 	github.com/jackpal/go-nat-pmp v0.0.0-20160603034137-1fa385a6f458 // indirect
 	github.com/json-iterator/go v1.1.7 // indirect
-	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2 // indirect
+	github.com/karalabe/usb v0.0.0-20190819132248-550797b1cad8 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.2
@@ -55,7 +57,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v0.1.1 // indirect
-	github.com/opentracing/opentracing-go v0.0.0-20190218023034-25a84ff92183
+	github.com/opentracing/opentracing-go v1.1.0
 	github.com/oschwald/maxminddb-golang v0.0.0-20180819230143-277d39ecb83e // indirect
 	github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222
 	github.com/peterh/liner v0.0.0-20190123174540-a2c9a5303de7 // indirect

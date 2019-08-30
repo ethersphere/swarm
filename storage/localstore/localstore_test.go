@@ -195,6 +195,42 @@ func generateTestRandomChunks(count int) []chunk.Chunk {
 	return chunks
 }
 
+// chunkAddresses return chunk addresses of provided chunks.
+func chunkAddresses(chunks []chunk.Chunk) []chunk.Address {
+	addrs := make([]chunk.Address, len(chunks))
+	for i, ch := range chunks {
+		addrs[i] = ch.Address()
+	}
+	return addrs
+}
+
+// Standard test cases to validate multi chunk operations.
+var multiChunkTestCases = []struct {
+	name  string
+	count int
+}{
+	{
+		name:  "one",
+		count: 1,
+	},
+	{
+		name:  "two",
+		count: 2,
+	},
+	{
+		name:  "eight",
+		count: 8,
+	},
+	{
+		name:  "hundred",
+		count: 100,
+	},
+	{
+		name:  "thousand",
+		count: 1000,
+	},
+}
+
 // TestGenerateTestRandomChunk validates that
 // generateTestRandomChunk returns random data by comparing
 // two generated chunks.

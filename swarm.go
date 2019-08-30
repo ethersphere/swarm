@@ -41,9 +41,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/bzzeth"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -67,21 +68,23 @@ var (
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
 )
 
-// the swarm stack
+// Swarm abstracts the complete Swarm stack
 type Swarm struct {
 	config            *api.Config        // swarm configuration
 	api               *api.API           // high level api layer (fs/manifest)
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
-	bzz               *network.Bzz       // the logistic manager
-	backend           chequebook.Backend // simple blockchain Backend
+	bzzEth            *bzzeth.BzzEth
+	bzz               *network.Bzz // the logistic manager
+	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
 	swap              *swap.Swap
 	stateStore        *state.DBStore
+	tags              *chunk.Tags
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
 	pinAPI            *pin.API // API object implements all pinning related commands
@@ -101,22 +104,39 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, fmt.Errorf("empty bzz key")
 	}
 
-	var backend chequebook.Backend
-	if config.SwapAPI != "" && config.SwapEnabled {
-		log.Info("connecting to SWAP API", "url", config.SwapAPI)
-		backend, err = ethclient.Dial(config.SwapAPI)
-		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapAPI, err)
-		}
-	}
-
 	self = &Swarm{
 		config:       config,
-		backend:      backend,
 		privateKey:   config.ShiftPrivateKey(),
 		cleanupFuncs: []func() error{},
 	}
 	log.Debug("Setting up Swarm service components")
+
+	// Swap initialization
+	if config.SwapEnabled {
+		// for now, Swap can only be enabled in a whitelisted network
+		if self.config.NetworkID != swap.AllowedNetworkID {
+			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
+		}
+		// if Swap is enabled, we MUST have a contract API
+		if self.config.SwapBackendURL == "" {
+			return nil, errors.New("swap enabled but no contract address given; fatal error condition, aborting")
+		}
+		log.Info("connecting to SWAP API", "url", self.config.SwapBackendURL)
+		self.backend, err = ethclient.Dial(self.config.SwapBackendURL)
+		if err != nil {
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapBackendURL, err)
+		}
+
+		// initialize the balances store
+		swapStore, err := state.NewDBStore(filepath.Join(config.Path, "swap.db"))
+		if err != nil {
+			return nil, err
+		}
+		// create the accounting objects
+		self.swap = swap.New(swapStore, self.privateKey, self.config.Contract, self.backend)
+		// start anonymous metrics collection
+		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
+	}
 
 	config.HiveParams.Discovery = true
 
@@ -191,15 +211,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	feedsHandler.SetStore(self.netStore)
 
-	if config.SwapEnabled {
-		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
-		if err != nil {
-			return nil, err
-		}
-		self.swap = swap.New(balancesStore)
-		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
-	}
-
 	syncing := stream.SyncingAutoSubscribe
 	if !config.SyncEnabled || config.LightNodeEnabled {
 		syncing = stream.SyncingDisabled
@@ -212,15 +223,17 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
-	tags := chunk.NewTags() //todo load from state store
+	self.tags = chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
-	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
+	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, self.tags)
 
 	log.Debug("Setup local storage")
 
 	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
+
+	self.bzzEth = bzzeth.New()
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.New(to, config.Pss)
@@ -231,10 +244,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
 
 	// Instantiate the pinAPI object with the already opened localstore
-	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, tags, self.api)
+	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, self.tags, self.api)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
@@ -357,20 +370,17 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	s.tracerClose = tracing.Closer
 
 	// update uaddr to correct enode
-	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
+	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().URLv4()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
-	// set chequebook
-	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
-	//Once we integrate back the contracts, this check MUST be revisited
-	if s.config.SwapEnabled && s.config.SwapAPI != "" {
-		ctx := context.Background() // The initial setup has no deadline.
-		err := s.SetChequebook(ctx)
+
+	if s.config.SwapEnabled {
+		err := s.swap.Deploy(context.Background(), s.backend, s.config.Path)
 		if err != nil {
-			return fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
+			return fmt.Errorf("Unable to deploy swap contract: %v", err)
 		}
-		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", s.config.Swap.Chequebook()))
+		log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 	} else {
-		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
+		log.Info("SWAP disabled: no chequebook set")
 	}
 
 	log.Info("Starting bzz service")
@@ -381,6 +391,11 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 		return err
 	}
 	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", s.bzz.Hive.BaseAddr()))
+
+	err = s.bzzEth.Start(srv)
+	if err != nil {
+		return err
+	}
 
 	if s.ps != nil {
 		s.ps.Start(srv)
@@ -435,8 +450,8 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	return nil
 }
 
-// implements the node.Service interface
-// stops all component services.
+// Stop stops all component services.
+// Implements the node.Service interface.
 func (s *Swarm) Stop() error {
 	if s.tracerClose != nil {
 		err := s.tracerClose.Close()
@@ -449,12 +464,8 @@ func (s *Swarm) Stop() error {
 	if s.ps != nil {
 		s.ps.Stop()
 	}
-	if ch := s.config.Swap.Chequebook(); ch != nil {
-		ch.Stop()
-		ch.Save()
-	}
 	if s.swap != nil {
-		s.swap.Close()
+		s.swap.Stop()
 	}
 	if s.accountingMetrics != nil {
 		s.accountingMetrics.Close()
@@ -466,7 +477,12 @@ func (s *Swarm) Stop() error {
 	stopCounter.Inc(1)
 	s.streamer.Stop()
 
-	err := s.bzz.Stop()
+	err := s.bzzEth.Stop()
+	if err != nil {
+		log.Error("error during bzz-eth shutdown", "err", err)
+	}
+
+	err = s.bzz.Stop()
 	if s.stateStore != nil {
 		s.stateStore.Close()
 	}
@@ -487,23 +503,27 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 		protos = append(protos, s.bzz.Protocols()...)
 	} else {
 		protos = append(protos, s.bzz.Protocols()...)
-
+		protos = append(protos, s.bzzEth.Protocols()...)
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
+		}
+
+		if s.swap != nil {
+			protos = append(protos, s.swap.Protocols()...)
 		}
 	}
 	return
 }
 
-// implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
+// implements node.Service
 func (s *Swarm) APIs() []rpc.API {
 	apis := []rpc.API{
 		// public APIs
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   &Info{s.config, chequebook.ContractParams},
+			Service:   &Info{s.config},
 			Public:    true,
 		},
 		// admin APIs
@@ -511,12 +531,6 @@ func (s *Swarm) APIs() []rpc.API {
 			Namespace: "bzz",
 			Version:   "3.0",
 			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
-			Public:    false,
-		},
-		{
-			Namespace: "chequebook",
-			Version:   chequebook.Version,
-			Service:   chequebook.NewAPI(s.config.Swap.Chequebook),
 			Public:    false,
 		},
 		{
@@ -534,24 +548,18 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-
+	apis = append(apis, s.bzzEth.APIs()...)
 	apis = append(apis, s.streamer.APIs()...)
 
 	if s.ps != nil {
 		apis = append(apis, s.ps.APIs()...)
 	}
 
-	return apis
-}
-
-// SetChequebook ensures that the local checquebook is set up on chain.
-func (s *Swarm) SetChequebook(ctx context.Context) error {
-	err := s.config.Swap.SetChequebook(ctx, s.backend, s.config.Path)
-	if err != nil {
-		return err
+	if s.config.SwapEnabled {
+		apis = append(apis, s.swap.APIs()...)
 	}
-	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
-	return nil
+
+	return apis
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
@@ -559,12 +567,12 @@ func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targ
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
-// serialisable info about swarm
+// Info represents the current Swarm node's configuration
 type Info struct {
 	*api.Config
-	*chequebook.Params
 }
 
-func (s *Info) Info() *Info {
-	return s
+// Info returns the current Swarm configuration
+func (i *Info) Info() *Info {
+	return i
 }

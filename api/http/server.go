@@ -62,6 +62,9 @@ var (
 	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
+	getTagCount     = metrics.NewRegisteredCounter("api.http.get.tag.count", nil)
+	getTagNotFound  = metrics.NewRegisteredCounter("api.http.get.tag.notfound", nil)
+	getTagFail      = metrics.NewRegisteredCounter("api.http.get.tag.fail", nil)
 	getPinCount     = metrics.NewRegisteredCounter("api.http.get.pin.count", nil)
 	getPinFail      = metrics.NewRegisteredCounter("api.http.get.pin.fail", nil)
 	postPinCount    = metrics.NewRegisteredCounter("api.http.post.pin.count", nil)
@@ -71,9 +74,8 @@ var (
 )
 
 const (
-	SwarmTagHeaderName = "x-swarm-tag" // Presence of this in header indicates the tag
-	PinHeaderName      = "x-swarm-pin" // Presence of this in header indicates pinning required
-
+	TagHeaderName  = "x-swarm-tag" // Presence of this in header indicates the tag
+	PinHeaderName  = "x-swarm-pin" // Presence of this in header indicates pinning required
 	encryptAddr    = "encrypt"
 	tarContentType = "application/x-tar"
 )
@@ -168,6 +170,12 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostFeed),
+			defaultMiddlewares...,
+		),
+	})
+	mux.Handle("/bzz-tag:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetTag),
 			defaultMiddlewares...,
 		),
 	})
@@ -326,6 +334,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -402,7 +411,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
 	}
 
-	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.Total())
+	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.TotalCounter())
 	tag.DoneSplit(newAddr)
 
 	// Pin the file
@@ -418,6 +427,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }
@@ -917,6 +927,66 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+}
+
+// HandleGetTag responds to the following request
+//    - bzz-tag:/<manifest>  and
+//    - bzz-tag:/?tagId=<tagId>
+// Clients should use root hash or the tagID to get the tag counters
+func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
+	getTagCount.Inc(1)
+	uri := GetURI(r.Context())
+	if uri == nil {
+		getTagFail.Inc(1)
+		respondError(w, r, "Error decoding uri", http.StatusBadRequest)
+		return
+	}
+	fileAddr := uri.Address()
+
+	var tag *chunk.Tag
+	if fileAddr == nil {
+		tagString := r.URL.Query().Get("Id")
+		if tagString == "" {
+			getTagFail.Inc(1)
+			respondError(w, r, "Missing one of the mandatory argument", http.StatusBadRequest)
+			return
+		}
+
+		u64, err := strconv.ParseUint(tagString, 10, 32)
+		if err != nil {
+			getTagFail.Inc(1)
+			respondError(w, r, "Invalid Id argument", http.StatusBadRequest)
+			return
+		}
+		tagId := uint32(u64)
+
+		tag, err = s.api.Tags.Get(tagId)
+		if err != nil {
+			getTagNotFound.Inc(1)
+			respondError(w, r, "Tag not found", http.StatusNotFound)
+			return
+		}
+	} else {
+
+		tagByFile, err := s.api.Tags.GetByAddress(fileAddr)
+		if err != nil {
+			getTagNotFound.Inc(1)
+			respondError(w, r, "Tag not found", http.StatusNotFound)
+			return
+		}
+		tag = tagByFile
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
+	r.Header.Del("ETag")
+	w.WriteHeader(http.StatusOK)
+	err := json.NewEncoder(w).Encode(&tag)
+	if err != nil {
+		getTagFail.Inc(1)
+		respondError(w, r, "marshalling error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // HandlePin takes a root hash as argument and pins a given file or collection in the local Swarm DB

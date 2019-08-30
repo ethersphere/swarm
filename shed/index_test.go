@@ -49,7 +49,7 @@ var retrievalIndexFuncs = IndexFuncs{
 	},
 }
 
-// TestIndex validates put, get, has and delete functions of the Index implementation.
+// TestIndex validates put, get, fill, has and delete functions of the Index implementation.
 func TestIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
@@ -282,6 +282,68 @@ func TestIndex(t *testing.T) {
 		if err != wantErr {
 			t.Fatalf("got error %v, want %v", err, wantErr)
 		}
+	})
+
+	t.Run("fill", func(t *testing.T) {
+		want := []Item{
+			{
+				Address:        []byte("put-hash-1"),
+				Data:           []byte("DATA123"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+			{
+				Address:        []byte("put-hash-32"),
+				Data:           []byte("DATA124"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+			{
+				Address:        []byte("put-hash-42"),
+				Data:           []byte("DATA125"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+			{
+				Address:        []byte("put-hash-71"),
+				Data:           []byte("DATA126"),
+				StoreTimestamp: time.Now().UTC().UnixNano(),
+			},
+		}
+
+		for _, item := range want {
+			err := index.Put(item)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		items := make([]Item, len(want))
+		for i, w := range want {
+			items[i] = Item{
+				Address: w.Address,
+			}
+		}
+		err = index.Fill(items)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range items {
+			checkItem(t, items[i], want[i])
+		}
+
+		t.Run("not found", func(t *testing.T) {
+			items := make([]Item, len(want))
+			for i, w := range want {
+				items[i] = Item{
+					Address: w.Address,
+				}
+			}
+			items = append(items, Item{
+				Address: []byte("put-hash-missing"),
+			})
+			want := leveldb.ErrNotFound
+			err := index.Fill(items)
+			if err != want {
+				t.Errorf("got error %v, want %v", err, want)
+			}
+		})
 	})
 }
 
@@ -958,5 +1020,87 @@ func TestIncByteSlice(t *testing.T) {
 		if !bytes.Equal(got, tc.want) {
 			t.Errorf("got %v, want %v", got, tc.want)
 		}
+	}
+}
+
+// TestIndex_HasMulti validates that HasMulti returns a correct
+// slice of booleans for provided Items.
+func TestIndex_HasMulti(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items := []Item{
+		{
+			Address: []byte("hash-01"),
+			Data:    []byte("data94"),
+		},
+		{
+			Address: []byte("hash-03"),
+			Data:    []byte("data33"),
+		},
+		{
+			Address: []byte("hash-05"),
+			Data:    []byte("data55"),
+		},
+		{
+			Address: []byte("hash-02"),
+			Data:    []byte("data21"),
+		},
+		{
+			Address: []byte("hash-06"),
+			Data:    []byte("data8"),
+		},
+	}
+	missingItem := Item{
+		Address: []byte("hash-10"),
+		Data:    []byte("data0"),
+	}
+
+	batch := new(leveldb.Batch)
+	for _, i := range items {
+		index.PutInBatch(batch, i)
+	}
+	err = db.WriteBatch(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := index.HasMulti(items[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got[0] {
+		t.Error("first item not found")
+	}
+
+	got, err = index.HasMulti(missingItem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0] {
+		t.Error("missing item found")
+	}
+
+	got, err = index.HasMulti(items...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []bool{true, true, true, true, true}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	got, err = index.HasMulti(append(items, missingItem)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []bool{true, true, true, true, true, false}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
