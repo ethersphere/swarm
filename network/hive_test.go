@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethersphere/swarm/network/capability"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/state"
 )
@@ -55,7 +56,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	}
 
 	node := s.Nodes[0]
-	raddr := NewAddr(node)
+	raddr := NewAddr(node).WithCapabilities(capability.NewCapabilities())
 	pp.Register(raddr)
 
 	// start the hive
@@ -152,7 +153,7 @@ func TestHiveStatePersistance(t *testing.T) {
 	h1, cleanup1 := startHive(t, dir)
 	peers := make(map[string]bool)
 	for i := 0; i < peersCount; i++ {
-		raddr := RandomAddr()
+		raddr := RandomAddr().WithCapabilities(capability.NewCapabilities())
 		h1.Register(raddr)
 		peers[raddr.String()] = true
 	}

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/pot"
@@ -125,7 +126,10 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	}
 	register := func(a pot.Address, po int) {
 		addr := pot.RandomAddressAt(a, po)
-		hive.Register(&BzzAddr{OAddr: addr[:]})
+		bzzAddr := &BzzAddr{OAddr: addr[:]}
+		bzzAddr.WithCapabilities(capability.NewCapabilities())
+		hive.Register(addr)
+		//	hive.Register(&BzzAddr{OAddr: addr[:]})
 	}
 
 	// generate connected and just registered peers

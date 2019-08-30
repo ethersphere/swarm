@@ -87,7 +87,6 @@ func NewEnodeRecord(params *EnodeParams) (*enr.Record, error) {
 
 	var record enr.Record
 	record.Set(NewENRAddrEntry(bzzkeybytes))
-	record.Set(ENRLightNodeEntry(params.Lightnode))
 	record.Set(ENRBootNodeEntry(params.Bootnode))
 	return &record, nil
 }

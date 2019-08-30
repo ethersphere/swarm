@@ -184,7 +184,6 @@ func newBzzHandshakeTester(n int, prvkey *ecdsa.PrivateKey, lightNode bool) (*bz
 	var record enr.Record
 	bzzkey := PrivateKeyToBzzKey(prvkey)
 	record.Set(NewENRAddrEntry(bzzkey))
-	record.Set(ENRLightNodeEntry(lightNode))
 	err := enode.SignV4(&record, prvkey)
 	if err != nil {
 		return nil, err

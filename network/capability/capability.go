@@ -185,3 +185,32 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 
 	return nil
 }
+
+// Match returns true if all bits set in the argument is also set in the receiver
+func (c *Capability) Match(capCompare *Capability) bool {
+	if len(c.Cap) != len(capCompare.Cap) {
+		return false
+	}
+	// on the first occurence of false where query has true we can fail
+	for i, flag := range capCompare.Cap {
+		if flag && !c.Cap[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Capabilities) Match(capsCompare *Capabilities) bool {
+	for _, capCompare := range capsCompare.Caps {
+
+		// if queryied id doesn't exist in object we can nay right away
+		cap := c.Get(capCompare.Id)
+		if cap == nil {
+			return false
+		}
+		if !cap.Match(capCompare) {
+			return false
+		}
+	}
+	return true
+}
