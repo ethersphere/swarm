@@ -169,6 +169,12 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 			case *StreamInfoReq:
 				r.serverHandleStreamInfoReq(ctx, p, msg)
 			case *StreamInfoRes:
+				if len(msg.Streams) == 0 {
+					p.logger.Error("StreamInfo response is empty")
+					p.Drop()
+					return
+				}
+
 				r.clientHandleStreamInfoRes(ctx, p, msg)
 			case *GetRange:
 
@@ -273,6 +279,7 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 
 	select {
 	case <-r.quit:
+		// shutdown
 		return
 	case <-p.quit:
 		// peer has been removed, quit
@@ -288,12 +295,6 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 
 // clientHandleStreamInfoRes handles the StreamInfoRes message (Peer is the server)
 func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *StreamInfoRes) {
-	if len(msg.Streams) == 0 {
-		p.logger.Error("StreamInfo response is empty")
-		p.Drop()
-		return
-	}
-
 	for _, s := range msg.Streams {
 		s := s
 		provider, exit := r.getProviderOrDrop(s.Stream)
@@ -352,7 +353,7 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 // clientRequestStreamHead sends a GetRange message to the server requesting
 // new chunks from the supplied cursor position
 func (r *Registry) clientRequestStreamHead(ctx context.Context, p *Peer, stream ID, from uint64) error {
-	p.logger.Debug("peer.requestStreamHead", "stream", stream, "from", from)
+	p.logger.Debug("clientRequestStreamHead", "stream", stream, "from", from)
 	return r.clientCreateSendWant(ctx, p, stream, from, nil, true)
 }
 
@@ -360,7 +361,7 @@ func (r *Registry) clientRequestStreamHead(ctx context.Context, p *Peer, stream 
 // a bound interval of chunks starting from the current stored interval in the
 // interval store and ending at most in the supplied cursor position
 func (r *Registry) clientRequestStreamRange(ctx context.Context, p *Peer, provider StreamProvider, stream ID, cursor uint64) error {
-	p.logger.Debug("peer.requestStreamRange", "stream", stream, "cursor", cursor)
+	p.logger.Debug("clientRequestStreamRange", "stream", stream, "cursor", cursor)
 	from, _, empty, err := p.nextInterval(stream, 0)
 	if err != nil {
 		return err
@@ -383,8 +384,6 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		Roundtrip: true,
 	}
 
-	p.logger.Debug("sending GetRange to peer", "ruid", g.Ruid, "stream", stream)
-
 	p.mtx.Lock()
 	p.openWants[g.Ruid] = &want{
 		ruid:   g.Ruid,
@@ -394,7 +393,7 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		head:   head,
 		hashes: make(map[string]bool),
 		chunks: make(chan chunk.Chunk),
-		done:   make(chan error),
+		closeC: make(chan error),
 
 		requested: time.Now(),
 	}
@@ -404,7 +403,7 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 }
 
 func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
-	p.logger.Debug("stream.handleGetRangeHead", "ruid", msg.Ruid)
+	p.logger.Debug("serverHandleGetRangeHead", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
@@ -472,7 +471,7 @@ func (r *Registry) serverHandleGetRangeHead(ctx context.Context, p *Peer, msg *G
 // in the case that for the specific interval no chunks exist - the server sends an empty OfferedHashes
 // message so that the client could seal the interval and request the next
 func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRange, provider StreamProvider) {
-	p.logger.Debug("peer.handleGetRange", "ruid", msg.Ruid, "from", msg.From, "to", msg.To, "stream", msg.Stream)
+	p.logger.Debug("serverHandleGetRange", "ruid", msg.Ruid, "from", msg.From, "to", msg.To, "stream", msg.Stream)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
@@ -542,7 +541,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 
 // clientHandleOfferedHashes handles the OfferedHashes wire protocol message (Peer is the server)
 func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *OfferedHashes, w *want, provider StreamProvider) {
-	p.logger.Debug("stream.handleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
+	p.logger.Debug("clientHandleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_offered_hashes.total-time", nil).UpdateSince(start)
@@ -632,7 +631,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		errc = r.clientSealBatch(ctx, p, provider, w) // poll for the completion of the batch in a separate goroutine
 	}
 
-	p.logger.Debug("sending wanted hashes", "offered", lenHashes/HashSize, "want", ctr, "ruid", msg.Ruid)
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		p.logger.Error("error sending wanted hashes", "err", err)
 		p.Drop()
@@ -653,13 +651,12 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		}
 	case <-time.After(activeBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
-		close(w.done)
+		close(w.closeC)
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
 		p.Drop()
 		return
-	case <-w.done:
 	case <-r.quit:
 		return
 	case <-p.quit:
@@ -671,7 +668,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 // serverHandleWantedHashes is handled on the server side (Peer is the client) and is dependent on a preceding OfferedHashes message
 // the method is to ensure that all chunks in the requested batch is sent to the client
 func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes, o offer, provider StreamProvider) {
-	p.logger.Debug("peer.handleWantedHashes", "ruid", msg.Ruid)
+	p.logger.Debug("serverHandleWantedHashes", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
@@ -747,7 +744,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 				Ruid: msg.Ruid,
 			}
 		}
-
 	}
 
 	// send anything that we might have left in the batch
@@ -767,10 +763,13 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	err = provider.Set(ctx, addrs...)
 	if err != nil {
 		p.logger.Error("error setting chunk as synced", "addrs", addrs, "err", err)
+		p.Drop()
+		return
 	}
 }
 
 func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery, w *want, provider StreamProvider) {
+	p.logger.Debug("clientHandleChunkDelivery", "ruid", msg.Ruid)
 	processReceivedChunksMsgCount.Inc(1)
 	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 	start := time.Now()
@@ -795,7 +794,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	}
 	for _, v := range seen {
 		if v {
-			//this is possible when the same chunk is asked from multiple peers
+			//this is possible when the same chunk is asked from multiple peers, we currently do not limit this
 			streamSeenChunkDelivery.Inc(1)
 		}
 	}
@@ -804,7 +803,8 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		select {
 		case w.chunks <- dc:
 			// send the chunk to the goroutine that polls batch completion
-		case <-w.done:
+		case <-w.closeC:
+			// batch timeout
 			return
 		case <-r.quit:
 			return
@@ -815,7 +815,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 }
 
 func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan error {
-	p.logger.Debug("stream.clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
+	p.logger.Debug("clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
 	errc := make(chan error)
 	go func() {
 		start := time.Now()
@@ -849,7 +849,8 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				}
 			case <-p.quit:
 				return
-			case <-w.done:
+			case <-w.closeC:
+				// batch timeout was signalled
 				return
 			case <-r.quit:
 				return
@@ -860,7 +861,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 }
 
 func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
-	p.logger.Debug("stream.CollectBatch", "from", from, "to", to)
+	p.logger.Debug("serverCollectBatch", "from", from, "to", to)
 	batchStart := time.Now()
 
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
@@ -878,8 +879,6 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	)
 
 	defer func(start time.Time) {
-		t := time.Since(start)
-		p.logger.Trace("server collect batch ended", "took", t)
 		if to == 0 {
 			collectBatchLiveTimer.UpdateSince(start)
 		} else {
@@ -924,10 +923,8 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 			metrics.GetOrRegisterCounter("network.stream.server_collect_batch.timer-expire", nil).Inc(1)
 		case <-p.quit:
 			iterate = false
-			p.logger.Trace("pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-r.quit:
 			iterate = false
-			p.logger.Trace("pull subscription - shutting down")
 		}
 	}
 	if batchStartID == nil {
@@ -942,11 +939,6 @@ func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider
 	if !ok {
 		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
 		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
-		select {
-		case <-w.done:
-		default:
-			close(w.done)
-		}
 		p.mtx.Lock()
 		delete(p.openWants, w.ruid)
 		p.mtx.Unlock()

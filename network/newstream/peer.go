@@ -131,7 +131,7 @@ type want struct {
 	requested time.Time        // requested at time
 	remaining uint64           // number of remaining chunks to deliver
 	chunks    chan chunk.Chunk // chunk arrived notification channel
-	done      chan error       // signal polling goroutine to terminate due to empty batch or timeout
+	closeC    chan error       // signal polling goroutine to terminate due to empty batch or timeout
 }
 
 // getOfferOrDrop gets on open offer for the requested ruid
