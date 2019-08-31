@@ -77,7 +77,7 @@ type Swarm struct {
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	newstreamer       *newstream.Registry
 	retrieval         *retrieval.Retrieval
-	bzz               *network.Bzz       // the logistic manager
+	bzz               *network.Bzz // the logistic manager
 	bzzEth            *bzzeth.BzzEth
 	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
@@ -213,7 +213,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	feedsHandler.SetStore(self.netStore)
 
-
 	syncing := true
 	if !config.SyncEnabled || config.LightNodeEnabled {
 		syncing = false
@@ -225,7 +224,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
-	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, self.tags)
+	self.fileStore = storage.NewFileStore(lnetStore, localStore, self.config.FileStoreParams, self.tags)
 
 	log.Debug("Setup local storage")
 
