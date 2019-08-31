@@ -42,7 +42,7 @@ import (
 
 const (
 	HashSize     = 32
-	BatchSize    = 64
+	BatchSize    = 128
 	MinFrameSize = 16
 )
 
@@ -112,7 +112,7 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
 		baseKey:        baseKey,
-		logger:         log.New("base", hex.EncodeToString(baseKey)),
+		logger:         log.New("base", hex.EncodeToString(baseKey)[:16]),
 		spec:           Spec,
 	}
 	for _, p := range providers {
