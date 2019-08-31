@@ -21,7 +21,7 @@ func NewBzz(client *rpc.Client) *Bzz {
 // GetChunksBitVector returns a bit vector of presence for a given slice of chunks
 func (b *Bzz) GetChunksBitVector(addrs []storage.Address) (string, error) {
 	var hostChunks string
-	const trackChunksPageSize = 1000
+	const trackChunksPageSize = 7500
 
 	for len(addrs) > 0 {
 		var pageChunks string
