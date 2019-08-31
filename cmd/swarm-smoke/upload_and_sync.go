@@ -67,14 +67,6 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 		err = fmt.Errorf("timeout after %v sec", timeout)
 	}
 
-	if debug {
-		// trigger debug functionality on randomBytes
-		e := trackChunks(randomBytes[:], true)
-		if e != nil {
-			log.Error(e.Error())
-		}
-	}
-
 	return err
 }
 
@@ -220,6 +212,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {
 				if allHostChunks[maxProxHost][i] == '0' {
+					metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-not-max-prox", nil).Inc(1)
 					log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
 				} else {
 					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
@@ -228,6 +221,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 
 			// if chunk found at less than 2 hosts, which is actually less that the min size of a NN
 			if foundAt < 2 {
+				metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-less-nn", nil).Inc(1)
 				log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
 			}
 		}
@@ -243,6 +237,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 
 			if !found {
 				for _, maxProxHost := range maxProxHosts {
+					metrics.GetOrRegisterCounter("upload-and-sync.push-sync.chunk-not-max-prox", nil).Inc(1)
 					log.Error("chunk not found at any max prox host", "ref", addrs[i], "hosts", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
 				}
 			}
@@ -278,6 +273,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	}
 	t2 := time.Since(t1)
 	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
+	uploadSpeed := float64(len(randomBytes)) / t2.Seconds() // bytes per second
+	metrics.GetOrRegisterGauge("upload-and-sync.upload-speed", nil).Update(int64(uploadSpeed))
 
 	fhash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
@@ -299,7 +296,7 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 		log.Debug("chunks before fetch attempt", "hash", hash)
 
 		if debug {
-			err = trackChunks(randomBytes, false)
+			err = trackChunks(randomBytes, debug)
 			if err != nil {
 				log.Error(err.Error())
 			}
@@ -323,6 +320,9 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 		ended := time.Since(start)
 
 		metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).Update(ended)
+		downloadSpeed := float64(len(randomBytes)) / ended.Seconds() // bytes per second
+		metrics.GetOrRegisterGauge("upload-and-sync.download-speed", nil).Update(int64(downloadSpeed))
+
 		log.Info("fetch successful", "took", ended, "endpoint", httpEndpoint(hosts[randIndex]))
 		break
 	}

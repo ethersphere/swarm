@@ -39,23 +39,19 @@ const syncStreamName = "SYNC"
 const cacheCapacity = 10000
 
 type syncProvider struct {
-	netStore *storage.NetStore
-	kad      *network.Kademlia
-
-	name                    string
-	syncBinsOnlyWithinDepth bool
-	autostart               bool
-	quit                    chan struct{}
-
-	cacheMtx sync.RWMutex
-
-	cache *lru.Cache
-
-	logger log.Logger
+	netStore                *storage.NetStore // netstore
+	kad                     *network.Kademlia // kademlia
+	name                    string            // name of the stream we are responsible for
+	syncBinsOnlyWithinDepth bool              // true means streams are established only within depth, false means outside of depth too
+	autostart               bool              // start fetching streams automatically when cursors arrive from peer
+	quit                    chan struct{}     // shutdown
+	cacheMtx                sync.RWMutex      // synchronization primitive to protect cache
+	cache                   *lru.Cache        // cache to minimize load on netstore
+	logger                  log.Logger        // logger that appends the base address to loglines
 }
 
 // NewSyncProvider creates a new sync provider that is used by the stream protocol to sink data and control its behaviour
-// NOTE: syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
+// syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
 // established only within depth ( >=depth ). This is needed for Push Sync. When set to false, the streams are
 // established on all bins as they did traditionally with Pull Sync.
 func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
@@ -76,6 +72,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 	}
 }
 
+// NeedData checks if we need to retrieve the supplied addrs from the upstream peer
 func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
 	wants := make([]bool, len(addrs))
 
@@ -134,6 +131,7 @@ func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]
 	return wants, nil
 }
 
+// Get the supplied addresses for delivery
 func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error) {
 	s.cacheMtx.Lock()
 	defer s.cacheMtx.Unlock()
@@ -170,6 +168,7 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 	return retChunks, nil
 }
 
+// Set the supplied addrs as synced
 func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 	// mark the chunk as Set in order to allow for garbage collection
 	// this can and at some point should be moved to a dedicated method that
@@ -182,6 +181,7 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 	return nil
 }
 
+// Put the given chunks to the local storage
 func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error) {
 	start := time.Now()
 	defer func(start time.Time) {
@@ -213,6 +213,7 @@ func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []boo
 // nil in production.
 var putSeenTestHook func(addr chunk.Address, id enode.ID)
 
+// Subscribe wraps SubscribePull to retrieve chunks within a certain interval
 func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func()) {
 	// convert the key to the actual value and call SubscribePull
 	bin := key.(uint8)
@@ -221,6 +222,7 @@ func (s *syncProvider) Subscribe(ctx context.Context, key interface{}, from, to 
 	return s.netStore.SubscribePull(ctx, bin, from, to)
 }
 
+// Cursor gets the cursor from the localstore for a given stream key
 func (s *syncProvider) Cursor(k string) (cursor uint64, err error) {
 	key, err := s.ParseKey(k)
 	if err != nil {
@@ -236,6 +238,7 @@ func (s *syncProvider) Cursor(k string) (cursor uint64, err error) {
 	return s.netStore.LastPullSubscriptionBinID(bin)
 }
 
+// WantStream checks if we are interested in a given stream for a peer
 func (s *syncProvider) WantStream(p *Peer, streamID ID) bool {
 	p.logger.Debug("syncProvider.WantStream", "stream", streamID)
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())

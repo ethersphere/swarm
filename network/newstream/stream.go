@@ -69,7 +69,12 @@ var (
 
 	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
 	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
-	activeBatchTimeout       = 20 * time.Second
+	providerGetTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_get.total-time", nil)
+	providerPutTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_put.total-time", nil)
+	providerSetTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_set.total-time", nil)
+	providerNeedDataTimer    = metrics.GetOrRegisterResettingTimer("network.stream.provider_need_data.total-time", nil)
+
+	activeBatchTimeout = 20 * time.Second
 
 	// Protocol spec
 	Spec = &protocols.Spec{
@@ -550,6 +555,8 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		addresses[i/HashSize] = hash
 	}
 
+	startNeed := time.Now()
+
 	// check which hashes we want
 	if hasses, err := provider.NeedData(ctx, addresses...); err == nil {
 		for i, has := range hasses {
@@ -564,6 +571,8 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		p.Drop()
 		return
 	}
+
+	providerNeedDataTimer.UpdateSince(startNeed)
 
 	// set the number of remaining chunks to ctr
 	atomic.AddUint64(&w.remaining, ctr)
@@ -672,6 +681,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 			wantHashes = append(wantHashes, hash)
 		}
 	}
+	startGet := time.Now()
 
 	// get the chunks from the provider
 	chunks, err := provider.Get(ctx, wantHashes...)
@@ -680,6 +690,8 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		p.Drop()
 		return
 	}
+
+	providerGetTimer.UpdateSince(startGet) // measure how long we spend on getting the chunks
 
 	// append the chunks to the chunk delivery message. when reaching maxFrameSize send the current batch
 	for _, v := range chunks {
@@ -719,6 +731,8 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		}
 	}
 
+	startSet := time.Now()
+
 	// set the chunks as synced
 	err = provider.Set(ctx, wantHashes...)
 	if err != nil {
@@ -726,6 +740,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		p.Drop()
 		return
 	}
+	providerSetTimer.UpdateSince(startSet)
 }
 
 // clientHandleChunkDelivery handles chunk delivery messages
@@ -743,6 +758,8 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		chunks[i] = chunk.NewChunk(dc.Addr, dc.Data)
 	}
 
+	startPut := time.Now()
+
 	// put the chunks to the local store
 	seen, err := provider.Put(ctx, chunks...)
 	if err != nil {
@@ -754,6 +771,8 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		p.logger.Error("clientHandleChunkDelivery error putting chunk", "err", err)
 		return
 	}
+
+	providerPutTimer.UpdateSince(startPut)
 
 	// increment seen chunk delivery metric. duplicate delivery is possible when the same chunk is asked from multiple peers, we currently do not limit this
 	for _, v := range seen {
