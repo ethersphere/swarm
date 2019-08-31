@@ -452,9 +452,16 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		case <-p.quit:
 			return
 		default:
+			// if the batch is empty resulting from a request for the tip
+			// the lastIdx is msg.From
+			// if the range was defined - then it equals to the top of the requested range - msg.To
+			lastIdx := msg.From
+			if msg.To != nil {
+				lastIdx = *msg.To
+			}
 			offered := OfferedHashes{
 				Ruid:      msg.Ruid,
-				LastIndex: msg.From,
+				LastIndex: lastIdx,
 				Hashes:    []byte{},
 			}
 			if err := p.Send(ctx, offered); err != nil {
