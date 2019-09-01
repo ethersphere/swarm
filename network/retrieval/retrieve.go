@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -51,8 +50,7 @@ var (
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
 	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
 
-	lastReceivedRetrieveChunksMsg = metrics.GetOrRegisterGauge("network.retrieve.received_chunks", nil)
-	retrievalPeers                = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
+	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
 	Spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
@@ -168,8 +166,7 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 			// for other chunks from the same peer will get stuck in the queue
 			go r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
-			return r.handleChunkDelivery(ctx, p, msg)
-
+			go r.handleChunkDelivery(ctx, p, msg)
 		}
 		return nil
 	}
@@ -359,7 +356,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 // handleChunkDelivery handles a ChunkDelivery message from a certain peer
 // if the chunk proximity order in relation to our base address is within depth
 // we treat the chunk as a chunk received in syncing
-func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) error {
+func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
@@ -367,9 +364,6 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		"handle.chunk.delivery")
 
 	processReceivedChunksCount.Inc(1)
-
-	// record the last time we received a chunk delivery message
-	lastReceivedRetrieveChunksMsg.Update(time.Now().UnixNano())
 
 	// count how many chunks we receive for retrieve requests per peer
 	peermetric := fmt.Sprintf("network.retrieve.chunk.delivery.%x", p.BzzAddr.Over()[:16])
@@ -387,18 +381,15 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		// do not sync if peer that is sending us a chunk is closer to the chunk then we are
 		mode = chunk.ModePutRequest
 	}
-	go func() {
-		defer osp.Finish()
+	defer osp.Finish()
 
-		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
-		if err != nil {
-			p.logger.Error("netstore error putting chunk to localstore", "err", err)
-			if err == storage.ErrChunkInvalid {
-				p.Drop()
-			}
+	_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+	if err != nil {
+		p.logger.Error("netstore error putting chunk to localstore", "err", err)
+		if err == storage.ErrChunkInvalid {
+			p.Drop()
 		}
-	}()
-	return nil
+	}
 }
 
 // RequestFromPeers sends a chunk retrieve request to the next found peer
