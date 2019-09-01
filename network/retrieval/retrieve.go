@@ -164,7 +164,9 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
 		case *RetrieveRequest:
-			r.handleRetrieveRequest(ctx, p, msg)
+			// we must handle them in a different goroutine otherwise parallel requests
+			// for other chunks from the same peer will get stuck in the queue
+			go r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
 			return r.handleChunkDelivery(ctx, p, msg)
 
@@ -388,7 +390,6 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	go func() {
 		defer osp.Finish()
 
-		//p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
 		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			p.logger.Error("netstore error putting chunk to localstore", "err", err)
