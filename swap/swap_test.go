@@ -50,8 +50,8 @@ import (
 
 var (
 	loglevel           = flag.Int("loglevel", 2, "verbosity of logs")
-	issuerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
-	issuerAddress       = crypto.PubkeyToAddress(issuerKey.PublicKey)
+	issuerKey, _       = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	issuerAddress      = crypto.PubkeyToAddress(issuerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
 	testChequeSig      = common.Hex2Bytes("fd3f73c7a708bb4e42471b76dabee2a0c1b9af29efb7eadb37f206bf871b81cf0c7987ad89633be930a63eba9e793cc77896131de7d9740b49da80c23c217c621c")
@@ -92,7 +92,7 @@ func init() {
 // newTestBackend creates a new test backend instance
 func newTestBackend() *swapTestBackend {
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		issuerAddress:       {Balance: big.NewInt(1000000000)},
+		issuerAddress:      {Balance: big.NewInt(1000000000)},
 		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
 	}, gasLimit)
 	return &swapTestBackend{
