@@ -29,9 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/testutil"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -39,7 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
@@ -483,18 +482,18 @@ func retrieveF(
 // putString provides singleton manifest creation on top of api.API
 func putString(ctx context.Context, a *api.API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	r := strings.NewReader(content)
-	tag, err := a.Tags.Create("unnamed-tag", 0)
+	tag, err := a.Tags.Create(ctx, "unnamed-tag", 0)
 
 	log.Trace("created new tag", "uid", tag.Uid)
 
-	cCtx := sctx.SetTag(ctx, tag.Uid)
-	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt)
+	ctx = sctx.SetTag(ctx, tag.Uid)
+	key, waitContent, err := a.Store(ctx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.Store(ctx, r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		return nil, nil, err
 	}

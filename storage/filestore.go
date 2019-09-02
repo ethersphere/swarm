@@ -91,7 +91,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	tag, err := f.tags.GetFromContext(ctx)
 	if err != nil {
-		tag = chunk.NewTag(0, "ephemeral-retrieval-tag", 0)
+		tag = chunk.NewTag(ctx, 0, "ephemeral-retrieval-tag", 0)
 	}
 
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag)
@@ -108,7 +108,7 @@ func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEnc
 		// of the original request nor the tag with the trie, recalculating the trie hence
 		// loses the tag uid. thus we create an ephemeral tag here for that purpose
 
-		tag = chunk.NewTag(0, "", 0)
+		tag = chunk.NewTag(ctx, 0, "", 0)
 		//return nil, nil, err
 	}
 	putter := NewHasherStore(f.putterStore, f.hashFunc, toEncrypt, tag)
@@ -121,7 +121,7 @@ func (f *FileStore) HashSize() int {
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
 func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader) (addrs AddressCollection, err error) {
-	tag := chunk.NewTag(0, "ephemeral-tag", 0) //this tag is just a mock ephemeral tag since we don't want to save these results
+	tag := chunk.NewTag(ctx, 0, "ephemeral-tag", 0) //this tag is just a mock ephemeral tag since we don't want to save these results
 
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{

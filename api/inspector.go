@@ -55,15 +55,12 @@ func (i *Inspector) KademliaInfo() network.KademliaInfo {
 }
 
 func (i *Inspector) IsPushSynced(tagname string) bool {
-	log.Info("is push synced", "tagname", tagname)
 	tags := i.api.Tags.All()
 
 	for _, t := range tags {
 		if t.Name == tagname {
 			ds := t.Done(chunk.StateSynced)
-
-			log.Debug("found tag", "tagname", tagname, "done-syncing", ds)
-
+			log.Trace("found tag", "tagname", tagname, "done-syncing", ds)
 			return ds
 		}
 	}

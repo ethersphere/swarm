@@ -43,10 +43,10 @@ type chunkerTester struct {
 	t      test
 }
 
-var mockTag = chunk.NewTag(0, "mock-tag", 0)
+var mockTag = chunk.NewTag(context.Background(), 0, "mock-tag", 0)
 
 func newTestHasherStore(store ChunkStore, hash string) *hasherStore {
-	return NewHasherStore(store, MakeHashFunc(hash), false, chunk.NewTag(0, "test-tag", 0))
+	return NewHasherStore(store, MakeHashFunc(hash), false, chunk.NewTag(context.Background(), 0, "test-tag", 0))
 }
 
 func testRandomBrokenData(n int, tester *chunkerTester) {

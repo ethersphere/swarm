@@ -18,6 +18,7 @@ package chunk
 
 import (
 	"bytes"
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -137,12 +138,13 @@ func TestTagConcurrentIncrements(t *testing.T) {
 // TestTagsMultipleConcurrentIncrements tests Inc calls concurrently
 func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	ts := NewTags()
+	ctx := context.Background()
 	n := 100
 	wg := sync.WaitGroup{}
 	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
-		tag, err := ts.Create(s, int64(n))
+		tag, err := ts.Create(ctx, s, int64(n))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,7 +185,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 // TestMarshallingWithAddr tests that marshalling and unmarshalling is done correctly when the
 // tag Address (byte slice) contains some arbitrary value
 func TestMarshallingWithAddr(t *testing.T) {
-	tg := NewTag(111, "test/tag", 10)
+	tg := NewTag(context.Background(), 111, "test/tag", 10)
 	tg.Address = []byte{0, 1, 2, 3, 4, 5, 6}
 
 	for _, f := range allStates {
@@ -231,7 +233,7 @@ func TestMarshallingWithAddr(t *testing.T) {
 
 // TestMarshallingNoAddress tests that marshalling and unmarshalling is done correctly
 func TestMarshallingNoAddr(t *testing.T) {
-	tg := NewTag(111, "test/tag", 10)
+	tg := NewTag(context.Background(), 111, "test/tag", 10)
 	for _, f := range allStates {
 		tg.Inc(f)
 	}
