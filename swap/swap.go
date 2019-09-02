@@ -86,14 +86,14 @@ func NewParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend) *Swap {
 	return &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),
 		cheques:             make(map[enode.ID]*Cheque),
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
-		owner:               createOwner(prvkey, contract),
+		owner:               createOwner(prvkey),
 		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
@@ -127,12 +127,11 @@ func keyToID(key string, prefix string) enode.ID {
 }
 
 // createOwner assings keys and addresses
-func createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
+func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
 		privateKey: prvkey,
 		publicKey:  pubkey,
-		Contract:   contract,
 		address:    crypto.PubkeyToAddress(*pubkey),
 	}
 }
@@ -532,6 +531,11 @@ func (s *Swap) verifyContract(ctx context.Context, address common.Address) error
 	return contract.ValidateCode(ctx, s.backend, address)
 }
 
+// SetChequebookAddr sets the chequebook address
+func (s *Swap) SetChequebookAddr(chequebookAddr common.Address) {
+	s.owner.Contract = chequebookAddr
+}
+
 // getContractOwner retrieve the owner of the chequebook at address from the blockchain
 func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (common.Address, error) {
 	contr, err := contract.InstanceAt(address, s.backend)
@@ -542,7 +546,18 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// Deploy deploys the Swap contract
+// NewInstanceAt creates a new instance of the chequebook contract at address and sets chequebookAddr
+func (s *Swap) NewInstanceAt(address common.Address, backend swap.Backend) error {
+	c, err := contract.InstanceAt(address, backend)
+	if err != nil {
+		return err
+	}
+	s.contract = c
+	s.SetChequebookAddr(address)
+	return nil
+}
+
+// Deploy deploys the Swap contract and sets the contract address
 func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
@@ -555,7 +570,7 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 		log.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	s.owner.Contract = address
+	s.SetChequebookAddr(address)
 	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
