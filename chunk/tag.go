@@ -65,7 +65,7 @@ type Tag struct {
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func NewTag(uid uint32, s string, total int64) *Tag {
+func NewTag(ctx context.Context, uid uint32, s string, total int64) *Tag {
 	t := &Tag{
 		Uid:       uid,
 		Name:      s,
@@ -73,7 +73,7 @@ func NewTag(uid uint32, s string, total int64) *Tag {
 		Total:     total,
 	}
 
-	t.ctx, t.span = spancontext.StartSpan(context.Background(), "new.upload.tag")
+	t.ctx, t.span = spancontext.StartSpan(ctx, "new.upload.tag")
 	return t
 }
 

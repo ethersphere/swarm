@@ -1,18 +1,18 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package pushsync
 
@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
@@ -62,8 +62,8 @@ var (
 // * uploader uploads a number of chunks
 // * wait until the uploaded chunks are synced
 // * downloader downloads the chunk
-// Testcasrs are run concurrently
-func TestPushSyncSimulation(t *testing.T) {
+// Testcases are run concurrently
+func TestPushsyncSimulation(t *testing.T) {
 	nodeCnt := *nodeCntFlag
 	chunkCnt := *chunkCntFlag
 	testcases := *testCasesFlag
@@ -80,14 +80,16 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.Servic
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx := context.Background()
+	snapCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	err := sim.UploadSnapshot(ctx, fmt.Sprintf("../network/stream/testing/snapshot_%d.json", nodeCnt))
+	err := sim.UploadSnapshot(snapCtx, filepath.Join("../network/stream/testing", fmt.Sprintf("snapshot_%d.json", nodeCnt)))
 	if err != nil {
-		return err
+		return fmt.Errorf("error while loading snapshot: %v", err)
 	}
 
-	log.Debug("Snapshot loaded")
+	start := time.Now()
+	log.Info("Snapshot loaded. Simulation starting", "at", start)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		errc := make(chan error)
 		for j := 0; j < testcases; j++ {
@@ -116,6 +118,7 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.Servic
 	if result.Error != nil {
 		return fmt.Errorf("simulation error: %v", result.Error)
 	}
+	log.Error("simulation", "duration", time.Since(start))
 	return nil
 }
 
@@ -140,7 +143,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 	// the created tag indicates the uploader and downloader nodes
 	tagname := fmt.Sprintf("tag-%v-%v-%d", label(uid[:]), label(did[:]), i)
 	log.Debug("uploading", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
-	tag, what, err := upload(ctx, p.store.(*localstore.DB), p.tags, tagname, chunkCnt)
+	tag, ref, err := upload(ctx, p.store.(*localstore.DB), p.tags, tagname, chunkCnt)
 	if err != nil {
 		return err
 	}
@@ -159,7 +162,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 
 	log.Debug("downloading", "peer", did, "chunks", chunkCnt, "tagname", tagname)
 	netstore := sim.MustNodeItem(did, bucketKeyNetStore).(*storage.NetStore)
-	err = download(ctx, netstore, what)
+	err = download(ctx, netstore, ref)
 	log.Debug("downloaded", "peer", did, "chunks", chunkCnt, "tagname", tagname, "err", err)
 	return err
 }
@@ -170,7 +173,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	// setup localstore
 	n := ctx.Config.Node()
 	addr := network.NewAddr(n)
-	dir, err := ioutil.TempDir("", "localstore-test")
+	dir, err := ioutil.TempDir("", "pushsync-test")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -180,7 +183,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 	// setup netstore
-	netStore := storage.NewNetStore(lstore, enode.ID{})
+	netStore := storage.NewNetStore(lstore, n.ID())
 
 	// setup pss
 	kadParams := network.NewKadParams()
@@ -213,9 +216,9 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	s := NewStorer(netStore, pubSub)
 
 	cleanup := func() {
-		r.Close()
 		p.Close()
 		s.Close()
+		r.Close()
 		netStore.Close()
 		os.RemoveAll(dir)
 	}
@@ -250,7 +253,7 @@ func (s *StreamerAndPss) Stop() error {
 }
 
 func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, n int) (tag *chunk.Tag, addrs []storage.Address, err error) {
-	tag, err = tags.Create(tagname, int64(n))
+	tag, err = tags.Create(ctx, tagname, int64(n))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -44,7 +44,7 @@ func TestHasherStore(t *testing.T) {
 	for _, tt := range tests {
 
 		chunkStore := NewMapChunkStore()
-		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt, chunk.NewTag(0, "test-tag", 2))
+		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt, chunk.NewTag(context.Background(), 0, "test-tag", 2))
 
 		// Put two random chunks into the hasherStore
 		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).Data()

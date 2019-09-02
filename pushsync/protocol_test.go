@@ -1,3 +1,19 @@
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package pushsync
 
 import (
@@ -72,7 +88,7 @@ func TestProtocol(t *testing.T) {
 			n := synced[idx]
 			synced[idx] = n + 1
 			if len(synced) == chunkCnt {
-				expTotal := chunkCnt / tagCnt
+				expTotal := int64(chunkCnt / tagCnt)
 				checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
 				for i := uint64(0); i < uint64(chunkCnt); i++ {
 					if n := synced[int(i)]; n != 1 {
@@ -82,10 +98,9 @@ func TestProtocol(t *testing.T) {
 					if !ok {
 						t.Fatalf("chunk %v not stored", i)
 					}
-					_ = v
-					// if cnt := *(v.(*uint32)); cnt < uint32(storerCnt) {
-					// 	t.Fatalf("chunk %v expected to be saved at least %v times, got %v", i, storerCnt, cnt)
-					// }
+					if cnt := *(v.(*uint32)); cnt < uint32(storerCnt) {
+						t.Fatalf("chunk %v expected to be saved at least %v times, got %v", i, storerCnt, cnt)
+					}
 				}
 				return
 			}

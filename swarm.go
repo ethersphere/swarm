@@ -491,9 +491,6 @@ func (s *Swarm) Stop() error {
 		s.stateStore.Close()
 	}
 
-	s.pushSync.Close()
-	s.storer.Close()
-
 	for _, cleanF := range s.cleanupFuncs {
 		err = cleanF()
 		if err != nil {

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -123,7 +124,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 
 		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
 
-		t, err := tags.Create(tagName, estimatedTotal)
+		t, err := tags.Create(context.Background(), tagName, estimatedTotal)
 		if err != nil {
 			log.Error("error creating tag", "err", err, "tagName", tagName)
 		}

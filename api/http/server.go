@@ -358,9 +358,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Error("handle post raw got an error retrieving tag", "tagUID", tagUID, "err", err)
 	}
 
-	ctx := r.Context()
-
-	_, sp := spancontext.StartSpan(tag.Context(), "http.post")
+	ctx, sp := spancontext.StartSpan(tag.Context(), "http.post")
 	defer sp.Finish()
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -1151,7 +1149,7 @@ func isDecryptError(err error) bool {
 
 // periodicTagTrace queries the tag every 2 seconds and logs its state to the span
 func periodicTagTrace(tags *chunk.Tags, tagUID uint32, q chan struct{}, sp opentracing.Span) {
-	f := func() {
+	report := func() {
 		tag, err := tags.Get(tagUID)
 		if err != nil {
 			log.Error("error while getting tag", "tagUID", tagUID, "err", err)
@@ -1163,13 +1161,10 @@ func periodicTagTrace(tags *chunk.Tags, tagUID uint32, q chan struct{}, sp opent
 	for {
 		select {
 		case <-q:
-			f()
-
+			report()
 			return
-		default:
-			f()
-
-			time.Sleep(2 * time.Second)
+		case <-time.After(2 * time.Second):
+			report()
 		}
 	}
 }

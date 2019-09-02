@@ -1,18 +1,19 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package pushsync
 
 import (
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -103,7 +105,7 @@ func (lb *loopBack) send(to []byte, topic string, msg []byte) error {
 	for _, handler := range lb.handlers[topic] {
 		log.Debug("handling message", "topic", topic, "to", hex.EncodeToString(to))
 		if err := handler(msg, p); err != nil {
-			log.Warn("error handling message", "topic", topic, "to", hex.EncodeToString(to))
+			log.Error("error handling message", "topic", topic, "to", hex.EncodeToString(to))
 			return err
 		}
 	}
@@ -172,7 +174,7 @@ func (tp *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chun
 			log.Debug("resending", "idx", k)
 			return feed(k.(int))
 		})
-		// generate the new chunks from t.i
+		// generate the new chunks from tp.i
 		for tp.i < tp.total && feed(tp.i) {
 			tp.i++
 		}
@@ -285,7 +287,7 @@ func TestPusher(t *testing.T) {
 			n := synced[i]
 			synced[i] = n + 1
 			if len(synced) == chunkCnt {
-				expTotal := chunkCnt / tagCnt
+				expTotal := int64(chunkCnt / tagCnt)
 				checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
 				return
 			}
@@ -307,7 +309,7 @@ func setupTags(chunkCnt, tagCnt int) (tags *chunk.Tags, tagIDs []uint32) {
 	tags = chunk.NewTags()
 	// all but one tag is created
 	for i := 0; i < tagCnt-1; i++ {
-		tags.Create("", int64(chunkCnt/tagCnt))
+		tags.Create(context.Background(), "", int64(chunkCnt/tagCnt))
 	}
 	// extract tag ids
 	tags.Range(func(k, _ interface{}) bool {
@@ -318,36 +320,19 @@ func setupTags(chunkCnt, tagCnt int) (tags *chunk.Tags, tagIDs []uint32) {
 	return tags, append(tagIDs, 0)
 }
 
-func checkTags(t *testing.T, expTotal int, tagIDs []uint32, tags *chunk.Tags) {
+func checkTags(t *testing.T, expTotal int64, tagIDs []uint32, tags *chunk.Tags) {
+	t.Helper()
 	for _, tagID := range tagIDs {
 		tag, err := tags.Get(tagID)
 		if err != nil {
-			t.Fatalf("expected no error getting tag %v, got %v", tagID, err)
+			t.Fatal(err)
 		}
 		// the tag is adjusted after the store.Set calls show
 		err = tag.WaitTillDone(context.Background(), chunk.StateSynced)
 		if err != nil {
-			t.Fatalf("error waiting for syncing on tag %v: %v", tagID, err)
+			t.Fatalf("error waiting for syncing on tag %v: %v", tag.Uid, err)
 		}
-		n, total, err := tag.Status(chunk.StateSent)
-		if err != nil {
-			t.Fatalf("getting status for tag %v, expected no error, got %v", tagID, err)
-		}
-		if int(n) != expTotal {
-			t.Fatalf("expected Sent count on tag %v to be %v, got %v", tagID, expTotal, n)
-		}
-		if int(total) != expTotal {
-			t.Fatalf("expected Sent total count on tag %v to be %v, got %v", tagID, expTotal, n)
-		}
-		n, total, err = tag.Status(chunk.StateSynced)
-		if err != nil {
-			t.Fatalf("getting status for tag %v, expected no error, got %v\n%v", tagID, err, tag)
-		}
-		if int(n) != expTotal {
-			t.Fatalf("expected Synced count on tag %v to be %v, got %v\n%v", tagID, expTotal, n, tag)
-		}
-		if int(total) != expTotal {
-			t.Fatalf("expected Synced total count on tag %v to be %v, got %v", tagID, expTotal, n)
-		}
+
+		testutil.CheckTag(t, tag, 0, expTotal, 0, expTotal, expTotal, expTotal)
 	}
 }

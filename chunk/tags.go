@@ -42,7 +42,7 @@ func NewTags() *Tags {
 
 // Create creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *Tags) Create(s string, total int64) (*Tag, error) {
+func (ts *Tags) Create(ctx context.Context, s string, total int64) (*Tag, error) {
 	t := &Tag{
 		Uid:       uint32(rand.Int31()),
 		Name:      s,
@@ -53,7 +53,7 @@ func (ts *Tags) Create(s string, total int64) (*Tag, error) {
 		return nil, errExists
 	}
 
-	t.ctx, t.span = spancontext.StartSpan(context.Background(), "new.upload.tag")
+	t.ctx, t.span = spancontext.StartSpan(ctx, "new.upload.tag")
 	return t, nil
 }
 

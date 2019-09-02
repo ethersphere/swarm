@@ -141,7 +141,7 @@ func TestApiPut(t *testing.T) {
 		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 		tag := tags.All()[0]
-		chunktesting.CheckTag(t, tag, 2, 2, 0, 2) //1 chunk data, 1 chunk manifest
+		chunktesting.CheckTag(t, tag, 2, 2, 0, 0, 0, 2) //1 chunk data, 1 chunk manifest
 	})
 }
 
@@ -150,7 +150,7 @@ func TestApiTagLarge(t *testing.T) {
 	const contentLength = 4096 * 4095
 	testAPI(t, func(api *API, tags *chunk.Tags, toEncrypt bool) {
 		randomContentReader := io.LimitReader(crand.Reader, int64(contentLength))
-		tag, err := api.Tags.Create("unnamed-tag", 0)
+		tag, err := api.Tags.Create(context.Background(), "unnamed-tag", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,11 +168,11 @@ func TestApiTagLarge(t *testing.T) {
 		if toEncrypt {
 			tag := tags.All()[0]
 			expect := int64(4095 + 64 + 1)
-			chunktesting.CheckTag(t, tag, expect, expect, 0, expect)
+			chunktesting.CheckTag(t, tag, expect, expect, 0, 0, 0, expect)
 		} else {
 			tag := tags.All()[0]
 			expect := int64(4095 + 32 + 1)
-			chunktesting.CheckTag(t, tag, expect, expect, 0, expect)
+			chunktesting.CheckTag(t, tag, expect, expect, 0, 0, 0, expect)
 		}
 	})
 }
@@ -549,18 +549,18 @@ func TestDetectContentType(t *testing.T) {
 // putString provides singleton manifest creation on top of api.API
 func putString(ctx context.Context, a *API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	r := strings.NewReader(content)
-	tag, err := a.Tags.Create("unnamed-tag", 0)
+	tag, err := a.Tags.Create(ctx, "unnamed-tag", 0)
 
-	log.Trace("created new tag", "uid", tag.Uid)
+	log.Trace("created new tag", "id", tag.Uid)
 
-	cCtx := sctx.SetTag(ctx, tag.Uid)
-	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt)
+	ctx = sctx.SetTag(ctx, tag.Uid)
+	key, waitContent, err := a.Store(ctx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.Store(ctx, r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		return nil, nil, err
 	}

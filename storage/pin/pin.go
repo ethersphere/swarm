@@ -140,7 +140,7 @@ func (p *API) PinFiles(addr []byte, isRaw bool, credentials string) error {
 		// Get the file size from the root chunk first 8 bytes
 		hashFunc := storage.MakeHashFunc(storage.DefaultHash)
 		isEncrypted := len(addr) > hashFunc().Size()
-		getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(0, "show-chunks-tag", 0))
+		getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(context.Background(), 0, "show-chunks-tag", 0))
 		chunkData, err := getter.Get(context.Background(), addr)
 		if err != nil {
 			log.Error("Error getting chunk data from localstore.", "Address", hex.EncodeToString(addr))
@@ -365,7 +365,7 @@ func (p *API) walkFile(fileRef storage.Reference, executeFunc func(storage.Refer
 	hashFunc := storage.MakeHashFunc(storage.DefaultHash)
 	hashSize := len(addr)
 	isEncrypted := len(addr) > hashFunc().Size()
-	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(0, "show-chunks-tag", 0))
+	getter := storage.NewHasherStore(p.db, hashFunc, isEncrypted, chunk.NewTag(context.Background(), 0, "show-chunks-tag", 0))
 
 	// Trigger unwrapping the merkle tree starting from root hash of the file
 	chunkHashesC <- fileRef
