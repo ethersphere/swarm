@@ -502,7 +502,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	}
 	log.Debug("creating simulated backend")
 
-	swap := New(stateStore, key, common.Address{}, testBackend)
+	swap := New(stateStore, key, testBackend)
 	return swap, dir
 }
 
