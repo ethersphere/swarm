@@ -48,21 +48,20 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 // Only messages which have a price will be accounted for
 type Swap struct {
 	api                 API
-	store               state.Store          // store is needed in order to keep balances and cheques across sessions
-	accountingLock      sync.RWMutex         // lock for data consistency in accounting-related functions
-	balances            map[enode.ID]int64   // map of balances for each peer
-	balancesLock        sync.RWMutex         // lock for balances map
-	cheques             map[enode.ID]*Cheque // map of cheques for each peer
-	chequesLock         sync.RWMutex         // lock for cheques map
-	peers               map[enode.ID]*Peer   // map of all swap Peers
-	peersLock           sync.RWMutex         // lock for peers map
-	backend             contract.Backend     // the backend (blockchain) used
-	owner               *Owner               // contract access
-	params              *Params              // economic and operational parameters
-	contract            swap.Contract        // reference to the smart contract
-	oracle              PriceOracle          // the oracle providing the ether price for honey
-	paymentThreshold    int64                // balance difference required for sending cheque
-	disconnectThreshold int64                // balance difference required for dropping peer
+	store               state.Store        // store is needed in order to keep balances and cheques across sessions
+	accountingLock      sync.RWMutex       // lock for data consistency in accounting-related functions
+	storeLock           sync.RWMutex       // lock for store access
+	balances            map[enode.ID]int64 // map of balances for each peer
+	balancesLock        sync.RWMutex       // lock for balances map
+	peers               map[enode.ID]*Peer // map of all swap Peers
+	peersLock           sync.RWMutex       // lock for peers map
+	backend             contract.Backend   // the backend (blockchain) used
+	owner               *Owner             // contract access
+	params              *Params            // economic and operational parameters
+	contract            swap.Contract      // reference to the smart contract
+	oracle              PriceOracle        // the oracle providing the ether price for honey
+	paymentThreshold    int64              // balance difference required for sending cheque
+	disconnectThreshold int64              // balance difference required for dropping peer
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -90,7 +89,6 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 	return &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),
-		cheques:             make(map[enode.ID]*Cheque),
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
 		owner:               createOwner(prvkey, contract),
@@ -177,6 +175,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		if !ok {
 			return fmt.Errorf("peer %s not found", peer)
 		}
+		swapPeer.lock.Lock()
+		defer swapPeer.lock.Unlock()
 		return s.sendCheque(swapPeer)
 	}
 
@@ -194,19 +194,6 @@ func (s *Swap) setBalance(id enode.ID, balance int64) {
 	s.balancesLock.Lock()
 	defer s.balancesLock.Unlock()
 	s.balances[id] = balance
-}
-
-func (s *Swap) getCheque(id enode.ID) (*Cheque, bool) {
-	s.chequesLock.RLock()
-	defer s.chequesLock.RUnlock()
-	peerCheque, exists := s.cheques[id]
-	return peerCheque, exists
-}
-
-func (s *Swap) setCheque(id enode.ID, cheque *Cheque) {
-	s.chequesLock.Lock()
-	defer s.chequesLock.Unlock()
-	s.cheques[id] = cheque
 }
 
 // handleMsg is for handling messages when receiving messages
@@ -286,7 +273,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 		return 0, err
 	}
 
-	lastCheque := s.loadLastReceivedCheque(p)
+	lastCheque := p.getLastReceivedCheque()
 
 	// TODO: there should probably be a lock here?
 	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
@@ -299,7 +286,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 		return 0, err
 	}
 
-	if err := s.saveLastReceivedCheque(p, cheque); err != nil {
+	if err := p.setLastReceivedCheque(cheque); err != nil {
 		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
@@ -350,10 +337,8 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 	}
 
 	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
-	s.setCheque(peer, cheque)
 
-	err = s.store.Put(sentChequeKey(peer), &cheque)
-	if err != nil {
+	if err := swapPeer.setLastSentCheque(cheque); err != nil {
 		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
 	}
 
@@ -397,7 +382,7 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 
 	// if there is no existing cheque when loading from the store, it means it's the first interaction
 	// this is a valid scenario
-	total, err := s.getLastChequeValues(peer)
+	total, err := swapPeer.getLastChequeValues()
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
@@ -413,18 +398,6 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
-}
-
-func (s *Swap) getLastChequeValues(peer enode.ID) (total uint64, err error) {
-	err = s.loadLastSentCheque(peer)
-	if err != nil {
-		return
-	}
-	lastCheque, exists := s.getCheque(peer)
-	if exists {
-		total = lastCheque.CumulativePayout
-	}
-	return
 }
 
 // Balance returns the balance for a given peer
@@ -467,40 +440,36 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
-// loadLastSentCheque loads the last cheque for a peer from the state store (persisted)
-// To be called with mutex already held
-// Caller must be careful that the same cheque isn't concurrently read and written by multiple routines
-func (s *Swap) loadLastSentCheque(peer enode.ID) (err error) {
-	//only load if the current instance doesn't already have this peer's
-	//last cheque in memory
+// loadLastReceivedCheque loads the last received cheque for the peer from the store
+func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
+	s.storeLock.Lock()
+	defer s.storeLock.Unlock()
 	var cheque *Cheque
-	if _, ok := s.getCheque(peer); !ok {
-		err = s.store.Get(sentChequeKey(peer), &cheque)
-		if err == nil {
-			s.setCheque(peer, cheque)
-		}
-	}
-	return err
+	error := s.store.Get(receivedChequeKey(p), &cheque)
+	return cheque, error
 }
 
-// loadLastReceivedCheque gets the last received cheque for the peer
-// cheque gets loaded from database if not already in memory
-func (s *Swap) loadLastReceivedCheque(p *Peer) (cheque *Cheque) {
-	s.accountingLock.Lock()
-	defer s.accountingLock.Unlock()
-	if p.lastReceivedCheque != nil {
-		return p.lastReceivedCheque
-	}
-	s.store.Get(receivedChequeKey(p.ID()), &cheque)
-	return
+// loadLastSentCheque loads the last sent cheque for the peer from the store
+func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
+	s.storeLock.Lock()
+	defer s.storeLock.Unlock()
+	var cheque *Cheque
+	error := s.store.Get(sentChequeKey(p), &cheque)
+	return cheque, error
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p *Peer, cheque *Cheque) error {
-	s.accountingLock.Lock()
-	defer s.accountingLock.Unlock()
-	p.lastReceivedCheque = cheque
+	s.storeLock.Lock()
+	defer s.storeLock.Unlock()
 	return s.store.Put(receivedChequeKey(p.ID()), cheque)
+}
+
+// saveLastSentCheque saves cheque as the last received cheque for peer
+func (s *Swap) saveLastSentCheque(p *Peer, cheque *Cheque) error {
+	s.storeLock.Lock()
+	defer s.storeLock.Unlock()
+	return s.store.Put(sentChequeKey(p.ID()), cheque)
 }
 
 // Close cleans up swap

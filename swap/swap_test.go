@@ -345,7 +345,7 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	// now load the cheque that the debitor created...
-	cheque := debitorSwap.cheques[creditor.ID()]
+	cheque := creditor.getLastSentCheque()
 	if cheque == nil {
 		t.Fatal("expected to find a cheque, but it was empty")
 	}
@@ -832,29 +832,6 @@ func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err err
 	return err
 }
 
-// TestSaveAndLoadLastReceivedCheque tests if a saved last received cheque can be loaded again later using the swap functions
-func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
-	swap, clean := newTestSwap(t, ownerKey)
-	defer clean()
-
-	testPeer := NewPeer(newDummyPeer().Peer, swap, common.Address{}, common.Address{})
-	testCheque := newTestCheque()
-
-	if err := swap.saveLastReceivedCheque(testPeer, testCheque); err != nil {
-		t.Fatalf("Error while saving: %s", err.Error())
-	}
-
-	returnedCheque := swap.loadLastReceivedCheque(testPeer)
-
-	if returnedCheque == nil {
-		t.Fatalf("Could not find saved cheque")
-	}
-
-	if !returnedCheque.Equal(testCheque) {
-		t.Fatalf("Returned cheque was different")
-	}
-}
-
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
 // the owner of this swap is the beneficiaryAddress
 // hence the owner of this swap would sign cheques with beneficiaryKey and receive cheques from ownerKey (or another party) which is NOT the owner of this swap
@@ -868,19 +845,30 @@ func newTestSwapAndPeer(t *testing.T, key *ecdsa.PrivateKey) (*Swap, *Peer, func
 	return swap, peer, clean
 }
 
-// TestPeerSaveAndLoadLastReceivedCheque tests if a saved last received cheque can be loaded again later using the peer functions
-func TestPeerSaveAndLoadLastReceivedCheque(t *testing.T) {
+// TestPeerSaveAndLoadgetLastReceivedCheque tests if a saved last received cheque can be loaded again later using the peer functions
+func TestPeerSaveAndLoadgetLastReceivedCheque(t *testing.T) {
 	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
 	testCheque := newTestCheque()
 
-	if err := swap.saveLastReceivedCheque(peer, testCheque); err != nil {
+	if err := peer.setLastReceivedCheque(testCheque); err != nil {
 		t.Fatalf("Error while saving: %s", err.Error())
 	}
 
-	returnedCheque := swap.loadLastReceivedCheque(peer)
+	returnedCheque := peer.getLastReceivedCheque()
+	if returnedCheque == nil {
+		t.Fatal("Could not find saved cheque")
+	}
 
+	if !returnedCheque.Equal(testCheque) {
+		t.Fatal("Returned cheque was different")
+	}
+
+	// create a new swap peer for the same underlying peer to force a database load
+	samePeer := NewPeer(peer.Peer, swap, common.Address{}, common.Address{})
+
+	returnedCheque = samePeer.getLastReceivedCheque()
 	if returnedCheque == nil {
 		t.Fatal("Could not find saved cheque")
 	}
@@ -991,7 +979,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
@@ -1006,7 +994,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).CumulativePayout != otherCheque.CumulativePayout {
+	if peer.getLastReceivedCheque().CumulativePayout != otherCheque.CumulativePayout {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, otherCheque.CumulativePayout)
 	}
 }
@@ -1036,7 +1024,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
@@ -1051,7 +1039,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 
 	// check that no invalid cheque was saved
-	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 }

@@ -132,8 +132,8 @@ func TestEmitCheque(t *testing.T) {
 	creditorSwap.balances[debitor.ID()] = 42
 	log.Debug("balance", "balance", creditorSwap.balances[debitor.ID()])
 	// a safe check: at this point no cheques should be in the swap
-	if len(creditorSwap.cheques) != 0 {
-		t.Fatalf("Expected no cheques at creditor, but there are %d:", len(creditorSwap.cheques))
+	if debitor.getLastReceivedCheque() != nil {
+		t.Fatalf("Expected no cheques at creditor, but there is %v:", debitor.getLastReceivedCheque())
 	}
 
 	log.Debug("create a cheque")
@@ -175,10 +175,10 @@ func TestEmitCheque(t *testing.T) {
 	if creditorSwap.balances[debitor.ID()] != 0 {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, creditorSwap.balances[debitor.ID()])
 	}
-	recvCheque := creditorSwap.loadLastReceivedCheque(debitor)
+	recvCheque := debitor.getLastReceivedCheque()
 	log.Debug("expected cheque", "cheque", recvCheque)
 	if recvCheque != cheque {
-		t.Fatalf("Expected exactly one cheque at creditor, but there are %d:", len(creditorSwap.cheques))
+		t.Fatalf("Expected cheque at creditor, but it was %v:", recvCheque)
 	}
 }
 
@@ -205,9 +205,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	debitorSwap.balances[creditor.ID()] = 0 - DefaultPaymentThreshold
 
 	// we expect a cheque at the end of the test, but not yet
-	lenCheques := len(debitorSwap.cheques)
-	if lenCheques != 0 {
-		t.Fatalf("Expected no cheques yet, but there are %d", lenCheques)
+	if creditor.getLastSentCheque() != nil {
+		t.Fatalf("Expected no cheques yet, but there is %v:", creditor.getLastSentCheque())
 	}
 	// do some accounting, no error expected, just a WARN
 	err := debitorSwap.Add(int64(-overDraft), creditor.Peer)
@@ -216,11 +215,11 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	// we should now have a cheque
-	lenCheques = len(debitorSwap.cheques)
-	if lenCheques != 1 {
-		t.Fatalf("Expected one cheque, but there are %d", lenCheques)
+	if creditor.getLastSentCheque() == nil {
+		t.Fatal("Expected one cheque, but there is none")
 	}
-	cheque := debitorSwap.cheques[creditor.ID()]
+
+	cheque := creditor.getLastSentCheque()
 	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
 	if cheque.CumulativePayout != expectedAmount {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
@@ -261,9 +260,8 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	// we don't expect any change after the test
 	creditorSwap.balances[debitor.ID()] = expectedBalance
 	// we also don't expect any cheques yet
-	lenCheques := len(creditorSwap.cheques)
-	if lenCheques != 0 {
-		t.Fatalf("Expected no cheques yet, but there are %d", lenCheques)
+	if debitor.getLastSentCheque() != nil {
+		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getLastSentCheque())
 	}
 	// now do some accounting
 	err := creditorSwap.Add(int64(overDraft), debitor.Peer)
@@ -276,9 +274,8 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, creditorSwap.balances[debitor.ID()])
 	}
 	// still no cheques expected
-	lenCheques = len(creditorSwap.cheques)
-	if lenCheques != 0 {
-		t.Fatalf("Expected still no cheque, but there are %d", lenCheques)
+	if debitor.getLastSentCheque() != nil {
+		t.Fatalf("Expected still no cheques yet, but there is %v", debitor.getLastSentCheque())
 	}
 
 	// let's do the whole thing again (actually a bit silly, it's somehow simulating the peer would have been dropped)
@@ -291,8 +288,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, creditorSwap.balances[debitor.ID()])
 	}
 
-	lenCheques = len(creditorSwap.cheques)
-	if lenCheques != 0 {
-		t.Fatalf("Expected still no cheque, but there are %d", lenCheques)
+	if debitor.getLastSentCheque() != nil {
+		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getLastSentCheque())
 	}
 }
