@@ -17,7 +17,15 @@ import (
 type BzzAddr struct {
 	OAddr        []byte
 	UAddr        []byte
-	Capabilities *capability.Capabilities
+	capabilities *capability.Capabilities
+}
+
+func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
+	return &BzzAddr{
+		OAddr:        oaddr,
+		UAddr:        uaddr,
+		capabilities: capability.NewCapabilities(),
+	}
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -90,6 +98,10 @@ func (a *BzzAddr) Under() []byte {
 	return a.UAddr
 }
 
+func (a *BzzAddr) Capabilities() *capability.Capabilities {
+	return a.capabilities
+}
+
 // ID returns the node identifier in the underlay.
 func (a *BzzAddr) ID() enode.ID {
 	n, err := enode.ParseV4(string(a.UAddr))
@@ -129,7 +141,7 @@ func NewBzzAddrFromEnode(enod *enode.Node) *BzzAddr {
 
 // WithCapabilities is a chained constructor method to set the capabilities array for a BzzAddr
 func (b *BzzAddr) WithCapabilities(c *capability.Capabilities) *BzzAddr {
-	b.Capabilities = c
+	b.capabilities = c
 	return b
 }
 

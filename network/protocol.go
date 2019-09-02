@@ -155,9 +155,9 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 
 	// temporary soon-to-be-legacy light/full, as above
 	if config.LightNode {
-		bzz.localAddr.Capabilities.Add(newLightCapability())
+		bzz.localAddr.capabilities.Add(newLightCapability())
 	} else {
-		bzz.localAddr.Capabilities.Add(newFullCapability())
+		bzz.localAddr.capabilities.Add(newFullCapability())
 	}
 
 	return bzz
@@ -285,6 +285,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
+	rsh.(*HandshakeMsg).Addr.capabilities = rsh.(*HandshakeMsg).Capabilities
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
 	return nil
 }
@@ -373,6 +374,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if !isFullCapability(rhs.Addr.Capabilities.Get(0)) && !isLightCapability(rhs.Addr.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Addr.Capabilities)
 	}
+	rhs.Addr.capabilities = hs.(*HandshakeMsg).Capabilities
 	return nil
 }
 

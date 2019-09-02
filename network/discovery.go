@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -95,7 +96,11 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 		return
 	}
 	resp := &peersMsg{
-		Peers: []*BzzAddr{a},
+		Peers:        []*BzzAddr{a},
+		Capabilities: []*capability.Capabilities{a.capabilities},
+	}
+	if a.capabilities == nil {
+		log.Crit("tried to send capabilities empty", "msg", resp)
 	}
 	log.Warn("notifypeer", "notify", resp)
 	go d.Send(context.TODO(), resp)
@@ -127,7 +132,8 @@ disconnected
 // used for communicating about known peers
 // relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
-	Peers []*BzzAddr
+	Peers        []*BzzAddr
+	Capabilities []*capability.Capabilities
 }
 
 // DecodeRLP implements rlp.Decoder interface
@@ -206,7 +212,14 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
+			outMsg := &peersMsg{Peers: sortPeers(peers), Capabilities: []*capability.Capabilities{}}
+			for _, p := range peers {
+				if p.capabilities == nil {
+					log.Crit("attempting to send handlesub with cap nil", outMsg)
+				}
+				outMsg.Capabilities = append(outMsg.Capabilities, p.capabilities)
+			}
+			go d.Send(context.TODO(), outMsg)
 		}
 	}
 	d.sentPeers = true

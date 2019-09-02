@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
@@ -196,7 +195,6 @@ func TestAddressMatchProx(t *testing.T) {
 			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
 		}
 		peer := network.NewPeer(bzzPeer, kad)
-		peer.Capabilities = capability.NewCapabilities()
 		kad.On(peer)
 		peers = append(peers, peer)
 	}
