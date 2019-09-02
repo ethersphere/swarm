@@ -84,7 +84,12 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 		return fmt.Errorf("add nodes: %v", err)
 	}
 
-	err = sim.Net.ConnectNodesRing(ids)
+	if nodes == 2 {
+		err = sim.Net.ConnectNodesChain(ids)
+	} else {
+		err = sim.Net.ConnectNodesRing(ids)
+	}
+
 	if err != nil {
 		return fmt.Errorf("connect nodes: %v", err)
 	}

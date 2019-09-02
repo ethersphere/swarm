@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/pot"
@@ -68,14 +69,14 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 }
 
 func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNode bool) *HandshakeMsg {
-	capabilities := NewCapabilities()
-	var cap *Capability
+	capabilities := capability.NewCapabilities()
+	var cap *capability.Capability
 	if lightNode {
 		cap = newLightCapability()
 	} else {
 		cap = newFullCapability()
 	}
-	capabilities.add(cap)
+	capabilities.Add(cap)
 	msg := &HandshakeMsg{
 		Version:      version,
 		NetworkID:    networkId,
@@ -296,7 +297,7 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	node := s.Nodes[0]
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
-	cap := msg.Capabilities.get(0)
+	cap := msg.Capabilities.Get(0)
 	cap.Set(14)
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
@@ -364,7 +365,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var nodeCapability *Capability
+			var nodeCapability *capability.Capability
 			if test.lightNode {
 				nodeCapability = lightCapability
 			} else {

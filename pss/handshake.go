@@ -27,7 +27,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -325,7 +324,7 @@ func (ctl *HandshakeController) registerSymKeyUse(symkeyid string) error {
 	}
 	symKey.count++
 
-	receiver := common.ToHex(crypto.FromECDSAPub(ctl.pss.PublicKey()))
+	receiver := common.ToHex(ctl.pss.Crypto.FromECDSAPub(ctl.pss.PublicKey()))
 	log.Trace("increment symkey recv use", "symsymkeyid", symkeyid, "count", symKey.count, "limit", symKey.limit, "receiver", receiver)
 
 	return nil
