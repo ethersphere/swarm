@@ -483,9 +483,9 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
 	if pssmsg.isRaw() {
-		if capabilities, ok := p.getTopicHandlerCaps(Topic(psstopic)); ok {
+		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
 			if !capabilities.raw {
-				log.Debug("No handler for raw message", "topic", label(psstopic[:]))
+				log.Warn("No handler for raw message", "topic", label(psstopic[:]))
 				return nil
 			}
 		}
@@ -497,7 +497,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
 	var isProx bool
-	if capabilities, ok := p.getTopicHandlerCaps(Topic(psstopic)); ok {
+	if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
 		isProx = capabilities.prox
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)

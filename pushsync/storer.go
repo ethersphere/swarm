@@ -1,18 +1,18 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package pushsync
 
@@ -20,10 +20,10 @@ import (
 	"context"
 	"encoding/hex"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -37,9 +37,10 @@ type Store interface {
 
 // Storer is the object used by the push-sync server side protocol
 type Storer struct {
-	store      Store  // store to put chunks in, and retrieve them from
-	ps         PubSub // pubsub interface to receive chunks and send receipts
-	deregister func() // deregister the registered handler when Storer is closed
+	store      Store      // store to put chunks in, and retrieve them from
+	ps         PubSub     // pubsub interface to receive chunks and send receipts
+	deregister func()     // deregister the registered handler when Storer is closed
+	logger     log.Logger // custom logger
 }
 
 // NewStorer constructs a Storer
@@ -51,8 +52,9 @@ type Storer struct {
 // it sets a cancel function that deregisters the handler
 func NewStorer(store Store, ps PubSub) *Storer {
 	s := &Storer{
-		store: store,
-		ps:    ps,
+		store:  store,
+		ps:     ps,
+		logger: log.New("self", hex.EncodeToString(ps.BaseAddr())),
 	}
 	s.deregister = ps.Register(pssChunkTopic, true, func(msg []byte, _ *p2p.Peer) error {
 		return s.handleChunkMsg(msg)
@@ -74,14 +76,12 @@ func (s *Storer) handleChunkMsg(msg []byte) error {
 		return err
 	}
 
-	_, osp := spancontext.StartSpan(
-		context.TODO(),
-		"handle.chunk.msg")
+	ctx, osp := spancontext.StartSpan(context.Background(), "handle.chunk.msg")
 	defer osp.Finish()
 	osp.LogFields(olog.String("ref", hex.EncodeToString(chmsg.Addr)))
 	osp.SetTag("addr", hex.EncodeToString(chmsg.Addr))
-	log.Debug("Storer Handler", "chunk", label(chmsg.Addr), "origin", label(chmsg.Origin), "self", hex.EncodeToString(s.ps.BaseAddr()))
-	return s.processChunkMsg(chmsg)
+	s.logger.Trace("Storer Handler", "chunk", label(chmsg.Addr), "origin", label(chmsg.Origin))
+	return s.processChunkMsg(ctx, chmsg)
 }
 
 // processChunkMsg processes a chunk received via pss pssChunkTopic
@@ -90,17 +90,17 @@ func (s *Storer) handleChunkMsg(msg []byte) error {
 // chunks that fall within their area of responsibility.
 // Upon receiving the chunk is saved and a statement of custody
 // receipt message is sent as a response to the originator.
-func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
+func (s *Storer) processChunkMsg(ctx context.Context, chmsg *chunkMsg) error {
 	// TODO: double check if it falls in area of responsibility
 	ch := storage.NewChunk(chmsg.Addr, chmsg.Data)
-	if _, err := s.store.Put(context.TODO(), chunk.ModePutSync, ch); err != nil {
+	if _, err := s.store.Put(ctx, chunk.ModePutSync, ch); err != nil {
 		return err
 	}
 
 	// if self is closest peer then send back a receipt
 	if s.ps.IsClosestTo(chmsg.Addr) {
-		log.Debug("self is closest to ref", "ref", hex.EncodeToString(chmsg.Addr), "self", hex.EncodeToString(s.ps.BaseAddr()))
-		return s.sendReceiptMsg(chmsg)
+		s.logger.Trace("self is closest to ref", "ref", hex.EncodeToString(chmsg.Addr))
+		return s.sendReceiptMsg(ctx, chmsg)
 	}
 	return nil
 }
@@ -108,10 +108,8 @@ func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
 // sendReceiptMsg sends a statement of custody receipt message
 // to the originator of a push-synced chunk message.
 // Including a unique nonce makes the receipt immune to deduplication cache
-func (s *Storer) sendReceiptMsg(chmsg *chunkMsg) error {
-	_, osp := spancontext.StartSpan(
-		context.TODO(),
-		"send.receipt")
+func (s *Storer) sendReceiptMsg(ctx context.Context, chmsg *chunkMsg) error {
+	ctx, osp := spancontext.StartSpan(ctx, "send.receipt")
 	defer osp.Finish()
 	osp.LogFields(olog.String("ref", hex.EncodeToString(chmsg.Addr)))
 	osp.SetTag("addr", hex.EncodeToString(chmsg.Addr))
@@ -126,6 +124,6 @@ func (s *Storer) sendReceiptMsg(chmsg *chunkMsg) error {
 		return err
 	}
 	to := chmsg.Origin
-	log.Debug("send receipt", "addr", label(rmsg.Addr), "to", label(to), "self", hex.EncodeToString(s.ps.BaseAddr()))
+	s.logger.Trace("send receipt", "addr", label(rmsg.Addr), "to", label(to))
 	return s.ps.Send(to, pssReceiptTopic, msg)
 }
