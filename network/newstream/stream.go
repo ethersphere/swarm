@@ -651,9 +651,24 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		p.mtx.Unlock()
 	}()
 
-	l := len(o.hashes) / HashSize
+	var (
+		l          = len(o.hashes) / HashSize
+		cd         = &ChunkDelivery{Ruid: msg.Ruid}
+		wantHashes = []chunk.Address{}
+		allHashes  = make([]chunk.Address, l)
+	)
+
 	if len(msg.BitVector) == 0 {
 		p.logger.Debug("peer does not want any hashes in this range", "ruid", o.ruid)
+		for i := 0; i < l; i++ {
+			allHashes = append(allHashes, o.hashes[i*HashSize:(i+1)*HashSize])
+		}
+		// set all chunks as synced
+		if err := provider.Set(ctx, allHashes...); err != nil {
+			p.logger.Error("error setting chunk as synced", "addrs", allHashes, "err", err)
+			p.Drop()
+			return
+		}
 		return
 	}
 	want, err := bv.NewFromBytes(msg.BitVector, l)
@@ -663,11 +678,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		return
 	}
 
-	var (
-		cd         = &ChunkDelivery{Ruid: msg.Ruid}
-		wantHashes = []chunk.Address{}
-	)
-
 	maxFrame := MinFrameSize
 	if v := BatchSize / 4; v > maxFrame {
 		maxFrame = v
@@ -675,11 +685,12 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 
 	// check which hashes to get from the localstore
 	for i := 0; i < l; i++ {
+		hash := o.hashes[i*HashSize : (i+1)*HashSize]
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
-			hash := o.hashes[i*HashSize : (i+1)*HashSize]
 			wantHashes = append(wantHashes, hash)
 		}
+		allHashes[i] = hash
 	}
 	startGet := time.Now()
 
@@ -734,9 +745,9 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	startSet := time.Now()
 
 	// set the chunks as synced
-	err = provider.Set(ctx, wantHashes...)
+	err = provider.Set(ctx, allHashes...)
 	if err != nil {
-		p.logger.Error("error setting chunk as synced", "addrs", wantHashes, "err", err)
+		p.logger.Error("error setting chunk as synced", "addrs", allHashes, "err", err)
 		p.Drop()
 		return
 	}
