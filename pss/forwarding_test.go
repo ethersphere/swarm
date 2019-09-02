@@ -6,10 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
@@ -25,6 +23,8 @@ type testCase struct {
 	success   bool
 	errors    string
 }
+
+var crypto CryptoUtils = NewCryptoUtils()
 
 // the purpose of this test is to see that pss.forward() function correctly
 // selects the peers for message forwarding, depending on the message address
@@ -351,7 +351,7 @@ func newTestMsg(addr []byte) *PssMsg {
 	msg := newPssMsg(&msgParams{})
 	msg.To = addr[:]
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Payload = &whisper.Envelope{
+	msg.Payload = &envelope{
 		Topic: [4]byte{},
 		Data:  []byte("i have nothing to hide"),
 	}
