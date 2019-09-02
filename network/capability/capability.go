@@ -1,4 +1,20 @@
-package network
+// Copyright 2019 The Swarm authors
+// This file is part of the swarm library.
+//
+// The swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the swarm library. If not, see <http://www.gnu.org/licenses/>.
+
+package capability
 
 import (
 	"fmt"
@@ -95,7 +111,7 @@ func NewCapabilities() *Capabilities {
 }
 
 // adds a capability to the Capabilities collection
-func (c *Capabilities) add(cp *Capability) error {
+func (c *Capabilities) Add(cp *Capability) error {
 	if _, ok := c.idx[cp.Id]; ok {
 		return fmt.Errorf("Capability id %d already registered", cp.Id)
 	}
@@ -108,7 +124,7 @@ func (c *Capabilities) add(cp *Capability) error {
 
 // gets the capability with the specified module id
 // returns nil if the id doesn't exist
-func (c *Capabilities) get(id CapabilityID) *Capability {
+func (c *Capabilities) Get(id CapabilityID) *Capability {
 	idx, ok := c.idx[id]
 	if !ok {
 		return nil
@@ -164,7 +180,7 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 		}
 
 		// Add the entry to the Capabilities array
-		c.add(&cap)
+		c.Add(&cap)
 	}
 
 	return nil

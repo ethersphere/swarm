@@ -1,4 +1,20 @@
-package network
+// Copyright 2019 The Swarm authors
+// This file is part of the swarm library.
+//
+// The swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the swarm library. If not, see <http://www.gnu.org/licenses/>.
+
+package capability
 
 import (
 	"bytes"
@@ -63,21 +79,21 @@ func TestCapabilitiesControl(t *testing.T) {
 
 	// Register module. Should succeed
 	c1 := NewCapability(1, 16)
-	err := caps.add(c1)
+	err := caps.Add(c1)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule fail: %v", err)
 	}
 
 	// Fail if capability id already exists
 	c2 := NewCapability(1, 1)
-	err = caps.add(c2)
+	err = caps.Add(c2)
 	if err == nil {
 		t.Fatalf("Expected RegisterCapabilityModule call with existing id to fail")
 	}
 
 	// More than one capabilities flag vector should be possible
 	c3 := NewCapability(2, 1)
-	err = caps.add(c3)
+	err = caps.Add(c3)
 	if err != nil {
 		t.Fatalf("RegisterCapabilityModule (second) fail: %v", err)
 	}
@@ -105,8 +121,8 @@ func TestCapabilitiesString(t *testing.T) {
 	}
 
 	caps := NewCapabilities()
-	caps.add(c1)
-	caps.add(c2)
+	caps.Add(c1)
+	caps.Add(c2)
 
 	correctString := "42:001,666:100010101"
 	if correctString != caps.String() {
@@ -122,12 +138,12 @@ func TestCapabilitiesRLP(t *testing.T) {
 		Id:  42,
 		Cap: []bool{true, false, true},
 	}
-	c.add(cap1)
+	c.Add(cap1)
 	cap2 := &Capability{
 		Id:  666,
 		Cap: []bool{true, false, true, false, true, true, false, false, true},
 	}
-	c.add(cap2)
+	c.Add(cap2)
 	buf := bytes.NewBuffer(nil)
 	err := rlp.Encode(buf, &c)
 	if err != nil {
@@ -140,7 +156,7 @@ func TestCapabilitiesRLP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cap1Restored := cRestored.get(cap1.Id)
+	cap1Restored := cRestored.Get(cap1.Id)
 	if cap1Restored.Id != cap1.Id {
 		t.Fatalf("cap 1 id not correct, expected %d, got %d", cap1.Id, cap1Restored.Id)
 	}
@@ -148,7 +164,7 @@ func TestCapabilitiesRLP(t *testing.T) {
 		t.Fatalf("cap 1 caps not correct, expected %v, got %v", cap1.Cap, cap1Restored.Cap)
 	}
 
-	cap2Restored := cRestored.get(cap2.Id)
+	cap2Restored := cRestored.Get(cap2.Id)
 	if cap2Restored.Id != cap2.Id {
 		t.Fatalf("cap 1 id not correct, expected %d, got %d", cap2.Id, cap2Restored.Id)
 	}
