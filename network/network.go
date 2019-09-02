@@ -15,7 +15,15 @@ import (
 type BzzAddr struct {
 	OAddr        []byte
 	UAddr        []byte
-	Capabilities *capability.Capabilities
+	capabilities *capability.Capabilities
+}
+
+func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
+	return &BzzAddr{
+		OAddr: oaddr,
+		UAddr: uaddr,
+		capabilities: capability.NewCapabilities(),	
+	}
 }
 
 // Address implements OverlayPeer interface to be used in Overlay.
@@ -33,6 +41,10 @@ func (a *BzzAddr) Under() []byte {
 	return a.UAddr
 }
 
+func (a *BzzAddr) Capabilities() *capability.Capabilities {
+	return a.capabilities
+}
+
 // ID returns the node identifier in the underlay.
 func (a *BzzAddr) ID() enode.ID {
 	n, err := enode.ParseV4(string(a.UAddr))
@@ -44,12 +56,12 @@ func (a *BzzAddr) ID() enode.ID {
 
 // Update updates the underlay address of a peer record
 func (a *BzzAddr) Update(na *BzzAddr) *BzzAddr {
-	return &BzzAddr{a.OAddr, na.UAddr, capability.NewCapabilities()}
+	return &BzzAddr{a.OAddr, na.UAddr, a.capabilities}
 }
 
 // String pretty prints the address
 func (a *BzzAddr) String() string {
-	return fmt.Sprintf("%x <%s>", a.OAddr, a.UAddr)
+	return fmt.Sprintf("%x <%s> cap:%s", a.OAddr, a.UAddr, a.capabilities)
 }
 
 // RandomAddr is a utility method generating an address from a public key
@@ -63,12 +75,16 @@ func RandomAddr() *BzzAddr {
 }
 
 // NewAddr constructs a BzzAddr from a node record.
-func NewAddr(node *enode.Node) *BzzAddr {
-	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.URLv4()), Capabilities: capability.NewCapabilities()}
+func NewAddr(enod *enode.Node) *BzzAddr {
+	return NewBzzAddrFromEnode(enod)
+}
+
+func NewBzzAddrFromEnode(enod *enode.Node) *BzzAddr {
+	return &BzzAddr{OAddr: enod.ID().Bytes(), UAddr: []byte(enod.URLv4()), capabilities: capability.NewCapabilities()}
 }
 
 func (b *BzzAddr) WithCapabilities(c *capability.Capabilities) *BzzAddr {
-	b.Capabilities = c
+	b.capabilities = c
 	return b
 }
 

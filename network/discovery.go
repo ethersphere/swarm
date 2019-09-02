@@ -22,6 +22,8 @@ import (
 	"sync"
 
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network/capability"
 )
 
 // discovery bzz extension for requesting and relaying node address records
@@ -94,6 +96,10 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 	}
 	resp := &peersMsg{
 		Peers: []*BzzAddr{a},
+		Capabilities: []*capability.Capabilities{a.capabilities},
+	}
+	if a.capabilities == nil {
+		log.Crit("tried to send capabilities empty", "msg", resp)
 	}
 	go d.Send(context.TODO(), resp)
 }
@@ -125,6 +131,7 @@ disconnected
 // relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
 	Peers []*BzzAddr
+	Capabilities []*capability.Capabilities
 }
 
 // String pretty prints a peersMsg
@@ -140,7 +147,10 @@ func (d *Peer) handlePeersMsg(msg *peersMsg) error {
 	if len(msg.Peers) == 0 {
 		return nil
 	}
-
+	for i, cp := range msg.Capabilities {
+		msg.Peers[i].capabilities = cp
+		log.Warn("incoming notify peer", "peer", msg.Peers[i], "cap", cp)
+	}
 	for _, a := range msg.Peers {
 		d.seen(a)
 		NotifyPeer(a, d.kad)
@@ -183,7 +193,14 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
+			outMsg := &peersMsg{Peers: sortPeers(peers), Capabilities: []*capability.Capabilities{}}
+			for _, p := range peers {
+				if p.capabilities == nil {
+					log.Crit("attempting to send handlesub with cap nil", outMsg)
+				}
+				outMsg.Capabilities = append(outMsg.Capabilities, p.capabilities)
+			}
+			go d.Send(context.TODO(), outMsg)
 		}
 	}
 	d.sentPeers = true

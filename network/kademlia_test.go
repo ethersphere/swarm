@@ -39,7 +39,7 @@ func init() {
 
 func testKadPeerAddr(s string) *BzzAddr {
 	a := pot.NewAddressFromString(s)
-	return &BzzAddr{OAddr: a, UAddr: a, Capabilities: capability.NewCapabilities()}
+	return &BzzAddr{OAddr: a, UAddr: a, capabilities: capability.NewCapabilities()}
 }
 
 func newTestKademliaParams() *KadParams {
@@ -559,7 +559,7 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 		BzzAddr: &BzzAddr{
 			OAddr:        addr.Bytes(),
 			UAddr:        []byte(fmt.Sprintf("%x", addr[:])),
-			Capabilities: capability.NewCapabilities(),
+			capabilities: capability.NewCapabilities(),
 		},
 	}
 	return NewPeer(bp, kad)

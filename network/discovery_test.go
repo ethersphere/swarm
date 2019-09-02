@@ -249,7 +249,7 @@ func newDiscPeer(addr pot.Address) (*Peer, error) {
 	}
 	pubKey := pKey.PublicKey
 	nod := enode.NewV4(&pubKey, net.IPv4(127, 0, 0, 1), 0, 0)
-	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String()), Capabilities: capability.NewCapabilities()}
+	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String()), capabilities: capability.NewCapabilities()}
 	id := nod.ID()
 	p2pPeer := p2p.NewPeer(id, id.String(), nil)
 	return NewPeer(&BzzPeer{

@@ -148,7 +148,7 @@ func (k *Kademlia) addToCapabilityIndex(p interface{}, connected bool) {
 		eAddr = p.(*entry).BzzAddr
 	}
 	for s, idxItem := range k.capabilityIndex {
-		for _, vCap := range eAddr.Capabilities.Caps {
+		for _, vCap := range eAddr.capabilities.Caps {
 			log.Debug("in add to capability compare", "idx", s, "peer", vCap, "idx", idxItem.Capability)
 			if idxItem.Id != vCap.Id {
 				continue
@@ -217,6 +217,9 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 
 	var size int
 	for _, p := range peers {
+		if p.capabilities == nil {
+			panic("missing caps for peer")
+		}
 		log.Trace("kademlia trying to register", "addr", p)
 		// error if self received, peer should know better
 		// and should be punished for this

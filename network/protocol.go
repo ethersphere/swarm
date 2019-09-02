@@ -155,9 +155,9 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 
 	// temporary soon-to-be-legacy light/full, as above
 	if config.LightNode {
-		bzz.localAddr.Capabilities.Add(newLightCapability())
+		bzz.localAddr.capabilities.Add(newLightCapability())
 	} else {
-		bzz.localAddr.Capabilities.Add(newFullCapability())
+		bzz.localAddr.capabilities.Add(newFullCapability())
 	}
 
 	return bzz
@@ -257,7 +257,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 		if handshake.err != nil {
 			return fmt.Errorf("%08x: %s protocol closed: %v", b.BaseAddr()[:4], spec.Name, handshake.err)
 		}
-
+	
 		// the handshake has succeeded so construct the BzzPeer and run the protocol
 		peer := &BzzPeer{
 			Peer:       protocols.NewPeer(p, rw, spec),
@@ -285,8 +285,9 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
+	rsh.(*HandshakeMsg).Addr.capabilities =  rsh.(*HandshakeMsg).Capabilities
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
-	handshake.peerAddr.Capabilities = rsh.(*HandshakeMsg).Capabilities
+	handshake.Capabilities = rsh.(*HandshakeMsg).Capabilities
 	return nil
 }
 
@@ -376,6 +377,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if !isFullCapability(rhs.Capabilities.Get(0)) && !isLightCapability(rhs.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}
+	rhs.Addr.capabilities  = hs.(*HandshakeMsg).Capabilities
 	return nil
 }
 
@@ -397,8 +399,7 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			Version:      uint64(BzzSpec.Version),
 			NetworkID:    b.NetworkID,
 			Addr:         b.localAddr,
-			Capabilities: b.localAddr.Capabilities,
-			//Capabilities: b.capabilities,
+			Capabilities: b.localAddr.capabilities,
 			init: make(chan bool, 1),
 			done: make(chan struct{}),
 		}
