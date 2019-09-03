@@ -66,6 +66,7 @@ func TestMain(m *testing.M) {
 	if reexec.Init() {
 		return
 	}
+	testutil.Init()
 	os.Exit(m.Run())
 }
 

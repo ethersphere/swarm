@@ -35,10 +35,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
-func init() {
-	testutil.Init()
-}
-
 func TestSwarmUp(t *testing.T) {
 	if runtime.GOOS == goosWindows {
 		t.Skip()
