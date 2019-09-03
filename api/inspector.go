@@ -98,6 +98,6 @@ func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 	return strings.Join(hostChunks, "")
 }
 
-func (i *Inspector) PeerStreams() string {
+func (i *Inspector) PeerStreams() newstream.PeerInfo {
 	return i.stream.PeerInfo()
 }
