@@ -524,10 +524,10 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 // creates a dummy swap.Peer
 func newDummyPeer(spec *protocols.Spec) *Peer {
 	return &Peer{
-		Peer:                newDummyProtocolPeer(spec),
-		paymentThreshold:    DefaultPaymentThreshold,
-		disconnectThreshold: DefaultDisconnectThreshold,
-		oracle:              NewPriceOracle(),
+		Peer:                   newDummyProtocolPeer(spec),
+		paymentThresholdOracle: NewThresholdOracle(),
+		disconnectThreshold:    DefaultDisconnectThreshold,
+		honeyOracle:            NewHoneyPriceOracle(),
 	}
 }
 

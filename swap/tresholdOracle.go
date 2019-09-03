@@ -16,14 +16,14 @@
 
 package swap
 
-// TresholdOralce is the interface through which Oracles will deliver payment thresholds
-type TresholdOralce interface {
-	GetPaymentThreshold() (int, error)
+// ThresholdOracle is the interface through which Oracles will deliver payment thresholds
+type ThresholdOracle interface {
+	GetPaymentThreshold() (int64, error)
 }
 
 // NewThresholdOracle returns the actual oracle to be used for discovering the threshold
 // It will return a default one
-func NewThresholdOracle() TresholdOralce {
+func NewThresholdOracle() ThresholdOracle {
 	return &fixedPaymentThreshold{
 		paymentThreshold: DefaultPaymentThreshold,
 	}
@@ -31,10 +31,10 @@ func NewThresholdOracle() TresholdOralce {
 
 // FixedPaymentThreshold is a paymentThreshold oracle which which returns a fixed price
 type fixedPaymentThreshold struct {
-	paymentThreshold int
+	paymentThreshold int64
 }
 
 // GetPrice returns the actual price for honey
-func (fpo *fixedPaymentThreshold) GetPaymentThreshold() (int, error) {
+func (fpo *fixedPaymentThreshold) GetPaymentThreshold() (int64, error) {
 	return fpo.paymentThreshold, nil
 }

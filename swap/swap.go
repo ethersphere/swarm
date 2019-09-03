@@ -166,7 +166,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	paymentThreshold := s.peers[peer.ID()].paymentThreshold
+	paymentThreshold, _ := s.peers[peer.ID()].paymentThresholdOracle.GetPaymentThreshold()
 
 	if newBalance <= -paymentThreshold {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
@@ -286,7 +286,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	lastCheque := s.loadLastReceivedCheque(p)
 
 	// TODO: there should probably be a lock here?
-	expectedAmount, err := p.oracle.GetPrice(cheque.Honey)
+	expectedAmount, err := p.honeyOracle.GetPrice(cheque.Honey)
 	if err != nil {
 		return 0, err
 	}
@@ -387,7 +387,7 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	honey := uint64(-peerBalance)
 
 	var amount uint64
-	amount, err = swapPeer.oracle.GetPrice(honey)
+	amount, err = swapPeer.honeyOracle.GetPrice(honey)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
 	}
