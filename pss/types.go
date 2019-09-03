@@ -20,12 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -115,18 +115,6 @@ func (m *msgParams) Bytes() (paramBytes []byte) {
 	}
 	paramBytes = append(paramBytes, b)
 	return paramBytes
-}
-
-type outboxMsg struct {
-	msg       *PssMsg
-	startedAt time.Time
-}
-
-func newOutboxMsg(msg *PssMsg) *outboxMsg {
-	return &outboxMsg{
-		msg:       msg,
-		startedAt: time.Now(),
-	}
 }
 
 // PssMsg encapsulates messages transported over pss.
