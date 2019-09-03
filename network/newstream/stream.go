@@ -994,8 +994,9 @@ func (r *Registry) removePeer(p *Peer) {
 
 // PeerInfo holds information about the peer and it's peers.
 type PeerInfo struct {
-	Base  string      `json:"base"` // our node's base address
-	Peers []PeerState `json:"peers"`
+	Base    string                       `json:"base"` // our node's base address
+	Peers   []PeerState                  `json:"peers"`
+	Cursors map[string]map[string]uint64 `json:"cursors"`
 }
 
 // PeerState holds information about a connected peer.
@@ -1009,7 +1010,26 @@ type PeerState struct {
 // peer cursors and intervals are returned
 func (r *Registry) PeerInfo() PeerInfo {
 	info := PeerInfo{
-		Base: hex.EncodeToString(r.baseKey)[:16],
+		Base:    hex.EncodeToString(r.baseKey)[:16],
+		Cursors: make(map[string]map[string]uint64),
+	}
+	for name, p := range r.providers {
+		info.Cursors[name] = make(map[string]uint64)
+		if name != syncStreamName {
+			// support only sync provider, for now
+			continue
+		}
+		for i := uint8(0); i <= chunk.MaxPO; i++ {
+			key, err := p.EncodeKey(i)
+			if err != nil {
+				panic(err)
+			}
+			cursor, err := p.Cursor(key)
+			if err != nil {
+				panic(err)
+			}
+			info.Cursors[name][key] = cursor
+		}
 	}
 	for _, p := range r.peers {
 		is := make(map[string]string)
