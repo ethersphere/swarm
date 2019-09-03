@@ -546,7 +546,7 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// NewInstanceAt creates a new instance of the chequebook contract at address and sets chequebookAddr
+// NewInstanceAt creates a new instance of an already existing chequebook contract at address and sets chequebookAddr
 func (s *Swap) NewInstanceAt(address common.Address, backend swap.Backend) error {
 	c, err := contract.InstanceAt(address, backend)
 	if err != nil {
