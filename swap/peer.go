@@ -17,13 +17,16 @@
 package swap
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/state"
 )
 
 // ErrDontOwe indictates that no balance is actially owned
@@ -102,4 +105,74 @@ func (p *Peer) updateBalance(amount int64) error {
 	}
 	log.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
 	return nil
+}
+
+// createCheque creates a new cheque whose beneficiary will be the peer and
+// whose amount is based on the last cheque and current balance for this peer
+// The cheque will be signed and point to the issuer's contract
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
+func (p *Peer) createCheque() (*Cheque, error) {
+	var cheque *Cheque
+	var err error
+
+	beneficiary := p.beneficiary
+	peerBalance := p.getBalance()
+	// the balance should be negative here, we take the absolute value:
+	honey := uint64(-peerBalance)
+	var amount uint64
+
+	// TODO: this must probably be locked
+	amount, err = p.swap.oracle.GetPrice(honey)
+	if err != nil {
+		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
+	}
+
+	// if there is no existing cheque when loading from the store, it means it's the first interaction
+	// this is a valid scenario
+	total, err := p.getLastChequeValues()
+	if err != nil && err != state.ErrNotFound {
+		return nil, err
+	}
+
+	// TODO: lock
+	contract := p.swap.owner.Contract
+
+	cheque = &Cheque{
+		ChequeParams: ChequeParams{
+			CumulativePayout: total + amount,
+			Contract:         contract,
+			Beneficiary:      beneficiary,
+		},
+		Honey: honey,
+	}
+	cheque.Signature, err = cheque.Sign(p.swap.owner.privateKey)
+
+	return cheque, err
+}
+
+// sendCheque sends a cheque to peer
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
+func (p *Peer) sendCheque() error {
+	cheque, err := p.createCheque()
+	if err != nil {
+		return fmt.Errorf("error while creating cheque: %s", err.Error())
+	}
+
+	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+
+	if err := p.setLastSentCheque(cheque); err != nil {
+		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
+	}
+
+	emit := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
+	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
+		return err
+	}
+
+	return p.Send(context.Background(), emit)
 }

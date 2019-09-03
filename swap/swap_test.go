@@ -329,7 +329,7 @@ func TestResetBalance(t *testing.T) {
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	debitorSwap.sendCheque(creditor)
+	creditor.sendCheque()
 	// the debitor should have already reset its balance
 	if creditor.getBalance() != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
