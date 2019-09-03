@@ -214,7 +214,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	feedsHandler.SetStore(self.netStore)
 
 	syncing := true
-	if !config.SyncEnabled || config.LightNodeEnabled {
+	if !config.SyncEnabled || config.LightNodeEnabled || config.BootnodeMode {
 		syncing = false
 	}
 
