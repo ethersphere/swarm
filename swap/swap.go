@@ -165,7 +165,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		if !ok {
 			return fmt.Errorf("peer %s not found", peer)
 		}
-		return s.sendCheque(swapPeer)
+		return swapPeer.sendCheque()
 	}
 
 	return nil
@@ -202,8 +202,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	p.updateBalance(-int64(cheque.Honey))
-	if err != nil {
+	if err := p.updateBalance(-int64(cheque.Honey)); err != nil {
 		return err
 	}
 
@@ -268,71 +267,6 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	return actualAmount, nil
-}
-
-// sendCheque sends a cheque to peer
-// To be called with mutex already held
-// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
-func (s *Swap) sendCheque(swapPeer *Peer) error {
-	cheque, err := s.createCheque(swapPeer)
-	if err != nil {
-		return fmt.Errorf("error while creating cheque: %s", err.Error())
-	}
-
-	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
-
-	if err := swapPeer.setLastSentCheque(cheque); err != nil {
-		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
-	}
-
-	emit := &EmitChequeMsg{
-		Cheque: cheque,
-	}
-
-	if err := swapPeer.updateBalance(int64(cheque.Honey)); err != nil {
-		return err
-	}
-
-	return swapPeer.Send(context.Background(), emit)
-}
-
-// createCheque creates a new cheque whose beneficiary will be the peer and
-// whose amount is based on the last cheque and current balance for this peer
-// The cheque will be signed and point to the issuer's contract
-// To be called with mutex already held
-// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
-func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
-	var cheque *Cheque
-	var err error
-
-	beneficiary := swapPeer.beneficiary
-	peerBalance := swapPeer.getBalance()
-	// the balance should be negative here, we take the absolute value:
-	honey := uint64(-peerBalance)
-	var amount uint64
-	amount, err = s.oracle.GetPrice(honey)
-	if err != nil {
-		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
-	}
-
-	// if there is no existing cheque when loading from the store, it means it's the first interaction
-	// this is a valid scenario
-	total, err := swapPeer.getLastChequeValues()
-	if err != nil && err != state.ErrNotFound {
-		return nil, err
-	}
-
-	cheque = &Cheque{
-		ChequeParams: ChequeParams{
-			CumulativePayout: total + amount,
-			Contract:         s.owner.Contract,
-			Beneficiary:      beneficiary,
-		},
-		Honey: honey,
-	}
-	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
-
-	return cheque, err
 }
 
 // Balance returns the balance for a given peer
