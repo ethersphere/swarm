@@ -57,7 +57,7 @@ func TestProtocol(t *testing.T) {
 	sent := &sync.Map{}
 	store := &sync.Map{}
 	// mock pubsub messenger
-	lb := newLoopBack(true)
+	lb := newLoopBack()
 
 	// set up a number of storers
 	storers := make([]*Storer, storerCnt)

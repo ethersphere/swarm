@@ -68,13 +68,11 @@ func (tps *testPubSub) IsClosestTo(addr []byte) bool {
 // loopback implements PubSub as a central subscription engine,
 // ie a msg sent is received by all handlers registered for the topic
 type loopBack struct {
-	async    bool
 	handlers map[string][]func(msg []byte, p *p2p.Peer) error
 }
 
-func newLoopBack(async bool) *loopBack {
+func newLoopBack() *loopBack {
 	return &loopBack{
-		async:    async,
 		handlers: make(map[string][]func(msg []byte, p *p2p.Peer) error),
 	}
 }
@@ -88,13 +86,7 @@ func (lb *loopBack) Register(topic string, _ bool, handler func(msg []byte, p *p
 // Send publishes a msg with a topic and directly calls registered handlers with
 // that topic
 func (lb *loopBack) Send(to []byte, topic string, msg []byte) error {
-	if lb.async {
-		go func() {
-			if !delayResponse() {
-				return
-			}
-			lb.send(to, topic, msg)
-		}()
+	if !delayResponse() {
 		return nil
 	}
 	return lb.send(to, topic, msg)
@@ -233,9 +225,8 @@ func TestPusher(t *testing.T) {
 		}
 	}
 
-	lb := newLoopBack(false)
+	lb := newLoopBack()
 
-	max := 0 // the highest index sent so far
 	respond := func(msg []byte, _ *p2p.Peer) error {
 		chmsg, err := decodeChunkMsg(msg)
 		if err != nil {
@@ -244,31 +235,17 @@ func TestPusher(t *testing.T) {
 		}
 		// check outgoing chunk messages
 		idx := int(binary.BigEndian.Uint64(chmsg.Addr[:8]))
-		// disable ordering test
-		//if idx > max {
-		//errf("incorrect order of chunks from db chunk #%d before #%d", idx, max)
-		//return nil
-		//}
-		max++
 		// respond ~ mock storer protocol
-		go func() {
-			receipt := &receiptMsg{Addr: chmsg.Addr}
-			rmsg, err := rlp.EncodeToBytes(receipt)
-			if err != nil {
-				errf("error encoding receipt message: %v", err)
-			}
-			log.Debug("chunk sent", "idx", idx)
-			// random delay to allow retries
-			if !delayResponse() {
-				log.Debug("chunk/receipt lost", "idx", idx)
-				return
-			}
-			log.Debug("store chunk,  send receipt", "idx", idx)
-			err = lb.Send(chmsg.Origin, pssReceiptTopic, rmsg)
-			if err != nil {
-				errf("error sending receipt message: %v", err)
-			}
-		}()
+		receipt := &receiptMsg{Addr: chmsg.Addr}
+		rmsg, err := rlp.EncodeToBytes(receipt)
+		if err != nil {
+			errf("error encoding receipt message: %v", err)
+		}
+		log.Debug("store chunk,  send receipt", "idx", idx)
+		err = lb.Send(chmsg.Origin, pssReceiptTopic, rmsg)
+		if err != nil {
+			errf("error sending receipt message: %v", err)
+		}
 		return nil
 	}
 	// register the respond function
