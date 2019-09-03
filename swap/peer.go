@@ -30,18 +30,24 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
-	swap               *Swap
-	beneficiary        common.Address
-	contractAddress    common.Address
-	lastReceivedCheque *Cheque
+	swap                *Swap
+	beneficiary         common.Address
+	contractAddress     common.Address
+	lastReceivedCheque  *Cheque
+	oracle              HoneyOracle // the oracle providing the ether price for honey
+	paymentThreshold    int64       // balance difference required for sending cheque
+	disconnectThreshold int64       // balance difference required for dropping peer
 }
 
 // NewPeer creates a new swap Peer instance
 func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) *Peer {
 	return &Peer{
-		Peer:            p,
-		swap:            s,
-		beneficiary:     beneficiary,
-		contractAddress: contractAddress,
+		Peer:                p,
+		swap:                s,
+		beneficiary:         beneficiary,
+		contractAddress:     contractAddress,
+		paymentThreshold:    DefaultPaymentThreshold,
+		disconnectThreshold: DefaultDisconnectThreshold,
+		oracle:              NewPriceOracle(),
 	}
 }

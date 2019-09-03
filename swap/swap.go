@@ -47,22 +47,19 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api                 API
-	store               state.Store          // store is needed in order to keep balances and cheques across sessions
-	accountingLock      sync.RWMutex         // lock for data consistency in accounting-related functions
-	balances            map[enode.ID]int64   // map of balances for each peer
-	balancesLock        sync.RWMutex         // lock for balances map
-	cheques             map[enode.ID]*Cheque // map of cheques for each peer
-	chequesLock         sync.RWMutex         // lock for cheques map
-	peers               map[enode.ID]*Peer   // map of all swap Peers
-	peersLock           sync.RWMutex         // lock for peers map
-	backend             contract.Backend     // the backend (blockchain) used
-	owner               *Owner               // contract access
-	params              *Params              // economic and operational parameters
-	contract            swap.Contract        // reference to the smart contract
-	oracle              PriceOracle          // the oracle providing the ether price for honey
-	paymentThreshold    int64                // balance difference required for sending cheque
-	disconnectThreshold int64                // balance difference required for dropping peer
+	api            API
+	store          state.Store          // store is needed in order to keep balances and cheques across sessions
+	accountingLock sync.RWMutex         // lock for data consistency in accounting-related functions
+	balances       map[enode.ID]int64   // map of balances for each peer
+	balancesLock   sync.RWMutex         // lock for balances map
+	cheques        map[enode.ID]*Cheque // map of cheques for each peer
+	chequesLock    sync.RWMutex         // lock for cheques map
+	peers          map[enode.ID]*Peer   // map of all swap Peers
+	peersLock      sync.RWMutex         // lock for peers map
+	backend        contract.Backend     // the backend (blockchain) used
+	owner          *Owner               // contract access
+	params         *Params              // economic and operational parameters
+	contract       swap.Contract        // reference to the smart contract
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -88,16 +85,13 @@ func NewParams() *Params {
 // New - swap constructor
 func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
 	return &Swap{
-		store:               stateStore,
-		balances:            make(map[enode.ID]int64),
-		cheques:             make(map[enode.ID]*Cheque),
-		peers:               make(map[enode.ID]*Peer),
-		backend:             backend,
-		owner:               createOwner(prvkey, contract),
-		params:              NewParams(),
-		paymentThreshold:    DefaultPaymentThreshold,
-		disconnectThreshold: DefaultDisconnectThreshold,
-		oracle:              NewPriceOracle(),
+		store:    stateStore,
+		balances: make(map[enode.ID]int64),
+		cheques:  make(map[enode.ID]*Cheque),
+		peers:    make(map[enode.ID]*Peer),
+		backend:  backend,
+		owner:    createOwner(prvkey, contract),
+		params:   NewParams(),
 	}
 }
 
@@ -158,8 +152,9 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if !exists {
 		return fmt.Errorf("peer %v does not exist", peer.ID())
 	}
-	if balance >= s.disconnectThreshold {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
+	disconnectThreshold := s.peers[peer.ID()].disconnectThreshold
+	if balance >= disconnectThreshold {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), disconnectThreshold)
 	}
 
 	var newBalance int64
@@ -171,8 +166,10 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	if newBalance <= -s.paymentThreshold {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+	paymentThreshold := s.peers[peer.ID()].paymentThreshold
+
+	if newBalance <= -paymentThreshold {
+		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
 		swapPeer, ok := s.getPeer(peer.ID())
 		if !ok {
 			return fmt.Errorf("peer %s not found", peer)
@@ -289,7 +286,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	lastCheque := s.loadLastReceivedCheque(p)
 
 	// TODO: there should probably be a lock here?
-	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
+	expectedAmount, err := p.oracle.GetPrice(cheque.Honey)
 	if err != nil {
 		return 0, err
 	}
@@ -390,7 +387,7 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 	honey := uint64(-peerBalance)
 
 	var amount uint64
-	amount, err = s.oracle.GetPrice(honey)
+	amount, err = swapPeer.oracle.GetPrice(honey)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
 	}
