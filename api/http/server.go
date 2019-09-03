@@ -46,8 +46,6 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/pin"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/rs/cors"
 )
 
@@ -1145,26 +1143,4 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
-}
-
-// periodicTagTrace queries the tag every 2 seconds and logs its state to the span
-func periodicTagTrace(tags *chunk.Tags, tagUID uint32, q chan struct{}, sp opentracing.Span) {
-	report := func() {
-		tag, err := tags.Get(tagUID)
-		if err != nil {
-			log.Error("error while getting tag", "tagUID", tagUID, "err", err)
-		}
-
-		sp.LogFields(olog.String("tag state", fmt.Sprintf("split=%d stored=%d seen=%d synced=%d", tag.Get(chunk.StateSplit), tag.Get(chunk.StateStored), tag.Get(chunk.StateSeen), tag.Get(chunk.StateSynced))))
-	}
-
-	for {
-		select {
-		case <-q:
-			report()
-			return
-		case <-time.After(2 * time.Second):
-			report()
-		}
-	}
 }
