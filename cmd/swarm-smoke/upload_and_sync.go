@@ -67,18 +67,10 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 		err = fmt.Errorf("timeout after %v sec", timeout)
 	}
 
-	if debug {
-		// trigger debug functionality on randomBytes
-		e := trackChunks(randomBytes[:], true)
-		if e != nil {
-			log.Error(e.Error())
-		}
-	}
-
 	return err
 }
 
-func trackChunks(testData []byte, submitMetrics bool) error {
+func trackChunks(testData []byte) error {
 	addrs, err := getAllRefs(testData)
 	if err != nil {
 		return err
@@ -154,12 +146,10 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 
 			log.Debug("chunks", "chunks", hostChunks, "yes", yes, "no", no, "host", host)
 
-			if submitMetrics {
-				globalMu.Lock()
-				globalYes += yes
-				globalNo += no
-				globalMu.Unlock()
-			}
+			globalMu.Lock()
+			globalYes += yes
+			globalNo += no
+			globalMu.Unlock()
 		}()
 	}
 
@@ -167,7 +157,7 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 
 	checkChunksVsMostProxHosts(addrs, allHostChunks, bzzAddrs)
 
-	if !hasErr && submitMetrics {
+	if !hasErr {
 		// remove the chunks stored on the uploader node
 		globalYes -= len(addrs)
 
@@ -301,7 +291,7 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 		log.Debug("chunks before fetch attempt", "hash", hash)
 
 		if debug {
-			err = trackChunks(randomBytes, false)
+			err = trackChunks(randomBytes)
 			if err != nil {
 				log.Error(err.Error())
 			}
