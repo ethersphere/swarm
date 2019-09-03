@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/network/capability"
+	"github.com/ethersphere/swarm/pot"
 )
 
 // discovery bzz extension for requesting and relaying node address records
@@ -94,7 +94,7 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 		return
 	}
 	resp := &peersMsg{
-		Peers: []*BzzAddr{a},
+		Peers:        []*BzzAddr{a},
 		Capabilities: []*capability.Capabilities{a.capabilities},
 	}
 	go d.Send(context.TODO(), resp)
@@ -126,7 +126,7 @@ disconnected
 // used for communicating about known peers
 // relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
-	Peers []*BzzAddr
+	Peers        []*BzzAddr
 	Capabilities []*capability.Capabilities
 }
 

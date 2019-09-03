@@ -20,9 +20,9 @@ type BzzAddr struct {
 
 func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
 	return &BzzAddr{
-		OAddr: oaddr,
-		UAddr: uaddr,
-		capabilities: capability.NewCapabilities(),	
+		OAddr:        oaddr,
+		UAddr:        uaddr,
+		capabilities: capability.NewCapabilities(),
 	}
 }
 

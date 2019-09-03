@@ -553,8 +553,8 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 	p := p2p.NewPeer(enode.ID{}, "foo", []p2p.Cap{})
 	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
 	bp := &BzzPeer{
-		Peer: pp,
-		BzzAddr: NewBzzAddr(addr.Bytes(),  []byte(fmt.Sprintf("%x", addr[:]))),
+		Peer:    pp,
+		BzzAddr: NewBzzAddr(addr.Bytes(), []byte(fmt.Sprintf("%x", addr[:]))),
 	}
 	return NewPeer(bp, kad)
 }
@@ -668,4 +668,3 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 		}
 	})
 }
-

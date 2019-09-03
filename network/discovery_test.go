@@ -19,6 +19,7 @@ package network
 import (
 	"crypto/ecdsa"
 	//crand "crypto/rand"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -26,13 +27,12 @@ import (
 	"sort"
 	"testing"
 	"time"
-	"bytes"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/network/capability"
+	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -181,7 +181,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	for _, p := range expBzzAddrs {
 		cps = append(cps, p.capabilities)
 	}
-	
+
 	err = s.TestExchanges(
 		p2ptest.Exchange{
 			Label: "outgoing subPeersMsg",
@@ -267,4 +267,3 @@ func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
 func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
-

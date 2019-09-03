@@ -257,7 +257,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 		if handshake.err != nil {
 			return fmt.Errorf("%08x: %s protocol closed: %v", b.BaseAddr()[:4], spec.Name, handshake.err)
 		}
-	
+
 		// the handshake has succeeded so construct the BzzPeer and run the protocol
 		peer := &BzzPeer{
 			Peer:       protocols.NewPeer(p, rw, spec),
@@ -285,7 +285,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
-	rsh.(*HandshakeMsg).Addr.capabilities =  rsh.(*HandshakeMsg).Capabilities
+	rsh.(*HandshakeMsg).Addr.capabilities = rsh.(*HandshakeMsg).Capabilities
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
 	handshake.Capabilities = rsh.(*HandshakeMsg).Capabilities
 	return nil
@@ -377,7 +377,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if !isFullCapability(rhs.Capabilities.Get(0)) && !isLightCapability(rhs.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Capabilities)
 	}
-	rhs.Addr.capabilities  = hs.(*HandshakeMsg).Capabilities
+	rhs.Addr.capabilities = hs.(*HandshakeMsg).Capabilities
 	return nil
 }
 
@@ -400,8 +400,8 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			NetworkID:    b.NetworkID,
 			Addr:         b.localAddr,
 			Capabilities: b.localAddr.capabilities,
-			init: make(chan bool, 1),
-			done: make(chan struct{}),
+			init:         make(chan bool, 1),
+			done:         make(chan struct{}),
 		}
 		// when handhsake is first created for a remote peer
 		// it is initialised with the init
