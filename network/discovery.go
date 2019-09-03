@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -99,10 +98,6 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 		Peers:        []*BzzAddr{a},
 		Capabilities: []*capability.Capabilities{a.capabilities},
 	}
-	if a.capabilities == nil {
-		log.Crit("tried to send capabilities empty", "msg", resp)
-	}
-	log.Warn("notifypeer", "notify", resp)
 	go d.Send(context.TODO(), resp)
 }
 
@@ -214,9 +209,6 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		if len(peers) > 0 {
 			outMsg := &peersMsg{Peers: sortPeers(peers), Capabilities: []*capability.Capabilities{}}
 			for _, p := range peers {
-				if p.capabilities == nil {
-					log.Crit("attempting to send handlesub with cap nil", outMsg)
-				}
 				outMsg.Capabilities = append(outMsg.Capabilities, p.capabilities)
 			}
 			go d.Send(context.TODO(), outMsg)
