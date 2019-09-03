@@ -26,28 +26,21 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// encodeForSignature encodes the cheque in the format used in the signing procedure
-func (cheque *Cheque) encodeForSignature() []byte {
-	serialBytes := make([]byte, 32)
-	amountBytes := make([]byte, 32)
-	timeoutBytes := make([]byte, 32)
+// encodeForSignature encodes the cheque params in the format used in the signing procedure
+func (cheque *ChequeParams) encodeForSignature() []byte {
+	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	binary.BigEndian.PutUint64(serialBytes[24:], cheque.Serial)
-	binary.BigEndian.PutUint64(amountBytes[24:], cheque.Amount)
-	binary.BigEndian.PutUint64(timeoutBytes[24:], cheque.Timeout)
+	binary.BigEndian.PutUint64(cumulativePayoutBytes[24:], cheque.CumulativePayout)
 	// construct the actual cheque
 	input := cheque.Contract.Bytes()
 	input = append(input, cheque.Beneficiary.Bytes()...)
-	input = append(input, serialBytes[:]...)
-	input = append(input, amountBytes[:]...)
-	input = append(input, timeoutBytes[:]...)
-
+	input = append(input, cumulativePayoutBytes[:]...)
 	return input
 }
 
-// sigHash hashes the cheque using the prefix that would be added by eth_Sign
-func (cheque *Cheque) sigHash() []byte {
+// sigHash hashes the cheque params using the prefix that would be added by eth_Sign
+func (cheque *ChequeParams) sigHash() []byte {
 	// we can ignore the error because it is always nil
 	encoded := cheque.encodeForSignature()
 	input := crypto.Keccak256(encoded)
@@ -84,7 +77,7 @@ func (cheque *Cheque) VerifySig(expectedSigner common.Address) error {
 }
 
 // Sign returns the cheque's signature with supplied private key
-func (cheque *Cheque) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
+func (cheque *ChequeParams) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 	sig, err := crypto.Sign(cheque.sigHash(), prv)
 	if err != nil {
 		return nil, err
@@ -97,19 +90,11 @@ func (cheque *Cheque) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 
 // Equal checks if other has the same fields
 func (cheque *Cheque) Equal(other *Cheque) bool {
-	if cheque.Serial != other.Serial {
-		return false
-	}
-
 	if cheque.Beneficiary != other.Beneficiary {
 		return false
 	}
 
-	if cheque.Amount != other.Amount {
-		return false
-	}
-
-	if cheque.Timeout != other.Timeout {
+	if cheque.CumulativePayout != other.CumulativePayout {
 		return false
 	}
 
@@ -140,29 +125,20 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", expectedBeneficiary, cheque.Beneficiary)
 	}
 
-	if cheque.Timeout != 0 {
-		return fmt.Errorf("wrong cheque parameters: expected timeout to be 0, was: %d", cheque.Timeout)
-	}
-
 	return nil
 }
 
-// verifyChequeAgainstLast verifies that serial and amount are higher than in the previous cheque
-// furthermore it cheques that the increase in amount is as expected
+// verifyChequeAgainstLast verifies that the amount is higher than in the previous cheque and the increase is as expected
 // returns the actual amount received in this cheque
 func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
-	actualAmount := cheque.Amount
+	actualAmount := cheque.CumulativePayout
 
 	if lastCheque != nil {
-		if cheque.Serial <= lastCheque.Serial {
-			return 0, fmt.Errorf("wrong cheque parameters: expected serial larger than %d, was: %d", lastCheque.Serial, cheque.Serial)
+		if cheque.CumulativePayout <= lastCheque.CumulativePayout {
+			return 0, fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %d, was: %d", lastCheque.CumulativePayout, cheque.CumulativePayout)
 		}
 
-		if cheque.Amount <= lastCheque.Amount {
-			return 0, fmt.Errorf("wrong cheque parameters: expected amount larger than %d, was: %d", lastCheque.Amount, cheque.Amount)
-		}
-
-		actualAmount -= lastCheque.Amount
+		actualAmount -= lastCheque.CumulativePayout
 	}
 
 	if expectedAmount != actualAmount {

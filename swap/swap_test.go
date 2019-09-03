@@ -41,8 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/contracts/swap/contract"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -54,8 +54,8 @@ var (
 	issuerAddress      = crypto.PubkeyToAddress(issuerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
-	testChequeSig      = common.Hex2Bytes("fd3f73c7a708bb4e42471b76dabee2a0c1b9af29efb7eadb37f206bf871b81cf0c7987ad89633be930a63eba9e793cc77896131de7d9740b49da80c23c217c621c")
-	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD")
+	testChequeSig      = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
+	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by issuerKey
 	gasLimit           = uint64(8000000)
 	testBackend        *swapTestBackend
 )
@@ -72,8 +72,8 @@ type booking struct {
 // additional properties for the tests
 type swapTestBackend struct {
 	*backends.SimulatedBackend
-	// the async submit and cashing go routine needs synchronization for tests
-	submitDone chan struct{}
+	// the async cashing go routine needs synchronization for tests
+	cashDone chan struct{}
 }
 
 func init() {
@@ -354,19 +354,19 @@ func TestResetBalance(t *testing.T) {
 		Cheque: cheque,
 	}
 	// now we need to create the channel...
-	testBackend.submitDone = make(chan struct{})
+	testBackend.cashDone = make(chan struct{})
 	// ...and trigger message handling on the receiver side (creditor)
 	// remember that debitor is the model of the remote node for the creditor...
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the submitChequeAndCash is actually terminated (ensures proper nounce count)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
-	case <-testBackend.submitDone:
-		log.Debug("submit and cash transactions completed and committed")
+	case <-testBackend.cashDone:
+		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
-		t.Fatalf("Timeout waiting for submit and cash transactions to complete")
+		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
 	// finally check that the creditor also successfully reset the balances
 	if creditorSwap.balances[debitor.ID()] != 0 {
@@ -475,15 +475,15 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	}
 }
 
-// During tests, because the submit and cashing in of cheques are async, we should wait for the function to be returned
+// During tests, because the cashing in of cheques is async, we should wait for the function to be returned
 // Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
 // causing subsequent TX to possibly fail due to nonce mismatch
-func testSubmitChequeAndCash(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
-	submitChequeAndCash(s, otherSwap, opts, actualAmount, cheque)
+func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+	cashCheque(s, otherSwap, opts, cheque)
 	// close the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
-		if stb.submitDone != nil {
-			close(stb.submitDone)
+		if stb.cashDone != nil {
+			close(stb.cashDone)
 		}
 	}
 }
@@ -543,13 +543,11 @@ func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:    testChequeContract,
-			Serial:      uint64(1),
-			Amount:      uint64(42),
-			Honey:       uint64(42),
-			Timeout:     uint64(0),
-			Beneficiary: beneficiaryAddress,
+			Contract:         testChequeContract,
+			CumulativePayout: uint64(42),
+			Beneficiary:      beneficiaryAddress,
 		},
+		Honey: uint64(42),
 	}
 
 	return cheque
@@ -562,7 +560,7 @@ func TestChequeEncodeForSignature(t *testing.T) {
 	// encode the cheque
 	encoded := expectedCheque.encodeForSignature()
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000000")
+	expected := common.Hex2Bytes("4405415b2b8c9f9aa83e151637b8378dd3bcfeddb8d424e9662fe0837fb1d728f1ac97cebb1085fe000000000000000000000000000000000000000000000000000000000000002a")
 	if !bytes.Equal(encoded, expected) {
 		t.Fatalf("Unexpected encoding of cheque. Expected encoding: %x, result is: %x", expected, encoded)
 	}
@@ -575,7 +573,7 @@ func TestChequeSigHash(t *testing.T) {
 	// compute the hash that will be signed
 	hash := expectedCheque.sigHash()
 	// expected value (computed through truffle/js)
-	expected := common.Hex2Bytes("291619739fc0008915f09989411d22a29ea62eb39d86ed094ef51d6a420a1358")
+	expected := common.Hex2Bytes("354a78a181b24d0beb1606cd9f525e6068e8e5dd96747468c21f2ecc89cb0bad")
 	if !bytes.Equal(hash, expected) {
 		t.Fatalf("Unexpected sigHash of cheque. Expected: %x, result is: %x", expected, hash)
 	}
@@ -692,13 +690,13 @@ func setupContractTest() func() {
 	// we overwrite the waitForTx function with one which the simulated backend
 	// immediately commits
 	currentWaitFunc := cswap.WaitFunc
-	defaultSubmitChequeAndCash = testSubmitChequeAndCash
+	defaultCashCheque = testCashCheque
 	// overwrite only for the duration of the test, so...
 	cswap.WaitFunc = testWaitForTx
 	return func() {
 		// ...we need to set it back to original when done
 		cswap.WaitFunc = currentWaitFunc
-		defaultSubmitChequeAndCash = submitChequeAndCash
+		defaultCashCheque = cashCheque
 	}
 }
 
@@ -706,6 +704,7 @@ func setupContractTest() func() {
 // First a simulated backend is created, then we deploy the issuer's swap contract.
 // We issue a test cheque with the beneficiary address and on the issuer's contract,
 // and immediately try to cash-in the cheque
+// afterwards it attempts to cash-in a bouncing cheque
 func TestContractIntegration(t *testing.T) {
 
 	log.Debug("creating test swap")
@@ -743,40 +742,6 @@ func TestContractIntegration(t *testing.T) {
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	receipt, err := issuerSwap.contract.SubmitChequeBeneficiary(
-		opts,
-		testBackend,
-		big.NewInt(int64(cheque.Serial)),
-		big.NewInt(int64(cheque.Amount)),
-		big.NewInt(int64(cheque.Timeout)),
-		cheque.Signature)
-
-	testBackend.Commit()
-
-	// check if success
-	if receipt.Status != 1 {
-		t.Fatalf("Bad status %d", receipt.Status)
-	}
-
-	log.Debug("check cheques state")
-
-	// check state, check that cheque is indeed there
-	result, err := issuerSwap.contract.Cheques(nil, beneficiaryAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Serial.Uint64() != cheque.Serial {
-		t.Fatalf("Wrong serial %d", result.Serial)
-	}
-	if result.Amount.Uint64() != cheque.Amount {
-		t.Fatalf("Wrong amount %d", result.Amount)
-	}
-	log.Debug("cheques result", "result", result)
-
-	// go forward in time
-	testBackend.AdjustTime(30 * time.Second)
-
-	payoutAmount := int64(20)
 	// test cashing in, for this we need balance in the contract
 	// => send some money
 	log.Debug("send money to contract")
@@ -787,7 +752,7 @@ func TestContractIntegration(t *testing.T) {
 	depoTx := types.NewTransaction(
 		nonce,
 		issuerSwap.issuer.Contract,
-		big.NewInt(payoutAmount),
+		big.NewInt(int64(cheque.CumulativePayout)),
 		50000,
 		big.NewInt(int64(0)),
 		[]byte{},
@@ -799,7 +764,7 @@ func TestContractIntegration(t *testing.T) {
 	testBackend.SendTransaction(context.TODO(), depoTxs)
 
 	log.Debug("cash-in the cheque")
-	receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(payoutAmount))
+	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
@@ -807,15 +772,40 @@ func TestContractIntegration(t *testing.T) {
 	if receipt.Status != 1 {
 		t.Fatalf("Bad status %d", receipt.Status)
 	}
+	if cashResult.Bounced {
+		t.Fatal("cashing bounced")
+	}
 
-	// check again the status, check paid out is increase by amount
-	result, err = issuerSwap.contract.Cheques(nil, beneficiaryAddress)
+	// check state, check that cheque is indeed there
+	result, err := issuerSwap.contract.PaidOut(nil, beneficiaryAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.Uint64() != cheque.CumulativePayout {
+		t.Fatalf("Wrong cumulative payout %d", result)
+	}
 	log.Debug("cheques result", "result", result)
-	if result.PaidOut.Int64() != payoutAmount {
-		t.Fatalf("Expected paid out amount to be %d, but is %d", payoutAmount, result.PaidOut)
+
+	// create a cheque that will bounce
+	bouncingCheque := newTestCheque()
+	bouncingCheque.ChequeParams.Contract = issuerSwap.issuer.Contract
+	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10
+	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.issuer.privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Debug("try to cash-in the bouncing cheque")
+	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
+	testBackend.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Status != 1 {
+		t.Fatalf("Bad status %d", receipt.Status)
+	}
+	if !cashResult.Bounced {
+		t.Fatal("cheque did not bounce")
 	}
 }
 
@@ -940,24 +930,15 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 	if err := testCheque.verifyChequeProperties(peer, swap.issuer.address); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
 	}
-
-	// cheque with non-zero timeout
-	testCheque = newTestCheque()
-	testCheque.Timeout = 10
-	testCheque.Signature, _ = testCheque.Sign(issuerKey)
-	if err := testCheque.verifyChequeProperties(peer, swap.issuer.address); err == nil {
-		t.Fatalf("accepted cheque with non-zero timeout")
-	}
 }
 
-// TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher serial and amount
+// TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	increase := uint64(10)
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
-	newCheque.Serial = oldCheque.Serial + 1
-	newCheque.Amount = oldCheque.Amount + increase
+	newCheque.CumulativePayout = oldCheque.CumulativePayout + increase
 
 	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
 	if err != nil {
@@ -969,23 +950,13 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 	}
 }
 
-// TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower serial or amount or an unexpected value
+// TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	increase := uint64(10)
 
-	// cheque with higher amount but same serial
+	// cheque with same or lower amount
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
-	newCheque.Amount = oldCheque.Amount + increase
-
-	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
-		t.Fatal("accepted a cheque with same serial")
-	}
-
-	// cheque with higher serial but same amount
-	oldCheque = newTestCheque()
-	newCheque = newTestCheque()
-	newCheque.Serial = oldCheque.Serial + 1
 
 	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
@@ -994,8 +965,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	newCheque.Serial = oldCheque.Serial + 1
-	newCheque.Amount = oldCheque.Amount + increase + 5
+	newCheque.CumulativePayout = oldCheque.CumulativePayout + increase + 5
 
 	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
@@ -1016,19 +986,18 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if actualAmount != cheque.Amount {
-		t.Fatalf("computed wrong actual amount: was %d, expected: %d", actualAmount, cheque.Amount)
+	if actualAmount != cheque.CumulativePayout {
+		t.Fatalf("computed wrong actual amount: was %d, expected: %d", actualAmount, cheque.CumulativePayout)
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).Serial != cheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
-	// create another cheque with higher serial and amount
+	// create another cheque with higher amount
 	otherCheque := newTestCheque()
-	otherCheque.Serial = cheque.Serial + 1
-	otherCheque.Amount = cheque.Amount + 10
+	otherCheque.CumulativePayout = cheque.CumulativePayout + 10
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(issuerKey)
 
@@ -1037,15 +1006,14 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if swap.loadLastReceivedCheque(peer).Serial != otherCheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, otherCheque.Serial)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != otherCheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, otherCheque.CumulativePayout)
 	}
 }
 
 // TestPeerProcessAndVerifyChequeInvalid verifies that processAndVerifyCheque does not accept cheques incompatible with the last cheque
 // it first tries to process an invalid cheque
 // then it processes a valid cheque
-// then rejects one with lower serial
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	swap, peer, clean := newTestSwapAndPeer(t, issuerKey)
@@ -1060,34 +1028,21 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 		t.Fatal("accecpted an invalid cheque as first cheque")
 	}
 
-	// valid cheque with serial 5
+	// valid cheque
 	cheque = newTestCheque()
-	cheque.Serial = 5
 	cheque.Signature, _ = cheque.Sign(issuerKey)
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if swap.loadLastReceivedCheque(peer).Serial != cheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
-	}
-
-	// invalid cheque because serial is lower
-	otherCheque := newTestCheque()
-	otherCheque.Serial = cheque.Serial - 1
-	otherCheque.Amount = cheque.Amount + 10
-	otherCheque.Honey = 10
-	otherCheque.Signature, _ = otherCheque.Sign(issuerKey)
-
-	if _, err := swap.processAndVerifyCheque(otherCheque, peer); err == nil {
-		t.Fatal("accepted a cheque with lower serial")
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
 	// invalid cheque because amount is lower
-	otherCheque = newTestCheque()
-	otherCheque.Serial = cheque.Serial + 1
-	otherCheque.Amount = cheque.Amount - 10
+	otherCheque := newTestCheque()
+	otherCheque.CumulativePayout = cheque.CumulativePayout - 10
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(issuerKey)
 
@@ -1096,8 +1051,8 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 
 	// check that no invalid cheque was saved
-	if swap.loadLastReceivedCheque(peer).Serial != cheque.Serial {
-		t.Fatalf("last received cheque has wrong serial, was: %d, expected: %d", peer.lastReceivedCheque.Serial, cheque.Serial)
+	if swap.loadLastReceivedCheque(peer).CumulativePayout != cheque.CumulativePayout {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 }
 
