@@ -99,5 +99,5 @@ func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 }
 
 func (i *Inspector) PeerStreams() string {
-	return i.stream.PeerCursors()
+	return i.stream.PeerInfo()
 }

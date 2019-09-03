@@ -19,7 +19,6 @@ package newstream
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"math/rand"
 	"strings"
 	"sync"
@@ -35,6 +34,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	bv "github.com/ethersphere/swarm/network/bitvector"
+	"github.com/ethersphere/swarm/network/stream/intervals"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -992,32 +992,44 @@ func (r *Registry) removePeer(p *Peer) {
 	streamPeersCount.Update(int64(len(r.peers)))
 }
 
-// PeerCurosrs returns a JSON response in which the queried node's
-// peer cursors are returned
-func (r *Registry) PeerCursors() string {
-	type peerCurs struct {
-		Peer    string            `json:"peer"` // the peer address
-		Cursors map[string]uint64 `json:"cursors"`
-	}
-	curs := struct {
-		Base  string     `json:"base"` // our node's base address
-		Peers []peerCurs `json:"peers"`
-	}{
+// PeerInfo holds information about the peer and it's peers.
+type PeerInfo struct {
+	Base  string      `json:"base"` // our node's base address
+	Peers []PeerState `json:"peers"`
+}
+
+// PeerState holds information about a connected peer.
+type PeerState struct {
+	Peer      string            `json:"peer"` // the peer address
+	Cursors   map[string]uint64 `json:"cursors"`
+	Intervals map[string]string `json:"intervals"`
+}
+
+// PeerInfo returns a response in which the queried node's
+// peer cursors and intervals are returned
+func (r *Registry) PeerInfo() PeerInfo {
+	info := PeerInfo{
 		Base: hex.EncodeToString(r.baseKey)[:16],
 	}
-
 	for _, p := range r.peers {
-		pcur := peerCurs{
-			Peer:    hex.EncodeToString(p.OAddr)[:16],
-			Cursors: p.getCursorsCopy(),
+		is := make(map[string]string)
+		if err := p.intervalsStore.Iterate("", func(key, value []byte) (stop bool, err error) {
+			i := new(intervals.Intervals)
+			if err := i.UnmarshalBinary(value); err != nil {
+				return true, err
+			}
+			is[string(key)] = i.String()
+			return false, nil
+		}); err != nil {
+			panic(err)
 		}
-		curs.Peers = append(curs.Peers, pcur)
+		info.Peers = append(info.Peers, PeerState{
+			Peer:      hex.EncodeToString(p.OAddr)[:16],
+			Cursors:   p.getCursorsCopy(),
+			Intervals: is,
+		})
 	}
-	pc, err := json.Marshal(&curs)
-	if err != nil {
-		return ""
-	}
-	return string(pc)
+	return info
 }
 
 // LastReceivedChunkTime returns the time when the last chunk
