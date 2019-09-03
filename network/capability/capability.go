@@ -191,7 +191,7 @@ func (c *Capability) Match(capCompare *Capability) bool {
 	if len(c.Cap) != len(capCompare.Cap) {
 		return false
 	}
-	// on the first occurence of false where query has true we can fail
+	// on the first occurrence of false where query has true we can fail
 	for i, flag := range capCompare.Cap {
 		if flag && !c.Cap[i] {
 			return false
