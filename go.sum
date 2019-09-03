@@ -62,6 +62,8 @@ github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa/go.mod h1:cdorVVzy
 github.com/elazarl/goproxy v0.0.0-20170405201442-c4fc26588b6e/go.mod h1:/Zj4wYkgs4iZTTu3o/KG3Itv/qCCa8VVMlb3i9OVuzc=
 github.com/ethereum/go-ethereum v1.9.2 h1:RMIHDO/diqXEgORSVzYx8xW9x2+S32PoAX5lQwya0Lw=
 github.com/ethereum/go-ethereum v1.9.2/go.mod h1:PwpWDrCLZrV+tfrhqqF6kPknbISMHaJv9Ln3kPCZLwY=
+github.com/ethersphere/go-sw3 v0.1.0 h1:XMaWxiBhFtrxfOel2tXmxuan3eCfFw/NcftV6sUVtIc=
+github.com/ethersphere/go-sw3 v0.1.0/go.mod h1:HukT0aZ6QdW/d7zuD/0g5xlw6ewu9QeqHojxLDsaERQ=
 github.com/evanphx/json-patch v4.2.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fatih/color v1.7.0 h1:DkWD4oS2D8LGGgTQ6IvwJJXSL5Vp2ffcQg58nFV38Ys=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=

@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package contract
+package simpleswap
 
 import (
 	"math/big"
@@ -31,7 +31,7 @@ var (
 const ECDSAABI = "[]"
 
 // ECDSABin is the compiled bytecode used for deploying new contracts.
-var ECDSABin = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a72305820353b17c5512ad2475819e948aa4bccb6e28ce2412b9c9015d64afef5d3858f4464736f6c634300050a0032"
+var ECDSABin = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a723058208b264442266842114d00302eed910833246a8ca31d4a342465d27ee38b3c2d0c64736f6c634300050a0032"
 
 // DeployECDSA deploys a new Ethereum contract, binding an instance of ECDSA to it.
 func DeployECDSA(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *ECDSA, error) {
@@ -193,7 +193,7 @@ func (_ECDSA *ECDSATransactorRaw) Transact(opts *bind.TransactOpts, method strin
 const MathABI = "[]"
 
 // MathBin is the compiled bytecode used for deploying new contracts.
-var MathBin = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a72305820026916f3ef4a65b688fa8254d0ae6f5541bbfcd946eaa6d74f341aca66e733b864736f6c634300050a0032"
+var MathBin = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a7230582012a658010ec853ca058fc84f498376cc4e43ab59dbd66c48e1cc4b70ddafb2f464736f6c634300050a0032"
 
 // DeployMath deploys a new Ethereum contract, binding an instance of Math to it.
 func DeployMath(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Math, error) {
@@ -355,7 +355,7 @@ func (_Math *MathTransactorRaw) Transact(opts *bind.TransactOpts, method string,
 const SafeMathABI = "[]"
 
 // SafeMathBin is the compiled bytecode used for deploying new contracts.
-var SafeMathBin = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a7230582083799a6615b4b4ea345d09227a0c3a534a9521b5009ed41494e5637d323ed2a064736f6c634300050a0032"
+var SafeMathBin = "0x60556023600b82828239805160001a607314601657fe5b30600052607381538281f3fe73000000000000000000000000000000000000000030146080604052600080fdfea265627a7a723058200912251cef3833d2207d3ee96457126d52aa9798065e060e96ec7c2d505645a364736f6c634300050a0032"
 
 // DeploySafeMath deploys a new Ethereum contract, binding an instance of SafeMath to it.
 func DeploySafeMath(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *SafeMath, error) {
@@ -514,10 +514,10 @@ func (_SafeMath *SafeMathTransactorRaw) Transact(opts *bind.TransactOpts, method
 }
 
 // SimpleSwapABI is the input ABI used to generate the binding from.
-const SimpleSwapABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"swap\",\"type\":\"address\"},{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"}],\"name\":\"chequeHash\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"issuer\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiaryAgent\",\"type\":\"address\"},{\"name\":\"requestPayout\",\"type\":\"uint256\"}],\"name\":\"cashChequeBeneficiary\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"withdraw\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"increaseHardDeposit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"DEFAULT_HARDDEPPOSIT_DECREASE_TIMEOUT\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"},{\"name\":\"issuerSig\",\"type\":\"bytes\"},{\"name\":\"beneficarySig\",\"type\":\"bytes\"}],\"name\":\"submitCheque\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"},{\"name\":\"beneficiarySig\",\"type\":\"bytes\"}],\"name\":\"submitChequeissuer\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"cheques\",\"outputs\":[{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"paidOut\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"swap\",\"type\":\"address\"},{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"}],\"name\":\"encodeCheque\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"}],\"name\":\"decreaseHardDeposit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"hardDeposits\",\"outputs\":[{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"decreaseAmount\",\"type\":\"uint256\"},{\"name\":\"decreaseTimeout\",\"type\":\"uint256\"},{\"name\":\"canBeDecreasedAt\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"decreaseAmount\",\"type\":\"uint256\"}],\"name\":\"prepareDecreaseHardDeposit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"liquidBalance\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"}],\"name\":\"liquidBalanceFor\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"swap\",\"type\":\"address\"},{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"}],\"name\":\"sigChequeHash\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"decreaseTimeout\",\"type\":\"uint256\"},{\"name\":\"beneficiarySig\",\"type\":\"bytes\"}],\"name\":\"setCustomHardDepositDecreaseTimeout\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"totalHardDeposit\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiaryPrincipal\",\"type\":\"address\"},{\"name\":\"beneficiaryAgent\",\"type\":\"address\"},{\"name\":\"requestPayout\",\"type\":\"uint256\"},{\"name\":\"beneficiarySig\",\"type\":\"bytes\"},{\"name\":\"expiry\",\"type\":\"uint256\"},{\"name\":\"calleePayout\",\"type\":\"uint256\"}],\"name\":\"cashCheque\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiaryPrincipal\",\"type\":\"address\"},{\"name\":\"beneficiaryAgent\",\"type\":\"address\"},{\"name\":\"requestPayout\",\"type\":\"uint256\"},{\"name\":\"calleePayout\",\"type\":\"uint256\"}],\"name\":\"_cashChequeInternal\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"serial\",\"type\":\"uint256\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"cashTimeout\",\"type\":\"uint256\"},{\"name\":\"issuerSig\",\"type\":\"bytes\"}],\"name\":\"submitChequeBeneficiary\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_issuer\",\"type\":\"address\"},{\"name\":\"defaultHardDepositTimeoutDuration\",\"type\":\"uint256\"}],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"constructor\"},{\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"fallback\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"depositor\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiaryPrincipal\",\"type\":\"address\"},{\"indexed\":true,\"name\":\"beneficiaryAgent\",\"type\":\"address\"},{\"indexed\":true,\"name\":\"callee\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"serial\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"totalPayout\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"requestPayout\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"calleePayout\",\"type\":\"uint256\"}],\"name\":\"ChequeCashed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":true,\"name\":\"serial\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"cashTimeout\",\"type\":\"uint256\"}],\"name\":\"ChequeSubmitted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[],\"name\":\"ChequeBounced\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"HardDepositAmountChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"decreaseAmount\",\"type\":\"uint256\"}],\"name\":\"HardDepositDecreasePrepared\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"decreaseTimeout\",\"type\":\"uint256\"}],\"name\":\"HardDepositDecreaseTimeoutChanged\",\"type\":\"event\"}]"
+const SimpleSwapABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"}],\"name\":\"availableBalanceFor\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"recipient\",\"type\":\"address\"},{\"name\":\"cumulativePayout\",\"type\":\"uint256\"},{\"name\":\"issuerSig\",\"type\":\"bytes\"}],\"name\":\"cashChequeBeneficiary\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"recipient\",\"type\":\"address\"},{\"name\":\"cumulativePayout\",\"type\":\"uint256\"},{\"name\":\"beneficiarySig\",\"type\":\"bytes\"},{\"name\":\"callerPayout\",\"type\":\"uint256\"},{\"name\":\"issuerSig\",\"type\":\"bytes\"}],\"name\":\"cashCheque\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"issuer\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"withdraw\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"increaseHardDeposit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"DEFAULT_HARDDEPOSIT_DECREASE_TIMEOUT\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"paidOut\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"}],\"name\":\"decreaseHardDeposit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"hardDeposits\",\"outputs\":[{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"decreaseAmount\",\"type\":\"uint256\"},{\"name\":\"decreaseTimeout\",\"type\":\"uint256\"},{\"name\":\"canBeDecreasedAt\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"decreaseAmount\",\"type\":\"uint256\"}],\"name\":\"prepareDecreaseHardDeposit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"liquidBalance\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"decreaseTimeout\",\"type\":\"uint256\"},{\"name\":\"beneficiarySig\",\"type\":\"bytes\"}],\"name\":\"setCustomHardDepositDecreaseTimeout\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"totalHardDeposit\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_issuer\",\"type\":\"address\"},{\"name\":\"defaultHardDepositTimeoutDuration\",\"type\":\"uint256\"}],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"constructor\"},{\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"fallback\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"depositor\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":true,\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":true,\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"totalPayout\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"cumulativePayout\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"callerPayout\",\"type\":\"uint256\"}],\"name\":\"ChequeCashed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[],\"name\":\"ChequeBounced\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"HardDepositAmountChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"decreaseAmount\",\"type\":\"uint256\"}],\"name\":\"HardDepositDecreasePrepared\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"beneficiary\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"decreaseTimeout\",\"type\":\"uint256\"}],\"name\":\"HardDepositDecreaseTimeoutChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Withdraw\",\"type\":\"event\"}]"
 
 // SimpleSwapBin is the compiled bytecode used for deploying new contracts.
-var SimpleSwapBin = "0x6080604052604051612a63380380612a638339818101604052604081101561002657600080fd5b8101908080519060200190929190805190602001909291905050508060008190555081600460006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555060003411156100fe577fe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c3334604051808373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018281526020019250505060405180910390a15b50506129548061010f6000396000f3fe60806040526004361061012a5760003560e01c8063946f46a2116100ab578063d3000b8b1161006f578063d3000b8b14610992578063df32438014610a35578063e0bcf13a14610b27578063e3bb7aec14610b52578063f3c08b1f14610c78578063f890673b14610cfd5761012a565b8063946f46a2146107dc578063b6343b0d1461082d578063b7770350146108a7578063b7ec1a3314610902578063c76a4d311461092d5761012a565b806339d9ec4c116100f257806339d9ec4c1461038c5780634f823a4c146103b757806354fe2614146105545780636162913b1461065a5780636c16f684146106d45761012a565b8063030aca3e146101a15780631d143848146102445780632329d2a81461029b5780632e1a7d4d146102f6578063338f3fed14610331575b600034111561019f577fe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c3334604051808373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018281526020019250505060405180910390a15b005b3480156101ad57600080fd5b5061022e600480360360a08110156101c457600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291908035906020019092919080359060200190929190505050610de3565b6040518082815260200191505060405180910390f35b34801561025057600080fd5b50610259610e95565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b3480156102a757600080fd5b506102f4600480360360408110156102be57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919080359060200190929190505050610ebb565b005b34801561030257600080fd5b5061032f6004803603602081101561031957600080fd5b8101908080359060200190929190505050610ecc565b005b34801561033d57600080fd5b5061038a6004803603604081101561035457600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291908035906020019092919050505061105b565b005b34801561039857600080fd5b506103a1611280565b6040518082815260200191505060405180910390f35b3480156103c357600080fd5b50610552600480360360c08110156103da57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291908035906020019092919080359060200190929190803590602001909291908035906020019064010000000081111561043557600080fd5b82018360208201111561044757600080fd5b8035906020019184600183028401116401000000008311171561046957600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f820116905080830192505050505050509192919290803590602001906401000000008111156104cc57600080fd5b8201836020820111156104de57600080fd5b8035906020019184600183028401116401000000008311171561050057600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f820116905080830192505050505050509192919290505050611286565b005b34801561056057600080fd5b50610658600480360360a081101561057757600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291908035906020019092919080359060200190929190803590602001906401000000008111156105d257600080fd5b8201836020820111156105e457600080fd5b8035906020019184600183028401116401000000008311171561060657600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f82011690508083019250505050505050919291929050505061140b565b005b34801561066657600080fd5b506106a96004803603602081101561067d57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505061157a565b6040518085815260200184815260200183815260200182815260200194505050505060405180910390f35b3480156106e057600080fd5b50610761600480360360a08110156106f757600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff1690602001909291908035906020019092919080359060200190929190803590602001909291905050506115aa565b6040518080602001828103825283818151815260200191508051906020019080838360005b838110156107a1578082015181840152602081019050610786565b50505050905090810190601f1680156107ce5780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b3480156107e857600080fd5b5061082b600480360360208110156107ff57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050611655565b005b34801561083957600080fd5b5061087c6004803603602081101561085057600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506117a8565b6040518085815260200184815260200183815260200182815260200194505050505060405180910390f35b3480156108b357600080fd5b50610900600480360360408110156108ca57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291905050506117d8565b005b34801561090e57600080fd5b506109176119c0565b6040518082815260200191505060405180910390f35b34801561093957600080fd5b5061097c6004803603602081101561095057600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506119f3565b6040518082815260200191505060405180910390f35b34801561099e57600080fd5b50610a1f600480360360a08110156109b557600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291908035906020019092919080359060200190929190505050611a58565b6040518082815260200191505060405180910390f35b348015610a4157600080fd5b50610b2560048036036060811015610a5857600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291908035906020019092919080359060200190640100000000811115610a9f57600080fd5b820183602082011115610ab157600080fd5b80359060200191846001830284011164010000000083111715610ad357600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f820116905080830192505050505050509192919290505050611b12565b005b348015610b3357600080fd5b50610b3c611d80565b6040518082815260200191505060405180910390f35b348015610b5e57600080fd5b50610c76600480360360c0811015610b7557600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff1690602001909291908035906020019092919080359060200190640100000000811115610bdc57600080fd5b820183602082011115610bee57600080fd5b80359060200191846001830284011164010000000083111715610c1057600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f8201169050808301925050505050505091929192908035906020019092919080359060200190929190505050611d86565b005b348015610c8457600080fd5b50610cfb60048036036080811015610c9b57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff1690602001909291908035906020019092919080359060200190929190505050611fa2565b005b348015610d0957600080fd5b50610de160048036036080811015610d2057600080fd5b8101908080359060200190929190803590602001909291908035906020019092919080359060200190640100000000811115610d5b57600080fd5b820183602082011115610d6d57600080fd5b80359060200191846001830284011164010000000083111715610d8f57600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f820116905080830192505050505050509192919290505050612328565b005b60008585858585604051602001808673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018481526020018381526020018281526020019550505050505060405160208183030381529060405280519060200120905095945050505050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b610ec83383836000611fa2565b5050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614610f8f576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b610f976119c0565b811115610fef576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260288152602001806128d56028913960400191505060405180910390fd5b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166108fc829081150290604051600060405180830381858888f19350505050158015611057573d6000803e3d6000fd5b5050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161461111e576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b3073ffffffffffffffffffffffffffffffffffffffff163161114b8260035461241290919063ffffffff16565b11156111a2576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260358152602001806128a06035913960400191505060405180910390fd5b6000600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002090506111fc82826000015461241290919063ffffffff16565b81600001819055506112198260035461241290919063ffffffff16565b600381905550600081600201819055508273ffffffffffffffffffffffffffffffffffffffff167f2506c43272ded05d095b91dbba876e66e46888157d3e078db5691496e96c5fad82600001546040518082815260200191505060405180910390a2505050565b60005481565b61129c6112963088888888610de3565b8361249a565b73ffffffffffffffffffffffffffffffffffffffff16600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff161461135e576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601d8152602001807f53696d706c65537761703a20696e76616c69642069737375657253696700000081525060200191505060405180910390fd5b61137461136e3088888888610de3565b8261249a565b73ffffffffffffffffffffffffffffffffffffffff168673ffffffffffffffffffffffffffffffffffffffff16146113f7576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260228152602001806127ec6022913960400191505060405180910390fd5b611403868686866124b6565b505050505050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16146114ce576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b6114e46114de3087878787610de3565b8261249a565b73ffffffffffffffffffffffffffffffffffffffff168573ffffffffffffffffffffffffffffffffffffffff1614611567576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260228152602001806127ec6022913960400191505060405180910390fd5b611573858585856124b6565b5050505050565b60016020528060005260406000206000915090508060000154908060010154908060020154908060030154905084565b60608585858585604051602001808673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b815260140184815260200183815260200182815260200195505050505050604051602081830303815290604052905095945050505050565b6000600260008373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000209050806003015442101580156116b157506000816003015414155b611706576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252602581526020018061280e6025913960400191505060405180910390fd5b611721816001015482600001546125ed90919063ffffffff16565b81600001819055506000816003018190555061174c81600101546003546125ed90919063ffffffff16565b6003819055508173ffffffffffffffffffffffffffffffffffffffff167f2506c43272ded05d095b91dbba876e66e46888157d3e078db5691496e96c5fad82600001546040518082815260200191505060405180910390a25050565b60026020528060005260406000206000915090508060000154908060010154908060020154908060030154905084565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161461189b576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b6000600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000209050806000015482111561193b576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260278152602001806128576027913960400191505060405180910390fd5b600080826002015414611952578160020154611956565b6000545b905080420182600301819055508282600101819055508373ffffffffffffffffffffffffffffffffffffffff167fc8305077b495025ec4c1d977b176a762c350bb18cad4666ce1ee85c32b78698a846040518082815260200191505060405180910390a250505050565b60006119ee6003543073ffffffffffffffffffffffffffffffffffffffff16316125ed90919063ffffffff16565b905090565b6000611a51600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000154611a436119c0565b61241290919063ffffffff16565b9050919050565b6000611b078686868686604051602001808673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018481526020018381526020018281526020019550505050505060405160208183030381529060405280519060200120612676565b905095945050505050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614611bd5576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b611c6d308484604051602001808473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018281526020019350505050604051602081830303815290604052805190602001208261249a565b73ffffffffffffffffffffffffffffffffffffffff168373ffffffffffffffffffffffffffffffffffffffff1614611ca457600080fd5b81600260008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600201819055508273ffffffffffffffffffffffffffffffffffffffff167f86b5d1492f68620b7cc58d71bd1380193d46a46d90553b73e919e0c6f319fe1f600260008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600201546040518082815260200191505060405180910390a2505050565b60035481565b81421115611ddf576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252602281526020018061287e6022913960400191505060405180910390fd5b611ec4303386888686604051602001808773ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018581526020018473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018381526020018281526020019650505050505050604051602081830303815290604052805190602001208461249a565b73ffffffffffffffffffffffffffffffffffffffff168673ffffffffffffffffffffffffffffffffffffffff1614611f47576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260228152602001806127ec6022913960400191505060405180910390fd5b611f5386868684611fa2565b3373ffffffffffffffffffffffffffffffffffffffff166108fc829081150290604051600060405180830381858888f19350505050158015611f99573d6000803e3d6000fd5b50505050505050565b6000600160008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002090508060030154421015612042576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260248152602001806128336024913960400191505060405180910390fd5b61205d816002015482600101546125ed90919063ffffffff16565b8311156120b5576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260238152602001806128fd6023913960400191505060405180910390fd5b600061210384600260008973ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600001546126ce565b9050600061211a85836121146119c0565b016126ce565b9050600082146121db5761217982600260008a73ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600001546125ed90919063ffffffff16565b600260008973ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600001819055506121d4826003546125ed90919063ffffffff16565b6003819055505b6121f281846002015461241290919063ffffffff16565b83600201819055508573ffffffffffffffffffffffffffffffffffffffff166108fc61222786846125ed90919063ffffffff16565b9081150290604051600060405180830381858888f19350505050158015612252573d6000803e3d6000fd5b503373ffffffffffffffffffffffffffffffffffffffff168673ffffffffffffffffffffffffffffffffffffffff168873ffffffffffffffffffffffffffffffffffffffff167f5920b90d620e15c47f9e2f42adac6a717078eb0403d85477ad9be9493458ed138660000154858a8a6040518085815260200184815260200183815260200182815260200194505050505060405180910390a480851461231f577f3f4449c047e11092ec54dc0751b6b4817a9162745de856c893a26e611d18ffc460405160405180910390a15b50505050505050565b61233e6123383033878787610de3565b8261249a565b73ffffffffffffffffffffffffffffffffffffffff16600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1614612400576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601d8152602001807f53696d706c65537761703a20696e76616c69642069737375657253696700000081525060200191505060405180910390fd5b61240c338585856124b6565b50505050565b600080828401905083811015612490576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601b8152602001807f536166654d6174683a206164646974696f6e206f766572666c6f77000000000081525060200191505060405180910390fd5b8091505092915050565b60006124ae6124a884612676565b836126e7565b905092915050565b6000600160008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020905080600001548411612572576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601a8152602001807f53696d706c65537761703a20696e76616c69642073657269616c00000000000081525060200191505060405180910390fd5b8381600001819055508281600101819055508142018160030181905550838573ffffffffffffffffffffffffffffffffffffffff167f543b37a2abe69e287f27911f3802739c2f6271e8eb02ae6303a3cd9443bac03c8585604051808381526020018281526020019250505060405180910390a35050505050565b600082821115612665576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601e8152602001807f536166654d6174683a207375627472616374696f6e206f766572666c6f77000081525060200191505060405180910390fd5b600082840390508091505092915050565b60008160405160200180807f19457468657265756d205369676e6564204d6573736167653a0a333200000000815250601c01828152602001915050604051602081830303815290604052805190602001209050919050565b60008183106126dd57816126df565b825b905092915050565b600060418251146126fb57600090506127e5565b60008060006020850151925060408501519150606085015160001a90507f7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a08260001c111561274f57600093505050506127e5565b601b8160ff16141580156127675750601c8160ff1614155b1561277857600093505050506127e5565b60018682858560405160008152602001604052604051808581526020018460ff1660ff1681526020018381526020018281526020019450505050506020604051602081039080840390855afa1580156127d5573d6000803e3d6000fd5b5050506020604051035193505050505b9291505056fe53696d706c65537761703a20696e76616c69642062656e656669636961727953696753696d706c65537761703a206465706f736974206e6f74207965742074696d6564206f757453696d706c65537761703a20636865717565206e6f74207965742074696d6564206f757453696d706c65537761703a2068617264206465706f736974206e6f742073756666696369656e7453696d706c65537761703a2062656e6566696369617279536967206578706972656453696d706c65537761703a2068617264206465706f7369742063616e6e6f74206265206d6f7265207468616e2062616c616e63652053696d706c65537761703a206c697175696442616c616e6365206e6f742073756666696369656e7453696d706c65537761703a206e6f7420656e6f7567682062616c616e6365206f776564a265627a7a723058205ce630547310e8e185ec7f6c489d9f9e096545f5c05aa5980535b0e31cd1a2e064736f6c634300050a0032"
+var SimpleSwapBin = "0x6080604052604051611f6e380380611f6e8339818101604052604081101561002657600080fd5b8101908080519060200190929190805190602001909291905050508060008190555081600460006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555060003411156100fe577fe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c3334604051808373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018281526020019250505060405180910390a15b5050611e5f8061010f6000396000f3fe6080604052600436106100dd5760003560e01c806381f03fcb1161007f578063b777035011610059578063b7770350146106a6578063b7ec1a3314610701578063df3243801461072c578063e0bcf13a1461081e576100dd565b806381f03fcb14610576578063946f46a2146105db578063b6343b0d1461062c576100dd565b80631d143848116100bb5780631d1438481461045e5780632e1a7d4d146104b5578063338f3fed146104f05780635eb541601461054b576100dd565b8063065c804f146101545780630d5f2659146101b95780631633fb1d146102ab575b6000341115610152577fe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c3334604051808373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018281526020019250505060405180910390a15b005b34801561016057600080fd5b506101a36004803603602081101561017757600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610849565b6040518082815260200191505060405180910390f35b3480156101c557600080fd5b506102a9600480360360608110156101dc57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291908035906020019064010000000081111561022357600080fd5b82018360208201111561023557600080fd5b8035906020019184600183028401116401000000008311171561025757600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f8201169050808301925050505050505091929192905050506108ae565b005b3480156102b757600080fd5b5061045c600480360360c08110156102ce57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291908035906020019064010000000081111561033557600080fd5b82018360208201111561034757600080fd5b8035906020019184600183028401116401000000008311171561036957600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f82011690508083019250505050505050919291929080359060200190929190803590602001906401000000008111156103d657600080fd5b8201836020820111156103e857600080fd5b8035906020019184600183028401116401000000008311171561040a57600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f8201169050808301925050505050505091929192905050506108c1565b005b34801561046a57600080fd5b5061047361096f565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b3480156104c157600080fd5b506104ee600480360360208110156104d857600080fd5b8101908080359060200190929190505050610995565b005b3480156104fc57600080fd5b506105496004803603604081101561051357600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919080359060200190929190505050610b5b565b005b34801561055757600080fd5b50610560610d80565b6040518082815260200191505060405180910390f35b34801561058257600080fd5b506105c56004803603602081101561059957600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610d86565b6040518082815260200191505060405180910390f35b3480156105e757600080fd5b5061062a600480360360208110156105fe57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610d9e565b005b34801561063857600080fd5b5061067b6004803603602081101561064f57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610ef1565b6040518085815260200184815260200183815260200182815260200194505050505060405180910390f35b3480156106b257600080fd5b506106ff600480360360408110156106c957600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919080359060200190929190505050610f21565b005b34801561070d57600080fd5b50610716611109565b6040518082815260200191505060405180910390f35b34801561073857600080fd5b5061081c6004803603606081101561074f57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001909291908035906020019064010000000081111561079657600080fd5b8201836020820111156107a857600080fd5b803590602001918460018302840111640100000000831117156107ca57600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f82011690508083019250505050505050919291929050505061113c565b005b34801561082a57600080fd5b50610833611372565b6040518082815260200191505060405180910390f35b60006108a7600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000154610899611109565b61137890919063ffffffff16565b9050919050565b6108bc338484600085611400565b505050565b6108d76108d13033878987611925565b84611a06565b73ffffffffffffffffffffffffffffffffffffffff168673ffffffffffffffffffffffffffffffffffffffff161461095a576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526022815260200180611d956022913960400191505060405180910390fd5b6109678686868585611400565b505050505050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614610a58576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b610a60611109565b811115610ab8576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526028815260200180611e036028913960400191505060405180910390fd5b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166108fc829081150290604051600060405180830381858888f19350505050158015610b20573d6000803e3d6000fd5b507f5b6b431d4476a211bb7d41c20d1aab9ae2321deee0d20be3d9fc9b1093fa6e3d816040518082815260200191505060405180910390a150565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614610c1e576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b3073ffffffffffffffffffffffffffffffffffffffff1631610c4b8260035461137890919063ffffffff16565b1115610ca2576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526034815260200180611d616034913960400191505060405180910390fd5b6000600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000209050610cfc82826000015461137890919063ffffffff16565b8160000181905550610d198260035461137890919063ffffffff16565b600381905550600081600301819055508273ffffffffffffffffffffffffffffffffffffffff167f2506c43272ded05d095b91dbba876e66e46888157d3e078db5691496e96c5fad82600001546040518082815260200191505060405180910390a2505050565b60005481565b60016020528060005260406000206000915090505481565b6000600260008373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020905080600301544210158015610dfa57506000816003015414155b610e4f576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526025815260200180611db76025913960400191505060405180910390fd5b610e6a81600101548260000154611a2290919063ffffffff16565b816000018190555060008160030181905550610e958160010154600354611a2290919063ffffffff16565b6003819055508173ffffffffffffffffffffffffffffffffffffffff167f2506c43272ded05d095b91dbba876e66e46888157d3e078db5691496e96c5fad82600001546040518082815260200191505060405180910390a25050565b60026020528060005260406000206000915090508060000154908060010154908060020154908060030154905084565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614610fe4576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b6000600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002090508060000154821115611084576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526027815260200180611ddc6027913960400191505060405180910390fd5b60008082600201541461109b57816002015461109f565b6000545b905080420182600301819055508282600101819055508373ffffffffffffffffffffffffffffffffffffffff167fc8305077b495025ec4c1d977b176a762c350bb18cad4666ce1ee85c32b78698a846040518082815260200191505060405180910390a250505050565b60006111376003543073ffffffffffffffffffffffffffffffffffffffff1631611a2290919063ffffffff16565b905090565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16146111ff576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260168152602001807f53696d706c65537761703a206e6f74206973737565720000000000000000000081525060200191505060405180910390fd5b61121361120d308585611aab565b82611a06565b73ffffffffffffffffffffffffffffffffffffffff168373ffffffffffffffffffffffffffffffffffffffff1614611296576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526022815260200180611d956022913960400191505060405180910390fd5b81600260008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600201819055508273ffffffffffffffffffffffffffffffffffffffff167f86b5d1492f68620b7cc58d71bd1380193d46a46d90553b73e919e0c6f319fe1f600260008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600201546040518082815260200191505060405180910390a2505050565b60035481565b6000808284019050838110156113f6576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601b8152602001807f536166654d6174683a206164646974696f6e206f766572666c6f77000000000081525060200191505060405180910390fd5b8091505092915050565b600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161461152c57611469611463308786611b4b565b82611a06565b73ffffffffffffffffffffffffffffffffffffffff16600460009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff161461152b576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601d8152602001807f53696d706c65537761703a20696e76616c69642069737375657253696700000081525060200191505060405180910390fd5b5b6000611580600160008873ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205485611a2290919063ffffffff16565b905060006115968261159189610849565b611beb565b905060006115e682600260008b73ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000154611beb565b90508482101561165e576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601d8152602001807f53696d706c65537761703a2063616e6e6f74207061792063616c6c657200000081525060200191505060405180910390fd5b6000811461171d576116bb81600260008b73ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000154611a2290919063ffffffff16565b600260008a73ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000206000018190555061171681600354611a2290919063ffffffff16565b6003819055505b61176f82600160008b73ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205461137890919063ffffffff16565b600160008a73ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020819055508673ffffffffffffffffffffffffffffffffffffffff166108fc6117df8785611a2290919063ffffffff16565b9081150290604051600060405180830381858888f1935050505015801561180a573d6000803e3d6000fd5b506000851461185b573373ffffffffffffffffffffffffffffffffffffffff166108fc869081150290604051600060405180830381858888f19350505050158015611859573d6000803e3d6000fd5b505b3373ffffffffffffffffffffffffffffffffffffffff168773ffffffffffffffffffffffffffffffffffffffff168973ffffffffffffffffffffffffffffffffffffffff167f950494fc3642fae5221b6c32e0e45765c95ebb382a04a71b160db0843e74c99f858a8a60405180848152602001838152602001828152602001935050505060405180910390a481831461191b577f3f4449c047e11092ec54dc0751b6b4817a9162745de856c893a26e611d18ffc460405160405180910390a15b5050505050505050565b60008585858585604051602001808673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018481526020018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018281526020019550505050505060405160208183030381529060405280519060200120905095945050505050565b6000611a1a611a1484611c04565b83611c5c565b905092915050565b600082821115611a9a576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252601e8152602001807f536166654d6174683a207375627472616374696f6e206f766572666c6f77000081525060200191505060405180910390fd5b600082840390508091505092915050565b6000838383604051602001808473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b815260140182815260200193505050506040516020818303038152906040528051906020012090509392505050565b6000838383604051602001808473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b81526014018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1660601b815260140182815260200193505050506040516020818303038152906040528051906020012090509392505050565b6000818310611bfa5781611bfc565b825b905092915050565b60008160405160200180807f19457468657265756d205369676e6564204d6573736167653a0a333200000000815250601c01828152602001915050604051602081830303815290604052805190602001209050919050565b60006041825114611c705760009050611d5a565b60008060006020850151925060408501519150606085015160001a90507f7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a08260001c1115611cc45760009350505050611d5a565b601b8160ff1614158015611cdc5750601c8160ff1614155b15611ced5760009350505050611d5a565b60018682858560405160008152602001604052604051808581526020018460ff1660ff1681526020018381526020018281526020019450505050506020604051602081039080840390855afa158015611d4a573d6000803e3d6000fd5b5050506020604051035193505050505b9291505056fe53696d706c65537761703a2068617264206465706f7369742063616e6e6f74206265206d6f7265207468616e2062616c616e636553696d706c65537761703a20696e76616c69642062656e656669636961727953696753696d706c65537761703a206465706f736974206e6f74207965742074696d6564206f757453696d706c65537761703a2068617264206465706f736974206e6f742073756666696369656e7453696d706c65537761703a206c697175696442616c616e6365206e6f742073756666696369656e74a265627a7a72305820b250198c2ed4a8c9ba8db19510d8cb59d6971ebb29dc2d9467f49bb1b0514c0164736f6c634300050a0032"
 
 // DeploySimpleSwap deploys a new Ethereum contract, binding an instance of SimpleSwap to it.
 func DeploySimpleSwap(auth *bind.TransactOpts, backend bind.ContractBackend, _issuer common.Address, defaultHardDepositTimeoutDuration *big.Int) (common.Address, *types.Transaction, *SimpleSwap, error) {
@@ -675,126 +675,56 @@ func (_SimpleSwap *SimpleSwapTransactorRaw) Transact(opts *bind.TransactOpts, me
 	return _SimpleSwap.Contract.contract.Transact(opts, method, params...)
 }
 
-// DEFAULTHARDDEPPOSITDECREASETIMEOUT is a free data retrieval call binding the contract method 0x39d9ec4c.
+// DEFAULTHARDDEPOSITDECREASETIMEOUT is a free data retrieval call binding the contract method 0x5eb54160.
 //
-// Solidity: function DEFAULT_HARDDEPPOSIT_DECREASE_TIMEOUT() constant returns(uint256)
-func (_SimpleSwap *SimpleSwapCaller) DEFAULTHARDDEPPOSITDECREASETIMEOUT(opts *bind.CallOpts) (*big.Int, error) {
+// Solidity: function DEFAULT_HARDDEPOSIT_DECREASE_TIMEOUT() constant returns(uint256)
+func (_SimpleSwap *SimpleSwapCaller) DEFAULTHARDDEPOSITDECREASETIMEOUT(opts *bind.CallOpts) (*big.Int, error) {
 	var (
 		ret0 = new(*big.Int)
 	)
 	out := ret0
-	err := _SimpleSwap.contract.Call(opts, out, "DEFAULT_HARDDEPPOSIT_DECREASE_TIMEOUT")
+	err := _SimpleSwap.contract.Call(opts, out, "DEFAULT_HARDDEPOSIT_DECREASE_TIMEOUT")
 	return *ret0, err
 }
 
-// DEFAULTHARDDEPPOSITDECREASETIMEOUT is a free data retrieval call binding the contract method 0x39d9ec4c.
+// DEFAULTHARDDEPOSITDECREASETIMEOUT is a free data retrieval call binding the contract method 0x5eb54160.
 //
-// Solidity: function DEFAULT_HARDDEPPOSIT_DECREASE_TIMEOUT() constant returns(uint256)
-func (_SimpleSwap *SimpleSwapSession) DEFAULTHARDDEPPOSITDECREASETIMEOUT() (*big.Int, error) {
-	return _SimpleSwap.Contract.DEFAULTHARDDEPPOSITDECREASETIMEOUT(&_SimpleSwap.CallOpts)
+// Solidity: function DEFAULT_HARDDEPOSIT_DECREASE_TIMEOUT() constant returns(uint256)
+func (_SimpleSwap *SimpleSwapSession) DEFAULTHARDDEPOSITDECREASETIMEOUT() (*big.Int, error) {
+	return _SimpleSwap.Contract.DEFAULTHARDDEPOSITDECREASETIMEOUT(&_SimpleSwap.CallOpts)
 }
 
-// DEFAULTHARDDEPPOSITDECREASETIMEOUT is a free data retrieval call binding the contract method 0x39d9ec4c.
+// DEFAULTHARDDEPOSITDECREASETIMEOUT is a free data retrieval call binding the contract method 0x5eb54160.
 //
-// Solidity: function DEFAULT_HARDDEPPOSIT_DECREASE_TIMEOUT() constant returns(uint256)
-func (_SimpleSwap *SimpleSwapCallerSession) DEFAULTHARDDEPPOSITDECREASETIMEOUT() (*big.Int, error) {
-	return _SimpleSwap.Contract.DEFAULTHARDDEPPOSITDECREASETIMEOUT(&_SimpleSwap.CallOpts)
+// Solidity: function DEFAULT_HARDDEPOSIT_DECREASE_TIMEOUT() constant returns(uint256)
+func (_SimpleSwap *SimpleSwapCallerSession) DEFAULTHARDDEPOSITDECREASETIMEOUT() (*big.Int, error) {
+	return _SimpleSwap.Contract.DEFAULTHARDDEPOSITDECREASETIMEOUT(&_SimpleSwap.CallOpts)
 }
 
-// ChequeHash is a free data retrieval call binding the contract method 0x030aca3e.
+// AvailableBalanceFor is a free data retrieval call binding the contract method 0x065c804f.
 //
-// Solidity: function chequeHash(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes32)
-func (_SimpleSwap *SimpleSwapCaller) ChequeHash(opts *bind.CallOpts, swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([32]byte, error) {
+// Solidity: function availableBalanceFor(address beneficiary) constant returns(uint256)
+func (_SimpleSwap *SimpleSwapCaller) AvailableBalanceFor(opts *bind.CallOpts, beneficiary common.Address) (*big.Int, error) {
 	var (
-		ret0 = new([32]byte)
+		ret0 = new(*big.Int)
 	)
 	out := ret0
-	err := _SimpleSwap.contract.Call(opts, out, "chequeHash", swap, beneficiary, serial, amount, cashTimeout)
+	err := _SimpleSwap.contract.Call(opts, out, "availableBalanceFor", beneficiary)
 	return *ret0, err
 }
 
-// ChequeHash is a free data retrieval call binding the contract method 0x030aca3e.
+// AvailableBalanceFor is a free data retrieval call binding the contract method 0x065c804f.
 //
-// Solidity: function chequeHash(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes32)
-func (_SimpleSwap *SimpleSwapSession) ChequeHash(swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([32]byte, error) {
-	return _SimpleSwap.Contract.ChequeHash(&_SimpleSwap.CallOpts, swap, beneficiary, serial, amount, cashTimeout)
+// Solidity: function availableBalanceFor(address beneficiary) constant returns(uint256)
+func (_SimpleSwap *SimpleSwapSession) AvailableBalanceFor(beneficiary common.Address) (*big.Int, error) {
+	return _SimpleSwap.Contract.AvailableBalanceFor(&_SimpleSwap.CallOpts, beneficiary)
 }
 
-// ChequeHash is a free data retrieval call binding the contract method 0x030aca3e.
+// AvailableBalanceFor is a free data retrieval call binding the contract method 0x065c804f.
 //
-// Solidity: function chequeHash(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes32)
-func (_SimpleSwap *SimpleSwapCallerSession) ChequeHash(swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([32]byte, error) {
-	return _SimpleSwap.Contract.ChequeHash(&_SimpleSwap.CallOpts, swap, beneficiary, serial, amount, cashTimeout)
-}
-
-// Cheques is a free data retrieval call binding the contract method 0x6162913b.
-//
-// Solidity: function cheques(address ) constant returns(uint256 serial, uint256 amount, uint256 paidOut, uint256 cashTimeout)
-func (_SimpleSwap *SimpleSwapCaller) Cheques(opts *bind.CallOpts, arg0 common.Address) (struct {
-	Serial      *big.Int
-	Amount      *big.Int
-	PaidOut     *big.Int
-	CashTimeout *big.Int
-}, error) {
-	ret := new(struct {
-		Serial      *big.Int
-		Amount      *big.Int
-		PaidOut     *big.Int
-		CashTimeout *big.Int
-	})
-	out := ret
-	err := _SimpleSwap.contract.Call(opts, out, "cheques", arg0)
-	return *ret, err
-}
-
-// Cheques is a free data retrieval call binding the contract method 0x6162913b.
-//
-// Solidity: function cheques(address ) constant returns(uint256 serial, uint256 amount, uint256 paidOut, uint256 cashTimeout)
-func (_SimpleSwap *SimpleSwapSession) Cheques(arg0 common.Address) (struct {
-	Serial      *big.Int
-	Amount      *big.Int
-	PaidOut     *big.Int
-	CashTimeout *big.Int
-}, error) {
-	return _SimpleSwap.Contract.Cheques(&_SimpleSwap.CallOpts, arg0)
-}
-
-// Cheques is a free data retrieval call binding the contract method 0x6162913b.
-//
-// Solidity: function cheques(address ) constant returns(uint256 serial, uint256 amount, uint256 paidOut, uint256 cashTimeout)
-func (_SimpleSwap *SimpleSwapCallerSession) Cheques(arg0 common.Address) (struct {
-	Serial      *big.Int
-	Amount      *big.Int
-	PaidOut     *big.Int
-	CashTimeout *big.Int
-}, error) {
-	return _SimpleSwap.Contract.Cheques(&_SimpleSwap.CallOpts, arg0)
-}
-
-// EncodeCheque is a free data retrieval call binding the contract method 0x6c16f684.
-//
-// Solidity: function encodeCheque(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes)
-func (_SimpleSwap *SimpleSwapCaller) EncodeCheque(opts *bind.CallOpts, swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([]byte, error) {
-	var (
-		ret0 = new([]byte)
-	)
-	out := ret0
-	err := _SimpleSwap.contract.Call(opts, out, "encodeCheque", swap, beneficiary, serial, amount, cashTimeout)
-	return *ret0, err
-}
-
-// EncodeCheque is a free data retrieval call binding the contract method 0x6c16f684.
-//
-// Solidity: function encodeCheque(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes)
-func (_SimpleSwap *SimpleSwapSession) EncodeCheque(swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([]byte, error) {
-	return _SimpleSwap.Contract.EncodeCheque(&_SimpleSwap.CallOpts, swap, beneficiary, serial, amount, cashTimeout)
-}
-
-// EncodeCheque is a free data retrieval call binding the contract method 0x6c16f684.
-//
-// Solidity: function encodeCheque(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes)
-func (_SimpleSwap *SimpleSwapCallerSession) EncodeCheque(swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([]byte, error) {
-	return _SimpleSwap.Contract.EncodeCheque(&_SimpleSwap.CallOpts, swap, beneficiary, serial, amount, cashTimeout)
+// Solidity: function availableBalanceFor(address beneficiary) constant returns(uint256)
+func (_SimpleSwap *SimpleSwapCallerSession) AvailableBalanceFor(beneficiary common.Address) (*big.Int, error) {
+	return _SimpleSwap.Contract.AvailableBalanceFor(&_SimpleSwap.CallOpts, beneficiary)
 }
 
 // HardDeposits is a free data retrieval call binding the contract method 0xb6343b0d.
@@ -893,56 +823,30 @@ func (_SimpleSwap *SimpleSwapCallerSession) LiquidBalance() (*big.Int, error) {
 	return _SimpleSwap.Contract.LiquidBalance(&_SimpleSwap.CallOpts)
 }
 
-// LiquidBalanceFor is a free data retrieval call binding the contract method 0xc76a4d31.
+// PaidOut is a free data retrieval call binding the contract method 0x81f03fcb.
 //
-// Solidity: function liquidBalanceFor(address beneficiary) constant returns(uint256)
-func (_SimpleSwap *SimpleSwapCaller) LiquidBalanceFor(opts *bind.CallOpts, beneficiary common.Address) (*big.Int, error) {
+// Solidity: function paidOut(address ) constant returns(uint256)
+func (_SimpleSwap *SimpleSwapCaller) PaidOut(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
 	var (
 		ret0 = new(*big.Int)
 	)
 	out := ret0
-	err := _SimpleSwap.contract.Call(opts, out, "liquidBalanceFor", beneficiary)
+	err := _SimpleSwap.contract.Call(opts, out, "paidOut", arg0)
 	return *ret0, err
 }
 
-// LiquidBalanceFor is a free data retrieval call binding the contract method 0xc76a4d31.
+// PaidOut is a free data retrieval call binding the contract method 0x81f03fcb.
 //
-// Solidity: function liquidBalanceFor(address beneficiary) constant returns(uint256)
-func (_SimpleSwap *SimpleSwapSession) LiquidBalanceFor(beneficiary common.Address) (*big.Int, error) {
-	return _SimpleSwap.Contract.LiquidBalanceFor(&_SimpleSwap.CallOpts, beneficiary)
+// Solidity: function paidOut(address ) constant returns(uint256)
+func (_SimpleSwap *SimpleSwapSession) PaidOut(arg0 common.Address) (*big.Int, error) {
+	return _SimpleSwap.Contract.PaidOut(&_SimpleSwap.CallOpts, arg0)
 }
 
-// LiquidBalanceFor is a free data retrieval call binding the contract method 0xc76a4d31.
+// PaidOut is a free data retrieval call binding the contract method 0x81f03fcb.
 //
-// Solidity: function liquidBalanceFor(address beneficiary) constant returns(uint256)
-func (_SimpleSwap *SimpleSwapCallerSession) LiquidBalanceFor(beneficiary common.Address) (*big.Int, error) {
-	return _SimpleSwap.Contract.LiquidBalanceFor(&_SimpleSwap.CallOpts, beneficiary)
-}
-
-// SigChequeHash is a free data retrieval call binding the contract method 0xd3000b8b.
-//
-// Solidity: function sigChequeHash(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes32)
-func (_SimpleSwap *SimpleSwapCaller) SigChequeHash(opts *bind.CallOpts, swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([32]byte, error) {
-	var (
-		ret0 = new([32]byte)
-	)
-	out := ret0
-	err := _SimpleSwap.contract.Call(opts, out, "sigChequeHash", swap, beneficiary, serial, amount, cashTimeout)
-	return *ret0, err
-}
-
-// SigChequeHash is a free data retrieval call binding the contract method 0xd3000b8b.
-//
-// Solidity: function sigChequeHash(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes32)
-func (_SimpleSwap *SimpleSwapSession) SigChequeHash(swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([32]byte, error) {
-	return _SimpleSwap.Contract.SigChequeHash(&_SimpleSwap.CallOpts, swap, beneficiary, serial, amount, cashTimeout)
-}
-
-// SigChequeHash is a free data retrieval call binding the contract method 0xd3000b8b.
-//
-// Solidity: function sigChequeHash(address swap, address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout) constant returns(bytes32)
-func (_SimpleSwap *SimpleSwapCallerSession) SigChequeHash(swap common.Address, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int) ([32]byte, error) {
-	return _SimpleSwap.Contract.SigChequeHash(&_SimpleSwap.CallOpts, swap, beneficiary, serial, amount, cashTimeout)
+// Solidity: function paidOut(address ) constant returns(uint256)
+func (_SimpleSwap *SimpleSwapCallerSession) PaidOut(arg0 common.Address) (*big.Int, error) {
+	return _SimpleSwap.Contract.PaidOut(&_SimpleSwap.CallOpts, arg0)
 }
 
 // TotalHardDeposit is a free data retrieval call binding the contract method 0xe0bcf13a.
@@ -971,67 +875,46 @@ func (_SimpleSwap *SimpleSwapCallerSession) TotalHardDeposit() (*big.Int, error)
 	return _SimpleSwap.Contract.TotalHardDeposit(&_SimpleSwap.CallOpts)
 }
 
-// CashChequeInternal is a paid mutator transaction binding the contract method 0xf3c08b1f.
+// CashCheque is a paid mutator transaction binding the contract method 0x1633fb1d.
 //
-// Solidity: function _cashChequeInternal(address beneficiaryPrincipal, address beneficiaryAgent, uint256 requestPayout, uint256 calleePayout) returns()
-func (_SimpleSwap *SimpleSwapTransactor) CashChequeInternal(opts *bind.TransactOpts, beneficiaryPrincipal common.Address, beneficiaryAgent common.Address, requestPayout *big.Int, calleePayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.contract.Transact(opts, "_cashChequeInternal", beneficiaryPrincipal, beneficiaryAgent, requestPayout, calleePayout)
+// Solidity: function cashCheque(address beneficiary, address recipient, uint256 cumulativePayout, bytes beneficiarySig, uint256 callerPayout, bytes issuerSig) returns()
+func (_SimpleSwap *SimpleSwapTransactor) CashCheque(opts *bind.TransactOpts, beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, beneficiarySig []byte, callerPayout *big.Int, issuerSig []byte) (*types.Transaction, error) {
+	return _SimpleSwap.contract.Transact(opts, "cashCheque", beneficiary, recipient, cumulativePayout, beneficiarySig, callerPayout, issuerSig)
 }
 
-// CashChequeInternal is a paid mutator transaction binding the contract method 0xf3c08b1f.
+// CashCheque is a paid mutator transaction binding the contract method 0x1633fb1d.
 //
-// Solidity: function _cashChequeInternal(address beneficiaryPrincipal, address beneficiaryAgent, uint256 requestPayout, uint256 calleePayout) returns()
-func (_SimpleSwap *SimpleSwapSession) CashChequeInternal(beneficiaryPrincipal common.Address, beneficiaryAgent common.Address, requestPayout *big.Int, calleePayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.CashChequeInternal(&_SimpleSwap.TransactOpts, beneficiaryPrincipal, beneficiaryAgent, requestPayout, calleePayout)
+// Solidity: function cashCheque(address beneficiary, address recipient, uint256 cumulativePayout, bytes beneficiarySig, uint256 callerPayout, bytes issuerSig) returns()
+func (_SimpleSwap *SimpleSwapSession) CashCheque(beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, beneficiarySig []byte, callerPayout *big.Int, issuerSig []byte) (*types.Transaction, error) {
+	return _SimpleSwap.Contract.CashCheque(&_SimpleSwap.TransactOpts, beneficiary, recipient, cumulativePayout, beneficiarySig, callerPayout, issuerSig)
 }
 
-// CashChequeInternal is a paid mutator transaction binding the contract method 0xf3c08b1f.
+// CashCheque is a paid mutator transaction binding the contract method 0x1633fb1d.
 //
-// Solidity: function _cashChequeInternal(address beneficiaryPrincipal, address beneficiaryAgent, uint256 requestPayout, uint256 calleePayout) returns()
-func (_SimpleSwap *SimpleSwapTransactorSession) CashChequeInternal(beneficiaryPrincipal common.Address, beneficiaryAgent common.Address, requestPayout *big.Int, calleePayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.CashChequeInternal(&_SimpleSwap.TransactOpts, beneficiaryPrincipal, beneficiaryAgent, requestPayout, calleePayout)
+// Solidity: function cashCheque(address beneficiary, address recipient, uint256 cumulativePayout, bytes beneficiarySig, uint256 callerPayout, bytes issuerSig) returns()
+func (_SimpleSwap *SimpleSwapTransactorSession) CashCheque(beneficiary common.Address, recipient common.Address, cumulativePayout *big.Int, beneficiarySig []byte, callerPayout *big.Int, issuerSig []byte) (*types.Transaction, error) {
+	return _SimpleSwap.Contract.CashCheque(&_SimpleSwap.TransactOpts, beneficiary, recipient, cumulativePayout, beneficiarySig, callerPayout, issuerSig)
 }
 
-// CashCheque is a paid mutator transaction binding the contract method 0xe3bb7aec.
+// CashChequeBeneficiary is a paid mutator transaction binding the contract method 0x0d5f2659.
 //
-// Solidity: function cashCheque(address beneficiaryPrincipal, address beneficiaryAgent, uint256 requestPayout, bytes beneficiarySig, uint256 expiry, uint256 calleePayout) returns()
-func (_SimpleSwap *SimpleSwapTransactor) CashCheque(opts *bind.TransactOpts, beneficiaryPrincipal common.Address, beneficiaryAgent common.Address, requestPayout *big.Int, beneficiarySig []byte, expiry *big.Int, calleePayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.contract.Transact(opts, "cashCheque", beneficiaryPrincipal, beneficiaryAgent, requestPayout, beneficiarySig, expiry, calleePayout)
+// Solidity: function cashChequeBeneficiary(address recipient, uint256 cumulativePayout, bytes issuerSig) returns()
+func (_SimpleSwap *SimpleSwapTransactor) CashChequeBeneficiary(opts *bind.TransactOpts, recipient common.Address, cumulativePayout *big.Int, issuerSig []byte) (*types.Transaction, error) {
+	return _SimpleSwap.contract.Transact(opts, "cashChequeBeneficiary", recipient, cumulativePayout, issuerSig)
 }
 
-// CashCheque is a paid mutator transaction binding the contract method 0xe3bb7aec.
+// CashChequeBeneficiary is a paid mutator transaction binding the contract method 0x0d5f2659.
 //
-// Solidity: function cashCheque(address beneficiaryPrincipal, address beneficiaryAgent, uint256 requestPayout, bytes beneficiarySig, uint256 expiry, uint256 calleePayout) returns()
-func (_SimpleSwap *SimpleSwapSession) CashCheque(beneficiaryPrincipal common.Address, beneficiaryAgent common.Address, requestPayout *big.Int, beneficiarySig []byte, expiry *big.Int, calleePayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.CashCheque(&_SimpleSwap.TransactOpts, beneficiaryPrincipal, beneficiaryAgent, requestPayout, beneficiarySig, expiry, calleePayout)
+// Solidity: function cashChequeBeneficiary(address recipient, uint256 cumulativePayout, bytes issuerSig) returns()
+func (_SimpleSwap *SimpleSwapSession) CashChequeBeneficiary(recipient common.Address, cumulativePayout *big.Int, issuerSig []byte) (*types.Transaction, error) {
+	return _SimpleSwap.Contract.CashChequeBeneficiary(&_SimpleSwap.TransactOpts, recipient, cumulativePayout, issuerSig)
 }
 
-// CashCheque is a paid mutator transaction binding the contract method 0xe3bb7aec.
+// CashChequeBeneficiary is a paid mutator transaction binding the contract method 0x0d5f2659.
 //
-// Solidity: function cashCheque(address beneficiaryPrincipal, address beneficiaryAgent, uint256 requestPayout, bytes beneficiarySig, uint256 expiry, uint256 calleePayout) returns()
-func (_SimpleSwap *SimpleSwapTransactorSession) CashCheque(beneficiaryPrincipal common.Address, beneficiaryAgent common.Address, requestPayout *big.Int, beneficiarySig []byte, expiry *big.Int, calleePayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.CashCheque(&_SimpleSwap.TransactOpts, beneficiaryPrincipal, beneficiaryAgent, requestPayout, beneficiarySig, expiry, calleePayout)
-}
-
-// CashChequeBeneficiary is a paid mutator transaction binding the contract method 0x2329d2a8.
-//
-// Solidity: function cashChequeBeneficiary(address beneficiaryAgent, uint256 requestPayout) returns()
-func (_SimpleSwap *SimpleSwapTransactor) CashChequeBeneficiary(opts *bind.TransactOpts, beneficiaryAgent common.Address, requestPayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.contract.Transact(opts, "cashChequeBeneficiary", beneficiaryAgent, requestPayout)
-}
-
-// CashChequeBeneficiary is a paid mutator transaction binding the contract method 0x2329d2a8.
-//
-// Solidity: function cashChequeBeneficiary(address beneficiaryAgent, uint256 requestPayout) returns()
-func (_SimpleSwap *SimpleSwapSession) CashChequeBeneficiary(beneficiaryAgent common.Address, requestPayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.CashChequeBeneficiary(&_SimpleSwap.TransactOpts, beneficiaryAgent, requestPayout)
-}
-
-// CashChequeBeneficiary is a paid mutator transaction binding the contract method 0x2329d2a8.
-//
-// Solidity: function cashChequeBeneficiary(address beneficiaryAgent, uint256 requestPayout) returns()
-func (_SimpleSwap *SimpleSwapTransactorSession) CashChequeBeneficiary(beneficiaryAgent common.Address, requestPayout *big.Int) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.CashChequeBeneficiary(&_SimpleSwap.TransactOpts, beneficiaryAgent, requestPayout)
+// Solidity: function cashChequeBeneficiary(address recipient, uint256 cumulativePayout, bytes issuerSig) returns()
+func (_SimpleSwap *SimpleSwapTransactorSession) CashChequeBeneficiary(recipient common.Address, cumulativePayout *big.Int, issuerSig []byte) (*types.Transaction, error) {
+	return _SimpleSwap.Contract.CashChequeBeneficiary(&_SimpleSwap.TransactOpts, recipient, cumulativePayout, issuerSig)
 }
 
 // DecreaseHardDeposit is a paid mutator transaction binding the contract method 0x946f46a2.
@@ -1116,69 +999,6 @@ func (_SimpleSwap *SimpleSwapSession) SetCustomHardDepositDecreaseTimeout(benefi
 // Solidity: function setCustomHardDepositDecreaseTimeout(address beneficiary, uint256 decreaseTimeout, bytes beneficiarySig) returns()
 func (_SimpleSwap *SimpleSwapTransactorSession) SetCustomHardDepositDecreaseTimeout(beneficiary common.Address, decreaseTimeout *big.Int, beneficiarySig []byte) (*types.Transaction, error) {
 	return _SimpleSwap.Contract.SetCustomHardDepositDecreaseTimeout(&_SimpleSwap.TransactOpts, beneficiary, decreaseTimeout, beneficiarySig)
-}
-
-// SubmitCheque is a paid mutator transaction binding the contract method 0x4f823a4c.
-//
-// Solidity: function submitCheque(address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout, bytes issuerSig, bytes beneficarySig) returns()
-func (_SimpleSwap *SimpleSwapTransactor) SubmitCheque(opts *bind.TransactOpts, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int, issuerSig []byte, beneficarySig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.contract.Transact(opts, "submitCheque", beneficiary, serial, amount, cashTimeout, issuerSig, beneficarySig)
-}
-
-// SubmitCheque is a paid mutator transaction binding the contract method 0x4f823a4c.
-//
-// Solidity: function submitCheque(address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout, bytes issuerSig, bytes beneficarySig) returns()
-func (_SimpleSwap *SimpleSwapSession) SubmitCheque(beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int, issuerSig []byte, beneficarySig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.SubmitCheque(&_SimpleSwap.TransactOpts, beneficiary, serial, amount, cashTimeout, issuerSig, beneficarySig)
-}
-
-// SubmitCheque is a paid mutator transaction binding the contract method 0x4f823a4c.
-//
-// Solidity: function submitCheque(address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout, bytes issuerSig, bytes beneficarySig) returns()
-func (_SimpleSwap *SimpleSwapTransactorSession) SubmitCheque(beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int, issuerSig []byte, beneficarySig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.SubmitCheque(&_SimpleSwap.TransactOpts, beneficiary, serial, amount, cashTimeout, issuerSig, beneficarySig)
-}
-
-// SubmitChequeBeneficiary is a paid mutator transaction binding the contract method 0xf890673b.
-//
-// Solidity: function submitChequeBeneficiary(uint256 serial, uint256 amount, uint256 cashTimeout, bytes issuerSig) returns()
-func (_SimpleSwap *SimpleSwapTransactor) SubmitChequeBeneficiary(opts *bind.TransactOpts, serial *big.Int, amount *big.Int, cashTimeout *big.Int, issuerSig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.contract.Transact(opts, "submitChequeBeneficiary", serial, amount, cashTimeout, issuerSig)
-}
-
-// SubmitChequeBeneficiary is a paid mutator transaction binding the contract method 0xf890673b.
-//
-// Solidity: function submitChequeBeneficiary(uint256 serial, uint256 amount, uint256 cashTimeout, bytes issuerSig) returns()
-func (_SimpleSwap *SimpleSwapSession) SubmitChequeBeneficiary(serial *big.Int, amount *big.Int, cashTimeout *big.Int, issuerSig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.SubmitChequeBeneficiary(&_SimpleSwap.TransactOpts, serial, amount, cashTimeout, issuerSig)
-}
-
-// SubmitChequeBeneficiary is a paid mutator transaction binding the contract method 0xf890673b.
-//
-// Solidity: function submitChequeBeneficiary(uint256 serial, uint256 amount, uint256 cashTimeout, bytes issuerSig) returns()
-func (_SimpleSwap *SimpleSwapTransactorSession) SubmitChequeBeneficiary(serial *big.Int, amount *big.Int, cashTimeout *big.Int, issuerSig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.SubmitChequeBeneficiary(&_SimpleSwap.TransactOpts, serial, amount, cashTimeout, issuerSig)
-}
-
-// SubmitChequeissuer is a paid mutator transaction binding the contract method 0x54fe2614.
-//
-// Solidity: function submitChequeissuer(address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout, bytes beneficiarySig) returns()
-func (_SimpleSwap *SimpleSwapTransactor) SubmitChequeissuer(opts *bind.TransactOpts, beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int, beneficiarySig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.contract.Transact(opts, "submitChequeissuer", beneficiary, serial, amount, cashTimeout, beneficiarySig)
-}
-
-// SubmitChequeissuer is a paid mutator transaction binding the contract method 0x54fe2614.
-//
-// Solidity: function submitChequeissuer(address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout, bytes beneficiarySig) returns()
-func (_SimpleSwap *SimpleSwapSession) SubmitChequeissuer(beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int, beneficiarySig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.SubmitChequeissuer(&_SimpleSwap.TransactOpts, beneficiary, serial, amount, cashTimeout, beneficiarySig)
-}
-
-// SubmitChequeissuer is a paid mutator transaction binding the contract method 0x54fe2614.
-//
-// Solidity: function submitChequeissuer(address beneficiary, uint256 serial, uint256 amount, uint256 cashTimeout, bytes beneficiarySig) returns()
-func (_SimpleSwap *SimpleSwapTransactorSession) SubmitChequeissuer(beneficiary common.Address, serial *big.Int, amount *big.Int, cashTimeout *big.Int, beneficiarySig []byte) (*types.Transaction, error) {
-	return _SimpleSwap.Contract.SubmitChequeissuer(&_SimpleSwap.TransactOpts, beneficiary, serial, amount, cashTimeout, beneficiarySig)
 }
 
 // Withdraw is a paid mutator transaction binding the contract method 0x2e1a7d4d.
@@ -1403,60 +1223,59 @@ func (it *SimpleSwapChequeCashedIterator) Close() error {
 
 // SimpleSwapChequeCashed represents a ChequeCashed event raised by the SimpleSwap contract.
 type SimpleSwapChequeCashed struct {
-	BeneficiaryPrincipal common.Address
-	BeneficiaryAgent     common.Address
-	Callee               common.Address
-	Serial               *big.Int
-	TotalPayout          *big.Int
-	RequestPayout        *big.Int
-	CalleePayout         *big.Int
-	Raw                  types.Log // Blockchain specific contextual infos
+	Beneficiary      common.Address
+	Recipient        common.Address
+	Caller           common.Address
+	TotalPayout      *big.Int
+	CumulativePayout *big.Int
+	CallerPayout     *big.Int
+	Raw              types.Log // Blockchain specific contextual infos
 }
 
-// FilterChequeCashed is a free log retrieval operation binding the contract event 0x5920b90d620e15c47f9e2f42adac6a717078eb0403d85477ad9be9493458ed13.
+// FilterChequeCashed is a free log retrieval operation binding the contract event 0x950494fc3642fae5221b6c32e0e45765c95ebb382a04a71b160db0843e74c99f.
 //
-// Solidity: event ChequeCashed(address indexed beneficiaryPrincipal, address indexed beneficiaryAgent, address indexed callee, uint256 serial, uint256 totalPayout, uint256 requestPayout, uint256 calleePayout)
-func (_SimpleSwap *SimpleSwapFilterer) FilterChequeCashed(opts *bind.FilterOpts, beneficiaryPrincipal []common.Address, beneficiaryAgent []common.Address, callee []common.Address) (*SimpleSwapChequeCashedIterator, error) {
+// Solidity: event ChequeCashed(address indexed beneficiary, address indexed recipient, address indexed caller, uint256 totalPayout, uint256 cumulativePayout, uint256 callerPayout)
+func (_SimpleSwap *SimpleSwapFilterer) FilterChequeCashed(opts *bind.FilterOpts, beneficiary []common.Address, recipient []common.Address, caller []common.Address) (*SimpleSwapChequeCashedIterator, error) {
 
-	var beneficiaryPrincipalRule []interface{}
-	for _, beneficiaryPrincipalItem := range beneficiaryPrincipal {
-		beneficiaryPrincipalRule = append(beneficiaryPrincipalRule, beneficiaryPrincipalItem)
+	var beneficiaryRule []interface{}
+	for _, beneficiaryItem := range beneficiary {
+		beneficiaryRule = append(beneficiaryRule, beneficiaryItem)
 	}
-	var beneficiaryAgentRule []interface{}
-	for _, beneficiaryAgentItem := range beneficiaryAgent {
-		beneficiaryAgentRule = append(beneficiaryAgentRule, beneficiaryAgentItem)
+	var recipientRule []interface{}
+	for _, recipientItem := range recipient {
+		recipientRule = append(recipientRule, recipientItem)
 	}
-	var calleeRule []interface{}
-	for _, calleeItem := range callee {
-		calleeRule = append(calleeRule, calleeItem)
+	var callerRule []interface{}
+	for _, callerItem := range caller {
+		callerRule = append(callerRule, callerItem)
 	}
 
-	logs, sub, err := _SimpleSwap.contract.FilterLogs(opts, "ChequeCashed", beneficiaryPrincipalRule, beneficiaryAgentRule, calleeRule)
+	logs, sub, err := _SimpleSwap.contract.FilterLogs(opts, "ChequeCashed", beneficiaryRule, recipientRule, callerRule)
 	if err != nil {
 		return nil, err
 	}
 	return &SimpleSwapChequeCashedIterator{contract: _SimpleSwap.contract, event: "ChequeCashed", logs: logs, sub: sub}, nil
 }
 
-// WatchChequeCashed is a free log subscription operation binding the contract event 0x5920b90d620e15c47f9e2f42adac6a717078eb0403d85477ad9be9493458ed13.
+// WatchChequeCashed is a free log subscription operation binding the contract event 0x950494fc3642fae5221b6c32e0e45765c95ebb382a04a71b160db0843e74c99f.
 //
-// Solidity: event ChequeCashed(address indexed beneficiaryPrincipal, address indexed beneficiaryAgent, address indexed callee, uint256 serial, uint256 totalPayout, uint256 requestPayout, uint256 calleePayout)
-func (_SimpleSwap *SimpleSwapFilterer) WatchChequeCashed(opts *bind.WatchOpts, sink chan<- *SimpleSwapChequeCashed, beneficiaryPrincipal []common.Address, beneficiaryAgent []common.Address, callee []common.Address) (event.Subscription, error) {
+// Solidity: event ChequeCashed(address indexed beneficiary, address indexed recipient, address indexed caller, uint256 totalPayout, uint256 cumulativePayout, uint256 callerPayout)
+func (_SimpleSwap *SimpleSwapFilterer) WatchChequeCashed(opts *bind.WatchOpts, sink chan<- *SimpleSwapChequeCashed, beneficiary []common.Address, recipient []common.Address, caller []common.Address) (event.Subscription, error) {
 
-	var beneficiaryPrincipalRule []interface{}
-	for _, beneficiaryPrincipalItem := range beneficiaryPrincipal {
-		beneficiaryPrincipalRule = append(beneficiaryPrincipalRule, beneficiaryPrincipalItem)
+	var beneficiaryRule []interface{}
+	for _, beneficiaryItem := range beneficiary {
+		beneficiaryRule = append(beneficiaryRule, beneficiaryItem)
 	}
-	var beneficiaryAgentRule []interface{}
-	for _, beneficiaryAgentItem := range beneficiaryAgent {
-		beneficiaryAgentRule = append(beneficiaryAgentRule, beneficiaryAgentItem)
+	var recipientRule []interface{}
+	for _, recipientItem := range recipient {
+		recipientRule = append(recipientRule, recipientItem)
 	}
-	var calleeRule []interface{}
-	for _, calleeItem := range callee {
-		calleeRule = append(calleeRule, calleeItem)
+	var callerRule []interface{}
+	for _, callerItem := range caller {
+		callerRule = append(callerRule, callerItem)
 	}
 
-	logs, sub, err := _SimpleSwap.contract.WatchLogs(opts, "ChequeCashed", beneficiaryPrincipalRule, beneficiaryAgentRule, calleeRule)
+	logs, sub, err := _SimpleSwap.contract.WatchLogs(opts, "ChequeCashed", beneficiaryRule, recipientRule, callerRule)
 	if err != nil {
 		return nil, err
 	}
@@ -1488,166 +1307,12 @@ func (_SimpleSwap *SimpleSwapFilterer) WatchChequeCashed(opts *bind.WatchOpts, s
 	}), nil
 }
 
-// ParseChequeCashed is a log parse operation binding the contract event 0x5920b90d620e15c47f9e2f42adac6a717078eb0403d85477ad9be9493458ed13.
+// ParseChequeCashed is a log parse operation binding the contract event 0x950494fc3642fae5221b6c32e0e45765c95ebb382a04a71b160db0843e74c99f.
 //
-// Solidity: event ChequeCashed(address indexed beneficiaryPrincipal, address indexed beneficiaryAgent, address indexed callee, uint256 serial, uint256 totalPayout, uint256 requestPayout, uint256 calleePayout)
+// Solidity: event ChequeCashed(address indexed beneficiary, address indexed recipient, address indexed caller, uint256 totalPayout, uint256 cumulativePayout, uint256 callerPayout)
 func (_SimpleSwap *SimpleSwapFilterer) ParseChequeCashed(log types.Log) (*SimpleSwapChequeCashed, error) {
 	event := new(SimpleSwapChequeCashed)
 	if err := _SimpleSwap.contract.UnpackLog(event, "ChequeCashed", log); err != nil {
-		return nil, err
-	}
-	return event, nil
-}
-
-// SimpleSwapChequeSubmittedIterator is returned from FilterChequeSubmitted and is used to iterate over the raw logs and unpacked data for ChequeSubmitted events raised by the SimpleSwap contract.
-type SimpleSwapChequeSubmittedIterator struct {
-	Event *SimpleSwapChequeSubmitted // Event containing the contract specifics and raw log
-
-	contract *bind.BoundContract // Generic contract to use for unpacking event data
-	event    string              // Event name to use for unpacking event data
-
-	logs chan types.Log        // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for errors, completion and termination
-	done bool                  // Whether the subscription completed delivering logs
-	fail error                 // Occurred error to stop iteration
-}
-
-// Next advances the iterator to the subsequent event, returning whether there
-// are any more events found. In case of a retrieval or parsing error, false is
-// returned and Error() can be queried for the exact failure.
-func (it *SimpleSwapChequeSubmittedIterator) Next() bool {
-	// If the iterator failed, stop iterating
-	if it.fail != nil {
-		return false
-	}
-	// If the iterator completed, deliver directly whatever's available
-	if it.done {
-		select {
-		case log := <-it.logs:
-			it.Event = new(SimpleSwapChequeSubmitted)
-			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-				it.fail = err
-				return false
-			}
-			it.Event.Raw = log
-			return true
-
-		default:
-			return false
-		}
-	}
-	// Iterator still in progress, wait for either a data or an error event
-	select {
-	case log := <-it.logs:
-		it.Event = new(SimpleSwapChequeSubmitted)
-		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-			it.fail = err
-			return false
-		}
-		it.Event.Raw = log
-		return true
-
-	case err := <-it.sub.Err():
-		it.done = true
-		it.fail = err
-		return it.Next()
-	}
-}
-
-// Error returns any retrieval or parsing error occurred during filtering.
-func (it *SimpleSwapChequeSubmittedIterator) Error() error {
-	return it.fail
-}
-
-// Close terminates the iteration process, releasing any pending underlying
-// resources.
-func (it *SimpleSwapChequeSubmittedIterator) Close() error {
-	it.sub.Unsubscribe()
-	return nil
-}
-
-// SimpleSwapChequeSubmitted represents a ChequeSubmitted event raised by the SimpleSwap contract.
-type SimpleSwapChequeSubmitted struct {
-	Beneficiary common.Address
-	Serial      *big.Int
-	Amount      *big.Int
-	CashTimeout *big.Int
-	Raw         types.Log // Blockchain specific contextual infos
-}
-
-// FilterChequeSubmitted is a free log retrieval operation binding the contract event 0x543b37a2abe69e287f27911f3802739c2f6271e8eb02ae6303a3cd9443bac03c.
-//
-// Solidity: event ChequeSubmitted(address indexed beneficiary, uint256 indexed serial, uint256 amount, uint256 cashTimeout)
-func (_SimpleSwap *SimpleSwapFilterer) FilterChequeSubmitted(opts *bind.FilterOpts, beneficiary []common.Address, serial []*big.Int) (*SimpleSwapChequeSubmittedIterator, error) {
-
-	var beneficiaryRule []interface{}
-	for _, beneficiaryItem := range beneficiary {
-		beneficiaryRule = append(beneficiaryRule, beneficiaryItem)
-	}
-	var serialRule []interface{}
-	for _, serialItem := range serial {
-		serialRule = append(serialRule, serialItem)
-	}
-
-	logs, sub, err := _SimpleSwap.contract.FilterLogs(opts, "ChequeSubmitted", beneficiaryRule, serialRule)
-	if err != nil {
-		return nil, err
-	}
-	return &SimpleSwapChequeSubmittedIterator{contract: _SimpleSwap.contract, event: "ChequeSubmitted", logs: logs, sub: sub}, nil
-}
-
-// WatchChequeSubmitted is a free log subscription operation binding the contract event 0x543b37a2abe69e287f27911f3802739c2f6271e8eb02ae6303a3cd9443bac03c.
-//
-// Solidity: event ChequeSubmitted(address indexed beneficiary, uint256 indexed serial, uint256 amount, uint256 cashTimeout)
-func (_SimpleSwap *SimpleSwapFilterer) WatchChequeSubmitted(opts *bind.WatchOpts, sink chan<- *SimpleSwapChequeSubmitted, beneficiary []common.Address, serial []*big.Int) (event.Subscription, error) {
-
-	var beneficiaryRule []interface{}
-	for _, beneficiaryItem := range beneficiary {
-		beneficiaryRule = append(beneficiaryRule, beneficiaryItem)
-	}
-	var serialRule []interface{}
-	for _, serialItem := range serial {
-		serialRule = append(serialRule, serialItem)
-	}
-
-	logs, sub, err := _SimpleSwap.contract.WatchLogs(opts, "ChequeSubmitted", beneficiaryRule, serialRule)
-	if err != nil {
-		return nil, err
-	}
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
-				event := new(SimpleSwapChequeSubmitted)
-				if err := _SimpleSwap.contract.UnpackLog(event, "ChequeSubmitted", log); err != nil {
-					return err
-				}
-				event.Raw = log
-
-				select {
-				case sink <- event:
-				case err := <-sub.Err():
-					return err
-				case <-quit:
-					return nil
-				}
-			case err := <-sub.Err():
-				return err
-			case <-quit:
-				return nil
-			}
-		}
-	}), nil
-}
-
-// ParseChequeSubmitted is a log parse operation binding the contract event 0x543b37a2abe69e287f27911f3802739c2f6271e8eb02ae6303a3cd9443bac03c.
-//
-// Solidity: event ChequeSubmitted(address indexed beneficiary, uint256 indexed serial, uint256 amount, uint256 cashTimeout)
-func (_SimpleSwap *SimpleSwapFilterer) ParseChequeSubmitted(log types.Log) (*SimpleSwapChequeSubmitted, error) {
-	event := new(SimpleSwapChequeSubmitted)
-	if err := _SimpleSwap.contract.UnpackLog(event, "ChequeSubmitted", log); err != nil {
 		return nil, err
 	}
 	return event, nil
@@ -2214,6 +1879,139 @@ func (_SimpleSwap *SimpleSwapFilterer) WatchHardDepositDecreaseTimeoutChanged(op
 func (_SimpleSwap *SimpleSwapFilterer) ParseHardDepositDecreaseTimeoutChanged(log types.Log) (*SimpleSwapHardDepositDecreaseTimeoutChanged, error) {
 	event := new(SimpleSwapHardDepositDecreaseTimeoutChanged)
 	if err := _SimpleSwap.contract.UnpackLog(event, "HardDepositDecreaseTimeoutChanged", log); err != nil {
+		return nil, err
+	}
+	return event, nil
+}
+
+// SimpleSwapWithdrawIterator is returned from FilterWithdraw and is used to iterate over the raw logs and unpacked data for Withdraw events raised by the SimpleSwap contract.
+type SimpleSwapWithdrawIterator struct {
+	Event *SimpleSwapWithdraw // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *SimpleSwapWithdrawIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(SimpleSwapWithdraw)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(SimpleSwapWithdraw)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *SimpleSwapWithdrawIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *SimpleSwapWithdrawIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// SimpleSwapWithdraw represents a Withdraw event raised by the SimpleSwap contract.
+type SimpleSwapWithdraw struct {
+	Amount *big.Int
+	Raw    types.Log // Blockchain specific contextual infos
+}
+
+// FilterWithdraw is a free log retrieval operation binding the contract event 0x5b6b431d4476a211bb7d41c20d1aab9ae2321deee0d20be3d9fc9b1093fa6e3d.
+//
+// Solidity: event Withdraw(uint256 amount)
+func (_SimpleSwap *SimpleSwapFilterer) FilterWithdraw(opts *bind.FilterOpts) (*SimpleSwapWithdrawIterator, error) {
+
+	logs, sub, err := _SimpleSwap.contract.FilterLogs(opts, "Withdraw")
+	if err != nil {
+		return nil, err
+	}
+	return &SimpleSwapWithdrawIterator{contract: _SimpleSwap.contract, event: "Withdraw", logs: logs, sub: sub}, nil
+}
+
+// WatchWithdraw is a free log subscription operation binding the contract event 0x5b6b431d4476a211bb7d41c20d1aab9ae2321deee0d20be3d9fc9b1093fa6e3d.
+//
+// Solidity: event Withdraw(uint256 amount)
+func (_SimpleSwap *SimpleSwapFilterer) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *SimpleSwapWithdraw) (event.Subscription, error) {
+
+	logs, sub, err := _SimpleSwap.contract.WatchLogs(opts, "Withdraw")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(SimpleSwapWithdraw)
+				if err := _SimpleSwap.contract.UnpackLog(event, "Withdraw", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseWithdraw is a log parse operation binding the contract event 0x5b6b431d4476a211bb7d41c20d1aab9ae2321deee0d20be3d9fc9b1093fa6e3d.
+//
+// Solidity: event Withdraw(uint256 amount)
+func (_SimpleSwap *SimpleSwapFilterer) ParseWithdraw(log types.Log) (*SimpleSwapWithdraw, error) {
+	event := new(SimpleSwapWithdraw)
+	if err := _SimpleSwap.contract.UnpackLog(event, "Withdraw", log); err != nil {
 		return nil, err
 	}
 	return event, nil
