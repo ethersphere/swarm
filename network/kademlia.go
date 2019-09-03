@@ -217,9 +217,6 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 
 	var size int
 	for _, p := range peers {
-		if p.capabilities == nil {
-			panic("missing caps for peer")
-		}
 		log.Trace("kademlia trying to register", "addr", p)
 		// error if self received, peer should know better
 		// and should be punished for this

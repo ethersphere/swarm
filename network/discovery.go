@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
 )
 
@@ -98,9 +97,6 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 		Peers: []*BzzAddr{a},
 		Capabilities: []*capability.Capabilities{a.capabilities},
 	}
-	if a.capabilities == nil {
-		log.Crit("tried to send capabilities empty", "msg", resp)
-	}
 	go d.Send(context.TODO(), resp)
 }
 
@@ -149,7 +145,6 @@ func (d *Peer) handlePeersMsg(msg *peersMsg) error {
 	}
 	for i, cp := range msg.Capabilities {
 		msg.Peers[i].capabilities = cp
-		log.Warn("incoming notify peer", "peer", msg.Peers[i], "cap", cp)
 	}
 	for _, a := range msg.Peers {
 		d.seen(a)
@@ -195,9 +190,6 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		if len(peers) > 0 {
 			outMsg := &peersMsg{Peers: sortPeers(peers), Capabilities: []*capability.Capabilities{}}
 			for _, p := range peers {
-				if p.capabilities == nil {
-					log.Crit("attempting to send handlesub with cap nil", outMsg)
-				}
 				outMsg.Capabilities = append(outMsg.Capabilities, p.capabilities)
 			}
 			go d.Send(context.TODO(), outMsg)

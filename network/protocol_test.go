@@ -118,7 +118,7 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 		mu.Lock()
 		nodeToAddr[p.ID()] = addrs[0]
 		mu.Unlock()
-		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String()), capability.NewCapabilities()}
+		bzzAddr := NewBzzAddr(addrs[0], []byte(p.Node().String()))
 		addrs = addrs[1:]
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
 	}
@@ -248,7 +248,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(TestProtocolVersion, 321, NewAddr(node), false),
+		newBzzHandshakeMsg(TestProtocolVersion, 321, NewBzzAddrFromEnode(node), false),
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
 	)
 
@@ -272,7 +272,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewAddr(node), false),
+		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false),
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
 	)
 
@@ -295,7 +295,7 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	defer s.Stop()
 	node := s.Nodes[0]
 
-	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
+	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false)
 	cap := msg.Capabilities.Get(0)
 	cap.Set(14)
 	err = s.testHandshake(
@@ -323,7 +323,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false),
+		newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false),
 	)
 
 	if err != nil {
@@ -353,7 +353,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			defer pt.Stop()
 
 			node := pt.Nodes[0]
-			addr := NewAddr(node)
+			addr := NewBzzAddrFromEnode(node)
 
 			err = pt.testHandshake(
 				correctBzzHandshake(pt.addr, false),

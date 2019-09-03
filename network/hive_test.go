@@ -56,7 +56,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	}
 
 	node := s.Nodes[0]
-	raddr := NewAddr(node).WithCapabilities(capability.NewCapabilities())
+	raddr := NewBzzAddrFromEnode(node)
 	pp.Register(raddr)
 
 	// start the hive

@@ -23,11 +23,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -39,7 +37,7 @@ func init() {
 
 func testKadPeerAddr(s string) *BzzAddr {
 	a := pot.NewAddressFromString(s)
-	return &BzzAddr{OAddr: a, UAddr: a, capabilities: capability.NewCapabilities()}
+	return NewBzzAddr(a, a)
 }
 
 func newTestKademliaParams() *KadParams {
@@ -556,11 +554,7 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
 	bp := &BzzPeer{
 		Peer: pp,
-		BzzAddr: &BzzAddr{
-			OAddr:        addr.Bytes(),
-			UAddr:        []byte(fmt.Sprintf("%x", addr[:])),
-			capabilities: capability.NewCapabilities(),
-		},
+		BzzAddr: NewBzzAddr(addr.Bytes(),  []byte(fmt.Sprintf("%x", addr[:]))),
 	}
 	return NewPeer(bp, kad)
 }
@@ -675,25 +669,3 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 	})
 }
 
-func NewAdaptivePeer(k *Kademlia, capabilities ...*capability.Capability) (*Peer, error) {
-	// create the peer that fits the kademlia record
-	// it's quite a bit of work
-	peerPrivKey, err := crypto.GenerateKey()
-	if err != nil {
-		return nil, err
-	}
-	peerEnodeId := enode.PubkeyToIDV4(&peerPrivKey.PublicKey)
-	peerP2p := p2p.NewPeer(peerEnodeId, "foo", []p2p.Cap{})
-	peerProto := protocols.NewPeer(peerP2p, nil, nil)
-	peerBzz := NewBzzPeer(peerProto)
-	caps := capability.NewCapabilities()
-	for _, cap := range capabilities {
-		caps.Add(cap)
-	}
-	peerBzz.WithCapabilities(caps)
-	err = k.Register(peerBzz.BzzAddr)
-	if err != nil {
-		return nil, err
-	}
-	return NewPeer(peerBzz, k), nil
-}
