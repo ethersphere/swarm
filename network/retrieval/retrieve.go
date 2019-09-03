@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -409,6 +410,7 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
+		req.PeersToSkip.Store(sp.String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
 			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries)
