@@ -19,7 +19,6 @@ package pushsync
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -106,7 +105,6 @@ func (p *Pusher) sync() {
 	var chunks <-chan chunk.Chunk
 	var unsubscribe func()
 	var syncedAddrs []storage.Address
-	var syncedItems []*pushedItem
 	defer close(p.closed)
 	// timer, initially set to 0 to fall through select case on timer.C for initialisation
 	timer := time.NewTimer(0)
@@ -138,32 +136,18 @@ func (p *Pusher) sync() {
 				unsubscribe()
 			}
 
-			syncedTags := make(map[uint32]int)
 			// set chunk status to synced, insert to db GC index
-			if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
-				panic(fmt.Sprintf("pushsync: error setting chunks to synced: %v", err))
-			}
-			for i, item := range syncedItems {
-				// increment synced count for the tag if exists
-				tag := item.tag
-				if tag != nil {
-					syncedTags[tag.Uid] = syncedTags[tag.Uid] + 1
-					item.span.Finish()
+			go func() {
+				if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+					log.Error("pushsync: error setting chunks to synced", "err", err)
 				}
+			}()
+			// delete from pushed items
+			for i := 0; i < len(syncedAddrs); i++ {
 				delete(p.pushed, syncedAddrs[i].Hex())
-			}
-			// iterate over tags in this batch
-			for uid, n := range syncedTags {
-				tag, _ := p.tags.Get(uid)
-				tag.IncN(chunk.StateSynced, n)
-				if tag.Done(chunk.StateSynced) {
-					p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
-					tag.FinishRootSpan()
-				}
 			}
 			// reset synced list
 			syncedAddrs = nil
-			syncedItems = nil
 
 			// we don't want to record the first iteration
 			if chunksInBatch != -1 {
@@ -221,17 +205,27 @@ func (p *Pusher) sync() {
 				p.logger.Trace("just synced... ignore", "addr", hexaddr)
 				break
 			}
+			// increment synced count for the tag if exists
+			tag := item.tag
+			if tag != nil {
+				tag.Inc(chunk.StateSynced)
+				if tag.Done(chunk.StateSynced) {
+					p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
+					tag.FinishRootSpan()
+				}
+				// finish span for pushsync roundtrip, only have this span if we have a tag
+				item.span.Finish()
+			}
 
-			// calibrate retryInterval based on roundtrip times
 			totalDuration := time.Since(item.firstSentAt)
 			metrics.GetOrRegisterResettingTimer("pusher.chunk.roundtrip", nil).Update(totalDuration)
 			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
 
+			// calibrate retryInterval based on roundtrip times
 			measurements, average = p.updateRetryInterval(item, measurements, average)
 
 			// collect synced addresses and corresponding items to do subsequent batch operations
 			syncedAddrs = append(syncedAddrs, addr)
-			syncedItems = append(syncedItems, item)
 			item.synced = true
 
 		case <-p.quit:
@@ -251,7 +245,7 @@ func (p *Pusher) handleReceiptMsg(msg []byte) error {
 	if err != nil {
 		return err
 	}
-	p.logger.Trace("Handler", "receipt", label(receipt.Addr), "self", label(p.ps.BaseAddr()))
+	p.logger.Trace("Handler", "receipt", label(receipt.Addr))
 	p.pushReceipt(receipt.Addr)
 	return nil
 }
@@ -279,7 +273,7 @@ func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
 	if err != nil {
 		return err
 	}
-	p.logger.Trace("send chunk", "addr", label(ch.Address()), "self", label(p.ps.BaseAddr()))
+	p.logger.Trace("send chunk", "addr", label(ch.Address()))
 
 	metrics.GetOrRegisterResettingTimer("pusher.send.chunk.rlp", nil).UpdateSince(rlpTimer)
 
@@ -321,19 +315,18 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 			_, span := spancontext.StartSpan(tag.Context(), "chunk.sent")
 			span.LogFields(olog.String("ref", hexaddr))
 			span.SetTag("addr", hexaddr)
-
 			item.span = span
 		}
 
 		// remember the item
 		p.pushed[hexaddr] = item
 		if p.ps.IsClosestTo(addr) {
-			p.logger.Trace("self is closest to ref: push receipt locally", "ref", hexaddr, "self", hex.EncodeToString(p.ps.BaseAddr()))
+			p.logger.Trace("self is closest to ref: push receipt locally", "ref", hexaddr)
 			item.shortcut = true
 			go p.pushReceipt(addr)
 			return false
 		}
-		p.logger.Trace("self is not the closest to ref: send chunk to neighbourhood", "ref", hexaddr, "self", hex.EncodeToString(p.ps.BaseAddr()))
+		p.logger.Trace("self is not the closest to ref: send chunk to neighbourhood", "ref", hexaddr)
 	}
 	return true
 }
