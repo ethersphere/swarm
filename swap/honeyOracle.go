@@ -24,6 +24,7 @@ type HoneyOracle interface {
 // NewHoneyPriceOracle returns the actual oracle to be used for discovering the price
 // It will return a default one
 func NewHoneyPriceOracle() HoneyOracle {
+
 	return &fixedPriceOracle{
 		honeyPrice: defaultHoneyPrice,
 	}

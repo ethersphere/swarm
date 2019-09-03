@@ -504,7 +504,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	}
 	log.Debug("creating simulated backend")
 
-	swap := New(stateStore, key, common.Address{}, testBackend)
+	swap := New(stateStore, key, common.Address{}, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
 	return swap, dir
 }
 
@@ -525,7 +525,7 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 func newDummyPeer(spec *protocols.Spec) *Peer {
 	return &Peer{
 		Peer:                   newDummyProtocolPeer(spec),
-		paymentThresholdOracle: NewThresholdOracle(),
+		paymentThresholdOracle: NewThresholdOracle(DefaultPaymentThreshold),
 		disconnectThreshold:    DefaultDisconnectThreshold,
 		honeyOracle:            NewHoneyPriceOracle(),
 	}

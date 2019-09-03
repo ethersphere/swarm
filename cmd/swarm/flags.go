@@ -65,6 +65,16 @@ var (
 		Usage:  "URL of the Ethereum API provider to use to settle SWAP payments",
 		EnvVar: SwarmEnvSwapBackendURL,
 	}
+	SwarmEnvSwapPaymentThresholdFlag = cli.Int64Flag{
+		Name:   "swap-payment-threshold",
+		Usage:  "honey amount indebted to a peer at which you will initiate payment",
+		EnvVar: SwarmEnvSwapPaymentThreshold,
+	}
+	SwarmEnvDisconnectThresholdFlag = cli.Int64Flag{
+		Name:   "swap-disconnect-threshold",
+		Usage:  "honey amount at debt of a peer at which you will disconnect",
+		EnvVar: SwarmEnvSwapDisconnectThreshold,
+	}
 	SwarmSyncDisabledFlag = cli.BoolTFlag{
 		Name:   "nosync",
 		Usage:  "Disable swarm syncing",

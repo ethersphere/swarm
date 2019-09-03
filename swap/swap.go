@@ -47,19 +47,22 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api            API
-	store          state.Store          // store is needed in order to keep balances and cheques across sessions
-	accountingLock sync.RWMutex         // lock for data consistency in accounting-related functions
-	balances       map[enode.ID]int64   // map of balances for each peer
-	balancesLock   sync.RWMutex         // lock for balances map
-	cheques        map[enode.ID]*Cheque // map of cheques for each peer
-	chequesLock    sync.RWMutex         // lock for cheques map
-	peers          map[enode.ID]*Peer   // map of all swap Peers
-	peersLock      sync.RWMutex         // lock for peers map
-	backend        contract.Backend     // the backend (blockchain) used
-	owner          *Owner               // contract access
-	params         *Params              // economic and operational parameters
-	contract       swap.Contract        // reference to the smart contract
+	api                        API
+	store                      state.Store          // store is needed in order to keep balances and cheques across sessions
+	accountingLock             sync.RWMutex         // lock for data consistency in accounting-related functions
+	balances                   map[enode.ID]int64   // map of balances for each peer
+	balancesLock               sync.RWMutex         // lock for balances map
+	cheques                    map[enode.ID]*Cheque // map of cheques for each peer
+	chequesLock                sync.RWMutex         // lock for cheques map
+	peers                      map[enode.ID]*Peer   // map of all swap Peers
+	peersLock                  sync.RWMutex         // lock for peers map
+	backend                    contract.Backend     // the backend (blockchain) used
+	owner                      *Owner               // contract access
+	params                     *Params              // economic and operational parameters
+	contract                   swap.Contract        // reference to the smart contract
+	defaultDisconnectThreshold int64
+	defaultThresholdOracle     ThresholdOracle
+	defaultHoneyPriceOracle    HoneyOracle
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -83,15 +86,18 @@ func NewParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend, disconnectThreshold int64, paymentThreshold int64) *Swap {
 	return &Swap{
-		store:    stateStore,
-		balances: make(map[enode.ID]int64),
-		cheques:  make(map[enode.ID]*Cheque),
-		peers:    make(map[enode.ID]*Peer),
-		backend:  backend,
-		owner:    createOwner(prvkey, contract),
-		params:   NewParams(),
+		store:                      stateStore,
+		balances:                   make(map[enode.ID]int64),
+		cheques:                    make(map[enode.ID]*Cheque),
+		peers:                      make(map[enode.ID]*Peer),
+		backend:                    backend,
+		owner:                      createOwner(prvkey, contract),
+		params:                     NewParams(),
+		defaultDisconnectThreshold: disconnectThreshold,
+		defaultThresholdOracle:     NewThresholdOracle(paymentThreshold),
+		defaultHoneyPriceOracle:    NewHoneyPriceOracle(),
 	}
 }
 

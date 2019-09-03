@@ -23,9 +23,9 @@ type ThresholdOracle interface {
 
 // NewThresholdOracle returns the actual oracle to be used for discovering the threshold
 // It will return a default one
-func NewThresholdOracle() ThresholdOracle {
+func NewThresholdOracle(price int64) ThresholdOracle {
 	return &fixedPaymentThreshold{
-		paymentThreshold: DefaultPaymentThreshold,
+		paymentThreshold: price,
 	}
 }
 

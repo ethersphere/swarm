@@ -32,6 +32,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/swap"
 )
 
 const (
@@ -52,8 +53,10 @@ type Config struct {
 	BaseKey       []byte
 
 	// Swap configs
-	SwapBackendURL string
-	SwapEnabled    bool
+	SwapBackendURL          string
+	SwapEnabled             bool
+	SwapPaymentThreshold    int64
+	SwapDisconnectThreshold int64
 
 	*network.HiveParams
 	Pss                  *pss.Params
@@ -81,26 +84,28 @@ type Config struct {
 	privateKey           *ecdsa.PrivateKey
 }
 
-//create a default config with all parameters to set to defaults
+//NewConfig creates a default config with all parameters to set to defaults
 func NewConfig() (c *Config) {
 
 	c = &Config{
-		FileStoreParams:      storage.NewFileStoreParams(),
-		HiveParams:           network.NewHiveParams(),
-		Pss:                  pss.NewParams(),
-		ListenAddr:           DefaultHTTPListenAddr,
-		Port:                 DefaultHTTPPort,
-		Path:                 node.DefaultDataDir(),
-		EnsAPIs:              nil,
-		EnsRoot:              ens.TestNetAddress,
-		NetworkID:            network.DefaultNetworkID,
-		SyncEnabled:          true,
-		SyncingSkipCheck:     false,
-		MaxStreamPeerServers: 10000,
-		DeliverySkipCheck:    true,
-		SyncUpdateDelay:      15 * time.Second,
-		SwapEnabled:          false,
-		SwapBackendURL:       "",
+		FileStoreParams:         storage.NewFileStoreParams(),
+		HiveParams:              network.NewHiveParams(),
+		Pss:                     pss.NewParams(),
+		ListenAddr:              DefaultHTTPListenAddr,
+		Port:                    DefaultHTTPPort,
+		Path:                    node.DefaultDataDir(),
+		EnsAPIs:                 nil,
+		EnsRoot:                 ens.TestNetAddress,
+		NetworkID:               network.DefaultNetworkID,
+		SyncEnabled:             true,
+		SyncingSkipCheck:        false,
+		MaxStreamPeerServers:    10000,
+		DeliverySkipCheck:       true,
+		SyncUpdateDelay:         15 * time.Second,
+		SwapEnabled:             false,
+		SwapBackendURL:          "",
+		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
+		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 	}
 
 	return

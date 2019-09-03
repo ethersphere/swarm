@@ -41,13 +41,14 @@ type Peer struct {
 
 // NewPeer creates a new swap Peer instance
 func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) *Peer {
+	paymentThreshold, _ := s.defaultThresholdOracle.GetPaymentThreshold()
 	return &Peer{
 		Peer:                   p,
 		swap:                   s,
 		beneficiary:            beneficiary,
 		contractAddress:        contractAddress,
-		paymentThresholdOracle: NewThresholdOracle(),
-		disconnectThreshold:    DefaultDisconnectThreshold,
+		paymentThresholdOracle: NewThresholdOracle(paymentThreshold),
+		disconnectThreshold:    s.defaultDisconnectThreshold,
 		honeyOracle:            NewHoneyPriceOracle(),
 	}
 }
