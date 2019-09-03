@@ -77,8 +77,5 @@ func getENRBzzAddr(nod *enode.Node) *BzzAddr {
 	record := nod.Record()
 	record.Load(&addr)
 
-	return &BzzAddr{
-		OAddr: addr.data,
-		UAddr: []byte(nod.String()),
-	}
+	return NewBzzAddr(addr.data, []byte(nod.String()))
 }

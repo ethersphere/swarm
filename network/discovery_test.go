@@ -18,7 +18,7 @@ package network
 
 import (
 	"crypto/ecdsa"
-	crand "crypto/rand"
+	//crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -26,12 +26,13 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"bytes"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/network/capability"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -115,21 +116,16 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	connect := func(a pot.Address, po int) (addrs []*BzzAddr) {
 		n := rand.Intn(maxPeersPerPO)
 		for i := 0; i < n; i++ {
-			peer, err := newDiscPeer(pot.RandomAddressAt(a, po))
-			if err != nil {
-				t.Fatal(err)
-			}
+			peer := newDiscPeer(pot.RandomAddressAt(a, po))
 			hive.On(peer)
 			addrs = append(addrs, peer.BzzAddr)
 		}
 		return addrs
 	}
+	//register := func(a pot.Address, po int) {
 	register := func(a pot.Address, po int) {
-		addr := pot.RandomAddressAt(a, po)
-		bzzAddr := &BzzAddr{OAddr: addr[:]}
-		bzzAddr = bzzAddr.WithCapabilities(capability.NewCapabilities())
-		hive.Register(bzzAddr)
-		//	hive.Register(&BzzAddr{OAddr: addr[:]})
+		discPeer := newDiscPeer(a)
+		hive.Register(discPeer.BzzAddr)
 	}
 
 	// generate connected and just registered peers
@@ -182,6 +178,11 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	// 1. pivot sends to the control peer a `subPeersMsg` advertising its depth (ignored)
 	// 2. peer sends to pivot a `subPeersMsg` advertising its own depth (arbitrarily chosen)
 	// 3. pivot responds with `peersMsg` with the set of expected peers
+	var cps []*capability.Capabilities
+	for _, p := range expBzzAddrs {
+		cps = append(cps, p.capabilities)
+	}
+	
 	err = s.TestExchanges(
 		p2ptest.Exchange{
 			Label: "outgoing subPeersMsg",
@@ -205,7 +206,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 			Expects: []p2ptest.Expect{
 				{
 					Code:    0,
-					Msg:     &peersMsg{Peers: testSortPeers(expBzzAddrs)},
+					Msg:     &peersMsg{Peers: testSortPeers(expBzzAddrs), Capabilities: cps},
 					Peer:    peerID,
 					Timeout: 100 * time.Millisecond,
 				},
@@ -242,20 +243,20 @@ func testSortPeers(peers []*BzzAddr) []*BzzAddr {
 // as we are not creating a real node via the protocol,
 // we need to create the discovery peer objects for the additional kademlia
 // nodes manually
-func newDiscPeer(addr pot.Address) (*Peer, error) {
-	pKey, err := ecdsa.GenerateKey(crypto.S256(), crand.Reader)
-	if err != nil {
-		return nil, err
-	}
+func newDiscPeer(addr pot.Address) *Peer {
+	//pKey, err := ecdsa.GenerateKey(crypto.S256(), crand.Reader)
+	zeros := [32]byte{}
+	addrSeed := append(addr.Bytes(), zeros[:]...)
+	pKey, _ := ecdsa.GenerateKey(crypto.S256(), bytes.NewBuffer(addrSeed))
 	pubKey := pKey.PublicKey
 	nod := enode.NewV4(&pubKey, net.IPv4(127, 0, 0, 1), 0, 0)
-	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String()), capabilities: capability.NewCapabilities()}
+	bzzAddr := NewBzzAddr(addr[:], []byte(nod.String()))
 	id := nod.ID()
 	p2pPeer := p2p.NewPeer(id, id.String(), nil)
 	return NewPeer(&BzzPeer{
 		Peer:    protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
 		BzzAddr: bzzAddr,
-	}, nil), nil
+	}, nil)
 }
 
 type dummyMsgRW struct{}
@@ -266,3 +267,4 @@ func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
 func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
+
