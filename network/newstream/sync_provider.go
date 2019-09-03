@@ -74,43 +74,49 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 
 // NeedData checks if we need to retrieve the supplied addrs from the upstream peer
 func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]bool, error) {
-	wants := make([]bool, len(addrs))
+	var (
+		start   = time.Now()
+		wants   = make([]bool, len(addrs)) // which addresses we want
+		check   = make([]chunk.Address, 0) // which addresses to check in localstore
+		indexes = make([]int, 0)
+	)
 
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		s.logger.Debug("syncProvider.NeedData ended", "took", end)
-	}(start)
-
+	// don't check if we're shutting down
 	select {
 	case <-s.quit:
 		return wants, nil
 	default:
 	}
 
-	check := make([]chunk.Address, 0)
-	indexes := make([]int, 0)
-
+	// if the cache contains the chunk key - it is most probable to exist in the localstore
+	// therefore we do not want the chunk
+	// when the chunk is not in the cache - we check the localstore, and if it does not
+	// exist there - we ask for it
 	s.cacheMtx.RLock()
 	for i, addr := range addrs {
 		if !s.cache.Contains(addr.Hex()) {
+			// chunk is not in the cache - check in the localstore and if its not there - we want it
 			check = append(check, addr)
 			indexes = append(indexes, i)
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
 		} else {
-			wants[i] = true
+			// chunk is in the cache - we don't want it
+			wants[i] = false
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
 		}
 	}
 	s.cacheMtx.RUnlock()
 
+	// check localstore for the remaining chunks
 	has, err := s.netStore.Store.HasMulti(ctx, check...)
 	if err != nil {
 		return nil, err
 	}
 
+	// inspect results
 	for i, have := range has {
 		if !have {
+			wants[indexes[i]] = true // if we dont have it - we want it
 			fi, _, ok := s.netStore.GetOrCreateFetcher(ctx, check[i], "syncer")
 			if !ok {
 				continue
@@ -125,7 +131,8 @@ func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]
 				}
 			}()
 		} else {
-			wants[indexes[i]] = true
+			// if we have it - we dont want it
+			wants[indexes[i]] = false
 		}
 	}
 	return wants, nil
@@ -135,44 +142,47 @@ func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]
 func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error) {
 	s.cacheMtx.Lock()
 	defer s.cacheMtx.Unlock()
-	start := time.Now()
+	var (
+		start     = time.Now()                     // start time
+		retChunks = make([]chunk.Chunk, len(addr)) //the chunks we want to Get
+		lsChunks  = make([]chunk.Address, 0)       // the chunks that we need to Get from localstore
+		indices   = make([]int, 0)                 // backreferences to glue retChunks and lsChunks together
+	)
+
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.sync_provider.get.total-time", nil).UpdateSince(start)
 	}(start)
 
 	// iterate over the array - if it is in the cache - pull it out
 	// if not - save in a slice and fallback later to localstore in one go
-	retChunks := make([]chunk.Chunk, len(addr))
-	lsChunks := []chunk.Address{}
-	indices := make(map[string]int)
 	for i, a := range addr {
 		if v, ok := s.cache.Get(a.Hex()); ok {
 			retChunks[i] = chunk.NewChunk(a, v.([]byte))
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachehit", nil).Inc(1)
 		} else {
 			lsChunks = append(lsChunks, a)
-			indices[a.String()] = i
+			indices = append(indices, i)
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachemiss", nil).Inc(1)
 		}
 	}
 
+	// get the rest from localstore
 	chunks, err := s.netStore.GetMulti(ctx, chunk.ModeGetSync, lsChunks...)
 	if err != nil {
 		return nil, err
 	}
-	for _, ch := range chunks {
+
+	// merge the results together
+	for i, ch := range chunks {
 		ch := ch
 		s.cache.Add(ch.Address().Hex(), ch.Data())
-		retChunks[indices[ch.Address().String()]] = ch
+		retChunks[indices[i]] = ch
 	}
 	return retChunks, nil
 }
 
-// Set the supplied addrs as synced
+// Set the supplied addrs as synced in order to allow for garbage collection
 func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
-	// mark the chunk as Set in order to allow for garbage collection
-	// this can and at some point should be moved to a dedicated method that
-	// marks an entire sent batch of chunks as Set once the actual p2p.Send succeeds
 	err := s.netStore.Set(ctx, chunk.ModeSetSync, addrs...)
 	if err != nil {
 		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
@@ -183,15 +193,9 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 
 // Put the given chunks to the local storage
 func (s *syncProvider) Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error) {
-	start := time.Now()
-	defer func(start time.Time) {
-		end := time.Since(start)
-		s.logger.Debug("syncProvider.Put ended", "took", end)
-	}(start)
 	seen, err := s.netStore.Put(ctx, chunk.ModePutSync, ch...)
 	for i, v := range seen {
 		if v {
-			//log.Trace("syncProvider.Put - chunk already seen", "addr", ch[i].Address())
 			if putSeenTestHook != nil {
 				// call the test function if it is set
 				putSeenTestHook(ch[i].Address(), s.netStore.LocalID)
@@ -244,6 +248,7 @@ func (s *syncProvider) WantStream(p *Peer, streamID ID) bool {
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
 
+	// check all subscriptions that should exist for this peer
 	subBins, _ := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
 	v, err := strconv.Atoi(streamID.Key)
 	if err != nil {

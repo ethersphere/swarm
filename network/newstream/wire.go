@@ -35,9 +35,7 @@ import (
 // to expose, parse and encode values related to the string represntation of the stream
 type StreamProvider interface {
 
-	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not.
-	// Typically this will involve checking whether a certain chunk exists locally.
-	// In case a chunk does not exist locally - a `wait` function returns upon chunk delivery
+	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not
 	NeedData(ctx context.Context, addr ...chunk.Address) ([]bool, error)
 
 	// Get a set of chunks identified by addr from the local storage
@@ -71,10 +69,13 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
+	// Autostart indicates if the stream should autostart
 	Autostart() bool
 
+	// Boundedness indicates if the stream is bounded or not
 	Boundedness() bool
 
+	// Close the provider
 	Close()
 }
 

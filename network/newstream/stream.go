@@ -558,9 +558,9 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	startNeed := time.Now()
 
 	// check which hashes we want
-	if hasses, err := provider.NeedData(ctx, addresses...); err == nil {
-		for i, has := range hasses {
-			if !has {
+	if wants, err := provider.NeedData(ctx, addresses...); err == nil {
+		for i, wantChunk := range wants {
+			if wantChunk {
 				ctr++                                     // increment number of wanted chunks
 				want.Set(i)                               // set the bitvector
 				w.hashes[addresses[i].Hex()] = struct{}{} // set unsolicited chunks guard
