@@ -136,16 +136,15 @@ func (p *Pusher) sync() {
 				unsubscribe()
 			}
 
-			// set chunk status to synced, insert to db GC index
-			go func() {
-				if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
-					log.Error("pushsync: error setting chunks to synced", "err", err)
-				}
-			}()
 			// delete from pushed items
 			for i := 0; i < len(syncedAddrs); i++ {
 				delete(p.pushed, syncedAddrs[i].Hex())
 			}
+			// set chunk status to synced, insert to db GC index
+			if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+				log.Error("pushsync: error setting chunks to synced", "err", err)
+			}
+
 			// reset synced list
 			syncedAddrs = nil
 
@@ -169,7 +168,11 @@ func (p *Pusher) sync() {
 			// if no more, set to nil, reset timer to 0 to finalise batch immediately
 			if !more {
 				chunks = nil
-				timer.Reset(0)
+				var dur time.Duration
+				if chunksInBatch == 0 {
+					dur = 500 * time.Millisecond
+				}
+				timer.Reset(dur)
 				break
 			}
 
