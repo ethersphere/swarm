@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"sync/atomic"
-	"testing"
 	"time"
 )
 
@@ -216,32 +215,4 @@ func decodeInt64Splice(buffer *[]byte) int64 {
 	val, n := binary.Varint((*buffer))
 	*buffer = (*buffer)[n:]
 	return val
-}
-
-// CheckTag checks the first tag in the api struct to be in a certain state
-func CheckTag(t *testing.T, tag *Tag, split, stored, seen, total int64) {
-	t.Helper()
-	if tag == nil {
-		t.Fatal("no tag found")
-	}
-
-	tSplit := tag.Get(StateSplit)
-	if tSplit != split {
-		t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
-	}
-
-	tSeen := tag.Get(StateSeen)
-	if tSeen != seen {
-		t.Fatalf("should have had seen chunks, got %d want %d", tSeen, seen)
-	}
-
-	tStored := tag.Get(StateStored)
-	if tStored != stored {
-		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
-	}
-
-	tTotal := tag.TotalCounter()
-	if tTotal != total {
-		t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)
-	}
 }
