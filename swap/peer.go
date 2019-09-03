@@ -18,10 +18,11 @@ package swap
 
 import (
 	"errors"
+	"strconv"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -37,6 +38,7 @@ type Peer struct {
 	contractAddress    common.Address
 	lastReceivedCheque *Cheque
 	lastSentCheque     *Cheque
+	balance            int64
 }
 
 // NewPeer creates a new swap Peer instance
@@ -50,6 +52,7 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 
 	peer.lastReceivedCheque, _ = s.loadLastReceivedCheque(p.ID())
 	peer.lastSentCheque, _ = s.loadLastSentCheque(p.ID())
+	peer.balance, _ = s.loadBalance(p.ID())
 
 	return peer
 }
@@ -64,12 +67,12 @@ func (p *Peer) getLastSentCheque() *Cheque {
 
 func (p *Peer) setLastReceivedCheque(cheque *Cheque) error {
 	p.lastReceivedCheque = cheque
-	return p.swap.saveLastReceivedCheque(p, cheque)
+	return p.swap.saveLastReceivedCheque(p.ID(), cheque)
 }
 
 func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	p.lastSentCheque = cheque
-	return p.swap.saveLastSentCheque(p, cheque)
+	return p.swap.saveLastSentCheque(p.ID(), cheque)
 }
 
 func (p *Peer) getLastChequeValues() (total uint64, err error) {
@@ -78,4 +81,25 @@ func (p *Peer) getLastChequeValues() (total uint64, err error) {
 		total = lastCheque.CumulativePayout
 	}
 	return
+}
+
+func (p *Peer) setBalance(balance int64) error {
+	p.balance = balance
+	return p.swap.saveBalance(p.ID(), balance)
+}
+
+func (p *Peer) getBalance() int64 {
+	return p.balance
+}
+
+// To be called with mutex already held
+func (p *Peer) updateBalance(amount int64) error {
+	//adjust the balance
+	//if amount is negative, it will decrease, otherwise increase
+	newBalance := p.getBalance() + amount
+	if err := p.setBalance(newBalance); err != nil {
+		return err
+	}
+	log.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	return nil
 }

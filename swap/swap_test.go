@@ -103,12 +103,11 @@ func newTestBackend() *swapTestBackend {
 // Test getting a peer's balance
 func TestPeerBalance(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
 	// test for correct value
-	testPeer := newDummyPeer()
-	swap.balances[testPeer.ID()] = 888
+	testPeer.setBalance(888)
 	b, err := swap.Balance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -134,22 +133,22 @@ func TestAllBalances(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
-	if len(swap.balances) != 0 {
-		t.Fatalf("Expected balances to be empty, but are %v", swap.balances)
+	if balances, _ := swap.Balances(); len(balances) != 0 {
+		t.Fatalf("Expected balances to be empty, but are %v", balances)
 	}
 
 	// test balance addition for peer
-	testPeer := newDummyPeer()
-	swap.balances[testPeer.ID()] = 808
+	testPeer := swap.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer.setBalance(808)
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
 	// test successive balance addition for peer
-	testPeer2 := newDummyPeer()
-	swap.balances[testPeer2.ID()] = 909
+	testPeer2 := swap.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer2.setBalance(909)
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
 
 	// test balance change for peer
-	swap.balances[testPeer.ID()] = 303
+	testPeer.setBalance(303)
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
@@ -220,26 +219,22 @@ func TestStoreBalances(t *testing.T) {
 	s, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
-	var err error
-
-	// modify balances in memory but not in store
-	testPeerID := enode.HexID("8418f4eeb20735630cfff00459b7fc7ec1674c9f77f19bab23e895706bfd1032")
-	s.balances[testPeerID] = 144
-	comparePeerBalance(t, s, testPeerID, 0)
-
 	// modify balances both in memory and in store
-	peerBalance, err := s.updateBalance(testPeerID, 29)
-	if err != nil {
+	testPeer := s.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeerID := testPeer.ID()
+	var peerBalance int64 = 29
+	if err := testPeer.setBalance(peerBalance); err != nil {
 		t.Fatal(err)
 	}
 	// store balance for peer should match
 	comparePeerBalance(t, s, testPeerID, peerBalance)
 
 	// update balances for second peer
-	testPeer2ID := enode.HexID("fdbb55b4d9b0011c93e736bb1b736013943890f2a08640f89de00e738a8b7986")
-	s.balances[testPeer2ID] = 144
-	peer2Balance, err := s.updateBalance(testPeer2ID, -76)
-	if err != nil {
+	testPeer2 := s.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer2ID := testPeer2.ID()
+	var peer2Balance int64 = -76
+
+	if err := testPeer2.setBalance(peer2Balance); err != nil {
 		t.Fatal(err)
 	}
 	// store balance for each peer should match
@@ -268,13 +263,13 @@ func TestRepeatedBookings(t *testing.T) {
 	var bookings []booking
 
 	// credits to peer 1
-	testPeer := newDummyPeer()
+	testPeer := swap.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	bookingAmount := int64(mrand.Intn(100))
 	bookingQuantity := 1 + mrand.Intn(10)
 	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer.Peer)
 
 	// debits to peer 2
-	testPeer2 := newDummyPeer()
+	testPeer2 := swap.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	bookingAmount = 0 - int64(mrand.Intn(100))
 	bookingQuantity = 1 + mrand.Intn(10)
 	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer2.Peer)
@@ -321,17 +316,13 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	creditor := NewPeer(cPeer.Peer, debitorSwap, creditorSwap.owner.address, debitorSwap.owner.Contract)
-	debitor := NewPeer(dPeer.Peer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	creditor := debitorSwap.newPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := creditorSwap.newPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
 	// set balances arbitrarily
 	testAmount := int64(DefaultPaymentThreshold + 42)
-	creditorSwap.balances[debitor.ID()] = testAmount
-	debitorSwap.balances[creditor.ID()] = 0 - testAmount
-
-	// set the peers into each other's list
-	creditorSwap.peers[debitor.ID()] = debitor
-	debitorSwap.peers[creditor.ID()] = creditor
+	debitor.setBalance(testAmount)
+	creditor.setBalance(-testAmount)
 
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
@@ -340,8 +331,8 @@ func TestResetBalance(t *testing.T) {
 	// now simulate sending the cheque to the creditor from the debitor
 	debitorSwap.sendCheque(creditor)
 	// the debitor should have already reset its balance
-	if debitorSwap.balances[creditor.ID()] != 0 {
-		t.Fatalf("unexpected balance to be 0, but it is %d", debitorSwap.balances[creditor.ID()])
+	if creditor.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
 	}
 
 	// now load the cheque that the debitor created...
@@ -369,8 +360,8 @@ func TestResetBalance(t *testing.T) {
 		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
 	// finally check that the creditor also successfully reset the balances
-	if creditorSwap.balances[debitor.ID()] != 0 {
-		t.Fatalf("unexpected balance to be 0, but it is %d", creditorSwap.balances[debitor.ID()])
+	if debitor.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", debitor.getBalance())
 	}
 }
 
@@ -404,7 +395,7 @@ func addBookings(swap *Swap, bookings []booking) {
 func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
 	t.Helper()
 	expectedBalances := calculateExpectedBalances(swap, bookings)
-	realBalances := swap.balances
+	realBalances, _ := swap.Balances()
 	if !reflect.DeepEqual(expectedBalances, realBalances) {
 		t.Fatalf("After %d bookings, expected balance to be %v, but is %v", len(bookings), stringifyBalance(expectedBalances), stringifyBalance(realBalances))
 	}
@@ -448,10 +439,10 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	swap, testDir := newBaseTestSwap(t, ownerKey)
 	defer os.RemoveAll(testDir)
 
-	testPeer := newDummyPeer()
-	swap.balances[testPeer.ID()] = -8888
+	testPeer := swap.newPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer.setBalance(-8888)
 
-	tmpBalance := swap.balances[testPeer.ID()]
+	tmpBalance := testPeer.getBalance()
 	swap.store.Put(testPeer.ID().String(), &tmpBalance)
 
 	err := swap.store.Close()
@@ -839,7 +830,7 @@ func newTestSwapAndPeer(t *testing.T, key *ecdsa.PrivateKey) (*Swap, *Peer, func
 	swap, clean := newTestSwap(t, key)
 	// owner address is the beneficiary (counterparty) for the peer
 	// that's because we expect cheques we receive to be signed by the address we would issue cheques to
-	peer := NewPeer(newDummyPeer().Peer, swap, ownerAddress, testChequeContract)
+	peer := swap.newPeer(newDummyPeer().Peer, ownerAddress, testChequeContract)
 	// we need to adjust the owner address on swap because we will issue cheques to beneficiaryAddress
 	swap.owner.address = beneficiaryAddress
 	return swap, peer, clean
@@ -866,7 +857,7 @@ func TestPeerSaveAndLoadgetLastReceivedCheque(t *testing.T) {
 	}
 
 	// create a new swap peer for the same underlying peer to force a database load
-	samePeer := NewPeer(peer.Peer, swap, common.Address{}, common.Address{})
+	samePeer := swap.newPeer(peer.Peer, common.Address{}, common.Address{})
 
 	returnedCheque = samePeer.getLastReceivedCheque()
 	if returnedCheque == nil {
