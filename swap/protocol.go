@@ -116,7 +116,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return ErrInvalidHandshakeMsg
 	}
 
-	beneficiary, err := s.getContractIssuer(context.Background(), response.ContractAddress)
+	beneficiary, err := s.getIssuerAtContract(context.Background(), response.ContractAddress)
 	if err != nil {
 		return err
 	}

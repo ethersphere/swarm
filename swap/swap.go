@@ -527,8 +527,8 @@ func (s *Swap) verifyContract(ctx context.Context, address common.Address) error
 	return contract.ValidateCode(ctx, s.backend, address)
 }
 
-// getContractIssuer retrieve the issuer of the chequebook at address from the blockchain
-func (s *Swap) getContractIssuer(ctx context.Context, address common.Address) (common.Address, error) {
+// getIssuerAtContract retrieve the issuer of the chequebook at address from the blockchain
+func (s *Swap) getIssuerAtContract(ctx context.Context, address common.Address) (common.Address, error) {
 	contr, err := contract.InstanceAt(address, s.backend)
 	if err != nil {
 		return common.Address{}, err
