@@ -122,7 +122,7 @@ func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte) *Retrieval
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
 		netStore: ns,
-		logger:   log.New("base", hex.EncodeToString(baseKey)),
+		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
 	}
 	r.createPriceOracle()
@@ -410,7 +410,8 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
-		req.PeersToSkip.Store(sp.String(), time.Now())
+		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries)
+		req.PeersToSkip.Store(sp.ID().String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
 			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries)

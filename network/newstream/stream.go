@@ -61,9 +61,8 @@ var (
 	streamChunkDeliveryFail       = metrics.GetOrRegisterCounter("network.stream.delivery_fail", nil)
 	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network.stream.next_interval_fail", nil)
 
-	headBatchSizeGauge    = metrics.GetOrRegisterGauge("network.stream.batch_size_head", nil)
-	batchSizeGauge        = metrics.GetOrRegisterGauge("network.stream.batch_size", nil)
-	lastReceivedChunksMsg = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
+	headBatchSizeGauge = metrics.GetOrRegisterGauge("network.stream.batch_size_head", nil)
+	batchSizeGauge     = metrics.GetOrRegisterGauge("network.stream.batch_size", nil)
 
 	streamPeersCount = metrics.GetOrRegisterGauge("network.stream.peers", nil)
 
@@ -758,8 +757,8 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery, w *want, provider StreamProvider) {
 	p.logger.Debug("clientHandleChunkDelivery", "ruid", msg.Ruid)
 	processReceivedChunksMsgCount.Inc(1)
-	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 	r.setLastReceivedChunkTime() // needed for IsPullSyncing
+
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
 	}(time.Now())
