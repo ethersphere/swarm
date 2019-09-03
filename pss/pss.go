@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"hash"
 	"sync"
 	"time"
 
@@ -36,8 +35,6 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/storage"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -45,7 +42,6 @@ const (
 	defaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
-	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
 	defaultWhisperWorkTime     = 3
 	defaultWhisperPoW          = 0.0000000001
 	defaultMaxMsgSize          = 1024 * 1024
@@ -53,7 +49,6 @@ const (
 	defaultOutboxCapacity      = 100000
 	protocolName               = "pss"
 	protocolVersion            = 2
-	hasherCount                = 8
 )
 
 var (
@@ -67,13 +62,6 @@ var spec = &protocols.Spec{
 	Messages: []interface{}{
 		PssMsg{},
 	},
-}
-
-// cache is used for preventing backwards routing
-// will also be instrumental in flood guard mechanism
-// and mailbox implementation
-type cacheEntry struct {
-	expiresAt time.Time
 }
 
 // abstraction to enable access to p2p.protocols.Peer.Send
@@ -204,6 +192,7 @@ func (o outbox) reenqueue(slot int) {
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
+	*ForwardCache
 
 	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
@@ -212,9 +201,6 @@ type Pss struct {
 	peers   map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
 	peersMu sync.RWMutex
 
-	fwdCache        map[digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	fwdCacheMu      sync.RWMutex
-	cacheTTL        time.Duration // how long to keep messages in fwdCache (not implemented)
 	msgTTL          time.Duration
 	paddingByteSize int
 	capstring       string
@@ -223,7 +209,6 @@ type Pss struct {
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu         sync.RWMutex
-	hashPool           sync.Pool
 	topicHandlerCaps   map[Topic]*handlerCaps // caches capabilities of each topic's handlers
 	topicHandlerCapsMu sync.RWMutex
 
@@ -248,34 +233,23 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		Version: protocolVersion,
 	}
 	ps := &Pss{
-		Kademlia: k,
-		KeyStore: loadKeyStore(),
+		Kademlia:     k,
+		KeyStore:     loadKeyStore(),
+		ForwardCache: newForwardCache(params.CacheTTL),
 
 		privateKey: params.privateKey,
 		quitC:      make(chan struct{}),
 
-		peers:           make(map[string]*protocols.Peer),
-		fwdCache:        make(map[digest]cacheEntry),
-		cacheTTL:        params.CacheTTL,
+		peers: make(map[string]*protocols.Peer),
+
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       c.String(),
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
-
-		hashPool: sync.Pool{
-			New: func() interface{} {
-				return sha3.NewLegacyKeccak256()
-			},
-		},
 	}
 	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
-
-	for i := 0; i < hasherCount; i++ {
-		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
-		ps.hashPool.Put(hashfunc)
-	}
 
 	return ps, nil
 }
@@ -839,78 +813,8 @@ func (p *Pss) forward(msg *PssMsg) error {
 		return nil
 	}
 }
-
-/////////////////////////////////////////////////////////////////////
-// SECTION: Caching
-/////////////////////////////////////////////////////////////////////
-
-// cleanFwdCache is used to periodically remove expired entries from the forward cache
-func (p *Pss) cleanFwdCache() {
-	metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
-	p.fwdCacheMu.Lock()
-	defer p.fwdCacheMu.Unlock()
-	for k, v := range p.fwdCache {
-		if v.expiresAt.Before(time.Now()) {
-			delete(p.fwdCache, k)
-		}
-	}
-}
-
 func label(b []byte) string {
 	return fmt.Sprintf("%04x", b[:2])
-}
-
-// add a message to the cache
-func (p *Pss) addFwdCache(msg *PssMsg) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
-
-	var entry cacheEntry
-	var ok bool
-
-	p.fwdCacheMu.Lock()
-	defer p.fwdCacheMu.Unlock()
-
-	digest := p.msgDigest(msg)
-	if entry, ok = p.fwdCache[digest]; !ok {
-		entry = cacheEntry{}
-	}
-	entry.expiresAt = time.Now().Add(p.cacheTTL)
-	p.fwdCache[digest] = entry
-	return nil
-}
-
-// check if message is in the cache
-func (p *Pss) checkFwdCache(msg *PssMsg) bool {
-	p.fwdCacheMu.Lock()
-	defer p.fwdCacheMu.Unlock()
-
-	digest := p.msgDigest(msg)
-	entry, ok := p.fwdCache[digest]
-	if ok {
-		if entry.expiresAt.After(time.Now()) {
-			log.Trace("unexpired cache", "digest", fmt.Sprintf("%x", digest))
-			metrics.GetOrRegisterCounter("pss.checkfwdcache.unexpired", nil).Inc(1)
-			return true
-		}
-		metrics.GetOrRegisterCounter("pss.checkfwdcache.expired", nil).Inc(1)
-	}
-	return false
-}
-
-// Digest of message
-func (p *Pss) msgDigest(msg *PssMsg) digest {
-	return p.digestBytes(msg.serialize())
-}
-
-func (p *Pss) digestBytes(msg []byte) digest {
-	hasher := p.hashPool.Get().(hash.Hash)
-	defer p.hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(msg)
-	d := digest{}
-	key := hasher.Sum(nil)
-	copy(d[:], key[:digestLength])
-	return d
 }
 
 func validateAddress(addr PssAddress) error {

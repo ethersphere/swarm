@@ -88,7 +88,6 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 }
 
 // holds the digest of a message used for caching
-type digest [digestLength]byte
 
 // conceals bitwise operations on the control flags byte
 type msgParams struct {
