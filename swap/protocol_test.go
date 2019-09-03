@@ -133,7 +133,7 @@ func TestEmitCheque(t *testing.T) {
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
 	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
-	debitor := NewPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor := NewPeer(dProtoPeer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
 	// set balance artificially
 	creditorSwap.balances[debitor.ID()] = 42
@@ -208,7 +208,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
-	creditor := NewPeer(cPeer.Peer, common.Address{}, common.Address{})
+	creditor := NewPeer(cPeer.Peer, debitorSwap, common.Address{}, common.Address{})
 	// set the creditor as peer into the debitor's swap
 	debitorSwap.peers[creditor.ID()] = creditor
 
@@ -263,7 +263,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
-	debitor := NewPeer(cPeer.Peer, common.Address{}, common.Address{})
+	debitor := NewPeer(cPeer.Peer, creditorSwap, common.Address{}, common.Address{})
 	// set the debitor as peer into the creditor's swap
 	creditorSwap.peers[debitor.ID()] = debitor
 
