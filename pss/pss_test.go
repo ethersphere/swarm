@@ -189,7 +189,7 @@ func TestAddressMatchProx(t *testing.T) {
 		rw := &p2p.MsgPipeRW{}
 		ptpPeer := p2p.NewPeer(enode.ID{}, "362436 call me anytime", []p2p.Cap{})
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
-		peerAddr := pot.RandomAddressAt(localPotAddr, i)
+		peerAddr := pot.RandomBzzAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
 			Peer:    protoPeer,
 			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
@@ -270,7 +270,7 @@ func TestAddressMatchProx(t *testing.T) {
 	// test the distances
 	var prevReceive int
 	for i, distance := range remoteDistances {
-		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remotePotAddr := pot.RandomBzzAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		var data [32]byte
@@ -299,7 +299,7 @@ func TestAddressMatchProx(t *testing.T) {
 	receives = 0
 	prevReceive = 0
 	for i, distance := range remoteDistances {
-		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remotePotAddr := pot.RandomBzzAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		var data [32]byte
@@ -323,7 +323,7 @@ func TestAddressMatchProx(t *testing.T) {
 	receives = 0
 
 	for _, distance := range remoteDistances {
-		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remotePotAddr := pot.RandomBzzAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		pssMsg := message.New(message.Flags{Raw: true})

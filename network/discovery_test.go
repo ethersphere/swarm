@@ -105,7 +105,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	sortPeers = testSortPeers
 	pivotAddr := pot.NewAddressFromBytes(PrivateKeyToBzzKey(prvkey))
 	// generate control peers address at peerPO wrt pivot
-	peerAddr := pot.RandomAddressAt(pivotAddr, peerPO)
+	peerAddr := pot.RandomBzzAddressAt(pivotAddr, peerPO)
 	// construct kademlia and hive
 	to := NewKademlia(pivotAddr[:], NewKadParams())
 	hive := NewHive(NewHiveParams(), to, nil)
@@ -115,7 +115,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	connect := func(a pot.Address, po int) (addrs []*BzzAddr) {
 		n := rand.Intn(maxPeersPerPO)
 		for i := 0; i < n; i++ {
-			peer := newDiscPeer(pot.RandomAddressAt(a, po))
+			peer := newDiscPeer(pot.RandomBzzAddressAt(a, po))
 			hive.On(peer)
 			addrs = append(addrs, peer.BzzAddr)
 		}

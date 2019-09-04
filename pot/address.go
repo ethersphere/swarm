@@ -134,10 +134,10 @@ func ProxCmp(a, x, y []byte) int {
 	return 0
 }
 
-// RandomAddressAt (address, prox) generates a random address
+// RandomBzzAddressAt (address, prox) generates a random address
 // at proximity order prox relative to address
 // if prox is negative a random address is generated
-func RandomAddressAt(self Address, prox int) (addr Address) {
+func RandomBzzAddressAt(self Address, prox int) (addr Address) {
 	addr = self
 	pos := -1
 	if prox >= 0 {
@@ -159,9 +159,9 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	return
 }
 
-// RandomAddress generates a random address
-func RandomAddress() Address {
-	return RandomAddressAt(Address{}, -1)
+// RandomBzzAddress generates a random address
+func RandomBzzAddress() Address {
+	return RandomBzzAddressAt(Address{}, -1)
 }
 
 // NewAddressFromString creates a byte slice from a string in binary representation
