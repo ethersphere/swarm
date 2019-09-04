@@ -100,7 +100,11 @@ func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 }
 
 func (i *Inspector) PeerStreams() string {
-	res, err := json.Marshal(i.stream.PeerInfo())
+	peerInfo, err := i.stream.PeerInfo()
+	if err != nil {
+		return err.Error()
+	}
+	res, err := json.Marshal(peerInfo)
 	if err == nil {
 		return string(res)
 	}

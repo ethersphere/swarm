@@ -1008,8 +1008,8 @@ type PeerState struct {
 
 // PeerInfo returns a response in which the queried node's
 // peer cursors and intervals are returned
-func (r *Registry) PeerInfo() PeerInfo {
-	info := PeerInfo{
+func (r *Registry) PeerInfo() (*PeerInfo, error) {
+	info := &PeerInfo{
 		Base:    hex.EncodeToString(r.baseKey)[:16],
 		Cursors: make(map[string]map[string]uint64),
 	}
@@ -1022,11 +1022,11 @@ func (r *Registry) PeerInfo() PeerInfo {
 		for i := uint8(0); i <= chunk.MaxPO; i++ {
 			key, err := p.EncodeKey(i)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			cursor, err := p.Cursor(key)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			info.Cursors[name][key] = cursor
 		}
@@ -1041,7 +1041,7 @@ func (r *Registry) PeerInfo() PeerInfo {
 			is[string(key)] = i.String()
 			return false, nil
 		}); err != nil {
-			panic(err)
+			return nil, err
 		}
 		info.Peers = append(info.Peers, PeerState{
 			Peer:      hex.EncodeToString(p.OAddr)[:16],
@@ -1049,7 +1049,7 @@ func (r *Registry) PeerInfo() PeerInfo {
 			Intervals: is,
 		})
 	}
-	return info
+	return info, nil
 }
 
 // LastReceivedChunkTime returns the time when the last chunk
