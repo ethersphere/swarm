@@ -28,12 +28,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -234,7 +232,7 @@ type Pss struct {
 }
 
 func (p *Pss) String() string {
-	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), common.ToHex(crypto.FromECDSAPub(&p.privateKey.PublicKey)))
+	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), common.ToHex(p.Crypto.FromECDSAPub(&p.privateKey.PublicKey)))
 }
 
 // Creates a new Pss instance.
@@ -308,7 +306,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 	go p.outbox.processOutbox()
 
 	log.Info("Started Pss")
-	log.Info("Loaded EC keys", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(crypto.CompressPubkey(p.PublicKey())))
+	log.Info("Loaded EC keys", "pubkey", common.ToHex(p.Crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(p.Crypto.CompressPubkey(p.PublicKey())))
 	return nil
 }
 
@@ -485,7 +483,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	}
 	p.addFwdCache(pssmsg)
 
-	psstopic := Topic(pssmsg.Payload.Topic)
+	psstopic := pssmsg.Payload.Topic
 
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
@@ -530,15 +528,15 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
-	var recvmsg *whisper.ReceivedMessage
+	var recvmsg *receivedMessage
 	var payload []byte
 	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error)
+	var keyFunc func(envelope *envelope) (*receivedMessage, string, PssAddress, error)
 
 	envelope := pssmsg.Payload
-	psstopic := Topic(envelope.Topic)
+	psstopic := envelope.Topic
 
 	if raw {
 		payload = pssmsg.Payload.Data
@@ -645,9 +643,9 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsgParams := &msgParams{
 		raw: true,
 	}
-	payload := &whisper.Envelope{
+	payload := &envelope{
 		Data:  msg,
-		Topic: whisper.TopicType(topic),
+		Topic: topic,
 	}
 
 	pssMsg := newPssMsg(pssMsgParams)
@@ -679,7 +677,7 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 //
 // Fails if the key id does not match any in of the stored public keys
 func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
-	if _, err := crypto.UnmarshalPubkey(common.FromHex(pubkeyid)); err != nil {
+	if _, err := p.Crypto.UnmarshalPubkey(common.FromHex(pubkeyid)); err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkeyid)
 	}
 	psp, ok := p.getPeerPub(pubkeyid, topic)
@@ -690,7 +688,7 @@ func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
-// It generates an whisper envelope for the specified recipient and topic,
+// It generates an envelope for the specified recipient and topic,
 // and wraps the message payload in it.
 // TODO: Implement proper message padding
 func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []byte) error {
@@ -706,37 +704,27 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	} else if c < p.paddingByteSize {
 		return fmt.Errorf("invalid padding length: %d", c)
 	}
-	wparams := &whisper.MessageParams{
-		TTL:      defaultWhisperTTL,
-		Src:      p.privateKey,
-		Topic:    whisper.TopicType(topic),
-		WorkTime: defaultWhisperWorkTime,
-		PoW:      defaultWhisperPoW,
-		Payload:  msg,
-		Padding:  padding,
+	mparams := &messageParams{
+		Src:     p.privateKey,
+		Topic:   topic,
+		Payload: msg,
+		Padding: padding,
 	}
 	if asymmetric {
-		pk, err := crypto.UnmarshalPubkey(key)
+		pk, err := p.Crypto.UnmarshalPubkey(key)
 		if err != nil {
 			return fmt.Errorf("Cannot unmarshal pubkey: %x", key)
 		}
-		wparams.Dst = pk
+		mparams.Dst = pk
 	} else {
-		wparams.KeySym = key
+		mparams.KeySym = key
 	}
 	// set up outgoing message container, which does encryption and envelope wrapping
-	woutmsg, err := whisper.NewSentMessage(wparams)
+	envelope, err := newSentEnvelope(mparams)
 	if err != nil {
-		return fmt.Errorf("failed to generate whisper message encapsulation: %v", err)
+		return fmt.Errorf("failed to perform message encapsulation and encryption: %v", err)
 	}
-	// performs encryption.
-	// Does NOT perform / performs negligible PoW due to very low difficulty setting
-	// after this the message is ready for sending
-	envelope, err := woutmsg.Wrap(wparams)
-	if err != nil {
-		return fmt.Errorf("failed to perform whisper encryption: %v", err)
-	}
-	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", common.ToHex(mparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
 
 	// prepare for devp2p transport
 	pssMsgParams := &msgParams{

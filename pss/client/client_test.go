@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
@@ -49,8 +48,7 @@ type protoCtrl struct {
 var (
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
-	w              *whisper.Whisper
-	wapi           *whisper.PublicWhisperAPI
+	cryptoUtils    pss.CryptoUtils
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -78,8 +76,7 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	w = whisper.New(&whisper.DefaultConfig)
-	wapi = whisper.NewPublicWhisperAPI(w)
+	cryptoUtils = pss.NewCryptoUtils()
 
 	pssprotocols = make(map[string]*protoCtrl)
 }
@@ -250,11 +247,11 @@ func newServices() adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := wapi.NewKeyPair(ctxlocal)
+			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
 			if err != nil {
 				return nil, err
 			}
-			privkey, err := w.GetPrivateKey(keys)
+			privkey, err := cryptoUtils.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}

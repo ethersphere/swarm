@@ -219,14 +219,14 @@ func (s *Swap) handleMsg(p *Peer) func(ctx context.Context, msg interface{}) err
 	}
 }
 
-var defaultSubmitChequeAndCash = submitChequeAndCash
+var defaultCashCheque = cashCheque
 
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a debitor
 func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitChequeMsg) error {
 	cheque := msg.Cheque
-	log.Info("received cheque from peer", "peer", p.ID().String())
-	actualAmount, err := s.processAndVerifyCheque(cheque, p)
+	log.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
+	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
@@ -251,33 +251,31 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	// submit cheque and cash in async, otherwise this blocks here until the TX is mined
-	go defaultSubmitChequeAndCash(s, otherSwap, opts, actualAmount, cheque)
+	// cash cheque in async, otherwise this blocks here until the TX is mined
+	go defaultCashCheque(s, otherSwap, opts, cheque)
 
 	return err
 }
 
-// submitChequeAndCash should be called async as it blocks until the transaction(s) are mined
-// The function submits the cheque to the blockchain and then cashes it in directly
-func submitChequeAndCash(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, actualAmount uint64, cheque *Cheque) {
+// cashCheque should be called async as it blocks until the transaction(s) are mined
+// The function cashes the cheque by sending it to the blockchain
+func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	receipt, err := otherSwap.SubmitChequeBeneficiary(opts, s.backend, big.NewInt(int64(cheque.Serial)), big.NewInt(int64(cheque.Amount)), big.NewInt(int64(cheque.Timeout)), cheque.Signature)
-	if err != nil {
-		// TODO: do something with the error
-		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		log.Error("error submitting cheque", "err", err)
-		return
-	}
-	log.Debug("submit tx mined", "receipt", receipt)
-
-	receipt, err = otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(actualAmount)))
+	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
 		log.Error("error cashing cheque", "err", err)
 		return
 	}
-	log.Info("Cheque successfully submitted and cashed")
+
+	if result.Bounced {
+		log.Error("cheque bounced", "tx", receipt.TxHash)
+		return
+		// TODO: do something here
+	}
+
+	log.Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -350,7 +348,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 		return fmt.Errorf("error while creating cheque: %s", err.Error())
 	}
 
-	log.Info("sending cheque", "serial", cheque.ChequeParams.Serial, "amount", cheque.ChequeParams.Amount, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.setCheque(peer, cheque)
 
 	err = s.store.Put(sentChequeKey(peer), &cheque)
@@ -363,7 +361,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 	}
 
 	// reset balance;
-	err = s.resetBalance(peer, int64(cheque.Amount))
+	err = s.resetBalance(peer, int64(cheque.Honey))
 	if err != nil {
 		return err
 	}
@@ -372,7 +370,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 }
 
 // createCheque creates a new cheque whose beneficiary will be the peer and
-// whose serial and amount are set based on the last cheque and current balance for this peer
+// whose amount is based on the last cheque and current balance for this peer
 // The cheque will be signed and point to the issuer's contract
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
@@ -398,35 +396,32 @@ func (s *Swap) createCheque(swapPeer *Peer) (*Cheque, error) {
 
 	// if there is no existing cheque when loading from the store, it means it's the first interaction
 	// this is a valid scenario
-	serial, total, err := s.getLastChequeValues(peer)
+	total, err := s.getLastChequeValues(peer)
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
-			Serial:      serial + 1,
-			Amount:      total + amount,
-			Timeout:     defaultCashInDelay,
-			Contract:    s.owner.Contract,
-			Honey:       honey,
-			Beneficiary: beneficiary,
+			CumulativePayout: total + amount,
+			Contract:         s.owner.Contract,
+			Beneficiary:      beneficiary,
 		},
+		Honey: honey,
 	}
 	cheque.Signature, err = cheque.Sign(s.owner.privateKey)
 
 	return cheque, err
 }
 
-func (s *Swap) getLastChequeValues(peer enode.ID) (serial, total uint64, err error) {
+func (s *Swap) getLastChequeValues(peer enode.ID) (total uint64, err error) {
 	err = s.loadLastSentCheque(peer)
 	if err != nil {
 		return
 	}
 	lastCheque, exists := s.getCheque(peer)
 	if exists {
-		serial = lastCheque.Serial
-		total = lastCheque.Amount
+		total = lastCheque.CumulativePayout
 	}
 	return
 }

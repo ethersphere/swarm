@@ -26,6 +26,7 @@ require (
 	github.com/edsrzf/mmap-go v0.0.0-20160512033002-935e0e8a636c // indirect
 	github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa // indirect
 	github.com/ethereum/go-ethereum v1.9.2
+	github.com/ethersphere/go-sw3 v0.1.0
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
 	github.com/gballet/go-libpcsclite v0.0.0-20190528105824-2fd9b619dd3c // indirect
