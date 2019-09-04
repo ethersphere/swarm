@@ -994,17 +994,17 @@ func (r *Registry) removePeer(p *Peer) {
 
 // PeerInfo holds information about the peer and it's peers.
 type PeerInfo struct {
-	Base     string                       `json:"base"` // our node's base address
-	Kademlia string                       `json:"kademlia"`
-	Peers    []PeerState                  `json:"peers"`
-	Cursors  map[string]map[string]uint64 `json:"cursors"`
+	Base      string                       `json:"base"` // our node's base address
+	Kademlia  string                       `json:"kademlia"`
+	Peers     []PeerState                  `json:"peers"`
+	Cursors   map[string]map[string]uint64 `json:"cursors"`
+	Intervals map[string]string            `json:"intervals"`
 }
 
 // PeerState holds information about a connected peer.
 type PeerState struct {
-	Peer      string            `json:"peer"` // the peer address
-	Cursors   map[string]uint64 `json:"cursors"`
-	Intervals map[string]string `json:"intervals"`
+	Peer    string            `json:"peer"` // the peer address
+	Cursors map[string]uint64 `json:"cursors"`
 }
 
 // PeerInfo returns a response in which the queried node's
@@ -1035,22 +1035,21 @@ func (r *Registry) PeerInfo() (*PeerInfo, error) {
 			info.Cursors[name][key] = cursor
 		}
 	}
-	for _, p := range r.peers {
-		is := make(map[string]string)
-		if err := p.intervalsStore.Iterate("", func(key, value []byte) (stop bool, err error) {
-			i := new(intervals.Intervals)
-			if err := i.UnmarshalBinary(value); err != nil {
-				return true, err
-			}
-			is[string(key)[:16]] = i.String()
-			return false, nil
-		}); err != nil {
-			return nil, err
+	info.Intervals = make(map[string]string)
+	if err := r.intervalsStore.Iterate("", func(key, value []byte) (stop bool, err error) {
+		i := new(intervals.Intervals)
+		if err := i.UnmarshalBinary(value); err != nil {
+			return true, err
 		}
+		info.Intervals[string(key)] = i.String()
+		return false, nil
+	}); err != nil {
+		return nil, err
+	}
+	for _, p := range r.peers {
 		info.Peers = append(info.Peers, PeerState{
-			Peer:      hex.EncodeToString(p.OAddr)[:16],
-			Cursors:   p.getCursorsCopy(),
-			Intervals: is,
+			Peer:    hex.EncodeToString(p.OAddr)[:16],
+			Cursors: p.getCursorsCopy(),
 		})
 	}
 	return info, nil
