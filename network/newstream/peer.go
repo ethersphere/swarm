@@ -223,6 +223,6 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 }
 
 func (p *Peer) peerStreamIntervalKey(stream ID) string {
-	k := fmt.Sprintf("%s|%s", p.ID().String(), stream.String())
+	k := fmt.Sprintf("%s|%s", hex.EncodeToString(p.BzzAddr.OAddr), stream.String())
 	return k
 }
