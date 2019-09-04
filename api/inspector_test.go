@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ethersphere/swarm/network"
@@ -50,15 +51,19 @@ func TestInspectorPeerStreams(t *testing.T) {
 
 	client := rpc.DialInProc(server)
 
-	var peerInfo newstream.PeerInfo
+	var peerInfo string
 
 	err = client.Call(&peerInfo, "inspector_peerStreams")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if want := hex.EncodeToString(baseKey)[:16]; peerInfo.Base != want {
-		t.Fatalf("got base key %q, want %q", peerInfo.Base, want)
+	// if want := hex.EncodeToString(baseKey)[:16]; peerInfo.Base != want {
+	// 	t.Fatalf("got base key %q, want %q", peerInfo.Base, want)
+	// }
+
+	if !strings.Contains(peerInfo, `"base":"`+hex.EncodeToString(baseKey)[:16]+`"`) {
+		t.Error("missing base key in response")
 	}
 
 	t.Log(peerInfo)
