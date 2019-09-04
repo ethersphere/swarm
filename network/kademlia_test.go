@@ -95,7 +95,7 @@ func (tk *testKademlia) Register(regs ...string) {
 //
 // TODO: Make test adapt to change in NeighbourhoodSize
 func TestNeighbourhoodDepth(t *testing.T) {
-	baseAddressBytes := RandomAddr().OAddr
+	baseAddressBytes := RandomBzzAddr().OAddr
 	kad := NewKademlia(baseAddressBytes, NewKadParams())
 
 	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
@@ -103,12 +103,12 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	// generate the peers
 	var peers []*Peer
 	for i := 0; i < 7; i++ {
-		addr := pot.RandomAddressAt(baseAddress, i)
+		addr := pot.RandomBzzAddressAt(baseAddress, i)
 		peers = append(peers, newTestDiscoveryPeer(addr, kad))
 	}
 	var sevenPeers []*Peer
 	for i := 0; i < 2; i++ {
-		addr := pot.RandomAddressAt(baseAddress, 7)
+		addr := pot.RandomBzzAddressAt(baseAddress, 7)
 		sevenPeers = append(sevenPeers, newTestDiscoveryPeer(addr, kad))
 	}
 

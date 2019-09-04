@@ -231,11 +231,11 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 func TestRequestFromPeers(t *testing.T) {
 	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
-	addr := network.RandomAddr()
+	addr := network.RandomBzzAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr:   network.RandomAddr(),
+		BzzAddr:   network.RandomBzzAddr(),
 		LightNode: false,
 		Peer:      protocolsPeer,
 	}, to)
@@ -259,14 +259,14 @@ func TestRequestFromPeers(t *testing.T) {
 func TestRequestFromPeersWithLightNode(t *testing.T) {
 	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
-	addr := network.RandomAddr()
+	addr := network.RandomBzzAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
 
 	// setting up a lightnode
 	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr:   network.RandomAddr(),
+		BzzAddr:   network.RandomBzzAddr(),
 		LightNode: true,
 		Peer:      protocolsPeer,
 	}, to)

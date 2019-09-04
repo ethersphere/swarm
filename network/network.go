@@ -64,8 +64,8 @@ func (a *BzzAddr) String() string {
 	return fmt.Sprintf("%x <%s> cap:%s", a.OAddr, a.UAddr, a.capabilities)
 }
 
-// RandomAddr is a utility method generating an address from a public key
-func RandomAddr() *BzzAddr {
+// RandomBzzAddr is a utility method generating an address from a public key
+func RandomBzzAddr() *BzzAddr {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic("unable to generate key")

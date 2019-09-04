@@ -41,15 +41,15 @@ func TestForwardBasic(t *testing.T) {
 	const depth = 10
 	for i := 0; i <= depth; i++ {
 		// add two peers for each proximity order
-		a := pot.RandomAddressAt(base, i)
+		a := pot.RandomBzzAddressAt(base, i)
 		peerAddresses = append(peerAddresses, a)
-		a = pot.RandomAddressAt(base, i)
+		a = pot.RandomBzzAddressAt(base, i)
 		peerAddresses = append(peerAddresses, a)
 	}
 
 	// skip one level, add one peer at one level deeper.
 	// as a result, we will have an edge case of three peers in nearest neighbours' bin.
-	peerAddresses = append(peerAddresses, pot.RandomAddressAt(base, depth+2))
+	peerAddresses = append(peerAddresses, pot.RandomBzzAddressAt(base, depth+2))
 
 	kad := network.NewKademlia(base[:], network.NewKadParams())
 	ps := createPss(t, kad)
@@ -78,7 +78,7 @@ func TestForwardBasic(t *testing.T) {
 	for i := 0; i < firstNearest; i++ {
 		// send random messages with proximity orders, corresponding to PO of each bin,
 		// with one peer being closer to the recipient address
-		a := pot.RandomAddressAt(peerAddresses[i], 64)
+		a := pot.RandomBzzAddressAt(peerAddresses[i], 64)
 		c = testCase{
 			name:      fmt.Sprintf("Send random to each PO, id: [%d]", i),
 			recipient: a[:],
@@ -93,7 +93,7 @@ func TestForwardBasic(t *testing.T) {
 		// send random messages with proximity orders, corresponding to PO of each bin,
 		// with random proximity relative to the recipient address
 		po := i / 2
-		a := pot.RandomAddressAt(base, po)
+		a := pot.RandomBzzAddressAt(base, po)
 		c = testCase{
 			name:      fmt.Sprintf("Send direct to known, id: [%d]", i),
 			recipient: a[:],
@@ -106,7 +106,7 @@ func TestForwardBasic(t *testing.T) {
 
 	for i := firstNearest; i < len(peerAddresses); i++ {
 		// recipient address falls into the nearest neighbours' bin
-		a := pot.RandomAddressAt(base, i)
+		a := pot.RandomBzzAddressAt(base, i)
 		c = testCase{
 			name:      fmt.Sprintf("recipient address falls into the nearest neighbours' bin, id: [%d]", i),
 			recipient: a[:],
@@ -118,7 +118,7 @@ func TestForwardBasic(t *testing.T) {
 	}
 
 	// send msg with proximity order much deeper than the deepest nearest neighbour
-	a2 := pot.RandomAddressAt(base, 77)
+	a2 := pot.RandomBzzAddressAt(base, 77)
 	c = testCase{
 		name:      "proximity order much deeper than the deepest nearest neighbour",
 		recipient: a2[:],
@@ -167,7 +167,7 @@ func TestForwardBasic(t *testing.T) {
 	}
 
 	// partial address with proximity order deeper than any of the nearest neighbour
-	a3 := pot.RandomAddressAt(base, part)
+	a3 := pot.RandomBzzAddressAt(base, part)
 	c = testCase{
 		name:      "partial address with proximity order deeper than any of the nearest neighbour",
 		recipient: a3[:part],
@@ -218,7 +218,7 @@ func TestForwardBasic(t *testing.T) {
 		// send random messages with proximity orders, corresponding to PO of each bin,
 		// with different numbers of failed attempts.
 		// msg should be received by only one of the deeper peers.
-		a := pot.RandomAddressAt(base, po)
+		a := pot.RandomBzzAddressAt(base, po)
 		c = testCase{
 			name:      fmt.Sprintf("Send direct to known, id: [%d]", i),
 			recipient: a[:],

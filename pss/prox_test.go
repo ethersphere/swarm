@@ -136,7 +136,7 @@ func (td *testData) init(msgCount int) error {
 	}
 
 	for i := 0; i < msgCount; i++ {
-		msgAddr := pot.RandomAddress() // we choose message addresses randomly
+		msgAddr := pot.RandomBzzAddress() // we choose message addresses randomly
 		td.recipientAddresses = append(td.recipientAddresses, msgAddr.Bytes())
 		smallestPo := 256
 		var target enode.ID

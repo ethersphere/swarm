@@ -154,7 +154,7 @@ func TestHiveStatePersistance(t *testing.T) {
 	h1, cleanup1 := startHive(t, dir)
 	peers := make(map[string]bool)
 	for i := 0; i < peersCount; i++ {
-		raddr := RandomAddr().WithCapabilities(capability.NewCapabilities())
+		raddr := RandomBzzAddr().WithCapabilities(capability.NewCapabilities())
 		h1.Register(raddr)
 		peers[raddr.String()] = true
 	}

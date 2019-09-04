@@ -108,7 +108,7 @@ func TestAPITopic(t *testing.T) {
 // matching of address hints; whether a message could be or is for the node
 func TestAddressMatch(t *testing.T) {
 
-	localaddr := network.RandomAddr().Over()
+	localaddr := network.RandomBzzAddr().Over()
 	copy(localaddr[:8], []byte("deadbeef"))
 	remoteaddr := []byte("feedbeef")
 	kadparams := network.NewKadParams()
@@ -160,7 +160,7 @@ func TestAddressMatch(t *testing.T) {
 func TestAddressMatchProx(t *testing.T) {
 
 	// recipient node address
-	localAddr := network.RandomAddr().Over()
+	localAddr := network.RandomBzzAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
 
 	// set up kademlia
@@ -189,7 +189,7 @@ func TestAddressMatchProx(t *testing.T) {
 		rw := &p2p.MsgPipeRW{}
 		ptpPeer := p2p.NewPeer(enode.ID{}, "362436 call me anytime", []p2p.Cap{})
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
-		peerAddr := pot.RandomAddressAt(localPotAddr, i)
+		peerAddr := pot.RandomBzzAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
 			Peer:    protoPeer,
 			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
@@ -270,7 +270,7 @@ func TestAddressMatchProx(t *testing.T) {
 	// test the distances
 	var prevReceive int
 	for i, distance := range remoteDistances {
-		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remotePotAddr := pot.RandomBzzAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		var data [32]byte
@@ -299,7 +299,7 @@ func TestAddressMatchProx(t *testing.T) {
 	receives = 0
 	prevReceive = 0
 	for i, distance := range remoteDistances {
-		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remotePotAddr := pot.RandomBzzAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		var data [32]byte
@@ -323,7 +323,7 @@ func TestAddressMatchProx(t *testing.T) {
 	receives = 0
 
 	for _, distance := range remoteDistances {
-		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remotePotAddr := pot.RandomBzzAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		pssMsg := message.New(message.Flags{Raw: true})
@@ -478,8 +478,8 @@ func TestKeys(t *testing.T) {
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := make(PssAddress, 32)
-	copy(addr, network.RandomAddr().Over())
-	outkey := network.RandomAddr().Over()
+	copy(addr, network.RandomBzzAddr().Over())
+	outkey := network.RandomBzzAddr().Over()
 	topicobj := message.NewTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topicobj, addr)
 	outkeyid, err := ps.SetSymmetricKey(outkey, topicobj, addr, false)
@@ -526,7 +526,7 @@ func TestGetPublickeyEntries(t *testing.T) {
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 
-	peeraddr := network.RandomAddr().Over()
+	peeraddr := network.RandomBzzAddr().Over()
 	topicaddr := make(map[message.Topic]PssAddress)
 	topicaddr[message.Topic{0x13}] = peeraddr
 	topicaddr[message.Topic{0x2a}] = peeraddr[:16]
@@ -586,12 +586,12 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	}
 
 	// initialize kad
-	baseaddr := network.RandomAddr()
+	baseaddr := network.RandomBzzAddr()
 	kad := network.NewKademlia((baseaddr).Over(), network.NewKadParams())
 	rw := &p2p.MsgPipeRW{}
 
 	// one peer has a mismatching version of pss
-	wrongpssaddr := network.RandomAddr()
+	wrongpssaddr := network.RandomBzzAddr()
 	wrongpsscap := p2p.Cap{
 		Name:    protocolName,
 		Version: 0,
@@ -603,7 +603,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	}, kad)
 
 	// one peer doesn't even have pss (boo!)
-	nopssaddr := network.RandomAddr()
+	nopssaddr := network.RandomBzzAddr()
 	nopsscap := p2p.Cap{
 		Name:    "nopss",
 		Version: 1,
@@ -644,7 +644,7 @@ func TestRawAllow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseAddr := network.RandomAddr()
+	baseAddr := network.RandomBzzAddr()
 	kad := network.NewKademlia((baseAddr).Over(), network.NewKadParams())
 	ps := newTestPss(privKey, kad, nil)
 	defer ps.Stop()
@@ -889,8 +889,8 @@ func testSendSym(t *testing.T) {
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
-	lrecvkey := network.RandomAddr().Over()
-	rrecvkey := network.RandomAddr().Over()
+	lrecvkey := network.RandomBzzAddr().Over()
+	rrecvkey := network.RandomBzzAddr().Over()
 
 	var lkeyids [2]string
 	var rkeyids [2]string
@@ -1370,7 +1370,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	rand.Read(msg)
 	topic := message.NewTopic([]byte("foo"))
 	to := make(PssAddress, 32)
-	copy(to[:], network.RandomAddr().Over())
+	copy(to[:], network.RandomBzzAddr().Over())
 	symkeyid, err := ps.GenerateSymmetricKey(topic, to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
@@ -1412,7 +1412,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	rand.Read(msg)
 	topic := message.NewTopic([]byte("foo"))
 	to := make(PssAddress, 32)
-	copy(to[:], network.RandomAddr().Over())
+	copy(to[:], network.RandomBzzAddr().Over())
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1460,7 +1460,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	topic := message.NewTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
-		copy(to[:], network.RandomAddr().Over())
+		copy(to[:], network.RandomBzzAddr().Over())
 		keyid, err = ps.GenerateSymmetricKey(topic, to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
@@ -1532,7 +1532,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	defer ps.Stop()
 	topic := message.NewTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
-		copy(addr[i], network.RandomAddr().Over())
+		copy(addr[i], network.RandomBzzAddr().Over())
 		keyid, err = ps.GenerateSymmetricKey(topic, addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
