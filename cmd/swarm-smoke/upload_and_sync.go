@@ -47,7 +47,7 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 		seed = inputSeed
 	}
 
-	randomBytes := testutil.RandomBytes(seed, filesize*1000)
+	randomBytes := testutil.RandomBytes(seed, filesize)
 
 	errc := make(chan error)
 
