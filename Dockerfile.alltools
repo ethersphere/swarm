@@ -10,6 +10,10 @@ FROM alpine:3.9
 RUN apk --no-cache add ca-certificates
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
 RUN apk --update add perf
+RUN wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+RUN chmod +x /jq-linux64
+RUN wget https://github.com/vi/websocat/releases/download/v1.5.0/websocat_amd64-linux-static
+RUN chmod +x /websocat_amd64-linux-static
 COPY --from=builder /swarm/build/bin/* /usr/local/bin/
 COPY --from=geth /usr/local/bin/geth /usr/local/bin/
 COPY docker/run-smoke.sh /run-smoke.sh
