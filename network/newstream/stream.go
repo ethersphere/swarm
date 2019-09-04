@@ -1038,7 +1038,7 @@ func (r *Registry) PeerInfo() (*PeerInfo, error) {
 			if err := i.UnmarshalBinary(value); err != nil {
 				return true, err
 			}
-			is[string(key)] = i.String()
+			is[string(key)[:16]] = i.String()
 			return false, nil
 		}); err != nil {
 			return nil, err
