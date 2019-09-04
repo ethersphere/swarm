@@ -405,7 +405,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[messag
 			// however, we need to keep track of it in the test driver as well.
 			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			bzzPrivateKey, err = simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err

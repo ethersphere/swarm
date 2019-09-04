@@ -191,7 +191,7 @@ func TestAddressMatchProx(t *testing.T) {
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
 		peerAddr := pot.RandomAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
-			Peer: protoPeer,
+			Peer:    protoPeer,
 			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
 		}
 		peer := network.NewPeer(bzzPeer, kad)
@@ -611,7 +611,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	nid = enode.ID{0x02}
 	nopsspeer := network.NewPeer(&network.BzzPeer{
 		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
-		BzzAddr: network.NewBzzAddr(nopssaddr.Over(),nil),
+		BzzAddr: network.NewBzzAddr(nopssaddr.Over(), nil),
 	}, kad)
 
 	// add peers to kademlia and activate them
@@ -1625,7 +1625,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 	}
 	return map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err

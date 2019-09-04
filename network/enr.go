@@ -61,7 +61,7 @@ func getENRBzzPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *protocols.Spec) *Bzz
 	record := p.Node().Record()
 	record.Load(&bootnode)
 
-	// get the address; separate function as long as we need swarm/network:NewAddr() to call it
+	// get the address; separate function as long as we need swarm/network:NewBzzAddrFromEnode() to call it
 	addr := getENRBzzAddr(p.Node())
 
 	// build the peer using the retrieved data
