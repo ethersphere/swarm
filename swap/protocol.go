@@ -121,7 +121,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return err
 	}
 
-	swapPeer := s.newPeer(protoPeer, beneficiary, response.ContractAddress)
+	swapPeer := s.addPeer(protoPeer, beneficiary, response.ContractAddress)
 	defer s.removePeer(swapPeer)
 
 	return swapPeer.Run(s.handleMsg(swapPeer))
@@ -133,22 +133,18 @@ func (s *Swap) removePeer(p *Peer) {
 	delete(s.peers, p.ID())
 }
 
-func (s *Swap) addPeer(p *Peer) {
+func (s *Swap) addPeer(protoPeer *protocols.Peer, beneficiary common.Address, contractAddress common.Address) *Peer {
 	s.peersLock.Lock()
 	defer s.peersLock.Unlock()
+	p := NewPeer(protoPeer, s, beneficiary, contractAddress)
 	s.peers[p.ID()] = p
+	return p
 }
 
-func (s *Swap) getPeer(id enode.ID) (*Peer, bool) {
+func (s *Swap) getPeer(id enode.ID) *Peer {
 	s.peersLock.RLock()
 	defer s.peersLock.RUnlock()
-	peer, ok := s.peers[id]
-	return peer, ok
-}
-
-func (s *Swap) newPeer(protoPeer *protocols.Peer, beneficiary common.Address, contractAddress common.Address) *Peer {
-	peer := NewPeer(protoPeer, s, beneficiary, contractAddress)
-	s.addPeer(peer)
+	peer := s.peers[id]
 	return peer
 }
 

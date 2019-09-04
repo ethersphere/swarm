@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
-	"github.com/ethersphere/swarm/state"
 )
 
 // ErrDontOwe indictates that no balance is actially owned
@@ -78,12 +77,12 @@ func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	return p.swap.saveLastSentCheque(p.ID(), cheque)
 }
 
-func (p *Peer) getLastChequeValues() (total uint64, err error) {
+func (p *Peer) getLastCumulativePayout() uint64 {
 	lastCheque := p.getLastReceivedCheque()
 	if lastCheque != nil {
-		total = lastCheque.CumulativePayout
+		return lastCheque.CumulativePayout
 	}
-	return
+	return 0
 }
 
 func (p *Peer) setBalance(balance int64) error {
@@ -116,33 +115,25 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	beneficiary := p.beneficiary
-	peerBalance := p.getBalance()
+	if p.getBalance() >= 0 {
+		return nil, fmt.Errorf("expected negative balance, found: %d", p.getBalance())
+	}
 	// the balance should be negative here, we take the absolute value:
-	honey := uint64(-peerBalance)
-	var amount uint64
+	honey := uint64(-p.getBalance())
 
 	// TODO: this must probably be locked
-	amount, err = p.swap.oracle.GetPrice(honey)
+	amount, err := p.swap.oracle.GetPrice(honey)
 	if err != nil {
-		return nil, fmt.Errorf("error getting price from oracle: %s", err.Error())
+		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
 
-	// if there is no existing cheque when loading from the store, it means it's the first interaction
-	// this is a valid scenario
-	total, err := p.getLastChequeValues()
-	if err != nil && err != state.ErrNotFound {
-		return nil, err
-	}
-
-	// TODO: lock
-	contract := p.swap.owner.Contract
+	total := p.getLastCumulativePayout()
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
 			CumulativePayout: total + amount,
-			Contract:         contract,
-			Beneficiary:      beneficiary,
+			Contract:         p.swap.owner.Contract,
+			Beneficiary:      p.beneficiary,
 		},
 		Honey: honey,
 	}
@@ -157,22 +148,20 @@ func (p *Peer) createCheque() (*Cheque, error) {
 func (p *Peer) sendCheque() error {
 	cheque, err := p.createCheque()
 	if err != nil {
-		return fmt.Errorf("error while creating cheque: %s", err.Error())
+		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
 	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 
 	if err := p.setLastSentCheque(cheque); err != nil {
-		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
-	}
-
-	emit := &EmitChequeMsg{
-		Cheque: cheque,
+		return fmt.Errorf("error while storing the last cheque: %v", err)
 	}
 
 	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
 		return err
 	}
 
-	return p.Send(context.Background(), emit)
+	return p.Send(context.Background(), &EmitChequeMsg{
+		Cheque: cheque,
+	})
 }

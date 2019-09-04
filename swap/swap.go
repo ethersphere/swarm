@@ -48,8 +48,8 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 API
 	store               state.Store        // store is needed in order to keep balances and cheques across sessions
-	accountingLock      sync.RWMutex       // lock for data consistency in accounting-related functions
 	storeLock           sync.RWMutex       // lock for store access
+	accountingLock      sync.RWMutex       // lock for data consistency in accounting-related functions
 	peers               map[enode.ID]*Peer // map of all swap Peers
 	peersLock           sync.RWMutex       // lock for peers map
 	backend             contract.Backend   // the backend (blockchain) used
@@ -140,8 +140,8 @@ func (s *Swap) DeploySuccess() string {
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.accountingLock.Lock()
 	defer s.accountingLock.Unlock()
-	swapPeer, ok := s.getPeer(peer.ID())
-	if !ok {
+	swapPeer := s.getPeer(peer.ID())
+	if swapPeer == nil {
 		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
 	}
 	swapPeer.lock.Lock()
@@ -162,9 +162,6 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.paymentThreshold {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
-		if !ok {
-			return fmt.Errorf("peer %s not found", peer)
-		}
 		return swapPeer.sendCheque()
 	}
 
@@ -271,8 +268,8 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 
 // Balance returns the balance for a given peer
 func (s *Swap) Balance(peer enode.ID) (int64, error) {
-	swapPeer, ok := s.peers[peer]
-	if !ok {
+	swapPeer := s.getPeer(peer)
+	if swapPeer == nil {
 		return 0, state.ErrNotFound
 	}
 	return swapPeer.getBalance(), nil
