@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
-	"strconv"
 	"testing"
 	"time"
 
@@ -406,7 +405,7 @@ func compareNodeBinsToStreams(t *testing.T, onesCursors map[string]uint64, other
 	}
 
 	for nameKey, cur := range onesCursors {
-		id, err := strconv.Atoi(parseID(nameKey).Key)
+		id, err := parseSyncKey(parseID(nameKey).Key)
 		if err != nil {
 			return err
 		}
@@ -424,7 +423,7 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 	}
 	// inclusive test
 	for nameKey, cur := range onesCursors {
-		bin, err := strconv.Atoi(parseID(nameKey).Key)
+		bin, err := parseSyncKey(parseID(nameKey).Key)
 		if err != nil {
 			return err
 		}
@@ -437,9 +436,9 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[string]uint
 	}
 
 	// exclusive test
-	for i := 0; i < int(depth); i++ {
+	for i := uint8(0); i < uint8(depth); i++ {
 		// should not have anything shallower than depth
-		id := NewID("SYNC", fmt.Sprintf("%d", i))
+		id := NewID("SYNC", encodeSyncKey(i))
 		if _, ok := onesCursors[id.String()]; ok {
 			return fmt.Errorf("oneCursors contains id %s, but it should not", id)
 		}
@@ -474,7 +473,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		//create the response
 		res := &StreamInfoRes{}
 		for _, v := range msg.Streams {
-			cur, err := strconv.Atoi(v.Key)
+			cur, err := parseSyncKey(v.Key)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -568,11 +567,11 @@ CHECKSTREAMS:
 	//get the pivot cursors for peer, assert equal to what is in `sub`
 	for _, stream := range getAllSyncStreams() {
 		cur, ok := otherPeer.getCursor(stream)
-		keyInt, err := strconv.Atoi(stream.Key)
+		keyInt, err := parseSyncKey(stream.Key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		shouldExist := checkKeyInSlice(keyInt, sub)
+		shouldExist := checkKeyInSlice(int(keyInt), sub)
 
 		if shouldExist == ok {
 			continue
@@ -646,10 +645,10 @@ func (s *slipStreamMock) HandleMsg(ctx context.Context, msg interface{}) error {
 }
 
 func getAllSyncStreams() (streams []ID) {
-	for i := 0; i <= 16; i++ {
+	for i := uint8(0); i <= 16; i++ {
 		streams = append(streams, ID{
 			Name: syncStreamName,
-			Key:  fmt.Sprintf("%d", i),
+			Key:  encodeSyncKey(i),
 		})
 	}
 	return
