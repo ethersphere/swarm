@@ -994,9 +994,10 @@ func (r *Registry) removePeer(p *Peer) {
 
 // PeerInfo holds information about the peer and it's peers.
 type PeerInfo struct {
-	Base    string                       `json:"base"` // our node's base address
-	Peers   []PeerState                  `json:"peers"`
-	Cursors map[string]map[string]uint64 `json:"cursors"`
+	Base     string                       `json:"base"` // our node's base address
+	Kademlia string                       `json:"kademlia"`
+	Peers    []PeerState                  `json:"peers"`
+	Cursors  map[string]map[string]uint64 `json:"cursors"`
 }
 
 // PeerState holds information about a connected peer.
@@ -1018,6 +1019,9 @@ func (r *Registry) PeerInfo() (*PeerInfo, error) {
 		if name != syncStreamName {
 			// support only sync provider, for now
 			continue
+		}
+		if sp, ok := p.(*syncProvider); ok {
+			info.Kademlia = sp.kad.String()
 		}
 		for i := uint8(0); i <= chunk.MaxPO; i++ {
 			key, err := p.EncodeKey(i)
