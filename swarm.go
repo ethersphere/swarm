@@ -379,7 +379,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 			if err := cswap.ValidateCode(context.Background(), s.backend, address); err != nil {
 				return fmt.Errorf("contract validation for %v failed: %v", address, err)
 			}
-			if err := s.swap.InstanceAt(address, s.backend); err != nil {
+			if err := s.swap.BindToContractAt(address, s.backend); err != nil {
 				return err
 			}
 			log.Info("Using the provided chequebook", "chequebookAddr", address)
