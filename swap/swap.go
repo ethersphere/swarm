@@ -130,9 +130,9 @@ func keyToID(key string, prefix string) enode.ID {
 func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
+		address:    crypto.PubkeyToAddress(*pubkey),
 		privateKey: prvkey,
 		publicKey:  pubkey,
-		address:    crypto.PubkeyToAddress(*pubkey),
 	}
 }
 
@@ -531,8 +531,8 @@ func (s *Swap) verifyContract(ctx context.Context, address common.Address) error
 	return contract.ValidateCode(ctx, s.backend, address)
 }
 
-// SetChequebookAddr sets the chequebook address
-func (s *Swap) SetChequebookAddr(chequebookAddr common.Address) {
+// setChequebookAddr sets the chequebook address
+func (s *Swap) setChequebookAddr(chequebookAddr common.Address) {
 	s.owner.Contract = chequebookAddr
 }
 
@@ -546,14 +546,13 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// NewInstanceAt creates a new instance of an already existing chequebook contract at address and sets chequebookAddr
-func (s *Swap) NewInstanceAt(address common.Address, backend swap.Backend) error {
-	c, err := contract.InstanceAt(address, backend)
+// InstanceAt creates a new instance of an already existing chequebook contract at address and sets chequebookAddr
+func (s *Swap) InstanceAt(address common.Address, backend swap.Backend) (err error) {
+	s.contract, err = contract.InstanceAt(address, backend)
 	if err != nil {
 		return err
 	}
-	s.contract = c
-	s.SetChequebookAddr(address)
+	s.setChequebookAddr(address)
 	return nil
 }
 
@@ -570,7 +569,7 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 		log.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	s.SetChequebookAddr(address)
+	s.setChequebookAddr(address)
 	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err

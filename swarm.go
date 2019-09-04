@@ -377,17 +377,17 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 		if s.config.Contract != (common.Address{}) {
 			address := s.config.Contract
 			if err := cswap.ValidateCode(context.Background(), s.backend, address); err != nil {
-				return fmt.Errorf("Provided address not a chequebook smart-contract: %v", err)
+				return fmt.Errorf("contract validation for %v failed: %v", address, err)
 			}
-			if err := s.swap.NewInstanceAt(address, s.backend); err != nil {
-				return fmt.Errorf("Could not set the instance at provided cheqeubook: %v", err)
+			if err := s.swap.InstanceAt(address, s.backend); err != nil {
+				return err
 			}
 			log.Info("Using the provided chequebook", "chequebookAddr", address)
 		} else {
 			if err := s.swap.Deploy(context.Background(), s.backend, s.config.Path); err != nil {
-				return fmt.Errorf("Unable to deploy swap contract: %v", err)
+				return err
 			}
-			log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
+			log.Info("New SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 		}
 	} else {
 		log.Info("SWAP disabled: no chequebook set")
