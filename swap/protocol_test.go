@@ -126,7 +126,10 @@ func TestEmitCheque(t *testing.T) {
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
 	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
-	debitor := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// set balance artificially
 	debitor.setBalance(42)
@@ -196,7 +199,10 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
-	creditor := debitorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
+	creditor, err := debitorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
@@ -207,7 +213,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatalf("Expected no cheques yet, but there is %v:", creditor.getLastSentCheque())
 	}
 	// do some accounting, no error expected, just a WARN
-	err := debitorSwap.Add(int64(-overDraft), creditor.Peer)
+	err = debitorSwap.Add(int64(-overDraft), creditor.Peer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +254,10 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// create a dummy pper
 	cPeer := newDummyPeerWithSpec(Spec)
-	debitor := creditorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
+	debitor, err := creditorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// set the balance to manually be at DisconnectThreshold
 	overDraft := 42
@@ -260,7 +269,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getLastSentCheque())
 	}
 	// now do some accounting
-	err := creditorSwap.Add(int64(overDraft), debitor.Peer)
+	err = creditorSwap.Add(int64(overDraft), debitor.Peer)
 	// it should fail due to overdraft
 	if err == nil {
 		t.Fatal("Expected an error due to overdraft, but did not get any")

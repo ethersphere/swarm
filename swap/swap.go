@@ -311,6 +311,9 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	error := s.store.Get(receivedChequeKey(p), &cheque)
+	if error == state.ErrNotFound {
+		return nil, nil
+	}
 	return cheque, error
 }
 
@@ -318,6 +321,9 @@ func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
 func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
 	var cheque *Cheque
 	error := s.store.Get(sentChequeKey(p), &cheque)
+	if error == state.ErrNotFound {
+		return nil, nil
+	}
 	return cheque, error
 }
 
@@ -325,6 +331,9 @@ func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
 func (s *Swap) loadBalance(p enode.ID) (int64, error) {
 	var balance int64
 	error := s.store.Get(balanceKey(p), &balance)
+	if error == state.ErrNotFound {
+		return 0, nil
+	}
 	return balance, error
 }
 

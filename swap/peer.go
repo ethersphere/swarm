@@ -44,7 +44,7 @@ type Peer struct {
 }
 
 // NewPeer creates a new swap Peer instance
-func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) *Peer {
+func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) (*Peer, error) {
 	peer := &Peer{
 		Peer:            p,
 		swap:            s,
@@ -52,11 +52,19 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 		contractAddress: contractAddress,
 	}
 
-	peer.lastReceivedCheque, _ = s.loadLastReceivedCheque(p.ID())
-	peer.lastSentCheque, _ = s.loadLastSentCheque(p.ID())
-	peer.balance, _ = s.loadBalance(p.ID())
+	var err error
+	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {
+		return nil, err
+	}
 
-	return peer
+	if peer.lastSentCheque, err = s.loadLastSentCheque(p.ID()); err != nil {
+		return nil, err
+	}
+
+	if peer.balance, err = s.loadBalance(p.ID()); err != nil {
+		return nil, err
+	}
+	return peer, nil
 }
 
 func (p *Peer) getLastReceivedCheque() *Cheque {
