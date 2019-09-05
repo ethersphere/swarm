@@ -374,21 +374,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		if s.config.Contract != (common.Address{}) {
-			address := s.config.Contract
-			if err := cswap.ValidateCode(context.Background(), s.backend, address); err != nil {
-				return fmt.Errorf("contract validation for %v failed: %v", address, err)
-			}
-			if err := s.swap.BindToContractAt(address, s.backend); err != nil {
-				return err
-			}
-			log.Info("Using the provided chequebook", "chequebookAddr", address)
-		} else {
-			if err := s.swap.Deploy(context.Background(), s.backend, s.config.Path); err != nil {
-				return err
-			}
-			log.Info("New SWAP contract deployed", "contract info", s.swap.DeploySuccess())
-		}
+		s.swap.StartChequebook(s.config.Contract)
 	} else {
 		log.Info("SWAP disabled: no chequebook set")
 	}

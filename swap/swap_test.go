@@ -644,8 +644,8 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 	}
 }
 
-// tests if verifyContract accepts an address with the correct bytecode
-func TestVerifyContract(t *testing.T) {
+// tests if TestValidateCode accepts an address with the correct bytecode
+func TestValidateCode(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
@@ -658,13 +658,13 @@ func TestVerifyContract(t *testing.T) {
 
 	testBackend.Commit()
 
-	if err = swap.verifyContract(context.TODO(), addr); err != nil {
+	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
 
-// tests if verifyContract rejects an address with different bytecode
-func TestVerifyContractWrongContract(t *testing.T) {
+// tests if ValidateCode rejects an address with different bytecode
+func TestValidateWrongCode(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
@@ -679,7 +679,7 @@ func TestVerifyContractWrongContract(t *testing.T) {
 	testBackend.Commit()
 
 	// since the bytecode is different this should throw an error
-	if err = swap.verifyContract(context.TODO(), addr); err != cswap.ErrNotASwapContract {
+	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != cswap.ErrNotASwapContract {
 		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }

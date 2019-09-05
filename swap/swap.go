@@ -521,11 +521,6 @@ func (s *Swap) GetParams() *swap.Params {
 	return s.contract.ContractParams()
 }
 
-// verifyContract checks if the bytecode found at address matches the expected bytecode
-func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
-	return contract.ValidateCode(ctx, s.backend, address)
-}
-
 // setChequebookAddr sets the chequebook address
 func (s *Swap) setChequebookAddr(chequebookAddr common.Address) {
 	s.owner.Contract = chequebookAddr
@@ -541,9 +536,29 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
+// StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
+func (s *Swap) StartChequebook(chequebookAddr common.Address) (err error) {
+	if chequebookAddr != (common.Address{}) {
+		if err := s.BindToContractAt(chequebookAddr); err != nil {
+			return err
+		}
+		log.Info("Using the provided chequebook", "chequebookAddr", chequebookAddr)
+	} else {
+		if err := s.Deploy(context.Background(), s.backend); err != nil {
+			return err
+		}
+		log.Info("New SWAP contract deployed", "contract info", s.DeploySuccess())
+	}
+	return nil
+}
+
 // BindToContractAt binds an instance of an already existing chequebook contract at address and sets chequebookAddr
-func (s *Swap) BindToContractAt(address common.Address, backend swap.Backend) (err error) {
-	s.contract, err = contract.InstanceAt(address, backend)
+func (s *Swap) BindToContractAt(address common.Address) (err error) {
+
+	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
+		return fmt.Errorf("contract validation for %v failed: %v", address, err)
+	}
+	s.contract, err = contract.InstanceAt(address, s.backend)
 	if err != nil {
 		return err
 	}
@@ -552,7 +567,7 @@ func (s *Swap) BindToContractAt(address common.Address, backend swap.Backend) (e
 }
 
 // Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
+func (s *Swap) Deploy(ctx context.Context, backend swap.Backend) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
