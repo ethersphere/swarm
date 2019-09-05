@@ -17,6 +17,7 @@
 package swarm
 
 import (
+	"github.com/ethersphere/swarm/swap"
 	"context"
 	"encoding/hex"
 	"io/ioutil"
@@ -27,9 +28,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/ethersphere/swarm/network"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -228,11 +226,11 @@ func TestNewSwarmFailure(t *testing.T) {
 			},
 		},
 		{
-			name: "with swap enabled and default network ID",
+			name: "with swap enabled and disabled networkID",
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
-				config.NetworkID = network.DefaultNetworkID
+				config.NetworkID = swap.DisabledNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {
