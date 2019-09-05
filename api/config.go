@@ -55,8 +55,8 @@ type Config struct {
 	// Swap configs
 	SwapBackendURL          string
 	SwapEnabled             bool
-	SwapPaymentThreshold    int64
-	SwapDisconnectThreshold int64
+	SwapPaymentThreshold    uint64
+	SwapDisconnectThreshold uint64
 
 	*network.HiveParams
 	Pss                  *pss.Params

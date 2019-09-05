@@ -234,7 +234,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	}
 
 	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "5",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
@@ -244,7 +244,10 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), "10",
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), "15",
 	}
+
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {
@@ -273,8 +276,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkID != 42 {
-		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkID)
+	if info.NetworkID != 5 {
+		t.Fatalf("Expected network ID to be %d, got %d", 5, info.NetworkID)
 	}
 
 	if info.SyncEnabled {
@@ -287,6 +290,14 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 
 	if info.Cors != "*" {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
+	}
+
+	if info.SwapPaymentThreshold != 10 {
+		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", 10, info.SwapPaymentThreshold)
+	}
+
+	if info.SwapDisconnectThreshold != 15 {
+		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", 15, info.SwapDisconnectThreshold)
 	}
 
 	node.Shutdown()

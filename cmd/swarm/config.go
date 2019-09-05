@@ -30,7 +30,6 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/naoina/toml"
@@ -179,10 +178,6 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.BzzAccount = keyid
 	}
 
-	if chbookaddr := ctx.GlobalString(ChequebookAddrFlag.Name); chbookaddr != "" {
-		currentConfig.Contract = common.HexToAddress(chbookaddr)
-	}
-
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
 		id, err := strconv.ParseUint(networkid, 10, 64)
 		if err != nil {
@@ -212,6 +207,18 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.SwapEnabled = true
 	}
 
+	if swapBackendURL := ctx.GlobalString(SwarmSwapBackendURLFlag.Name); swapBackendURL != "" {
+		currentConfig.SwapBackendURL = swapBackendURL
+	}
+
+	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
+		currentConfig.SwapPaymentThreshold = paymentThreshold
+	}
+
+	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
+		currentConfig.SwapDisconnectThreshold = disconnectThreshold
+	}
+
 	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
 		currentConfig.SyncEnabled = false
 	}
@@ -231,7 +238,6 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.DeliverySkipCheck = true
 	}
 
-	currentConfig.SwapBackendURL = ctx.GlobalString(SwarmSwapBackendURLFlag.Name)
 	if currentConfig.SwapEnabled && currentConfig.SwapBackendURL == "" {
 		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
 	}

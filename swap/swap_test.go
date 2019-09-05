@@ -431,7 +431,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
 		// balance is not expected to be affected once past the disconnect threshold
-		if peerBalance < swap.peers[peerID].disconnectThreshold {
+		if peerBalance < int64(swap.disconnectThreshold) {
 			peerBalance += booking.amount
 		}
 		expectedBalances[peerID] = peerBalance
@@ -524,10 +524,7 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 // creates a dummy swap.Peer
 func newDummyPeer(spec *protocols.Spec) *Peer {
 	return &Peer{
-		Peer:                   newDummyProtocolPeer(spec),
-		paymentThresholdOracle: NewThresholdOracle(DefaultPaymentThreshold),
-		disconnectThreshold:    DefaultDisconnectThreshold,
-		honeyOracle:            NewHoneyPriceOracle(),
+		Peer: newDummyProtocolPeer(spec),
 	}
 }
 

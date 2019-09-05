@@ -60,7 +60,7 @@ type Swap struct {
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
 	contract            swap.Contract        // reference to the smart contract
-	disconnectThreshold int64                // default amount at which a peer
+	disconnectThreshold uint64               // default amount at which a peer
 	thresholdOracle     ThresholdOracle
 	honeyPriceOracle    HoneyOracle
 }
@@ -86,7 +86,7 @@ func NewParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend, disconnectThreshold int64, paymentThreshold int64) *Swap {
+func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
 	return &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),
@@ -159,7 +159,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return fmt.Errorf("peer %v does not exist", peer.ID())
 	}
 	disconnectThreshold := s.disconnectThreshold
-	if balance >= disconnectThreshold {
+	if balance >= int64(disconnectThreshold) {
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), disconnectThreshold)
 	}
 
@@ -174,7 +174,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// that the balance is *below* the threshold
 	paymentThreshold, _ := s.thresholdOracle.GetPaymentThreshold()
 
-	if newBalance <= -paymentThreshold {
+	if newBalance <= -int64(paymentThreshold) {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
 		swapPeer, ok := s.getPeer(peer.ID())
 		if !ok {

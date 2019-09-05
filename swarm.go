@@ -114,8 +114,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	// Swap initialization
 	if config.SwapEnabled {
 		// for now, Swap can only be enabled in a whitelisted network
-		if self.config.NetworkID != swap.AllowedNetworkID {
-			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
+		if self.config.NetworkID == swap.NonAllowedNetworkID {
+			return nil, fmt.Errorf("swap can not be allowed under Network ID %d", swap.NonAllowedNetworkID)
 		}
 		// if Swap is enabled, we MUST have a contract API
 		if self.config.SwapBackendURL == "" {

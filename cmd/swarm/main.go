@@ -177,8 +177,11 @@ func init() {
 		CorsStringFlag,
 		EnsAPIFlag,
 		SwarmTomlConfigPathFlag,
+		//swap flags
 		SwarmSwapEnabledFlag,
 		SwarmSwapBackendURLFlag,
+		SwarmSwapDisconnectThresholdFlag,
+		SwarmSwapPaymentThresholdFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,

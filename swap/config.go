@@ -16,7 +16,9 @@
 
 package swap
 
-import "time"
+import (
+	"time"
+)
 
 // These are currently arbitrary values which have not been verified nor tested
 // Need experimentation to arrive to values which make sense
@@ -34,6 +36,6 @@ const (
 	// The smart-contract allows for setting this variable differently per beneficiary
 	defaultHarddepositTimeoutDuration = 24 * time.Hour
 
-	// While Swap is unstable, it's only allowed to be run under a specific network ID
-	AllowedNetworkID = 5
+	// While Swap is unstable, it is not allowed to run on mainnet
+	NonAllowedNetworkID = 1
 )
