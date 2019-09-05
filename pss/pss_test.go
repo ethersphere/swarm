@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -173,15 +172,12 @@ func TestAddressMatchProx(t *testing.T) {
 	privKey, err := ethCrypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
-	// enqueue method now is blocking, so we need always somebody processing the outbox
-	go func() {
-		for slot := range ps.outbox.process {
-			ps.outbox.free(slot)
-		}
-	}()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+
+	//Forwarding will fail. Since in this test we are not relying on forwarding, but just handling, the test is valid
+	ps.outbox.Start()
 
 	// create kademlia peers, so we have peers both inside and outside minproxlimit
 	var peers []*network.Peer
@@ -283,6 +279,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
 		ps.handle(context.TODO(), pssMsg)
+
 		if (!expects[i] && prevReceive != receives) || (expects[i] && prevReceive == receives) {
 			t.Fatalf("expected distance %d recipient %v when prox is set for handler", distance, expects[i])
 		}
@@ -338,127 +335,6 @@ func TestAddressMatchProx(t *testing.T) {
 			t.Fatalf("expected distance %d to not be recipient when prox is not set for handler", distance)
 		}
 
-	}
-}
-
-func TestMessageOutbox(t *testing.T) {
-	// setup
-	privkey, err := ethCrypto.GenerateKey()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	addr := make([]byte, 32)
-	addr[0] = 0x01
-	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-	outboxCapacity := 2
-
-	successC := make(chan struct{})
-	forward := func(msg *message.Message) error {
-		successC <- struct{}{}
-		return nil
-	}
-	ps.outbox = newOutbox(outboxCapacity, ps.quitC, forward)
-
-	ps.Start(nil)
-	defer ps.Stop()
-
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	usedSlots := ps.outbox.len()
-	if usedSlots != 1 {
-		t.Fatalf("incorrect outbox length. expected 1, got %v", usedSlots)
-	}
-	t.Log("Message enqueued", "Outbox len", ps.outbox.len())
-
-	select {
-	case <-successC:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for success forward")
-	}
-
-	failed := make([]*message.Message, 0)
-	failedC := make(chan struct{})
-	continueC := make(chan struct{})
-	failedForward := func(msg *message.Message) error {
-		failed = append(failed, msg)
-		failedC <- struct{}{}
-		<-continueC
-		return errors.New("Forced test error forwarding message")
-	}
-
-	ps.outbox.forward = failedForward
-
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("Expected no error enqueing, got %v", err.Error())
-	}
-
-	select {
-	case <-failedC:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for failing forward")
-	}
-
-	if len(failed) == 0 {
-		t.Fatal("Incorrect number of failed messages, expected 1 got 0")
-	}
-	// The message will be retried once we send to continueC, so first, we change the forward function
-	ps.outbox.forward = forward
-	continueC <- struct{}{}
-	select {
-	case <-successC:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for second success forward")
-	}
-
-}
-
-func TestOutboxFull(t *testing.T) {
-	// setup
-	privkey, err := ethCrypto.GenerateKey()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	addr := make([]byte, 32)
-	addr[0] = 0x01
-	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-	defer ps.Stop()
-	outboxCapacity := 2
-
-	procChan := make(chan struct{})
-	succesForward := func(msg *message.Message) error {
-		<-procChan
-		log.Info("Message processed")
-		return nil
-	}
-	ps.outbox = newOutbox(outboxCapacity, ps.quitC, succesForward)
-
-	ps.Start(nil)
-
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error enqueing first message, got %v", err)
-	}
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error enqueing second message, got %v", err)
-	}
-	//As we haven't signaled procChan, the messages are still in the outbox
-
-	err = ps.enqueue(testRandomMessage())
-	if err == nil {
-		t.Fatalf("expected error enqueing third message, instead got nil")
-	}
-	procChan <- struct{}{}
-	//There should be a slot again in the outbox
-	select {
-	case <-ps.outbox.slots:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for a free slot")
 	}
 }
 

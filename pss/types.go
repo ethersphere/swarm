@@ -18,7 +18,6 @@ package pss
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -47,18 +46,6 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 		*a = append(*a, bb)
 	}
 	return nil
-}
-
-type outboxMsg struct {
-	msg       *message.Message
-	startedAt time.Time
-}
-
-func newOutboxMsg(msg *message.Message) *outboxMsg {
-	return &outboxMsg{
-		msg:       msg,
-		startedAt: time.Now(),
-	}
 }
 
 // Signature for a message handler function for a Message
