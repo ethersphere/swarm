@@ -172,19 +172,19 @@ func TestCache(t *testing.T) {
 		Topic:   PingTopic,
 		Payload: data,
 	}
-	env, err := newSentEnvelope(mparams)
+	env, err := newSentEnvelope(mparams, ps.Crypto)
 	msg := &PssMsg{
 		Payload: env,
 		To:      to,
 	}
 	mparams.Payload = datatwo
-	envtwo, err := newSentEnvelope(mparams)
+	envtwo, err := newSentEnvelope(mparams, ps.Crypto)
 	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
 	}
 	mparams.Payload = datathree
-	envthree, err := newSentEnvelope(mparams)
+	envthree, err := newSentEnvelope(mparams, ps.Crypto)
 	msgthree := &PssMsg{
 		Payload: envthree,
 		To:      to,
@@ -1644,7 +1644,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			Payload: []byte("xyzzy"),
 			Padding: []byte("1234567890abcdef"),
 		}
-		env, err := newSentEnvelope(mparams)
+		env, err := newSentEnvelope(mparams, ps.Crypto)
 		if err != nil {
 			b.Fatalf("could not generate envelope: %v", err)
 		}
@@ -1723,7 +1723,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		Payload: []byte("xyzzy"),
 		Padding: []byte("1234567890abcdef"),
 	}
-	env, err := newSentEnvelope(mparams)
+	env, err := newSentEnvelope(mparams, ps.Crypto)
 	if err != nil {
 		b.Fatalf("could not generate envelope: %v", err)
 	}

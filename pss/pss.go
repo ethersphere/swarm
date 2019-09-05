@@ -720,7 +720,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		mparams.KeySym = key
 	}
 	// set up outgoing message container, which does encryption and envelope wrapping
-	envelope, err := newSentEnvelope(mparams)
+	envelope, err := newSentEnvelope(mparams, p.Crypto)
 	if err != nil {
 		return fmt.Errorf("failed to perform message encapsulation and encryption: %v", err)
 	}

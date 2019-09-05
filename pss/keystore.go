@@ -155,7 +155,7 @@ func (ks *KeyStore) processSym(envelope *envelope) (*receivedMessage, string, Ps
 		if err != nil {
 			continue
 		}
-		recvmsg, err := envelope.openSymmetric(symkey)
+		recvmsg, err := envelope.openSymmetric(symkey, ks.Crypto)
 		if err != nil {
 			continue
 		}
@@ -183,7 +183,7 @@ func (ks *KeyStore) processSym(envelope *envelope) (*receivedMessage, string, Ps
 func (p *Pss) processAsym(envelope *envelope) (*receivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
 
-	recvmsg, err := envelope.openAsymmetric(p.privateKey)
+	recvmsg, err := envelope.openAsymmetric(p.privateKey, p.Crypto)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
