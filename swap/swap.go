@@ -48,7 +48,6 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 API
 	store               state.Store        // store is needed in order to keep balances and cheques across sessions
-	accountingLock      sync.RWMutex       // lock for data consistency in accounting-related functions
 	peers               map[enode.ID]*Peer // map of all swap Peers
 	peersLock           sync.RWMutex       // lock for peers map
 	backend             contract.Backend   // the backend (blockchain) used
@@ -137,8 +136,6 @@ func (s *Swap) DeploySuccess() string {
 // Add is the (sole) accounting function
 // Swap implements the protocols.Balance interface
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
-	s.accountingLock.Lock()
-	defer s.accountingLock.Unlock()
 	swapPeer := s.getPeer(peer.ID())
 	if swapPeer == nil {
 		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
