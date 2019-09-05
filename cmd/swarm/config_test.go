@@ -234,7 +234,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	}
 
 	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "5",
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
@@ -276,8 +276,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkID != 5 {
-		t.Fatalf("Expected network ID to be %d, got %d", 5, info.NetworkID)
+	if info.NetworkID != 42 {
+		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkID)
 	}
 
 	if info.SyncEnabled {

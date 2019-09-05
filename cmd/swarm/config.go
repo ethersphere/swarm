@@ -28,6 +28,7 @@ import (
 	"unicode"
 
 	cli "gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
@@ -177,7 +178,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if keyid := ctx.GlobalString(SwarmAccountFlag.Name); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
-
+	if chbookaddr := ctx.GlobalString(ChequebookAddrFlag.Name); chbookaddr != "" {	
+		currentConfig.Contract = common.HexToAddress(chbookaddr)	
+	}
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
 		id, err := strconv.ParseUint(networkid, 10, 64)
 		if err != nil {

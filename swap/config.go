@@ -16,9 +16,7 @@
 
 package swap
 
-import (
-	"time"
-)
+import "time"
 
 // These are currently arbitrary values which have not been verified nor tested
 // Need experimentation to arrive to values which make sense

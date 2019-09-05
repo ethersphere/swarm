@@ -60,9 +60,9 @@ type Swap struct {
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
 	contract            swap.Contract        // reference to the smart contract
-	disconnectThreshold uint64               // default amount at which a peer
-	thresholdOracle     ThresholdOracle
-	honeyPriceOracle    HoneyOracle
+	disconnectThreshold uint64               // amount at which the node will disconnect from the peer
+	thresholdOracle     ThresholdOracle		 // oracle which resolves at which amount node will initiate payment
+	honeyPriceOracle    HoneyOracle 		 // oracle which resolves the price of honey (in Wei)
 }
 
 // Owner encapsulates information related to accessing the contract
