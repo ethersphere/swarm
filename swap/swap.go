@@ -48,7 +48,6 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 type Swap struct {
 	api                 API
 	store               state.Store        // store is needed in order to keep balances and cheques across sessions
-	storeLock           sync.RWMutex       // lock for store access
 	accountingLock      sync.RWMutex       // lock for data consistency in accounting-related functions
 	peers               map[enode.ID]*Peer // map of all swap Peers
 	peersLock           sync.RWMutex       // lock for peers map
@@ -309,8 +308,6 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
 	var cheque *Cheque
 	error := s.store.Get(receivedChequeKey(p), &cheque)
 	return cheque, error
@@ -318,8 +315,6 @@ func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
 
 // loadLastSentCheque loads the last sent cheque for the peer from the store
 func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
 	var cheque *Cheque
 	error := s.store.Get(sentChequeKey(p), &cheque)
 	return cheque, error
@@ -327,8 +322,6 @@ func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
 
 // loadBalance loads the current balance for the peer from the store
 func (s *Swap) loadBalance(p enode.ID) (int64, error) {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
 	var balance int64
 	error := s.store.Get(balanceKey(p), &balance)
 	return balance, error
@@ -336,22 +329,16 @@ func (s *Swap) loadBalance(p enode.ID) (int64, error) {
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p enode.ID, cheque *Cheque) error {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
 	return s.store.Put(receivedChequeKey(p), cheque)
 }
 
 // saveLastSentCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastSentCheque(p enode.ID, cheque *Cheque) error {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
 	return s.store.Put(sentChequeKey(p), cheque)
 }
 
 // saveBalance saves balance as the current balance for peer
 func (s *Swap) saveBalance(p enode.ID, balance int64) error {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
 	return s.store.Put(balanceKey(p), balance)
 }
 
