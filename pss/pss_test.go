@@ -130,33 +130,33 @@ func TestCache(t *testing.T) {
 		Receiver: &privkey.PublicKey,
 	}
 	env, err := ps.Crypto.Wrap(data, wparams)
-	msg := &PssMsg{
+	msg := &message.Message{
 		Payload: env,
 		To:      to,
 		Topic:   PingTopic,
 	}
 	envtwo, err := ps.Crypto.Wrap(datatwo, wparams)
-	msgtwo := &PssMsg{
+	msgtwo := &message.Message{
 		Payload: envtwo,
 		To:      to,
 		Topic:   PingTopic,
 	}
 	envthree, err := ps.Crypto.Wrap(datathree, wparams)
-	msgthree := &PssMsg{
+	msgthree := &message.Message{
 		Payload: envthree,
 		To:      to,
 		Topic:   PingTopic,
 	}
 
-	digestone := ps.msgDigest(msg)
+	digestone := msg.Digest()
 	if err != nil {
 		t.Fatalf("could not store cache msgone: %v", err)
 	}
-	digesttwo := ps.msgDigest(msgtwo)
+	digesttwo := msgtwo.Digest()
 	if err != nil {
 		t.Fatalf("could not store cache msgtwo: %v", err)
 	}
-	digestthree := ps.msgDigest(msgthree)
+	digestthree := msgthree.Digest()
 	if err != nil {
 		t.Fatalf("could not store cache msgthree: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestAddressMatch(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	pssmsg := &PssMsg{
+	pssmsg := &message.Message{
 		To: remoteaddr,
 	}
 
@@ -331,7 +331,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 	// first the unit test on the method that calculates possible receipient using prox
 	for i, distance := range remoteDistances {
-		pssMsg := newPssMsg(message.Flags{})
+		pssMsg := message.New(message.Flags{})
 		pssMsg.To = make([]byte, len(localAddr))
 		copy(pssMsg.To, localAddr)
 		var byteIdx = distance / 8
@@ -371,7 +371,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 		var data [32]byte
 		rand.Read(data[:])
-		pssMsg := newPssMsg(message.Flags{Raw: true})
+		pssMsg := message.New(message.Flags{Raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 		pssMsg.Payload = data[:]
@@ -400,7 +400,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 		var data [32]byte
 		rand.Read(data[:])
-		pssMsg := newPssMsg(message.Flags{Raw: true})
+		pssMsg := message.New(message.Flags{Raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 		pssMsg.Payload = data[:]
@@ -422,7 +422,7 @@ func TestAddressMatchProx(t *testing.T) {
 		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
-		pssMsg := newPssMsg(message.Flags{Raw: true})
+		pssMsg := message.New(message.Flags{Raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 		pssMsg.Payload = []byte(remotePotAddr.String())
@@ -450,7 +450,7 @@ func TestMessageOutbox(t *testing.T) {
 	outboxCapacity := 2
 
 	successC := make(chan struct{})
-	forward := func(msg *PssMsg) error {
+	forward := func(msg *message.Message) error {
 		successC <- struct{}{}
 		return nil
 	}
@@ -475,10 +475,10 @@ func TestMessageOutbox(t *testing.T) {
 		t.Fatal("timeout waiting for success forward")
 	}
 
-	failed := make([]*PssMsg, 0)
+	failed := make([]*message.Message, 0)
 	failedC := make(chan struct{})
 	continueC := make(chan struct{})
-	failedForward := func(msg *PssMsg) error {
+	failedForward := func(msg *message.Message) error {
 		failed = append(failed, msg)
 		failedC <- struct{}{}
 		<-continueC
@@ -526,7 +526,7 @@ func TestOutboxFull(t *testing.T) {
 	outboxCapacity := 2
 
 	procChan := make(chan struct{})
-	succesForward := func(msg *PssMsg) error {
+	succesForward := func(msg *message.Message) error {
 		<-procChan
 		log.Info("Message processed")
 		return nil
@@ -718,7 +718,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	kad.On(nopsspeer)
 
 	// create pss
-	pssmsg := &PssMsg{
+	pssmsg := &message.Message{
 		To:      []byte{},
 		Expire:  uint32(time.Now().Add(time.Second).Unix()),
 		Payload: nil,
@@ -761,7 +761,7 @@ func TestRawAllow(t *testing.T) {
 	ps.Register(&topic, hndlrNoRaw)
 
 	// test it with a raw message, should be poo-poo
-	pssMsg := newPssMsg(message.Flags{
+	pssMsg := message.New(message.Flags{
 		Raw: true,
 	})
 	pssMsg.To = baseAddr.OAddr
@@ -1544,7 +1544,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
 		}
 	}
-	pssmsgs := make([]*PssMsg, 0, keycount)
+	pssmsgs := make([]*message.Message, 0, keycount)
 	var keyid string
 	privkey, err := ethCrypto.GenerateKey()
 	if cachesize > 0 {
@@ -1575,7 +1575,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		ps.Register(&topic, &handler{
 			f: noopHandlerFunc,
 		})
-		pssmsgs = append(pssmsgs, &PssMsg{
+		pssmsgs = append(pssmsgs, &message.Message{
 			To:      to,
 			Topic:   topic,
 			Payload: payload,
@@ -1649,7 +1649,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	ps.Register(&topic, &handler{
 		f: noopHandlerFunc,
 	})
-	pssmsg := &PssMsg{
+	pssmsg := &message.Message{
 		To:      addr[len(addr)-1][:],
 		Topic:   topic,
 		Payload: payload,
@@ -1661,10 +1661,10 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 }
 
-func testRandomMessage() *PssMsg {
+func testRandomMessage() *message.Message {
 	addr := make([]byte, 32)
 	addr[0] = 0x01
-	msg := newPssMsg(message.Flags{})
+	msg := message.New(message.Flags{})
 	msg.To = addr
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	msg.Topic = [4]byte{}

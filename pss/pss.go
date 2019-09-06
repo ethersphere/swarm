@@ -23,7 +23,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 	"sync"
 	"time"
 
@@ -46,7 +45,6 @@ const (
 	defaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
-	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
 	defaultOutboxCapacity      = 100000
@@ -64,7 +62,7 @@ var spec = &protocols.Spec{
 	Version:    protocolVersion,
 	MaxMsgSize: defaultMaxMsgSize,
 	Messages: []interface{}{
-		PssMsg{},
+		message.Message{},
 	},
 }
 
@@ -119,10 +117,10 @@ type outbox struct {
 	slots   chan int
 	process chan int
 	quitC   chan struct{}
-	forward func(msg *PssMsg) error
+	forward func(msg *message.Message) error
 }
 
-func newOutbox(capacity int, quitC chan struct{}, forward func(msg *PssMsg) error) outbox {
+func newOutbox(capacity int, quitC chan struct{}, forward func(msg *message.Message) error) outbox {
 	outbox := outbox{
 		queue:   make([]*outboxMsg, capacity),
 		slots:   make(chan int, capacity),
@@ -211,7 +209,7 @@ type Pss struct {
 	peers   map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
 	peersMu sync.RWMutex
 
-	fwdCache   map[digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	fwdCache   map[message.Digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	fwdCacheMu sync.RWMutex
 	cacheTTL   time.Duration // how long to keep messages in fwdCache (not implemented)
 	msgTTL     time.Duration
@@ -253,7 +251,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		quitC:      make(chan struct{}),
 
 		peers:     make(map[string]*protocols.Peer),
-		fwdCache:  make(map[digest]cacheEntry),
+		fwdCache:  make(map[message.Digest]cacheEntry),
 		cacheTTL:  params.CacheTTL,
 		msgTTL:    params.MsgTTL,
 		capstring: c.String(),
@@ -464,9 +462,9 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
-	pssmsg, ok := msg.(*PssMsg)
+	pssmsg, ok := msg.(*message.Message)
 	if !ok {
-		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T", msg)
+		return fmt.Errorf("invalid message type. Expected *message.Message, got %T", msg)
 	}
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
@@ -521,7 +519,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 // Entry point to processing a message for which the current node can be the intended recipient.
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
-func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
+func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
@@ -529,7 +527,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(pssMsg *PssMsg) ([]byte, string, PssAddress, error)
+	var keyFunc func(pssMsg *message.Message) ([]byte, string, PssAddress, error)
 
 	psstopic := pssmsg.Topic
 
@@ -588,12 +586,12 @@ func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddre
 }
 
 // will return false if using partial address
-func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
+func (p *Pss) isSelfRecipient(msg *message.Message) bool {
 	return bytes.Equal(msg.To, p.Kademlia.BaseAddr())
 }
 
 // test match of leftmost bytes in given message to node's Kademlia address
-func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
+func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 	local := p.Kademlia.BaseAddr()
 
 	// if a partial address matches we are possible recipient regardless of prox
@@ -616,7 +614,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
-func (p *Pss) enqueue(msg *PssMsg) error {
+func (p *Pss) enqueue(msg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	outboxmsg := newOutboxMsg(msg)
@@ -638,7 +636,7 @@ func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte) error
 		Raw: true,
 	}
 
-	pssMsg := newPssMsg(pssMsgParams)
+	pssMsg := message.New(pssMsgParams)
 	pssMsg.To = address
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = msg
@@ -711,7 +709,7 @@ func (p *Pss) send(to []byte, topic message.Topic, msg []byte, asymmetric bool, 
 	pssMsgParams := message.Flags{
 		Symmetric: !asymmetric,
 	}
-	pssMsg := newPssMsg(pssMsgParams)
+	pssMsg := message.New(pssMsgParams)
 	pssMsg.To = to
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = envelope
@@ -725,7 +723,7 @@ func (p *Pss) send(to []byte, topic message.Topic, msg []byte, asymmetric bool, 
 var sendFunc = sendMsg
 
 // tries to send a message, returns true if successful
-func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
+func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
@@ -765,7 +763,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
 //// forwarding fails, the node should try to forward it to the next best peer, until the message is
 //// successfully forwarded to at least one peer.
-func (p *Pss) forward(msg *PssMsg) error {
+func (p *Pss) forward(msg *message.Message) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
@@ -843,7 +841,7 @@ func label(b []byte) string {
 }
 
 // add a message to the cache
-func (p *Pss) addFwdCache(msg *PssMsg) error {
+func (p *Pss) addFwdCache(msg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
 
 	var entry cacheEntry
@@ -852,7 +850,7 @@ func (p *Pss) addFwdCache(msg *PssMsg) error {
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 
-	digest := p.msgDigest(msg)
+	digest := msg.Digest()
 	if entry, ok = p.fwdCache[digest]; !ok {
 		entry = cacheEntry{}
 	}
@@ -862,11 +860,11 @@ func (p *Pss) addFwdCache(msg *PssMsg) error {
 }
 
 // check if message is in the cache
-func (p *Pss) checkFwdCache(msg *PssMsg) bool {
+func (p *Pss) checkFwdCache(msg *message.Message) bool {
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 
-	digest := p.msgDigest(msg)
+	digest := msg.Digest()
 	entry, ok := p.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
@@ -877,22 +875,6 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 		metrics.GetOrRegisterCounter("pss.checkfwdcache.expired", nil).Inc(1)
 	}
 	return false
-}
-
-// Digest of message
-func (p *Pss) msgDigest(msg *PssMsg) digest {
-	return p.digestBytes(msg.serialize())
-}
-
-func (p *Pss) digestBytes(msg []byte) digest {
-	hasher := p.hashPool.Get().(hash.Hash)
-	defer p.hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(msg)
-	d := digest{}
-	key := hasher.Sum(nil)
-	copy(d[:], key[:digestLength])
-	return d
 }
 
 func validateAddress(addr PssAddress) error {
