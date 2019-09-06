@@ -30,10 +30,6 @@ import (
 )
 
 const (
-	defaultWhisperTTL = 6000
-)
-
-const (
 	pssControlSym = 1
 	pssControlRaw = 1 << 1
 	TopicLength   = 4 // in bytes Taken from Whisper
@@ -135,7 +131,8 @@ type PssMsg struct {
 	To      []byte
 	Control []byte
 	Expire  uint32
-	Payload *envelope
+	Topic   Topic
+	Payload []byte
 }
 
 func newPssMsg(param *msgParams) *PssMsg {
@@ -158,9 +155,11 @@ func (msg *PssMsg) isSym() bool {
 func (msg *PssMsg) serialize() []byte {
 	rlpdata, _ := rlp.EncodeToBytes(struct {
 		To      []byte
-		Payload *envelope
+		Topic   Topic
+		Payload []byte
 	}{
 		To:      msg.To,
+		Topic:   msg.Topic,
 		Payload: msg.Payload,
 	})
 	return rlpdata
@@ -168,7 +167,7 @@ func (msg *PssMsg) serialize() []byte {
 
 // String representation of PssMsg
 func (msg *PssMsg) String() string {
-	return fmt.Sprintf("PssMsg: Recipient: %x", common.ToHex(msg.To))
+	return fmt.Sprintf("PssMsg: Recipient: %x, Topic: %v", common.ToHex(msg.To), msg.Topic.String())
 }
 
 // Signature for a message handler function for a PssMsg
@@ -227,4 +226,17 @@ func BytesToTopic(b []byte) Topic {
 	topicHashFunc.Reset()
 	topicHashFunc.Write(b)
 	return toTopic(topicHashFunc.Sum(nil))
+}
+
+// BytesToTopic converts from the byte array representation of a topic
+// into the TopicType type.
+func toTopic(b []byte) (t Topic) {
+	sz := TopicLength
+	if x := len(b); x < TopicLength {
+		sz = x
+	}
+	for i := 0; i < sz; i++ {
+		t[i] = b[i]
+	}
+	return t
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	crypto2 "github.com/ethersphere/swarm/pss/crypto"
 	"os"
 	"testing"
 	"time"
@@ -24,8 +25,8 @@ import (
 var (
 	loglevel    = flag.Int("loglevel", 3, "logging verbosity")
 	psses       map[string]*pss.Pss
-	cryptoUtils pss.CryptoUtils
-	crypto      pss.CryptoBackend
+	cryptoUtils crypto2.CryptoUtils
+	crypto      crypto2.CryptoBackend
 )
 
 func init() {
@@ -35,7 +36,7 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	cryptoUtils = pss.NewCryptoUtils()
+	cryptoUtils = crypto2.NewCryptoUtils()
 	crypto = pss.NewCryptoBackend()
 	psses = make(map[string]*pss.Pss)
 }

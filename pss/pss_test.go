@@ -45,6 +45,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
 )
 
@@ -52,7 +53,7 @@ var (
 	initOnce        = sync.Once{}
 	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
 	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
-	cryptoUtils     CryptoUtils
+	cryptoUtils     crypto.CryptoUtils
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -76,7 +77,7 @@ func initTest() {
 			h := log.CallerFileHandler(hf)
 			log.Root().SetHandler(h)
 
-			cryptoUtils = NewCryptoUtils()
+			cryptoUtils = crypto.NewCryptoUtils()
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
@@ -166,28 +167,27 @@ func TestCache(t *testing.T) {
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
-	mparams := &messageParams{
-		Src:     privkey,
-		Dst:     &privkey.PublicKey,
-		Topic:   PingTopic,
-		Payload: data,
+	wparams := &crypto.WrapParams{
+		Src: privkey,
+		Dst: &privkey.PublicKey,
 	}
-	env, err := newSentEnvelope(mparams, ps.Crypto)
+	env, err := ps.Crypto.WrapMessage(data, wparams)
 	msg := &PssMsg{
 		Payload: env,
 		To:      to,
+		Topic:   PingTopic,
 	}
-	mparams.Payload = datatwo
-	envtwo, err := newSentEnvelope(mparams, ps.Crypto)
+	envtwo, err := ps.Crypto.WrapMessage(datatwo, wparams)
 	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
+		Topic:   PingTopic,
 	}
-	mparams.Payload = datathree
-	envthree, err := newSentEnvelope(mparams, ps.Crypto)
+	envthree, err := ps.Crypto.WrapMessage(datathree, wparams)
 	msgthree := &PssMsg{
 		Payload: envthree,
 		To:      to,
+		Topic:   PingTopic,
 	}
 
 	digestone := ps.msgDigest(msg)
@@ -419,10 +419,8 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &envelope{
-			Topic: topic,
-			Data:  data[:],
-		}
+		pssMsg.Payload = data[:]
+		pssMsg.Topic = topic
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
 		ps.handle(context.TODO(), pssMsg)
@@ -450,10 +448,8 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &envelope{
-			Topic: topic,
-			Data:  data[:],
-		}
+		pssMsg.Payload = data[:]
+		pssMsg.Topic = topic
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
 		ps.handle(context.TODO(), pssMsg)
@@ -474,10 +470,8 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = &envelope{
-			Topic: topic,
-			Data:  []byte(remotePotAddr.String()),
-		}
+		pssMsg.Payload = []byte(remotePotAddr.String())
+		pssMsg.Topic = topic
 
 		log.Trace("noprox addrs", "local", localAddr, "remote", remoteAddr)
 		ps.handle(context.TODO(), pssMsg)
@@ -565,7 +559,7 @@ func TestMessageOutbox(t *testing.T) {
 
 func TestOutboxFull(t *testing.T) {
 	// setup
-	privkey, err := crypto.GenerateKey()
+	privkey, err := utils.GenerateKey()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -784,7 +778,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	pssmsg := &PssMsg{
 		To:      []byte{},
 		Expire:  uint32(time.Now().Add(time.Second).Unix()),
-		Payload: &envelope{},
+		Payload: nil,
 	}
 	ps := newTestPss(privkey, kad, nil)
 	defer ps.Stop()
@@ -829,9 +823,8 @@ func TestRawAllow(t *testing.T) {
 	})
 	pssMsg.To = baseAddr.OAddr
 	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-	pssMsg.Payload = &envelope{
-		Topic: topic,
-	}
+	pssMsg.Topic = topic
+	pssMsg.Payload = nil
 	ps.handle(context.TODO(), pssMsg)
 	if receives > 0 {
 		t.Fatalf("Expected handler not to be executed with raw cap off")
@@ -847,7 +840,7 @@ func TestRawAllow(t *testing.T) {
 	deregRawHandler := ps.Register(&topic, hndlrRaw)
 
 	// should work now
-	pssMsg.Payload.Data = []byte("Raw Deal")
+	pssMsg.Payload = []byte("Raw Deal")
 	ps.handle(context.TODO(), pssMsg)
 	if receives == 0 {
 		t.Fatalf("Expected handler to be executed with raw cap on")
@@ -858,7 +851,7 @@ func TestRawAllow(t *testing.T) {
 	deregRawHandler()
 
 	// check that raw messages fail again
-	pssMsg.Payload.Data = []byte("Raw Trump")
+	pssMsg.Payload = []byte("Raw Trump")
 	ps.handle(context.TODO(), pssMsg)
 	if receives != prevReceives {
 		t.Fatalf("Expected handler not to be executed when raw handler is retracted")
@@ -1638,13 +1631,10 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
-		mparams := &messageParams{
-			KeySym:  symkey,
-			Topic:   topic,
-			Payload: []byte("xyzzy"),
-			Padding: []byte("1234567890abcdef"),
+		wparams := &crypto.WrapParams{
+			KeySym: symkey,
 		}
-		env, err := newSentEnvelope(mparams, ps.Crypto)
+		payload, err := ps.Crypto.WrapMessage([]byte("xyzzy"), wparams)
 		if err != nil {
 			b.Fatalf("could not generate envelope: %v", err)
 		}
@@ -1653,7 +1643,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		})
 		pssmsgs = append(pssmsgs, &PssMsg{
 			To:      to,
-			Payload: env,
+			Topic:   topic,
+			Payload: payload,
 		})
 	}
 	b.ResetTimer()
@@ -1717,13 +1708,10 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
-	mparams := &messageParams{
-		KeySym:  symkey,
-		Topic:   topic,
-		Payload: []byte("xyzzy"),
-		Padding: []byte("1234567890abcdef"),
+	wparams := &crypto.WrapParams{
+		KeySym: symkey,
 	}
-	env, err := newSentEnvelope(mparams, ps.Crypto)
+	payload, err := ps.Crypto.WrapMessage([]byte("xyzzy"), wparams)
 	if err != nil {
 		b.Fatalf("could not generate envelope: %v", err)
 	}
@@ -1732,7 +1720,8 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	})
 	pssmsg := &PssMsg{
 		To:      addr[len(addr)-1][:],
-		Payload: env,
+		Topic:   topic,
+		Payload: payload,
 	}
 	for i := 0; i < b.N; i++ {
 		if err := ps.process(pssmsg, false, false); err != nil {
@@ -1747,10 +1736,8 @@ func testRandomMessage() *PssMsg {
 	msg := newPssMsg(&msgParams{})
 	msg.To = addr
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Payload = &envelope{
-		Topic: [4]byte{},
-		Data:  []byte{0x66, 0x6f, 0x6f},
-	}
+	msg.Topic = [4]byte{}
+	msg.Payload = []byte{0x66, 0x6f, 0x6f}
 	return msg
 }
 

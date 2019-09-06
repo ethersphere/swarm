@@ -11,6 +11,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/pss/crypto"
 )
 
 type testCase struct {
@@ -24,7 +25,7 @@ type testCase struct {
 	errors    string
 }
 
-var crypto CryptoUtils = NewCryptoUtils()
+var utils = crypto.NewCryptoUtils()
 
 // the purpose of this test is to see that pss.forward() function correctly
 // selects the peers for message forwarding, depending on the message address
@@ -324,7 +325,7 @@ func addPeers(kad *network.Kademlia, addresses []pot.Address) {
 }
 
 func createPss(t *testing.T, kad *network.Kademlia) *Pss {
-	privKey, err := crypto.GenerateKey()
+	privKey, err := utils.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
 	if err != nil {
@@ -351,9 +352,7 @@ func newTestMsg(addr []byte) *PssMsg {
 	msg := newPssMsg(&msgParams{})
 	msg.To = addr[:]
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Payload = &envelope{
-		Topic: [4]byte{},
-		Data:  []byte("i have nothing to hide"),
-	}
+	msg.Topic = [4]byte{}
+	msg.Payload = []byte("i have nothing to hide")
 	return msg
 }
