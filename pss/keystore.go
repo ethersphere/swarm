@@ -26,22 +26,23 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 type KeyStore struct {
 	Crypto                   crypto.Crypto // key and encryption crypto
 	mx                       sync.RWMutex
-	pubKeyPool               map[string]map[Topic]*peer // mapping of hex public keys to peer address by topic.
-	symKeyPool               map[string]map[Topic]*peer // mapping of symkeyids to peer address by topic.
-	symKeyDecryptCache       []*string                  // fast lookup of symkeys recently used for decryption; last used is on top of stack
-	symKeyDecryptCacheCursor int                        // modular cursor pointing to last used, wraps on symKeyDecryptCache array
+	pubKeyPool               map[string]map[message.Topic]*peer // mapping of hex public keys to peer address by topic.
+	symKeyPool               map[string]map[message.Topic]*peer // mapping of symkeyids to peer address by topic.
+	symKeyDecryptCache       []*string                          // fast lookup of symkeys recently used for decryption; last used is on top of stack
+	symKeyDecryptCacheCursor int                                // modular cursor pointing to last used, wraps on symKeyDecryptCache array
 }
 
 func loadKeyStore() *KeyStore {
 	return &KeyStore{
 		Crypto:             crypto.New(),
-		pubKeyPool:         make(map[string]map[Topic]*peer),
-		symKeyPool:         make(map[string]map[Topic]*peer),
+		pubKeyPool:         make(map[string]map[message.Topic]*peer),
+		symKeyPool:         make(map[string]map[message.Topic]*peer),
 		symKeyDecryptCache: make([]*string, defaultSymKeyCacheCapacity),
 	}
 }
@@ -62,14 +63,14 @@ func (ks *KeyStore) isPubKeyStored(key string) bool {
 	return ok
 }
 
-func (ks *KeyStore) getPeerSym(symkeyid string, topic Topic) (*peer, bool) {
+func (ks *KeyStore) getPeerSym(symkeyid string, topic message.Topic) (*peer, bool) {
 	ks.mx.RLock()
 	defer ks.mx.RUnlock()
 	psp, ok := ks.symKeyPool[symkeyid][topic]
 	return psp, ok
 }
 
-func (ks *KeyStore) getPeerPub(pubkeyid string, topic Topic) (*peer, bool) {
+func (ks *KeyStore) getPeerPub(pubkeyid string, topic message.Topic) (*peer, bool) {
 	ks.mx.RLock()
 	defer ks.mx.RUnlock()
 	psp, ok := ks.pubKeyPool[pubkeyid][topic]
@@ -79,7 +80,7 @@ func (ks *KeyStore) getPeerPub(pubkeyid string, topic Topic) (*peer, bool) {
 // Links a peer ECDSA public key to a topic.
 // This is required for asymmetric message exchange on the given topic.
 // The value in `address` will be used as a routing hint for the public key / topic association.
-func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address PssAddress) error {
+func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic message.Topic, address PssAddress) error {
 	if err := validateAddress(address); err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, addre
 	}
 	ks.mx.Lock()
 	if _, ok := ks.pubKeyPool[pubkeyid]; !ok {
-		ks.pubKeyPool[pubkeyid] = make(map[Topic]*peer)
+		ks.pubKeyPool[pubkeyid] = make(map[message.Topic]*peer)
 	}
 	ks.pubKeyPool[pubkeyid][topic] = psp
 	ks.mx.Unlock()
@@ -103,14 +104,14 @@ func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, addre
 
 // adds a symmetric key to the pss key pool, and optionally adds the key to the
 // collection of keys used to attempt symmetric decryption of incoming messages
-func (ks *KeyStore) addSymmetricKeyToPool(keyid string, topic Topic, address PssAddress, addtocache bool, protected bool) {
+func (ks *KeyStore) addSymmetricKeyToPool(keyid string, topic message.Topic, address PssAddress, addtocache bool, protected bool) {
 	psp := &peer{
 		address:   address,
 		protected: protected,
 	}
 	ks.mx.Lock()
 	if _, ok := ks.symKeyPool[keyid]; !ok {
-		ks.symKeyPool[keyid] = make(map[Topic]*peer)
+		ks.symKeyPool[keyid] = make(map[message.Topic]*peer)
 	}
 	ks.symKeyPool[keyid][topic] = psp
 	ks.mx.Unlock()
@@ -121,7 +122,7 @@ func (ks *KeyStore) addSymmetricKeyToPool(keyid string, topic Topic, address Pss
 }
 
 // Returns all recorded topic and address combination for a specific public key
-func (ks *KeyStore) GetPublickeyPeers(keyid string) (topic []Topic, address []PssAddress, err error) {
+func (ks *KeyStore) GetPublickeyPeers(keyid string) (topic []message.Topic, address []PssAddress, err error) {
 	ks.mx.RLock()
 	defer ks.mx.RUnlock()
 	for t, peer := range ks.pubKeyPool[keyid] {
@@ -131,7 +132,7 @@ func (ks *KeyStore) GetPublickeyPeers(keyid string) (topic []Topic, address []Ps
 	return topic, address, nil
 }
 
-func (ks *KeyStore) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
+func (ks *KeyStore) getPeerAddress(keyid string, topic message.Topic) (PssAddress, error) {
 	ks.mx.RLock()
 	defer ks.mx.RUnlock()
 	if peers, ok := ks.pubKeyPool[keyid]; ok {
@@ -218,7 +219,7 @@ func (p *Pss) cleanKeys() (count int) {
 	p.mx.Lock()
 	defer p.mx.Unlock()
 	for keyid, peertopics := range p.symKeyPool {
-		var expiredtopics []Topic
+		var expiredtopics []message.Topic
 		for topic, psp := range peertopics {
 			if psp.protected {
 				continue
@@ -245,7 +246,7 @@ func (p *Pss) cleanKeys() (count int) {
 }
 
 // Automatically generate a new symkey for a topic and address hint
-func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache bool) (string, error) {
+func (ks *KeyStore) GenerateSymmetricKey(topic message.Topic, address PssAddress, addToCache bool) (string, error) {
 	keyid, err := ks.Crypto.GenerateSymKey()
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addToCache, false)
@@ -270,14 +271,14 @@ func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
 //
 // Returns a string id that can be used to retrieve the key bytes
 // from the crypto backend (see pss.GetSymmetricKey())
-func (ks *KeyStore) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
+func (ks *KeyStore) SetSymmetricKey(key []byte, topic message.Topic, address PssAddress, addtocache bool) (string, error) {
 	if err := validateAddress(address); err != nil {
 		return "", err
 	}
 	return ks.setSymmetricKey(key, topic, address, addtocache, true)
 }
 
-func (ks *KeyStore) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
+func (ks *KeyStore) setSymmetricKey(key []byte, topic message.Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
 	keyid, err := ks.Crypto.AddSymKey(key)
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addtocache, protected)

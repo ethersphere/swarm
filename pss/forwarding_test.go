@@ -12,7 +12,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/pss/internal/message"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 type testCase struct {

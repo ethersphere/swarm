@@ -51,6 +51,7 @@ import (
 	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
+	pssmessage "github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -563,7 +564,7 @@ func (s *Swarm) APIs() []rpc.API {
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
-func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
+func (s *Swarm) RegisterPssProtocol(topic *pssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
