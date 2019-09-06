@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -76,13 +75,13 @@ func (s *Swap) APIs() []rpc.API {
 
 // Start is a node.Service interface method
 func (s *Swap) Start(server *p2p.Server) error {
-	log.Info("Swap service started")
+	Info("Swap service started")
 	return nil
 }
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
-	log.Info("Swap service stopping")
+	Info("Swap service stopping")
 	return s.Close()
 }
 

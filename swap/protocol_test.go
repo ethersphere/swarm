@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -103,7 +102,7 @@ func TestHandshake(t *testing.T) {
 // We have the debitor send a cheque via an `EmitChequeMsg`, then the creditor "reads" (pipe) the message
 // and handles the cheque.
 func TestEmitCheque(t *testing.T) {
-	log.Debug("set up test swaps")
+	Debug("set up test swaps")
 	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
 	debitorSwap, clean2 := newTestSwap(t, ownerKey)
 	defer clean1()
@@ -111,7 +110,7 @@ func TestEmitCheque(t *testing.T) {
 
 	ctx := context.Background()
 
-	log.Debug("deploy to simulated backend")
+	Debug("deploy to simulated backend")
 	err := testDeploy(ctx, creditorSwap.backend, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +120,7 @@ func TestEmitCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Debug("create peer instances")
+	Debug("create peer instances")
 
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
@@ -133,13 +132,13 @@ func TestEmitCheque(t *testing.T) {
 
 	// set balance artificially
 	debitor.setBalance(42)
-	log.Debug("balance", "balance", debitor.getBalance())
+	Debug("balance", "balance", debitor.getBalance())
 	// a safe check: at this point no cheques should be in the swap
 	if debitor.getLastReceivedCheque() != nil {
 		t.Fatalf("Expected no cheques at creditor, but there is %v:", debitor.getLastReceivedCheque())
 	}
 
-	log.Debug("create a cheque")
+	Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         debitorSwap.owner.Contract,
@@ -169,17 +168,17 @@ func TestEmitCheque(t *testing.T) {
 	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
 	case <-testBackend.cashDone:
-		log.Debug("cash transaction completed and committed")
+		Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transaction to complete")
 	}
-	log.Debug("balance", "balance", debitor.getBalance())
+	Debug("balance", "balance", debitor.getBalance())
 	// check that the balance has been reset
 	if debitor.getBalance() != 0 {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, debitor.getBalance())
 	}
 	recvCheque := debitor.getLastReceivedCheque()
-	log.Debug("expected cheque", "cheque", recvCheque)
+	Debug("expected cheque", "cheque", recvCheque)
 	if recvCheque != cheque {
 		t.Fatalf("Expected cheque at creditor, but it was %v:", recvCheque)
 	}
@@ -189,7 +188,7 @@ func TestEmitCheque(t *testing.T) {
 // when we reach the payment threshold
 // It is the debitor who triggers cheques
 func TestTriggerPaymentThreshold(t *testing.T) {
-	log.Debug("create test swap")
+	Debug("create test swap")
 	debitorSwap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
@@ -248,7 +247,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 // when we reach the disconnect threshold
 // It is the creditor who triggers the disconnect from a overdraft creditor
 func TestTriggerDisconnectThreshold(t *testing.T) {
-	log.Debug("create test swap")
+	Debug("create test swap")
 	creditorSwap, clean := newTestSwap(t, beneficiaryKey)
 	defer clean()
 

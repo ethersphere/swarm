@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
@@ -158,7 +157,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.paymentThreshold {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+		Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
@@ -185,13 +184,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
-	log.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
+	Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
 
-	log.Debug("received cheque processed and verified", "peer", p.ID().String())
+	Debug("received cheque processed and verified", "peer", p.ID().String())
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -222,17 +221,17 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		log.Error("error cashing cheque", "err", err)
+		Error("error cashing cheque", "err", err)
 		return
 	}
 
 	if result.Bounced {
-		log.Error("cheque bounced", "tx", receipt.TxHash)
+		Error("cheque bounced", "tx", receipt.TxHash)
 		return
 		// TODO: do something here
 	}
 
-	log.Debug("cash tx mined", "receipt", receipt)
+	Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -256,7 +255,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -381,14 +380,14 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	log.Info("deploying new swap", "owner", opts.From.Hex())
+	Info("deploying new swap", "owner", opts.From.Hex())
 	address, err := s.deployLoop(opts, backend, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
-		log.Error("unable to deploy swap", "error", err)
+		Error("unable to deploy swap", "error", err)
 		return err
 	}
 	s.owner.Contract = address
-	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
+	Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
 }
@@ -402,11 +401,11 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 		}
 
 		if _, s.contract, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+			Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
-			log.Warn("chequebook deploy error", "try", try, "error", err)
+			Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
 		return addr, nil

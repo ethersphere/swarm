@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -110,7 +109,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	log.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
 
@@ -159,7 +158,7 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
-	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 
 	if err := p.setLastSentCheque(cheque); err != nil {
 		return fmt.Errorf("error while storing the last cheque: %v", err)
