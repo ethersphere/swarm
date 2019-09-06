@@ -349,7 +349,7 @@ func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
 	key, err := crypto.generateSecureRandomData(aesKeyLength)
 	if err != nil {
 		return "", err
-	} else if !crypto.validateDataIntegrity(key, aesKeyLength) {
+	} else if !validateDataIntegrity(key, aesKeyLength) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
@@ -452,7 +452,7 @@ func (crypto *defaultCryptoBackend) decryptAsymmetric(rawBytes []byte, key *ecds
 }
 
 func (crypto *defaultCryptoBackend) encryptSymmetric(rawBytes []byte, key []byte) ([]byte, error) {
-	if !crypto.validateDataIntegrity(key, aesKeyLength) {
+	if !validateDataIntegrity(key, aesKeyLength) {
 		return nil, errInvalidSymkey
 	}
 	block, err := aes.NewCipher(key)
@@ -489,7 +489,7 @@ func (crypto *defaultCryptoBackend) generateRandomID() (id string, err error) {
 	if err != nil {
 		return "", err
 	}
-	if !crypto.validateDataIntegrity(buf, keyIDSize) {
+	if !validateDataIntegrity(buf, keyIDSize) {
 		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
@@ -514,19 +514,19 @@ func (crypto *defaultCryptoBackend) generateSecureRandomData(length int) ([]byte
 	_, err := crand.Read(x)
 	if err != nil {
 		return nil, err
-	} else if !crypto.validateDataIntegrity(x, length) {
+	} else if !validateDataIntegrity(x, length) {
 		return nil, errSecureRandomData
 	}
 	_, err = mrand.Read(y)
 	if err != nil {
 		return nil, err
-	} else if !crypto.validateDataIntegrity(y, length) {
+	} else if !validateDataIntegrity(y, length) {
 		return nil, errSecureRandomData
 	}
 	for i := 0; i < length; i++ {
 		res[i] = x[i] ^ y[i]
 	}
-	if !crypto.validateDataIntegrity(res, length) {
+	if !validateDataIntegrity(res, length) {
 		return nil, errSecureRandomData
 	}
 	return res, nil
@@ -536,23 +536,11 @@ func (crypto *defaultCryptoBackend) importECDSAPublic(key *ecdsa.PublicKey) *eci
 	return ecies.ImportECDSAPublic(key)
 }
 
-// validateDataIntegrity returns false if the data have the wrong or contains all zeros,
-// which is the simplest and the most common bug.
-func (crypto *defaultCryptoBackend) validateDataIntegrity(k []byte, expectedSize int) bool {
-	if len(k) != expectedSize {
-		return false
-	}
-	if expectedSize > 3 && containsOnlyZeros(k) {
-		return false
-	}
-	return true
-}
-
-// CryptoUtils
-
 func (crypto *defaultCryptoBackend) GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ethCrypto.GenerateKey()
 }
+
+// CryptoUtils
 
 // NewKeyPair generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption. Returns ID of the new key pair.
@@ -594,6 +582,18 @@ func (crypto *defaultCryptoBackend) GetPrivateKey(id string) (*ecdsa.PrivateKey,
 }
 
 // Util functions
+
+// validateDataIntegrity returns false if the data have the wrong size or contains all zeros,
+// which is the simplest and the most common bug.
+func validateDataIntegrity(k []byte, expectedSize int) bool {
+	if len(k) != expectedSize {
+		return false
+	}
+	if expectedSize > 3 && containsOnlyZeros(k) {
+		return false
+	}
+	return true
+}
 
 // validatePrivateKey checks the format of the given private key.
 func validatePrivateKey(k *ecdsa.PrivateKey) bool {
