@@ -36,13 +36,13 @@ func (f *Flags) DecodeRLP(s *rlp.Stream) error {
 
 // EncodeRLP implements the rlp.Encoder interface
 func (f *Flags) EncodeRLP(w io.Writer) error {
-	flagsBytes := []byte{0}
+	var flags byte
 	if f.Raw {
-		flagsBytes[0] |= flagRaw
+		flags |= flagRaw
 	}
 	if f.Symmetric {
-		flagsBytes[0] |= flagSymmetric
+		flags |= flagSymmetric
 	}
 
-	return rlp.Encode(w, flagsBytes)
+	return rlp.Encode(w, []byte{flags})
 }
