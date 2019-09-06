@@ -253,7 +253,6 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 
 	streamRes := &StreamInfoRes{}
 	for _, v := range msg.Streams {
-		v := v
 		provider := r.getProvider(v)
 		if provider == nil {
 			p.logger.Error("unsupported provider", "stream", v)
