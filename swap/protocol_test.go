@@ -344,7 +344,7 @@ func TestSwapRPC(t *testing.T) {
 	fakeBalance1 := int64(234)
 	fakeBalance2 := int64(-100)
 
-	// query a first time, should be zero
+	// query a first time, should give error
 	var balance int64
 	err = rpcclient.Call(&balance, "swap_balance", id1)
 	// at this point no balance should be there:  no peer at address in map...
@@ -395,7 +395,7 @@ func TestSwapRPC(t *testing.T) {
 	}
 
 	fakeSum := fakeBalance1 + fakeBalance2
-	if sum != int64(fakeSum) {
+	if sum != fakeSum {
 		t.Fatalf("Expected total balance to be %d, but it %d", fakeSum, sum)
 	}
 
