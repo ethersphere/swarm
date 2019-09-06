@@ -229,7 +229,7 @@ func BytesToTopic(b []byte) Topic {
 }
 
 // toTopic converts from the byte array representation of a topic
-// into the TopicType type.
+// into the Topic type.
 func toTopic(b []byte) (t Topic) {
 	sz := TopicLength
 	if x := len(b); x < TopicLength {

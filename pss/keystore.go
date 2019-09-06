@@ -144,7 +144,7 @@ func (ks *KeyStore) getPeerAddress(keyid string, topic Topic) (PssAddress, error
 
 // Attempt to decrypt, validate and unpack a symmetrically encrypted message.
 // If successful, returns the unpacked receivedMessage struct
-// encapsulating the decrypted message, and the utils backend id
+// encapsulating the decrypted message, and the id
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted.
 func (ks *KeyStore) processSym(pssMsg *PssMsg) (crypto.ReceivedMessage, string, PssAddress, error) {
@@ -245,8 +245,8 @@ func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToC
 	return keyid, err
 }
 
-// Returns a symmetric key byte sequence stored in the utils backend by its unique id.
-// Passes on the error value from the utils backend.
+// Returns a symmetric key byte sequence stored in the crypto backend by its unique id.
+// Passes on the error value from the crypto backend.
 func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
 	return ks.Crypto.GetSymKey(symkeyid)
 }
@@ -255,13 +255,13 @@ func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
 //
 // This is required for symmetrically encrypted message exchange on the given topic.
 //
-// The key is stored in the utils backend.
+// The key is stored in the crypto backend.
 //
 // If addtocache is set to true, the key will be added to the cache of keys
 // used to attempt symmetric decryption of incoming messages.
 //
 // Returns a string id that can be used to retrieve the key bytes
-// from the utils backend (see pss.GetSymmetricKey())
+// from the crypto backend (see pss.GetSymmetricKey())
 func (ks *KeyStore) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
 	if err := validateAddress(address); err != nil {
 		return "", err
