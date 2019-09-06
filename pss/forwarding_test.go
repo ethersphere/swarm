@@ -12,6 +12,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/pss/internal/message"
 )
 
 type testCase struct {
@@ -347,7 +348,7 @@ func newTestDiscoveryPeer(addr pot.Address, kad *network.Kademlia) *network.Peer
 }
 
 func newTestMsg(addr []byte) *PssMsg {
-	msg := newPssMsg(&msgParams{})
+	msg := newPssMsg(message.Flags{})
 	msg.To = addr[:]
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	msg.Topic = [4]byte{}

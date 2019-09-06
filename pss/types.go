@@ -26,13 +26,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethersphere/swarm/pss/internal/message"
 	"github.com/ethersphere/swarm/storage"
 )
 
 const (
-	pssControlSym = 1
-	pssControlRaw = 1 << 1
-	TopicLength   = 4 // in bytes Taken from Whisper
+	TopicLength = 4 // in bytes Taken from Whisper
 )
 
 var (
@@ -86,34 +85,6 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 // holds the digest of a message used for caching
 type digest [digestLength]byte
 
-// conceals bitwise operations on the control flags byte
-type msgParams struct {
-	raw bool
-	sym bool
-}
-
-func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
-	if len(paramBytes) != 1 {
-		return nil
-	}
-	return &msgParams{
-		raw: paramBytes[0]&pssControlRaw > 0,
-		sym: paramBytes[0]&pssControlSym > 0,
-	}
-}
-
-func (m *msgParams) Bytes() (paramBytes []byte) {
-	var b byte
-	if m.raw {
-		b |= pssControlRaw
-	}
-	if m.sym {
-		b |= pssControlSym
-	}
-	paramBytes = append(paramBytes, b)
-	return paramBytes
-}
-
 type outboxMsg struct {
 	msg       *PssMsg
 	startedAt time.Time
@@ -129,26 +100,16 @@ func newOutboxMsg(msg *PssMsg) *outboxMsg {
 // PssMsg encapsulates messages transported over pss.
 type PssMsg struct {
 	To      []byte
-	Control []byte
+	Flags   message.Flags
 	Expire  uint32
 	Topic   Topic
 	Payload []byte
 }
 
-func newPssMsg(param *msgParams) *PssMsg {
+func newPssMsg(flags message.Flags) *PssMsg {
 	return &PssMsg{
-		Control: param.Bytes(),
+		Flags: flags,
 	}
-}
-
-// message is flagged as raw / external encryption
-func (msg *PssMsg) isRaw() bool {
-	return msg.Control[0]&pssControlRaw > 0
-}
-
-// message is flagged as symmetrically encrypted
-func (msg *PssMsg) isSym() bool {
-	return msg.Control[0]&pssControlSym > 0
 }
 
 // serializes the message for use in cache

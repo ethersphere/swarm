@@ -37,6 +37,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/internal/message"
 	"github.com/ethersphere/swarm/storage"
 	"golang.org/x/crypto/sha3"
 )
@@ -483,7 +484,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
-	if pssmsg.isRaw() {
+	if pssmsg.Flags.Raw {
 		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
 			if !capabilities.raw {
 				log.Debug("No handler for raw message", "topic", psstopic)
@@ -535,7 +536,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	if raw {
 		payload = pssmsg.Payload
 	} else {
-		if pssmsg.isSym() {
+		if pssmsg.Flags.Symmetric {
 			keyFunc = p.processSym
 		} else {
 			asymmetric = true
@@ -633,8 +634,8 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 		return err
 	}
 
-	pssMsgParams := &msgParams{
-		raw: true,
+	pssMsgParams := message.Flags{
+		Raw: true,
 	}
 
 	pssMsg := newPssMsg(pssMsgParams)
@@ -707,8 +708,8 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", hex.EncodeToString(msg), "to", hex.EncodeToString(to), "asym", asymmetric, "key", hex.EncodeToString(key))
 
 	// prepare for devp2p transport
-	pssMsgParams := &msgParams{
-		sym: !asymmetric,
+	pssMsgParams := message.Flags{
+		Symmetric: !asymmetric,
 	}
 	pssMsg := newPssMsg(pssMsgParams)
 	pssMsg.To = to

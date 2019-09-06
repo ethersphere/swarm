@@ -47,6 +47,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/internal/message"
 	"github.com/ethersphere/swarm/state"
 )
 
@@ -122,29 +123,6 @@ func TestTopic(t *testing.T) {
 	topicjsonin.UnmarshalJSON(topicjsonout)
 	if topicjsonin != topicobj {
 		t.Fatalf("topic json unmarshal mismatch: %x != %x", topicjsonin, topicobj)
-	}
-}
-
-// test bit packing of message control flags
-func TestMsgParams(t *testing.T) {
-	var ctrl byte
-	ctrl |= pssControlRaw
-	p := newMsgParamsFromBytes([]byte{ctrl})
-	m := newPssMsg(p)
-	if !m.isRaw() || m.isSym() {
-		t.Fatal("expected raw=true and sym=false")
-	}
-	ctrl |= pssControlSym
-	p = newMsgParamsFromBytes([]byte{ctrl})
-	m = newPssMsg(p)
-	if !m.isRaw() || !m.isSym() {
-		t.Fatal("expected raw=true and sym=true")
-	}
-	ctrl &= 0xff &^ pssControlRaw
-	p = newMsgParamsFromBytes([]byte{ctrl})
-	m = newPssMsg(p)
-	if m.isRaw() || !m.isSym() {
-		t.Fatal("expected raw=false and sym=true")
 	}
 }
 
@@ -368,7 +346,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 	// first the unit test on the method that calculates possible receipient using prox
 	for i, distance := range remoteDistances {
-		pssMsg := newPssMsg(&msgParams{})
+		pssMsg := newPssMsg(message.Flags{})
 		pssMsg.To = make([]byte, len(localAddr))
 		copy(pssMsg.To, localAddr)
 		var byteIdx = distance / 8
@@ -408,7 +386,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 		var data [32]byte
 		rand.Read(data[:])
-		pssMsg := newPssMsg(&msgParams{raw: true})
+		pssMsg := newPssMsg(message.Flags{Raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 		pssMsg.Payload = data[:]
@@ -437,7 +415,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 		var data [32]byte
 		rand.Read(data[:])
-		pssMsg := newPssMsg(&msgParams{raw: true})
+		pssMsg := newPssMsg(message.Flags{Raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 		pssMsg.Payload = data[:]
@@ -459,7 +437,7 @@ func TestAddressMatchProx(t *testing.T) {
 		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
-		pssMsg := newPssMsg(&msgParams{raw: true})
+		pssMsg := newPssMsg(message.Flags{Raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
 		pssMsg.Payload = []byte(remotePotAddr.String())
@@ -798,8 +776,8 @@ func TestRawAllow(t *testing.T) {
 	ps.Register(&topic, hndlrNoRaw)
 
 	// test it with a raw message, should be poo-poo
-	pssMsg := newPssMsg(&msgParams{
-		raw: true,
+	pssMsg := newPssMsg(message.Flags{
+		Raw: true,
 	})
 	pssMsg.To = baseAddr.OAddr
 	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
@@ -1701,7 +1679,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 func testRandomMessage() *PssMsg {
 	addr := make([]byte, 32)
 	addr[0] = 0x01
-	msg := newPssMsg(&msgParams{})
+	msg := newPssMsg(message.Flags{})
 	msg.To = addr
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	msg.Topic = [4]byte{}
