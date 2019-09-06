@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -309,7 +310,6 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 func TestSwapRPC(t *testing.T) {
 
 	var (
-		p2pPort = 30100
 		ipcPath = ".swarm.ipc"
 		err     error
 	)
@@ -324,8 +324,10 @@ func TestSwapRPC(t *testing.T) {
 	}
 
 	// start a service stack
-	stack := createAndStartSvcNode(swap, ipcPath, p2pPort, t)
-	defer stack.Stop()
+	stack := createAndStartSvcNode(swap, ipcPath, t)
+	defer func() {
+		go stack.Stop()
+	}()
 
 	// connect to the servicenode RPCs
 	rpcclient, err := rpc.Dial(filepath.Join(stack.DataDir(), ipcPath))
@@ -405,8 +407,8 @@ func TestSwapRPC(t *testing.T) {
 }
 
 // createAndStartSvcNode setup a p2p service and start it
-func createAndStartSvcNode(swap *Swap, ipcPath string, p2pPort int, t *testing.T) *node.Node {
-	stack, err := newServiceNode(p2pPort, ipcPath, 0, 0)
+func createAndStartSvcNode(swap *Swap, ipcPath string, t *testing.T) *node.Node {
+	stack, err := newServiceNode(ipcPath, 0, 0)
 	if err != nil {
 		t.Fatal("Create servicenode #1 fail", "err", err)
 	}
@@ -430,14 +432,16 @@ func createAndStartSvcNode(swap *Swap, ipcPath string, p2pPort int, t *testing.T
 }
 
 // newServiceNode creates a p2p.Service node stub
-func newServiceNode(port int, ipcPath string, httpport int, wsport int, modules ...string) (*node.Node, error) {
-	var datadirPrefix = ".data_"
+func newServiceNode(ipcPath string, httpport int, wsport int, modules ...string) (*node.Node, error) {
+	var err error
 	cfg := &node.DefaultConfig
-	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", port)
 	cfg.P2P.EnableMsgEvents = true
 	cfg.P2P.NoDiscovery = true
 	cfg.IPCPath = ipcPath
-	cfg.DataDir = fmt.Sprintf("%s%d", datadirPrefix, port)
+	cfg.DataDir, err = ioutil.TempDir("", "test-Service-node")
+	if err != nil {
+		return nil, err
+	}
 	if httpport > 0 {
 		cfg.HTTPHost = node.DefaultHTTPHost
 		cfg.HTTPPort = httpport
