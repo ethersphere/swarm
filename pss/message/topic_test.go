@@ -9,11 +9,11 @@ import (
 )
 
 // test that topic conversion functions give predictable results
+var someTopics = []string{"These", "are", "some", "topics", "A topic can be very long as well, longer than TopicLength"}
+
 func TestTopic(tx *testing.T) {
 	t := ut.BeginTest(tx, false) // set to true to generate test results
 	defer t.FinishTest()
-
-	someTopics := []string{"These", "are", "some", "topics", "A topic can be very long as well, longer than TopicLength"}
 
 	for i, topicString := range someTopics {
 		topic := message.NewTopic([]byte(topicString))

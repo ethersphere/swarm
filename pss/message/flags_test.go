@@ -10,11 +10,12 @@ import (
 	"github.com/ethersphere/swarm/pss/message"
 )
 
+var bools = []bool{true, false}
+
 func TestFlags(tx *testing.T) {
 	t := ut.BeginTest(tx, false)
 	defer t.FinishTest()
 
-	bools := []bool{true, false}
 	for _, r := range bools {
 		for _, s := range bools {
 			f := message.Flags{

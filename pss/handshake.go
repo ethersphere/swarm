@@ -291,7 +291,7 @@ func (ctl *HandshakeController) getSymKey(symkeyid string) *handshakeKey {
 	return ctl.symKeyIndex[symkeyid]
 }
 
-// Passed as a PssMsg handler for the topic handshake is activated on
+// Passed as a message.Message handler for the topic handshake is activated on
 // Handles incoming key exchange messages and
 // counts message usage by symmetric key (expiry limit control)
 // Only returns error if key handler fails

@@ -18,13 +18,10 @@ package pss
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/pss/message"
 )
 
@@ -52,56 +49,19 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// holds the digest of a message used for caching
-type digest [digestLength]byte
-
 type outboxMsg struct {
-	msg       *PssMsg
+	msg       *message.Message
 	startedAt time.Time
 }
 
-func newOutboxMsg(msg *PssMsg) *outboxMsg {
+func newOutboxMsg(msg *message.Message) *outboxMsg {
 	return &outboxMsg{
 		msg:       msg,
 		startedAt: time.Now(),
 	}
 }
 
-// PssMsg encapsulates messages transported over pss.
-type PssMsg struct {
-	To      []byte
-	Flags   message.Flags
-	Expire  uint32
-	Topic   message.Topic
-	Payload []byte
-}
-
-func newPssMsg(flags message.Flags) *PssMsg {
-	return &PssMsg{
-		Flags: flags,
-	}
-}
-
-// serializes the message for use in cache
-func (msg *PssMsg) serialize() []byte {
-	rlpdata, _ := rlp.EncodeToBytes(struct {
-		To      []byte
-		Topic   message.Topic
-		Payload []byte
-	}{
-		To:      msg.To,
-		Topic:   msg.Topic,
-		Payload: msg.Payload,
-	})
-	return rlpdata
-}
-
-// String representation of PssMsg
-func (msg *PssMsg) String() string {
-	return fmt.Sprintf("PssMsg: Recipient: %x, Topic: %v", common.ToHex(msg.To), msg.Topic.String())
-}
-
-// Signature for a message handler function for a PssMsg
+// Signature for a message handler function for a Message
 // Implementations of this type are passed to Pss.Register together with a topic,
 type HandlerFunc func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
 
