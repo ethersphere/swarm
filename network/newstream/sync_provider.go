@@ -252,11 +252,11 @@ func (s *syncProvider) WantStream(p *Peer, streamID ID) bool {
 
 	// check all subscriptions that should exist for this peer
 	subBins, _ := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
-	v, err := strconv.Atoi(streamID.Key)
+	v, err := parseSyncKey(streamID.Key)
 	if err != nil {
 		return false
 	}
-	return checkKeyInSlice(v, subBins)
+	return checkKeyInSlice(int(v), subBins)
 }
 
 var (
@@ -324,7 +324,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 		streams := make([]ID, l)
 		for i, po := range subBins {
 
-			stream := NewID(s.StreamName(), strconv.Itoa(po))
+			stream := NewID(s.StreamName(), encodeSyncKey(uint8(po)))
 			_, err := p.getOrCreateInterval(p.peerStreamIntervalKey(stream))
 			if err != nil {
 				p.logger.Error("got an error while trying to register initial streams", "stream", stream)
@@ -342,7 +342,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 	}
 	for _, po := range quitBins {
 		p.logger.Debug("stream unwanted, removing cursor info for peer", "bin", po)
-		p.deleteCursor(NewID(syncStreamName, strconv.Itoa(po)))
+		p.deleteCursor(NewID(syncStreamName, encodeSyncKey(uint8(po))))
 	}
 }
 
@@ -434,14 +434,7 @@ func checkKeyInSlice(k int, slice []int) (found bool) {
 }
 
 func (s *syncProvider) ParseKey(streamKey string) (interface{}, error) {
-	b, err := strconv.Atoi(streamKey)
-	if err != nil {
-		return 0, err
-	}
-	if b < 0 || b > 16 {
-		return 0, errors.New("stream key out of range")
-	}
-	return uint8(b), nil
+	return parseSyncKey(streamKey)
 }
 
 func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
@@ -449,7 +442,7 @@ func (s *syncProvider) EncodeKey(i interface{}) (string, error) {
 	if !ok {
 		return "", errors.New("error encoding key")
 	}
-	return fmt.Sprintf("%d", v), nil
+	return encodeSyncKey(v), nil
 }
 
 func (s *syncProvider) StreamName() string { return s.name }
@@ -459,3 +452,18 @@ func (s *syncProvider) Boundedness() bool { return false }
 func (s *syncProvider) Autostart() bool { return s.autostart }
 
 func (s *syncProvider) Close() { close(s.quit) }
+
+func parseSyncKey(streamKey string) (uint8, error) {
+	b, err := strconv.ParseUint(streamKey, 36, 8)
+	if err != nil {
+		return 0, err
+	}
+	if b < 0 || b > chunk.MaxPO {
+		return 0, fmt.Errorf("stream key %v out of range", b)
+	}
+	return uint8(b), nil
+}
+
+func encodeSyncKey(i uint8) string {
+	return strconv.FormatUint(uint64(i), 36)
+}
