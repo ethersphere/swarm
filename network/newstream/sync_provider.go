@@ -140,8 +140,6 @@ func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]
 
 // Get the supplied addresses for delivery
 func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error) {
-	s.cacheMtx.Lock()
-	defer s.cacheMtx.Unlock()
 	var (
 		start     = time.Now()                     // start time
 		retChunks = make([]chunk.Chunk, len(addr)) //the chunks we want to Get
@@ -153,6 +151,7 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 		metrics.GetOrRegisterResettingTimer("network.stream.sync_provider.get.total-time", nil).UpdateSince(start)
 	}(start)
 
+	s.cacheMtx.RLock()
 	// iterate over the array - if it is in the cache - pull it out
 	// if not - save in a slice and fallback later to localstore in one go
 	for i, a := range addr {
@@ -165,12 +164,15 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachemiss", nil).Inc(1)
 		}
 	}
+	s.cacheMtx.RUnlock()
 
 	// get the rest from localstore
 	chunks, err := s.netStore.GetMulti(ctx, chunk.ModeGetSync, lsChunks...)
 	if err != nil {
 		return nil, err
 	}
+	s.cacheMtx.Lock()
+	defer s.cacheMtx.Unlock()
 
 	// merge the results together
 	for i, ch := range chunks {
