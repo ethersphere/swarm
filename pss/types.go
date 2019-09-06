@@ -228,7 +228,7 @@ func BytesToTopic(b []byte) Topic {
 	return toTopic(topicHashFunc.Sum(nil))
 }
 
-// BytesToTopic converts from the byte array representation of a topic
+// toTopic converts from the byte array representation of a topic
 // into the TopicType type.
 func toTopic(b []byte) (t Topic) {
 	sz := TopicLength

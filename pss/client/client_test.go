@@ -21,7 +21,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/ethersphere/swarm/pss/crypto"
 	"math/rand"
 	"os"
 	"testing"
@@ -37,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
 )
 

@@ -5,13 +5,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	crypto2 "github.com/ethersphere/swarm/pss/crypto"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -19,14 +17,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
 )
 
 var (
-	loglevel    = flag.Int("loglevel", 3, "logging verbosity")
-	psses       map[string]*pss.Pss
-	cryptoUtils crypto2.CryptoUtils
-	crypto      crypto2.CryptoBackend
+	loglevel = flag.Int("loglevel", 3, "logging verbosity")
+	psses    map[string]*pss.Pss
+	cryptoB  crypto.Crypto
 )
 
 func init() {
@@ -36,8 +34,7 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	cryptoUtils = crypto2.NewCryptoUtils()
-	crypto = pss.NewCryptoBackend()
+	cryptoB = crypto.New()
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -138,7 +135,7 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubkey, err := crypto.UnmarshalPubkey(pubkeybytes)
+	pubkey, err := cryptoB.UnmarshalPubkey(pubkeybytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,11 +227,11 @@ func newServices(allowRaw bool) adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
+			keys, err := cryptoB.NewKeyPair(ctxlocal)
 			if err != nil {
 				return nil, err
 			}
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			privkey, err := cryptoB.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
@@ -246,7 +243,7 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(cryptoB.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
