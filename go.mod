@@ -25,6 +25,8 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/edsrzf/mmap-go v0.0.0-20160512033002-935e0e8a636c // indirect
 	github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa // indirect
+	github.com/epiclabs-io/diff3 v0.0.0-20181217103619-05282cece609 // indirect
+	github.com/epiclabs-io/ut v0.0.0-20190416122157-8da7fe4b4947
 	github.com/ethereum/go-ethereum v1.9.2
 	github.com/ethersphere/go-sw3 v0.1.0
 	github.com/fatih/color v1.7.0 // indirect
