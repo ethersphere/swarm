@@ -17,6 +17,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
 )
@@ -106,7 +107,7 @@ func TestStart(t *testing.T) {
 	}
 
 	rsrcName := "foo.eth"
-	rsrcTopic := pss.BytesToTopic([]byte(rsrcName))
+	rsrcTopic := message.NewTopic([]byte(rsrcName))
 
 	// wait for kademlia table to populate
 	time.Sleep(time.Second)

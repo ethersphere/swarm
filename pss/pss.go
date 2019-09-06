@@ -37,7 +37,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
-	"github.com/ethersphere/swarm/pss/internal/message"
+	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/storage"
 	"golang.org/x/crypto/sha3"
 )
@@ -219,10 +219,10 @@ type Pss struct {
 	outbox     outbox
 
 	// message handling
-	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
+	handlers           map[message.Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu         sync.RWMutex
 	hashPool           sync.Pool
-	topicHandlerCaps   map[Topic]*handlerCaps // caches capabilities of each topic's handlers
+	topicHandlerCaps   map[message.Topic]*handlerCaps // caches capabilities of each topic's handlers
 	topicHandlerCapsMu sync.RWMutex
 
 	// process
@@ -258,8 +258,8 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		msgTTL:    params.MsgTTL,
 		capstring: c.String(),
 
-		handlers:         make(map[Topic]map[*handler]bool),
-		topicHandlerCaps: make(map[Topic]*handlerCaps),
+		handlers:         make(map[message.Topic]map[*handler]bool),
+		topicHandlerCaps: make(map[message.Topic]*handlerCaps),
 
 		hashPool: sync.Pool{
 			New: func() interface{} {
@@ -384,14 +384,14 @@ func (p *Pss) PublicKey() *ecdsa.PublicKey {
 // SECTION: Message handling
 /////////////////////////////////////////////////////////////////////
 
-func (p *Pss) getTopicHandlerCaps(topic Topic) (hc *handlerCaps, found bool) {
+func (p *Pss) getTopicHandlerCaps(topic message.Topic) (hc *handlerCaps, found bool) {
 	p.topicHandlerCapsMu.RLock()
 	defer p.topicHandlerCapsMu.RUnlock()
 	hc, found = p.topicHandlerCaps[topic]
 	return
 }
 
-func (p *Pss) setTopicHandlerCaps(topic Topic, hc *handlerCaps) {
+func (p *Pss) setTopicHandlerCaps(topic message.Topic, hc *handlerCaps) {
 	p.topicHandlerCapsMu.Lock()
 	defer p.topicHandlerCapsMu.Unlock()
 	p.topicHandlerCaps[topic] = hc
@@ -406,7 +406,7 @@ func (p *Pss) setTopicHandlerCaps(topic Topic, hc *handlerCaps) {
 //
 // Returns a deregister function which needs to be called to
 // deregister the handler,
-func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
+func (p *Pss) Register(topic *message.Topic, hndlr *handler) func() {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
@@ -435,7 +435,7 @@ func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	return func() { p.deregister(topic, hndlr) }
 }
 
-func (p *Pss) deregister(topic *Topic, hndlr *handler) {
+func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
@@ -557,7 +557,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 }
 
 // copy all registered handlers for respective topic in order to avoid data race or deadlock
-func (p *Pss) getHandlers(topic Topic) (ret []*handler) {
+func (p *Pss) getHandlers(topic message.Topic) (ret []*handler) {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	for k := range p.handlers[topic] {
@@ -566,7 +566,7 @@ func (p *Pss) getHandlers(topic Topic) (ret []*handler) {
 	return ret
 }
 
-func (p *Pss) executeHandlers(topic Topic, payload []byte, from PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
+func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
 	defer metrics.GetOrRegisterResettingTimer("pss.execute-handlers", nil).UpdateSince(time.Now())
 
 	handlers := p.getHandlers(topic)
@@ -627,7 +627,7 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 // Send a raw message (any encryption is responsibility of calling client)
 //
 // Will fail if raw messages are disallowed
-func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
+func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.send.raw", nil).UpdateSince(time.Now())
 
 	if err := validateAddress(address); err != nil {
@@ -652,7 +652,7 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 // Send a message using symmetric encryption
 //
 // Fails if the key id does not match any of the stored symmetric keys
-func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
+func (p *Pss) SendSym(symkeyid string, topic message.Topic, msg []byte) error {
 	symkey, err := p.GetSymmetricKey(symkeyid)
 	if err != nil {
 		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
@@ -667,7 +667,7 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 // Send a message using asymmetric encryption
 //
 // Fails if the key id does not match any in of the stored public keys
-func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
+func (p *Pss) SendAsym(pubkeyid string, topic message.Topic, msg []byte) error {
 	if _, err := p.Crypto.UnmarshalPublicKey(common.FromHex(pubkeyid)); err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkeyid)
 	}
@@ -682,7 +682,7 @@ func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 // It generates an envelope for the specified recipient and topic,
 // and wraps the message payload in it.
 // TODO: Implement proper message padding
-func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []byte) error {
+func (p *Pss) send(to []byte, topic message.Topic, msg []byte, asymmetric bool, key []byte) error {
 	metrics.GetOrRegisterCounter("pss.send", nil).Inc(1)
 
 	if key == nil || bytes.Equal(key, []byte{}) {

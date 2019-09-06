@@ -7,7 +7,7 @@ import (
 
 	"github.com/epiclabs-io/ut"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/pss/internal/message"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 func TestFlags(tx *testing.T) {

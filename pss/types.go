@@ -19,48 +19,18 @@ package pss
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/pss/internal/message"
-	"github.com/ethersphere/swarm/storage"
-)
-
-const (
-	TopicLength = 4 // in bytes Taken from Whisper
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 var (
-	topicHashMutex = sync.Mutex{}
-	topicHashFunc  = storage.MakeHashFunc("SHA256")()
-	rawTopic       = Topic{}
+	rawTopic = message.Topic{}
 )
-
-// Topic is the PSS encapsulation of the Whisper topic type
-type Topic [TopicLength]byte
-
-func (t *Topic) String() string {
-	return hexutil.Encode(t[:])
-}
-
-// MarshalJSON implements the json.Marshaler interface
-func (t Topic) MarshalJSON() (b []byte, err error) {
-	return json.Marshal(t.String())
-}
-
-// MarshalJSON implements the json.Marshaler interface
-func (t *Topic) UnmarshalJSON(input []byte) error {
-	topicbytes, err := hexutil.Decode(string(input[1 : len(input)-1]))
-	if err != nil {
-		return err
-	}
-	copy(t[:], topicbytes)
-	return nil
-}
 
 // PssAddress is an alias for []byte. It represents a variable length address
 type PssAddress []byte
@@ -102,7 +72,7 @@ type PssMsg struct {
 	To      []byte
 	Flags   message.Flags
 	Expire  uint32
-	Topic   Topic
+	Topic   message.Topic
 	Payload []byte
 }
 
@@ -116,7 +86,7 @@ func newPssMsg(flags message.Flags) *PssMsg {
 func (msg *PssMsg) serialize() []byte {
 	rlpdata, _ := rlp.EncodeToBytes(struct {
 		To      []byte
-		Topic   Topic
+		Topic   message.Topic
 		Payload []byte
 	}{
 		To:      msg.To,
@@ -178,26 +148,4 @@ func (store *stateStore) Load(key string) ([]byte, error) {
 
 func (store *stateStore) Save(key string, v []byte) error {
 	return nil
-}
-
-// BytesToTopic hashes an arbitrary length byte slice and truncates it to the length of a topic, using only the first bytes of the digest
-func BytesToTopic(b []byte) Topic {
-	topicHashMutex.Lock()
-	defer topicHashMutex.Unlock()
-	topicHashFunc.Reset()
-	topicHashFunc.Write(b)
-	return toTopic(topicHashFunc.Sum(nil))
-}
-
-// toTopic converts from the byte array representation of a topic
-// into the Topic type.
-func toTopic(b []byte) (t Topic) {
-	sz := TopicLength
-	if x := len(b); x < TopicLength {
-		sz = x
-	}
-	for i := 0; i < sz; i++ {
-		t[i] = b[i]
-	}
-	return t
 }
