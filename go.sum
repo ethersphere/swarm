@@ -60,6 +60,10 @@ github.com/edsrzf/mmap-go v0.0.0-20160512033002-935e0e8a636c/go.mod h1:YO35OhQPt
 github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa h1:o8OuEkracbk3qH6GvlI6XpEN1HTSxkzOG42xZpfDv/s=
 github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa/go.mod h1:cdorVVzy1fhmEqmtgqkoE3bYtCfSCkVyjTyCIo22xvs=
 github.com/elazarl/goproxy v0.0.0-20170405201442-c4fc26588b6e/go.mod h1:/Zj4wYkgs4iZTTu3o/KG3Itv/qCCa8VVMlb3i9OVuzc=
+github.com/epiclabs-io/diff3 v0.0.0-20181217103619-05282cece609 h1:KHcpmcC/8cnCDXDm6SaCTajWF/vyUbBE1ovA27xYYEY=
+github.com/epiclabs-io/diff3 v0.0.0-20181217103619-05282cece609/go.mod h1:tM499ZoH5jQRF3wlMnl59SJQwVYXIBdJRZa/K71p0IM=
+github.com/epiclabs-io/ut v0.0.0-20190416122157-8da7fe4b4947 h1:5jyZq+mwwE90FnIyzAorlWF0Nrg8AB48KsDxofSAyBw=
+github.com/epiclabs-io/ut v0.0.0-20190416122157-8da7fe4b4947/go.mod h1:Sm6PW7b/nLOHEn3XxuUOXFYA4xFkLUnyAWUOcTGcRZ4=
 github.com/ethereum/go-ethereum v1.9.2 h1:RMIHDO/diqXEgORSVzYx8xW9x2+S32PoAX5lQwya0Lw=
 github.com/ethereum/go-ethereum v1.9.2/go.mod h1:PwpWDrCLZrV+tfrhqqF6kPknbISMHaJv9Ln3kPCZLwY=
 github.com/ethersphere/go-sw3 v0.1.0 h1:XMaWxiBhFtrxfOel2tXmxuan3eCfFw/NcftV6sUVtIc=
