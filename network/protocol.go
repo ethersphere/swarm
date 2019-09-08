@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
@@ -171,8 +172,9 @@ func (b *Bzz) Stop() error {
 // UpdateLocalAddr updates underlayaddress of the running node
 func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *BzzAddr {
 	b.localAddr = b.localAddr.Update(&BzzAddr{
-		UAddr: byteaddr,
-		OAddr: b.localAddr.OAddr,
+		UAddr:        byteaddr,
+		OAddr:        b.localAddr.OAddr,
+		Capabilities: b.localAddr.Capabilities,
 	})
 
 	return b.localAddr
@@ -263,7 +265,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			Peer:       protocols.NewPeer(p, rw, spec),
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
-			LightNode:  isLightCapability(handshake.Addr.Capabilities.Get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
+			LightNode:  isLightCapability(handshake.peerAddr.Capabilities.Get(0)), // this is a temporary member kept until kademlia code accommodates Capabilities instead
 		}
 
 		log.Debug("peer created", "addr", handshake.peerAddr.String())
@@ -285,9 +287,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
-	rsh.(*HandshakeMsg).Addr.Capabilities = rsh.(*HandshakeMsg).Addr.Capabilities
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
-	handshake.Addr.Capabilities = rsh.(*HandshakeMsg).Addr.Capabilities
 	return nil
 }
 
@@ -349,7 +349,6 @@ type HandshakeMsg struct {
 	Version   uint64
 	NetworkID uint64
 	Addr      *BzzAddr
-	//Capabilities *capability.Capabilities
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -357,6 +356,26 @@ type HandshakeMsg struct {
 	init chan bool
 	done chan struct{}
 	err  error
+}
+
+func (bh *HandshakeMsg) DecodeRLP(s *rlp.Stream) error {
+	_, err := s.List()
+	if err != nil {
+		return fmt.Errorf("list --- %v", err)
+	}
+	err = s.Decode(&bh.Version)
+	if err != nil {
+		return fmt.Errorf("version --- %v", err)
+	}
+	err = s.Decode(&bh.NetworkID)
+	if err != nil {
+		return fmt.Errorf("networkid  --- %v", err)
+	}
+	err = s.Decode(&bh.Addr)
+	if err != nil {
+		return fmt.Errorf("addr --- %v", err)
+	}
+	return nil
 }
 
 // String pretty prints the handshake
@@ -377,7 +396,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if !isFullCapability(rhs.Addr.Capabilities.Get(0)) && !isLightCapability(rhs.Addr.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Addr.Capabilities)
 	}
-	rhs.Addr.Capabilities = hs.(*HandshakeMsg).Addr.Capabilities
+	//rhs.Addr.Capabilities = hs.(*HandshakeMsg).Addr.Capabilities
 	return nil
 }
 
@@ -399,9 +418,8 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			Version:   uint64(BzzSpec.Version),
 			NetworkID: b.NetworkID,
 			Addr:      b.localAddr,
-			//Capabilities: b.localAddr.Capabilities,
-			init: make(chan bool, 1),
-			done: make(chan struct{}),
+			init:      make(chan bool, 1),
+			done:      make(chan struct{}),
 		}
 		// when handhsake is first created for a remote peer
 		// it is initialised with the init

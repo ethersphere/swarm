@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"fmt"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
@@ -233,6 +235,41 @@ func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	return newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, addr, lightNode)
 }
 
+func TestBzzHandshakeRLPSerialization(t *testing.T) {
+	caps := capability.NewCapabilities()
+	caps.Add(fullCapability)
+	addr := RandomBzzAddr().WithCapabilities(caps)
+	msg := &HandshakeMsg{
+		Version:   42,
+		NetworkID: 666,
+		Addr:      addr,
+	}
+	b, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var msgRecovered HandshakeMsg
+	err = rlp.DecodeBytes(b, &msgRecovered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Version != msgRecovered.Version {
+		t.Fatal("version mismatch")
+	}
+	if msg.NetworkID != msgRecovered.NetworkID {
+		t.Fatal("networkid mismatch")
+	}
+	if !bytes.Equal(msg.Addr.OAddr, msgRecovered.Addr.OAddr) {
+		t.Fatal("OAddr mismatch")
+	}
+	if !bytes.Equal(msg.Addr.UAddr, msgRecovered.Addr.UAddr) {
+		t.Fatal("UAddr mismatch")
+	}
+	if !fullCapability.IsSameAs(msgRecovered.Addr.Capabilities.Get(0)) {
+		t.Fatal("capabilities mismatch")
+	}
+}
+
 func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	lightNode := false
 	prvkey, err := crypto.GenerateKey()
@@ -373,7 +410,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for _, cp := range pt.bzz.handshakes[node.ID()].Addr.Capabilities.Caps {
+				for _, cp := range pt.bzz.handshakes[node.ID()].peerAddr.Capabilities.Caps {
 					if cp.String() != nodeCapability.String() {
 						t.Fatalf("peer LightNode flag is %v, should be %v", cp.String(), nodeCapability.String())
 					}

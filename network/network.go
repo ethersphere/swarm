@@ -22,19 +22,19 @@ type BzzAddr struct {
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	_, err := s.List()
 	if err != nil {
-		return fmt.Errorf("list %v", err)
+		return fmt.Errorf("list --- %v", err)
 	}
 	err = s.Decode(&b.OAddr)
 	if err != nil {
-		return fmt.Errorf("oaddr %v", err)
+		return fmt.Errorf("oaddr --- %v", err)
 	}
 	err = s.Decode(&b.UAddr)
 	if err != nil {
-		return fmt.Errorf("uaddr %v", err)
+		return fmt.Errorf("uaddr --- %v", err)
 	}
 	err = s.Decode(&b.Capabilities)
 	if err != nil {
-		return fmt.Errorf("capz %v", err)
+		return fmt.Errorf("capz --- %v", err)
 	}
 	return nil
 }
