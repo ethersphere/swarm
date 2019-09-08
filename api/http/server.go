@@ -20,7 +20,6 @@ A simple http server interface to Swarm
 package http
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -778,7 +777,15 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 		if typ := r.URL.Query().Get("content_type"); typ != "" {
 			w.Header().Set("Content-Type", typ)
 		}
-		http.ServeContent(w, r, "", time.Now(), reader)
+
+		fileName := uri.Addr
+		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
+			fileName = found
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
+		log.Error("serving content")
+		http.ServeContent(w, r, fileName, time.Now(), newDownloader(reader))
+
 	case uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -944,7 +951,8 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
-	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+	http.ServeContent(w, r, fileName, time.Now(), newDownloader(reader))
+
 }
 
 // HandleGetTag responds to the following request
@@ -1102,51 +1110,6 @@ func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 	}
 
 	return int64(totalChunks) + 1
-}
-
-// The size of buffer used for bufio.Reader on LazyChunkReader passed to
-// http.ServeContent in HandleGetFile.
-// Warning: This value influences the number of chunk requests and chunker join goroutines
-// per file request.
-// Recommended value is 4 times the io.Copy default buffer value which is 32kB.
-const getFileBufferSize = 4 * 32 * 1024
-
-// bufferedReadSeeker wraps bufio.Reader to expose Seek method
-// from the provied io.ReadSeeker in newBufferedReadSeeker.
-type bufferedReadSeeker struct {
-	r io.Reader
-	s io.Seeker
-}
-
-// newBufferedReadSeeker creates a new instance of bufferedReadSeeker,
-// out of io.ReadSeeker. Argument `size` is the size of the read buffer.
-func newBufferedReadSeeker(readSeeker io.ReadSeeker, size int) bufferedReadSeeker {
-	return bufferedReadSeeker{
-		r: bufio.NewReaderSize(readSeeker, size),
-		s: readSeeker,
-	}
-}
-
-func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
-	return b.r.Read(p)
-}
-
-func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
-	return b.s.Seek(offset, whence)
-}
-
-type loggingResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
-	return &loggingResponseWriter{w, http.StatusOK}
-}
-
-func (lrw *loggingResponseWriter) WriteHeader(code int) {
-	lrw.statusCode = code
-	lrw.ResponseWriter.WriteHeader(code)
 }
 
 func isDecryptError(err error) bool {

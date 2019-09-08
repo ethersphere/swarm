@@ -3,7 +3,6 @@ package http
 import (
 	"fmt"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -187,11 +186,11 @@ func PinningEnabledPassthrough(h http.Handler, api *pin.API, checkHeader bool) h
 // and log them when they occur, failing gracefully to the client
 func RecoverPanic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Error("panic recovery!", "stack trace", string(debug.Stack()), "url", r.URL.String(), "headers", r.Header)
-			}
-		}()
+		// defer func() {
+		// 	if err := recover(); err != nil {
+		// 		log.Error("panic recovery!", "stack trace", string(debug.Stack()), "url", r.URL.String(), "headers", r.Header)
+		// 	}
+		// }()
 		h.ServeHTTP(w, r)
 	})
 }
