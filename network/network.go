@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/network/capability"
 )
 
@@ -15,14 +16,34 @@ import (
 type BzzAddr struct {
 	OAddr        []byte
 	UAddr        []byte
-	capabilities *capability.Capabilities
+	Capabilities *capability.Capabilities
+}
+
+func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
+	_, err := s.List()
+	if err != nil {
+		return fmt.Errorf("list %v", err)
+	}
+	err = s.Decode(&b.OAddr)
+	if err != nil {
+		return fmt.Errorf("oaddr %v", err)
+	}
+	err = s.Decode(&b.UAddr)
+	if err != nil {
+		return fmt.Errorf("uaddr %v", err)
+	}
+	err = s.Decode(&b.Capabilities)
+	if err != nil {
+		return fmt.Errorf("capz %v", err)
+	}
+	return nil
 }
 
 func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
 	return &BzzAddr{
 		OAddr:        oaddr,
 		UAddr:        uaddr,
-		capabilities: capability.NewCapabilities(),
+		Capabilities: capability.NewCapabilities(),
 	}
 }
 
@@ -41,10 +62,6 @@ func (a *BzzAddr) Under() []byte {
 	return a.UAddr
 }
 
-func (a *BzzAddr) Capabilities() *capability.Capabilities {
-	return a.capabilities
-}
-
 // ID returns the node identifier in the underlay.
 func (a *BzzAddr) ID() enode.ID {
 	n, err := enode.ParseV4(string(a.UAddr))
@@ -56,12 +73,12 @@ func (a *BzzAddr) ID() enode.ID {
 
 // Update updates the underlay address of a peer record
 func (a *BzzAddr) Update(na *BzzAddr) *BzzAddr {
-	return &BzzAddr{a.OAddr, na.UAddr, a.capabilities}
+	return &BzzAddr{a.OAddr, na.UAddr, a.Capabilities}
 }
 
 // String pretty prints the address
 func (a *BzzAddr) String() string {
-	return fmt.Sprintf("%x <%s> cap:%s", a.OAddr, a.UAddr, a.capabilities)
+	return fmt.Sprintf("%x <%s> cap:%s", a.OAddr, a.UAddr, a.Capabilities)
 }
 
 // RandomBzzAddr is a utility method generating an address from a public key
@@ -75,11 +92,11 @@ func RandomBzzAddr() *BzzAddr {
 }
 
 func NewBzzAddrFromEnode(enod *enode.Node) *BzzAddr {
-	return &BzzAddr{OAddr: enod.ID().Bytes(), UAddr: []byte(enod.URLv4()), capabilities: capability.NewCapabilities()}
+	return &BzzAddr{OAddr: enod.ID().Bytes(), UAddr: []byte(enod.URLv4()), Capabilities: capability.NewCapabilities()}
 }
 
 func (b *BzzAddr) WithCapabilities(c *capability.Capabilities) *BzzAddr {
-	b.capabilities = c
+	b.Capabilities = c
 	return b
 }
 

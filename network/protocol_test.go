@@ -77,11 +77,11 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		cap = newFullCapability()
 	}
 	capabilities.Add(cap)
+	addr.Capabilities = capabilities
 	msg := &HandshakeMsg{
-		Version:      version,
-		NetworkID:    networkId,
-		Addr:         addr,
-		Capabilities: capabilities,
+		Version:   version,
+		NetworkID: networkId,
+		Addr:      addr,
 	}
 
 	return msg
@@ -296,12 +296,12 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	node := s.Nodes[0]
 
 	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false)
-	cap := msg.Capabilities.Get(0)
+	cap := msg.Addr.Capabilities.Get(0)
 	cap.Set(14)
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Capabilities)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Addr.Capabilities)},
 	)
 
 	if err != nil {
@@ -373,7 +373,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for _, cp := range pt.bzz.handshakes[node.ID()].Capabilities.Caps {
+				for _, cp := range pt.bzz.handshakes[node.ID()].Addr.Capabilities.Caps {
 					if cp.String() != nodeCapability.String() {
 						t.Fatalf("peer LightNode flag is %v, should be %v", cp.String(), nodeCapability.String())
 					}

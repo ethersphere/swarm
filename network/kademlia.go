@@ -148,7 +148,7 @@ func (k *Kademlia) addToCapabilityIndex(p interface{}, connected bool) {
 		eAddr = p.(*entry).BzzAddr
 	}
 	for s, idxItem := range k.capabilityIndex {
-		for _, vCap := range eAddr.capabilities.Caps {
+		for _, vCap := range eAddr.Capabilities.Caps {
 			log.Debug("in add to capability compare", "idx", s, "peer", vCap, "idx", idxItem.Capability)
 			if idxItem.Id != vCap.Id {
 				continue

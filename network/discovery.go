@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -94,8 +93,7 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 		return
 	}
 	resp := &peersMsg{
-		Peers:        []*BzzAddr{a},
-		Capabilities: []*capability.Capabilities{a.capabilities},
+		Peers: []*BzzAddr{a},
 	}
 	go d.Send(context.TODO(), resp)
 }
@@ -126,8 +124,7 @@ disconnected
 // used for communicating about known peers
 // relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
-	Peers        []*BzzAddr
-	Capabilities []*capability.Capabilities
+	Peers []*BzzAddr
 }
 
 // String pretty prints a peersMsg
@@ -142,9 +139,6 @@ func (d *Peer) handlePeersMsg(msg *peersMsg) error {
 	// register all addresses
 	if len(msg.Peers) == 0 {
 		return nil
-	}
-	for i, cp := range msg.Capabilities {
-		msg.Peers[i].capabilities = cp
 	}
 	for _, a := range msg.Peers {
 		d.seen(a)
@@ -188,10 +182,7 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			outMsg := &peersMsg{Peers: sortPeers(peers), Capabilities: []*capability.Capabilities{}}
-			for _, p := range peers {
-				outMsg.Capabilities = append(outMsg.Capabilities, p.capabilities)
-			}
+			outMsg := &peersMsg{Peers: sortPeers(peers)}
 			go d.Send(context.TODO(), outMsg)
 		}
 	}
