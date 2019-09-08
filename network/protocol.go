@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
@@ -285,7 +286,6 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
-	rsh.(*HandshakeMsg).Addr.Capabilities = rsh.(*HandshakeMsg).Addr.Capabilities
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
 	return nil
 }
@@ -356,6 +356,26 @@ type HandshakeMsg struct {
 	err  error
 }
 
+func (bh *HandshakeMsg) DecodeRLP(s *rlp.Stream) error {
+	_, err := s.List()
+	if err != nil {
+		return fmt.Errorf("list --- %v", err)
+	}
+	err = s.Decode(&bh.Version)
+	if err != nil {
+		return fmt.Errorf("version --- %v", err)
+	}
+	err = s.Decode(&bh.NetworkID)
+	if err != nil {
+		return fmt.Errorf("networkid  --- %v", err)
+	}
+	err = s.Decode(&bh.Addr)
+	if err != nil {
+		return fmt.Errorf("addr --- %v", err)
+	}
+	return nil
+}
+
 // String pretty prints the handshake
 func (bh *HandshakeMsg) String() string {
 	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, peerAddr: %v", bh.Version, bh.NetworkID, bh.Addr, bh.peerAddr)
@@ -374,7 +394,7 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if !isFullCapability(rhs.Addr.Capabilities.Get(0)) && !isLightCapability(rhs.Addr.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Addr.Capabilities)
 	}
-	rhs.Addr.Capabilities = hs.(*HandshakeMsg).Addr.Capabilities
+	//rhs.Addr.Capabilities = hs.(*HandshakeMsg).Addr.Capabilities
 	return nil
 }
 
