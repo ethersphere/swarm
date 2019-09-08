@@ -404,7 +404,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for _, cp := range pt.bzz.handshakes[node.ID()].peerAddr.Capabilities.Caps {
+				for _, cp := range pt.bzz.handshakes[node.ID()].Addr.Capabilities.Caps {
 					if cp.String() != nodeCapability.String() {
 						t.Fatalf("peer LightNode flag is %v, should be %v", cp.String(), nodeCapability.String())
 					}

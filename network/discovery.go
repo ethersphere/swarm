@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -95,8 +94,7 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 		return
 	}
 	resp := &peersMsg{
-		Peers:        []*BzzAddr{a},
-		Capabilities: []*capability.Capabilities{a.capabilities},
+		Peers: []*BzzAddr{a},
 	}
 	go d.Send(context.TODO(), resp)
 }
@@ -127,8 +125,7 @@ disconnected
 // used for communicating about known peers
 // relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
-	Peers        []*BzzAddr
-	Capabilities []*capability.Capabilities
+	Peers []*BzzAddr
 }
 
 // DecodeRLP implements rlp.Decoder interface
@@ -207,10 +204,7 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			outMsg := &peersMsg{Peers: sortPeers(peers), Capabilities: []*capability.Capabilities{}}
-			for _, p := range peers {
-				outMsg.Capabilities = append(outMsg.Capabilities, p.capabilities)
-			}
+			outMsg := &peersMsg{Peers: sortPeers(peers)}
 			go d.Send(context.TODO(), outMsg)
 		}
 	}

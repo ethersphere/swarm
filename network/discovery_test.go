@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/pot"
@@ -176,11 +175,6 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	// 1. pivot sends to the control peer a `subPeersMsg` advertising its depth (ignored)
 	// 2. peer sends to pivot a `subPeersMsg` advertising its own depth (arbitrarily chosen)
 	// 3. pivot responds with `peersMsg` with the set of expected peers
-	var cps []*capability.Capabilities
-	for _, p := range expBzzAddrs {
-		cps = append(cps, p.capabilities)
-	}
-
 	err = s.TestExchanges(
 		p2ptest.Exchange{
 			Label: "outgoing subPeersMsg",
@@ -204,7 +198,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 			Expects: []p2ptest.Expect{
 				{
 					Code:    0,
-					Msg:     &peersMsg{Peers: testSortPeers(expBzzAddrs), Capabilities: cps},
+					Msg:     &peersMsg{Peers: testSortPeers(expBzzAddrs)},
 					Peer:    peerID,
 					Timeout: 100 * time.Millisecond,
 				},
