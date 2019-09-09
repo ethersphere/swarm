@@ -28,6 +28,7 @@ import (
 	mrand "math/rand"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -289,6 +290,31 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 	addBookings(swap, mixedBookings)
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
+}
+
+func TestDisconnectThreshold(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+	testPeer := newDummyPeer(Spec)
+	swap.peers[testPeer.Peer.ID()] = testPeer
+	swap.Add(DefaultDisconnectThreshold, testPeer.Peer)
+	err := swap.Add(1, testPeer.Peer)
+	if !strings.Contains(err.Error(), "disconnect threshold") {
+		t.Fatal(err)
+	}
+}
+
+func TestPaymentThreshold(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+	testPeer := newDummyPeer(Spec)
+	swap.peers[testPeer.Peer.ID()] = testPeer
+	swap.Add(-DefaultPaymentThreshold, testPeer.Peer)
+	var cheque Cheque
+	swap.store.Close()
+	err := swap.store.Get(sentChequeKey(testPeer.Peer.ID()), cheque)
+	fmt.Println(err)
+	t.Fatal(cheque)
 }
 
 // TestResetBalance tests that balances are correctly reset
