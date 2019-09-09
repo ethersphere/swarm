@@ -316,7 +316,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			} else {
 				p1Peer.Send(ctx, &testMsgBigPrice{})
 			}
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		ch1, ok := p2Svc.swap.getCheque(p1)
@@ -422,6 +422,8 @@ func TestMultiChequeSimulation(t *testing.T) {
 			// we need to sleep a bit in order to give time for the cheque to be processed
 			time.Sleep(100 * time.Millisecond)
 		}
+
+		time.Sleep(500 * time.Millisecond)
 
 		// check balances:
 		b1, _ := debitorSvc.swap.getBalance(creditor)
