@@ -44,7 +44,7 @@ func NewTags() *Tags {
 // it returns an error if the tag with this name already exists
 func (ts *Tags) Create(ctx context.Context, s string, total int64) (*Tag, error) {
 	t := &Tag{
-		Uid:       uint32(rand.Int31()),
+		Uid:       rand.Uint32(),
 		Name:      s,
 		StartedAt: time.Now(),
 		Total:     total,
