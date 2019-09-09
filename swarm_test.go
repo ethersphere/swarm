@@ -19,12 +19,6 @@ package swarm
 import (
 	"context"
 	"encoding/hex"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/api"
-	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/swap"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -33,6 +27,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/swap"
 )
 
 // TestNewSwarm validates Swarm fields in repsect to the provided configuration.
