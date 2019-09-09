@@ -220,7 +220,7 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 		}
 		keys[i] = key
 		addrs[i] = crypto.PubkeyToAddress(key.PublicKey)
-		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(1000000000)}
+		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(10000000000)}
 		dir, err := ioutil.TempDir("", fmt.Sprintf("swap_test_store_%d", i))
 		if err != nil {
 			return nil, err
@@ -233,7 +233,7 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 		stores[i] = stateStore
 	}
 	// then create the single SimulatedBackend
-	gasLimit := uint64(80000000000)
+	gasLimit := uint64(8000000000)
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
 	// finally, create all Swap instances for each node, which share the same backend
 	for i := 0; i < nodeCount; i++ {
@@ -316,7 +316,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			} else {
 				p1Peer.Send(ctx, &testMsgBigPrice{})
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
 
 		ch1, ok := p2Svc.swap.getCheque(p1)
@@ -420,10 +420,8 @@ func TestMultiChequeSimulation(t *testing.T) {
 			// use a price which will trigger a cheque each time
 			creditorPeer.Send(ctx, &testMsgBigPrice{})
 			// we need to sleep a bit in order to give time for the cheque to be processed
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
-
-		time.Sleep(500 * time.Millisecond)
 
 		// check balances:
 		b1, _ := debitorSvc.swap.getBalance(creditor)
