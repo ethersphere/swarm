@@ -20,10 +20,33 @@ type BzzAddr struct {
 	Capabilities *capability.Capabilities
 }
 
-func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
-	_, err := s.List()
+func (b *BzzAddr) EncodeRLP(w io.Writer) error {
+	err := rlp.Encode(w, b.OAddr)
 	if err != nil {
-		return fmt.Errorf("list --- %v", err)
+		return err
+	}
+	err = rlp.Encode(w, b.UAddr)
+	if err != nil {
+		return err
+	}
+	y, err := rlp.EncodeToBytes(b.Capabilities)
+	if err != nil {
+		return err
+	}
+	err = rlp.Encode(w, y)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
+	knd, _, err := s.Kind()
+	if err != nil {
+		return err
+	}
+	if knd == rlp.List {
+		s.List()
 	}
 	err = s.Decode(&b.OAddr)
 	if err != nil {
@@ -33,9 +56,15 @@ func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return fmt.Errorf("uaddr --- %v", err)
 	}
-	err = s.Decode(&b.Capabilities)
+
+	var y []byte
+	err = s.Decode(&y)
 	if err != nil {
-		return fmt.Errorf("capz --- %v", err)
+		return fmt.Errorf("capzbytes --- %v", err)
+	}
+	err = rlp.DecodeBytes(y, &b.Capabilities)
+	if err != nil {
+		return fmt.Errorf("capzdecode --- %v", err)
 	}
 	return nil
 }

@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
@@ -354,26 +353,6 @@ type HandshakeMsg struct {
 	init chan bool
 	done chan struct{}
 	err  error
-}
-
-func (bh *HandshakeMsg) DecodeRLP(s *rlp.Stream) error {
-	_, err := s.List()
-	if err != nil {
-		return fmt.Errorf("list --- %v", err)
-	}
-	err = s.Decode(&bh.Version)
-	if err != nil {
-		return fmt.Errorf("version --- %v", err)
-	}
-	err = s.Decode(&bh.NetworkID)
-	if err != nil {
-		return fmt.Errorf("networkid  --- %v", err)
-	}
-	err = s.Decode(&bh.Addr)
-	if err != nil {
-		return fmt.Errorf("addr --- %v", err)
-	}
-	return nil
 }
 
 // String pretty prints the handshake
