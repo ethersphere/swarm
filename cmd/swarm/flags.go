@@ -20,7 +20,7 @@ package main
 import cli "gopkg.in/urfave/cli.v1"
 
 var (
-	ChequebookAddrFlag = cli.StringFlag{
+	SwarmSwapChequebookAddrFlag = cli.StringFlag{
 		Name:   "chequebook",
 		Usage:  "chequebook contract address",
 		EnvVar: SwarmEnvChequebookAddr,

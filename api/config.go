@@ -55,12 +55,12 @@ type Config struct {
 	// Swap configs
 	SwapBackendURL          string
 	SwapEnabled             bool
-	SwapPaymentThreshold    uint64
-	SwapDisconnectThreshold uint64
+	SwapPaymentThreshold    uint64 // in Honey
+	SwapDisconnectThreshold uint64 // in Honey
+	Contract                common.Address
 
 	*network.HiveParams
 	Pss                  *pss.Params
-	Contract             common.Address
 	EnsRoot              common.Address
 	EnsAPIs              []string
 	Path                 string
@@ -89,23 +89,23 @@ func NewConfig() (c *Config) {
 
 	c = &Config{
 		FileStoreParams:         storage.NewFileStoreParams(),
+		SwapBackendURL:          "",
+		SwapEnabled:             false,
+		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
+		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 		HiveParams:              network.NewHiveParams(),
 		Pss:                     pss.NewParams(),
+		EnsRoot:                 ens.TestNetAddress,
+		EnsAPIs:                 nil,
+		Path:                    node.DefaultDataDir(),
 		ListenAddr:              DefaultHTTPListenAddr,
 		Port:                    DefaultHTTPPort,
-		Path:                    node.DefaultDataDir(),
-		EnsAPIs:                 nil,
-		EnsRoot:                 ens.TestNetAddress,
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
 		SyncingSkipCheck:        false,
-		MaxStreamPeerServers:    10000,
 		DeliverySkipCheck:       true,
+		MaxStreamPeerServers:    10000,
 		SyncUpdateDelay:         15 * time.Second,
-		SwapEnabled:             false,
-		SwapBackendURL:          "",
-		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
-		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 	}
 
 	return

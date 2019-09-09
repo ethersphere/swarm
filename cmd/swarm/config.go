@@ -178,7 +178,7 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if keyid := ctx.GlobalString(SwarmAccountFlag.Name); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
-	if chbookaddr := ctx.GlobalString(ChequebookAddrFlag.Name); chbookaddr != "" {
+	if chbookaddr := ctx.GlobalString(SwarmSwapChequebookAddrFlag.Name); chbookaddr != "" {
 		currentConfig.Contract = common.HexToAddress(chbookaddr)
 	}
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
@@ -190,61 +190,47 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 			currentConfig.NetworkID = id
 		}
 	}
-
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		if datadir := ctx.GlobalString(utils.DataDirFlag.Name); datadir != "" {
 			currentConfig.Path = expandPath(datadir)
 		}
 	}
-
 	bzzport := ctx.GlobalString(SwarmPortFlag.Name)
 	if len(bzzport) > 0 {
 		currentConfig.Port = bzzport
 	}
-
 	if bzzaddr := ctx.GlobalString(SwarmListenAddrFlag.Name); bzzaddr != "" {
 		currentConfig.ListenAddr = bzzaddr
 	}
-
 	if ctx.GlobalIsSet(SwarmSwapEnabledFlag.Name) {
 		currentConfig.SwapEnabled = true
 	}
-
 	if swapBackendURL := ctx.GlobalString(SwarmSwapBackendURLFlag.Name); swapBackendURL != "" {
 		currentConfig.SwapBackendURL = swapBackendURL
 	}
-
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
 	}
-
 	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
-
 	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
 		currentConfig.SyncEnabled = false
 	}
-
 	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
 		currentConfig.SyncUpdateDelay = d
 	}
-
 	// any value including 0 is acceptable
 	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
-
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
 	}
-
 	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
 		currentConfig.DeliverySkipCheck = true
 	}
-
 	if currentConfig.SwapEnabled && currentConfig.SwapBackendURL == "" {
 		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
 	}
-
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {
 		ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)
 		// preserve backward compatibility to disable ENS with --ens-api=""
@@ -254,40 +240,30 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		for i := range ensAPIs {
 			ensAPIs[i] = expandPath(ensAPIs[i])
 		}
-
 		currentConfig.EnsAPIs = ensAPIs
 	}
-
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
 	}
-
 	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
 		currentConfig.ChunkDbPath = storePath
 	}
-
 	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
 		currentConfig.DbCapacity = storeCapacity
 	}
-
 	if ctx.GlobalIsSet(SwarmStoreCacheCapacity.Name) {
 		currentConfig.CacheCapacity = ctx.GlobalUint(SwarmStoreCacheCapacity.Name)
 	}
-
 	if ctx.GlobalIsSet(SwarmBootnodeModeFlag.Name) {
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
 	}
-
 	if ctx.GlobalIsSet(SwarmDisableAutoConnectFlag.Name) {
 		currentConfig.DisableAutoConnect = ctx.GlobalBool(SwarmDisableAutoConnectFlag.Name)
 	}
-
 	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
 		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
 	}
-
 	return currentConfig
-
 }
 
 // dumpConfig is the dumpconfig command.

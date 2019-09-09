@@ -60,8 +60,8 @@ type Swap struct {
 	owner               *Owner               // contract access
 	params              *Params              // economic and operational parameters
 	contract            swap.Contract        // reference to the smart contract
-	disconnectThreshold uint64               // amount at which the node will disconnect from the peer
-	thresholdOracle     ThresholdOracle      // oracle which resolves at which amount node will initiate payment
+	disconnectThreshold uint64               // amount of debt of a peer at which the node will disconnect
+	paymentThreshold    uint64               // amount of debt to a peer at which the node will initiate payment
 	honeyPriceOracle    HoneyOracle          // oracle which resolves the price of honey (in Wei)
 }
 
@@ -96,7 +96,7 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Addre
 		owner:               createOwner(prvkey, contract),
 		params:              NewParams(),
 		disconnectThreshold: disconnectThreshold,
-		thresholdOracle:     NewThresholdOracle(paymentThreshold),
+		paymentThreshold:    paymentThreshold,
 		honeyPriceOracle:    NewHoneyPriceOracle(),
 	}
 }
@@ -158,8 +158,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if !exists {
 		return fmt.Errorf("peer %v does not exist", peer.ID())
 	}
-	disconnectThreshold := s.disconnectThreshold
-	if balance >= int64(disconnectThreshold) {
+	disconnectThreshold := int64(s.disconnectThreshold)
+	if balance >= disconnectThreshold {
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), disconnectThreshold)
 	}
 
@@ -172,7 +172,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	paymentThreshold, _ := s.thresholdOracle.GetPaymentThreshold()
+	paymentThreshold := int64(s.paymentThreshold)
 
 	if newBalance <= -int64(paymentThreshold) {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
