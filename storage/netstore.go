@@ -24,15 +24,23 @@ import (
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
+=======
+>>>>>>> pushsync: address PR review feedback
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
 
+<<<<<<< HEAD
+=======
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+>>>>>>> pushsync: address PR review feedback
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
@@ -112,7 +120,11 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 	defer n.putMu.Unlock()
 
 	for i, ch := range chs {
+<<<<<<< HEAD
 		n.logger.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
+=======
+		log.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
+>>>>>>> pushsync: address PR review feedback
 	}
 	// put the chunk to the localstore, there should be no error
 	exist, err := n.Store.Put(ctx, mode, chs...)
@@ -158,6 +170,11 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 	ref := req.Addr
 
+<<<<<<< HEAD
+=======
+	log.Trace("netstore.get", "ref", ref.String())
+
+>>>>>>> pushsync: address PR review feedback
 	ch, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
 		// TODO: fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
@@ -165,7 +182,11 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			n.logger.Error("localstore get error", "err", err)
 		}
 
+<<<<<<< HEAD
 		n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+=======
+		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+>>>>>>> pushsync: address PR review feedback
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
@@ -203,7 +224,11 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 		c := v.(Chunk)
 
+<<<<<<< HEAD
 		n.logger.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
+=======
+		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
+>>>>>>> pushsync: address PR review feedback
 
 		return c, nil
 	}
@@ -231,9 +256,11 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 	for {
 		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
 
-		ctx, osp := spancontext.StartSpan(ctx, "remote.fetch")
+		ctx, osp := spancontext.StartSpan(
+			ctx,
+			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
-		ctx = context.WithValue(ctx, "remote.fetch", osp)
+
 		log.Trace("remote.fetch", "ref", ref)
 
 		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)

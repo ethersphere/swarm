@@ -42,6 +42,7 @@ import (
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -118,7 +119,7 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.Servic
 	if result.Error != nil {
 		return fmt.Errorf("simulation error: %v", result.Error)
 	}
-	log.Error("simulation", "duration", time.Since(start))
+	log.Info("simulation", "duration", time.Since(start))
 	return nil
 }
 
@@ -152,13 +153,12 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 	// wait till pushsync is done
 	syncTimeout := 30 * time.Second
 	sctx, cancel := context.WithTimeout(ctx, syncTimeout)
+	defer cancel()
 	err = tag.WaitTillDone(sctx, chunk.StateSynced)
 	if err != nil {
 		log.Debug("tag", "tag", tag)
-		cancel()
 		return fmt.Errorf("error waiting syncing: %v", err)
 	}
-	cancel()
 
 	log.Debug("downloading", "peer", did, "chunks", chunkCnt, "tagname", tagname)
 	netstore := sim.MustNodeItem(did, bucketKeyNetStore).(*storage.NetStore)
@@ -197,7 +197,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 
-	// // streamer for retrieval
+	// streamer for retrieval
 	delivery := stream.NewDelivery(kad, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers
 
@@ -270,26 +270,14 @@ func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, 
 }
 
 func download(ctx context.Context, store *storage.NetStore, addrs []storage.Address) error {
-	errc := make(chan error)
+	var g errgroup.Group
 	for _, addr := range addrs {
-		go func(addr storage.Address) {
+		addr := addr
+		g.Go(func() error {
 			_, err := store.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(addr))
 			log.Debug("Get", "addr", hex.EncodeToString(addr[:]), "err", err)
-			select {
-			case errc <- err:
-			case <-ctx.Done():
-			}
-		}(addr)
-	}
-	i := 0
-	for err := range errc {
-		if err != nil {
 			return err
-		}
-		i++
-		if i == len(addrs) {
-			break
-		}
+		})
 	}
-	return nil
+	return g.Wait()
 }

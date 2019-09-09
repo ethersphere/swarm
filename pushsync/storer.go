@@ -44,7 +44,7 @@ type Storer struct {
 }
 
 // NewStorer constructs a Storer
-// Storer run storer nodes to handle the reception of push-synced chunks
+// Storer runs on storer nodes to handle the reception of push-synced chunks
 // that fall within their area of responsibility.
 // The protocol makes sure that
 // - the chunks are stored and synced to their nearest neighbours and
@@ -54,7 +54,7 @@ func NewStorer(store Store, ps PubSub) *Storer {
 	s := &Storer{
 		store:  store,
 		ps:     ps,
-		logger: log.New("self", hex.EncodeToString(ps.BaseAddr())),
+		logger: log.New("self", label(ps.BaseAddr())),
 	}
 	s.deregister = ps.Register(pssChunkTopic, true, func(msg []byte, _ *p2p.Peer) error {
 		return s.handleChunkMsg(msg)
@@ -99,7 +99,7 @@ func (s *Storer) processChunkMsg(ctx context.Context, chmsg *chunkMsg) error {
 
 	// if self is closest peer then send back a receipt
 	if s.ps.IsClosestTo(chmsg.Addr) {
-		s.logger.Trace("self is closest to ref", "ref", hex.EncodeToString(chmsg.Addr))
+		s.logger.Trace("self is closest to ref", "ref", label(chmsg.Addr))
 		return s.sendReceiptMsg(ctx, chmsg)
 	}
 	return nil
