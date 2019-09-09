@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -310,7 +311,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 func TestSwapRPC(t *testing.T) {
 
 	var (
-		ipcPath = ".swarm.ipc"
+		ipcPath = ".swap.ipc"
 		err     error
 	)
 
@@ -329,8 +330,15 @@ func TestSwapRPC(t *testing.T) {
 		go stack.Stop()
 	}()
 
+	// use unique IPC path on windows
+	if runtime.GOOS == "windows" {
+		ipcPath = `\\.\pipe\swap.ipc`
+	} else {
+		ipcPath = filepath.Join(stack.DataDir(), ipcPath)
+	}
+
 	// connect to the servicenode RPCs
-	rpcclient, err := rpc.Dial(filepath.Join(stack.DataDir(), ipcPath))
+	rpcclient, err := rpc.Dial(ipcPath)
 	if err != nil {
 		t.Fatal(err)
 	}
