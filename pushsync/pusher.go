@@ -81,7 +81,7 @@ func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 		pushed:        make(map[string]*pushedItem),
 		receipts:      make(chan []byte),
 		ps:            ps,
-		logger:        log.New("self", hex.EncodeToString(ps.BaseAddr())),
+		logger:        log.New("self", label(ps.BaseAddr())),
 		retryInterval: 100 * time.Millisecond,
 	}
 	go p.sync()

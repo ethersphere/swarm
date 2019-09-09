@@ -84,28 +84,30 @@ func TestProtocol(t *testing.T) {
 	synced := make(map[int]int)
 	for {
 		select {
+		// receive indexes on synced channel when a chunk is set as synced
 		case idx := <-tp.synced:
 			n := synced[idx]
 			synced[idx] = n + 1
-			if len(synced) == chunkCnt {
-				expTotal := int64(chunkCnt / tagCnt)
-				checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
-				for i := uint64(0); i < uint64(chunkCnt); i++ {
-					if n := synced[int(i)]; n != 1 {
-						t.Fatalf("expected to receive exactly 1 receipt for chunk %v, got %v", i, n)
-					}
-					v, ok := store.Load(i)
-					if !ok {
-						t.Fatalf("chunk %v not stored", i)
-					}
-					if cnt := *(v.(*uint32)); cnt < uint32(storerCnt) {
-						t.Fatalf("chunk %v expected to be saved at least %v times, got %v", i, storerCnt, cnt)
-					}
-				}
-				return
-			}
 		case <-time.After(timeout):
 			t.Fatalf("timeout waiting for all chunks to be synced")
+		}
+		// all chunks set as synced
+		if len(synced) == chunkCnt {
+			expTotal := int64(chunkCnt / tagCnt)
+			checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
+			for i := uint64(0); i < uint64(chunkCnt); i++ {
+				if n := synced[int(i)]; n != 1 {
+					t.Fatalf("expected to receive exactly 1 receipt for chunk %v, got %v", i, n)
+				}
+				v, ok := store.Load(i)
+				if !ok {
+					t.Fatalf("chunk %v not stored", i)
+				}
+				if cnt := *(v.(*uint32)); cnt < uint32(storerCnt) {
+					t.Fatalf("chunk %v expected to be saved at least %v times, got %v", i, storerCnt, cnt)
+				}
+			}
+			return
 		}
 	}
 }
