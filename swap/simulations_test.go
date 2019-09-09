@@ -44,15 +44,117 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
+/*
+This file adds some in-process simulations to Swap.
+
+It is NOT an integration test; it does not test integration of Swap with other
+protocols like stream or retrieval; it is independent of backends and blockchains,
+and is purely meant for testing the accounting functionality across nodes.
+
+For integration tests, run test cluster deployments with all integration modueles
+(blockchains, oracles, etc.)
+*/
+
 var bucketKeySwap = simulation.BucketKey("swap")
 
+// swapSimulationParams allows to avoid global variables for the test
+type swapSimulationParams struct {
+	swaps       map[int]*Swap
+	dirs        map[int]string
+	count       int
+	maxMsgPrice int
+	minMsgPrice int
+	nodeCount   int
+	backend     *backends.SimulatedBackend
+}
+
+// define test message types
+type testMsgBySender struct{}
+type testMsgByReceiver struct{}
+type testMsgBigPrice struct{}
+
+// create a test Spec; every node has its Spec and its accounting Hook
+func newTestSpec() *protocols.Spec {
+	return &protocols.Spec{
+		Name:       "testSpec",
+		Version:    1,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			testMsgBySender{},
+			testMsgByReceiver{},
+			testMsgBigPrice{},
+		},
+	}
+}
+
+// testPrices holds prices for these test messages
+type testPrices struct {
+	priceMatrix map[reflect.Type]*protocols.Price
+}
+
+// assign prices for the test messages
+func (tp *testPrices) newTestPriceMatrix() {
+	tp.priceMatrix = map[reflect.Type]*protocols.Price{
+		reflect.TypeOf(testMsgBySender{}): {
+			Value:   1000, // arbitrary price for now
+			PerByte: true,
+			Payer:   protocols.Sender,
+		},
+		reflect.TypeOf(testMsgByReceiver{}): {
+			Value:   100, // arbitrary price for now
+			PerByte: false,
+			Payer:   protocols.Receiver,
+		},
+		reflect.TypeOf(testMsgBigPrice{}): {
+			Value:   DefaultPaymentThreshold + 1,
+			PerByte: false,
+			Payer:   protocols.Sender,
+		},
+	}
+}
+
+// Price returns the price for a (test) message
+func (tp *testPrices) Price(msg interface{}) *protocols.Price {
+	t := reflect.TypeOf(msg).Elem()
+	return tp.priceMatrix[t]
+}
+
+// testService encapsulates objects needed for the simulation
+type testService struct {
+	swap  *Swap
+	spec  *protocols.Spec
+	peers map[enode.ID]*testPeer
+}
+
+func newTestService() *testService {
+	return &testService{
+		peers: make(map[enode.ID]*testPeer),
+	}
+}
+
+// testPeer is our object for the test protocol; we can use it to handle our own messages
+type testPeer struct {
+	*protocols.Peer
+}
+
+// handle our own messages; we don't need to do anything (yet), we only
+// want messages to be sent and received, and we need this function for the protocol spec
+func (tp *testPeer) handleMsg(ctx context.Context, msg interface{}) error {
+	return nil
+}
+
+// newSimServiceMap creates the `ServiceFunc` map for node initialization.
+// The trick we need to apply is that we need to create a `SimulatedBackend`
+// with all accounts for every simulation node pre-loaded with "funds".
+// To do this, we pass a `swapSimulationParams` object to this function,
+// which contains the shared objects needed to initialize the `SimulatedBackend`
 func newSimServiceMap(params *swapSimulationParams) map[string]simulation.ServiceFunc {
 	simServiceMap := map[string]simulation.ServiceFunc{
+		// we need the bzz service in order to build up a kademlia
 		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
-			//assign the network ID
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),
@@ -61,20 +163,26 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
+		// and we also use a swap service
 		"swap": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-
+			// every simulation node has an instance of a `testService`
 			ts := newTestService()
-
+			// balance is the interface for `NewAccounting`; it is a Swap
 			balance := params.swaps[params.count]
+			// every node is a different instance of a Swap and gets a different entry in the map
 			params.count++
+			// to create the accounting, we also need a `Price` instance
 			prices := &testPrices{}
+			// create the matrix of test prices
 			prices.newTestPriceMatrix()
 			ts.spec = newTestSpec()
+			// create the accounting instance and assign to the spec
 			ts.spec.Hook = protocols.NewAccounting(balance, prices)
 			ts.swap = balance
+			// deploy the accounting to the `SimulatedBackend`
 			testDeploy(context.Background(), balance.backend, balance)
-			balance.backend.(*backends.SimulatedBackend).Commit()
-
+			params.backend.Commit()
+			// store the testService into the bucket
 			bucket.Store(bucketKeySwap, ts)
 
 			cleanup = func() {
@@ -89,15 +197,8 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 	return simServiceMap
 }
 
-type swapSimulationParams struct {
-	swaps       map[int]*Swap
-	dirs        map[int]string
-	count       int
-	maxMsgPrice int
-	minMsgPrice int
-	nodeCount   int
-}
-
+// newSharedBackendSwaps pre-loads each simulated node account with "funds"
+// so that later in the simulation all operations have sufficient gas
 func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 	params := &swapSimulationParams{
 		swaps:       make(map[int]*Swap),
@@ -111,6 +212,7 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 	alloc := core.GenesisAlloc{}
 	stores := make(map[int]*state.DBStore)
 
+	// for each node, generate keys, a GenesisAccount and a state store
 	for i := 0; i < nodeCount; i++ {
 		key, err := crypto.GenerateKey()
 		if err != nil {
@@ -130,21 +232,33 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 		params.dirs[i] = dir
 		stores[i] = stateStore
 	}
-	gasLimit := uint64(8000000)
+	// then create the single SimulatedBackend
+	gasLimit := uint64(80000000000)
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
+	// finally, create all Swap instances for each node, which share the same backend
 	for i := 0; i < nodeCount; i++ {
 		params.swaps[i] = New(stores[i], keys[i], common.Address{}, defaultBackend)
 	}
 
+	params.backend = defaultBackend
 	return params, nil
 }
 
+// TestPingPongChequeSimulation just launches two nodes and sends each other
+// messages which immediately crosses the PaymentThreshold and triggers cheques
+// to each other. Checks that accounting and cheque handling works across multiple
+// cheques and also if cheques are mutually sent
 func TestPingPongChequeSimulation(t *testing.T) {
 	nodeCount := 2
+	// create the shared backend and params
 	params, err := newSharedBackendSwaps(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// cleanup backend
+	defer params.backend.Close()
+
+	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
 
@@ -176,47 +290,51 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		debitor := sim.UpNodeIDs()[0]
-		creditor := sim.UpNodeIDs()[1]
+		p1 := sim.UpNodeIDs()[0]
+		p2 := sim.UpNodeIDs()[1]
 
 		maxCheques := 42
 
-		item, ok := sim.NodeItem(debitor, bucketKeySwap)
+		item, ok := sim.NodeItem(p1, bucketKeySwap)
 		if !ok {
 			return errors.New("no swap in simulation bucket")
 		}
-		debitorSvc := item.(*testService)
+		p1Svc := item.(*testService)
 
-		peerItem, ok := sim.NodeItem(creditor, bucketKeySwap)
+		peerItem, ok := sim.NodeItem(p2, bucketKeySwap)
 		if !ok {
 			return errors.New("no swap in simulation bucket")
 		}
-		creditorSvc := peerItem.(*testService)
+		p2Svc := peerItem.(*testService)
 
-		creditorPeer := debitorSvc.peers[creditor]
-		debitorPeer := creditorSvc.peers[debitor]
+		p2Peer := p1Svc.peers[p2]
+		p1Peer := p2Svc.peers[p1]
 
 		for i := 0; i < maxCheques; i++ {
 			if i%2 == 0 {
-				creditorPeer.Send(ctx, &testMsgBigPrice{})
+				p2Peer.Send(ctx, &testMsgBigPrice{})
 			} else {
-				debitorPeer.Send(ctx, &testMsgBigPrice{})
+				p1Peer.Send(ctx, &testMsgBigPrice{})
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
 
-		fmt.Println(creditorSvc.swap.getBalance(debitor))
-		fmt.Println(debitorSvc.swap.getBalance(creditor))
-		ch1, ok := creditorSvc.swap.getCheque(debitor)
-		if err != nil {
+		ch1, ok := p2Svc.swap.getCheque(p1)
+		if !ok {
 			return errors.New("peer not found")
 		}
-		fmt.Println(ch1.CumulativePayout)
-		ch2, ok := debitorSvc.swap.getCheque(creditor)
-		if err != nil {
+		ch2, ok := p1Svc.swap.getCheque(p2)
+		if !ok {
 			return errors.New("peer not found")
 		}
-		fmt.Println(ch2.CumulativePayout)
+
+		expected := uint64(maxCheques / 2 * (DefaultPaymentThreshold + 1))
+		if ch1.CumulativePayout != expected {
+			return fmt.Errorf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
+		}
+		if ch2.CumulativePayout != expected {
+			return fmt.Errorf("expected cumulative payout to be %d, but is %d", expected, ch2.CumulativePayout)
+		}
 
 		return nil
 
@@ -229,12 +347,20 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
+// TestMultiChequeSimulation just launches two nodes, and sends multiple cheques
+// to the same node; checks that accounting still works properly afterwards and that
+// cheque cumulation values add up correctly
 func TestMultiChequeSimulation(t *testing.T) {
 	nodeCount := 2
+	// create the shared backend and params
 	params, err := newSharedBackendSwaps(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// cleanup backend
+	defer params.backend.Close()
+
+	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
 
@@ -266,36 +392,45 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// define the nodes
 		debitor := sim.UpNodeIDs()[0]
 		creditor := sim.UpNodeIDs()[1]
+		// we will send just maxCheques number of cheques
 		maxCheques := 6
 
+		// get the testService for the debitor
 		item, ok := sim.NodeItem(debitor, bucketKeySwap)
 		if !ok {
 			return errors.New("no swap in simulation bucket")
 		}
 		debitorSvc := item.(*testService)
 
+		// get the testService for the creditor
 		peerItem, ok := sim.NodeItem(creditor, bucketKeySwap)
 		if !ok {
 			return errors.New("no swap in simulation bucket")
 		}
 		creditorSvc := peerItem.(*testService)
 
+		// the peer object used for sending
 		creditorPeer := debitorSvc.peers[creditor]
 
+		// send maxCheques number of cheques
 		for i := 0; i < maxCheques; i++ {
+			// use a price which will trigger a cheque each time
 			creditorPeer.Send(ctx, &testMsgBigPrice{})
+			// we need to sleep a bit in order to give time for the cheque to be processed
 			time.Sleep(100 * time.Millisecond)
 		}
 
+		// check balances:
 		b1, _ := debitorSvc.swap.getBalance(creditor)
 		b2, _ := creditorSvc.swap.getBalance(debitor)
 
 		if b1 != -b2 {
 			return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
 		}
-
+		// check cheques
 		var cheque1, cheque2 *Cheque
 		if cheque1, ok = debitorSvc.swap.getCheque(creditor); !ok {
 			return errors.New("expected cheques with creditor, but none found")
@@ -305,10 +440,12 @@ func TestMultiChequeSimulation(t *testing.T) {
 			return errors.New("expected cheques with debitor, but none found")
 		}
 
+		// both cheques (at issuer and beneficiary) should have same cumulative value
 		if cheque1.CumulativePayout != cheque2.CumulativePayout {
 			return fmt.Errorf("Expected symmetric cheques payout, but they are not: %d vs %d", cheque1.CumulativePayout, cheque2.CumulativePayout)
 		}
 
+		// check also the actual expected amount
 		expectedPayout := uint64(maxCheques * (DefaultPaymentThreshold + 1))
 
 		if cheque2.CumulativePayout != expectedPayout {
@@ -326,13 +463,20 @@ func TestMultiChequeSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
+// TestSimpleSimulation starts 16 nodes, then in a simple round robin fashion sends messages to each other.
+// Then checks that accounting is ok. It checks the actual amount of balances without any cheques sent,
+// in order to verify that the most basic accounting works.
 func TestSimpleSimulation(t *testing.T) {
-
 	nodeCount := 16
+	// create the shared backend and params
 	params, err := newSharedBackendSwaps(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// cleanup backend
+	defer params.backend.Close()
+
+	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
 
@@ -365,13 +509,18 @@ func TestSimpleSimulation(t *testing.T) {
 		}
 
 		nodes := sim.UpNodeIDs()
+		// we don't want any cheques to be issued for this test, we only want to test accounting across nodes
+		// for this we define a "global" maximum amount of messages to be sent;
+		// this formula should ensure that we trigger enough messages but not enough to trigger cheques
 		maxMsgs := (DefaultPaymentThreshold / params.maxMsgPrice) * (nodeCount - 1)
 		msgCount := 0
 
+		// iterate all nodes, then send each other test messages
 	ITER:
 		for {
 			for _, node := range nodes {
 				for k, p := range nodes {
+					// don't send to self
 					if node == p {
 						continue
 					}
@@ -386,6 +535,7 @@ func TestSimpleSimulation(t *testing.T) {
 						if tp == nil {
 							return errors.New("peer is nil")
 						}
+						// also alternate between Sender paid and Receiver paid messages
 						if k%2 == 0 {
 							tp.Send(ctx, &testMsgByReceiver{})
 						} else {
@@ -399,42 +549,45 @@ func TestSimpleSimulation(t *testing.T) {
 			}
 		}
 
-		time.Sleep(1 * time.Second)
+		// before we can check the balances, we need to wait a bit, as the last messages
+		// may still be processed
+		time.Sleep(500 * time.Millisecond)
 
-		for i, node := range nodes {
-
-			//now iterate
-			//and check that every node k has the same
-			//balance with a peer as that peer with the node,
-			//but in inverted signs
-
-			//iterate the map
-			p := i + 1
-			if i == len(nodes)-1 {
-				p = 0
-			}
+		//now iterate again and check that every node has the same
+		//balance with a peer as that peer with the same node,
+		//but in inverted signs
+		for _, node := range nodes {
 			item, ok := sim.NodeItem(node, bucketKeySwap)
 			if !ok {
 				return errors.New("no swap in simulation bucket")
 			}
 			ts := item.(*testService)
+			// for each node look up the peers
+			for _, p := range nodes {
+				// no need to check self
+				if p == node {
+					continue
+				}
 
-			peerItem, ok := sim.NodeItem(nodes[p], bucketKeySwap)
-			if !ok {
-				return errors.New("no swap in simulation bucket")
-			}
-			peerTs := peerItem.(*testService)
+				peerItem, ok := sim.NodeItem(p, bucketKeySwap)
+				if !ok {
+					return errors.New("no swap in simulation bucket")
+				}
+				peerTs := peerItem.(*testService)
 
-			nodeBalanceWithP, ok := ts.swap.getBalance(nodes[p])
-			if !ok {
-				return fmt.Errorf("expected balance for peer %v to be found, but not found", nodes[p])
-			}
-			pBalanceWithNode, ok := peerTs.swap.getBalance(node)
-			if !ok {
-				return fmt.Errorf("expected counter balance for node %v to be found, but not found", node)
-			}
-			if nodeBalanceWithP != -pBalanceWithNode {
-				return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", nodeBalanceWithP, pBalanceWithNode)
+				// balance of the node with peer p
+				nodeBalanceWithP, ok := ts.swap.getBalance(p)
+				if !ok {
+					return fmt.Errorf("expected balance for peer %v to be found, but not found", p)
+				}
+				// balance of the peer with node
+				pBalanceWithNode, ok := peerTs.swap.getBalance(node)
+				if !ok {
+					return fmt.Errorf("expected counter balance for node %v to be found, but not found", node)
+				}
+				if nodeBalanceWithP != -pBalanceWithNode {
+					return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", nodeBalanceWithP, pBalanceWithNode)
+				}
 			}
 		}
 
@@ -447,37 +600,6 @@ func TestSimpleSimulation(t *testing.T) {
 	}
 
 	log.Info("Simulation ended")
-}
-
-type testMsgBySender struct{}
-type testMsgByReceiver struct{}
-type testMsgBigPrice struct{}
-
-type testPeer struct {
-	*protocols.Peer
-}
-
-// boolean is used to concurrently set
-// and read a boolean value.
-type boolean struct {
-	v  bool
-	mu sync.RWMutex
-}
-
-// set sets the value.
-func (b *boolean) set(v bool) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.v = v
-}
-
-// bool reads the value.
-func (b *boolean) bool() bool {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	return b.v
 }
 
 // watchDisconnections receives simulation peer events in a new goroutine and sets atomic value
@@ -506,60 +628,6 @@ func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disco
 		}
 	}()
 	return disconnected
-}
-
-func newTestSpec() *protocols.Spec {
-	return &protocols.Spec{
-		Name:       "testSpec",
-		Version:    1,
-		MaxMsgSize: 10 * 1024 * 1024,
-		Messages: []interface{}{
-			testMsgBySender{},
-			testMsgByReceiver{},
-			testMsgBigPrice{},
-		},
-	}
-}
-
-type testPrices struct {
-	priceMatrix map[reflect.Type]*protocols.Price
-}
-
-func (tp *testPrices) newTestPriceMatrix() {
-	tp.priceMatrix = map[reflect.Type]*protocols.Price{
-		reflect.TypeOf(testMsgBySender{}): {
-			Value:   1000, // arbitrary price for now
-			PerByte: true,
-			Payer:   protocols.Sender,
-		},
-		reflect.TypeOf(testMsgByReceiver{}): {
-			Value:   100, // arbitrary price for now
-			PerByte: false,
-			Payer:   protocols.Receiver,
-		},
-		reflect.TypeOf(testMsgBigPrice{}): {
-			Value:   DefaultPaymentThreshold + 1,
-			PerByte: false,
-			Payer:   protocols.Sender,
-		},
-	}
-}
-
-func (tp *testPrices) Price(msg interface{}) *protocols.Price {
-	t := reflect.TypeOf(msg).Elem()
-	return tp.priceMatrix[t]
-}
-
-type testService struct {
-	swap  *Swap
-	spec  *protocols.Spec
-	peers map[enode.ID]*testPeer
-}
-
-func newTestService() *testService {
-	return &testService{
-		peers: make(map[enode.ID]*testPeer),
-	}
 }
 
 func (ts *testService) Protocols() []p2p.Protocol {
@@ -592,23 +660,12 @@ func (ts *testService) APIs() []rpc.API {
 	}
 }
 
+// runProtocol for the test spec
 func (ts *testService) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, ts.spec)
 	tp := &testPeer{Peer: peer}
 	ts.peers[tp.ID()] = tp
-	//peer.Send(context.Background(), &testMsgByReceiver{})
 	return peer.Run(tp.handleMsg)
-}
-
-func (tp *testPeer) handleMsg(ctx context.Context, msg interface{}) error {
-
-	switch msg.(type) {
-
-	case *testMsgBySender:
-
-	case *testMsgByReceiver:
-	}
-	return nil
 }
 
 // Start is called after all services have been constructed and the networking
@@ -621,4 +678,27 @@ func (ts *testService) Start(server *p2p.Server) error {
 // are all terminated.
 func (ts *testService) Stop() error {
 	return nil
+}
+
+// boolean is used to concurrently set
+// and read a boolean value.
+type boolean struct {
+	v  bool
+	mu sync.RWMutex
+}
+
+// set sets the value.
+func (b *boolean) set(v bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.v = v
+}
+
+// bool reads the value.
+func (b *boolean) bool() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	return b.v
 }
