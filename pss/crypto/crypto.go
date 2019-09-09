@@ -194,24 +194,6 @@ func (msg *receivedMessage) validateAndParse() error {
 	return nil
 }
 
-// sigToPubKey returns the public key associated to the message's signature.
-// should only be called if message has been signed
-func (msg *receivedMessage) sigToPubKey() *ecdsa.PublicKey {
-	defer func() { recover() }() // in case of invalid signature
-
-	signedBytes := msg.Raw
-	if isMessageSigned(msg.Raw[0]) {
-		sz := len(msg.Raw) - signatureLength
-		signedBytes = msg.Raw[:sz]
-	}
-	pub, err := msg.crypto.sigToPub(signedBytes, msg.Signature)
-	if err != nil {
-		log.Error("failed to recover public key from signature", "err", err)
-		return nil
-	}
-	return pub
-}
-
 func newReceivedMessage(decrypted []byte, salt []byte, crypto *defaultCryptoBackend) *receivedMessage {
 	return &receivedMessage{
 		Raw:          decrypted,

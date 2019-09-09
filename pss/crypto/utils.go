@@ -41,6 +41,7 @@ func NewUtils() Utils {
 	}
 }
 
+// Generates a new private key right away. It is not stored for later retrieval.
 func (utils *utils) GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ethCrypto.GenerateKey()
 }
@@ -74,6 +75,7 @@ func (utils *utils) NewKeyPair() (string, error) {
 	return id, nil
 }
 
+// GetPrivateKey return a PrivateKey previously generated in NewKeyPair by id
 func (utils *utils) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	utils.keyMu.RLock()
 	defer utils.keyMu.RUnlock()
