@@ -83,7 +83,7 @@ func (ks *KeyStore) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, addre
 	if err := validateAddress(address); err != nil {
 		return err
 	}
-	pubkeybytes := ks.Crypto.FromECDSAPub(pubkey)
+	pubkeybytes := ks.Crypto.SerializePublicKey(pubkey)
 	if len(pubkeybytes) == 0 {
 		return fmt.Errorf("invalid public key: %v", pubkey)
 	}
@@ -147,7 +147,7 @@ func (ks *KeyStore) getPeerAddress(keyid string, topic Topic) (PssAddress, error
 // encapsulating the decrypted message, and the id
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted.
-func (ks *KeyStore) processSym(pssMsg *PssMsg) (crypto.ReceivedMessage, string, PssAddress, error) {
+func (ks *KeyStore) processSym(pssMsg *PssMsg) ([]byte, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
 
 	for i := ks.symKeyDecryptCacheCursor; i > ks.symKeyDecryptCacheCursor-cap(ks.symKeyDecryptCache) && i > 0; i-- {
@@ -156,13 +156,18 @@ func (ks *KeyStore) processSym(pssMsg *PssMsg) (crypto.ReceivedMessage, string, 
 		if err != nil {
 			continue
 		}
-		recvmsg, err := ks.Crypto.UnWrapSymmetric(pssMsg.Payload, symkey)
+		unwrapParams := &crypto.UnwrapParams{
+			SymmetricKey: symkey,
+		}
+		recvmsg, err := ks.Crypto.UnWrap(pssMsg.Payload, unwrapParams)
 		if err != nil {
 			continue
 		}
-		if !recvmsg.ValidateAndParse() {
-			return nil, "", nil, errors.New("symmetrically encrypted message has invalid signature or is corrupt")
+		payload, validateError := recvmsg.GetPayload()
+		if validateError != nil {
+			return nil, "", nil, validateError
 		}
+
 		var from PssAddress
 		ks.mx.RLock()
 		if ks.symKeyPool[*symkeyid][pssMsg.Topic] != nil {
@@ -171,7 +176,7 @@ func (ks *KeyStore) processSym(pssMsg *PssMsg) (crypto.ReceivedMessage, string, 
 		ks.mx.RUnlock()
 		ks.symKeyDecryptCacheCursor++
 		ks.symKeyDecryptCache[ks.symKeyDecryptCacheCursor%cap(ks.symKeyDecryptCache)] = symkeyid
-		return recvmsg, *symkeyid, from, nil
+		return payload, *symkeyid, from, nil
 	}
 	return nil, "", nil, errors.New("could not decrypt message")
 }
@@ -181,25 +186,30 @@ func (ks *KeyStore) processSym(pssMsg *PssMsg) (crypto.ReceivedMessage, string, 
 // encapsulating the decrypted message, and the byte representation of
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted.
-func (p *Pss) processAsym(pssMsg *PssMsg) (crypto.ReceivedMessage, string, PssAddress, error) {
+func (p *Pss) processAsym(pssMsg *PssMsg) ([]byte, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
 
-	recvmsg, err := p.Crypto.UnWrapAsymmetric(pssMsg.Payload, p.privateKey)
+	unwrapParams := &crypto.UnwrapParams{
+		Receiver: p.privateKey,
+	}
+	recvmsg, err := p.Crypto.UnWrap(pssMsg.Payload, unwrapParams)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
-	// check signature (if signed), strip padding
-	if !recvmsg.ValidateAndParse() {
-		return nil, "", nil, errors.New("invalid message")
+
+	payload, validateError := recvmsg.GetPayload()
+	if validateError != nil {
+		return nil, "", nil, validateError
 	}
-	pubkeyid := common.ToHex(p.Crypto.FromECDSAPub(recvmsg.GetSrc()))
+
+	pubkeyid := common.ToHex(p.Crypto.SerializePublicKey(recvmsg.GetSender()))
 	var from PssAddress
 	p.mx.RLock()
 	if p.pubKeyPool[pubkeyid][pssMsg.Topic] != nil {
 		from = p.pubKeyPool[pubkeyid][pssMsg.Topic].address
 	}
 	p.mx.RUnlock()
-	return recvmsg, pubkeyid, from, nil
+	return payload, pubkeyid, from, nil
 }
 
 // Symkey garbage collection
@@ -270,7 +280,7 @@ func (ks *KeyStore) SetSymmetricKey(key []byte, topic Topic, address PssAddress,
 }
 
 func (ks *KeyStore) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
-	keyid, err := ks.Crypto.AddSymKeyDirect(key)
+	keyid, err := ks.Crypto.AddSymKey(key)
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addtocache, protected)
 	}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -228,7 +229,7 @@ type Pss struct {
 }
 
 func (p *Pss) String() string {
-	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), common.ToHex(p.Crypto.FromECDSAPub(&p.privateKey.PublicKey)))
+	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), hex.EncodeToString(p.Crypto.SerializePublicKey(&p.privateKey.PublicKey)))
 }
 
 // Creates a new Pss instance.
@@ -301,7 +302,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 	go p.outbox.processOutbox()
 
 	log.Info("Started Pss")
-	log.Info("Loaded EC keys", "pubkey", common.ToHex(p.Crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(p.Crypto.CompressPubkey(p.PublicKey())))
+	log.Info("Loaded EC keys", "pubkey", hex.EncodeToString(p.Crypto.SerializePublicKey(p.PublicKey())), "secp256", hex.EncodeToString(p.Crypto.CompressPublicKey(p.PublicKey())))
 	return nil
 }
 
@@ -469,11 +470,11 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
-		log.Warn("pss filtered expired message", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
+		log.Warn("pss filtered expired message", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", hex.EncodeToString(pssmsg.To))
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
-		log.Trace("pss relay block-cache match (process)", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", (common.ToHex(pssmsg.To)))
+		log.Trace("pss relay block-cache match (process)", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", (hex.EncodeToString(pssmsg.To)))
 		return nil
 	}
 	p.addFwdCache(pssmsg)
@@ -502,11 +503,11 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
-		log.Trace("pss msg forwarding ===>", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
+		log.Trace("pss msg forwarding ===>", "pss", hex.EncodeToString(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss msg processing <===", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Topic[:]))
+	log.Trace("pss msg processing <===", "pss", hex.EncodeToString(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Topic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
@@ -523,12 +524,11 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
-	var recvmsg crypto.ReceivedMessage
 	var payload []byte
 	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(pssMsg *PssMsg) (crypto.ReceivedMessage, string, PssAddress, error)
+	var keyFunc func(pssMsg *PssMsg) ([]byte, string, PssAddress, error)
 
 	psstopic := pssmsg.Topic
 
@@ -542,11 +542,10 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 			keyFunc = p.processAsym
 		}
 
-		recvmsg, keyid, from, err = keyFunc(pssmsg)
+		payload, keyid, from, err = keyFunc(pssmsg)
 		if err != nil {
-			return errors.New("Decryption failed")
+			return errors.New("decryption failed")
 		}
-		payload = recvmsg.GetPayload()
 	}
 
 	if len(pssmsg.To) < addressLength || prox {
@@ -668,7 +667,7 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 //
 // Fails if the key id does not match any in of the stored public keys
 func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
-	if _, err := p.Crypto.UnmarshalPubkey(common.FromHex(pubkeyid)); err != nil {
+	if _, err := p.Crypto.UnmarshalPublicKey(common.FromHex(pubkeyid)); err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkeyid)
 	}
 	psp, ok := p.getPeerPub(pubkeyid, topic)
@@ -689,23 +688,23 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		return fmt.Errorf("Zero length key passed to pss send")
 	}
 	wrapParams := &crypto.WrapParams{
-		Src: p.privateKey,
+		Sender: p.privateKey,
 	}
 	if asymmetric {
-		pk, err := p.Crypto.UnmarshalPubkey(key)
+		pk, err := p.Crypto.UnmarshalPublicKey(key)
 		if err != nil {
 			return fmt.Errorf("Cannot unmarshal pubkey: %x", key)
 		}
-		wrapParams.Dst = pk
+		wrapParams.Receiver = pk
 	} else {
-		wrapParams.KeySym = key
+		wrapParams.SymmetricKey = key
 	}
 	// set up outgoing message container, which does encryption and envelope wrapping
-	envelope, err := p.Crypto.WrapMessage(msg, wrapParams)
+	envelope, err := p.Crypto.Wrap(msg, wrapParams)
 	if err != nil {
 		return fmt.Errorf("failed to perform message encapsulation and encryption: %v", err)
 	}
-	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", common.ToHex(msg), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", hex.EncodeToString(msg), "to", hex.EncodeToString(to), "asym", asymmetric, "key", hex.EncodeToString(key))
 
 	// prepare for devp2p transport
 	pssMsgParams := &msgParams{

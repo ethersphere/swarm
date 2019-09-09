@@ -53,7 +53,7 @@ var (
 	initOnce        = sync.Once{}
 	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
 	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
-	cryptoUtils     crypto.CryptoUtils
+	cryptoUtils     crypto.Utils
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -77,7 +77,7 @@ func initTest() {
 			h := log.CallerFileHandler(hf)
 			log.Root().SetHandler(h)
 
-			cryptoUtils = crypto.NewCryptoUtils()
+			cryptoUtils = crypto.NewUtils()
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
@@ -154,9 +154,7 @@ func TestMsgParams(t *testing.T) {
 func TestCache(t *testing.T) {
 	var err error
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := cryptoUtils.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair()
 	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	if err != nil {
 		t.Fatal(err)
@@ -168,22 +166,22 @@ func TestCache(t *testing.T) {
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
 	wparams := &crypto.WrapParams{
-		Src: privkey,
-		Dst: &privkey.PublicKey,
+		Sender:   privkey,
+		Receiver: &privkey.PublicKey,
 	}
-	env, err := ps.Crypto.WrapMessage(data, wparams)
+	env, err := ps.Crypto.Wrap(data, wparams)
 	msg := &PssMsg{
 		Payload: env,
 		To:      to,
 		Topic:   PingTopic,
 	}
-	envtwo, err := ps.Crypto.WrapMessage(datatwo, wparams)
+	envtwo, err := ps.Crypto.Wrap(datatwo, wparams)
 	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
 		Topic:   PingTopic,
 	}
-	envthree, err := ps.Crypto.WrapMessage(datathree, wparams)
+	envthree, err := ps.Crypto.Wrap(datathree, wparams)
 	msgthree := &PssMsg{
 		Payload: envthree,
 		To:      to,
@@ -248,9 +246,7 @@ func TestAddressMatch(t *testing.T) {
 	remoteaddr := []byte("feedbeef")
 	kadparams := network.NewKadParams()
 	kad := network.NewKademlia(localaddr, kadparams)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := cryptoUtils.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair()
 	if err != nil {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
@@ -606,15 +602,11 @@ func TestOutboxFull(t *testing.T) {
 // set and generate pubkeys and symkeys
 func TestKeys(t *testing.T) {
 	// make our key and init pss with it
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	ourkeys, err := cryptoUtils.NewKeyPair(ctx)
+	ourkeys, err := cryptoUtils.NewKeyPair()
 	if err != nil {
 		t.Fatalf("create 'our' key fail")
 	}
-	ctx, cancel2 := context.WithTimeout(context.Background(), time.Second)
-	defer cancel2()
-	theirkeys, err := cryptoUtils.NewKeyPair(ctx)
+	theirkeys, err := cryptoUtils.NewKeyPair()
 	if err != nil {
 		t.Fatalf("create 'their' key fail")
 	}
@@ -689,7 +681,7 @@ func TestGetPublickeyEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	remotepubkeybytes := ps.Crypto.FromECDSAPub(&remoteprivkey.PublicKey)
+	remotepubkeybytes := ps.Crypto.SerializePublicKey(&remoteprivkey.PublicKey)
 	remotepubkeyhex := common.ToHex(remotepubkeybytes)
 
 	pssapi := NewAPI(ps)
@@ -1516,9 +1508,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := cryptoUtils.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair()
 	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
@@ -1561,9 +1551,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := cryptoUtils.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair()
 	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
@@ -1575,7 +1563,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendAsym(common.ToHex(ps.Crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
+		ps.SendAsym(common.ToHex(ps.Crypto.SerializePublicKey(&privkey.PublicKey)), topic, msg)
 	}
 }
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
@@ -1609,9 +1597,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := cryptoUtils.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair()
 	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
@@ -1632,9 +1618,9 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
 		wparams := &crypto.WrapParams{
-			KeySym: symkey,
+			SymmetricKey: symkey,
 		}
-		payload, err := ps.Crypto.WrapMessage([]byte("xyzzy"), wparams)
+		payload, err := ps.Crypto.Wrap([]byte("xyzzy"), wparams)
 		if err != nil {
 			b.Fatalf("could not generate envelope: %v", err)
 		}
@@ -1685,9 +1671,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 	}
 	addr := make([]PssAddress, keycount)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := cryptoUtils.NewKeyPair(ctx)
+	keys, err := cryptoUtils.NewKeyPair()
 	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
@@ -1709,9 +1693,9 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
 	wparams := &crypto.WrapParams{
-		KeySym: symkey,
+		SymmetricKey: symkey,
 	}
-	payload, err := ps.Crypto.WrapMessage([]byte("xyzzy"), wparams)
+	payload, err := ps.Crypto.Wrap([]byte("xyzzy"), wparams)
 	if err != nil {
 		b.Fatalf("could not generate envelope: %v", err)
 	}
@@ -1812,9 +1796,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			// execadapter does not exec init()
 			initTest()
 
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
+			keys, err := cryptoUtils.NewKeyPair()
 			privkey, err := cryptoUtils.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw

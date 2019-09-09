@@ -16,7 +16,6 @@
 package crypto
 
 import (
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -34,8 +33,6 @@ import (
 	"github.com/ethersphere/swarm/log"
 )
 
-// We need a singleton here?
-var cryptoBackend defaultCryptoBackend
 var createPadding = true
 
 const (
@@ -53,54 +50,54 @@ const (
 	defaultPaddingByteSize = 16
 )
 
+// Config params to wrap and encrypt a message.
+// For asymmetric encryption Receiver is needed.
+// For symmetric, SymmetricKey is needed. Sender is not mandatory but used to sign the message in both schemes.
 type WrapParams struct {
-	Src    *ecdsa.PrivateKey
-	Dst    *ecdsa.PublicKey
-	KeySym []byte
+	Sender       *ecdsa.PrivateKey // Private key of sender used for signature
+	Receiver     *ecdsa.PublicKey  // Public key of receiver for encryption
+	SymmetricKey []byte            // Symmetric key for encryption
+}
+
+// Config params to unwrap and decrypt a message.
+// For asymmetric encryption Receiver is needed.
+// For symmetric, SymmetricKey is needed. Sender is not mandatory but used to sign the message in both schemes.
+type UnwrapParams struct {
+	Sender       *ecdsa.PublicKey  // Private key of sender used for signature validation
+	Receiver     *ecdsa.PrivateKey // Public key of receiver for decryption
+	SymmetricKey []byte            // Symmetric key for decryption
 }
 
 // Contains a successfully decrypted message prior to parsing and validating
 type ReceivedMessage interface {
-	ValidateAndParse() bool
-	GetPayload() []byte
-	GetSrc() *ecdsa.PublicKey
+	GetPayload() ([]byte, error)
+	GetSender() *ecdsa.PublicKey
 }
 
-// Crypto contains methods from MessageCrypto, CryptoBackend and CryptoUtils
+// Crypto contains methods from Message and KeyStore
 type Crypto interface {
-	MessageCrypto
-	CryptoBackend
-	CryptoUtils
+	Message
+	KeyStore
 }
 
-// MessageCrypto contains methods for wrapping(encrypting) and unwrapping(decrypting) messages
-type MessageCrypto interface {
-	WrapMessage(msgData []byte, params *WrapParams) (data []byte, err error)
-	UnWrapSymmetric(encryptedData, key []byte) (ReceivedMessage, error)
-	UnWrapAsymmetric(encryptedData []byte, key *ecdsa.PrivateKey) (ReceivedMessage, error)
+// Message contains methods for wrapping(encrypting) and unwrapping(decrypting) messages
+type Message interface {
+	Wrap(plaintext []byte, params *WrapParams) (data []byte, err error)
+	UnWrap(ciphertext []byte, unwrapParams *UnwrapParams) (ReceivedMessage, error)
 }
 
-// CryptoBackend contains key manipulation methods
-type CryptoBackend interface {
+// KeyStore contains key manipulation methods
+type KeyStore interface {
 
-	// Key store functions
+	// Asymmetric key management
 	GetSymKey(id string) ([]byte, error)
 	GenerateSymKey() (string, error)
-	AddSymKeyDirect(bytes []byte) (string, error)
-
-	// Key conversion
-	FromECDSAPub(pub *ecdsa.PublicKey) []byte
+	AddSymKey(bytes []byte) (string, error)
 
 	// Key serialization
-	UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error)
-	CompressPubkey(pubkey *ecdsa.PublicKey) []byte
-}
-
-// CryptoUtils contains utility methods for tests
-type CryptoUtils interface {
-	GenerateKey() (*ecdsa.PrivateKey, error)
-	NewKeyPair(ctx context.Context) (string, error)
-	GetPrivateKey(id string) (*ecdsa.PrivateKey, error)
+	SerializePublicKey(pub *ecdsa.PublicKey) []byte
+	UnmarshalPublicKey(pub []byte) (*ecdsa.PublicKey, error)
+	CompressPublicKey(pub *ecdsa.PublicKey) []byte
 }
 
 var (
@@ -108,13 +105,18 @@ var (
 	errInvalidSymkey               = errors.New("invalid key provided for symmetric encryption")
 	errMissingSaltOrInvalidPayload = errors.New("missing salt or invalid payload in symmetric message")
 	errSecureRandomData            = errors.New("failed to generate secure random data")
-	errNeitherSymNorAsymKeysProv   = errors.New("unable to encrypt the message: neither symmetric nor asymmetric key provided")
+	errNoKey                       = errors.New("unable to encrypt the message: neither symmetric nor asymmetric key provided")
+
+	// Validation and Parse errors
+	errEmptyMessage       = errors.New("empty message")
+	errEmptySignature     = errors.New("empty expected signature")
+	errIncorrectSignature = errors.New("incorrect signature")
+	errIncorrectSize      = errors.New("incorrect payload size")
 )
 
 type defaultCryptoBackend struct {
-	privateKeys map[string]*ecdsa.PrivateKey // Private key storage
-	symKeys     map[string][]byte            // Symmetric key storage
-	keyMu       sync.RWMutex                 // Mutex associated with key storages
+	symKeys map[string][]byte // Symmetric key storage
+	keyMu   sync.RWMutex      // Mutex associated with key storage
 }
 
 // receivedMessage represents a data packet to be received
@@ -123,34 +125,54 @@ type receivedMessage struct {
 	Payload   []byte // Parsed and validated message content
 	Raw       []byte // Unparsed but decrypted message content
 	Signature []byte // Signature from the sender
-	Salt      []byte // Salt used for validation
+	Salt      []byte // Protect against plaintext attacks
 	Padding   []byte // Padding applied
 
-	Src *ecdsa.PublicKey // Source public key used for signing the message
-	Dst *ecdsa.PublicKey // Destination public key used for encrypting the msessage asymmetrically
+	Sender *ecdsa.PublicKey // Source public key used for signing the message
+
+	validateOnce  sync.Once
+	validateError error
 
 	crypto *defaultCryptoBackend
 }
 
-func (msg receivedMessage) GetSrc() *ecdsa.PublicKey {
-	return msg.Src
+// Returns the sender public key of the message
+func (msg *receivedMessage) GetSender() *ecdsa.PublicKey {
+	msg.validateOnce.Do(
+		func() {
+			msg.validateError = msg.validateAndParse()
+		})
+	return msg.Sender
 }
 
-// ValidateAndParse checks that the format and the signnature are correct. It also set Payload as the parsed message
-func (msg *receivedMessage) ValidateAndParse() bool {
+// GetPayload validate and parse the payload of the message.
+func (msg *receivedMessage) GetPayload() ([]byte, error) {
+	msg.validateOnce.Do(
+		func() {
+			msg.validateError = msg.validateAndParse()
+		})
+	return msg.Payload, msg.validateError
+}
+
+// validateAndParse checks that the format and the signature are correct. It also set Payload as the parsed message
+func (msg *receivedMessage) validateAndParse() error {
 	end := len(msg.Raw)
-	if end < 1 {
-		return false
+	if end == 0 {
+		return errEmptyMessage
 	}
 	if isMessageSigned(msg.Raw[0]) {
 		end -= signatureLength
 		if end <= 1 {
-			return false
+			return errEmptySignature
 		}
 		msg.Signature = msg.Raw[end : end+signatureLength]
-		msg.Src = msg.sigToPubKey()
-		if msg.Src == nil {
-			return false
+		sz := len(msg.Raw) - signatureLength
+		pub, err := msg.crypto.sigToPub(msg.Raw[:sz], msg.Signature)
+		if err != nil {
+			log.Error("failed to recover public key from signature", "err", err)
+			return errIncorrectSignature
+		} else {
+			msg.Sender = pub
 		}
 	}
 
@@ -158,9 +180,10 @@ func (msg *receivedMessage) ValidateAndParse() bool {
 	payloadSize := 0
 	sizeOfPayloadSizeField := int(msg.Raw[0] & SizeMask) // number of bytes indicating the size of payload
 	if sizeOfPayloadSizeField != 0 {
+		log.Warn("Size of payload field", "size", sizeOfPayloadSizeField)
 		payloadSize = int(bytesToUintLittleEndian(msg.Raw[beg : beg+sizeOfPayloadSizeField]))
 		if payloadSize+1 > end {
-			return false
+			return errIncorrectSize
 		}
 		beg += sizeOfPayloadSizeField
 		msg.Payload = msg.Raw[beg : beg+payloadSize]
@@ -168,12 +191,7 @@ func (msg *receivedMessage) ValidateAndParse() bool {
 
 	beg += payloadSize
 	msg.Padding = msg.Raw[beg:end]
-	return true
-}
-
-// GetPayload obtains the parsed payload of the message. Should be called after ValidateAndParse
-func (msg receivedMessage) GetPayload() []byte {
-	return msg.Payload
+	return nil
 }
 
 // sigToPubKey returns the public key associated to the message's signature.
@@ -196,33 +214,32 @@ func (msg *receivedMessage) sigToPubKey() *ecdsa.PublicKey {
 
 func newReceivedMessage(decrypted []byte, salt []byte, crypto *defaultCryptoBackend) *receivedMessage {
 	return &receivedMessage{
-		Raw:    decrypted,
-		Salt:   salt,
-		crypto: crypto,
+		Raw:          decrypted,
+		Salt:         salt,
+		crypto:       crypto,
+		validateOnce: sync.Once{},
 	}
 }
 
+// Return the default implementation of Crypto
 func New() Crypto {
-	cryptoBackend = defaultCryptoBackend{
-		symKeys:     make(map[string][]byte),
-		privateKeys: make(map[string]*ecdsa.PrivateKey),
-	}
-	return &cryptoBackend
+	return newDefaultCryptoBackend()
+
 }
 
-func NewCryptoUtils() CryptoUtils {
-	if cryptoBackend.privateKeys == nil {
-		New()
+func newDefaultCryptoBackend() *defaultCryptoBackend {
+	return &defaultCryptoBackend{
+		symKeys: make(map[string][]byte),
 	}
-	return &cryptoBackend
 }
 
 // == Message Crypto ==
 
-func (crypto *defaultCryptoBackend) WrapMessage(payload []byte, params *WrapParams) (data []byte, err error) {
+// Wrap creates a message adding signature, padding and other control fields and then it is encrypted using params
+func (crypto *defaultCryptoBackend) Wrap(plaintext []byte, params *WrapParams) (data []byte, err error) {
 	var padding []byte
 	if createPadding {
-		padding, err = crypto.generateSecureRandomData(defaultPaddingByteSize)
+		padding, err = generateSecureRandomData(defaultPaddingByteSize)
 		if err != nil {
 			return
 		}
@@ -231,28 +248,28 @@ func (crypto *defaultCryptoBackend) WrapMessage(payload []byte, params *WrapPara
 	}
 	// Message structure is flags+PayloadSize+Payload+padding+signature
 	rawBytes := make([]byte, 1,
-		flagsLength+payloadSizeFieldMaxSize+len(payload)+len(padding)+signatureLength+padSizeLimit)
+		flagsLength+payloadSizeFieldMaxSize+len(plaintext)+len(padding)+signatureLength+padSizeLimit)
 	// set flags byte
 	rawBytes[0] = 0 // set all the flags to zero
 	// add payloadSizeField
-	rawBytes = crypto.addPayloadSizeField(rawBytes, payload)
+	rawBytes = crypto.addPayloadSizeField(rawBytes, plaintext)
 	// add payload
-	rawBytes = append(rawBytes, payload...)
+	rawBytes = append(rawBytes, plaintext...)
 	// add padding
 	rawBytes = append(rawBytes, padding...)
 	// sign
-	if params.Src != nil {
-		if rawBytes, err = crypto.sign(rawBytes, params.Src); err != nil {
+	if params.Sender != nil {
+		if rawBytes, err = crypto.sign(rawBytes, params.Sender); err != nil {
 			return
 		}
 	}
 	// encrypt
-	if params.Dst != nil {
-		rawBytes, err = crypto.encryptAsymmetric(rawBytes, params.Dst)
-	} else if params.KeySym != nil {
-		rawBytes, err = crypto.encryptSymmetric(rawBytes, params.KeySym)
+	if params.Receiver != nil {
+		rawBytes, err = crypto.encryptAsymmetric(rawBytes, params.Receiver)
+	} else if params.SymmetricKey != nil {
+		rawBytes, err = crypto.encryptSymmetric(rawBytes, params.SymmetricKey)
 	} else {
-		err = errNeitherSymNorAsymKeysProv
+		err = errNoKey
 	}
 	if err != nil {
 		return
@@ -262,8 +279,20 @@ func (crypto *defaultCryptoBackend) WrapMessage(payload []byte, params *WrapPara
 	return
 }
 
-func (crypto *defaultCryptoBackend) UnWrapSymmetric(encryptedData, key []byte) (ReceivedMessage, error) {
-	decrypted, salt, err := crypto.decryptSymmetric(encryptedData, key)
+// Unwrap decrypts and compose a received message ready to be parsed and validated.
+// It selects symmetric/asymmetric crypto depending on unwrapParams
+func (crypto *defaultCryptoBackend) UnWrap(ciphertext []byte, unwrapParams *UnwrapParams) (ReceivedMessage, error) {
+	if unwrapParams.SymmetricKey != nil {
+		return crypto.unWrapSymmetric(ciphertext, unwrapParams.SymmetricKey)
+	} else if unwrapParams.Receiver != nil {
+		return crypto.unWrapAsymmetric(ciphertext, unwrapParams.Receiver)
+	} else {
+		return nil, errNoKey
+	}
+}
+
+func (crypto *defaultCryptoBackend) unWrapSymmetric(ciphertext, key []byte) (ReceivedMessage, error) {
+	decrypted, salt, err := crypto.decryptSymmetric(ciphertext, key)
 	if err != nil {
 		return nil, err
 	}
@@ -271,11 +300,11 @@ func (crypto *defaultCryptoBackend) UnWrapSymmetric(encryptedData, key []byte) (
 	return msg, err
 }
 
-func (crypto *defaultCryptoBackend) UnWrapAsymmetric(encryptedData []byte, key *ecdsa.PrivateKey) (ReceivedMessage, error) {
-	decrypted, err := crypto.decryptAsymmetric(encryptedData, key)
+func (crypto *defaultCryptoBackend) unWrapAsymmetric(ciphertext []byte, key *ecdsa.PrivateKey) (ReceivedMessage, error) {
+	plaintext, err := crypto.decryptAsymmetric(ciphertext, key)
 	switch err {
 	case nil:
-		message := newReceivedMessage(decrypted, nil, crypto)
+		message := newReceivedMessage(plaintext, nil, crypto)
 		return message, nil
 	case ecies.ErrInvalidPublicKey: // addressed to somebody else
 		return nil, err
@@ -284,7 +313,7 @@ func (crypto *defaultCryptoBackend) UnWrapAsymmetric(encryptedData []byte, key *
 	}
 }
 
-func (crypto *defaultCryptoBackend) addPayloadSizeField(rawBytes rawMessage, payload []byte) rawMessage {
+func (crypto *defaultCryptoBackend) addPayloadSizeField(rawBytes []byte, payload []byte) []byte {
 	fieldSize := getSizeOfPayloadSizeField(payload)
 	field := make([]byte, 4)
 	binary.LittleEndian.PutUint32(field, uint32(len(payload)))
@@ -294,11 +323,10 @@ func (crypto *defaultCryptoBackend) addPayloadSizeField(rawBytes rawMessage, pay
 	return rawBytes
 }
 
-// appendPadding appends the padding specified in params.
-// If no padding is provided in params, then random padding is generated.
-func (crypto *defaultCryptoBackend) appendPadding(rawBytes, payload []byte, src *ecdsa.PrivateKey) (rawMessage, error) {
+// pad appends the padding specified in params.
+func (crypto *defaultCryptoBackend) pad(rawBytes, payload []byte, signed bool) ([]byte, error) {
 	rawSize := flagsLength + getSizeOfPayloadSizeField(payload) + len(payload)
-	if src != nil {
+	if signed {
 		rawSize += signatureLength
 	}
 	odd := rawSize % padSizeLimit
@@ -309,7 +337,7 @@ func (crypto *defaultCryptoBackend) appendPadding(rawBytes, payload []byte, src 
 		return nil, err
 	}
 
-	if len(pad) != paddingSize || isAllZeroes(pad) {
+	if len(pad) != paddingSize || containsOnlyZeros(pad) {
 		return nil, errors.New("failed to generate random padding of size " + strconv.Itoa(paddingSize))
 	}
 	rawBytes = append(rawBytes, pad...)
@@ -318,7 +346,7 @@ func (crypto *defaultCryptoBackend) appendPadding(rawBytes, payload []byte, src 
 
 // sign calculates and sets the cryptographic signature for the message,
 // also setting the sign flag.
-func (crypto *defaultCryptoBackend) sign(rawBytes rawMessage, key *ecdsa.PrivateKey) (rawMessage, error) {
+func (crypto *defaultCryptoBackend) sign(rawBytes []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 	if isMessageSigned(rawBytes[0]) {
 		// this should not happen, but no reason to panic
 		log.Error("failed to sign the message: already signed")
@@ -343,6 +371,7 @@ func isMessageSigned(flags byte) bool {
 
 // === Key store functions ===
 
+// GetSymKey retrieves symmetric key by id from the store
 func (crypto *defaultCryptoBackend) GetSymKey(id string) ([]byte, error) {
 	crypto.keyMu.RLock()
 	defer crypto.keyMu.RUnlock()
@@ -352,15 +381,16 @@ func (crypto *defaultCryptoBackend) GetSymKey(id string) ([]byte, error) {
 	return nil, fmt.Errorf("non-existent key ID")
 }
 
+// GenerateSymKey creates a new symmetric, stores it and return its id
 func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
-	key, err := crypto.generateSecureRandomData(aesKeyLength)
+	key, err := generateSecureRandomData(aesKeyLength)
 	if err != nil {
 		return "", err
 	} else if !validateDataIntegrity(key, aesKeyLength) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
-	id, err := crypto.generateRandomID()
+	id, err := generateRandomID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
@@ -375,12 +405,13 @@ func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
 	return id, nil
 }
 
-func (crypto *defaultCryptoBackend) AddSymKeyDirect(key []byte) (string, error) {
+// Add a symmetric key ti the store generating an id and returning it
+func (crypto *defaultCryptoBackend) AddSymKey(key []byte) (string, error) {
 	if len(key) != aesKeyLength {
 		return "", fmt.Errorf("wrong key size: %d", len(key))
 	}
 
-	id, err := crypto.generateRandomID()
+	id, err := generateRandomID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
@@ -398,19 +429,19 @@ func (crypto *defaultCryptoBackend) AddSymKeyDirect(key []byte) (string, error) 
 // === Key conversion ===
 
 // FromECDSA exports a public key into a binary dump.
-func (crypto *defaultCryptoBackend) FromECDSAPub(pub *ecdsa.PublicKey) []byte {
+func (crypto *defaultCryptoBackend) SerializePublicKey(pub *ecdsa.PublicKey) []byte {
 	return ethCrypto.FromECDSAPub(pub)
 }
 
 // === Key serialization ===
 
-// UnmarshalPubkey converts bytes to a secp256k1 public key.
-func (crypto *defaultCryptoBackend) UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
+// UnmarshalPublicKey converts bytes to a secp256k1 public key.
+func (crypto *defaultCryptoBackend) UnmarshalPublicKey(pub []byte) (*ecdsa.PublicKey, error) {
 	return ethCrypto.UnmarshalPubkey(pub)
 }
 
-// CompressPubkey encodes a public key to the 33-byte compressed format.
-func (crypto *defaultCryptoBackend) CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
+// CompressPublicKey encodes a public key to the 33-byte compressed format.
+func (crypto *defaultCryptoBackend) CompressPublicKey(pubkey *ecdsa.PublicKey) []byte {
 	return ethCrypto.CompressPubkey(pubkey)
 }
 
@@ -470,7 +501,7 @@ func (crypto *defaultCryptoBackend) encryptSymmetric(rawBytes []byte, key []byte
 	if err != nil {
 		return nil, err
 	}
-	salt, err := crypto.generateSecureRandomData(aesNonceLength) // never use more than 2^32 random nonces with a given key
+	salt, err := generateSecureRandomData(aesNonceLength) // never use more than 2^32 random nonces with a given key
 	if err != nil {
 		return nil, err
 	}
@@ -486,13 +517,18 @@ func (crypto *defaultCryptoBackend) signHash(hash []byte, prv *ecdsa.PrivateKey)
 
 // Obtain public key from the signed message and the signature
 func (crypto *defaultCryptoBackend) sigToPub(signed, sig []byte) (*ecdsa.PublicKey, error) {
+	defer func() { recover() }() // in case of invalid signature
 	hash := crypto.keccak256(signed)
 	return ethCrypto.SigToPub(hash, sig)
 }
 
+func (crypto *defaultCryptoBackend) importECDSAPublic(key *ecdsa.PublicKey) *ecies.PublicKey {
+	return ecies.ImportECDSAPublic(key)
+}
+
 // GenerateRandomID generates a random string, which is then returned to be used as a key id
-func (crypto *defaultCryptoBackend) generateRandomID() (id string, err error) {
-	buf, err := crypto.generateSecureRandomData(keyIDSize)
+func generateRandomID() (id string, err error) {
+	buf, err := generateSecureRandomData(keyIDSize)
 	if err != nil {
 		return "", err
 	}
@@ -513,7 +549,7 @@ func (crypto *defaultCryptoBackend) keccak256(data ...[]byte) []byte {
 // from delivering not-very-random data. This is especially useful for AES nonce,
 // where true randomness does not really matter, but it is very important to have
 // a unique nonce for every message.
-func (crypto *defaultCryptoBackend) generateSecureRandomData(length int) ([]byte, error) {
+func generateSecureRandomData(length int) ([]byte, error) {
 	x := make([]byte, length)
 	y := make([]byte, length)
 	res := make([]byte, length)
@@ -538,57 +574,6 @@ func (crypto *defaultCryptoBackend) generateSecureRandomData(length int) ([]byte
 	}
 	return res, nil
 }
-
-func (crypto *defaultCryptoBackend) importECDSAPublic(key *ecdsa.PublicKey) *ecies.PublicKey {
-	return ecies.ImportECDSAPublic(key)
-}
-
-func (crypto *defaultCryptoBackend) GenerateKey() (*ecdsa.PrivateKey, error) {
-	return ethCrypto.GenerateKey()
-}
-
-// CryptoUtils
-
-// NewKeyPair generates a new cryptographic identity for the client, and injects
-// it into the known identities for message decryption. Returns ID of the new key pair.
-func (crypto *defaultCryptoBackend) NewKeyPair(ctx context.Context) (string, error) {
-	key, err := ethCrypto.GenerateKey()
-	if err != nil || !validatePrivateKey(key) {
-		key, err = crypto.GenerateKey() // retry once
-	}
-	if err != nil {
-		return "", err
-	}
-	if !validatePrivateKey(key) {
-		return "", fmt.Errorf("failed to generate valid key")
-	}
-
-	id, err := crypto.generateRandomID()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate ID: %s", err)
-	}
-
-	crypto.keyMu.Lock()
-	defer crypto.keyMu.Unlock()
-
-	if crypto.privateKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
-	}
-	crypto.privateKeys[id] = key
-	return id, nil
-}
-
-func (crypto *defaultCryptoBackend) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
-	crypto.keyMu.RLock()
-	defer crypto.keyMu.RUnlock()
-	key := crypto.privateKeys[id]
-	if key == nil {
-		return nil, fmt.Errorf("invalid id")
-	}
-	return key, nil
-}
-
-// Util functions
 
 // validateDataIntegrity returns false if the data have the wrong size or contains all zeros,
 // which is the simplest and the most common bug.
@@ -635,15 +620,6 @@ func bytesToUintLittleEndian(b []byte) (res uint64) {
 	return res
 }
 
-func isAllZeroes(data []byte) bool {
-	for _, b := range data {
-		if b != 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // getSizeOfPayloadSizeField returns the number of bytes necessary to encode the size of payload
 func getSizeOfPayloadSizeField(payload []byte) int {
 	s := 1
@@ -652,5 +628,3 @@ func getSizeOfPayloadSizeField(payload []byte) int {
 	}
 	return s
 }
-
-type rawMessage []byte

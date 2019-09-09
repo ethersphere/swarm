@@ -426,9 +426,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			initTest()
 
 			// create keys in cryptoUtils and set up the pss object
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second*3)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
+			keys, err := cryptoUtils.NewKeyPair()
 			privkey, err := cryptoUtils.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw

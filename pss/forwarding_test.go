@@ -25,7 +25,7 @@ type testCase struct {
 	errors    string
 }
 
-var utils = crypto.NewCryptoUtils()
+var utils = crypto.NewUtils()
 
 // the purpose of this test is to see that pss.forward() function correctly
 // selects the peers for message forwarding, depending on the message address

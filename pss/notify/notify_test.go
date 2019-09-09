@@ -24,7 +24,8 @@ import (
 var (
 	loglevel = flag.Int("loglevel", 3, "logging verbosity")
 	psses    map[string]*pss.Pss
-	cryptoB  crypto.Crypto
+	utils    crypto.Utils
+	crypt    crypto.Crypto
 )
 
 func init() {
@@ -34,7 +35,8 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	cryptoB = crypto.New()
+	crypt = crypto.New()
+	utils = crypto.NewUtils()
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -135,7 +137,7 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubkey, err := cryptoB.UnmarshalPubkey(pubkeybytes)
+	pubkey, err := crypt.UnmarshalPublicKey(pubkeybytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,13 +227,11 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			keys, err := cryptoB.NewKeyPair(ctxlocal)
+			keys, err := utils.NewKeyPair()
 			if err != nil {
 				return nil, err
 			}
-			privkey, err := cryptoB.GetPrivateKey(keys)
+			privkey, err := utils.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
@@ -243,7 +243,7 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			psses[hexutil.Encode(cryptoB.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(crypt.SerializePublicKey(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {

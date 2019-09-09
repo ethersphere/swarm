@@ -49,7 +49,7 @@ type protoCtrl struct {
 var (
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
-	cryptoUtils    crypto.CryptoUtils
+	utils          crypto.Utils
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -77,7 +77,7 @@ func init() {
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	cryptoUtils = crypto.NewCryptoUtils()
+	utils = crypto.NewUtils()
 
 	pssprotocols = make(map[string]*protoCtrl)
 }
@@ -246,13 +246,11 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
+			keys, err := utils.NewKeyPair()
 			if err != nil {
 				return nil, err
 			}
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			privkey, err := utils.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
