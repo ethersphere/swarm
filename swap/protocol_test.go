@@ -310,6 +310,10 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 // We want this so that we can check the API works
 func TestSwapRPC(t *testing.T) {
 
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	var (
 		ipcPath = ".swap.ipc"
 		err     error
@@ -331,11 +335,7 @@ func TestSwapRPC(t *testing.T) {
 	}()
 
 	// use unique IPC path on windows
-	if runtime.GOOS == "windows" {
-		ipcPath = `\\.\pipe\swap.ipc`
-	} else {
-		ipcPath = filepath.Join(stack.DataDir(), ipcPath)
-	}
+	ipcPath = filepath.Join(stack.DataDir(), ipcPath)
 
 	// connect to the servicenode RPCs
 	rpcclient, err := rpc.Dial(ipcPath)
