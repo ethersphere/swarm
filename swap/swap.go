@@ -537,7 +537,7 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 }
 
 // StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
-func (s *Swap) StartChequebook(chequebookAddr common.Address) (err error) {
+func (s *Swap) StartChequebook(chequebookAddr common.Address) error {
 	if chequebookAddr != (common.Address{}) {
 		if err := s.BindToContractAt(chequebookAddr); err != nil {
 			return err

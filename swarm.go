@@ -374,7 +374,9 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		s.swap.StartChequebook(s.config.Contract)
+		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
+			return err
+		}
 	} else {
 		log.Info("SWAP disabled: no chequebook set")
 	}
