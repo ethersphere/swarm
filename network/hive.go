@@ -65,6 +65,7 @@ type Hive struct {
 	lock   sync.Mutex
 	peers  map[enode.ID]*BzzPeer
 	ticker *time.Ticker
+	done   chan struct{}
 }
 
 // NewHive constructs a new hive
@@ -97,6 +98,8 @@ func (h *Hive) Start(server *p2p.Server) error {
 	h.addPeer = server.AddPeer
 	// ticker to keep the hive alive
 	h.ticker = time.NewTicker(h.KeepAliveInterval)
+	// done channel to signal the connect goroutine to return after Stop
+	h.done = make(chan struct{})
 	// this loop is doing bootstrapping and maintains a healthy table
 	if !h.DisableAutoConnect {
 		go h.connect()
@@ -108,6 +111,7 @@ func (h *Hive) Start(server *p2p.Server) error {
 func (h *Hive) Stop() error {
 	log.Info(fmt.Sprintf("%08x hive stopping, saving peers", h.BaseAddr()[:4]))
 	h.ticker.Stop()
+	close(h.done)
 	if h.Store != nil {
 		if err := h.savePeers(); err != nil {
 			return fmt.Errorf("could not save peers to persistence store: %v", err)
@@ -131,24 +135,29 @@ func (h *Hive) Stop() error {
 // at each iteration, ask the overlay driver to suggest the most preferred peer to connect to
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
-	for range h.ticker.C {
+loop:
+	for {
+		select {
+		case <-h.ticker.C:
+			addr, depth, changed := h.SuggestPeer()
+			if h.Discovery && changed {
+				NotifyDepth(uint8(depth), h.Kademlia)
+			}
+			if addr == nil {
+				continue loop
+			}
 
-		addr, depth, changed := h.SuggestPeer()
-		if h.Discovery && changed {
-			NotifyDepth(uint8(depth), h.Kademlia)
+			log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+			under, err := enode.ParseV4(string(addr.Under()))
+			if err != nil {
+				log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
+				continue loop
+			}
+			log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+			h.addPeer(under)
+		case <-h.done:
+			break loop
 		}
-		if addr == nil {
-			continue
-		}
-
-		log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-		under, err := enode.ParseV4(string(addr.Under()))
-		if err != nil {
-			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
-			continue
-		}
-		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-		h.addPeer(under)
 	}
 }
 
