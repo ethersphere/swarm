@@ -305,7 +305,7 @@ func TestDisconnectThreshold(t *testing.T) {
 	}
 }
 
-//TestPaymentThreshold tests that the payment threshold is reached when substracting the DefaultPaymentThreshold amount from the peers balance
+//TestPaymentThreshold tests that the payment threshold is reached when subtracting the DefaultPaymentThreshold amount from the peers balance
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
