@@ -1825,7 +1825,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			}
 			pskad := kademlia(ctx.Config.ID, addr.OAddr)
 			bucket.Store(simulation.BucketKeyKademlia, pskad)
-			return network.NewBzz(config, pskad, stateStore, nil, nil), nil, nil
+			return network.NewBzz(config, pskad, stateStore, nil, nil, nil, nil), nil, nil
 		},
 		protocolName: func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()

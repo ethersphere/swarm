@@ -299,7 +299,7 @@ func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Uploading snapshot")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := s.UploadSnapshot(ctx, fmt.Sprintf("../stream/testing/snapshot_%d.json", nodeCount))
+	err := s.UploadSnapshot(ctx, fmt.Sprintf("../newstream/testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		t.Fatalf("Error uploading snapshot to simulation network: %v", err)
 	}
