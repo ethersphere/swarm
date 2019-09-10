@@ -108,7 +108,7 @@ func TestPeerBalance(t *testing.T) {
 	defer clean()
 
 	// test for correct value
-	testPeer := newDummyPeer(Spec)
+	testPeer := newDummyPeer()
 	swap.balances[testPeer.Peer.ID()] = 888
 	b, err := swap.Balance(testPeer.Peer.ID())
 	if err != nil {
@@ -140,12 +140,12 @@ func TestAllBalances(t *testing.T) {
 	}
 
 	// test balance addition for peer
-	testPeer := newDummyPeer(Spec)
+	testPeer := newDummyPeer()
 	swap.balances[testPeer.Peer.ID()] = 808
 	testBalances(t, swap, map[enode.ID]int64{testPeer.Peer.ID(): 808})
 
 	// test successive balance addition for peer
-	testPeer2 := newDummyPeer(Spec)
+	testPeer2 := newDummyPeer()
 	swap.balances[testPeer2.Peer.ID()] = 909
 	testBalances(t, swap, map[enode.ID]int64{testPeer.Peer.ID(): 808, testPeer2.Peer.ID(): 909})
 
@@ -269,14 +269,14 @@ func TestRepeatedBookings(t *testing.T) {
 	var bookings []booking
 
 	// credits to peer 1
-	testPeer := newDummyPeer(Spec)
+	testPeer := newDummyPeer()
 	swap.peers[testPeer.Peer.ID()] = testPeer
 	bookingAmount := int64(mrand.Intn(100))
 	bookingQuantity := 1 + mrand.Intn(10)
 	testPeerBookings(t, swap, &bookings, bookingAmount, bookingQuantity, testPeer.Peer)
 
 	// debits to peer 2
-	testPeer2 := newDummyPeer(Spec)
+	testPeer2 := newDummyPeer()
 	swap.peers[testPeer2.Peer.ID()] = testPeer2
 	bookingAmount = 0 - int64(mrand.Intn(100))
 	bookingQuantity = 1 + mrand.Intn(10)
@@ -296,7 +296,7 @@ func TestRepeatedBookings(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
-	testPeer := newDummyPeer(Spec)
+	testPeer := newDummyPeer()
 	swap.peers[testPeer.Peer.ID()] = testPeer
 	swap.Add(DefaultDisconnectThreshold, testPeer.Peer)
 	err := swap.Add(1, testPeer.Peer)
@@ -309,7 +309,7 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
-	testPeer := newDummyPeer(Spec)
+	testPeer := newDummyPeer()
 	swap.peers[testPeer.Peer.ID()] = testPeer
 	err := swap.Add(-DefaultPaymentThreshold, testPeer.Peer)
 	fmt.Println(err)
@@ -350,8 +350,8 @@ func TestResetBalance(t *testing.T) {
 	// create Peer instances
 	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
-	cPeer := newDummyPeer(Spec)
-	dPeer := newDummyPeer(Spec)
+	cPeer := newDummyPeer()
+	dPeer := newDummyPeer()
 	creditor := NewPeer(cPeer.Peer, debitorSwap, creditorSwap.owner.address, debitorSwap.owner.Contract)
 	debitor := NewPeer(dPeer.Peer, creditorSwap, debitorSwap.owner.address, debitorSwap.owner.Contract)
 
@@ -479,7 +479,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	swap, testDir := newBaseTestSwap(t, ownerKey)
 	defer os.RemoveAll(testDir)
 
-	testPeer := newDummyPeer(Spec)
+	testPeer := newDummyPeer()
 	swap.balances[testPeer.Peer.ID()] = -8888
 
 	tmpBalance := swap.balances[testPeer.Peer.ID()]
@@ -551,17 +551,17 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 }
 
 // creates a dummy swap.Peer
-func newDummyPeer(spec *protocols.Spec) *Peer {
+func newDummyPeer() *Peer {
 	return &Peer{
-		Peer: newDummyProtocolPeer(spec),
+		Peer: newDummyProtocolPeer(),
 	}
 }
 
 // creates a dummy protocols.Peer with dummy MsgReadWriter
-func newDummyProtocolPeer(spec *protocols.Spec) *protocols.Peer {
+func newDummyProtocolPeer() *protocols.Peer {
 	id := adapters.RandomNodeConfig().ID
 	rw := &dummyMsgRW{}
-	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, spec)
+	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, Spec)
 	return protoPeer
 }
 
@@ -863,7 +863,7 @@ func TestSaveAndLoadLastReceivedCheque(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
-	testPeer := NewPeer(newDummyProtocolPeer(Spec), swap, common.Address{}, common.Address{})
+	testPeer := NewPeer(newDummyProtocolPeer(), swap, common.Address{}, common.Address{})
 	testCheque := newTestCheque()
 
 	if err := swap.saveLastReceivedCheque(testPeer, testCheque); err != nil {
@@ -888,7 +888,7 @@ func newTestSwapAndPeer(t *testing.T, key *ecdsa.PrivateKey) (*Swap, *Peer, func
 	swap, clean := newTestSwap(t, key)
 	// owner address is the beneficiary (counterparty) for the peer
 	// that's because we expect cheques we receive to be signed by the address we would issue cheques to
-	peer := NewPeer(newDummyProtocolPeer(Spec), swap, ownerAddress, testChequeContract)
+	peer := NewPeer(newDummyProtocolPeer(), swap, ownerAddress, testChequeContract)
 	// we need to adjust the owner address on swap because we will issue cheques to beneficiaryAddress
 	swap.owner.address = beneficiaryAddress
 	return swap, peer, clean
