@@ -19,7 +19,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"sync"
 )
 
