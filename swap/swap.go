@@ -243,7 +243,6 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 
 	lastCheque := p.getLastReceivedCheque()
 
-	// TODO: there should probably be a lock here?
 	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
 	if err != nil {
 		return 0, err
@@ -304,33 +303,33 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
-func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
-	var cheque *Cheque
-	error := s.store.Get(receivedChequeKey(p), &cheque)
-	if error == state.ErrNotFound {
+// and returns nil when there never was a cheque saved
+func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
+	err = s.store.Get(receivedChequeKey(p), &cheque)
+	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, error
+	return cheque, err
 }
 
 // loadLastSentCheque loads the last sent cheque for the peer from the store
-func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
-	var cheque *Cheque
-	error := s.store.Get(sentChequeKey(p), &cheque)
-	if error == state.ErrNotFound {
+// and returns nil when there never was a cheque saved
+func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
+	err = s.store.Get(sentChequeKey(p), &cheque)
+	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, error
+	return cheque, err
 }
 
 // loadBalance loads the current balance for the peer from the store
-func (s *Swap) loadBalance(p enode.ID) (int64, error) {
-	var balance int64
-	error := s.store.Get(balanceKey(p), &balance)
-	if error == state.ErrNotFound {
+// and returns 0 if there was no prior balance saved
+func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
+	err = s.store.Get(balanceKey(p), &balance)
+	if err == state.ErrNotFound {
 		return 0, nil
 	}
-	return balance, error
+	return balance, err
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer

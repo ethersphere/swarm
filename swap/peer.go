@@ -44,15 +44,14 @@ type Peer struct {
 }
 
 // NewPeer creates a new swap Peer instance
-func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) (*Peer, error) {
-	peer := &Peer{
+func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) (peer *Peer, err error) {
+	peer = &Peer{
 		Peer:            p,
 		swap:            s,
 		beneficiary:     beneficiary,
 		contractAddress: contractAddress,
 	}
 
-	var err error
 	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {
 		return nil, err
 	}
@@ -129,7 +128,6 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-p.getBalance())
 
-	// TODO: this must probably be locked
 	amount, err := p.swap.oracle.GetPrice(honey)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
