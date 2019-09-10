@@ -1088,3 +1088,21 @@ func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
 func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
+
+func TestFileLogger(t *testing.T) {
+	handler, err := log.FileHandler("/home/git/go/src/github.com/ethersphere/swarm/testlog/test.log", log.TerminalFormat(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), handler))
+	log.Error("Test")
+}
+
+func TestRotatingFileLogger(t *testing.T) {
+	handler, err := log.RotatingFileHandler("/home/git/go/src/github.com/ethersphere/swarm/testlog/testRotating.log", 200, log.TerminalFormat(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), handler))
+	log.Error("Test")
+}
