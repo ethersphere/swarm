@@ -524,7 +524,6 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	t.Helper()
 	dir, err := ioutil.TempDir("", "swap_test_store")
-	fmt.Println(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
