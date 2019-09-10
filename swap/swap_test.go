@@ -532,11 +532,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	}
 	log.Debug("creating simulated backend")
 
-<<<<<<< HEAD
-	swap := New(stateStore, key, common.Address{}, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
-=======
-	swap := New(stateStore, key, testBackend)
->>>>>>> master
+	swap := New(stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
 	return swap, dir
 }
 
