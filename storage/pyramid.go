@@ -67,7 +67,7 @@ var (
 )
 
 const (
-	ChunkProcessors = 4
+	ChunkProcessors = 8
 	splitTimeout    = time.Minute * 5
 )
 

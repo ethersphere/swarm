@@ -147,20 +147,6 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 
 // Close chunk store
 func (n *NetStore) Close() error {
-	n.putMu.Lock()
-	defer n.putMu.Unlock()
-	if n.fetchers.Len() > 0 {
-		n.logger.Warn("netstore shutting down, fetchers not empty", "len", n.fetchers.Len(), "localID", n.LocalID)
-	}
-
-	for _, fname := range n.fetchers.Keys() {
-		v, loaded := n.fetchers.Get(fname.(string))
-		if !loaded {
-			panic("not loaded")
-		}
-		f := v.(*Fetcher)
-		n.logger.Warn("fetcher", "key", fname, "isSyncer", f.RequestedBySyncer)
-	}
 	return n.Store.Close()
 }
 
@@ -179,7 +165,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			n.logger.Error("localstore get error", "err", err)
 		}
 
-		//n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+		n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher

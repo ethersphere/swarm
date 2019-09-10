@@ -459,7 +459,6 @@ func (r *Retrieval) Protocols() []p2p.Protocol {
 
 func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, Spec)
-	// TODO: fix, used in tests only. Incorrect, as we do not have access to the overlay address
 	bp := network.NewBzzPeer(peer)
 
 	return r.Run(bp)

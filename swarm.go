@@ -48,8 +48,8 @@ import (
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/newstream"
 	"github.com/ethersphere/swarm/network/retrieval"
+	"github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
@@ -75,7 +75,7 @@ type Swarm struct {
 	api               *api.API           // high level api layer (fs/manifest)
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	newstreamer       *newstream.Registry
+	streamer          *stream.Registry
 	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz // the logistic manager
 	bzzEth            *bzzeth.BzzEth
@@ -218,8 +218,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		syncing = false
 	}
 
-	syncProvider := newstream.NewSyncProvider(self.netStore, to, syncing, false)
-	self.newstreamer = newstream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
+	syncProvider := stream.NewSyncProvider(self.netStore, to, syncing, false)
+	self.streamer = stream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
 	self.tags = chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
@@ -228,7 +228,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, newstream.Spec, retrieval.Spec, self.newstreamer.Run, self.retrieval.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, retrieval.Spec, self.streamer.Run, self.retrieval.Run)
 
 	self.bzzEth = bzzeth.New()
 
@@ -443,9 +443,10 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	}(startTime)
 
 	startCounter.Inc(1)
-	_ = s.newstreamer.Start(srv)
-	_ = s.retrieval.Start(srv)
-	return nil
+	if err := s.streamer.Start(srv); err != nil {
+		return err
+	}
+	return s.retrieval.Start(srv)
 }
 
 // Stop stops all component services.
@@ -469,8 +470,12 @@ func (s *Swarm) Stop() error {
 		s.accountingMetrics.Close()
 	}
 
-	_ = s.newstreamer.Stop()
-	_ = s.retrieval.Stop()
+	if err := s.streamer.Stop(); err != nil {
+		log.Error("streamer stop", "err", err)
+	}
+	if err := s.retrieval.Stop(); err != nil {
+		log.Error("retrieval stop", "err", err)
+	}
 
 	if s.netStore != nil {
 		s.netStore.Close()
@@ -531,7 +536,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.newstreamer),
+			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.streamer),
 			Public:    false,
 		},
 		{
@@ -549,7 +554,7 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-	apis = append(apis, s.newstreamer.APIs()...)
+	apis = append(apis, s.streamer.APIs()...)
 	apis = append(apis, s.bzzEth.APIs()...)
 
 	if s.ps != nil {
@@ -576,20 +581,4 @@ type Info struct {
 // Info returns the current Swarm configuration
 func (i *Info) Info() *Info {
 	return i
-}
-
-func (s *Swarm) NetStore() *storage.NetStore {
-	return s.netStore
-}
-
-func (s *Swarm) API() *api.API {
-	return s.api
-}
-
-func (s *Swarm) Bzz() *network.Bzz {
-	return s.bzz
-}
-
-func (s *Swarm) NewStreamer() *newstream.Registry {
-	return s.newstreamer
 }

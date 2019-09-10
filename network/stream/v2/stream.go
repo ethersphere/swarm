@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package newstream
+package stream
 
 import (
 	"context"
@@ -526,7 +526,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		return
 	}
 
-	w.to = &msg.LastIndex // now that we know the range of the batch we can set the upped bound of the interval to the open want
+	w.to = &msg.LastIndex // we can set the open wants upper bound to the index supplied in the msg
 
 	// this code block handles the case of a complete gap on the interval on the server side
 	// lenhashes == 0 means there's no hashes in the requested range with the upper bound of
@@ -1082,9 +1082,7 @@ func (r *Registry) Protocols() []p2p.Protocol {
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, r.spec)
-	// TODO: fix, used in tests only. Incorrect, as we do not have access to the overlay address
 	bp := network.NewBzzPeer(peer)
-
 	return r.Run(bp)
 }
 

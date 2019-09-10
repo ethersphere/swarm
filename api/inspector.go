@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/newstream"
+	stream "github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -36,10 +36,10 @@ type Inspector struct {
 	api      *API
 	hive     *network.Hive
 	netStore *storage.NetStore
-	stream   *newstream.Registry
+	stream   *stream.Registry
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *newstream.Registry) *Inspector {
+func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *stream.Registry) *Inspector {
 	return &Inspector{api, hive, netStore, pullSyncer}
 }
 

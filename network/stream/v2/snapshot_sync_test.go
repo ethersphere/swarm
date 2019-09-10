@@ -13,14 +13,14 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package newstream
+
+package stream
 
 import (
 	"context"
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 	"testing"
 	"time"
 
@@ -64,8 +64,8 @@ func dummyRequestFromPeers(_ context.Context, req *storage.Request, _ enode.ID) 
 //they are expected to store based on the syncing protocol.
 //Number of chunks and nodes can be provided via commandline too.
 func TestSyncingViaGlobalSync(t *testing.T) {
-	if runtime.GOOS == "darwin" && os.Getenv("TRAVIS") == "true" {
-		t.Skip("Flaky on mac on travis")
+	if os.Getenv("TRAVIS") == "true" {
+		t.Skip("Flaky on travis")
 	}
 
 	if testutil.RaceEnabled {
@@ -116,7 +116,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
-	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
+	filename := fmt.Sprintf("../testdata/snapshot_%d.json", nodeCount)
 	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		t.Fatal(err)

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/newstream"
+	stream "github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 
@@ -39,7 +39,7 @@ func TestInspectorPeerStreams(t *testing.T) {
 	}
 	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
 
-	i := NewInspector(nil, nil, netStore, newstream.New(state.NewInmemoryStore(), baseKey, newstream.NewSyncProvider(netStore, network.NewKademlia(
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
 	), false, false)))
@@ -57,10 +57,6 @@ func TestInspectorPeerStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// if want := hex.EncodeToString(baseKey)[:16]; peerInfo.Base != want {
-	// 	t.Fatalf("got base key %q, want %q", peerInfo.Base, want)
-	// }
 
 	if !strings.Contains(peerInfo, `"base":"`+hex.EncodeToString(baseKey)[:16]+`"`) {
 		t.Error("missing base key in response")

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package newstream
+package stream
 
 import (
 	"encoding/hex"
@@ -124,7 +124,7 @@ type offer struct {
 type want struct {
 	ruid      uint                // the request uid
 	from      uint64              // want from index
-	to        *uint64             //want to index, nil signifies top of range not yet known
+	to        *uint64             // want to index, nil signifies top of range not yet known
 	head      bool                // is this the head of the stream? (bound versus tip of the stream; true is tip)
 	stream    ID                  // the stream id
 	hashes    map[string]struct{} // key: chunk address, value: wanted yes/no, used to prevent unsolicited chunks
