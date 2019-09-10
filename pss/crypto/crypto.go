@@ -372,7 +372,7 @@ func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
-	id, err := generateRandomID()
+	id, err := generateRandomKeyID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
@@ -387,13 +387,13 @@ func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
 	return id, nil
 }
 
-// Add a symmetric key ti the store generating an id and returning it
+// Add a symmetric key to the store generating an id and returning it
 func (crypto *defaultCryptoBackend) AddSymKey(key []byte) (string, error) {
 	if len(key) != aesKeyLength {
 		return "", fmt.Errorf("wrong key size: %d", len(key))
 	}
 
-	id, err := generateRandomID()
+	id, err := generateRandomKeyID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
@@ -460,7 +460,7 @@ func (crypto *defaultCryptoBackend) encryptAsymmetric(rawBytes []byte, key *ecds
 	if !validatePublicKey(key) {
 		return nil, errInvalidPubkey
 	}
-	encrypted, err := ecies.Encrypt(crand.Reader, crypto.importECDSAPublic(key), rawBytes, nil, nil)
+	encrypted, err := ecies.Encrypt(crand.Reader, crypto.fromECDSAtoECIESPublic(key), rawBytes, nil, nil)
 	if err == nil {
 		return encrypted, nil
 	}
@@ -497,25 +497,26 @@ func (crypto *defaultCryptoBackend) signHash(hash []byte, prv *ecdsa.PrivateKey)
 	return ethCrypto.Sign(hash, prv)
 }
 
-// Obtain public key from the signed message and the signature
+// sigToPub obtains public key from the signed message and the signature
 func (crypto *defaultCryptoBackend) sigToPub(signed, sig []byte) (*ecdsa.PublicKey, error) {
 	defer func() { recover() }() // in case of invalid signature
 	hash := crypto.keccak256(signed)
 	return ethCrypto.SigToPub(hash, sig)
 }
 
-func (crypto *defaultCryptoBackend) importECDSAPublic(key *ecdsa.PublicKey) *ecies.PublicKey {
+// fromECDSAtoECIESPublic converts a ecdsa public key to the format needed by the crypti/ecies package
+func (crypto *defaultCryptoBackend) fromECDSAtoECIESPublic(key *ecdsa.PublicKey) *ecies.PublicKey {
 	return ecies.ImportECDSAPublic(key)
 }
 
-// GenerateRandomID generates a random string, which is then returned to be used as a key id
-func generateRandomID() (id string, err error) {
+// generateRandomKeyID generates a random string, which is then returned to be used as a key id
+func generateRandomKeyID() (id string, err error) {
 	buf, err := generateSecureRandomData(keyIDSize)
 	if err != nil {
 		return "", err
 	}
 	if !validateDataIntegrity(buf, keyIDSize) {
-		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+		return "", fmt.Errorf("error in generateRandomKeyID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
 	return id, err

@@ -143,10 +143,9 @@ func (ks *KeyStore) getPeerAddress(keyid string, topic Topic) (PssAddress, error
 }
 
 // Attempt to decrypt, validate and unpack a symmetrically encrypted message.
-// If successful, returns the unpacked receivedMessage struct
-// encapsulating the decrypted message, and the id
+// If successful, returns the payload of the message and the id
 // of the symmetric key used to decrypt the message.
-// It fails if decryption of the message fails or if the message is corrupted.
+// It fails if decryption of the message fails or if the message is corrupted/not valid.
 func (ks *KeyStore) processSym(pssMsg *PssMsg) ([]byte, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
 
@@ -182,8 +181,7 @@ func (ks *KeyStore) processSym(pssMsg *PssMsg) ([]byte, string, PssAddress, erro
 }
 
 // Attempt to decrypt, validate and unpack an asymmetrically encrypted message.
-// If successful, returns the unpacked receivedMessage struct
-// encapsulating the decrypted message, and the byte representation of
+// If successful, returns the payload of the message and the hex representation of
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted.
 func (p *Pss) processAsym(pssMsg *PssMsg) ([]byte, string, PssAddress, error) {

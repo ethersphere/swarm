@@ -18,12 +18,12 @@ package crypto
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"sync"
-
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"sync"
 )
 
-// Utils contains utility methods for tests. Generates and stores asymmetric keys
+// Utils contains utility methods only for testing. Generates and stores asymmetric keys
 type Utils interface {
 	GenerateKey() (*ecdsa.PrivateKey, error)
 	NewKeyPair() (string, error)
@@ -32,7 +32,7 @@ type Utils interface {
 
 type utils struct {
 	privateKeys map[string]*ecdsa.PrivateKey // Private key storage
-	keyMu       sync.RWMutex                 // Mutex associated with private key storage1111111111111111111111111111111
+	keyMu       sync.RWMutex                 // Mutex associated with private key storage
 }
 
 func NewUtils() Utils {
@@ -60,7 +60,7 @@ func (utils *utils) NewKeyPair() (string, error) {
 		return "", fmt.Errorf("failed to generate valid key")
 	}
 
-	id, err := generateRandomID()
+	id, err := generateRandomKeyID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
@@ -77,6 +77,7 @@ func (utils *utils) NewKeyPair() (string, error) {
 
 // GetPrivateKey return a PrivateKey previously generated in NewKeyPair by id
 func (utils *utils) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
+	whisperv6.NewSentMessage()
 	utils.keyMu.RLock()
 	defer utils.keyMu.RUnlock()
 	key := utils.privateKeys[id]
