@@ -18,13 +18,22 @@ package swap
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
+	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )
@@ -295,4 +304,167 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	if lenCheques != 0 {
 		t.Fatalf("Expected still no cheque, but there are %d", lenCheques)
 	}
+}
+
+// TestSwapRPC tests some basic things over RPC
+// We want this so that we can check the API works
+func TestSwapRPC(t *testing.T) {
+
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	var (
+		ipcPath = ".swap.ipc"
+		err     error
+	)
+
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+
+	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
+	swap.contract, err = contract.InstanceAt(common.Address{}, swap.backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// start a service stack
+	stack := createAndStartSvcNode(swap, ipcPath, t)
+	defer func() {
+		go stack.Stop()
+	}()
+
+	// use unique IPC path on windows
+	ipcPath = filepath.Join(stack.DataDir(), ipcPath)
+
+	// connect to the servicenode RPCs
+	rpcclient, err := rpc.Dial(ipcPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(stack.DataDir())
+
+	// create dummy peers so that we can artificially set balances and query
+	dummyPeer1 := newDummyPeer()
+	dummyPeer2 := newDummyPeer()
+	id1 := dummyPeer1.ID()
+	id2 := dummyPeer2.ID()
+
+	// set some fake balances
+	fakeBalance1 := int64(234)
+	fakeBalance2 := int64(-100)
+
+	// query a first time, should give error
+	var balance int64
+	err = rpcclient.Call(&balance, "swap_balance", id1)
+	// at this point no balance should be there:  no peer at address in map...
+	if err == nil {
+		t.Fatal("Expected error but no error received")
+	}
+	log.Debug("servicenode balance", "balance", balance)
+
+	// ...thus balance should be zero
+	if balance != 0 {
+		t.Fatalf("Expected balance to be 0 but it is %d", balance)
+	}
+
+	// now artificially assign some balances
+	swap.balances[id1] = fakeBalance1
+	swap.balances[id2] = fakeBalance2
+
+	// query them, values should coincide
+	err = rpcclient.Call(&balance, "swap_balance", id1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("balance1", "balance1", balance)
+	if balance != fakeBalance1 {
+		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance1)
+	}
+
+	err = rpcclient.Call(&balance, "swap_balance", id2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("balance2", "balance2", balance)
+	if balance != fakeBalance2 {
+		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance2)
+	}
+
+	// now call all balances
+	allBalances := make(map[enode.ID]int64)
+	err = rpcclient.Call(&allBalances, "swap_balances")
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("received balances", "allBalances", allBalances)
+
+	var sum int64
+	for _, v := range allBalances {
+		sum += v
+	}
+
+	fakeSum := fakeBalance1 + fakeBalance2
+	if sum != fakeSum {
+		t.Fatalf("Expected total balance to be %d, but it %d", fakeSum, sum)
+	}
+
+	if !reflect.DeepEqual(allBalances, swap.balances) {
+		t.Fatal("Balances are not deep equal")
+	}
+}
+
+// createAndStartSvcNode setup a p2p service and start it
+func createAndStartSvcNode(swap *Swap, ipcPath string, t *testing.T) *node.Node {
+	stack, err := newServiceNode(ipcPath, 0, 0)
+	if err != nil {
+		t.Fatal("Create servicenode #1 fail", "err", err)
+	}
+
+	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
+		return swap, nil
+	}
+
+	err = stack.Register(swapsvc)
+	if err != nil {
+		t.Fatal("Register service in servicenode #1 fail", "err", err)
+	}
+
+	// start the nodes
+	err = stack.Start()
+	if err != nil {
+		t.Fatal("servicenode #1 start failed", "err", err)
+	}
+
+	return stack
+}
+
+// newServiceNode creates a p2p.Service node stub
+func newServiceNode(ipcPath string, httpport int, wsport int, modules ...string) (*node.Node, error) {
+	var err error
+	cfg := &node.DefaultConfig
+	cfg.P2P.EnableMsgEvents = true
+	cfg.P2P.NoDiscovery = true
+	cfg.IPCPath = ipcPath
+	cfg.DataDir, err = ioutil.TempDir("", "test-Service-node")
+	if err != nil {
+		return nil, err
+	}
+	if httpport > 0 {
+		cfg.HTTPHost = node.DefaultHTTPHost
+		cfg.HTTPPort = httpport
+	}
+	if wsport > 0 {
+		cfg.WSHost = node.DefaultWSHost
+		cfg.WSPort = wsport
+		cfg.WSOrigins = []string{"*"}
+		for i := 0; i < len(modules); i++ {
+			cfg.WSModules = append(cfg.WSModules, modules[i])
+		}
+	}
+	stack, err := node.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("ServiceNode create fail: %v", err)
+	}
+	return stack, nil
 }
