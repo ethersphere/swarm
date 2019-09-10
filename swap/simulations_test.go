@@ -316,8 +316,46 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			} else {
 				p1Peer.Send(ctx, &testMsgBigPrice{})
 			}
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
+
+		// we need to synchronize when we can actually go check that all values are ok
+		// (all cheques arrived). Without it, specifically on CI (travis) the tests are flaky
+		chequesArrived := make(chan struct{})
+
+		// periodically check that all cheques have arrived
+		go func() {
+			var ch1, ch2 *Cheque
+			for {
+				time.Sleep(10 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				p1Svc.swap.store.Get(receivedChequeKey(p2), &ch1)
+				p2Svc.swap.store.Get(receivedChequeKey(p1), &ch2)
+				if ch1 == nil || ch2 == nil {
+					continue
+				}
+				// every peer gets maxCheques/2 messages, thus we can check that the CumulativePayout corresponds
+				// (NOTE: DefaultPaymentThreshold + 1 is assumed to be the price for `testMsgBigPrice`)
+				if ch1.CumulativePayout == uint64(maxCheques/2*(DefaultPaymentThreshold+1)) &&
+					ch2.CumulativePayout == uint64(maxCheques/2*(DefaultPaymentThreshold+1)) {
+					log.Debug("expected payout reached. going to check values now")
+					close(chequesArrived)
+					return
+				}
+			}
+		}()
+
+		log.Debug("waiting for cheque to arrive....")
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for cheques, aborting.")
+		case <-chequesArrived:
+		}
+		log.Debug("all good.")
 
 		ch1, ok := p2Svc.swap.getCheque(p1)
 		if !ok {
@@ -420,8 +458,41 @@ func TestMultiChequeSimulation(t *testing.T) {
 			// use a price which will trigger a cheque each time
 			creditorPeer.Send(ctx, &testMsgBigPrice{})
 			// we need to sleep a bit in order to give time for the cheque to be processed
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
+
+		// we need some synchronization, or tests get flaky, especially on CI (travis)
+		chequesArrived := make(chan struct{})
+
+		// check periodically that the peer has all cheques
+		go func() {
+			for {
+				time.Sleep(10 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				var ch *Cheque
+				creditorSvc.swap.store.Get(receivedChequeKey(debitor), &ch)
+				if ch == nil {
+					continue
+				}
+				// the peer should have a CumulativePayout correspondent to the amount of cheques emitted
+				if ch.CumulativePayout == uint64(maxCheques*(DefaultPaymentThreshold+1)) {
+					log.Debug("expected payout reached. going to check values now")
+					close(chequesArrived)
+				}
+			}
+		}()
+
+		log.Debug("waiting for cheque to arrive....")
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for cheques, aborting.")
+		case <-chequesArrived:
+		}
+		log.Debug("all good.")
 
 		// check balances:
 		b1, _ := debitorSvc.swap.getBalance(creditor)
@@ -492,6 +563,48 @@ func TestSimpleSimulation(t *testing.T) {
 
 	log.Info("starting simulation...")
 
+	// setup a filter for all received messages
+	// we count all received messages by any peer in order to know when the last
+	// peer has actually received and processed the message
+	msgs := sim.PeerEvents(
+		context.Background(),
+		sim.NodeIDs(),
+		// Watch when bzz messages 1 and 4 are received.
+		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("testSpec").MsgCode(0),
+		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("testSpec").MsgCode(1),
+	)
+
+	// we don't want any cheques to be issued for this test, we only want to test accounting across nodes
+	// for this we define a "global" maximum amount of messages to be sent;
+	// this formula should ensure that we trigger enough messages but not enough to trigger cheques
+	maxMsgs := (DefaultPaymentThreshold / params.maxMsgPrice) * (nodeCount - 1)
+	// need some syncrhonization to make sure we wait enough before check all balances:
+	// all messages should have been received
+	allMessagesArrived := make(chan struct{})
+	// count all messages received in the simulation
+	recvCount := 0
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		for m := range msgs {
+			if m.Error != nil {
+				log.Error("bzz message", "err", m.Error)
+				continue
+			}
+			// received a message
+			recvCount++
+			// all messages have been received
+			if recvCount == maxMsgs {
+				close(allMessagesArrived)
+				return
+			}
+		}
+	}()
+
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		log.Info("simulation running")
 		disconnected := watchDisconnections(ctx, sim)
@@ -509,10 +622,6 @@ func TestSimpleSimulation(t *testing.T) {
 		}
 
 		nodes := sim.UpNodeIDs()
-		// we don't want any cheques to be issued for this test, we only want to test accounting across nodes
-		// for this we define a "global" maximum amount of messages to be sent;
-		// this formula should ensure that we trigger enough messages but not enough to trigger cheques
-		maxMsgs := (DefaultPaymentThreshold / params.maxMsgPrice) * (nodeCount - 1)
 		msgCount := 0
 
 		// iterate all nodes, then send each other test messages
@@ -551,7 +660,12 @@ func TestSimpleSimulation(t *testing.T) {
 
 		// before we can check the balances, we need to wait a bit, as the last messages
 		// may still be processed
-		time.Sleep(500 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return errors.New("timed out waiting for all messages to arrive, aborting")
+		case <-allMessagesArrived:
+		}
+		log.Debug("all messages arrived")
 
 		//now iterate again and check that every node has the same
 		//balance with a peer as that peer with the same node,
