@@ -352,7 +352,6 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 
 	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.setCheque(peer, cheque)
-	fmt.Println(sentChequeKey(peer))
 	err = s.store.Put(sentChequeKey(peer), &cheque)
 	if err != nil {
 		return fmt.Errorf("error while storing the last cheque: %s", err.Error())

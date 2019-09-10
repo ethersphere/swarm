@@ -292,6 +292,7 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
+//TestDisconnectThreshold tests that the disconnect threshold is reached when adding the DefaultDisconnectThreshold amount to the peers balance
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
@@ -304,6 +305,7 @@ func TestDisconnectThreshold(t *testing.T) {
 	}
 }
 
+//TestPaymentThreshold tests that the payment threshold is reached when substracting the DefaultPaymentThreshold amount from the peers balance
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()

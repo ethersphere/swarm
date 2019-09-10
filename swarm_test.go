@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/swap"
 )
@@ -112,7 +113,7 @@ func TestNewSwarm(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
-				config.NetworkID = 2
+				config.NetworkID = network.DefaultNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s.backend == nil {
@@ -218,7 +219,7 @@ func TestNewSwarmFailure(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ""
 				config.SwapEnabled = true
-				config.NetworkID = 2
+				config.NetworkID = config.DefaultNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {
