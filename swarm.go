@@ -136,7 +136,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.swap = swap.New(
 			swapStore,
 			self.privateKey,
-			self.config.Contract,
 			self.backend,
 			self.config.SwapDisconnectThreshold,
 			self.config.SwapPaymentThreshold,
@@ -381,11 +380,9 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		err := s.swap.Deploy(context.Background(), s.backend, s.config.Path)
-		if err != nil {
-			return fmt.Errorf("Unable to deploy swap contract: %v", err)
+		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
+			return err
 		}
-		log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 	} else {
 		log.Info("SWAP disabled: no chequebook set")
 	}
