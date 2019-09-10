@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -24,7 +25,6 @@ import (
 var (
 	loglevel = flag.Int("loglevel", 3, "logging verbosity")
 	psses    map[string]*pss.Pss
-	utils    crypto.Utils
 	crypt    crypto.Crypto
 )
 
@@ -36,7 +36,6 @@ func init() {
 	log.Root().SetHandler(h)
 
 	crypt = crypto.New()
-	utils = crypto.NewUtils()
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -227,11 +226,7 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			keys, err := utils.NewKeyPair()
-			if err != nil {
-				return nil, err
-			}
-			privkey, err := utils.GetPrivateKey(keys)
+			privkey, err := ethCrypto.GenerateKey()
 			if err != nil {
 				return nil, err
 			}

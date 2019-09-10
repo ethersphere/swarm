@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/pss/crypto"
 )
 
 type testCase struct {
@@ -24,8 +24,6 @@ type testCase struct {
 	success   bool
 	errors    string
 }
-
-var utils = crypto.NewUtils()
 
 // the purpose of this test is to see that pss.forward() function correctly
 // selects the peers for message forwarding, depending on the message address
@@ -325,7 +323,7 @@ func addPeers(kad *network.Kademlia, addresses []pot.Address) {
 }
 
 func createPss(t *testing.T, kad *network.Kademlia) *Pss {
-	privKey, err := utils.GenerateKey()
+	privKey, err := ethCrypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
 	if err != nil {

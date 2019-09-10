@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -425,9 +426,8 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			// execadapter does not exec init()
 			initTest()
 
-			// create keys in cryptoUtils and set up the pss object
-			keys, err := cryptoUtils.NewKeyPair()
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			// create keys and set up the pss object
+			privkey, err := ethCrypto.GenerateKey()
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)

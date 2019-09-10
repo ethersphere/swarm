@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -36,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
-	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
 )
 
@@ -49,7 +49,6 @@ type protoCtrl struct {
 var (
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
-	utils          crypto.Utils
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -76,8 +75,6 @@ func init() {
 	hf := log.LvlFilterHandler(loglevel, hs)
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
-
-	utils = crypto.NewUtils()
 
 	pssprotocols = make(map[string]*protoCtrl)
 }
@@ -246,11 +243,7 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			keys, err := utils.NewKeyPair()
-			if err != nil {
-				return nil, err
-			}
-			privkey, err := utils.GetPrivateKey(keys)
+			privkey, err := ethCrypto.GenerateKey()
 			if err != nil {
 				return nil, err
 			}

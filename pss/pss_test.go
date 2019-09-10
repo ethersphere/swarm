@@ -35,6 +35,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -53,7 +54,6 @@ var (
 	initOnce        = sync.Once{}
 	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
 	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
-	cryptoUtils     crypto.Utils
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -76,8 +76,6 @@ func initTest() {
 			hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
 			h := log.CallerFileHandler(hf)
 			log.Root().SetHandler(h)
-
-			cryptoUtils = crypto.NewUtils()
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
@@ -154,8 +152,7 @@ func TestMsgParams(t *testing.T) {
 func TestCache(t *testing.T) {
 	var err error
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
-	keys, err := cryptoUtils.NewKeyPair()
-	privkey, err := cryptoUtils.GetPrivateKey(keys)
+	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,11 +243,10 @@ func TestAddressMatch(t *testing.T) {
 	remoteaddr := []byte("feedbeef")
 	kadparams := network.NewKadParams()
 	kad := network.NewKademlia(localaddr, kadparams)
-	keys, err := cryptoUtils.NewKeyPair()
+	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
-	privkey, err := cryptoUtils.GetPrivateKey(keys)
 	pssp := NewParams().WithPrivateKey(privkey)
 	ps, err := New(kad, pssp)
 	if err != nil {
@@ -304,7 +300,7 @@ func TestAddressMatchProx(t *testing.T) {
 	peerCount := nnPeerCount + 2
 
 	// set up pss
-	privKey, err := cryptoUtils.GenerateKey()
+	privKey, err := ethCrypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
 	// enqueue method now is blocking, so we need always somebody processing the outbox
@@ -480,7 +476,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 func TestMessageOutbox(t *testing.T) {
 	// setup
-	privkey, err := cryptoUtils.GenerateKey()
+	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -555,7 +551,7 @@ func TestMessageOutbox(t *testing.T) {
 
 func TestOutboxFull(t *testing.T) {
 	// setup
-	privkey, err := utils.GenerateKey()
+	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -602,19 +598,11 @@ func TestOutboxFull(t *testing.T) {
 // set and generate pubkeys and symkeys
 func TestKeys(t *testing.T) {
 	// make our key and init pss with it
-	ourkeys, err := cryptoUtils.NewKeyPair()
-	if err != nil {
-		t.Fatalf("create 'our' key fail")
-	}
-	theirkeys, err := cryptoUtils.NewKeyPair()
-	if err != nil {
-		t.Fatalf("create 'their' key fail")
-	}
-	ourprivkey, err := cryptoUtils.GetPrivateKey(ourkeys)
+	ourprivkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to retrieve 'our' private key")
 	}
-	theirprivkey, err := cryptoUtils.GetPrivateKey(theirkeys)
+	theirprivkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
@@ -664,7 +652,7 @@ func TestKeys(t *testing.T) {
 // check that we can retrieve previously added public key entires per topic and peer
 func TestGetPublickeyEntries(t *testing.T) {
 
-	privkey, err := cryptoUtils.GenerateKey()
+	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -677,7 +665,7 @@ func TestGetPublickeyEntries(t *testing.T) {
 	topicaddr[Topic{0x2a}] = peeraddr[:16]
 	topicaddr[Topic{0x02, 0x9a}] = []byte{}
 
-	remoteprivkey, err := cryptoUtils.GenerateKey()
+	remoteprivkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -725,7 +713,7 @@ OUTER:
 func TestPeerCapabilityMismatch(t *testing.T) {
 
 	// create privkey for forwarder node
-	privkey, err := cryptoUtils.GenerateKey()
+	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -785,7 +773,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 func TestRawAllow(t *testing.T) {
 
 	// set up pss like so many times before
-	privKey, err := cryptoUtils.GenerateKey()
+	privKey, err := ethCrypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1508,8 +1496,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	keys, err := cryptoUtils.NewKeyPair()
-	privkey, err := cryptoUtils.GetPrivateKey(keys)
+	privkey, err := ethCrypto.GenerateKey()
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
@@ -1551,8 +1538,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	keys, err := cryptoUtils.NewKeyPair()
-	privkey, err := cryptoUtils.GetPrivateKey(keys)
+	privkey, err := ethCrypto.GenerateKey()
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
@@ -1597,8 +1583,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
-	keys, err := cryptoUtils.NewKeyPair()
-	privkey, err := cryptoUtils.GetPrivateKey(keys)
+	privkey, err := ethCrypto.GenerateKey()
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1671,8 +1656,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 	}
 	addr := make([]PssAddress, keycount)
-	keys, err := cryptoUtils.NewKeyPair()
-	privkey, err := cryptoUtils.GetPrivateKey(keys)
+	privkey, err := ethCrypto.GenerateKey()
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1796,8 +1780,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			// execadapter does not exec init()
 			initTest()
 
-			keys, err := cryptoUtils.NewKeyPair()
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			privkey, err := ethCrypto.GenerateKey()
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
