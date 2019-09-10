@@ -310,15 +310,6 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		p2Peer := p1Svc.peers[p2]
 		p1Peer := p2Svc.peers[p1]
 
-		for i := 0; i < maxCheques; i++ {
-			if i%2 == 0 {
-				p2Peer.Send(ctx, &testMsgBigPrice{})
-			} else {
-				p1Peer.Send(ctx, &testMsgBigPrice{})
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-
 		// we need to synchronize when we can actually go check that all values are ok
 		// (all cheques arrived). Without it, specifically on CI (travis) the tests are flaky
 		chequesArrived := make(chan struct{})
@@ -327,7 +318,6 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		go func() {
 			var ch1, ch2 *Cheque
 			for {
-				time.Sleep(10 * time.Millisecond)
 				select {
 				case <-ctx.Done():
 					return
@@ -346,8 +336,18 @@ func TestPingPongChequeSimulation(t *testing.T) {
 					close(chequesArrived)
 					return
 				}
+				time.Sleep(10 * time.Millisecond)
 			}
 		}()
+
+		for i := 0; i < maxCheques; i++ {
+			if i%2 == 0 {
+				p2Peer.Send(ctx, &testMsgBigPrice{})
+			} else {
+				p1Peer.Send(ctx, &testMsgBigPrice{})
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 
 		log.Debug("waiting for cheque to arrive....")
 		select {
@@ -666,6 +666,8 @@ func TestSimpleSimulation(t *testing.T) {
 		case <-allMessagesArrived:
 		}
 		log.Debug("all messages arrived")
+
+		time.Sleep(100 * time.Millisecond)
 
 		//now iterate again and check that every node has the same
 		//balance with a peer as that peer with the same node,
