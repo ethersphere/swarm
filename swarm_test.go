@@ -219,7 +219,7 @@ func TestNewSwarmFailure(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ""
 				config.SwapEnabled = true
-				config.NetworkID = config.DefaultNetworkID
+				config.NetworkID = network.DefaultNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {
