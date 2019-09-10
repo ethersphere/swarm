@@ -41,13 +41,13 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 }
 
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
-	knd, _, err := s.Kind()
+	_, _, err := s.Kind()
 	if err != nil {
 		return err
 	}
-	if knd == rlp.List {
-		s.List()
-	}
+	//	if knd == rlp.List {
+	//		s.List()
+	//	}
 	err = s.Decode(&b.OAddr)
 	if err != nil {
 		return fmt.Errorf("oaddr --- %v", err)
