@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethersphere/swarm/pss/forwardcache"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -38,7 +36,9 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/internal/ttlset"
 	"github.com/ethersphere/swarm/pss/message"
+	"github.com/tilinna/clock"
 )
 
 const (
@@ -193,7 +193,7 @@ func (o outbox) reenqueue(slot int) {
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
-	forwardcache.ForwardCache
+	forwardCache ttlset.TTLSet
 
 	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
@@ -246,9 +246,9 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		handlers:         make(map[message.Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[message.Topic]*handlerCaps),
 	}
-	ps.ForwardCache = forwardcache.NewForwardCache(&forwardcache.Config{
-		CacheTTL: params.CacheTTL,
-		QuitC:    ps.quitC,
+	ps.forwardCache = ttlset.New(&ttlset.Config{
+		EntryTTL: params.CacheTTL,
+		Clock:    clock.Realtime(),
 	})
 	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
 
@@ -273,6 +273,10 @@ func (p *Pss) Start(srv *p2p.Server) error {
 		}
 	}()
 
+	if err := p.forwardCache.Start(); err != nil {
+		return err
+	}
+
 	// Forward outbox messages
 	go p.outbox.processOutbox()
 
@@ -283,6 +287,9 @@ func (p *Pss) Start(srv *p2p.Server) error {
 
 func (p *Pss) Stop() error {
 	log.Info("Pss shutting down")
+	if err := p.forwardCache.Stop(); err != nil {
+		return err
+	}
 	close(p.quitC)
 	return nil
 }
@@ -448,11 +455,12 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 		log.Warn("pss filtered expired message", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", hex.EncodeToString(pssmsg.To))
 		return nil
 	}
-	if p.CheckFwdCache(pssmsg) {
+	msgDigest := pssmsg.Digest()
+	if p.forwardCache.Has(msgDigest) {
 		log.Trace("pss relay block-cache match (process)", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", (hex.EncodeToString(pssmsg.To)))
 		return nil
 	}
-	p.AddFwdCache(pssmsg)
+	p.forwardCache.Add(msgDigest)
 
 	psstopic := pssmsg.Topic
 
@@ -618,7 +626,7 @@ func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte) error
 	pssMsg.Payload = msg
 	pssMsg.Topic = topic
 
-	p.AddFwdCache(pssMsg)
+	p.forwardCache.Add(pssMsg.Digest())
 
 	return p.enqueue(pssMsg)
 }
@@ -787,7 +795,7 @@ func (p *Pss) forward(msg *message.Message) error {
 	})
 
 	// cache the message
-	p.AddFwdCache(msg)
+	p.forwardCache.Add(msg.Digest())
 
 	if sent == 0 {
 		return errors.New("unable to forward to any peers")

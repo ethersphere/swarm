@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
