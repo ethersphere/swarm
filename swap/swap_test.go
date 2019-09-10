@@ -309,12 +309,13 @@ func TestPaymentThreshold(t *testing.T) {
 	defer clean()
 	testPeer := newDummyPeer(Spec)
 	swap.peers[testPeer.Peer.ID()] = testPeer
-	swap.Add(-DefaultPaymentThreshold, testPeer.Peer)
-	var cheque Cheque
-	swap.store.Close()
-	err := swap.store.Get(sentChequeKey(testPeer.Peer.ID()), cheque)
+	err := swap.Add(-DefaultPaymentThreshold, testPeer.Peer)
 	fmt.Println(err)
-	t.Fatal(cheque)
+	var cheque *Cheque
+	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
+	if cheque.CumulativePayout != DefaultPaymentThreshold {
+		t.Fatal()
+	}
 }
 
 // TestResetBalance tests that balances are correctly reset
@@ -521,6 +522,7 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	t.Helper()
 	dir, err := ioutil.TempDir("", "swap_test_store")
+	fmt.Println(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

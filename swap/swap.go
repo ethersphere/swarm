@@ -173,8 +173,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	paymentThreshold := int64(s.paymentThreshold)
-
-	if newBalance <= -int64(paymentThreshold) {
+	if newBalance <= -paymentThreshold {
 		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
 		swapPeer, ok := s.getPeer(peer.ID())
 		if !ok {
@@ -354,6 +353,7 @@ func (s *Swap) sendCheque(swapPeer *Peer) error {
 
 	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	s.setCheque(peer, cheque)
+	fmt.Println(sentChequeKey(peer))
 	err = s.store.Put(sentChequeKey(peer), &cheque)
 	if err != nil {
 		return fmt.Errorf("error while storing the last cheque: %s", err.Error())
