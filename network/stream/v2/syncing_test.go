@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -311,6 +312,9 @@ func TestFullSync(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.syncNodeCount > 2 && runtime.GOARCH == "386" {
+				t.Skip("skipping larger simulation on low memory architecture")
+			}
 
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 				"bzz-sync": newSyncSimServiceFunc(nil),
