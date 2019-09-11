@@ -405,6 +405,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.paymentThreshold = DefaultDisconnectThreshold
 			},
 			check: func(t *testing.T, config *SWAPConfig) {
+				defer os.RemoveAll(config.dbPath)
 				_, err := NewSWAP(
 					config.dbPath,
 					config.prvkey,

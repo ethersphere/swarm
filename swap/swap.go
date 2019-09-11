@@ -174,8 +174,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 	// Check if balance with peer is over the disconnect threshold
 	balance := swapPeer.getBalance()
-	if balance >= int64(s.disconnectThreshold) {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), int64(s.disconnectThreshold))
+	if disconnectThreshold := int64(s.disconnectThreshold); balance >= disconnectThreshold {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), disconnectThreshold)
 	}
 
 	if err = swapPeer.updateBalance(amount); err != nil {
@@ -185,8 +185,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	if swapPeer.getBalance() <= -int64(s.paymentThreshold) {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+	if paymentThreshold := int64(s.paymentThreshold); swapPeer.getBalance() <= -paymentThreshold {
+		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
