@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -43,6 +44,8 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	_, _, err := s.Kind()
 	if err != nil {
+		log.Error("decoderlp bzzaddr err", "err", err)
+		panic(err)
 		return err
 	}
 	//	if knd == rlp.List {
