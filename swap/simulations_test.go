@@ -65,7 +65,7 @@ type swapSimulationParams struct {
 	maxMsgPrice int
 	minMsgPrice int
 	nodeCount   int
-	backend     *backends.SimulatedBackend
+	backend     *swapTestBackend
 }
 
 // define test message types
@@ -235,12 +235,13 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 	// then create the single SimulatedBackend
 	gasLimit := uint64(8000000000)
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
+	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend}
 	// finally, create all Swap instances for each node, which share the same backend
 	for i := 0; i < nodeCount; i++ {
-		params.swaps[i] = New(stores[i], keys[i], defaultBackend)
+		params.swaps[i] = New(stores[i], keys[i], testBackend)
 	}
 
-	params.backend = defaultBackend
+	params.backend = testBackend
 	return params, nil
 }
 
@@ -258,6 +259,11 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	// cleanup backend
 	defer params.backend.Close()
 
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	params.backend.cashDone = make(chan struct{})
 	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
@@ -319,52 +325,21 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		p2Peer := ts1.peers[p2]
 		p1Peer := ts2.peers[p1]
 
-		// we need to synchronize when we can actually go check that all values are ok
-		// (all cheques arrived). Without it, specifically on CI (travis) the tests are flaky
-		chequesArrived := make(chan struct{})
-
-		// periodically check that all cheques have arrived
-		go func() {
-			var ch1, ch2 *Cheque
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-				ts1.swap.store.Get(receivedChequeKey(p2), &ch1)
-				ts2.swap.store.Get(receivedChequeKey(p1), &ch2)
-				if ch1 == nil || ch2 == nil {
-					continue
-				}
-				// every peer gets maxCheques/2 messages, thus we can check that the CumulativePayout corresponds
-				// (NOTE: DefaultPaymentThreshold + 1 is assumed to be the price for `testMsgBigPrice`)
-				if ch1.CumulativePayout == uint64(maxCheques/2*(DefaultPaymentThreshold+1)) &&
-					ch2.CumulativePayout == uint64(maxCheques/2*(DefaultPaymentThreshold+1)) {
-					log.Debug("expected payout reached. going to check values now")
-					close(chequesArrived)
-					return
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-		}()
-
 		for i := 0; i < maxCheques; i++ {
 			if i%2 == 0 {
 				p2Peer.Send(ctx, &testMsgBigPrice{})
+				err := waitForChequeProcessed(ts2, p1, uint64((i+2)/2*(DefaultPaymentThreshold+1)))
+				if err != nil {
+					return err
+				}
 			} else {
 				p1Peer.Send(ctx, &testMsgBigPrice{})
+				err := waitForChequeProcessed(ts1, p2, uint64((i+2)/2*(DefaultPaymentThreshold+1)))
+				if err != nil {
+					return err
+				}
 			}
-			time.Sleep(200 * time.Millisecond)
 		}
-
-		log.Debug("waiting for cheque to arrive....")
-		select {
-		case <-ctx.Done():
-			t.Fatal("timed out waiting for cheques, aborting.")
-		case <-chequesArrived:
-		}
-		log.Debug("all good.")
 
 		ch1, err := ts2.swap.loadLastReceivedCheque(p1)
 		if err != nil {
@@ -407,6 +382,11 @@ func TestMultiChequeSimulation(t *testing.T) {
 	// cleanup backend
 	defer params.backend.Close()
 
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	params.backend.cashDone = make(chan struct{})
 	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
@@ -476,43 +456,12 @@ func TestMultiChequeSimulation(t *testing.T) {
 		for i := 0; i < maxCheques; i++ {
 			// use a price which will trigger a cheque each time
 			creditorPeer.Send(ctx, &testMsgBigPrice{})
-			// we need to sleep a bit in order to give time for the cheque to be processed
-			time.Sleep(200 * time.Millisecond)
-		}
-
-		// we need some synchronization, or tests get flaky, especially on CI (travis)
-		chequesArrived := make(chan struct{})
-
-		// check periodically that the peer has all cheques
-		go func() {
-			for {
-				time.Sleep(10 * time.Millisecond)
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-				var ch *Cheque
-				creditorSvc.swap.store.Get(receivedChequeKey(debitor), &ch)
-				if ch == nil {
-					continue
-				}
-				// the peer should have a CumulativePayout correspondent to the amount of cheques emitted
-				if ch.CumulativePayout == uint64(maxCheques*(DefaultPaymentThreshold+1)) {
-					log.Debug("expected payout reached. going to check values now")
-					time.Sleep(200 * time.Millisecond)
-					close(chequesArrived)
-				}
+			// we need to wait a bit in order to give time for the cheque to be processed
+			err = waitForChequeProcessed(creditorSvc, debitor, uint64(i*(DefaultPaymentThreshold+1)))
+			if err != nil {
+				return err
 			}
-		}()
-
-		log.Debug("waiting for cheque to arrive....")
-		select {
-		case <-ctx.Done():
-			t.Fatal("timed out waiting for cheques, aborting.")
-		case <-chequesArrived:
 		}
-		log.Debug("all good.")
 
 		// check balances:
 		b1, err := debitorSvc.swap.loadBalance(creditor)
@@ -794,6 +743,21 @@ CONNS:
 	}
 
 	log.Info("Simulation ended")
+}
+
+func waitForChequeProcessed(ts *testService, peer enode.ID, expected uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	backend := ts.swap.backend.(*swapTestBackend)
+	fmt.Println(backend)
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("timed out waiting for cheque to be processed")
+	case <-backend.cashDone:
+		return nil
+	}
 }
 
 // watchDisconnections receives simulation peer events in a new goroutine and sets atomic value
