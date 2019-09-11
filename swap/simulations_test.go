@@ -161,7 +161,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 				HiveParams:   hp,
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+			return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 		},
 		// and we also use a swap service
 		"swap": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -304,6 +304,9 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		p2Svc := peerItem.(*testService)
 
 		p2Peer := p1Svc.peers[p2]
+		if p2Peer == nil {
+			return errors.New("peer not found in peer list")
+		}
 		p1Peer := p2Svc.peers[p1]
 
 		// we need to synchronize when we can actually go check that all values are ok
