@@ -18,12 +18,17 @@ package bzzeth
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
+)
+
+var (
+	errRcvdMsgFromSwarmNode = errors.New("received message from Swarm node")
 )
 
 // BzzEth implements node.Service
@@ -61,14 +66,14 @@ func (b *BzzEth) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	bp.serveHeaders = handshake.(*Handshake).ServeHeaders
 	log.Debug("handshake", "hs", handshake, "peer", bp)
 
+	b.peers.add(bp)
+	defer b.peers.remove(bp)
+
 	// This protocol is all about interaction between an Eth node and a Swarm Node.
 	// If another swarm node tries to connect then the protocol goes into idle
 	if isSwarmNodeFunc(bp) {
-		<-b.quit
-		return nil
+		return peer.Run(b.handleMsgFromSwarmNode(bp))
 	}
-	b.peers.add(bp)
-	defer b.peers.remove(bp)
 
 	return peer.Run(b.handleMsg(bp))
 }
@@ -82,6 +87,15 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 		default:
 		}
 		return nil
+	}
+}
+
+// handleMsgFromSwarmNode is used in the case if this node is connected to a Swarm node
+// If any message is received in this case, the peer needs to be dropped
+func (b *BzzEth) handleMsgFromSwarmNode(p *Peer) func(context.Context, interface{}) error {
+	return func(ctx context.Context, msg interface{}) error {
+		p.logger.Debug("bzzeth.handleMsgFromSwarmNode")
+		return errRcvdMsgFromSwarmNode
 	}
 }
 

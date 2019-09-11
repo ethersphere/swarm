@@ -81,6 +81,21 @@ func handshakeExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, serveHea
 		})
 }
 
+// This message is exchanged between two Swarm nodes to check if the connection drops
+func dummyMessage(tester *p2ptest.ProtocolTester, peerID enode.ID) error {
+	return tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "DummyMessage",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 1,
+					Msg:  DummyMessage{test: true},
+					Peer: peerID,
+				},
+			},
+		})
+}
+
 // tests handshake between eth node and swarm node
 // on successful handshake the protocol does not go idle
 // peer added to the pool and serves headers is registered
@@ -141,17 +156,18 @@ func TestBzzBzzHandshake(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// after handshake expect protocol to hang, peer not added to pool
-	p := b.peers.get(node.ID())
-	if p != nil {
-		t.Fatal("bzzeth swarm peer incorrectly added")
+	// Wait for sometime and see if peer is connected and idling
+	time.Sleep(1000 * time.Millisecond)
+	if _, ok := b.peers.peers[node.ID()]; !ok {
+		t.Fatalf("peer is not connected")
 	}
 
-	// after closing the ptotocall, expect disconnect
-	close(b.quit)
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("protocol returned")})
+	// Send a dummy message and check if peer is dropped
+	err = dummyMessage(tester, node.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	if _, ok := b.peers.peers[node.ID()]; ok {
+		t.Fatalf("peer still connected")
+	}
 }

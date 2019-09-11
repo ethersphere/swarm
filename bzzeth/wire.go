@@ -25,6 +25,7 @@ var Spec = &protocols.Spec{
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		Handshake{},
+		DummyMessage{},
 	},
 	DisableContext: true,
 }
@@ -32,4 +33,10 @@ var Spec = &protocols.Spec{
 // Handshake is used in between the ethereum node and the Swarm node
 type Handshake struct {
 	ServeHeaders bool // indicates if this node is expected to serve requests for headers
+}
+
+// Dummy message to send from another Swarm node
+// Used only in testing
+type DummyMessage struct {
+	test bool
 }
