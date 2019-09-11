@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -63,14 +62,6 @@ func dummyRequestFromPeers(_ context.Context, req *storage.Request, _ enode.ID) 
 //they are expected to store based on the syncing protocol.
 //Number of chunks and nodes can be provided via commandline too.
 func TestSyncingViaGlobalSync(t *testing.T) {
-	if os.Getenv("TRAVIS") == "true" {
-		t.Skip("Flaky on travis")
-	}
-
-	if testutil.RaceEnabled {
-		t.Skip("Segfaults on Travis with -race")
-	}
-
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
