@@ -91,7 +91,7 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 func newBzzBaseTester(n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
 	var addrs [][]byte
 	for i := 0; i < n; i++ {
-		addr := pot.RandomBzzAddress()
+		addr := pot.RandomAddress()
 		addrs = append(addrs, addr[:])
 	}
 	pt, _, err := newBzzBaseTesterWithAddrs(prvkey, addrs, spec, run)

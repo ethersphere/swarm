@@ -105,12 +105,12 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	// generate the peers
 	var peers []*Peer
 	for i := 0; i < 7; i++ {
-		addr := pot.RandomBzzAddressAt(baseAddress, i)
+		addr := pot.RandomAddressAt(baseAddress, i)
 		peers = append(peers, newTestDiscoveryPeer(addr, kad))
 	}
 	var sevenPeers []*Peer
 	for i := 0; i < 2; i++ {
-		addr := pot.RandomBzzAddressAt(baseAddress, 7)
+		addr := pot.RandomAddressAt(baseAddress, 7)
 		sevenPeers = append(sevenPeers, newTestDiscoveryPeer(addr, kad))
 	}
 
