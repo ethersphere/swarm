@@ -29,7 +29,11 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	err = rlp.Encode(w, b.Capabilities)
+	y, err := rlp.EncodeToBytes(b.Capabilities)
+	if err != nil {
+		return err
+	}
+	err = rlp.Encode(w, y)
 	if err != nil {
 		return err
 	}
@@ -47,7 +51,12 @@ func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return fmt.Errorf("uaddr --- %v", err)
 	}
-	err = s.Decode(&b.Capabilities)
+
+	y, err := s.Bytes()
+	if err != nil {
+		return fmt.Errorf("capsbytes --- %v", err)
+	}
+	err = rlp.DecodeBytes(y, &b.Capabilities)
 	if err != nil {
 		return fmt.Errorf("caps --- %v", err)
 	}
