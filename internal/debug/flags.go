@@ -55,6 +55,11 @@ var (
 		Name:  "debug",
 		Usage: "Prepends log messages with call-site location (file and line number)",
 	}
+	debugfileFlag = cli.StringFlag{
+		Name:  "debugfile",
+		Usage: "Write execution logs to the given file",
+		Value: "",
+	}
 	pprofFlag = cli.BoolFlag{
 		Name:  "pprof",
 		Usage: "Enable the pprof HTTP server",
@@ -90,7 +95,7 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
+	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag, debugfileFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
 }
@@ -112,10 +117,10 @@ func init() {
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context, logdir string) error {
+func Setup(ctx *cli.Context) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	if logdir != "" {
+	if logdir := ctx.GlobalString(debugfileFlag.Name); logdir != "" {
 		rfh, err := log.RotatingFileHandler(
 			logdir,
 			262144,

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	l "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -133,7 +134,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		// create the accounting objects
-		self.swap = swap.New(swapStore, self.privateKey, self.config.Contract, self.backend)
+		self.swap = swap.New(l.Logger.GetHandler, swapStore, self.privateKey, self.config.Contract, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}

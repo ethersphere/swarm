@@ -109,7 +109,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	p.swap.logger.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
-	Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	p.swap.logger.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 
 	if err := p.setLastSentCheque(cheque); err != nil {
 		return fmt.Errorf("error while storing the last cheque: %v", err)

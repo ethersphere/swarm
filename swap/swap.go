@@ -30,11 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	l "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/mattn/go-colorable"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
@@ -46,6 +49,7 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 // Only messages which have a price will be accounted for
 type Swap struct {
 	api                 API
+	logger              l.Logger           // logger for Swap related messages and audit trail
 	store               state.Store        // store is needed in order to keep balances and cheques across sessions
 	peers               map[enode.ID]*Peer // map of all swap Peers
 	peersLock           sync.RWMutex       // lock for peers map
@@ -78,9 +82,24 @@ func NewParams() *Params {
 	}
 }
 
+// NewLogger returns a new logger
+func NewLogger(h interface{}) log.Logger {
+	swapLogger := log.New("swaplog", "*")
+	hd, ok := h.(log.Handler)
+
+	//TODO: replace with default handler
+	if !ok {
+		hd = log.LvlFilterHandler(log.Lvl(2), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))
+	}
+
+	swapLogger.SetHandler(hd)
+	return swapLogger
+}
+
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
+func New(logHandler interface{}, stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
 	return &Swap{
+		logger:              NewLogger(logHandler),
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
@@ -157,7 +176,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.paymentThreshold {
-		Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+		s.logger.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
@@ -184,13 +203,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
-	Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
+	s.logger.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
 
-	Debug("received cheque processed and verified", "peer", p.ID().String())
+	s.logger.Debug("received cheque processed and verified", "peer", p.ID().String())
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -221,17 +240,17 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		Error("error cashing cheque", "err", err)
+		s.logger.Error("error cashing cheque", "err", err)
 		return
 	}
 
 	if result.Bounced {
-		Error("cheque bounced", "tx", receipt.TxHash)
+		s.logger.Error("cheque bounced", "tx", receipt.TxHash)
 		return
 		// TODO: do something here
 	}
 
-	Debug("cash tx mined", "receipt", receipt)
+	s.logger.Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -255,7 +274,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		s.logger.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -380,14 +399,14 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	Info("deploying new swap", "owner", opts.From.Hex())
+	s.logger.Info("deploying new swap", "owner", opts.From.Hex())
 	address, err := s.deployLoop(opts, backend, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
-		Error("unable to deploy swap", "error", err)
+		s.logger.Error("unable to deploy swap", "error", err)
 		return err
 	}
 	s.owner.Contract = address
-	Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
+	s.logger.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
 }
@@ -401,11 +420,11 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner c
 		}
 
 		if _, s.contract, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			Warn("can't send chequebook deploy tx", "try", try, "error", err)
+			s.logger.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
-			Warn("chequebook deploy error", "try", try, "error", err)
+			s.logger.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
 		return addr, nil

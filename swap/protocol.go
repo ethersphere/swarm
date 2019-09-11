@@ -75,13 +75,13 @@ func (s *Swap) APIs() []rpc.API {
 
 // Start is a node.Service interface method
 func (s *Swap) Start(server *p2p.Server) error {
-	Info("Swap service started")
+	s.logger.Info("Swap service started")
 	return nil
 }
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
-	Info("Swap service stopping")
+	s.logger.Info("Swap service stopping")
 	return s.Close()
 }
 

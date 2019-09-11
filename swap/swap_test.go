@@ -383,7 +383,7 @@ func TestResetBalance(t *testing.T) {
 	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
 	case <-testBackend.cashDone:
-		Debug("cash transaction completed and committed")
+		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
@@ -525,9 +525,9 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	if err2 != nil {
 		t.Fatal(err2)
 	}
-	Debug("creating simulated backend")
+	log.Debug("creating simulated backend")
 
-	swap := New(stateStore, key, common.Address{}, testBackend)
+	swap := New(log.Logger.GetHandler, stateStore, key, common.Address{}, testBackend)
 	return swap, dir
 }
 
@@ -732,7 +732,7 @@ func setupContractTest() func() {
 // afterwards it attempts to cash-in a bouncing cheque
 func TestContractIntegration(t *testing.T) {
 
-	Debug("creating test swap")
+	log.Debug("creating test swap")
 
 	issuerSwap, clean := newTestSwap(t, ownerKey)
 	defer clean()
@@ -740,7 +740,7 @@ func TestContractIntegration(t *testing.T) {
 	issuerSwap.owner.address = ownerAddress
 	issuerSwap.owner.privateKey = ownerKey
 
-	Debug("deploy issuer swap")
+	log.Debug("deploy issuer swap")
 
 	ctx := context.TODO()
 	err := testDeploy(ctx, testBackend, issuerSwap)
@@ -748,7 +748,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	Debug("deployed. signing cheque")
+	log.Debug("deployed. signing cheque")
 
 	cheque := newTestCheque()
 	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
@@ -757,7 +757,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	Debug("sending cheque...")
+	log.Debug("sending cheque...")
 
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
@@ -769,7 +769,7 @@ func TestContractIntegration(t *testing.T) {
 
 	// test cashing in, for this we need balance in the contract
 	// => send some money
-	Debug("send money to contract")
+	log.Debug("send money to contract")
 	nonce, err := testBackend.NonceAt(ctx, issuerSwap.owner.address, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -788,7 +788,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 	testBackend.SendTransaction(context.TODO(), depoTxs)
 
-	Debug("cash-in the cheque")
+	log.Debug("cash-in the cheque")
 	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	testBackend.Commit()
 	if err != nil {
@@ -809,7 +809,7 @@ func TestContractIntegration(t *testing.T) {
 	if result.Uint64() != cheque.CumulativePayout {
 		t.Fatalf("Wrong cumulative payout %d", result)
 	}
-	Debug("cheques result", "result", result)
+	log.Debug("cheques result", "result", result)
 
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
@@ -820,7 +820,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	Debug("try to cash-in the bouncing cheque")
+	log.Debug("try to cash-in the bouncing cheque")
 	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
 	testBackend.Commit()
 	if err != nil {
@@ -1090,6 +1090,10 @@ func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 }
 
 func TestFileLogger(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	handler, err := log.FileHandler("/home/git/go/src/github.com/ethersphere/swarm/testlog/test.log", log.TerminalFormat(true))
 	if err != nil {
 		t.Fatal(err)
@@ -1099,6 +1103,10 @@ func TestFileLogger(t *testing.T) {
 }
 
 func TestRotatingFileLogger(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	handler, err := log.RotatingFileHandler("/home/git/go/src/github.com/ethersphere/swarm/testlog/testRotating.log", 200, log.TerminalFormat(true))
 	if err != nil {
 		t.Fatal(err)
