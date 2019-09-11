@@ -131,7 +131,10 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 	}
 
 	// connect the nodes together
-	for _, node := range cluster.Nodes {
+	for i, node := range cluster.Nodes {
+		if i == 0 {
+			continue
+		}
 		if err := node.Client.Call(nil, "admin_addPeer", cluster.Nodes[0].Enode); err != nil {
 			t.Fatal(err)
 		}
