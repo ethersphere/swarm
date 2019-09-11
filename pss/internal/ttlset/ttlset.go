@@ -12,6 +12,7 @@ import (
 type Config struct {
 	EntryTTL time.Duration // time after which items are removed
 	Clock    clock.Clock   // time reference
+	OnClean  func()        // Callback that will be fired every time items are automatically removed on expiry
 }
 
 // TTLSet implements a Set that automatically removes expired keys
@@ -85,6 +86,9 @@ func (ts *TTLSet) clean() {
 		if v.expiresAt.Before(ts.Clock.Now()) {
 			delete(ts.set, k)
 		}
+	}
+	if ts.Config.OnClean != nil {
+		ts.Config.OnClean()
 	}
 }
 

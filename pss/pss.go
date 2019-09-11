@@ -248,7 +248,10 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	}
 	ps.forwardCache = ttlset.New(&ttlset.Config{
 		EntryTTL: params.CacheTTL,
-		Clock:    clock.Realtime(),
+		Clock:    clock.Realtime(), //TODO: Clock should be injected by Params so it can be mocked.
+		OnClean: func() {
+			metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
+		},
 	})
 	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
 
@@ -451,12 +454,11 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 		log.Warn("pss filtered expired message", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", hex.EncodeToString(pssmsg.To))
 		return nil
 	}
-	msgDigest := pssmsg.Digest()
-	if p.forwardCache.Has(msgDigest) {
+	if p.checkFwdCache(pssmsg) {
 		log.Trace("pss relay block-cache match (process)", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", (hex.EncodeToString(pssmsg.To)))
 		return nil
 	}
-	p.forwardCache.Add(msgDigest)
+	p.addFwdCache(pssmsg)
 
 	psstopic := pssmsg.Topic
 
@@ -622,7 +624,7 @@ func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte) error
 	pssMsg.Payload = msg
 	pssMsg.Topic = topic
 
-	p.forwardCache.Add(pssMsg.Digest())
+	p.addFwdCache(pssMsg)
 
 	return p.enqueue(pssMsg)
 }
@@ -791,7 +793,7 @@ func (p *Pss) forward(msg *message.Message) error {
 	})
 
 	// cache the message
-	p.forwardCache.Add(msg.Digest())
+	p.addFwdCache(msg)
 
 	if sent == 0 {
 		return errors.New("unable to forward to any peers")
@@ -801,6 +803,23 @@ func (p *Pss) forward(msg *message.Message) error {
 }
 func label(b []byte) string {
 	return fmt.Sprintf("%04x", b[:2])
+}
+
+// add a message to the cache
+func (p *Pss) addFwdCache(msg *message.Message) error {
+	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
+	return p.forwardCache.Add(msg.Digest())
+}
+
+// check if message is in the cache
+func (p *Pss) checkFwdCache(msg *message.Message) bool {
+	hit := p.forwardCache.Has(msg.Digest())
+	if hit {
+		metrics.GetOrRegisterCounter("pss.checkfwdcache.hit", nil).Inc(1)
+	} else {
+		metrics.GetOrRegisterCounter("pss.checkfwdcache.miss", nil).Inc(1)
+	}
+	return hit
 }
 
 func validateAddress(addr PssAddress) error {

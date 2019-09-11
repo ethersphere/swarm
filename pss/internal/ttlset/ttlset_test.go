@@ -15,11 +15,15 @@ func TestTTLSet(tx *testing.T) {
 	var err error
 
 	testClock := clock.NewMock(time.Unix(0, 0))
+	waitClean := make(chan bool)
 
 	testEntryTTL := 10 * time.Second
 	testSet := ttlset.New(&ttlset.Config{
 		EntryTTL: testEntryTTL,
 		Clock:    testClock,
+		OnClean: func() {
+			waitClean <- true
+		},
 	})
 
 	key1 := "some key"
@@ -47,6 +51,8 @@ func TestTTLSet(tx *testing.T) {
 	// Let some time pass well beyond the expiry time, so key1 expires:
 	testClock.Add(testEntryTTL * 2)
 
+	<-waitClean // Will only continue if the clean function was indeed called
+
 	// Add another key to the set:
 	err = testSet.Add(key2)
 	t.Ok(err)
@@ -59,6 +65,7 @@ func TestTTLSet(tx *testing.T) {
 
 	// Let some time pass well beyond key2's expiry time, so key2 expires:
 	testClock.Add(testEntryTTL * 2)
+	<-waitClean // Will only continue if the clean function was indeed called
 
 	hasKey = testSet.Has(key2)
 	t.Assert(hasKey == false, "key2 should have been wiped, but Has() returned true")
