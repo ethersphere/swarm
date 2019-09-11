@@ -122,6 +122,7 @@ type offer struct {
 // want represents an open want for a hash range from a client to a server
 // it is stored on the peer.openWants
 type want struct {
+	remaining uint64              // number of remaining chunks to deliver
 	ruid      uint                // the request uid
 	from      uint64              // want from index
 	to        *uint64             // want to index, nil signifies top of range not yet known
@@ -129,7 +130,6 @@ type want struct {
 	stream    ID                  // the stream id
 	hashes    map[string]struct{} // key: chunk address, value: wanted yes/no, used to prevent unsolicited chunks
 	requested time.Time           // requested at time
-	remaining uint64              // number of remaining chunks to deliver
 	chunks    chan chunk.Address  // chunk arrived notification channel
 	closeC    chan error          // signal polling goroutine to terminate due to empty batch or timeout
 }
