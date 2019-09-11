@@ -533,53 +533,59 @@ func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
 }
 
 /*
- go test -v -bench . -run BenchmarkHistoricalStream -loglevel 0 -benchtime 10x
-BenchmarkHistoricalStream_1000-4    	      10	 119487009 ns/op
-BenchmarkHistoricalStream_2000-4    	      10	 236469752 ns/op
-BenchmarkHistoricalStream_3000-4    	      10	 371934729 ns/op
-BenchmarkHistoricalStream_5000-4    	      10	 638317966 ns/op
-BenchmarkHistoricalStream_10000-4   	      10	1359858063 ns/op
-BenchmarkHistoricalStream_15000-4   	      10	2485790336 ns/op
-BenchmarkHistoricalStream_20000-4   	      10	3382260295 ns/op
+BenchmarkHistoricalStream measures syncing time after two nodes connect.
+
+go test -v github.com/ethersphere/swarm/network/stream/v2 -run="^$" -bench BenchmarkHistoricalStream -benchmem -loglevel 0
+goos: darwin
+goarch: amd64
+pkg: github.com/ethersphere/swarm/network/stream/v2
+BenchmarkHistoricalStream/1000-chunks-8        	      10	 133564663 ns/op	148289188 B/op	  233646 allocs/op
+BenchmarkHistoricalStream/2000-chunks-8        	       5	 290056259 ns/op	316599452 B/op	  541507 allocs/op
+BenchmarkHistoricalStream/10000-chunks-8       	       1	1714618578 ns/op	1791108672 B/op	 4133564 allocs/op
+BenchmarkHistoricalStream/20000-chunks-8       	       1	4724760666 ns/op	4133092720 B/op	11347504 allocs/op
+PASS
 */
-func BenchmarkHistoricalStream_1000(b *testing.B)  { benchmarkHistoricalStream(b, 1000) }
-func BenchmarkHistoricalStream_2000(b *testing.B)  { benchmarkHistoricalStream(b, 2000) }
-func BenchmarkHistoricalStream_3000(b *testing.B)  { benchmarkHistoricalStream(b, 3000) }
-func BenchmarkHistoricalStream_5000(b *testing.B)  { benchmarkHistoricalStream(b, 5000) }
-func BenchmarkHistoricalStream_10000(b *testing.B) { benchmarkHistoricalStream(b, 10000) }
-func BenchmarkHistoricalStream_15000(b *testing.B) { benchmarkHistoricalStream(b, 15000) }
-func BenchmarkHistoricalStream_20000(b *testing.B) { benchmarkHistoricalStream(b, 20000) }
+func BenchmarkHistoricalStream(b *testing.B) {
+	for _, c := range []uint64{
+		1000,
+		2000,
+		10000,
+		20000,
+	} {
+		b.Run(fmt.Sprintf("%v-chunks", c), func(b *testing.B) {
+			benchmarkHistoricalStream(b, c)
+		})
+	}
+}
 
 func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 	b.StopTimer()
-	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newSyncSimServiceFunc(nil),
-	})
-
-	defer sim.Close()
-	uploaderNode, err := sim.AddNode()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	uploaderNodeStore := sim.MustNodeItem(uploaderNode, bucketKeyFileStore).(*storage.FileStore)
-	uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
-	if err != nil {
-		b.Fatal(err)
-	}
 
 	for i := 0; i < b.N; i++ {
-		b.StartTimer()
+		sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+			"bzz-sync": newSyncSimServiceFunc(nil),
+		})
+
+		uploaderNode, err := sim.AddNode()
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		uploaderNodeStore := nodeFileStore(sim, uploaderNode)
+
+		mustUploadChunks(context.Background(), b, uploaderNodeStore, chunks)
+
+		uploadedChunks, err := getChunks(uploaderNodeStore.ChunkStore)
+		if err != nil {
+			b.Fatal(err)
+		}
+
 		syncingNode, err := sim.AddNode()
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		mustUploadChunks(context.Background(), b, nodeFileStore(sim, syncingNode), chunks)
+		b.StartTimer()
 
 		err = sim.Net.Connect(syncingNode, uploaderNode)
 		if err != nil {
@@ -594,6 +600,8 @@ func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
+		sim.Close()
 	}
 }
 
