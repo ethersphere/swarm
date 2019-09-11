@@ -23,6 +23,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -1097,7 +1098,7 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 	// close the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
 		if stb.cashDone != nil {
-			close(stb.cashDone)
+			stb.cashDone <- struct{}{}
 		}
 	}
 }
@@ -1436,7 +1437,11 @@ func TestContractIntegration(t *testing.T) {
 // when testing, we don't need to wait for a transaction to be mined
 func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
 
-	testBackend.Commit()
+	if stb, ok := backend.(*swapTestBackend); !ok {
+		return nil, errors.New("not the expected test backend")
+	} else {
+		stb.Commit()
+	}
 	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
 	if err != nil {
 		return nil, err
