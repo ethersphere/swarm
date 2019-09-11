@@ -358,7 +358,7 @@ func TestSwapRPC(t *testing.T) {
 	// query a first time, should give error
 	var balance int64
 	err = rpcclient.Call(&balance, "swap_balance", id1)
-	// at this point no balance should be there:  no peer at address in map...
+	// at this point no balance should be there:  no peer registered with Swap
 	if err == nil {
 		t.Fatal("Expected error but no error received")
 	}
@@ -369,9 +369,23 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatalf("Expected balance to be 0 but it is %d", balance)
 	}
 
-	// now artificially assign some balances
-	swap.balances[id1] = fakeBalance1
-	swap.balances[id2] = fakeBalance2
+	peer1, err := swap.addPeer(dummyPeer1.Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := peer1.setBalance(fakeBalance1); err != nil {
+		t.Fatal(err)
+	}
+
+	peer2, err := swap.addPeer(dummyPeer2.Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := peer2.setBalance(fakeBalance2); err != nil {
+		t.Fatal(err)
+	}
 
 	// query them, values should coincide
 	err = rpcclient.Call(&balance, "swap_balance", id1)
@@ -410,7 +424,12 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatalf("Expected total balance to be %d, but it %d", fakeSum, sum)
 	}
 
-	if !reflect.DeepEqual(allBalances, swap.balances) {
+	balances, err := swap.Balances()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(allBalances, balances) {
 		t.Fatal("Balances are not deep equal")
 	}
 }
