@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -27,7 +29,9 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"os"
+	"path"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -292,6 +297,127 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
+func TestNewSwapFailure(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swarm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	// a simple rpc endpoint for testing dialing
+	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
+
+	// windows namedpipes are not on filesystem but on NPFS
+	if runtime.GOOS == "windows" {
+		b := make([]byte, 8)
+		rand.Read(b)
+		ipcEndpoint = `\\.\pipe\TestSwarm-` + hex.EncodeToString(b)
+	}
+
+	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	defer server.Stop()
+
+	prvKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Error(err)
+	}
+
+	type SWAPConfig struct {
+		dbPath              string
+		prvkey              *ecdsa.PrivateKey
+		backendURL          string
+		disconnectThreshold uint64
+		paymentThreshold    uint64
+	}
+
+	var config SWAPConfig
+
+	for _, tc := range []struct {
+		name      string
+		configure func(*SWAPConfig)
+		check     func(*testing.T, *SWAPConfig)
+	}{
+		{
+			name: "no backedURL",
+			configure: func(config *SWAPConfig) {
+				config.dbPath = dir
+				config.prvkey = prvKey
+				config.backendURL = ""
+				config.disconnectThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultPaymentThreshold
+			},
+			check: func(t *testing.T, config *SWAPConfig) {
+				defer os.RemoveAll(config.dbPath)
+				_, err := NewSWAP(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.disconnectThreshold,
+					config.paymentThreshold,
+				)
+				if !strings.Contains(err.Error(), "no backend URL given") {
+					t.Fatal("no backendURL, but created SWAP")
+				}
+			},
+		},
+		{
+			name: "disconnect threshold lower than payment threshold",
+			configure: func(config *SWAPConfig) {
+				config.dbPath = dir
+				config.prvkey = prvKey
+				config.backendURL = ipcEndpoint
+				config.disconnectThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultDisconnectThreshold + 1
+			},
+			check: func(t *testing.T, config *SWAPConfig) {
+				defer os.RemoveAll(config.dbPath)
+				_, err := NewSWAP(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.disconnectThreshold,
+					config.paymentThreshold,
+				)
+				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower than payment threshold.") {
+					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP")
+				}
+			},
+		},
+		{
+			name: "invalid backendURL",
+			configure: func(config *SWAPConfig) {
+				config.dbPath = dir
+				config.prvkey = prvKey
+				config.backendURL = "invalid backendURL"
+				config.disconnectThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultDisconnectThreshold
+			},
+			check: func(t *testing.T, config *SWAPConfig) {
+				_, err := NewSWAP(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.disconnectThreshold,
+					config.paymentThreshold,
+				)
+				if !strings.Contains(err.Error(), "swap init error: error connecting to Ethereum API") {
+					t.Fatal("invalid backendURL, but created SWAP", err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.configure(&config)
+			if tc.check != nil {
+				tc.check(t, &config)
+			}
+		})
+
+	}
+}
+
 //TestDisconnectThreshold tests that the disconnect threshold is reached when adding the DefaultDisconnectThreshold amount to the peers balance
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
@@ -533,7 +659,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	}
 	log.Debug("creating simulated backend")
 
-	swap := New(stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
+	swap := new(stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
 	return swap, dir
 }
 

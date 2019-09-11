@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
@@ -99,6 +101,33 @@ func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Back
 		paymentThreshold:    paymentThreshold,
 		honeyPriceOracle:    NewHoneyPriceOracle(),
 	}
+}
+
+// NewSWAP - swap constructor
+func NewSWAP(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
+	// we MUST have a backend
+	if backendURL == "" {
+		return nil, errors.New("swap init error: no backend URL given")
+	}
+	log.Info("connecting to SWAP API", "url", backendURL)
+	// initialize the balances store
+	stateStore, err := state.NewDBStore(filepath.Join(dbPath, "swap.db"))
+	if err != nil {
+		return nil, fmt.Errorf("swap init error: %s", err)
+	}
+	if disconnectThreshold < paymentThreshold {
+		return nil, fmt.Errorf("swap init error: disconnect threshold lower than payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
+	}
+	backend, err := ethclient.Dial(backendURL)
+	if err != nil {
+		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
+	}
+	return new(
+		stateStore,
+		prvkey,
+		backend,
+		disconnectThreshold,
+		paymentThreshold), nil
 }
 
 const (

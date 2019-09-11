@@ -47,19 +47,6 @@ func TestConfigDump(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestConfigFailsSwapEnabledNoBackendURL(t *testing.T) {
-	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
-		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
-		fmt.Sprintf("--%s", SwarmSwapEnabledFlag.Name),
-	}
-
-	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SwarmErrSwapSetNoBackendURL + "\n")
-	swarm.ExpectExit()
-}
-
 func TestBzzKeyFlag(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	if err != nil {

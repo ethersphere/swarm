@@ -228,9 +228,6 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
 		currentConfig.DeliverySkipCheck = true
 	}
-	if currentConfig.SwapEnabled && currentConfig.SwapBackendURL == "" {
-		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
-	}
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {
 		ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)
 		// preserve backward compatibility to disable ENS with --ens-api=""

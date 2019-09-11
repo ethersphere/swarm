@@ -117,29 +117,19 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
-		// if Swap is enabled, we MUST have a contract API
-		if self.config.SwapBackendURL == "" {
-			return nil, errors.New("swap enabled but no contract address given; fatal error condition, aborting")
-		}
-		log.Info("connecting to SWAP API", "url", self.config.SwapBackendURL)
-		self.backend, err = ethclient.Dial(self.config.SwapBackendURL)
-		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapBackendURL, err)
-		}
-
-		// initialize the balances store
-		swapStore, err := state.NewDBStore(filepath.Join(config.Path, "swap.db"))
-		if err != nil {
-			return nil, err
-		}
+		//TODO: is this needed here?
+		self.backend, _ = ethclient.Dial(self.config.SwapBackendURL)
 		// create the accounting objects
-		self.swap = swap.New(
-			swapStore,
+		self.swap, err = swap.NewSWAP(
+			self.config.Path,
 			self.privateKey,
-			self.backend,
+			self.config.SwapBackendURL,
 			self.config.SwapDisconnectThreshold,
 			self.config.SwapPaymentThreshold,
 		)
+		if err != nil {
+			return nil, err
+		}
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}

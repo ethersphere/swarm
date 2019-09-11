@@ -185,6 +185,7 @@ func TestNewSwarm(t *testing.T) {
 	}
 }
 
+//TODO: is this still needed here, as we are validating all these fields now in SWAP
 // TestNewSwarmFailure validates that invalid Swarm fields in repsect to the provided configuration cause a failure.
 func TestNewSwarmFailure(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarm")
