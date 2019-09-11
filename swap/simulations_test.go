@@ -267,7 +267,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelSimRun()
 
-	_, err = sim.AddNodesAndConnectFull(nodeCount)
+	_, err = sim.AddNodesAndConnectChain(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,31 +283,41 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			}
 		}()
 
+		p1 := sim.UpNodeIDs()[0]
+		p2 := sim.UpNodeIDs()[1]
+		p1Item, ok := sim.NodeItem(p1, bucketKeySwap)
+		if !ok {
+			return errors.New("no swap in simulation bucket")
+		}
+		ts1 := p1Item.(*testService)
+		p2Item, ok := sim.NodeItem(p2, bucketKeySwap)
+		if !ok {
+			return errors.New("no swap in simulation bucket")
+		}
+		ts2 := p2Item.(*testService)
+
+		for {
+			// let's always be nice and allow a time out to be catched
+			select {
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for all swap peer connections to be established")
+			default:
+			}
+			// the node has all other peers in its peer list
+			if len(ts1.peers) == 1 && len(ts2.peers) == 1 {
+				break
+			}
+			// don't overheat the CPU...
+			time.Sleep(5 * time.Millisecond)
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		p1 := sim.UpNodeIDs()[0]
-		p2 := sim.UpNodeIDs()[1]
-
 		maxCheques := 42
 
-		item, ok := sim.NodeItem(p1, bucketKeySwap)
-		if !ok {
-			return errors.New("no swap in simulation bucket")
-		}
-		p1Svc := item.(*testService)
-
-		peerItem, ok := sim.NodeItem(p2, bucketKeySwap)
-		if !ok {
-			return errors.New("no swap in simulation bucket")
-		}
-		p2Svc := peerItem.(*testService)
-
-		p2Peer := p1Svc.peers[p2]
-		if p2Peer == nil {
-			return errors.New("peer not found in peer list")
-		}
-		p1Peer := p2Svc.peers[p1]
+		p2Peer := ts1.peers[p2]
+		p1Peer := ts2.peers[p1]
 
 		// we need to synchronize when we can actually go check that all values are ok
 		// (all cheques arrived). Without it, specifically on CI (travis) the tests are flaky
@@ -322,8 +332,8 @@ func TestPingPongChequeSimulation(t *testing.T) {
 					return
 				default:
 				}
-				p1Svc.swap.store.Get(receivedChequeKey(p2), &ch1)
-				p2Svc.swap.store.Get(receivedChequeKey(p1), &ch2)
+				ts1.swap.store.Get(receivedChequeKey(p2), &ch1)
+				ts2.swap.store.Get(receivedChequeKey(p1), &ch2)
 				if ch1 == nil || ch2 == nil {
 					continue
 				}
@@ -356,11 +366,11 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		}
 		log.Debug("all good.")
 
-		ch1, err := p2Svc.swap.loadLastReceivedCheque(p1)
+		ch1, err := ts2.swap.loadLastReceivedCheque(p1)
 		if err != nil {
 			return err
 		}
-		ch2, err := p1Svc.swap.loadLastReceivedCheque(p2)
+		ch2, err := ts1.swap.loadLastReceivedCheque(p2)
 		if err != nil {
 			return err
 		}
@@ -406,7 +416,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelSimRun()
 
-	_, err = sim.AddNodesAndConnectFull(nodeCount)
+	_, err = sim.AddNodesAndConnectChain(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,15 +432,9 @@ func TestMultiChequeSimulation(t *testing.T) {
 			}
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
 		// define the nodes
 		debitor := sim.UpNodeIDs()[0]
 		creditor := sim.UpNodeIDs()[1]
-		// we will send just maxCheques number of cheques
-		maxCheques := 6
-
 		// get the testService for the debitor
 		item, ok := sim.NodeItem(debitor, bucketKeySwap)
 		if !ok {
@@ -444,6 +448,26 @@ func TestMultiChequeSimulation(t *testing.T) {
 			return errors.New("no swap in simulation bucket")
 		}
 		creditorSvc := peerItem.(*testService)
+
+		for {
+			// let's always be nice and allow a time out to be catched
+			select {
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for all swap peer connections to be established")
+			default:
+			}
+			// the node has all other peers in its peer list
+			if len(debitorSvc.peers) == 1 && len(creditorSvc.peers) == 1 {
+				break
+			}
+			// don't overheat the CPU...
+			time.Sleep(5 * time.Millisecond)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		// we will send just maxCheques number of cheques
+		maxCheques := 6
 
 		// the peer object used for sending
 		creditorPeer := debitorSvc.peers[creditor]
@@ -505,11 +529,10 @@ func TestMultiChequeSimulation(t *testing.T) {
 		}
 		// check cheques
 		var cheque1, cheque2 *Cheque
-		if cheque1, err = debitorSvc.swap.loadLastReceivedCheque(creditor); err != nil {
+		if cheque1, err = debitorSvc.swap.loadLastSentCheque(creditor); err != nil {
 			return errors.New("expected cheques with creditor, but none found")
 		}
-		creditorSvc.swap.store.Get(receivedChequeKey(debitor), &cheque2)
-		if cheque2 == nil {
+		if cheque2, err = creditorSvc.swap.loadLastReceivedCheque(debitor); err != nil {
 			return errors.New("expected cheques with debitor, but none found")
 		}
 
