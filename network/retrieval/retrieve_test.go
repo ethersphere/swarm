@@ -286,7 +286,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 //TestHasPriceImplementation is to check that Retrieval implements protocols.Prices
 func TestHasPriceImplementation(t *testing.T) {
-	addr := network.RandomAddr()
+	addr := network.RandomBzzAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	r := New(to, nil, to.BaseAddr(), nil)
 
@@ -437,7 +437,7 @@ func nodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig 
 			t.Fatalf("unable to create enode: %v", err)
 		}
 
-		n := network.NewAddr(nod)
+		n := network.NewBzzAddrFromEnode(nod)
 		foundPo = chunk.Proximity(baseaddr, n.Over())
 	}
 

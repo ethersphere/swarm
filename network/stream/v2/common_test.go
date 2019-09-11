@@ -110,7 +110,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 	}
 	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 		n := ctx.Config.Node()
-		addr := network.NewAddr(n)
+		addr := network.NewBzzAddrFromEnode(n)
 
 		localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
 		if err != nil {
