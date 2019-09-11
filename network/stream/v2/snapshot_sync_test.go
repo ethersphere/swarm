@@ -68,7 +68,7 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
 		testSyncingViaGlobalSync(t, *chunks, *nodes)
 	} else {
-		chunkCounts := []int{4, 32}
+		chunkCounts := []int{4}
 		nodeCounts := []int{16, 32}
 
 		//if the `longrunning` flag has been provided
