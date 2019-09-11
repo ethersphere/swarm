@@ -1,7 +1,6 @@
 package ttlset
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +21,7 @@ func TestClean(tx *testing.T) {
 	testSet := New(&Config{
 		EntryTTL: testEntryTTL,
 		Clock:    testClock,
-	}).(*ttlSet)
+	})
 
 	key1 := "some key"
 	key2 := "some later key"
@@ -68,41 +67,5 @@ func TestClean(tx *testing.T) {
 
 	// verify the map is now empty
 	t.Assert(len(testSet.set) == 0, "Expected the set to be empty")
-
-}
-
-// TestNewTicker tests whether newTicker calls the callback function periodically
-func TestNewTicker(tx *testing.T) {
-	t := ut.BeginTest(tx, false) // set to true to generate test results
-	defer t.FinishTest()
-	var err error
-
-	testClock := clock.NewMock(time.Unix(0, 0))
-
-	testEntryTTL := 1 * time.Second
-	testSet := New(&Config{
-		EntryTTL: testEntryTTL,
-		Clock:    testClock,
-	}).(*ttlSet)
-
-	err = testSet.Start()
-	t.Ok(err)
-
-	wg := sync.WaitGroup{}
-	wg.Add(10)
-	tickWait := make(chan bool)
-	testSet.newTicker(func() {
-		wg.Done()
-		tickWait <- true
-	})
-
-	for i := 0; i < 10; i++ {
-		testClock.Add(testEntryTTL)
-		<-tickWait
-	}
-
-	wg.Wait()
-	err = testSet.Stop()
-	t.Ok(err)
 
 }

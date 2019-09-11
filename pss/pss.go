@@ -193,7 +193,7 @@ func (o outbox) reenqueue(slot int) {
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
-	forwardCache ttlset.TTLSet
+	forwardCache *ttlset.TTLSet
 
 	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
@@ -272,10 +272,6 @@ func (p *Pss) Start(srv *p2p.Server) error {
 			}
 		}
 	}()
-
-	if err := p.forwardCache.Start(); err != nil {
-		return err
-	}
 
 	// Forward outbox messages
 	go p.outbox.processOutbox()

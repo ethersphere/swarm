@@ -1,21 +1,12 @@
 package ttlset
 
 import (
-	"errors"
 	"sync"
 	"time"
 
+	"github.com/ethersphere/swarm/pss/internal/ttlset/ticker"
 	"github.com/tilinna/clock"
 )
-
-// TTLSet implements a Set that automatically removes expired items
-// after a predefined expiration time
-type TTLSet interface {
-	Add(key interface{}) error // Add adds a new key to the set
-	Has(key interface{}) bool  // Check returns whether or not the key is already/still in the set
-	Start() error              // Start launches this service
-	Stop() error               // Stop will close the service and release all resources
-}
 
 // Config defines the TTLSet configuration
 type Config struct {
@@ -23,34 +14,40 @@ type Config struct {
 	Clock    clock.Clock   // time reference
 }
 
+// TTLSet implements a Set that automatically removes expired keys
+// after a predefined expiration time
+type TTLSet struct {
+	Config
+	set    map[interface{}]setEntry
+	lock   sync.RWMutex
+	ticker *ticker.Ticker
+}
+
 type setEntry struct {
 	expiresAt time.Time
 }
 
-type ttlSet struct {
-	Config
-	quitC chan struct{}
-	set   map[interface{}]setEntry
-	lock  sync.RWMutex
-}
-
-// ErrAlreadyStarted is returned if this service was already started and Start() is called again
-var ErrAlreadyStarted = errors.New("Already started")
-
-// ErrAlreadyStopped is returned if this service was already stopped and Stop() is called again
-var ErrAlreadyStopped = errors.New("Already stopped")
-
-// New instances a the default ForwardCache implementation
-func New(config *Config) TTLSet {
-	ts := &ttlSet{
+// New instances a TTLSet
+func New(config *Config) *TTLSet {
+	ts := &TTLSet{
 		set:    make(map[interface{}]setEntry),
 		Config: *config,
 	}
+
+	ticker := ticker.New(&ticker.Config{
+		Interval: config.EntryTTL,
+		Clock:    config.Clock,
+		Callback: func() {
+			ts.clean()
+		},
+	})
+	ts.ticker = ticker
+
 	return ts
 }
 
 // Add adds a new key to the set
-func (ts *ttlSet) Add(key interface{}) error {
+func (ts *TTLSet) Add(key interface{}) error {
 	var entry setEntry
 	var ok bool
 
@@ -66,7 +63,7 @@ func (ts *ttlSet) Add(key interface{}) error {
 }
 
 // Has returns whether or not a key is already/still in the set
-func (ts *ttlSet) Has(key interface{}) bool {
+func (ts *TTLSet) Has(key interface{}) bool {
 	ts.lock.Lock()
 	defer ts.lock.Unlock()
 
@@ -80,8 +77,8 @@ func (ts *ttlSet) Has(key interface{}) bool {
 	return false
 }
 
-// clean is used to periodically remove expired entries from the set
-func (ts *ttlSet) clean() {
+// clean is used internally to periodically remove expired entries from the set
+func (ts *TTLSet) clean() {
 	ts.lock.Lock()
 	defer ts.lock.Unlock()
 	for k, v := range ts.set {
@@ -91,41 +88,7 @@ func (ts *ttlSet) clean() {
 	}
 }
 
-func (ts *ttlSet) newTicker(callback func()) {
-	ticker := ts.Clock.NewTicker(ts.EntryTTL)
-
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				callback()
-			case <-ts.quitC:
-				return
-			}
-		}
-	}()
-}
-
-// Start launches this service
-func (ts *ttlSet) Start() error {
-	if ts.quitC != nil {
-		return ErrAlreadyStarted
-	}
-	ts.quitC = make(chan struct{})
-	ts.newTicker(func() {
-		ts.clean()
-	})
-
-	return nil
-}
-
 // Stop will close the service and release all resources
-func (ts *ttlSet) Stop() error {
-	if ts.quitC == nil {
-		return ErrAlreadyStopped
-	}
-	close(ts.quitC)
-	ts.quitC = nil
-	return nil
+func (ts *TTLSet) Stop() error {
+	return ts.ticker.Stop()
 }

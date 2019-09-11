@@ -22,14 +22,6 @@ func TestTTLSet(tx *testing.T) {
 		Clock:    testClock,
 	})
 
-	// start the service
-	err = testSet.Start()
-	t.Ok(err)
-
-	// starting again must return an error
-	err = testSet.Start()
-	t.MustFailWith(err, ttlset.ErrAlreadyStarted)
-
 	key1 := "some key"
 	key2 := "some other key"
 
@@ -77,5 +69,5 @@ func TestTTLSet(tx *testing.T) {
 
 	// stopping again must return an error
 	err = testSet.Stop()
-	t.MustFailWith(err, ttlset.ErrAlreadyStopped)
+	t.MustFail(err, "Expected Stop() to fail if the service is already stopped")
 }
