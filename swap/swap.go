@@ -103,7 +103,7 @@ func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Back
 	}
 }
 
-// NewSWAP - swap constructor
+// NewSWAP - swap constructor with integrity checks
 func NewSWAP(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
 	// we MUST have a backend
 	if backendURL == "" {
