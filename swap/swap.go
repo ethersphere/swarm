@@ -157,9 +157,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if !exists {
 		return fmt.Errorf("peer %v does not exist", peer.ID())
 	}
-	disconnectThreshold := int64(s.disconnectThreshold)
-	if balance >= disconnectThreshold {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), disconnectThreshold)
+	if balance >= int64(s.disconnectThreshold) {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), int64(s.disconnectThreshold))
 	}
 
 	var newBalance int64
@@ -171,9 +170,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	paymentThreshold := int64(s.paymentThreshold)
-	if newBalance <= -paymentThreshold {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
+	if newBalance <= -int64(s.paymentThreshold) {
+		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		swapPeer, ok := s.getPeer(peer.ID())
 		if !ok {
 			return fmt.Errorf("peer %s not found", peer)
