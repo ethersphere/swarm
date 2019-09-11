@@ -19,27 +19,22 @@ package storage
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/mattn/go-colorable"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel   = flag.Int("loglevel", 3, "verbosity of logs")
 	getTimeout = 30 * time.Second
 )
 
 func init() {
-	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	testutil.Init()
 }
 
 type brokenLimitedReader struct {

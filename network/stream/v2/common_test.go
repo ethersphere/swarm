@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -42,18 +41,15 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
-	update   = flag.Bool("update", false, "Update golden files in testdata directory")
+	update = flag.Bool("update", false, "Update golden files in testdata directory")
 )
 
 func init() {
-	flag.Parse()
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	testutil.Init()
 }
 
 var (

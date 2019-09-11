@@ -36,11 +36,10 @@ import (
 )
 
 var (
-	nodes       = flag.Int("nodes", 0, "number of nodes")
-	chunks      = flag.Int("chunks", 0, "number of chunks")
-	longrunning = flag.Bool("longrunning", false, "do run long-running tests")
-	chunkSize   = 4096
-	pof         = network.Pof
+	nodes     = flag.Int("nodes", 0, "number of nodes")
+	chunks    = flag.Int("chunks", 0, "number of chunks")
+	chunkSize = 4096
+	pof       = network.Pof
 )
 
 type synctestConfig struct {
@@ -83,7 +82,7 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 
 		//if the `longrunning` flag has been provided
 		//run more test combinations
-		if *longrunning {
+		if *testutil.Longrunning {
 			chunkCounts = []int{64, 128}
 			nodeCounts = []int{32, 64}
 		}

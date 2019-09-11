@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -416,7 +417,7 @@ func TestLocalStoreAndRetrieve(t *testing.T) {
 	// by default, test only the lonely chunk cases
 	sizes := []int{1, 60, 4097, 524288 + 1, 7*524288 + 1}
 
-	if *longrunning {
+	if *testutil.Longrunning {
 		// test broader set of cases if -longruning flag is set
 		sizes = append(sizes, 83, 179, 253, 1024, 4095, 4096, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288+4096, 524288+4097, 7*524288, 7*524288+4096, 7*524288+4097, 128*524288+1, 128*524288, 128*524288+4096, 128*524288+4097, 816778334)
 	}

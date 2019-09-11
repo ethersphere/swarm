@@ -43,17 +43,13 @@ import (
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
-	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 
-	flag.Parse()
-
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
+	testutil.Init()
 }
 
 // TestSwarmNetwork runs a series of test simulations with
@@ -91,7 +87,7 @@ func TestSwarmNetwork(t *testing.T) {
 		},
 	}
 
-	if *longrunning {
+	if *testutil.Longrunning {
 		tests = append(tests, longRunningCases()...)
 	} else if testutil.RaceEnabled {
 		tests = shortCaseForRace()

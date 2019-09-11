@@ -19,7 +19,6 @@ package network
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
@@ -48,7 +48,7 @@ const (
 )
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	rand.Seed(time.Now().Unix())
 }
 

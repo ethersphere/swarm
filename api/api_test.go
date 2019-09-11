@@ -21,7 +21,6 @@ import (
 	"context"
 	crand "crypto/rand"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -34,15 +33,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
 )
 
 func init() {
-	loglevel := flag.Int("loglevel", 2, "loglevel")
-	flag.Parse()
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	testutil.Init()
 }
 
 func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
@@ -143,7 +141,7 @@ func TestApiPut(t *testing.T) {
 		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 		tag := tags.All()[0]
-		testutil.CheckTag(t, tag, 2, 2, 0, 2) //1 chunk data, 1 chunk manifest
+		chunktesting.CheckTag(t, tag, 2, 2, 0, 2) //1 chunk data, 1 chunk manifest
 	})
 }
 
@@ -170,11 +168,11 @@ func TestApiTagLarge(t *testing.T) {
 		if toEncrypt {
 			tag := tags.All()[0]
 			expect := int64(4095 + 64 + 1)
-			testutil.CheckTag(t, tag, expect, expect, 0, expect)
+			chunktesting.CheckTag(t, tag, expect, expect, 0, expect)
 		} else {
 			tag := tags.All()[0]
 			expect := int64(4095 + 32 + 1)
-			testutil.CheckTag(t, tag, expect, expect, 0, expect)
+			chunktesting.CheckTag(t, tag, expect, expect, 0, expect)
 		}
 	})
 }

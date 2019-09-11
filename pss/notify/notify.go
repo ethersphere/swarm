@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/log"
@@ -139,7 +138,7 @@ func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss
 	defer c.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, c.pss.BaseAddr())
 	c.pss.SetPeerPublicKey(pubkey, controlTopic, address)
-	pubkeyId := hexutil.Encode(crypto.FromECDSAPub(pubkey))
+	pubkeyId := hexutil.Encode(c.pss.Crypto.FromECDSAPub(pubkey))
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
@@ -290,7 +289,7 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 	if err != nil {
 		return err
 	}
-	pubkey, err := crypto.UnmarshalPubkey(keyidbytes)
+	pubkey, err := c.pss.Crypto.UnmarshalPubkey(keyidbytes)
 	if err != nil {
 		return err
 	}

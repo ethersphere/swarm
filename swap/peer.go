@@ -17,10 +17,14 @@
 package swap
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -30,18 +34,140 @@ var ErrDontOwe = errors.New("no negative balance")
 // Peer is a devp2p peer for the Swap protocol
 type Peer struct {
 	*protocols.Peer
+	lock               sync.RWMutex
 	swap               *Swap
 	beneficiary        common.Address
 	contractAddress    common.Address
 	lastReceivedCheque *Cheque
+	lastSentCheque     *Cheque
+	balance            int64
 }
 
 // NewPeer creates a new swap Peer instance
-func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) *Peer {
-	return &Peer{
+func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) (peer *Peer, err error) {
+	peer = &Peer{
 		Peer:            p,
 		swap:            s,
 		beneficiary:     beneficiary,
 		contractAddress: contractAddress,
 	}
+
+	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {
+		return nil, err
+	}
+
+	if peer.lastSentCheque, err = s.loadLastSentCheque(p.ID()); err != nil {
+		return nil, err
+	}
+
+	if peer.balance, err = s.loadBalance(p.ID()); err != nil {
+		return nil, err
+	}
+	return peer, nil
+}
+
+func (p *Peer) getLastReceivedCheque() *Cheque {
+	return p.lastReceivedCheque
+}
+
+func (p *Peer) getLastSentCheque() *Cheque {
+	return p.lastSentCheque
+}
+
+func (p *Peer) setLastReceivedCheque(cheque *Cheque) error {
+	p.lastReceivedCheque = cheque
+	return p.swap.saveLastReceivedCheque(p.ID(), cheque)
+}
+
+func (p *Peer) setLastSentCheque(cheque *Cheque) error {
+	p.lastSentCheque = cheque
+	return p.swap.saveLastSentCheque(p.ID(), cheque)
+}
+
+func (p *Peer) getLastCumulativePayout() uint64 {
+	lastCheque := p.getLastReceivedCheque()
+	if lastCheque != nil {
+		return lastCheque.CumulativePayout
+	}
+	return 0
+}
+
+func (p *Peer) setBalance(balance int64) error {
+	p.balance = balance
+	return p.swap.saveBalance(p.ID(), balance)
+}
+
+func (p *Peer) getBalance() int64 {
+	return p.balance
+}
+
+// To be called with mutex already held
+func (p *Peer) updateBalance(amount int64) error {
+	//adjust the balance
+	//if amount is negative, it will decrease, otherwise increase
+	newBalance := p.getBalance() + amount
+	if err := p.setBalance(newBalance); err != nil {
+		return err
+	}
+	log.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	return nil
+}
+
+// createCheque creates a new cheque whose beneficiary will be the peer and
+// whose amount is based on the last cheque and current balance for this peer
+// The cheque will be signed and point to the issuer's contract
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
+func (p *Peer) createCheque() (*Cheque, error) {
+	var cheque *Cheque
+	var err error
+
+	if p.getBalance() >= 0 {
+		return nil, fmt.Errorf("expected negative balance, found: %d", p.getBalance())
+	}
+	// the balance should be negative here, we take the absolute value:
+	honey := uint64(-p.getBalance())
+
+	amount, err := p.swap.oracle.GetPrice(honey)
+	if err != nil {
+		return nil, fmt.Errorf("error getting price from oracle: %v", err)
+	}
+
+	total := p.getLastCumulativePayout()
+
+	cheque = &Cheque{
+		ChequeParams: ChequeParams{
+			CumulativePayout: total + amount,
+			Contract:         p.swap.owner.Contract,
+			Beneficiary:      p.beneficiary,
+		},
+		Honey: honey,
+	}
+	cheque.Signature, err = cheque.Sign(p.swap.owner.privateKey)
+
+	return cheque, err
+}
+
+// sendCheque sends a cheque to peer
+// To be called with mutex already held
+// Caller must be careful that the same resources aren't concurrently read and written by multiple routines
+func (p *Peer) sendCheque() error {
+	cheque, err := p.createCheque()
+	if err != nil {
+		return fmt.Errorf("error while creating cheque: %v", err)
+	}
+
+	if err := p.setLastSentCheque(cheque); err != nil {
+		return fmt.Errorf("error while storing the last cheque: %v", err)
+	}
+
+	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
+		return err
+	}
+
+	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+
+	return p.Send(context.Background(), &EmitChequeMsg{
+		Cheque: cheque,
+	})
 }

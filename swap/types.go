@@ -22,17 +22,15 @@ import (
 
 // ChequeParams encapsulate all cheque parameters
 type ChequeParams struct {
-	Contract    common.Address // address of chequebook, needed to avoid cross-contract submission
-	Beneficiary common.Address // address of the beneficiary, the contract which will redeem the cheque
-	Serial      uint64         // monotonically increasing serial number
-	Amount      uint64         // cumulative amount of the cheque in currency
-	Honey       uint64         // amount of honey which resulted in the cumulative currency difference
-	Timeout     uint64         // timeout for cashing in
+	Contract         common.Address // address of chequebook, needed to avoid cross-contract submission
+	Beneficiary      common.Address // address of the beneficiary, the contract which will redeem the cheque
+	CumulativePayout uint64         // cumulative amount of the cheque in currency
 }
 
 // Cheque encapsulates the parameters and the signature
 type Cheque struct {
 	ChequeParams
+	Honey     uint64 // amount of honey which resulted in the cumulative currency difference
 	Signature []byte // signature Sign(Keccak256(contract, beneficiary, amount), prvKey)
 }
 
