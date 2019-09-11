@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package newstream
+package stream
 
 import (
 	"context"
@@ -35,26 +35,30 @@ import (
 // to expose, parse and encode values related to the string represntation of the stream
 type StreamProvider interface {
 
-	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not.
-	// Typically this will involve checking whether a certain chunk exists locally.
-	// In case a chunk does not exist locally - a `wait` function returns upon chunk delivery
-	NeedData(ctx context.Context, key []byte) (need bool, wait func(context.Context) error)
+	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not
+	NeedData(ctx context.Context, addr ...chunk.Address) ([]bool, error)
 
-	// Get a particular chunk identified by addr from the local storage
-	Get(ctx context.Context, addr chunk.Address) ([]byte, error)
+	// Get a set of chunks identified by addr from the local storage
+	Get(ctx context.Context, addr ...chunk.Address) ([]chunk.Chunk, error)
 
-	// Put a certain chunk into the local storage
-	Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error)
+	// Put a set of chunks into the local storage
+	Put(ctx context.Context, ch ...chunk.Chunk) (exists []bool, err error)
+
+	// Set a set of chunks as synced in the localstore
+	Set(ctx context.Context, addrs ...chunk.Address) error
 
 	// Subscribe to a data stream from an arbitrary data source
 	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
 
-	// Cursor returns the last known Cursor for a given Stream Key
-	Cursor(interface{}) (uint64, error)
+	// Cursor returns the last known Cursor for a given Stream Key string
+	Cursor(string) (uint64, error)
 
-	// RunUpdateStreams is a provider specific implementation on how to maintain running streams with
+	// InitPeer is a provider specific implementation on how to maintain running streams with
 	// an arbitrary Peer. This method should always be run in a separate goroutine
-	RunUpdateStreams(p *Peer)
+	InitPeer(p *Peer)
+
+	// WantStream indicates if we are interested in a stream
+	WantStream(*Peer, ID) bool
 
 	// StreamName returns the Name of the Stream (see ID)
 	StreamName() string
@@ -65,28 +69,15 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
-	// StreamBehavior defines how the stream behaves upon initialisation
-	StreamBehavior() StreamInitBehavior
+	// Autostart indicates if the stream should autostart
+	Autostart() bool
 
+	// Boundedness indicates if the stream is bounded or not
 	Boundedness() bool
+
+	// Close the provider
+	Close()
 }
-
-// StreamInitBehavior defines the stream behavior upon init
-type StreamInitBehavior int
-
-const (
-	// StreamIdle means that there is no initial automatic message exchange
-	// between the nodes when the protocol gets established
-	StreamIdle StreamInitBehavior = iota
-
-	// StreamGetCursors tells the two nodes to automatically fetch stream
-	// cursors from each other
-	StreamGetCursors
-
-	// StreamAutostart automatically starts fetching data from the streams
-	// once the cursors arrive
-	StreamAutostart
-)
 
 // StreamInfoReq is a request to get information about particular streams
 type StreamInfoReq struct {
@@ -111,16 +102,15 @@ type GetRange struct {
 	Ruid      uint
 	Stream    ID
 	From      uint64
-	To        uint64 `rlp:"nil"`
+	To        *uint64 `rlp:"nil"`
 	BatchSize uint
-	Roundtrip bool
 }
 
 // OfferedHashes is a message sent from the upstream peer to the downstream peer allowing the latter
 // to selectively ask for chunks within a particular requested interval
 type OfferedHashes struct {
 	Ruid      uint
-	LastIndex uint
+	LastIndex uint64
 	Hashes    []byte
 }
 
@@ -133,9 +123,8 @@ type WantedHashes struct {
 
 // ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
 type ChunkDelivery struct {
-	Ruid      uint
-	LastIndex uint
-	Chunks    []DeliveredChunk
+	Ruid   uint
+	Chunks []DeliveredChunk
 }
 
 // DeliveredChunk encapsulates a particular chunk's underlying data within a ChunkDelivery message

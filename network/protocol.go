@@ -119,13 +119,15 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	NetworkID    uint64
-	localAddr    *BzzAddr
-	mtx          sync.Mutex
-	handshakes   map[enode.ID]*HandshakeMsg
-	streamerSpec *protocols.Spec
-	streamerRun  func(*BzzPeer) error
-	capabilities *capability.Capabilities // capabilities control and state
+	NetworkID     uint64
+	localAddr     *BzzAddr
+	mtx           sync.Mutex
+	handshakes    map[enode.ID]*HandshakeMsg
+	streamerSpec  *protocols.Spec
+	streamerRun   func(*BzzPeer) error
+	capabilities  *capability.Capabilities // capabilities control and state
+	retrievalSpec *protocols.Spec
+	retrievalRun  func(*BzzPeer) error
 }
 
 // NewBzz is the swarm protocol constructor
@@ -133,20 +135,24 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
+func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, retrievalSpec *protocols.Spec, streamerRun, retrievalRun func(*BzzPeer) error) *Bzz {
 	bzz := &Bzz{
-		Hive:         NewHive(config.HiveParams, kad, store),
-		NetworkID:    config.NetworkID,
-		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes:   make(map[enode.ID]*HandshakeMsg),
-		streamerRun:  streamerRun,
-		streamerSpec: streamerSpec,
-		capabilities: capability.NewCapabilities(),
+		Hive:          NewHive(config.HiveParams, kad, store),
+		NetworkID:     config.NetworkID,
+		localAddr:     &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
+		handshakes:    make(map[enode.ID]*HandshakeMsg),
+		streamerRun:   streamerRun,
+		streamerSpec:  streamerSpec,
+		retrievalRun:  retrievalRun,
+		retrievalSpec: retrievalSpec,
+		capabilities:  capability.NewCapabilities(),
 	}
 
 	if config.BootnodeMode {
 		bzz.streamerRun = nil
 		bzz.streamerSpec = nil
+		bzz.retrievalRun = nil
+		bzz.retrievalSpec = nil
 	}
 
 	// temporary soon-to-be-legacy light/full, as above
@@ -207,6 +213,14 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Version: b.streamerSpec.Version,
 			Length:  b.streamerSpec.Length(),
 			Run:     b.RunProtocol(b.streamerSpec, b.streamerRun),
+		})
+	}
+	if b.retrievalSpec != nil && b.retrievalRun != nil {
+		protocol = append(protocol, p2p.Protocol{
+			Name:    b.retrievalSpec.Name,
+			Version: b.retrievalSpec.Version,
+			Length:  b.retrievalSpec.Length(),
+			Run:     b.RunProtocol(b.retrievalSpec, b.retrievalRun),
 		})
 	}
 	return protocol

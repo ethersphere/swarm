@@ -140,7 +140,7 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 			// store kademlia in node's bucket under BucketKeyKademlia
 			// so that it can be found by WaitTillHealthy method.
 			b.Store(BucketKeyKademlia, kad)
-			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+			return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 		},
 	}
 }

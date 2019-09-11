@@ -454,7 +454,6 @@ func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 		copy(chunkData[8+readBytes:], res)
 
 		readBytes += len(res)
-		log.Trace("pyramid.chunker: copied all data", "readBytes", readBytes)
 
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
