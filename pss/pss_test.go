@@ -23,10 +23,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,12 +44,11 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
 	initOnce        = sync.Once{}
-	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
-	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
 	cryptoUtils     CryptoUtils
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
@@ -62,7 +59,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	rand.Seed(time.Now().Unix())
 	initTest()
 }
@@ -71,10 +68,6 @@ func initTest() {
 	initOnce.Do(
 		func() {
 			psslogmain = log.New("psslog", "*")
-			hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-			hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
-			h := log.CallerFileHandler(hf)
-			log.Root().SetHandler(h)
 
 			cryptoUtils = NewCryptoUtils()
 
@@ -1224,7 +1217,7 @@ func TestNetwork(t *testing.T) {
 // nodes/recipientAddresses/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/2000/4/sim", testNetwork)
@@ -1234,7 +1227,7 @@ func TestNetwork2000(t *testing.T) {
 }
 
 func TestNetwork5000(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/5000/4/sim", testNetwork)
@@ -1244,7 +1237,7 @@ func TestNetwork5000(t *testing.T) {
 }
 
 func TestNetwork10000(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/10000/4/sim", testNetwork)

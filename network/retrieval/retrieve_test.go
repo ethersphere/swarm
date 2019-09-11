@@ -21,10 +21,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"sync"
 	"testing"
@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
@@ -49,7 +50,6 @@ import (
 )
 
 var (
-	loglevel           = flag.Int("loglevel", 5, "verbosity of logs")
 	bucketKeyFileStore = simulation.BucketKey("filestore")
 	bucketKeyNetstore  = simulation.BucketKey("netstore")
 
@@ -57,10 +57,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	testutil.Init()
 }
 
 // TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
@@ -202,7 +199,7 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 	}
 
 	// create a node that will be in po 1 from fetcher
-	forwarderConfig := testutil.NodeConfigAtPo(t, fetcherBase, 1)
+	forwarderConfig := nodeConfigAtPo(t, fetcherBase, 1)
 	forwarder, err = sim.AddNode(override(forwarderConfig))
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +213,7 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 	forwarderBase := sim.MustNodeItem(forwarder, simulation.BucketKeyKademlia).(*network.Kademlia).BaseAddr()
 
 	// create a node on which the files will be stored at po 1 in relation to the forwarding node
-	uploaderConfig := testutil.NodeConfigAtPo(t, forwarderBase, 1)
+	uploaderConfig := nodeConfigAtPo(t, forwarderBase, 1)
 	uploader, err = sim.AddNode(override(uploaderConfig))
 	if err != nil {
 		t.Fatal(err)
@@ -395,4 +392,34 @@ func getChunks(store chunk.Store) (chunks map[string]struct{}, err error) {
 		}
 	}
 	return chunks, nil
+}
+
+// nodeConfigAtPo brute forces a node config to create a node that has an overlay address at the provided po in relation to the given baseaddr
+func nodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig {
+	foundPo := -1
+	var conf *adapters.NodeConfig
+	for foundPo != po {
+		conf = adapters.RandomNodeConfig()
+		ip := net.IPv4(127, 0, 0, 1)
+		enrIP := enr.IP(ip)
+		conf.Record.Set(&enrIP)
+		enrTCPPort := enr.TCP(conf.Port)
+		conf.Record.Set(&enrTCPPort)
+		enrUDPPort := enr.UDP(0)
+		conf.Record.Set(&enrUDPPort)
+
+		err := enode.SignV4(&conf.Record, conf.PrivateKey)
+		if err != nil {
+			t.Fatalf("unable to generate ENR: %v", err)
+		}
+		nod, err := enode.New(enode.V4ID{}, &conf.Record)
+		if err != nil {
+			t.Fatalf("unable to create enode: %v", err)
+		}
+
+		n := network.NewAddr(nod)
+		foundPo = chunk.Proximity(baseaddr, n.Over())
+	}
+
+	return conf
 }

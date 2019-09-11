@@ -3,9 +3,7 @@ package notify
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -19,21 +17,17 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel    = flag.Int("loglevel", 3, "logging verbosity")
 	psses       map[string]*pss.Pss
 	cryptoUtils pss.CryptoUtils
 	crypto      pss.CryptoBackend
 )
 
 func init() {
-	flag.Parse()
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
+	testutil.Init()
 
 	cryptoUtils = pss.NewCryptoUtils()
 	crypto = pss.NewCryptoBackend()

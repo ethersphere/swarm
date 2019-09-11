@@ -233,8 +233,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold),
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold),
 	}
 
 	node.Cmd = runSwarm(t, flags...)

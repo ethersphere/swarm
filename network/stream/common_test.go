@@ -48,11 +48,9 @@ import (
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	nodes        = flag.Int("nodes", 0, "number of nodes")
 	chunks       = flag.Int("chunks", 0, "number of chunks")
 	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
-	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 
 	bucketKeyStore     = simulation.BucketKey("store")
 	bucketKeyFileStore = simulation.BucketKey("filestore")
@@ -64,11 +62,8 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	rand.Seed(time.Now().UnixNano())
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 // newNetStoreAndDelivery is a default constructor for BzzAddr, NetStore and Delivery, used in Simulations

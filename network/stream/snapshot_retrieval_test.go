@@ -54,7 +54,7 @@ func TestFileRetrieval(t *testing.T) {
 	} else {
 		nodeCount = []int{16}
 
-		if *longrunning {
+		if *testutil.Longrunning {
 			nodeCount = append(nodeCount, 32, 64)
 		} else if testutil.RaceEnabled {
 			nodeCount = []int{4}
@@ -86,7 +86,7 @@ func TestPureRetrieval(t *testing.T) {
 		nodeCount = []int{16}
 		chunkCount = []int{150}
 
-		if *longrunning {
+		if *testutil.Longrunning {
 			nodeCount = append(nodeCount, 32, 64)
 			chunkCount = append(chunkCount, 32, 256)
 		} else if testutil.RaceEnabled {
@@ -118,7 +118,7 @@ func TestRetrieval(t *testing.T) {
 		nodeCnt := []int{16}
 		chnkCnt := []int{32}
 
-		if *longrunning {
+		if *testutil.Longrunning {
 			nodeCnt = []int{16, 32, 64}
 			chnkCnt = []int{4, 32, 256}
 		} else if testutil.RaceEnabled {
@@ -144,7 +144,7 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 		}
 
 		syncUpdateDelay := 1 * time.Second
-		if *longrunning {
+		if *testutil.Longrunning {
 			syncUpdateDelay = 3 * time.Second
 		}
 
