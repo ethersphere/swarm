@@ -15,11 +15,24 @@ jobs:
     - stage: lint
       os: linux
       dist: trusty
-      go: 1.12.x
+      go: 1.13.x
       env:
         - lint
       script:
         - go run build/ci.go lint
+
+    # Go 1.12.x is needed because of the Ubuntu PPA builds
+    - stage: build
+      os: linux
+      dist: trusty
+      sudo: required
+      go: 1.12.x
+      script:
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # Go 1.11.x is needed because of the Ubuntu PPA builds
     - stage: build
@@ -39,7 +52,7 @@ jobs:
       os: linux
       dist: trusty
       sudo: required
-      go: 1.12.x
+      go: 1.13.x
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -49,7 +62,7 @@ jobs:
 
     - stage: build
       os: osx
-      go: 1.12.x
+      go: 1.13.x
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
         - NOFILE=20480
@@ -68,7 +81,7 @@ jobs:
       if: type = push
       os: linux
       dist: trusty
-      go: 1.12.x
+      go: 1.13.x
       env:
         - ubuntu-ppa
       addons:
@@ -90,7 +103,7 @@ jobs:
       os: linux
       dist: trusty
       sudo: required
-      go: 1.12.x
+      go: 1.13.x
       env:
         - azure-linux
       addons:
@@ -124,7 +137,7 @@ jobs:
       dist: trusty
       services:
         - docker
-      go: 1.12.x
+      go: 1.13.x
       env:
         - azure-linux-mips
       script:
@@ -148,7 +161,7 @@ jobs:
     - stage: deploy
       if: type = push
       os: osx
-      go: 1.12.x
+      go: 1.13.x
       env:
         - azure-osx
       script:
@@ -161,7 +174,7 @@ jobs:
       if: type = cron
       os: linux
       dist: trusty
-      go: 1.12.x
+      go: 1.13.x
       env:
         - azure-purge
       script:

@@ -33,13 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	swarmapi "github.com/ethersphere/swarm/api/client"
 	"github.com/ethersphere/swarm/testutil"
-	"github.com/mattn/go-colorable"
 )
-
-func init() {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-}
 
 func TestSwarmUp(t *testing.T) {
 	if runtime.GOOS == goosWindows {

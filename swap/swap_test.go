@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -45,11 +44,10 @@ import (
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel           = flag.Int("loglevel", 2, "verbosity of logs")
 	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
@@ -77,11 +75,8 @@ type swapTestBackend struct {
 }
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
 	// create a single backend for all tests
 	testBackend = newTestBackend()

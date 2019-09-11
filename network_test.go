@@ -40,21 +40,16 @@ import (
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/mattn/go-colorable"
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
-	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 
-	flag.Parse()
-
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	testutil.Init()
 }
 
 // TestSwarmNetwork runs a series of test simulations with
@@ -104,7 +99,7 @@ func TestSwarmNetwork(t *testing.T) {
 		},
 	}
 
-	if *longrunning {
+	if *testutil.Longrunning {
 		tests = append(tests, longRunningCases()...)
 	} else if testutil.RaceEnabled {
 		tests = shortCaseForRace()
