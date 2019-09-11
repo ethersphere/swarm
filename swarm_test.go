@@ -113,7 +113,7 @@ func TestNewSwarm(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
-				config.NetworkID = network.DefaultNetworkID
+				config.NetworkID = swap.AllowedNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s.backend == nil {
@@ -219,7 +219,7 @@ func TestNewSwarmFailure(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ""
 				config.SwapEnabled = true
-				config.NetworkID = network.DefaultNetworkID
+				config.NetworkID = swap.AllowedNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {
@@ -228,11 +228,11 @@ func TestNewSwarmFailure(t *testing.T) {
 			},
 		},
 		{
-			name: "with swap enabled and disabled networkID",
+			name: "with swap enabled and default network ID",
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
-				config.NetworkID = swap.DisabledNetworkID
+				config.NetworkID = network.DefaultNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
 				if s != nil {
