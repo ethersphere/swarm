@@ -308,13 +308,13 @@ func TestRepeatedBookings(t *testing.T) {
 }
 
 func TestNewSwapFailure(t *testing.T) {
-	dir, err := ioutil.TempDir("", "swarm")
+	dir, err := ioutil.TempDir("", "swarmSwap")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 	// a simple rpc endpoint for testing dialing
-	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
+	ipcEndpoint := path.Join(dir, "TestSwarmSwap.ipc")
 
 	// windows namedpipes are not on filesystem but on NPFS
 	if runtime.GOOS == "windows" {
