@@ -88,7 +88,7 @@ func NewParams() *Params {
 }
 
 // New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
+func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
 	return &Swap{
 		store:               stateStore,
 		balances:            make(map[enode.ID]int64),

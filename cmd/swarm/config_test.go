@@ -24,6 +24,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/swap"
 )
 
 func TestConfigDump(t *testing.T) {
@@ -231,8 +233,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), "10",
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), "15",
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -279,12 +281,12 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if info.SwapPaymentThreshold != 10 {
-		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", 10, info.SwapPaymentThreshold)
+	if info.SwapPaymentThreshold != swap.DefaultPaymentThreshold {
+		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", swap.DefaultPaymentThreshold, info.SwapPaymentThreshold)
 	}
 
-	if info.SwapDisconnectThreshold != 15 {
-		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", 15, info.SwapDisconnectThreshold)
+	if info.SwapDisconnectThreshold != swap.DefaultDisconnectThreshold {
+		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold, info.SwapDisconnectThreshold)
 	}
 
 	node.Shutdown()
