@@ -85,7 +85,7 @@ func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 }
 
 func (p *Peer) getLastCumulativePayout() uint64 {
-	lastCheque := p.getLastReceivedCheque()
+	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
