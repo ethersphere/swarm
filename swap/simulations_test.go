@@ -285,10 +285,6 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		_, err = sim.WaitTillHealthy(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
 
 		p1 := sim.UpNodeIDs()[0]
 		p2 := sim.UpNodeIDs()[1]
@@ -357,13 +353,13 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		}
 		log.Debug("all good.")
 
-		ch1, ok := p2Svc.swap.getCheque(p1)
-		if !ok {
-			return errors.New("peer not found")
+		ch1, err := p2Svc.swap.loadLastReceivedCheque(p1)
+		if err != nil {
+			return err
 		}
-		ch2, ok := p1Svc.swap.getCheque(p2)
-		if !ok {
-			return errors.New("peer not found")
+		ch2, err := p1Svc.swap.loadLastReceivedCheque(p2)
+		if err != nil {
+			return err
 		}
 
 		expected := uint64(maxCheques / 2 * (DefaultPaymentThreshold + 1))
@@ -425,10 +421,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		_, err = sim.WaitTillHealthy(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
 
 		// define the nodes
 		debitor := sim.UpNodeIDs()[0]
@@ -481,6 +473,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 				// the peer should have a CumulativePayout correspondent to the amount of cheques emitted
 				if ch.CumulativePayout == uint64(maxCheques*(DefaultPaymentThreshold+1)) {
 					log.Debug("expected payout reached. going to check values now")
+					time.Sleep(100 * time.Millisecond)
 					close(chequesArrived)
 				}
 			}
@@ -495,15 +488,21 @@ func TestMultiChequeSimulation(t *testing.T) {
 		log.Debug("all good.")
 
 		// check balances:
-		b1, _ := debitorSvc.swap.getBalance(creditor)
-		b2, _ := creditorSvc.swap.getBalance(debitor)
+		b1, err := debitorSvc.swap.loadBalance(creditor)
+		if err != nil {
+			return err
+		}
+		b2, err := creditorSvc.swap.loadBalance(debitor)
+		if err != nil {
+			return err
+		}
 
 		if b1 != -b2 {
 			return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
 		}
 		// check cheques
 		var cheque1, cheque2 *Cheque
-		if cheque1, ok = debitorSvc.swap.getCheque(creditor); !ok {
+		if cheque1, err = debitorSvc.swap.loadLastReceivedCheque(creditor); err != nil {
 			return errors.New("expected cheques with creditor, but none found")
 		}
 		creditorSvc.swap.store.Get(receivedChequeKey(debitor), &cheque2)
@@ -692,13 +691,13 @@ func TestSimpleSimulation(t *testing.T) {
 				peerTs := peerItem.(*testService)
 
 				// balance of the node with peer p
-				nodeBalanceWithP, ok := ts.swap.getBalance(p)
-				if !ok {
+				nodeBalanceWithP, err := ts.swap.loadBalance(p)
+				if err != nil {
 					return fmt.Errorf("expected balance for peer %v to be found, but not found", p)
 				}
 				// balance of the peer with node
-				pBalanceWithNode, ok := peerTs.swap.getBalance(node)
-				if !ok {
+				pBalanceWithNode, err := peerTs.swap.loadBalance(node)
+				if err != nil {
 					return fmt.Errorf("expected counter balance for node %v to be found, but not found", node)
 				}
 				if nodeBalanceWithP != -pBalanceWithNode {
