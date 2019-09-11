@@ -204,7 +204,7 @@ func newReceivedMessage(decrypted []byte, salt []byte, crypto *defaultCryptoBack
 }
 
 // Return the default implementation of Crypto
-func New() Crypto {
+func New() *defaultCryptoBackend {
 	return newDefaultCryptoBackend()
 
 }
