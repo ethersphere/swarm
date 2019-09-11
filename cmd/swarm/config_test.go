@@ -36,10 +36,11 @@ import (
 	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/swap"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 func TestConfigDump(t *testing.T) {
-	swarm := runSwarm(t, "dumpconfig")
+	swarm := runSwarm(t, "--verbosity", fmt.Sprintf("%d", *testutil.Loglevel), "dumpconfig")
 	defaultConf := api.NewConfig()
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
@@ -78,6 +79,7 @@ func TestBzzKeyFlag(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		fmt.Sprintf("--%s", SwarmBzzKeyHexFlag.Name), hexKey,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -126,6 +128,7 @@ func TestEmptyBzzAccountFlagMultipleAccounts(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -149,6 +152,7 @@ func TestEmptyBzzAccountFlagSingleAccount(t *testing.T) {
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -194,6 +198,7 @@ func TestEmptyBzzAccountFlagNoAccountWrongPassword(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -342,6 +347,7 @@ func TestConfigFileOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
@@ -420,6 +426,7 @@ func TestConfigEnvVars(t *testing.T) {
 		"--ens-api", "",
 		"--datadir", dir,
 		"--ipcpath", conf.IPCPath,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 
 	//node.Cmd = runSwarm(t,flags...)
@@ -551,6 +558,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 	}
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
