@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -30,11 +29,7 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	y, err := rlp.EncodeToBytes(b.Capabilities)
-	if err != nil {
-		return err
-	}
-	err = rlp.Encode(w, y)
+	err = rlp.Encode(w, b.Capabilities)
 	if err != nil {
 		return err
 	}
@@ -42,32 +37,19 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 }
 
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
-	_, _, err := s.Kind()
-	if err != nil {
-		log.Error("decoderlp bzzaddr err", "err", err)
-		panic(err)
-		return err
-	}
-	//	if knd == rlp.List {
-	//		s.List()
-	//	}
-	err = s.Decode(&b.OAddr)
+	var err error
+
+	b.OAddr, err = s.Bytes()
 	if err != nil {
 		return fmt.Errorf("oaddr --- %v", err)
 	}
-	err = s.Decode(&b.UAddr)
+	b.UAddr, err = s.Bytes()
 	if err != nil {
 		return fmt.Errorf("uaddr --- %v", err)
 	}
-
-	var y []byte
-	err = s.Decode(&y)
+	err = s.Decode(&b.Capabilities)
 	if err != nil {
-		return fmt.Errorf("capzbytes --- %v", err)
-	}
-	err = rlp.DecodeBytes(y, &b.Capabilities)
-	if err != nil {
-		return fmt.Errorf("capzdecode --- %v", err)
+		return fmt.Errorf("caps --- %v", err)
 	}
 	return nil
 }
