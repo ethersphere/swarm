@@ -355,7 +355,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			} else {
 				p1Peer.Send(ctx, &testMsgBigPrice{})
 			}
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
 
 		log.Debug("waiting for cheque to arrive....")
@@ -477,7 +477,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			// use a price which will trigger a cheque each time
 			creditorPeer.Send(ctx, &testMsgBigPrice{})
 			// we need to sleep a bit in order to give time for the cheque to be processed
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
 
 		// we need some synchronization, or tests get flaky, especially on CI (travis)
@@ -500,7 +500,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 				// the peer should have a CumulativePayout correspondent to the amount of cheques emitted
 				if ch.CumulativePayout == uint64(maxCheques*(DefaultPaymentThreshold+1)) {
 					log.Debug("expected payout reached. going to check values now")
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(200 * time.Millisecond)
 					close(chequesArrived)
 				}
 			}
