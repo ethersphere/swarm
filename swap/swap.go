@@ -129,7 +129,7 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 
 // DeploySuccess is for convenience log output
 func (s *Swap) DeploySuccess() string {
-	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.contract.ContractParams().ContractAddress.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
+	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.GetParams().ContractAddress.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
 }
 
 // Add is the (sole) accounting function
@@ -216,7 +216,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.contract.ContractParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
@@ -351,7 +351,7 @@ func (s *Swap) Close() error {
 	return s.store.Close()
 }
 
-// GetParams returns contract parameters (Bin, ABI) from the contract
+// GetParams returns contract parameters (Bin, ABI, contractAddress) from the contract
 func (s *Swap) GetParams() *swap.Params {
 	return s.contract.ContractParams()
 }

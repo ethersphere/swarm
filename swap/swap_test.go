@@ -333,11 +333,11 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.contract.ContractParams().ContractAddress)
+	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.contract.ContractParams().ContractAddress)
+	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -674,11 +674,10 @@ func TestValidateCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
-	fmt.Println(swap.contract.ContractParams().ContractAddress)
 
 	testBackend.Commit()
 
-	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.contract.ContractParams().ContractAddress); err != nil {
+	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
@@ -746,7 +745,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("deployed. signing cheque")
 
 	cheque := newTestCheque()
-	cheque.ChequeParams.Contract = issuerSwap.contract.ContractParams().ContractAddress
+	cheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
 	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -771,7 +770,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 	depoTx := types.NewTransaction(
 		nonce,
-		issuerSwap.contract.ContractParams().ContractAddress,
+		issuerSwap.GetParams().ContractAddress,
 		big.NewInt(int64(cheque.CumulativePayout)),
 		50000,
 		big.NewInt(int64(0)),
@@ -808,7 +807,7 @@ func TestContractIntegration(t *testing.T) {
 
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
-	bouncingCheque.ChequeParams.Contract = issuerSwap.contract.ContractParams().ContractAddress
+	bouncingCheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
 	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10
 	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
@@ -847,7 +846,6 @@ func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts.Context = ctx
 
 	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
-	fmt.Println(swap.contract)
 	testBackend.Commit()
 
 	return err

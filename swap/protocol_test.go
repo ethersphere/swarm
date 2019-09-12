@@ -83,7 +83,7 @@ func TestHandshake(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &HandshakeMsg{
-					ContractAddress: swap.contract.ContractParams().ContractAddress,
+					ContractAddress: swap.GetParams().ContractAddress,
 				},
 				Peer: creditor.ID(),
 			},
@@ -92,7 +92,7 @@ func TestHandshake(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &HandshakeMsg{
-					ContractAddress: swap.contract.ContractParams().ContractAddress,
+					ContractAddress: swap.GetParams().ContractAddress,
 				},
 				Peer: debitor.ID(),
 			},
@@ -135,7 +135,7 @@ func TestEmitCheque(t *testing.T) {
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
 	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
-	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.contract.ContractParams().ContractAddress)
+	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestEmitCheque(t *testing.T) {
 	log.Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:         debitorSwap.contract.ContractParams().ContractAddress,
+			Contract:         debitorSwap.GetParams().ContractAddress,
 			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: 42,
 		},

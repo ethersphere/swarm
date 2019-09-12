@@ -138,7 +138,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
 			CumulativePayout: total + amount,
-			Contract:         p.swap.contract.ContractParams().ContractAddress,
+			Contract:         p.swap.GetParams().ContractAddress,
 			Beneficiary:      p.beneficiary,
 		},
 		Honey: honey,
