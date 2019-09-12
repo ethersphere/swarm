@@ -209,7 +209,6 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 		owner = createOwner(keys[i])
 		params.swaps[i] = new(stores[i], owner, testBackend, defParams)
 	}
-	testBackend.Commit()
 
 	params.backend = testBackend
 	return params, nil
