@@ -87,8 +87,8 @@ func NewLogger(h interface{}) log.Logger {
 	swapLogger := log.New("swaplog", "*")
 	hd, ok := h.(log.Handler)
 
-	//TODO: replace with default handler
 	if !ok {
+		//default handler just in case the handler is not set
 		hd = log.LvlFilterHandler(log.Lvl(2), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))
 	}
 

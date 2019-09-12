@@ -46,3 +46,9 @@ func Trace(msg string, ctx ...interface{}) {
 	metrics.GetOrRegisterCounter("trace", nil).Inc(1)
 	l.Output(msg, l.LvlTrace, CallDepth, ctx...)
 }
+
+// GetHandler return the Handler assigned to root
+func GetHandler() l.Handler {
+	lh := l.Root()
+	return lh.GetHandler()
+}
