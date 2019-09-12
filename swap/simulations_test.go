@@ -264,6 +264,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	defer cleanup()
 
 	params.backend.cashDone = make(chan struct{}, 1)
+	defer close(params.backend.cashDone)
 	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
@@ -328,13 +329,13 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		for i := 0; i < maxCheques; i++ {
 			if i%2 == 0 {
 				p2Peer.Send(ctx, &testMsgBigPrice{})
-				err := waitForChequeProcessed(ts2, p1, uint64((i+2)/2*(DefaultPaymentThreshold+1)))
+				err := waitForChequeProcessed(ts2)
 				if err != nil {
 					return err
 				}
 			} else {
 				p1Peer.Send(ctx, &testMsgBigPrice{})
-				err := waitForChequeProcessed(ts1, p2, uint64((i+2)/2*(DefaultPaymentThreshold+1)))
+				err := waitForChequeProcessed(ts1)
 				if err != nil {
 					return err
 				}
@@ -387,6 +388,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	defer cleanup()
 
 	params.backend.cashDone = make(chan struct{}, 1)
+	defer close(params.backend.cashDone)
 	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
@@ -457,7 +459,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			// use a price which will trigger a cheque each time
 			creditorPeer.Send(ctx, &testMsgBigPrice{})
 			// we need to wait a bit in order to give time for the cheque to be processed
-			err = waitForChequeProcessed(creditorSvc, debitor, uint64(i*(DefaultPaymentThreshold+1)))
+			err = waitForChequeProcessed(creditorSvc)
 			if err != nil {
 				return err
 			}
@@ -694,7 +696,7 @@ CONNS:
 		// but probably not all processed yet (balances not updated).
 		// without this wait, we still get occasionally failures with imbalances
 		// (travis CI is not terrific in terms of resources)
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 
 		//now iterate again and check that every node has the same
 		//balance with a peer as that peer with the same node,
@@ -745,7 +747,7 @@ CONNS:
 	log.Info("Simulation ended")
 }
 
-func waitForChequeProcessed(ts *testService, peer enode.ID, expected uint64) error {
+func waitForChequeProcessed(ts *testService) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
