@@ -51,7 +51,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
-	netStore := storage.NewNetStore(localStore, enode.ID{})
+	netStore := storage.NewNetStore(localStore, make([]byte, 32), enode.ID{})
 	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
 		return nil, errors.New("not found")
 	}

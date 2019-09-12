@@ -242,7 +242,7 @@ func TestRequestFromPeers(t *testing.T) {
 
 	to.On(peer)
 
-	s := New(to, nil)
+	s := New(to, nil, to.BaseAddr())
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.Background(), req)
@@ -273,7 +273,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 	to.On(peer)
 
-	r := New(to, nil)
+	r := New(to, nil, to.BaseAddr())
 	req := storage.NewRequest(storage.Address(hash0[:]))
 
 	// making a request which should return with "no peer found"
@@ -281,6 +281,31 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 	if err != ErrNoPeerFound {
 		t.Fatalf("expected '%v', got %v", ErrNoPeerFound, err)
+	}
+}
+
+//TestHasPriceImplementation is to check that Retrieval implements protocols.Prices
+func TestHasPriceImplementation(t *testing.T) {
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+	r := New(to, nil, to.BaseAddr())
+
+	if r.prices == nil {
+		t.Fatal("No prices implementation available for retrieve protocol")
+	}
+
+	pricesInstance, ok := r.prices.(*RetrievalPrices)
+	if !ok {
+		t.Fatal("Retrieval does not have the expected Prices instance")
+	}
+	price := pricesInstance.Price(&ChunkDelivery{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.chunkDeliveryPrice() {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+
+	price = pricesInstance.Price(&RetrieveRequest{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.retrieveRequestPrice() {
+		t.Fatal("No prices set for retrieve requests")
 	}
 }
 
@@ -301,9 +326,9 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		bucket.Store(simulation.BucketKeyKademlia, kad)
 	}
 
-	netStore := storage.NewNetStore(localStore, n.ID())
+	netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
-	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+	fileStore := storage.NewFileStore(lnetStore, lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
 	var store *state.DBStore
 	// Use on-disk DBStore to reduce memory consumption in race tests.
@@ -316,7 +341,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := New(kad, netStore)
+	r := New(kad, netStore, kad.BaseAddr())
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)

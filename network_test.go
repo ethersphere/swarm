@@ -69,18 +69,6 @@ func TestSwarmNetwork(t *testing.T) {
 			},
 		},
 		{
-			name: "10_nodes_skip_check",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 10,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout:   45 * time.Second,
-				SkipCheck: true,
-			},
-		},
-		{
 			name: "dec_inc_node_count",
 			steps: []testSwarmNetworkStep{
 				{
@@ -147,18 +135,6 @@ func longRunningCases() []testSwarmNetworkCase {
 			},
 		},
 		{
-			name: "50_nodes_skip_check",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 50,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout:   3 * time.Minute,
-				SkipCheck: true,
-			},
-		},
-		{
 			name: "inc_node_count",
 			steps: []testSwarmNetworkStep{
 				{
@@ -213,30 +189,6 @@ func longRunningCases() []testSwarmNetworkCase {
 			},
 			options: &testSwarmNetworkOptions{
 				Timeout: 5 * time.Minute,
-			},
-		},
-		{
-			name: "inc_dec_node_count_skip_check",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 3,
-				},
-				{
-					nodeCount: 5,
-				},
-				{
-					nodeCount: 25,
-				},
-				{
-					nodeCount: 10,
-				},
-				{
-					nodeCount: 4,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout:   5 * time.Minute,
-				SkipCheck: true,
 			},
 		},
 	}
@@ -388,7 +340,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 			// or until the timeout is reached.
 			for {
-				if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
+				if retrieveF(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
 					return nil
 				}
 			}
@@ -423,9 +375,9 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 	return k, data, err
 }
 
-// retrieve is the function that is used for checking the availability of
+// retrieveF is the function that is used for checking the availability of
 // uploaded files in testSwarmNetwork test helper function.
-func retrieve(
+func retrieveF(
 	sim *simulation.Simulation,
 	files []file,
 	checkStatusM *sync.Map,
@@ -457,7 +409,7 @@ func retrieve(
 
 		swarm := sim.Service("swarm", id).(*Swarm)
 		for _, f := range files {
-
+			f := f
 			checkKey := check{
 				key:    f.addr.String(),
 				nodeID: id,
