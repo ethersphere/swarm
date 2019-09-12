@@ -169,6 +169,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts := newTestService()
 			// balance is the interface for `NewAccounting`; it is a Swap
 			balance := params.swaps[params.count]
+			dir := params.dirs[params.count]
 			// every node is a different instance of a Swap and gets a different entry in the map
 			params.count++
 			// to create the accounting, we also need a `Price` instance
@@ -188,9 +189,8 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			bucket.Store(bucketKeySwap, ts)
 
 			cleanup = func() {
-				for _, dir := range params.dirs {
-					os.RemoveAll(dir)
-				}
+				ts.swap.store.Close()
+				os.RemoveAll(dir)
 			}
 
 			return ts, cleanup, nil
@@ -223,7 +223,7 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 		keys[i] = key
 		addrs[i] = crypto.PubkeyToAddress(key.PublicKey)
 		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(10000000000)}
-		dir, err := ioutil.TempDir("", fmt.Sprintf("swap_test_store_%d", i))
+		dir, err := ioutil.TempDir("", fmt.Sprintf("swap_test_store_%x", addrs[i].Hex()))
 		if err != nil {
 			return nil, err
 		}

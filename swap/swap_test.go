@@ -55,7 +55,6 @@ var (
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
 	testChequeSig      = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
 	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
-	gasLimit           = uint64(8000000)
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -81,6 +80,7 @@ func init() {
 
 // newTestBackend creates a new test backend instance
 func newTestBackend() *swapTestBackend {
+	gasLimit := uint64(8000000)
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
 		ownerAddress:       {Balance: big.NewInt(1000000000)},
 		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
