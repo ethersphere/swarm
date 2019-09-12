@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -87,38 +86,6 @@ func newTestSpec() *protocols.Spec {
 	}
 }
 
-// testPrices holds prices for these test messages
-type testPrices struct {
-	priceMatrix map[reflect.Type]*protocols.Price
-}
-
-// assign prices for the test messages
-func (tp *testPrices) newTestPriceMatrix() {
-	tp.priceMatrix = map[reflect.Type]*protocols.Price{
-		reflect.TypeOf(testMsgBySender{}): {
-			Value:   1000, // arbitrary price for now
-			PerByte: true,
-			Payer:   protocols.Sender,
-		},
-		reflect.TypeOf(testMsgByReceiver{}): {
-			Value:   100, // arbitrary price for now
-			PerByte: false,
-			Payer:   protocols.Receiver,
-		},
-		reflect.TypeOf(testMsgBigPrice{}): {
-			Value:   DefaultPaymentThreshold + 1,
-			PerByte: false,
-			Payer:   protocols.Sender,
-		},
-	}
-}
-
-// Price returns the price for a (test) message
-func (tp *testPrices) Price(msg interface{}) *protocols.Price {
-	t := reflect.TypeOf(msg).Elem()
-	return tp.priceMatrix[t]
-}
-
 // testService encapsulates objects needed for the simulation
 type testService struct {
 	swap  *Swap
@@ -152,7 +119,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 	simServiceMap := map[string]simulation.ServiceFunc{
 		// we need the bzz service in order to build up a kademlia
 		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -172,16 +139,15 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			// every node is a different instance of a Swap and gets a different entry in the map
 			params.count++
 			// to create the accounting, we also need a `Price` instance
-			prices := &testPrices{}
-			// create the matrix of test prices
-			prices.newTestPriceMatrix()
 			ts.spec = newTestSpec()
 			// create the accounting instance and assign to the spec
-			ts.spec.Hook = protocols.NewAccounting(balance, prices)
+			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			testDeploy(context.Background(), balance.backend, balance)
-			params.backend.Commit()
+			err = testDeploy(context.Background(), balance)
+			if err != nil {
+				return nil, nil, err
+			}
 			// store the testService into the bucket
 			bucket.Store(bucketKeySwap, ts)
 
@@ -237,8 +203,11 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
 	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend}
 	// finally, create all Swap instances for each node, which share the same backend
+	var owner *Owner
+	defParams := newDefaultParams()
 	for i := 0; i < nodeCount; i++ {
-		params.swaps[i] = New(stores[i], keys[i], testBackend)
+		owner = createOwner(keys[i])
+		params.swaps[i] = new(stores[i], owner, testBackend, defParams)
 	}
 	testBackend.Commit()
 
@@ -450,7 +419,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		defer cancel()
 
 		// we will send just maxCheques number of cheques
-		maxCheques := 6
+		maxCheques := 10
 
 		// the peer object used for sending
 		creditorPeer := debitorSvc.peers[creditor]
@@ -771,7 +740,7 @@ func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disco
 		sim.NodeIDs(),
 		simulation.NewPeerEventsFilter().Drop(),
 	)
-	disconnected = new(boolean)
+	disconnected = &boolean{}
 	go func() {
 		for {
 			select {
