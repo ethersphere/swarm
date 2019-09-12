@@ -319,7 +319,6 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 func addPeers(kad *network.Kademlia, addresses []pot.Address) {
 	for _, a := range addresses {
 		p := newTestDiscoveryPeer(a, kad)
-		//p.Addr.SetCapabilities = capability.NewCapabilities()
 		kad.On(p)
 	}
 }
