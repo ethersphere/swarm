@@ -28,24 +28,6 @@ import (
 	"github.com/ethersphere/swarm/log"
 )
 
-type testStore struct {
-	store *sync.Map
-}
-
-func (t *testStore) Put(_ context.Context, _ chunk.ModePut, chs ...chunk.Chunk) ([]bool, error) {
-	exists := make([]bool, len(chs))
-	for i, ch := range chs {
-		idx := binary.BigEndian.Uint64(ch.Address()[:8])
-		var storedCnt uint32 = 1
-		if v, loaded := t.store.LoadOrStore(idx, &storedCnt); loaded {
-			atomic.AddUint32(v.(*uint32), 1)
-			exists[i] = loaded
-		}
-		log.Debug("testStore put", "idx", idx)
-	}
-	return exists, nil
-}
-
 // TestProtocol tests the push sync protocol
 // push syncer node communicate with storers via mock loopback PubSub
 func TestProtocol(t *testing.T) {
@@ -110,4 +92,22 @@ func TestProtocol(t *testing.T) {
 			return
 		}
 	}
+}
+
+type testStore struct {
+	store *sync.Map
+}
+
+func (t *testStore) Put(_ context.Context, _ chunk.ModePut, chs ...chunk.Chunk) ([]bool, error) {
+	exists := make([]bool, len(chs))
+	for i, ch := range chs {
+		idx := binary.BigEndian.Uint64(ch.Address()[:8])
+		var storedCnt uint32 = 1
+		if v, loaded := t.store.LoadOrStore(idx, &storedCnt); loaded {
+			atomic.AddUint32(v.(*uint32), 1)
+			exists[i] = loaded
+		}
+		log.Debug("testStore put", "idx", idx)
+	}
+	return exists, nil
 }

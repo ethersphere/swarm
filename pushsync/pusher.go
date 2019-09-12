@@ -51,7 +51,7 @@ type Pusher struct {
 	receipts      chan []byte            // channel to receive receipts
 	ps            PubSub                 // PubSub interface to send chunks and receive receipts
 	logger        log.Logger             // custom logger
-	retryInterval time.Duration          // dynamically adjusted time interval between retriess
+	retryInterval time.Duration          // dynamically adjusted time interval between retries
 }
 
 const maxMeasurements = 20000
@@ -67,7 +67,7 @@ type pushedItem struct {
 	span        opentracing.Span // roundtrip span
 }
 
-// NewPusher contructs a Pusher and starts up the push sync protocol
+// NewPusher constructs a Pusher and starts up the push sync protocol
 // takes
 // - a DB interface to subscribe to push sync index to allow iterating over recently stored chunks
 // - a pubsub interface to send chunks and receive statements of custody
@@ -91,7 +91,11 @@ func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 // Close closes the pusher
 func (p *Pusher) Close() {
 	close(p.quit)
-	<-p.closed
+	select {
+	case <-p.closed:
+	case <-time.After(3 * time.Second):
+		log.Error("timeout closing pusher")
+	}
 }
 
 // sync starts a forever loop that pushes chunks to their neighbourhood
@@ -125,44 +129,6 @@ func (p *Pusher) sync() {
 
 	for {
 		select {
-
-		// retry interval timer triggers starting from new
-		case <-timer.C:
-			// initially timer is set to go off as well as every time we hit the end of push index
-			// so no wait for retryInterval needed to set  items synced
-			metrics.GetOrRegisterCounter("pusher.subscribe-push", nil).Inc(1)
-			// if subscribe was running, stop it
-			if unsubscribe != nil {
-				unsubscribe()
-			}
-
-			// delete from pushed items
-			for i := 0; i < len(syncedAddrs); i++ {
-				delete(p.pushed, syncedAddrs[i].Hex())
-			}
-			// set chunk status to synced, insert to db GC index
-			if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
-				log.Error("pushsync: error setting chunks to synced", "err", err)
-			}
-
-			// reset synced list
-			syncedAddrs = nil
-
-			// we don't want to record the first iteration
-			if chunksInBatch != -1 {
-				// this measurement is not a timer, but we want a histogram, so it fits the data structure
-				metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.hist", nil).Update(time.Duration(chunksInBatch))
-				metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.time", nil).UpdateSince(batchStartTime)
-				metrics.GetOrRegisterCounter("pusher.subscribe-push.chunks-in-batch", nil).Inc(int64(chunksInBatch))
-			}
-			chunksInBatch = 0
-			batchStartTime = time.Now()
-
-			// and start iterating on Push index from the beginning
-			chunks, unsubscribe = p.store.SubscribePush(ctx)
-			// reset timer to go off after retryInterval
-			timer.Reset(p.retryInterval)
-
 		// handle incoming chunks
 		case ch, more := <-chunks:
 			// if no more, set to nil, reset timer to 0 to finalise batch immediately
@@ -231,6 +197,43 @@ func (p *Pusher) sync() {
 			syncedAddrs = append(syncedAddrs, addr)
 			item.synced = true
 
+			// retry interval timer triggers starting from new
+		case <-timer.C:
+			// initially timer is set to go off as well as every time we hit the end of push index
+			// so no wait for retryInterval needed to set  items synced
+			metrics.GetOrRegisterCounter("pusher.subscribe-push", nil).Inc(1)
+			// if subscribe was running, stop it
+			if unsubscribe != nil {
+				unsubscribe()
+			}
+
+			// delete from pushed items
+			for i := 0; i < len(syncedAddrs); i++ {
+				delete(p.pushed, syncedAddrs[i].Hex())
+			}
+			// set chunk status to synced, insert to db GC index
+			if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+				log.Error("pushsync: error setting chunks to synced", "err", err)
+			}
+
+			// reset synced list
+			syncedAddrs = nil
+
+			// we don't want to record the first iteration
+			if chunksInBatch != -1 {
+				// this measurement is not a timer, but we want a histogram, so it fits the data structure
+				metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.hist", nil).Update(time.Duration(chunksInBatch))
+				metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.time", nil).UpdateSince(batchStartTime)
+				metrics.GetOrRegisterCounter("pusher.subscribe-push.chunks-in-batch", nil).Inc(int64(chunksInBatch))
+			}
+			chunksInBatch = 0
+			batchStartTime = time.Now()
+
+			// and start iterating on Push index from the beginning
+			chunks, unsubscribe = p.store.SubscribePush(ctx)
+			// reset timer to go off after retryInterval
+			timer.Reset(p.retryInterval)
+
 		case <-p.quit:
 			if unsubscribe != nil {
 				unsubscribe()
@@ -268,7 +271,7 @@ func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
 
 	cmsg := &chunkMsg{
 		Origin: p.ps.BaseAddr(),
-		Addr:   ch.Address()[:],
+		Addr:   ch.Address(),
 		Data:   ch.Data(),
 		Nonce:  newNonce(),
 	}
