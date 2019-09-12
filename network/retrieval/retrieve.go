@@ -226,11 +226,6 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
-		// skip light nodes
-		if p.LightNode {
-			return true
-		}
-
 		if !p.HasCap("bzz-stream") {
 			return true
 		}
