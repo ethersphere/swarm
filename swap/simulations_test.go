@@ -463,6 +463,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			if err != nil {
 				return err
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		// check balances:
