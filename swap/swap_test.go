@@ -501,7 +501,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 // causing subsequent TX to possibly fail due to nonce mismatch
 func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	cashCheque(s, otherSwap, opts, cheque)
-	// close the channel, signals to clients that this function actually finished
+	// send to the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
 		if stb.cashDone != nil {
 			stb.cashDone <- struct{}{}
