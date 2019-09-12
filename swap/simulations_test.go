@@ -242,7 +242,6 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 	for i := 0; i < nodeCount; i++ {
 		params.swaps[i] = New(stores[i], keys[i], testBackend)
 	}
-	testBackend.Commit()
 
 	params.backend = testBackend
 	return params, nil
