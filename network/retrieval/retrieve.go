@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/spancontext"
@@ -228,6 +229,10 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 
 		// skip light nodes
 		if p.LightNode {
+			return true
+		}
+
+		if !p.HasCap(stream.Spec.Name) {
 			return true
 		}
 
