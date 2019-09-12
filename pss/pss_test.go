@@ -627,11 +627,11 @@ func TestKeys(t *testing.T) {
 	}
 
 	// get the key back from crypto backend, check that it's still the same
-	outkeyback, err := ps.Crypto.GetSymKey(outkeyid)
+	outkeyback, err := ps.Crypto.GetSymmetricKey(outkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	inkey, err := ps.Crypto.GetSymKey(inkeyid)
+	inkey, err := ps.Crypto.GetSymmetricKey(inkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -1508,7 +1508,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
-	symkey, err := ps.Crypto.GetSymKey(symkeyid)
+	symkey, err := ps.Crypto.GetSymmetricKey(symkeyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey: %v", err)
 	}
@@ -1598,7 +1598,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
-		symkey, err := ps.Crypto.GetSymKey(keyid)
+		symkey, err := ps.Crypto.GetSymmetricKey(keyid)
 		if err != nil {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
@@ -1672,7 +1672,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 
 	}
-	symkey, err := ps.Crypto.GetSymKey(keyid)
+	symkey, err := ps.Crypto.GetSymmetricKey(keyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}

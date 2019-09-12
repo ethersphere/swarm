@@ -63,8 +63,8 @@ type WrapParams struct {
 // For asymmetric encryption Receiver is needed.
 // For symmetric, SymmetricKey is needed. Sender is not mandatory but used to sign the message in both schemes.
 type UnwrapParams struct {
-	Sender       *ecdsa.PublicKey  // Private key of sender used for signature validation
-	Receiver     *ecdsa.PrivateKey // Public key of receiver for decryption
+	Sender       *ecdsa.PublicKey  // Public key of sender used for signature validation
+	Receiver     *ecdsa.PrivateKey // Private key of receiver for decryption
 	SymmetricKey []byte            // Symmetric key for decryption
 }
 
@@ -89,10 +89,10 @@ type Message interface {
 // KeyStore contains key manipulation methods
 type KeyStore interface {
 
-	// Asymmetric key management
-	GetSymKey(id string) ([]byte, error)
-	GenerateSymKey() (string, error)
-	AddSymKey(bytes []byte) (string, error)
+	// Symmetric key management
+	GetSymmetricKey(id string) ([]byte, error)
+	GenerateSymmetricKey() (string, error)
+	AddSymmetricKey(bytes []byte) (string, error)
 
 	// Key serialization
 	SerializePublicKey(pub *ecdsa.PublicKey) []byte
@@ -336,7 +336,7 @@ func (crypto *defaultCryptoBackend) sign(rawBytes []byte, key *ecdsa.PrivateKey)
 	}
 	rawBytes[0] |= signatureFlag // it is important to set this flag before signing
 
-	hash := crypto.keccak256(rawBytes)
+	hash := ethCrypto.Keccak256(rawBytes)
 	signature, err := crypto.signHash(hash, key)
 
 	if err != nil {
@@ -353,8 +353,8 @@ func isMessageSigned(flags byte) bool {
 
 // === Key store functions ===
 
-// GetSymKey retrieves symmetric key by id from the store
-func (crypto *defaultCryptoBackend) GetSymKey(id string) ([]byte, error) {
+// GetSymmetricKey retrieves symmetric key by id from the store
+func (crypto *defaultCryptoBackend) GetSymmetricKey(id string) ([]byte, error) {
 	crypto.keyMu.RLock()
 	defer crypto.keyMu.RUnlock()
 	if crypto.symKeys[id] != nil {
@@ -363,13 +363,13 @@ func (crypto *defaultCryptoBackend) GetSymKey(id string) ([]byte, error) {
 	return nil, fmt.Errorf("non-existent key ID")
 }
 
-// GenerateSymKey creates a new symmetric, stores it and return its id
-func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
+// GenerateSymmetricKey creates a new symmetric, stores it and return its id
+func (crypto *defaultCryptoBackend) GenerateSymmetricKey() (string, error) {
 	key, err := generateSecureRandomData(aesKeyLength)
 	if err != nil {
 		return "", err
 	} else if !validateDataIntegrity(key, aesKeyLength) {
-		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
+		return "", fmt.Errorf("error in GenerateSymmetricKey: crypto/rand failed to generate random data")
 	}
 
 	id, err := generateRandomKeyID()
@@ -388,7 +388,7 @@ func (crypto *defaultCryptoBackend) GenerateSymKey() (string, error) {
 }
 
 // Add a symmetric key to the store generating an id and returning it
-func (crypto *defaultCryptoBackend) AddSymKey(key []byte) (string, error) {
+func (crypto *defaultCryptoBackend) AddSymmetricKey(key []byte) (string, error) {
 	if len(key) != aesKeyLength {
 		return "", fmt.Errorf("wrong key size: %d", len(key))
 	}
@@ -500,7 +500,7 @@ func (crypto *defaultCryptoBackend) signHash(hash []byte, prv *ecdsa.PrivateKey)
 // sigToPub obtains public key from the signed message and the signature
 func (crypto *defaultCryptoBackend) sigToPub(signed, sig []byte) (*ecdsa.PublicKey, error) {
 	defer func() { recover() }() // in case of invalid signature
-	hash := crypto.keccak256(signed)
+	hash := ethCrypto.Keccak256(signed)
 	return ethCrypto.SigToPub(hash, sig)
 }
 
@@ -520,11 +520,6 @@ func generateRandomKeyID() (id string, err error) {
 	}
 	id = common.Bytes2Hex(buf)
 	return id, err
-}
-
-// keccak256 calculates and returns the keccak256 hash of the input data.
-func (crypto *defaultCryptoBackend) keccak256(data ...[]byte) []byte {
-	return ethCrypto.Keccak256(data...)
 }
 
 // generateSecureRandomData generates random data where extra security is required.

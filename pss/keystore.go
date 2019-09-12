@@ -151,7 +151,7 @@ func (ks *KeyStore) processSym(pssMsg *PssMsg) ([]byte, string, PssAddress, erro
 
 	for i := ks.symKeyDecryptCacheCursor; i > ks.symKeyDecryptCacheCursor-cap(ks.symKeyDecryptCache) && i > 0; i-- {
 		symkeyid := ks.symKeyDecryptCache[i%cap(ks.symKeyDecryptCache)]
-		symkey, err := ks.Crypto.GetSymKey(*symkeyid)
+		symkey, err := ks.Crypto.GetSymmetricKey(*symkeyid)
 		if err != nil {
 			continue
 		}
@@ -246,7 +246,7 @@ func (p *Pss) cleanKeys() (count int) {
 
 // Automatically generate a new symkey for a topic and address hint
 func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache bool) (string, error) {
-	keyid, err := ks.Crypto.GenerateSymKey()
+	keyid, err := ks.Crypto.GenerateSymmetricKey()
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addToCache, false)
 	}
@@ -256,7 +256,7 @@ func (ks *KeyStore) GenerateSymmetricKey(topic Topic, address PssAddress, addToC
 // Returns a symmetric key byte sequence stored in the crypto backend by its unique id.
 // Passes on the error value from the crypto backend.
 func (ks *KeyStore) GetSymmetricKey(symkeyid string) ([]byte, error) {
-	return ks.Crypto.GetSymKey(symkeyid)
+	return ks.Crypto.GetSymmetricKey(symkeyid)
 }
 
 // Links a peer symmetric key (arbitrary byte sequence) to a topic.
@@ -278,7 +278,7 @@ func (ks *KeyStore) SetSymmetricKey(key []byte, topic Topic, address PssAddress,
 }
 
 func (ks *KeyStore) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
-	keyid, err := ks.Crypto.AddSymKey(key)
+	keyid, err := ks.Crypto.AddSymmetricKey(key)
 	if err == nil {
 		ks.addSymmetricKeyToPool(keyid, topic, address, addtocache, protected)
 	}
