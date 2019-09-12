@@ -81,5 +81,9 @@ func newNonce() []byte {
 }
 
 func label(b []byte) string {
-	return hexutil.Encode(b[:8])
+	l := len(b)
+	if l > 8 {
+		l = 8
+	}
+	return hexutil.Encode(b[:l])
 }

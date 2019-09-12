@@ -43,6 +43,16 @@ func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, sent, synced, t
 		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
 	}
 
+	tSent := tag.Get(chunk.StateSent)
+	if tStored != stored {
+		t.Fatalf("mismatch sent chunks, got %d want %d", tSent, sent)
+	}
+
+	tSynced := tag.Get(chunk.StateSynced)
+	if tStored != stored {
+		t.Fatalf("mismatch synced chunks, got %d want %d", tSynced, synced)
+	}
+
 	tTotal := tag.TotalCounter()
 	if tTotal != total {
 		t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)

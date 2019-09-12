@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -32,19 +31,94 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
-	colorable "github.com/mattn/go-colorable"
-)
-
-var (
-	loglevel = flag.Int("loglevel", 0, "verbosity of logs")
 )
 
 func init() {
-	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	testutil.Init()
+}
+
+// TestPusher tests the correct behaviour of Pusher
+// in the context of inserting n chunks
+// receipt response model: the pushed chunk's receipt is sent back
+// after a random delay
+// The test checks:
+// - if sync function is called on chunks in order of insertion (FIFO)
+// - already synced chunks are not resynced
+// - if no more data inserted, the db is emptied shortly
+func TestPusher(t *testing.T) {
+	timeout := 10 * time.Second
+	chunkCnt := 1024
+	tagCnt := 4
+
+	errc := make(chan error)
+	sent := &sync.Map{}
+	synced := make(map[int]int)
+	quit := make(chan struct{})
+	defer close(quit)
+
+	errf := func(s string, vals ...interface{}) {
+		select {
+		case errc <- fmt.Errorf(s, vals...):
+		case <-quit:
+		}
+	}
+
+	lb := newLoopBack()
+
+	respond := func(msg []byte, _ *p2p.Peer) error {
+		chmsg, err := decodeChunkMsg(msg)
+		if err != nil {
+			errf("error decoding chunk message: %v", err)
+			return nil
+		}
+		// check outgoing chunk messages
+		idx := int(binary.BigEndian.Uint64(chmsg.Addr[:8]))
+		// respond ~ mock storer protocol
+		receipt := &receiptMsg{Addr: chmsg.Addr}
+		rmsg, err := rlp.EncodeToBytes(receipt)
+		if err != nil {
+			errf("error encoding receipt message: %v", err)
+		}
+		log.Debug("store chunk,  send receipt", "idx", idx)
+		err = lb.Send(chmsg.Origin, pssReceiptTopic, rmsg)
+		if err != nil {
+			errf("error sending receipt message: %v", err)
+		}
+		return nil
+	}
+	// register the respond function
+	lb.Register(pssChunkTopic, false, respond)
+	tags, tagIDs := setupTags(chunkCnt, tagCnt)
+	// construct the mock push sync index iterator
+	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
+	// start push syncing in a go routine
+	p := NewPusher(tp, &testPubSub{lb, func([]byte) bool { return false }}, tags)
+	defer p.Close()
+	// collect synced chunks until all chunks synced
+	// wait on errc for errors on any thread
+	// otherwise time out
+	for {
+		select {
+		case i := <-tp.synced:
+			n := synced[i]
+			synced[i] = n + 1
+			if len(synced) == chunkCnt {
+				expTotal := int64(chunkCnt / tagCnt)
+				checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
+				return
+			}
+		case err := <-errc:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(timeout):
+			t.Fatalf("timeout waiting for all chunks to be synced")
+		}
+	}
+
 }
 
 type testPubSub struct {
@@ -199,87 +273,6 @@ func delayResponse() bool {
 	return delay < retentionLimit
 }
 
-// TestPusher tests the correct behaviour of Pusher
-// in the context of inserting n chunks
-// receipt response model: the pushed chunk's receipt is sent back
-// after a random delay
-// The test checks:
-// - if sync function is called on chunks in order of insertion (FIFO)
-// - already synced chunks are not resynced
-// - if no more data inserted, the db is emptied shortly
-func TestPusher(t *testing.T) {
-	timeout := 10 * time.Second
-	chunkCnt := 1024
-	tagCnt := 4
-
-	errc := make(chan error)
-	sent := &sync.Map{}
-	synced := make(map[int]int)
-	quit := make(chan struct{})
-	defer close(quit)
-
-	errf := func(s string, vals ...interface{}) {
-		select {
-		case errc <- fmt.Errorf(s, vals...):
-		case <-quit:
-		}
-	}
-
-	lb := newLoopBack()
-
-	respond := func(msg []byte, _ *p2p.Peer) error {
-		chmsg, err := decodeChunkMsg(msg)
-		if err != nil {
-			errf("error decoding chunk message: %v", err)
-			return nil
-		}
-		// check outgoing chunk messages
-		idx := int(binary.BigEndian.Uint64(chmsg.Addr[:8]))
-		// respond ~ mock storer protocol
-		receipt := &receiptMsg{Addr: chmsg.Addr}
-		rmsg, err := rlp.EncodeToBytes(receipt)
-		if err != nil {
-			errf("error encoding receipt message: %v", err)
-		}
-		log.Debug("store chunk,  send receipt", "idx", idx)
-		err = lb.Send(chmsg.Origin, pssReceiptTopic, rmsg)
-		if err != nil {
-			errf("error sending receipt message: %v", err)
-		}
-		return nil
-	}
-	// register the respond function
-	lb.Register(pssChunkTopic, false, respond)
-	tags, tagIDs := setupTags(chunkCnt, tagCnt)
-	// construct the mock push sync index iterator
-	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
-	// start push syncing in a go routine
-	p := NewPusher(tp, &testPubSub{lb, func([]byte) bool { return false }}, tags)
-	defer p.Close()
-	// collect synced chunks until all chunks synced
-	// wait on errc for errors on any thread
-	// otherwise time out
-	for {
-		select {
-		case i := <-tp.synced:
-			n := synced[i]
-			synced[i] = n + 1
-			if len(synced) == chunkCnt {
-				expTotal := int64(chunkCnt / tagCnt)
-				checkTags(t, expTotal, tagIDs[:tagCnt-1], tags)
-				return
-			}
-		case err := <-errc:
-			if err != nil {
-				t.Fatal(err)
-			}
-		case <-time.After(timeout):
-			t.Fatalf("timeout waiting for all chunks to be synced")
-		}
-	}
-
-}
-
 // setupTags constructs tags object create tagCnt - 1 tags
 // the sequential fake chunk i will be tagged with i%tagCnt
 func setupTags(chunkCnt, tagCnt int) (tags *chunk.Tags, tagIDs []uint32) {
@@ -311,6 +304,6 @@ func checkTags(t *testing.T, expTotal int64, tagIDs []uint32, tags *chunk.Tags) 
 			t.Fatalf("error waiting for syncing on tag %v: %v", tag.Uid, err)
 		}
 
-		testutil.CheckTag(t, tag, 0, expTotal, 0, expTotal, expTotal, expTotal)
+		chunktesting.CheckTag(t, tag, 0, expTotal, 0, expTotal, expTotal, expTotal)
 	}
 }
