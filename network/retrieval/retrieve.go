@@ -415,11 +415,11 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
-		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries)
+		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
 		req.PeersToSkip.Store(sp.ID().String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
-			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries)
+			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
 			return nil, ErrNoPeerFound
 		}
 
