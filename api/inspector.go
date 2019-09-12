@@ -69,7 +69,7 @@ func (i *Inspector) DeliveriesPerPeer() map[string]int64 {
 	// iterate connection in kademlia
 	i.hive.Kademlia.EachConn(nil, 255, func(p *network.Peer, po int) bool {
 		// get how many chunks we receive for retrieve requests per peer
-		peermetric := fmt.Sprintf("chunk.delivery.%x", p.Over()[:16])
+		peermetric := fmt.Sprintf("network.retrieve.chunk.delivery.%x", p.Over()[:16])
 
 		res[fmt.Sprintf("%x", p.Over()[:16])] = metrics.GetOrRegisterCounter(peermetric, nil).Count()
 

@@ -226,7 +226,11 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
-		// skip light nodes
+		if !p.HasCap(Spec.Name) {
+			return true
+		}
+
+		// skip light nodes, even though they support `bzz-retrieve` protocol
 		if p.LightNode {
 			return true
 		}
@@ -410,11 +414,11 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
-		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries)
+		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
 		req.PeersToSkip.Store(sp.ID().String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
-			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries)
+			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
 			return nil, ErrNoPeerFound
 		}
 
