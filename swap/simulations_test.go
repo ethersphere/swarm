@@ -263,7 +263,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	params.backend.cashDone = make(chan struct{})
+	params.backend.cashDone = make(chan struct{}, 1)
 	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
@@ -386,7 +386,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	params.backend.cashDone = make(chan struct{})
+	params.backend.cashDone = make(chan struct{}, 1)
 	// initialize the simulation
 	sim := simulation.NewInProc(newSimServiceMap(params))
 	defer sim.Close()
@@ -694,7 +694,7 @@ CONNS:
 		// but probably not all processed yet (balances not updated).
 		// without this wait, we still get occasionally failures with imbalances
 		// (travis CI is not terrific in terms of resources)
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 
 		//now iterate again and check that every node has the same
 		//balance with a peer as that peer with the same node,
@@ -750,7 +750,6 @@ func waitForChequeProcessed(ts *testService, peer enode.ID, expected uint64) err
 	defer cancel()
 
 	backend := ts.swap.backend.(*swapTestBackend)
-	fmt.Println(backend)
 
 	select {
 	case <-ctx.Done():
