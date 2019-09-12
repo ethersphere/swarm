@@ -56,12 +56,12 @@ func (a *testAddr) String() string {
 }
 
 func randomTestAddr(n int, i int) *testAddr {
-	v := RandomBzzAddress().Bin()[:n]
+	v := RandomAddress().Bin()[:n]
 	return newTestAddr(v, i)
 }
 
 func randomtestAddr(n int, i int) *testAddr {
-	v := RandomBzzAddress().Bin()[:n]
+	v := RandomAddress().Bin()[:n]
 	return newTestAddr(v, i)
 }
 
