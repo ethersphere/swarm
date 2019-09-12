@@ -382,7 +382,6 @@ func TestNewSwapFailure(t *testing.T) {
 				config.paymentThreshold = DefaultDisconnectThreshold + 1
 			},
 			check: func(t *testing.T, config *SWAPConfig) {
-				defer os.RemoveAll(config.dbPath)
 				_, err := NewSWAP(
 					config.dbPath,
 					config.prvkey,
@@ -398,7 +397,6 @@ func TestNewSwapFailure(t *testing.T) {
 		{
 			name: "invalid backendURL",
 			configure: func(config *SWAPConfig) {
-				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
 				config.disconnectThreshold = DefaultDisconnectThreshold
@@ -420,6 +418,13 @@ func TestNewSwapFailure(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			dir, err := ioutil.TempDir("", "swarmSwap")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(dir)
+			config.dbPath = dir
+
 			tc.configure(&config)
 			if tc.check != nil {
 				tc.check(t, &config)
