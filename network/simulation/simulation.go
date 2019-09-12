@@ -103,6 +103,7 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 		addr := network.NewAddr(ctx.Config.Node())
+
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
@@ -121,7 +122,7 @@ func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 			UnderlayAddr: addr.Under(),
 			HiveParams:   hp,
 		}
-		return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+		return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 	}
 
 	return NewInProc(services)
@@ -253,6 +254,19 @@ func (s *Simulation) Close() {
 	close(s.done)
 
 	sem := make(chan struct{}, maxParallelCleanups)
+	if s.httpSrv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		err := s.httpSrv.Shutdown(ctx)
+		if err != nil {
+			log.Error("Error shutting down HTTP server!", "err", err)
+		}
+		close(s.runC)
+	}
+
+	s.shutdownWG.Wait()
+	s.Net.Shutdown()
+
 	s.mu.RLock()
 	cleanupFuncs := make([]func(), len(s.cleanupFuncs))
 	for i, f := range s.cleanupFuncs {
@@ -274,18 +288,6 @@ func (s *Simulation) Close() {
 	}
 	cleanupWG.Wait()
 
-	if s.httpSrv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		err := s.httpSrv.Shutdown(ctx)
-		if err != nil {
-			log.Error("Error shutting down HTTP server!", "err", err)
-		}
-		close(s.runC)
-	}
-
-	s.shutdownWG.Wait()
-	s.Net.Shutdown()
 	if s.baseDir != "" {
 		os.RemoveAll(s.baseDir)
 	}

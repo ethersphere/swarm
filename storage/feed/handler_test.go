@@ -19,7 +19,6 @@ package feed
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -32,10 +31,10 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/ethersphere/swarm/storage/localstore"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel  = flag.Int("loglevel", 3, "loglevel")
 	startTime = Timestamp{
 		Time: uint64(4200),
 	}
@@ -44,8 +43,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	testutil.Init()
 }
 
 // simulated timeProvider

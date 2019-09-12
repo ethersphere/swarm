@@ -23,10 +23,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,12 +46,11 @@ import (
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
 	initOnce        = sync.Once{}
-	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
-	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -63,7 +60,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	rand.Seed(time.Now().Unix())
 	initTest()
 }
@@ -72,10 +69,6 @@ func initTest() {
 	initOnce.Do(
 		func() {
 			psslogmain = log.New("psslog", "*")
-			hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-			hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
-			h := log.CallerFileHandler(hf)
-			log.Root().SetHandler(h)
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
@@ -1197,7 +1190,7 @@ func TestNetwork(t *testing.T) {
 // nodes/recipientAddresses/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/2000/4/sim", testNetwork)
@@ -1207,7 +1200,7 @@ func TestNetwork2000(t *testing.T) {
 }
 
 func TestNetwork5000(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/5000/4/sim", testNetwork)
@@ -1217,7 +1210,7 @@ func TestNetwork5000(t *testing.T) {
 }
 
 func TestNetwork10000(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/10000/4/sim", testNetwork)
@@ -1774,7 +1767,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			}
 			pskad := kademlia(ctx.Config.ID, addr.OAddr)
 			bucket.Store(simulation.BucketKeyKademlia, pskad)
-			return network.NewBzz(config, pskad, stateStore, nil, nil), nil, nil
+			return network.NewBzz(config, pskad, stateStore, nil, nil, nil, nil), nil, nil
 		},
 		protocolName: func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
@@ -1823,8 +1816,8 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 				protocol: pp,
 				run:      p2pp.Run,
 			}
-			return ps, cleanupFunc, nil
 
+			return ps, cleanupFunc, nil
 		},
 	}
 }

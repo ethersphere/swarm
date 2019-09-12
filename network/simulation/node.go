@@ -298,8 +298,19 @@ func (s *Simulation) StopNode(id enode.ID) (err error) {
 }
 
 // StopRandomNode stops a random node.
-func (s *Simulation) StopRandomNode() (id enode.ID, err error) {
-	n := s.Net.GetRandomUpNode()
+func (s *Simulation) StopRandomNode(protect ...enode.ID) (id enode.ID, err error) {
+	found := false
+	var n *simulations.Node
+outer:
+	for !found {
+		n = s.Net.GetRandomUpNode()
+		for _, v := range protect {
+			if bytes.Equal(n.ID().Bytes(), v.Bytes()) {
+				continue outer
+			}
+		}
+		found = true
+	}
 	if n == nil {
 		return id, ErrNodeNotFound
 	}

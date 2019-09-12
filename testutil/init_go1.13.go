@@ -14,17 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package retrieval
+// +build go1.13
 
-import "github.com/ethersphere/swarm/storage"
+package testutil
 
-// RetrieveRequest is the protocol msg for chunk retrieve requests
-type RetrieveRequest struct {
-	Addr storage.Address
-}
+import "testing"
 
-// ChunkDelivery is the protocol msg for delivering a solicited chunk to a peer
-type ChunkDelivery struct {
-	Addr  storage.Address
-	SData []byte
+func init() {
+	// as of go1.13, testing.Init needs to be called before flag.Parse
+	// which is done in Init function of this package
+	testInit = testing.Init
 }

@@ -3,9 +3,7 @@ package notify
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -20,20 +18,16 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel = flag.Int("loglevel", 3, "logging verbosity")
-	psses    map[string]*pss.Pss
-	crypt    crypto.Crypto
+	psses map[string]*pss.Pss
+	crypt crypto.Crypto
 )
 
 func init() {
-	flag.Parse()
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
+	testutil.Init()
 
 	crypt = crypto.New()
 	psses = make(map[string]*pss.Pss)
@@ -250,7 +244,7 @@ func newServices(allowRaw bool) adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil, nil, nil), nil
 		},
 	}
 }

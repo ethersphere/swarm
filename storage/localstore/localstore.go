@@ -457,6 +457,5 @@ func init() {
 // with provided name appended with ".total-time".
 func totalTimeMetric(name string, start time.Time) {
 	totalTime := time.Since(start)
-	log.Trace(name+" total time", "time", totalTime)
 	metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 }

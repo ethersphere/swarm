@@ -48,7 +48,8 @@ import (
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/stream"
+	"github.com/ethersphere/swarm/network/retrieval"
+	"github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
@@ -75,8 +76,9 @@ type Swarm struct {
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
-	bzzEth            *bzzeth.BzzEth
+	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz // the logistic manager
+	bzzEth            *bzzeth.BzzEth
 	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
@@ -133,7 +135,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		// create the accounting objects
-		self.swap = swap.New(swapStore, self.privateKey, self.config.Contract, self.backend)
+		self.swap = swap.New(swapStore, self.privateKey, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
@@ -200,38 +202,33 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 
 	nodeID := config.Enode.ID()
-	self.netStore = storage.NewNetStore(lstore, nodeID)
+	self.netStore = storage.NewNetStore(lstore, bzzconfig.OverlayAddr, nodeID)
 
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	delivery := stream.NewDelivery(to, self.netStore)
-	self.netStore.RemoteGet = delivery.RequestFromPeers
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr) // nodeID.Bytes())
+	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
 
-	syncing := stream.SyncingAutoSubscribe
-	if !config.SyncEnabled || config.LightNodeEnabled {
-		syncing = stream.SyncingDisabled
+	syncing := true
+	if !config.SyncEnabled || config.LightNodeEnabled || config.BootnodeMode {
+		syncing = false
 	}
 
-	registryOptions := &stream.RegistryOptions{
-		SkipCheck:       config.DeliverySkipCheck,
-		Syncing:         syncing,
-		SyncUpdateDelay: config.SyncUpdateDelay,
-		MaxPeerServers:  config.MaxStreamPeerServers,
-	}
-	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
+	syncProvider := stream.NewSyncProvider(self.netStore, to, syncing, false)
+	self.streamer = stream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
 	self.tags = chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
-	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, self.tags)
+	self.fileStore = storage.NewFileStore(lnetStore, localStore, self.config.FileStoreParams, self.tags)
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, retrieval.Spec, self.streamer.Run, self.retrieval.Run)
 
 	self.bzzEth = bzzeth.New()
 
@@ -374,11 +371,9 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		err := s.swap.Deploy(context.Background(), s.backend, s.config.Path)
-		if err != nil {
-			return fmt.Errorf("Unable to deploy swap contract: %v", err)
+		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
+			return err
 		}
-		log.Info("SWAP contract deployed", "contract info", s.swap.DeploySuccess())
 	} else {
 		log.Info("SWAP disabled: no chequebook set")
 	}
@@ -446,8 +441,10 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	}(startTime)
 
 	startCounter.Inc(1)
-	s.streamer.Start(srv)
-	return nil
+	if err := s.streamer.Start(srv); err != nil {
+		return err
+	}
+	return s.retrieval.Start(srv)
 }
 
 // Stop stops all component services.
@@ -470,12 +467,19 @@ func (s *Swarm) Stop() error {
 	if s.accountingMetrics != nil {
 		s.accountingMetrics.Close()
 	}
+
+	if err := s.streamer.Stop(); err != nil {
+		log.Error("streamer stop", "err", err)
+	}
+	if err := s.retrieval.Stop(); err != nil {
+		log.Error("retrieval stop", "err", err)
+	}
+
 	if s.netStore != nil {
 		s.netStore.Close()
 	}
 	s.sfs.Stop()
 	stopCounter.Inc(1)
-	s.streamer.Stop()
 
 	err := s.bzzEth.Stop()
 	if err != nil {
@@ -530,7 +534,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
+			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.streamer),
 			Public:    false,
 		},
 		{
@@ -548,8 +552,8 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-	apis = append(apis, s.bzzEth.APIs()...)
 	apis = append(apis, s.streamer.APIs()...)
+	apis = append(apis, s.bzzEth.APIs()...)
 
 	if s.ps != nil {
 		apis = append(apis, s.ps.APIs()...)
