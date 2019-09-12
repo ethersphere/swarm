@@ -309,7 +309,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			// let's always be nice and allow a time out to be catched
 			select {
 			case <-ctx.Done():
-				t.Fatal("Timed out waiting for all swap peer connections to be established")
+				return errors.New("Timed out waiting for all swap peer connections to be established")
 			default:
 			}
 			// the node has all other peers in its peer list
@@ -437,7 +437,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			// let's always be nice and allow a time out to be catched
 			select {
 			case <-ctx.Done():
-				t.Fatal("Timed out waiting for all swap peer connections to be established")
+				return errors.New("Timed out waiting for all swap peer connections to be established")
 			default:
 			}
 			// the node has all other peers in its peer list
@@ -606,18 +606,20 @@ CONNS:
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		log.Info("simulation running")
-		disconnected := watchDisconnections(ctx, sim)
-		defer func() {
-			if err != nil && disconnected.bool() {
-				err = errors.New("disconnect events received")
-			}
-		}()
+		/*
+			disconnected := watchDisconnections(ctx, sim)
+			defer func() {
+				if err != nil && disconnected.bool() {
+					err = errors.New("disconnect events received")
+				}
+			}()
+		*/
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_, err = sim.WaitTillHealthy(ctx)
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
 
 		nodes := sim.UpNodeIDs()
