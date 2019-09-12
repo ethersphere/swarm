@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/state"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -43,24 +43,6 @@ var (
 	verbosity   = flag.Int("verbosity", 0, "log filters for logger via Vmodule")
 	httpSimPort = 8888
 )
-
-func init() {
-	flag.Parse()
-	//initialize the logger
-	//this is a demonstration on how to use Vmodule for filtering logs
-	//provide -vmodule as param, and comma-separated values, e.g.:
-	//-vmodule overlay_test.go=4,simulations=3
-	//above examples sets overlay_test.go logs to level 4, while packages ending with "simulations" to 3
-	if *vmodule != "" {
-		//only enable the pattern matching handler if the flag has been provided
-		glogger := log.NewGlogHandler(log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))
-		if *verbosity > 0 {
-			glogger.Verbosity(log.Lvl(*verbosity))
-		}
-		glogger.Vmodule(*vmodule)
-		log.Root().SetHandler(glogger)
-	}
-}
 
 type Simulation struct {
 	mtx    sync.Mutex
@@ -103,7 +85,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, store, nil, nil), nil
+	return network.NewBzz(config, kad, store, nil, nil, nil, nil), nil
 }
 
 //create the simulation network
@@ -131,6 +113,22 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	//run the sim
 	runOverlaySim()
+
+	flag.Parse()
+	//initialize the logger
+	//this is a demonstration on how to use Vmodule for filtering logs
+	//provide -vmodule as param, and comma-separated values, e.g.:
+	//-vmodule overlay_test.go=4,simulations=3
+	//above examples sets overlay_test.go logs to level 4, while packages ending with "simulations" to 3
+	if *vmodule != "" {
+		//only enable the pattern matching handler if the flag has been provided
+		glogger := log.NewGlogHandler(log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))
+		if *verbosity > 0 {
+			glogger.Verbosity(log.Lvl(*verbosity))
+		}
+		glogger.Vmodule(*vmodule)
+		log.Root().SetHandler(glogger)
+	}
 }
 
 func runOverlaySim() {

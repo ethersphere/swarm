@@ -13,53 +13,40 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package stream
 
 import (
 	"context"
-	"errors"
+	"flag"
 	"fmt"
-	"os"
-	"runtime"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/storage/mock"
-	mockmem "github.com/ethersphere/swarm/storage/mock/mem"
 	"github.com/ethersphere/swarm/testutil"
+)
+
+var (
+	nodes     = flag.Int("nodes", 0, "number of nodes")
+	chunks    = flag.Int("chunks", 0, "number of chunks")
+	chunkSize = 4096
+	pof       = network.Pof
 )
 
 type synctestConfig struct {
 	addrs         [][]byte
 	hashes        []storage.Address
 	idToChunksMap map[enode.ID][]int
-	//chunksToNodesMap map[string][]int
-	addrToIDMap map[string]enode.ID
+	addrToIDMap   map[string]enode.ID
 }
-
-const (
-	// EventTypeNode is the type of event emitted when a node is either
-	// created, started or stopped
-	EventTypeChunkCreated   simulations.EventType = "chunkCreated"
-	EventTypeChunkOffered   simulations.EventType = "chunkOffered"
-	EventTypeChunkWanted    simulations.EventType = "chunkWanted"
-	EventTypeChunkDelivered simulations.EventType = "chunkDelivered"
-	EventTypeChunkArrived   simulations.EventType = "chunkArrived"
-	EventTypeSimTerminated  simulations.EventType = "simTerminated"
-)
 
 // Tests in this file should not request chunks from peers.
 // This function will panic indicating that there is a problem if request has been made.
@@ -75,69 +62,38 @@ func dummyRequestFromPeers(_ context.Context, req *storage.Request, _ enode.ID) 
 //they are expected to store based on the syncing protocol.
 //Number of chunks and nodes can be provided via commandline too.
 func TestSyncingViaGlobalSync(t *testing.T) {
-	if runtime.GOOS == "darwin" && os.Getenv("TRAVIS") == "true" {
-		t.Skip("Flaky on mac on travis")
-	}
-
-	if testutil.RaceEnabled {
-		t.Skip("Segfaults on Travis with -race")
-	}
-
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
 		testSyncingViaGlobalSync(t, *chunks, *nodes)
 	} else {
-		chunkCounts := []int{4, 32}
-		nodeCounts := []int{32, 16}
+		chunkCounts := []int{4}
+		nodeCounts := []int{16, 32}
 
 		//if the `longrunning` flag has been provided
 		//run more test combinations
-		if *longrunning {
+		if *testutil.Longrunning {
 			chunkCounts = []int{64, 128}
 			nodeCounts = []int{32, 64}
 		}
 
 		for _, chunkCount := range chunkCounts {
 			for _, n := range nodeCounts {
-				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chunkCount, n))
-				testSyncingViaGlobalSync(t, chunkCount, n)
+				tName := fmt.Sprintf("snapshot sync test %d nodes %d chunks", n, chunkCount)
+				t.Run(tName, func(t *testing.T) {
+					testSyncingViaGlobalSync(t, chunkCount, n)
+				})
 			}
 		}
 	}
 }
 
-var simServiceMap = map[string]simulation.ServiceFunc{
-	"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-		addr, netStore, delivery, clean, err := newNetStoreAndDeliveryWithRequestFunc(ctx, bucket, dummyRequestFromPeers)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		store := state.NewInmemoryStore()
-
-		r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
-			Syncing:         SyncingAutoSubscribe,
-			SyncUpdateDelay: 3 * time.Second,
-		}, nil)
-
-		bucket.Store(bucketKeyRegistry, r)
-
-		cleanup = func() {
-			r.Close()
-			clean()
-		}
-
-		return r, cleanup, nil
-	},
-}
-
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
-	sim := simulation.NewInProc(simServiceMap)
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-sync": newSyncSimServiceFunc(nil),
+	})
 	defer sim.Close()
-
-	log.Info("Initializing test config")
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -150,7 +106,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
-	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
+	filename := fmt.Sprintf("../testdata/snapshot_%d.json", nodeCount)
 	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
@@ -164,15 +120,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 }
 
 func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulation, chunkCount int) simulation.Result {
-
 	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		disconnected := watchDisconnections(ctx, sim)
-		defer func() {
-			if err != nil && disconnected.bool() {
-				err = errors.New("disconnect events received")
-			}
-		}()
-
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
 			//get the kademlia overlay address from this ID
@@ -188,32 +136,16 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 		//get the node at that index
 		//this is the node selected for upload
 		node := sim.Net.GetRandomUpNode()
-		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
-		if !ok {
-			return errors.New("no store in simulation bucket")
-		}
-		store := item.(chunk.Store)
-		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, store)
+		uploadStore := sim.MustNodeItem(node.ID(), bucketKeyFileStore).(chunk.Store)
+		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, uploadStore)
 		if err != nil {
 			return err
-		}
-		for _, h := range hashes {
-			evt := &simulations.Event{
-				Type: EventTypeChunkCreated,
-				Node: sim.Net.GetNode(node.ID()),
-				Data: h.String(),
-			}
-			sim.Net.Events().Send(evt)
 		}
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		var globalStore mock.GlobalStorer
-		if *useMockStore {
-			globalStore = mockmem.NewGlobalStore()
-		}
 	REPEAT:
 		for {
 			for _, id := range nodeIDs {
@@ -225,31 +157,14 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 					log.Trace("node has chunk", "address", ch)
 					//check if the expected chunk is indeed in the localstore
 					var err error
-					if *useMockStore {
-						//use the globalStore if the mockStore should be used; in that case,
-						//the complete localStore stack is bypassed for getting the chunk
-						_, err = globalStore.Get(common.BytesToAddress(id.Bytes()), ch)
-					} else {
-						//use the actual localstore
-						item, ok := sim.NodeItem(id, bucketKeyStore)
-						if !ok {
-							return errors.New("no store in simulation bucket")
-						}
-						store := item.(chunk.Store)
-						_, err = store.Get(ctx, chunk.ModeGetLookup, ch)
-					}
+					store := sim.MustNodeItem(id, bucketKeyFileStore).(chunk.Store)
+					_, err = store.Get(ctx, chunk.ModeGetLookup, ch)
 					if err != nil {
 						log.Debug("chunk not found", "address", ch.Hex(), "node", id)
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
 					}
-					evt := &simulations.Event{
-						Type: EventTypeChunkArrived,
-						Node: sim.Net.GetNode(id),
-						Data: ch.String(),
-					}
-					sim.Net.Events().Send(evt)
 					log.Trace("chunk found", "address", ch.Hex(), "node", id)
 				}
 			}
@@ -298,7 +213,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 //upload a file(chunks) to a single local node store
 func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, store chunk.Store) ([]storage.Address, error) {
 	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
-	fileStore := storage.NewFileStore(store, storage.NewFileStoreParams(), chunk.NewTags())
+	fileStore := storage.NewFileStore(store, store, storage.NewFileStoreParams(), chunk.NewTags())
 	size := chunkSize
 	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {

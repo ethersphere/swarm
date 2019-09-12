@@ -29,10 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattn/go-colorable"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -46,16 +45,12 @@ const (
 )
 
 var (
-	nodes    = flag.Int("nodes", 30, "number of nodes to create (default 30)")
-	msgs     = flag.Int("msgs", 100, "number of messages sent by node (default 100)")
-	loglevel = flag.Int("loglevel", 0, "verbosity of logs")
-	rawlog   = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+	nodes = flag.Int("nodes", 30, "number of nodes to create (default 30)")
+	msgs  = flag.Int("msgs", 100, "number of messages sent by node (default 100)")
 )
 
 func init() {
-	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
+	testutil.Init()
 }
 
 //TestAccountingSimulation runs a p2p/simulations simulation

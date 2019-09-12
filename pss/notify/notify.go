@@ -138,7 +138,7 @@ func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss
 	defer c.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, c.pss.BaseAddr())
 	c.pss.SetPeerPublicKey(pubkey, controlTopic, address)
-	pubkeyId := hexutil.Encode(c.pss.Crypto.FromECDSAPub(pubkey))
+	pubkeyId := hexutil.Encode(c.pss.Crypto.SerializePublicKey(pubkey))
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
@@ -289,7 +289,7 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 	if err != nil {
 		return err
 	}
-	pubkey, err := c.pss.Crypto.UnmarshalPubkey(keyidbytes)
+	pubkey, err := c.pss.Crypto.UnmarshalPublicKey(keyidbytes)
 	if err != nil {
 		return err
 	}

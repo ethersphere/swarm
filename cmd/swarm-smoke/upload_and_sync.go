@@ -156,6 +156,7 @@ func trackChunks(testData []byte) error {
 	wg.Wait()
 
 	checkChunksVsMostProxHosts(addrs, allHostChunks, bzzAddrs)
+	metrics.GetOrRegisterGauge("deployment.nodes", nil).Update(int64(len(hosts)))
 
 	if !hasErr {
 		// remove the chunks stored on the uploader node
@@ -207,11 +208,10 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			}
 		}
 
-		log.Debug("sync mode", "sync mode", syncMode)
-
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {
 				if allHostChunks[maxProxHost][i] == '0' {
+					metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-not-max-prox", nil).Inc(1)
 					log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
 				} else {
 					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
@@ -220,6 +220,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 
 			// if chunk found at less than 2 hosts, which is actually less that the min size of a NN
 			if foundAt < 2 {
+				metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-less-nn", nil).Inc(1)
 				log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
 			}
 		}
@@ -235,6 +236,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 
 			if !found {
 				for _, maxProxHost := range maxProxHosts {
+					metrics.GetOrRegisterCounter("upload-and-sync.push-sync.chunk-not-max-prox", nil).Inc(1)
 					log.Error("chunk not found at any max prox host", "ref", addrs[i], "hosts", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
 				}
 			}
@@ -270,6 +272,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	}
 	t2 := time.Since(t1)
 	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
+	uploadSpeed := float64(len(randomBytes)) / t2.Seconds() // bytes per second
+	metrics.GetOrRegisterGauge("upload-and-sync.upload-speed", nil).Update(int64(uploadSpeed))
 
 	fhash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
@@ -315,6 +319,9 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 		ended := time.Since(start)
 
 		metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).Update(ended)
+		downloadSpeed := float64(len(randomBytes)) / ended.Seconds() // bytes per second
+		metrics.GetOrRegisterGauge("upload-and-sync.download-speed", nil).Update(int64(downloadSpeed))
+
 		log.Info("fetch successful", "took", ended, "endpoint", httpEndpoint(hosts[randIndex]))
 		break
 	}

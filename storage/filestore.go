@@ -45,8 +45,9 @@ const (
 
 type FileStore struct {
 	ChunkStore
-	hashFunc SwarmHasher
-	tags     *chunk.Tags
+	putterStore ChunkStore
+	hashFunc    SwarmHasher
+	tags        *chunk.Tags
 }
 
 type FileStoreParams struct {
@@ -68,15 +69,16 @@ func NewLocalFileStore(datadir string, basekey []byte, tags *chunk.Tags) (*FileS
 	cleanup := func() {
 		localStore.Close()
 	}
-	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams(), tags), cleanup, nil
+	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), localStore, NewFileStoreParams(), tags), cleanup, nil
 }
 
-func NewFileStore(store ChunkStore, params *FileStoreParams, tags *chunk.Tags) *FileStore {
+func NewFileStore(store ChunkStore, putterStore ChunkStore, params *FileStoreParams, tags *chunk.Tags) *FileStore {
 	hashFunc := MakeHashFunc(params.Hash)
 	return &FileStore{
-		ChunkStore: store,
-		hashFunc:   hashFunc,
-		tags:       tags,
+		ChunkStore:  store,
+		putterStore: putterStore,
+		hashFunc:    hashFunc,
+		tags:        tags,
 	}
 }
 
@@ -109,7 +111,7 @@ func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEnc
 		tag = chunk.NewTag(0, "", 0)
 		//return nil, nil, err
 	}
-	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag)
+	putter := NewHasherStore(f.putterStore, f.hashFunc, toEncrypt, tag)
 	return PyramidSplit(ctx, data, putter, putter, tag)
 }
 

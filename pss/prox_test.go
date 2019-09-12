@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -21,6 +22,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 // needed to make the enode id of the receiving node available to the handler for triggers
@@ -211,7 +213,7 @@ func TestProxNetwork(t *testing.T) {
 }
 
 func TestProxNetworkLong(t *testing.T) {
-	if !*longrunning {
+	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("8_nodes,_100_messages,_30_seconds", func(t *testing.T) {
@@ -419,17 +421,14 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil), nil, nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil, nil, nil), nil, nil
 		},
 		"pss": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
 			initTest()
 
-			// create keys in cryptoUtils and set up the pss object
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second*3)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			// create keys and set up the pss object
+			privkey, err := ethCrypto.GenerateKey()
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)

@@ -19,14 +19,13 @@ package client
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -37,6 +36,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 type protoCtrl struct {
@@ -46,9 +46,6 @@ type protoCtrl struct {
 }
 
 var (
-	debugdebugflag = flag.Bool("vv", false, "veryverbose")
-	debugflag      = flag.Bool("v", false, "verbose")
-	cryptoUtils    pss.CryptoUtils
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -58,25 +55,12 @@ var (
 var services = newServices()
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
 
-	loglevel := log.LvlInfo
-	if *debugflag {
-		loglevel = log.LvlDebug
-	} else if *debugdebugflag {
-		loglevel = log.LvlTrace
-	}
-
 	psslogmain = log.New("psslog", "*")
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(loglevel, hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
-
-	cryptoUtils = pss.NewCryptoUtils()
 
 	pssprotocols = make(map[string]*protoCtrl)
 }
@@ -245,13 +229,7 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
-			if err != nil {
-				return nil, err
-			}
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			privkey, err := ethCrypto.GenerateKey()
 			if err != nil {
 				return nil, err
 			}
@@ -278,7 +256,7 @@ func newServices() adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil, nil, nil), nil
 		},
 	}
 }

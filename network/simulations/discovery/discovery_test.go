@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/state"
-	colorable "github.com/mattn/go-colorable"
 )
 
 // serviceName is used with the exec adapter so the exec'd binary knows which
@@ -86,8 +85,6 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 var (
 	nodeCount = flag.Int("nodes", defaultNodeCount(), "number of nodes to create (default 32)")
 	initCount = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
-	loglevel  = flag.Int("loglevel", 3, "verbosity of logs")
-	rawlog    = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
 
 func defaultNodeCount() int {
@@ -98,13 +95,10 @@ func defaultNodeCount() int {
 }
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }
 
 // Benchmarks to test the average time it takes for an N-node ring
@@ -526,8 +520,8 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 		if err != nil {
 			return nil, err
 		}
-		return network.NewBzz(config, kad, store, nil, nil), nil
+		return network.NewBzz(config, kad, store, nil, nil, nil, nil), nil
 	}
 
-	return network.NewBzz(config, kad, nil, nil, nil), nil
+	return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil
 }

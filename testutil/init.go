@@ -14,17 +14,33 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package retrieval
+package testutil
 
-import "github.com/ethersphere/swarm/storage"
+import (
+	"flag"
 
-// RetrieveRequest is the protocol msg for chunk retrieve requests
-type RetrieveRequest struct {
-	Addr storage.Address
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/mattn/go-colorable"
+)
+
+// Common flags used in Swarm tests.
+var (
+	Loglevel    = flag.Int("loglevel", 2, "verbosity of logs")
+	Longrunning = flag.Bool("longrunning", false, "do run long-running tests")
+
+	rawlog = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+)
+
+// Init ensures that testing.Init is called before flag.Parse and sets common
+// logging options.
+func Init() {
+	testInit()
+
+	flag.Parse()
+
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*Loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }
 
-// ChunkDelivery is the protocol msg for delivering a solicited chunk to a peer
-type ChunkDelivery struct {
-	Addr  storage.Address
-	SData []byte
-}
+// This function is set to testing.Init for go 1.13.
+var testInit = func() {}

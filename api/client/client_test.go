@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/api"
 	swarmhttp "github.com/ethersphere/swarm/api/http"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
@@ -50,7 +51,7 @@ func TestClientUploadDownloadRaw(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 1, 1, 0, 1)
+	chunktesting.CheckTag(t, tag, 1, 1, 0, 1)
 }
 
 func TestClientUploadDownloadRawEncrypted(t *testing.T) {
@@ -68,7 +69,7 @@ func TestClientUploadDownloadRawEncrypted(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 1, 1, 0, 1)
+	chunktesting.CheckTag(t, tag, 1, 1, 0, 1)
 }
 
 func testClientUploadDownloadRaw(srv *swarmhttp.TestSwarmServer, toEncrypt bool, t *testing.T, data []byte, toPin bool) string {
@@ -227,7 +228,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 9, 9, 0, 9)
+	chunktesting.CheckTag(t, tag, 9, 9, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string, expected []byte) {
@@ -371,7 +372,7 @@ func TestClientMultipartUpload(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 9, 9, 0, 9)
+	chunktesting.CheckTag(t, tag, 9, 9, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {

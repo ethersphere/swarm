@@ -19,18 +19,20 @@ package retrieval
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -45,14 +47,13 @@ var (
 	_ node.Service = &Retrieval{}
 
 	// Metrics
-	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks.count", nil)
-	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg.count", nil)
-	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail.count", nil)
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks_handled", nil)
+	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
+	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
 
-	lastReceivedRetrieveChunksMsg = metrics.GetOrRegisterGauge("network.retrieve.received_chunks", nil)
+	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
-	// Protocol spec
-	spec = &protocols.Spec{
+	Spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
 		Version:    1,
 		MaxMsgSize: 10 * 1024 * 1024,
@@ -65,61 +66,105 @@ var (
 	ErrNoPeerFound = errors.New("no peer found")
 )
 
+// RetrievalPrices define the price matrix that correlates a message
+// type to a certain price (or price function)
+type RetrievalPrices struct {
+	priceMatrix map[reflect.Type]*protocols.Price
+}
+
+// Price implements the protocols.Price interface and returns the price for a specific message
+func (p *RetrievalPrices) Price(msg interface{}) *protocols.Price {
+	t := reflect.TypeOf(msg).Elem()
+	return p.priceMatrix[t]
+}
+
+func (p *RetrievalPrices) retrieveRequestPrice() uint64 {
+	return uint64(1)
+}
+
+func (p *RetrievalPrices) chunkDeliveryPrice() uint64 {
+	return uint64(1)
+}
+
+// createPriceOracle sets up a matrix which can be queried to get
+// the price for a message via the Price method
+func (r *Retrieval) createPriceOracle() {
+	p := &RetrievalPrices{}
+	p.priceMatrix = map[reflect.Type]*protocols.Price{
+		reflect.TypeOf(ChunkDelivery{}): {
+			Value:   p.chunkDeliveryPrice(),
+			PerByte: true,
+			Payer:   protocols.Receiver,
+		},
+		reflect.TypeOf(RetrieveRequest{}): {
+			Value:   p.retrieveRequestPrice(),
+			PerByte: false,
+			Payer:   protocols.Sender,
+		},
+	}
+	r.prices = p
+}
+
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
-	mtx      sync.Mutex
+	mtx      sync.RWMutex
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
-	spec     *protocols.Spec //this protocol's spec
-
-	quit chan struct{} // termination
+	prices   protocols.Prices
+	logger   log.Logger
+	quit     chan struct{}
 }
 
-// NewRetrieval returns a new instance of the retrieval protocol handler
-func New(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
-	return &Retrieval{
+// New returns a new instance of the retrieval protocol handler
+func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte) *Retrieval {
+	r := &Retrieval{
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
 		netStore: ns,
+		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
-		spec:     spec,
 	}
+	r.createPriceOracle()
+	return r
 }
 
 func (r *Retrieval) addPeer(p *Peer) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	r.peers[p.ID()] = p
+	retrievalPeers.Update(int64(len(r.peers)))
 }
 
 func (r *Retrieval) removePeer(p *Peer) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	delete(r.peers, p.ID())
+	retrievalPeers.Update(int64(len(r.peers)))
 }
 
 func (r *Retrieval) getPeer(id enode.ID) *Peer {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
 
 	return r.peers[id]
 }
 
-// Run protocol function
-func (r *Retrieval) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, r.spec)
-	bp := network.NewBzzPeer(peer)
+// Run is being dispatched when 2 nodes connect
+func (r *Retrieval) Run(bp *network.BzzPeer) error {
 	sp := NewPeer(bp)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
-	return peer.Run(r.handleMsg(sp))
+
+	return sp.Peer.Run(r.handleMsg(sp))
 }
 
 func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
 		case *RetrieveRequest:
+			// we must handle them in a different goroutine otherwise parallel requests
+			// for other chunks from the same peer will get stuck in the queue
 			go r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
 			go r.handleChunkDelivery(ctx, p, msg)
@@ -134,7 +179,7 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 // this is used only for tracing, and can probably be refactor so that we don't have to
 // iterater over Kademlia
 func (r *Retrieval) getOriginPo(req *storage.Request) int {
-	log.Trace("retrieval.getOriginPo", "req.Addr", req.Addr)
+	r.logger.Trace("retrieval.getOriginPo", "req.Addr", req.Addr)
 	originPo := -1
 
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
@@ -154,7 +199,7 @@ func (r *Retrieval) getOriginPo(req *storage.Request) int {
 
 // findPeer finds a peer we need to ask for a specific chunk from according to our kademlia
 func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer *network.Peer, err error) {
-	log.Trace("retrieval.findPeer", "req.Addr", req.Addr)
+	r.logger.Trace("retrieval.findPeer", "req.Addr", req.Addr)
 	osp, _ := ctx.Value("remote.fetch").(opentracing.Span)
 
 	// originPo - proximity of the node that made the request; -1 if the request originator is our node;
@@ -181,7 +226,11 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
-		// skip light nodes
+		if !p.HasCap(Spec.Name) {
+			return true
+		}
+
+		// skip light nodes, even though they support `bzz-retrieve` protocol
 		if p.LightNode {
 			return true
 		}
@@ -193,33 +242,33 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 
 		// skip peers that we have already tried
 		if req.SkipPeer(id.String()) {
-			log.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
+			r.logger.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
 			return true
 		}
 
 		if myPo < depth { //  chunk is NOT within the neighbourhood
 			if po <= myPo { // always choose a peer strictly closer to chunk than us
-				log.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				r.logger.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 				return false
 			} else {
-				log.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				r.logger.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 			}
 		} else { // chunk IS WITHIN neighbourhood
 			if po < depth { // do not select peer outside the neighbourhood. But allows peers further from the chunk than us
-				log.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				r.logger.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 				return false
 			} else if po <= originPo { // avoid loop in neighbourhood, so not forward when a request comes from the neighbourhood
-				log.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				r.logger.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 				return false
 			} else {
-				log.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				r.logger.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 			}
 		}
 
 		// if selected peer is not in the depth (2nd condition; if depth <= po, then peer is in nearest neighbourhood)
 		// and they have a lower po than ours, return error
 		if po < myPo && depth > po {
-			log.Trace("findpeer4 skip peer because origin was closer", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			r.logger.Trace("findpeer4 skip peer because origin was closer", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 
 			err = fmt.Errorf("not asking peers further away from origin; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
 			return false
@@ -228,7 +277,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 		// if chunk falls in our nearest neighbourhood (1st condition), but suggested peer is not in
 		// the nearest neighbourhood (2nd condition), don't forward the request to suggested peer
 		if depth <= myPo && depth > po {
-			log.Trace("findpeer5 skip peer because depth", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			r.logger.Trace("findpeer5 skip peer because depth", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 
 			err = fmt.Errorf("not going outside of depth; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
 			return false
@@ -289,7 +338,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		p.logger.Debug("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
+		p.logger.Error("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
 		return
 	}
 
@@ -312,7 +361,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 // handleChunkDelivery handles a ChunkDelivery message from a certain peer
 // if the chunk proximity order in relation to our base address is within depth
 // we treat the chunk as a chunk received in syncing
-func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) error {
+func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
@@ -321,11 +370,8 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 
 	processReceivedChunksCount.Inc(1)
 
-	// record the last time we received a chunk delivery message
-	lastReceivedRetrieveChunksMsg.Update(time.Now().UnixNano())
-
 	// count how many chunks we receive for retrieve requests per peer
-	peermetric := fmt.Sprintf("chunk.delivery.%x", p.BzzAddr.Over()[:16])
+	peermetric := fmt.Sprintf("network.retrieve.chunk.delivery.%x", p.BzzAddr.Over()[:16])
 	metrics.GetOrRegisterCounter(peermetric, nil).Inc(1)
 
 	peerPO := chunk.Proximity(p.BzzAddr.Over(), msg.Addr)
@@ -340,26 +386,20 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 		// do not sync if peer that is sending us a chunk is closer to the chunk then we are
 		mode = chunk.ModePutRequest
 	}
+	defer osp.Finish()
 
-	p.logger.Trace("handle.chunk.delivery", "ref", msg.Addr)
-
-	go func() {
-		defer osp.Finish()
-		p.logger.Trace("handle.chunk.delivery", "put", msg.Addr)
-		_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
-		if err != nil {
-			if err == storage.ErrChunkInvalid {
-				p.Drop()
-			}
+	_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+	if err != nil {
+		p.logger.Error("netstore error putting chunk to localstore", "err", err)
+		if err == storage.ErrChunkInvalid {
+			p.Drop()
 		}
-		p.logger.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
-	}()
-	return nil
+	}
 }
 
 // RequestFromPeers sends a chunk retrieve request to the next found peer
 func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-	log.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr)
+	r.logger.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr, "localID", localID)
 	metrics.GetOrRegisterCounter("network.retrieve.request_from_peers", nil).Inc(1)
 
 	const maxFindPeerRetries = 5
@@ -368,15 +408,17 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 FINDPEER:
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {
-		log.Trace(err.Error())
+		r.logger.Error(err.Error())
 		return nil, err
 	}
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
+		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
+		req.PeersToSkip.Store(sp.ID().String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
-			log.Error("max find peer retries reached", "max retries", maxFindPeerRetries)
+			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
 			return nil, ErrNoPeerFound
 		}
 
@@ -398,12 +440,12 @@ FINDPEER:
 }
 
 func (r *Retrieval) Start(server *p2p.Server) error {
-	log.Info("starting bzz-retrieve")
+	r.logger.Info("starting bzz-retrieve")
 	return nil
 }
 
 func (r *Retrieval) Stop() error {
-	log.Info("shutting down bzz-retrieve")
+	r.logger.Info("shutting down bzz-retrieve")
 	close(r.quit)
 	return nil
 }
@@ -411,12 +453,19 @@ func (r *Retrieval) Stop() error {
 func (r *Retrieval) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    r.spec.Name,
-			Version: r.spec.Version,
-			Length:  r.spec.Length(),
-			Run:     r.Run,
+			Name:    Spec.Name,
+			Version: Spec.Version,
+			Length:  Spec.Length(),
+			Run:     r.runProtocol,
 		},
 	}
+}
+
+func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	peer := protocols.NewPeer(p, rw, Spec)
+	bp := network.NewBzzPeer(peer)
+
+	return r.Run(bp)
 }
 
 func (r *Retrieval) APIs() []rpc.API {

@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -45,11 +44,10 @@ import (
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel           = flag.Int("loglevel", 2, "verbosity of logs")
 	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
@@ -77,11 +75,8 @@ type swapTestBackend struct {
 }
 
 func init() {
-	flag.Parse()
+	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
 	// create a single backend for all tests
 	testBackend = newTestBackend()
@@ -527,7 +522,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	}
 	log.Debug("creating simulated backend")
 
-	swap := New(log.Logger.GetHandler, stateStore, key, common.Address{}, testBackend)
+	swap := New(log.Logger.GetHandler(), stateStore, key, testBackend)
 	return swap, dir
 }
 
@@ -669,8 +664,8 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 	}
 }
 
-// tests if verifyContract accepts an address with the correct bytecode
-func TestVerifyContract(t *testing.T) {
+// tests if TestValidateCode accepts an address with the correct bytecode
+func TestValidateCode(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
@@ -683,13 +678,13 @@ func TestVerifyContract(t *testing.T) {
 
 	testBackend.Commit()
 
-	if err = swap.verifyContract(context.TODO(), addr); err != nil {
+	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
 
-// tests if verifyContract rejects an address with different bytecode
-func TestVerifyContractWrongContract(t *testing.T) {
+// tests if ValidateCode rejects an address with different bytecode
+func TestValidateWrongCode(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
@@ -704,7 +699,7 @@ func TestVerifyContractWrongContract(t *testing.T) {
 	testBackend.Commit()
 
 	// since the bytecode is different this should throw an error
-	if err = swap.verifyContract(context.TODO(), addr); err != cswap.ErrNotASwapContract {
+	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != cswap.ErrNotASwapContract {
 		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }

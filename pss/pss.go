@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -36,18 +36,16 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/storage"
 	"golang.org/x/crypto/sha3"
 )
 
 const (
-	defaultPaddingByteSize     = 16
 	defaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
-	defaultWhisperWorkTime     = 3
-	defaultWhisperPoW          = 0.0000000001
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
 	defaultOutboxCapacity      = 100000
@@ -212,13 +210,12 @@ type Pss struct {
 	peers   map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
 	peersMu sync.RWMutex
 
-	fwdCache        map[digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	fwdCacheMu      sync.RWMutex
-	cacheTTL        time.Duration // how long to keep messages in fwdCache (not implemented)
-	msgTTL          time.Duration
-	paddingByteSize int
-	capstring       string
-	outbox          outbox
+	fwdCache   map[digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	fwdCacheMu sync.RWMutex
+	cacheTTL   time.Duration // how long to keep messages in fwdCache (not implemented)
+	msgTTL     time.Duration
+	capstring  string
+	outbox     outbox
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -232,7 +229,7 @@ type Pss struct {
 }
 
 func (p *Pss) String() string {
-	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), common.ToHex(p.Crypto.FromECDSAPub(&p.privateKey.PublicKey)))
+	return fmt.Sprintf("pss: addr %x, pubkey %v", p.BaseAddr(), hex.EncodeToString(p.Crypto.SerializePublicKey(&p.privateKey.PublicKey)))
 }
 
 // Creates a new Pss instance.
@@ -254,12 +251,11 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		privateKey: params.privateKey,
 		quitC:      make(chan struct{}),
 
-		peers:           make(map[string]*protocols.Peer),
-		fwdCache:        make(map[digest]cacheEntry),
-		cacheTTL:        params.CacheTTL,
-		msgTTL:          params.MsgTTL,
-		paddingByteSize: defaultPaddingByteSize,
-		capstring:       c.String(),
+		peers:     make(map[string]*protocols.Peer),
+		fwdCache:  make(map[digest]cacheEntry),
+		cacheTTL:  params.CacheTTL,
+		msgTTL:    params.MsgTTL,
+		capstring: c.String(),
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
@@ -306,7 +302,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 	go p.outbox.processOutbox()
 
 	log.Info("Started Pss")
-	log.Info("Loaded EC keys", "pubkey", common.ToHex(p.Crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(p.Crypto.CompressPubkey(p.PublicKey())))
+	log.Info("Loaded EC keys", "pubkey", hex.EncodeToString(p.Crypto.SerializePublicKey(p.PublicKey())), "secp256", hex.EncodeToString(p.Crypto.CompressPublicKey(p.PublicKey())))
 	return nil
 }
 
@@ -471,19 +467,19 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T", msg)
 	}
-	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Payload.Topic[:]))
+	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
-		log.Warn("pss filtered expired message", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
+		log.Warn("pss filtered expired message", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", hex.EncodeToString(pssmsg.To))
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
-		log.Trace("pss relay block-cache match (process)", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", (common.ToHex(pssmsg.To)))
+		log.Trace("pss relay block-cache match (process)", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", (hex.EncodeToString(pssmsg.To)))
 		return nil
 	}
 	p.addFwdCache(pssmsg)
 
-	psstopic := pssmsg.Payload.Topic
+	psstopic := pssmsg.Topic
 
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
@@ -507,11 +503,11 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
-		log.Trace("pss msg forwarding ===>", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
+		log.Trace("pss msg forwarding ===>", "pss", hex.EncodeToString(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss msg processing <===", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
+	log.Trace("pss msg processing <===", "pss", hex.EncodeToString(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Topic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
@@ -528,18 +524,16 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
-	var recvmsg *receivedMessage
 	var payload []byte
 	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(envelope *envelope) (*receivedMessage, string, PssAddress, error)
+	var keyFunc func(pssMsg *PssMsg) ([]byte, string, PssAddress, error)
 
-	envelope := pssmsg.Payload
-	psstopic := envelope.Topic
+	psstopic := pssmsg.Topic
 
 	if raw {
-		payload = pssmsg.Payload.Data
+		payload = pssmsg.Payload
 	} else {
 		if pssmsg.isSym() {
 			keyFunc = p.processSym
@@ -548,11 +542,10 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 			keyFunc = p.processAsym
 		}
 
-		recvmsg, keyid, from, err = keyFunc(envelope)
+		payload, keyid, from, err = keyFunc(pssmsg)
 		if err != nil {
-			return errors.New("Decryption failed")
+			return errors.New("decryption failed")
 		}
-		payload = recvmsg.Payload
 	}
 
 	if len(pssmsg.To) < addressLength || prox {
@@ -643,15 +636,12 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsgParams := &msgParams{
 		raw: true,
 	}
-	payload := &envelope{
-		Data:  msg,
-		Topic: topic,
-	}
 
 	pssMsg := newPssMsg(pssMsgParams)
 	pssMsg.To = address
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
-	pssMsg.Payload = payload
+	pssMsg.Payload = msg
+	pssMsg.Topic = topic
 
 	p.addFwdCache(pssMsg)
 
@@ -677,7 +667,7 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 //
 // Fails if the key id does not match any in of the stored public keys
 func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
-	if _, err := p.Crypto.UnmarshalPubkey(common.FromHex(pubkeyid)); err != nil {
+	if _, err := p.Crypto.UnmarshalPublicKey(common.FromHex(pubkeyid)); err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkeyid)
 	}
 	psp, ok := p.getPeerPub(pubkeyid, topic)
@@ -697,34 +687,24 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	if key == nil || bytes.Equal(key, []byte{}) {
 		return fmt.Errorf("Zero length key passed to pss send")
 	}
-	padding := make([]byte, p.paddingByteSize)
-	c, err := rand.Read(padding)
-	if err != nil {
-		return err
-	} else if c < p.paddingByteSize {
-		return fmt.Errorf("invalid padding length: %d", c)
-	}
-	mparams := &messageParams{
-		Src:     p.privateKey,
-		Topic:   topic,
-		Payload: msg,
-		Padding: padding,
+	wrapParams := &crypto.WrapParams{
+		Sender: p.privateKey,
 	}
 	if asymmetric {
-		pk, err := p.Crypto.UnmarshalPubkey(key)
+		pk, err := p.Crypto.UnmarshalPublicKey(key)
 		if err != nil {
 			return fmt.Errorf("Cannot unmarshal pubkey: %x", key)
 		}
-		mparams.Dst = pk
+		wrapParams.Receiver = pk
 	} else {
-		mparams.KeySym = key
+		wrapParams.SymmetricKey = key
 	}
 	// set up outgoing message container, which does encryption and envelope wrapping
-	envelope, err := newSentEnvelope(mparams)
+	envelope, err := p.Crypto.Wrap(msg, wrapParams)
 	if err != nil {
 		return fmt.Errorf("failed to perform message encapsulation and encryption: %v", err)
 	}
-	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", common.ToHex(mparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+	log.Trace("pssmsg wrap done", "env", envelope, "mparams payload", hex.EncodeToString(msg), "to", hex.EncodeToString(to), "asym", asymmetric, "key", hex.EncodeToString(key))
 
 	// prepare for devp2p transport
 	pssMsgParams := &msgParams{
@@ -734,6 +714,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	pssMsg.To = to
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = envelope
+	pssMsg.Topic = topic
 
 	return p.enqueue(pssMsg)
 }

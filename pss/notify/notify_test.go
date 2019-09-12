@@ -3,14 +3,12 @@ package notify
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -18,25 +16,20 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel    = flag.Int("loglevel", 3, "logging verbosity")
-	psses       map[string]*pss.Pss
-	cryptoUtils pss.CryptoUtils
-	crypto      pss.CryptoBackend
+	psses map[string]*pss.Pss
+	crypt crypto.Crypto
 )
 
 func init() {
-	flag.Parse()
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
+	testutil.Init()
 
-	cryptoUtils = pss.NewCryptoUtils()
-	crypto = pss.NewCryptoBackend()
+	crypt = crypto.New()
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -137,7 +130,7 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubkey, err := crypto.UnmarshalPubkey(pubkeybytes)
+	pubkey, err := crypt.UnmarshalPublicKey(pubkeybytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,13 +220,7 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
-			if err != nil {
-				return nil, err
-			}
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			privkey, err := ethCrypto.GenerateKey()
 			if err != nil {
 				return nil, err
 			}
@@ -245,7 +232,7 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(crypt.SerializePublicKey(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
@@ -257,7 +244,7 @@ func newServices(allowRaw bool) adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil, nil, nil), nil
 		},
 	}
 }

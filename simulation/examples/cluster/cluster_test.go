@@ -8,21 +8,16 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/simulation"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	nodes    = flag.Int("nodes", 20, "number of nodes to create")
-	loglevel = flag.Int("loglevel", 3, "verbosity of logs")
-	rawlog   = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+	nodes = flag.Int("nodes", 20, "number of nodes to create")
 )
 
 func init() {
-	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
+	testutil.Init()
 }
 
 func TestCluster(t *testing.T) {

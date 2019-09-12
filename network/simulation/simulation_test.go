@@ -19,26 +19,18 @@ package simulation
 import (
 	"context"
 	"errors"
-	"flag"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/mattn/go-colorable"
-)
-
-var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	"github.com/ethersphere/swarm/testutil"
 )
 
 func init() {
-	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	testutil.Init()
 }
 
 // TestRun tests if Run method calls RunFunc and if it handles context properly.

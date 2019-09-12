@@ -18,19 +18,21 @@ package storage
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
 
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
@@ -83,21 +85,23 @@ type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*e
 // on request it initiates remote cloud retrieval
 type NetStore struct {
 	chunk.Store
-	localID      enode.ID // our local enode - used when issuing RetrieveRequests
+	LocalID      enode.ID // our local enode - used when issuing RetrieveRequests
 	fetchers     *lru.Cache
 	putMu        sync.Mutex
 	requestGroup singleflight.Group
 	RemoteGet    RemoteGetFunc
+	logger       log.Logger
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
-func NewNetStore(store chunk.Store, localID enode.ID) *NetStore {
+func NewNetStore(store chunk.Store, baseAddr []byte, localID enode.ID) *NetStore {
 	fetchers, _ := lru.New(fetchersCapacity)
 
 	return &NetStore{
 		fetchers: fetchers,
 		Store:    store,
-		localID:  localID,
+		LocalID:  localID,
+		logger:   log.New("base", hex.EncodeToString(baseAddr)[:16]),
 	}
 }
 
@@ -108,9 +112,8 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 	defer n.putMu.Unlock()
 
 	for i, ch := range chs {
-		log.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
+		n.logger.Trace("netstore.put", "index", i, "ref", ch.Address().String(), "mode", mode)
 	}
-
 	// put the chunk to the localstore, there should be no error
 	exist, err := n.Store.Put(ctx, mode, chs...)
 	if err != nil {
@@ -125,16 +128,16 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			// delivered through syncing and through a retrieve request
 			fii := fi.(*Fetcher)
 			fii.SafeClose()
-			log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
+			n.logger.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
 
 			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
 			// helper snippet to log if a chunk took way to long to be delivered
 			slowChunkDeliveryThreshold := 5 * time.Second
 			if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
-				log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
+				metrics.GetOrRegisterCounter("netstore.slow_chunk_delivery", nil).Inc(1)
+				n.logger.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 			}
-
 			n.fetchers.Remove(ch.Address().String())
 		}
 	}
@@ -155,16 +158,14 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 	ref := req.Addr
 
-	log.Trace("netstore.get", "ref", ref.String())
-
 	ch, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
 		// TODO: fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
 		if err != ErrChunkNotFound && err != leveldb.ErrNotFound {
-			log.Error("localstore get error", "err", err)
+			n.logger.Error("localstore get error", "err", err)
 		}
 
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+		n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
@@ -183,7 +184,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 			ch, err := n.Store.Get(ctx, mode, ref)
 			if err != nil {
-				log.Error(err.Error(), "ref", ref)
+				n.logger.Error(err.Error(), "ref", ref)
 				return nil, errors.New("item should have been in localstore, but it is not")
 			}
 
@@ -196,16 +197,17 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 		})
 
 		if err != nil {
-			log.Trace(err.Error(), "ref", ref)
+			n.logger.Trace(err.Error(), "ref", ref)
 			return nil, err
 		}
 
 		c := v.(Chunk)
 
-		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
+		n.logger.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
 
 		return c, nil
 	}
+	n.logger.Trace("netstore.get returned", "ref", ref.String())
 
 	ctx, ssp := spancontext.StartSpan(
 		ctx,
@@ -234,23 +236,23 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
 
-		log.Trace("remote.fetch", "ref", ref)
+		n.logger.Trace("remote.fetch", "ref", ref)
 
-		currentPeer, err := n.RemoteGet(ctx, req, n.localID)
+		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
 		if err != nil {
-			log.Trace(err.Error(), "ref", ref)
+			n.logger.Trace(err.Error(), "ref", ref)
 			osp.LogFields(olog.String("err", err.Error()))
 			osp.Finish()
 			return ErrNoSuitablePeer
 		}
 
 		// add peer to the set of peers to skip from now
-		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
+		n.logger.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
 		req.PeersToSkip.Store(currentPeer.String(), time.Now())
 
 		select {
 		case <-fi.Delivered:
-			log.Trace("remote.fetch, chunk delivered", "ref", ref)
+			n.logger.Trace("remote.fetch, chunk delivered", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
 
 			osp.LogFields(olog.Bool("delivered", true))
 			osp.Finish()
@@ -262,7 +264,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			osp.Finish()
 			break
 		case <-ctx.Done(): // global fetcher timeout
-			log.Trace("remote.fetch, fail", "ref", ref)
+			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref)
 			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
 
 			osp.LogFields(olog.Bool("fail", true))
@@ -284,17 +286,9 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
-	has, err := n.Store.Has(ctx, ref)
-	if err != nil {
-		log.Error(err.Error())
-	}
-	if has {
-		return nil, false, false
-	}
-
 	f = NewFetcher()
 	v, loaded := n.fetchers.Get(ref.String())
-	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
+	n.logger.Trace("netstore.has-with-callback.loadorstore", "localID", n.LocalID.String()[:16], "ref", ref.String(), "loaded", loaded, "createdBy", interestedParty)
 	if loaded {
 		f = v.(*Fetcher)
 	} else {

@@ -18,6 +18,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -25,17 +26,21 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	stream "github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/storage"
 )
+
+const InspectorIsPullSyncingTolerance = 15 * time.Second
 
 type Inspector struct {
 	api      *API
 	hive     *network.Hive
 	netStore *storage.NetStore
+	stream   *stream.Registry
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Inspector {
-	return &Inspector{api, hive, netStore}
+func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *stream.Registry) *Inspector {
+	return &Inspector{api, hive, netStore, pullSyncer}
 }
 
 // Hive prints the kademlia table
@@ -49,15 +54,12 @@ func (i *Inspector) KademliaInfo() network.KademliaInfo {
 }
 
 func (i *Inspector) IsPullSyncing() bool {
-	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
-
-	// last received chunks msg time
-	lrct := time.Unix(0, lastReceivedChunksMsg.Value())
+	t := i.stream.LastReceivedChunkTime()
 
 	// if last received chunks msg time is after now-15sec. (i.e. within the last 15sec.) then we say that the node is still syncing
 	// technically this is not correct, because this might have been a retrieve request, but for the time being it works for our purposes
 	// because we know we are not making retrieve requests on the node while checking this
-	return lrct.After(time.Now().Add(-15 * time.Second))
+	return t.After(time.Now().Add(-InspectorIsPullSyncingTolerance))
 }
 
 // DeliveriesPerPeer returns the sum of chunks we received from a given peer
@@ -67,7 +69,7 @@ func (i *Inspector) DeliveriesPerPeer() map[string]int64 {
 	// iterate connection in kademlia
 	i.hive.Kademlia.EachConn(nil, 255, func(p *network.Peer, po int) bool {
 		// get how many chunks we receive for retrieve requests per peer
-		peermetric := fmt.Sprintf("chunk.delivery.%x", p.Over()[:16])
+		peermetric := fmt.Sprintf("network.retrieve.chunk.delivery.%x", p.Over()[:16])
 
 		res[fmt.Sprintf("%x", p.Over()[:16])] = metrics.GetOrRegisterCounter(peermetric, nil).Count()
 
@@ -95,4 +97,16 @@ func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 	}
 
 	return strings.Join(hostChunks, "")
+}
+
+func (i *Inspector) PeerStreams() (string, error) {
+	peerInfo, err := i.stream.PeerInfo()
+	if err != nil {
+		return "", err
+	}
+	v, err := json.Marshal(peerInfo)
+	if err != nil {
+		return "", err
+	}
+	return string(v), nil
 }

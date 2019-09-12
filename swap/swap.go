@@ -97,13 +97,13 @@ func NewLogger(h interface{}) log.Logger {
 }
 
 // New - swap constructor
-func New(logHandler interface{}, stateStore state.Store, prvkey *ecdsa.PrivateKey, contract common.Address, backend contract.Backend) *Swap {
+func New(logHandler interface{}, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend) *Swap {
 	return &Swap{
 		logger:              NewLogger(logHandler),
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
-		owner:               createOwner(prvkey, contract),
+		owner:               createOwner(prvkey),
 		params:              NewParams(),
 		paymentThreshold:    DefaultPaymentThreshold,
 		disconnectThreshold: DefaultDisconnectThreshold,
@@ -137,13 +137,12 @@ func keyToID(key string, prefix string) enode.ID {
 }
 
 // createOwner assings keys and addresses
-func createOwner(prvkey *ecdsa.PrivateKey, contract common.Address) *Owner {
+func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
+		address:    crypto.PubkeyToAddress(*pubkey),
 		privateKey: prvkey,
 		publicKey:  pubkey,
-		Contract:   contract,
-		address:    crypto.PubkeyToAddress(*pubkey),
 	}
 }
 
@@ -262,7 +261,6 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 
 	lastCheque := p.getLastReceivedCheque()
 
-	// TODO: there should probably be a lock here?
 	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
 	if err != nil {
 		return 0, err
@@ -323,33 +321,33 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
-func (s *Swap) loadLastReceivedCheque(p enode.ID) (*Cheque, error) {
-	var cheque *Cheque
-	error := s.store.Get(receivedChequeKey(p), &cheque)
-	if error == state.ErrNotFound {
+// and returns nil when there never was a cheque saved
+func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
+	err = s.store.Get(receivedChequeKey(p), &cheque)
+	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, error
+	return cheque, err
 }
 
 // loadLastSentCheque loads the last sent cheque for the peer from the store
-func (s *Swap) loadLastSentCheque(p enode.ID) (*Cheque, error) {
-	var cheque *Cheque
-	error := s.store.Get(sentChequeKey(p), &cheque)
-	if error == state.ErrNotFound {
+// and returns nil when there never was a cheque saved
+func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
+	err = s.store.Get(sentChequeKey(p), &cheque)
+	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, error
+	return cheque, err
 }
 
 // loadBalance loads the current balance for the peer from the store
-func (s *Swap) loadBalance(p enode.ID) (int64, error) {
-	var balance int64
-	error := s.store.Get(balanceKey(p), &balance)
-	if error == state.ErrNotFound {
+// and returns 0 if there was no prior balance saved
+func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
+	err = s.store.Get(balanceKey(p), &balance)
+	if err == state.ErrNotFound {
 		return 0, nil
 	}
-	return balance, error
+	return balance, err
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
@@ -377,9 +375,9 @@ func (s *Swap) GetParams() *swap.Params {
 	return s.contract.ContractParams()
 }
 
-// verifyContract checks if the bytecode found at address matches the expected bytecode
-func (s *Swap) verifyContract(ctx context.Context, address common.Address) error {
-	return contract.ValidateCode(ctx, s.backend, address)
+// setChequebookAddr sets the chequebook address
+func (s *Swap) setChequebookAddr(chequebookAddr common.Address) {
+	s.owner.Contract = chequebookAddr
 }
 
 // getContractOwner retrieve the owner of the chequebook at address from the blockchain
@@ -392,8 +390,38 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// Deploy deploys the Swap contract
-func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) error {
+// StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
+func (s *Swap) StartChequebook(chequebookAddr common.Address) error {
+	if chequebookAddr != (common.Address{}) {
+		if err := s.BindToContractAt(chequebookAddr); err != nil {
+			return err
+		}
+		log.Info("Using the provided chequebook", "chequebookAddr", chequebookAddr)
+	} else {
+		if err := s.Deploy(context.Background(), s.backend); err != nil {
+			return err
+		}
+		log.Info("New SWAP contract deployed", "contract info", s.DeploySuccess())
+	}
+	return nil
+}
+
+// BindToContractAt binds an instance of an already existing chequebook contract at address and sets chequebookAddr
+func (s *Swap) BindToContractAt(address common.Address) (err error) {
+
+	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
+		return fmt.Errorf("contract validation for %v failed: %v", address, err)
+	}
+	s.contract, err = contract.InstanceAt(address, s.backend)
+	if err != nil {
+		return err
+	}
+	s.setChequebookAddr(address)
+	return nil
+}
+
+// Deploy deploys the Swap contract and sets the contract address
+func (s *Swap) Deploy(ctx context.Context, backend swap.Backend) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
@@ -405,7 +433,7 @@ func (s *Swap) Deploy(ctx context.Context, backend swap.Backend, path string) er
 		s.logger.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	s.owner.Contract = address
+	s.setChequebookAddr(address)
 	s.logger.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
