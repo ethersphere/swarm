@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -48,6 +49,7 @@ import (
 )
 
 var (
+	loglevel           = flag.Int("logleveld", 2, "verbosity of debug logs")
 	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
@@ -521,8 +523,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 		t.Fatal(err2)
 	}
 	log.Debug("creating simulated backend")
-
-	swap := New(log.Logger.GetHandler(), stateStore, key, testBackend)
+	swap := New(nil, stateStore, key, testBackend)
 	return swap, dir
 }
 
