@@ -226,7 +226,12 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
-		if !p.HasCap("bzz-retrieve") {
+		if !p.HasCap(Spec.Name) {
+			return true
+		}
+
+		// skip light nodes, even though they support `bzz-retrieve` protocol
+		if p.LightNode {
 			return true
 		}
 
