@@ -17,9 +17,8 @@
 package network
 
 import (
-	"crypto/ecdsa"
-	//crand "crypto/rand"
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
 	"math/rand"

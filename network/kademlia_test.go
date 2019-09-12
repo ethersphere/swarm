@@ -472,32 +472,6 @@ func TestOffEffectingAddressBookNormalNode(t *testing.T) {
 	}
 }
 
-// a light node should not be in the address book
-func TestOffEffectingAddressBookLightNode(t *testing.T) {
-	t.Skip("lightnode flag is now obsolete, this test must be changed")
-	tk := newTestKademlia(t, "00000000")
-	// light node peer added to kademlia
-	tk.Kademlia.On(tk.newTestKadPeer("01000000", true))
-	// peer should not be in the address book
-	if tk.addrs.Size() != 0 {
-		t.Fatal("known peer addresses should contain 0 entry")
-	}
-	// peer should be among live connections
-	if tk.conns.Size() != 1 {
-		t.Fatal("live peers should contain 1 entry")
-	}
-	// remove peer from kademlia
-	tk.Kademlia.Off(tk.newTestKadPeer("01000000", true))
-	// peer should not be in the address book
-	if tk.addrs.Size() != 0 {
-		t.Fatal("known peer addresses should contain 0 entry")
-	}
-	// peer should not be among live connections
-	if tk.conns.Size() != 0 {
-		t.Fatal("live peers should contain 0 entry")
-	}
-}
-
 func TestSuggestPeerRetries(t *testing.T) {
 	tk := newTestKademlia(t, "00000000")
 	tk.RetryInterval = int64(300 * time.Millisecond) // cycle

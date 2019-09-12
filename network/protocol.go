@@ -375,7 +375,6 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 	if !isFullCapability(rhs.Addr.Capabilities.Get(0)) && !isLightCapability(rhs.Addr.Capabilities.Get(0)) {
 		return fmt.Errorf("invalid capabilities setting: %s", rhs.Addr.Capabilities)
 	}
-	//rhs.Addr.Capabilities = hs.(*HandshakeMsg).Addr.Capabilities
 	return nil
 }
 

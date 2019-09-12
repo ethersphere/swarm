@@ -110,7 +110,7 @@ func TestRegisterAndConnect(t *testing.T) {
 // Actual connectivity is not in scope for this test, as the peers loaded from state are not known to
 // the simulation; the test only verifies that the peers are known to the node
 func TestHiveStatePersistance(t *testing.T) {
-	t.Skip("persistence test does not retrieve capabilities properly")
+	//	t.Skip("persistence test does not retrieve capabilities properly")
 	dir, err := ioutil.TempDir("", "hive_test_store")
 	if err != nil {
 		t.Fatal(err)
