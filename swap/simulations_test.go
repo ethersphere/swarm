@@ -180,8 +180,10 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance, prices)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			testDeploy(context.Background(), balance.backend, balance)
-			params.backend.Commit()
+			err = testDeploy(context.Background(), balance)
+			if err != nil {
+				return nil, nil, err
+			}
 			// store the testService into the bucket
 			bucket.Store(bucketKeySwap, ts)
 
@@ -450,7 +452,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		defer cancel()
 
 		// we will send just maxCheques number of cheques
-		maxCheques := 6
+		maxCheques := 10
 
 		// the peer object used for sending
 		creditorPeer := debitorSvc.peers[creditor]

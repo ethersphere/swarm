@@ -46,8 +46,11 @@ it expects a handshake to take place between the two nodes
 func TestHandshake(t *testing.T) {
 	var err error
 
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	// setup test swap object
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	ctx := context.Background()
@@ -112,9 +115,12 @@ func TestHandshake(t *testing.T) {
 // We have the debitor send a cheque via an `EmitChequeMsg`, then the creditor "reads" (pipe) the message
 // and handles the cheque.
 func TestEmitCheque(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	log.Debug("set up test swaps")
-	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
-	debitorSwap, clean2 := newTestSwap(t, ownerKey)
+	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey, testBackend)
+	debitorSwap, clean2 := newTestSwap(t, ownerKey, testBackend)
 	defer clean1()
 	defer clean2()
 
@@ -198,8 +204,11 @@ func TestEmitCheque(t *testing.T) {
 // when we reach the payment threshold
 // It is the debitor who triggers cheques
 func TestTriggerPaymentThreshold(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	log.Debug("create test swap")
-	debitorSwap, clean := newTestSwap(t, ownerKey)
+	debitorSwap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	ctx := context.Background()
@@ -262,8 +271,11 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 // when we reach the disconnect threshold
 // It is the creditor who triggers the disconnect from a overdraft creditor
 func TestTriggerDisconnectThreshold(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	log.Debug("create test swap")
-	creditorSwap, clean := newTestSwap(t, beneficiaryKey)
+	creditorSwap, clean := newTestSwap(t, beneficiaryKey, testBackend)
 	defer clean()
 
 	// create a dummy pper
@@ -315,6 +327,8 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 // TestSwapRPC tests some basic things over RPC
 // We want this so that we can check the API works
 func TestSwapRPC(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 
 	if runtime.GOOS == "windows" {
 		t.Skip()
@@ -325,7 +339,7 @@ func TestSwapRPC(t *testing.T) {
 		err     error
 	)
 
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
