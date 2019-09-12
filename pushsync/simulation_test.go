@@ -33,13 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/simulation"
-	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/pss"
-	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"golang.org/x/sync/errgroup"
@@ -84,7 +84,7 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.Servic
 	ctx := context.Background()
 	snapCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	err := sim.UploadSnapshot(snapCtx, filepath.Join("../network/stream/testing", fmt.Sprintf("snapshot_%d.json", nodeCnt)))
+	err := sim.UploadSnapshot(snapCtx, filepath.Join("../network/stream/testdata", fmt.Sprintf("snapshot_%d.json", nodeCnt)))
 	if err != nil {
 		return fmt.Errorf("error while loading snapshot: %v", err)
 	}
@@ -183,7 +183,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 	// setup netstore
-	netStore := storage.NewNetStore(lstore, n.ID())
+	netStore := storage.NewNetStore(lstore, addr.Over(), n.ID())
 
 	// setup pss
 	kadParams := network.NewKadParams()
@@ -197,15 +197,9 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 
-	// streamer for retrieval
-	delivery := stream.NewDelivery(kad, netStore)
-	netStore.RemoteGet = delivery.RequestFromPeers
-
 	bucket.Store(bucketKeyNetStore, netStore)
 
-	// set up syncer
-	noSyncing := &stream.RegistryOptions{Syncing: stream.SyncingDisabled, SyncUpdateDelay: 50 * time.Millisecond}
-	r := stream.NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), noSyncing, nil)
+	r := retrieval.New(kad, netStore, kad.BaseAddr())
 
 	pubSub := pss.NewPubSub(ps)
 	// setup pusher
@@ -218,34 +212,37 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	cleanup := func() {
 		p.Close()
 		s.Close()
-		r.Close()
 		netStore.Close()
 		os.RemoveAll(dir)
 	}
 
-	return &StreamerAndPss{r, ps}, cleanup, nil
+	return &RetrievalAndPss{r, ps}, cleanup, nil
 }
 
 // implements the node.Service interface
-type StreamerAndPss struct {
-	*stream.Registry
-	pss *pss.Pss
+type RetrievalAndPss struct {
+	retrieval *retrieval.Retrieval
+	pss       *pss.Pss
 }
 
-func (s *StreamerAndPss) Protocols() []p2p.Protocol {
-	return append(s.Registry.Protocols(), s.pss.Protocols()...)
+func (s *RetrievalAndPss) APIs() []rpc.API {
+	return nil
 }
 
-func (s *StreamerAndPss) Start(srv *p2p.Server) error {
-	err := s.Registry.Start(srv)
+func (s *RetrievalAndPss) Protocols() []p2p.Protocol {
+	return append(s.retrieval.Protocols(), s.pss.Protocols()...)
+}
+
+func (s *RetrievalAndPss) Start(srv *p2p.Server) error {
+	err := s.retrieval.Start(srv)
 	if err != nil {
 		return err
 	}
 	return s.pss.Start(srv)
 }
 
-func (s *StreamerAndPss) Stop() error {
-	err := s.Registry.Stop()
+func (s *RetrievalAndPss) Stop() error {
+	err := s.retrieval.Stop()
 	if err != nil {
 		return err
 	}
