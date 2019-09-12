@@ -15,15 +15,11 @@ func TestTTLSet(tx *testing.T) {
 	var err error
 
 	testClock := clock.NewMock(time.Unix(0, 0))
-	waitClean := make(chan bool)
 
 	testEntryTTL := 10 * time.Second
 	testSet := ttlset.New(&ttlset.Config{
 		EntryTTL: testEntryTTL,
 		Clock:    testClock,
-		OnClean: func() {
-			waitClean <- true
-		},
 	})
 
 	key1 := "some key"
@@ -51,8 +47,6 @@ func TestTTLSet(tx *testing.T) {
 	// Let some time pass well beyond the expiry time, so key1 expires:
 	testClock.Add(testEntryTTL * 2)
 
-	<-waitClean // Will only continue if the clean function was indeed called
-
 	// Add another key to the set:
 	err = testSet.Add(key2)
 	t.Ok(err)
@@ -65,16 +59,63 @@ func TestTTLSet(tx *testing.T) {
 
 	// Let some time pass well beyond key2's expiry time, so key2 expires:
 	testClock.Add(testEntryTTL * 2)
-	<-waitClean // Will only continue if the clean function was indeed called
 
 	hasKey = testSet.Has(key2)
 	t.Assert(hasKey == false, "key2 should have been wiped, but Has() returned true")
+}
 
-	// stop the service
-	err = testSet.Stop()
+func TestGC(tx *testing.T) {
+	t := ut.BeginTest(tx, false) // set to true to generate test results
+	defer t.FinishTest()
+	var err error
+
+	testClock := clock.NewMock(time.Unix(0, 0))
+
+	testEntryTTL := 10 * time.Second
+	testSet := ttlset.New(&ttlset.Config{
+		EntryTTL: testEntryTTL,
+		Clock:    testClock,
+	})
+
+	key1 := "some key"
+	key2 := "some later key"
+
+	// check adding a message to the cache
+	err = testSet.Add(key1)
 	t.Ok(err)
 
-	// stopping again must return an error
-	err = testSet.Stop()
-	t.MustFail(err, "Expected Stop() to fail if the service is already stopped")
+	// move the clock 2 seconds
+	testClock.Add(2 * time.Second)
+
+	// add a second key which will have a later expiration time
+	err = testSet.Add(key2)
+	t.Ok(err)
+
+	count := testSet.Count()
+	t.Assert(count == 2, "Expected the set to contain 2 keys")
+
+	testSet.GC() // attempt a cleanup. This cleanup should not affect any of the two keys, since they are not expired.
+
+	count = testSet.Count()
+	t.Assert(count == 2, "Expected the set to still contain 2 keys")
+
+	//Now, move the clock forward 9 seconds. This will expire key1 but still keep key2
+	testClock.Add(9 * time.Second)
+	testSet.GC() // invoke the internal cleaning function, which should wipe only key1
+	count = testSet.Count()
+	t.Assert(count == 1, "Expected the set to now have only 1 key")
+	//Verify if key1 was wiped but key2 persists:
+	hasKey := testSet.Has(key1)
+	t.Assert(hasKey == false, "Expected the set to have removed key1")
+	hasKey = testSet.Has(key2)
+	t.Assert(hasKey == true, "Expected the set to still contain key2")
+
+	//Now, move the clock some more time. This will wipe key2
+	testClock.Add(7 * time.Second)
+	testSet.GC() // invoke the internal cleaning function, which should wipe only key1
+
+	count = testSet.Count()
+	// verify the map is now empty
+	t.Assert(count == 0, "Expected the set to be empty")
+
 }

@@ -36,6 +36,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/internal/ticker"
 	"github.com/ethersphere/swarm/pss/internal/ttlset"
 	"github.com/ethersphere/swarm/pss/message"
 	"github.com/tilinna/clock"
@@ -194,6 +195,7 @@ type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
 	forwardCache *ttlset.TTLSet
+	gcTicker     *ticker.Ticker
 
 	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
@@ -228,6 +230,9 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")
 	}
+
+	clock := clock.Realtime() //TODO: Clock should be injected by Params so it can be mocked.
+
 	c := p2p.Cap{
 		Name:    protocolName,
 		Version: protocolVersion,
@@ -248,8 +253,13 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	}
 	ps.forwardCache = ttlset.New(&ttlset.Config{
 		EntryTTL: params.CacheTTL,
-		Clock:    clock.Realtime(), //TODO: Clock should be injected by Params so it can be mocked.
-		OnClean: func() {
+		Clock:    clock,
+	})
+	ps.gcTicker = ticker.New(&ticker.Config{
+		Clock:    clock,
+		Interval: params.CacheTTL,
+		Callback: func() {
+			ps.forwardCache.GC()
 			metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
 		},
 	})
@@ -286,7 +296,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 
 func (p *Pss) Stop() error {
 	log.Info("Pss shutting down")
-	if err := p.forwardCache.Stop(); err != nil {
+	if err := p.gcTicker.Stop(); err != nil {
 		return err
 	}
 	close(p.quitC)

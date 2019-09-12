@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/epiclabs-io/ut"
-	"github.com/ethersphere/swarm/pss/internal/ttlset/ticker"
+	"github.com/ethersphere/swarm/pss/internal/ticker"
 	"github.com/tilinna/clock"
 )
 

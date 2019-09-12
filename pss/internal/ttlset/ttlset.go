@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethersphere/swarm/pss/internal/ttlset/ticker"
 	"github.com/tilinna/clock"
 )
 
@@ -12,16 +11,14 @@ import (
 type Config struct {
 	EntryTTL time.Duration // time after which items are removed
 	Clock    clock.Clock   // time reference
-	OnClean  func()        // Callback that will be fired every time items are automatically removed on expiry
 }
 
 // TTLSet implements a Set that automatically removes expired keys
 // after a predefined expiration time
 type TTLSet struct {
 	Config
-	set    map[interface{}]setEntry
-	lock   sync.RWMutex
-	ticker *ticker.Ticker
+	set  map[interface{}]setEntry
+	lock sync.RWMutex
 }
 
 type setEntry struct {
@@ -34,16 +31,6 @@ func New(config *Config) *TTLSet {
 		set:    make(map[interface{}]setEntry),
 		Config: *config,
 	}
-
-	ticker := ticker.New(&ticker.Config{
-		Interval: config.EntryTTL,
-		Clock:    config.Clock,
-		Callback: func() {
-			ts.clean()
-		},
-	})
-	ts.ticker = ticker
-
 	return ts
 }
 
@@ -78,8 +65,8 @@ func (ts *TTLSet) Has(key interface{}) bool {
 	return false
 }
 
-// clean is used internally to periodically remove expired entries from the set
-func (ts *TTLSet) clean() {
+// GC will remove expired entries from the set
+func (ts *TTLSet) GC() {
 	ts.lock.Lock()
 	defer ts.lock.Unlock()
 	for k, v := range ts.set {
@@ -87,12 +74,11 @@ func (ts *TTLSet) clean() {
 			delete(ts.set, k)
 		}
 	}
-	if ts.Config.OnClean != nil {
-		ts.Config.OnClean()
-	}
 }
 
-// Stop will close the service and release all resources
-func (ts *TTLSet) Stop() error {
-	return ts.ticker.Stop()
+// Count returns the number of entries in the set
+func (ts *TTLSet) Count() int {
+	ts.lock.Lock()
+	defer ts.lock.Unlock()
+	return len(ts.set)
 }
