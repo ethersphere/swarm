@@ -188,7 +188,7 @@ func (c *Capabilities) DecodeRLP(s *rlp.Stream) error {
 
 // Match returns true if all bits set in the argument is also set in the receiver
 func (c *Capability) Match(capCompare *Capability) bool {
-	if len(c.Cap) != len(capCompare.Cap) {
+	if capCompare == nil || len(c.Cap) != len(capCompare.Cap) {
 		return false
 	}
 	// on the first occurrence of false where query has true we can fail
