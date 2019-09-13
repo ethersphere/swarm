@@ -115,14 +115,7 @@ func TestBzzEthHandshake(t *testing.T) {
 	}
 
 	// after successful handshake, expect peer added to peer pool
-	var p *Peer
-	for i := 0; i < 10; i++ {
-		p = b.peers.get(node.ID())
-		if p != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	p := getPeerAfterConnection(node.ID(), b)
 	if p == nil {
 		t.Fatal("bzzeth peer not added")
 	}
@@ -158,14 +151,7 @@ func TestBzzBzzHandshake(t *testing.T) {
 	}
 
 	// after successful handshake, expect peer added to peer pool
-	var p *Peer
-	for i := 0; i < 10; i++ {
-		p = b.peers.get(node.ID())
-		if p != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	p := getPeerAfterConnection(node.ID(), b)
 	if p == nil {
 		t.Fatal("bzzeth peer not added")
 	}
@@ -218,15 +204,31 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	// after successful handshake, expect peer added to peer pool
-	var p1 *Peer
+	p1 := isPeerDisconnected(node.ID(), b)
+	if p1 != nil {
+		t.Fatal("bzzeth peer still connected")
+	}
+}
+
+func getPeerAfterConnection(id enode.ID, b *BzzEth) (p *Peer) {
 	for i := 0; i < 10; i++ {
-		p1 = b.peers.get(node.ID())
-		if p1 != nil {
+		p = b.peers.get(id)
+		if p != nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if p1 != nil {
-		t.Fatal("bzzeth peer still connected")
+	return
+}
+
+func isPeerDisconnected(id enode.ID, b *BzzEth) (p *Peer) {
+	var p1 *Peer
+	for i := 0; i < 10; i++ {
+		p1 = b.peers.get(id)
+		if p1 == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
+	return
 }
