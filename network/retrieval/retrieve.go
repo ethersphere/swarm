@@ -59,6 +59,7 @@ var (
 		MaxMsgSize: 10 * 1024 * 1024,
 		Messages: []interface{}{
 			ChunkDelivery{},
+			ChunkNotFound{},
 			RetrieveRequest{},
 		},
 	}
@@ -168,6 +169,8 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 			go r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
 			go r.handleChunkDelivery(ctx, p, msg)
+		case *ChunkNotFound:
+			go r.handleChunkNotFound(ctx, p, msg)
 		}
 		return nil
 	}
@@ -195,6 +198,118 @@ func (r *Retrieval) getOriginPo(req *storage.Request) int {
 	})
 
 	return originPo
+}
+
+func (r *Retrieval) RequestChunk(ctx context.Context, p *network.Peer, req *storage.Request) error {
+	pp := r.getPeer(p.ID())
+	if pp == nil {
+		return errors.New("peer doesn't exist anymore")
+	}
+	ret := RetrieveRequest{
+		Addr: req.Addr,
+	}
+	return pp.Send(ctx, ret)
+}
+
+// GeneratePeersList returns a list of peers we need to ask for a specific chunk from according to our kademlia in order of importance
+func (r *Retrieval) GeneratePeersList(ctx context.Context, req *storage.Request) (peers []*network.Peer, err error) {
+	r.logger.Trace("retrieval.generatePeersList", "req.Addr", req.Addr)
+	osp, _ := ctx.Value("remote.fetch").(opentracing.Span)
+
+	// originPo - proximity of the node that made the request; -1 if the request originator is our node;
+	// myPo - this node's proximity with the requested chunk
+	originPo := r.getOriginPo(req)
+	myPo := chunk.Proximity(req.Addr, r.kad.BaseAddr())
+
+	depth := r.kad.NeighbourhoodDepth()
+
+	if osp != nil {
+		osp.LogFields(olog.Int("originPo", originPo))
+		osp.LogFields(olog.Int("depth", depth))
+		osp.LogFields(olog.Int("myPo", myPo))
+	}
+
+	// do not forward requests if origin proximity is bigger than our node's proximity
+	// this means that origin is closer to the chunk
+	if originPo > myPo {
+		return nil, errors.New("not forwarding request, origin node is closer to chunk than this node")
+	}
+
+	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
+		id := p.ID()
+
+		if !p.HasCap(Spec.Name) {
+			return true
+		}
+
+		// skip light nodes, even though they support `bzz-retrieve` protocol
+		if p.LightNode {
+			return true
+		}
+
+		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
+		if bytes.Equal(req.Origin.Bytes(), id.Bytes()) {
+			return true
+		}
+
+		// skip peers that we have already tried
+		if req.SkipPeer(id.String()) {
+			r.logger.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
+			return true
+		}
+
+		if myPo < depth { //  chunk is NOT within the neighbourhood
+			if po <= myPo { // always choose a peer strictly closer to chunk than us
+				r.logger.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				return false
+			} else {
+				r.logger.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			}
+		} else { // chunk IS WITHIN neighbourhood
+			if po < depth { // do not select peer outside the neighbourhood. But allows peers further from the chunk than us
+				r.logger.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				return false
+			} else if po <= originPo { // avoid loop in neighbourhood, so not forward when a request comes from the neighbourhood
+				r.logger.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				return false
+			} else {
+				r.logger.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			}
+		}
+
+		// if selected peer is not in the depth (2nd condition; if depth <= po, then peer is in nearest neighbourhood)
+		// and they have a lower po than ours, return error
+		if po < myPo && depth > po {
+			r.logger.Trace("findpeer4 skip peer because origin was closer", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+
+			err = fmt.Errorf("not asking peers further away from origin; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
+			return false
+		}
+
+		// if chunk falls in our nearest neighbourhood (1st condition), but suggested peer is not in
+		// the nearest neighbourhood (2nd condition), don't forward the request to suggested peer
+		if depth <= myPo && depth > po {
+			r.logger.Trace("findpeer5 skip peer because depth", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+
+			err = fmt.Errorf("not going outside of depth; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
+			return false
+		}
+
+		peers = append(peers, p)
+
+		// continue iterating
+		return true
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(peers) == 0 {
+		return nil, ErrNoPeerFound
+	}
+
+	return peers, nil
 }
 
 // findPeer finds a peer we need to ask for a specific chunk from according to our kademlia
@@ -336,9 +451,34 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 		Origin: p.ID(),
 	}
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
+	if err != nil && err == storage.ErrChunk404 {
+		notFoundMsg := &ChunkNotFound{
+			Addr: chunk.Address(),
+		}
+
+		err = p.Send(ctx, notFoundMsg)
+		if err != nil {
+			p.logger.Error("retrieval.handleRetrieveRequest - chunk not found msg send failed", "ref", msg.Addr, "err", err)
+			osp.LogFields(olog.Bool("delivered", false))
+			return
+		}
+	}
 	if err != nil {
 		retrieveChunkFail.Inc(1)
 		p.logger.Error("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
+
+		if err == storage.ErrChunk404 {
+			notFoundMsg := &ChunkNotFound{
+				Addr: chunk.Address(),
+			}
+
+			err = p.Send(ctx, notFoundMsg)
+			if err != nil {
+				p.logger.Error("retrieval.handleRetrieveRequest - chunk not found msg send failed", "ref", msg.Addr, "err", err)
+				osp.LogFields(olog.Bool("delivered", false))
+				return
+			}
+		}
 		return
 	}
 
@@ -470,4 +610,10 @@ func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (r *Retrieval) APIs() []rpc.API {
 	return nil
+}
+
+func (r *Retrieval) handleChunkNotFound(ctx context.Context, p *Peer, msg *ChunkNotFound) {
+	p.logger.Debug("retrieval.handleChunkNotFound", "ref", msg.Addr)
+
+	r.netStore.MarkResponseNotFound(ctx, p.ID(), msg.Addr)
 }

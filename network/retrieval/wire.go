@@ -28,3 +28,7 @@ type ChunkDelivery struct {
 	Addr  storage.Address
 	SData []byte
 }
+
+type ChunkNotFound struct {
+	Addr storage.Address
+}

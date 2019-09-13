@@ -209,7 +209,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		network.NewKadParams(),
 	)
 	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr) // nodeID.Bytes())
+
+	self.netStore.RequestChunk = self.retrieval.RequestChunk
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
+	self.netStore.GeneratePeersList = self.retrieval.GeneratePeersList
 
 	feedsHandler.SetStore(self.netStore)
 

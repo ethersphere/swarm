@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
@@ -45,6 +46,7 @@ const (
 
 var (
 	ErrNoSuitablePeer = errors.New("no suitable peer")
+	ErrChunk404       = errors.New("chunk not found")
 )
 
 // Fetcher is a struct which maintains state of remote requests.
@@ -62,11 +64,23 @@ type Fetcher struct {
 	CreatedBy string    // who created the fetcher - "request" or "syncing", used for metrics measuring lifecycle of fetchers
 
 	RequestedBySyncer bool // whether we have issued at least once a request through Offered/Wanted hashes flow
+
+	NotFoundResponsesMu sync.Mutex
+	NotFoundResponses   int // peers we have asked for that chunk and responded with 404
+	TotalRequests       int // peers we should ask for this chunk
+
+	EveryoneRespondedWith404 chan struct{} // signal when all peers we asked don't have the chunk
+	PeerCouldntFind          map[enode.ID]chan struct{}
 }
 
 // NewFetcher is a constructor for a Fetcher
 func NewFetcher() *Fetcher {
-	return &Fetcher{make(chan struct{}), sync.Once{}, time.Now(), "", false}
+	return &Fetcher{
+		Delivered:                make(chan struct{}),
+		CreatedAt:                time.Now(),
+		EveryoneRespondedWith404: make(chan struct{}),
+		PeerCouldntFind:          make(map[enode.ID]chan struct{}),
+	}
 }
 
 // SafeClose signals to interested parties (those waiting for a signal on fi.Delivered) that a chunk is delivered.
@@ -78,7 +92,9 @@ func (fi *Fetcher) SafeClose() {
 	})
 }
 
+type RequestChunkFunc func(ctx context.Context, peer *network.Peer, req *Request) error
 type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
+type GeneratePeersListFunc func(ctx context.Context, req *Request) (peers []*network.Peer, err error)
 
 // NetStore is an extension of LocalStore
 // it implements the ChunkStore interface
@@ -89,8 +105,12 @@ type NetStore struct {
 	fetchers     *lru.Cache
 	putMu        sync.Mutex
 	requestGroup singleflight.Group
-	RemoteGet    RemoteGetFunc
-	logger       log.Logger
+
+	RemoteGet         RemoteGetFunc
+	RequestChunk      RequestChunkFunc
+	GeneratePeersList GeneratePeersListFunc
+
+	logger log.Logger
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -228,7 +248,16 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 
 	ref := req.Addr
 
-	for {
+	peers, err := n.GeneratePeersList(ctx, req)
+	if err != nil {
+		return ErrChunk404
+	}
+
+	fi.TotalRequests = len(peers)
+
+	n.logger.Debug("remote.fetch, peers", "ref", ref, "requests-to-make", fi.TotalRequests, "base", hex.EncodeToString(n.LocalID[:16]))
+
+	for _, p := range peers {
 		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
 
 		ctx, osp := spancontext.StartSpan(
@@ -236,21 +265,23 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
 
-		n.logger.Trace("remote.fetch", "ref", ref)
+		n.logger.Debug("remote.fetch", "ref", ref, "peer", p.ID())
 
-		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
+		fi.PeerCouldntFind[p.ID()] = make(chan struct{})
+		err = n.RequestChunk(ctx, p, req)
 		if err != nil {
-			n.logger.Trace(err.Error(), "ref", ref)
-			osp.LogFields(olog.String("err", err.Error()))
-			osp.Finish()
-			return ErrNoSuitablePeer
+			n.logger.Error(err.Error(), "ref", ref, "peer", p.ID())
+			n.DecrementTotalRequests(ctx, fi, p.ID(), ref)
+			continue
 		}
 
-		// add peer to the set of peers to skip from now
-		n.logger.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
-		req.PeersToSkip.Store(currentPeer.String(), time.Now())
-
 		select {
+		case <-fi.PeerCouldntFind[p.ID()]:
+			n.logger.Trace("remote.fetch, chunk not found", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
+
+			osp.LogFields(olog.Bool("delivered", false))
+			osp.Finish()
+			break
 		case <-fi.Delivered:
 			n.logger.Trace("remote.fetch, chunk delivered", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
 
@@ -263,14 +294,54 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			osp.LogFields(olog.Bool("timeout", true))
 			osp.Finish()
 			break
-		case <-ctx.Done(): // global fetcher timeout
-			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref)
-			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
-
-			osp.LogFields(olog.Bool("fail", true))
-			osp.Finish()
-			return ctx.Err()
 		}
+	}
+
+	select {
+	case <-fi.Delivered:
+		n.logger.Trace("remote.fetch, chunk delivered", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
+
+		return nil
+	case <-fi.EveryoneRespondedWith404:
+		n.logger.Trace("remote.fetch, chunk not found all 404", "ref", ref, "base", hex.EncodeToString(n.LocalID[:16]))
+
+		return ErrChunk404
+	case <-ctx.Done(): // global fetcher timeout
+		n.logger.Warn("remote.fetch, global timeout fail", "ref", ref)
+		metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
+
+		return ctx.Err()
+	}
+}
+
+func (n *NetStore) MarkResponseNotFound(ctx context.Context, peerID enode.ID, ref Address) {
+	n.logger.Debug("mark response not found", "ref", ref)
+	v, loaded := n.fetchers.Get(ref.String())
+	if !loaded {
+		return
+	}
+	f := v.(*Fetcher)
+
+	f.NotFoundResponsesMu.Lock()
+	defer f.NotFoundResponsesMu.Unlock()
+
+	f.NotFoundResponses++
+
+	close(f.PeerCouldntFind[peerID])
+
+	n.logger.Debug("mark response not found - check peers responses", "ref", ref, "lenrequests", f.TotalRequests, "res", f.NotFoundResponses)
+	if f.NotFoundResponses == f.TotalRequests {
+		close(f.EveryoneRespondedWith404)
+	}
+}
+
+func (n *NetStore) DecrementTotalRequests(ctx context.Context, f *Fetcher, peerID enode.ID, ref Address) {
+	f.NotFoundResponsesMu.Lock()
+	defer f.NotFoundResponsesMu.Unlock()
+
+	f.TotalRequests--
+	if f.NotFoundResponses == f.TotalRequests {
+		close(f.EveryoneRespondedWith404)
 	}
 }
 
