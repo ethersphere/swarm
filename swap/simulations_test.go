@@ -625,35 +625,33 @@ CONNS:
 		nodes := sim.UpNodeIDs()
 		msgCount := 0
 
-		/*
-				// unfortunately, before running the actual simulation, we need an additional check (...).
-				// If we start sending right away, it can happen that devp2p did **not yet finish connecting swap peers**
-				// (verified through multiple runs). This would then fail the test because on Swap.Add the peer is not (yet) found...
-				// Thus this iteration here makes sure that all swap peers actually have been added on the Swap protocol as well.
-			ALL_SWAP_PEERS:
-				for _, node := range nodes {
-					for {
-						// let's always be nice and allow a time out to be catched
-						select {
-						case <-ctx.Done():
-							t.Fatal("Timed out waiting for all swap peer connections to be established")
-						default:
-						}
-						item, ok := sim.NodeItem(node, bucketKeySwap)
-						if !ok {
-							return errors.New("no swap in simulation bucket")
-						}
-						ts := item.(*testService)
-						// the node has all other peers in its peer list
-						if len(ts.peers) == nodeCount-1 {
-							// so let's take the next node
-							continue ALL_SWAP_PEERS
-						}
-						// don't overheat the CPU...
-						time.Sleep(5 * time.Millisecond)
-					}
+		// unfortunately, before running the actual simulation, we need an additional check (...).
+		// If we start sending right away, it can happen that devp2p did **not yet finish connecting swap peers**
+		// (verified through multiple runs). This would then fail the test because on Swap.Add the peer is not (yet) found...
+		// Thus this iteration here makes sure that all swap peers actually have been added on the Swap protocol as well.
+	ALL_SWAP_PEERS:
+		for _, node := range nodes {
+			for {
+				// let's always be nice and allow a time out to be catched
+				select {
+				case <-ctx.Done():
+					return errors.New("Timed out waiting for all swap peer connections to be established")
+				default:
 				}
-		*/
+				item, ok := sim.NodeItem(node, bucketKeySwap)
+				if !ok {
+					return errors.New("no swap in simulation bucket")
+				}
+				ts := item.(*testService)
+				// the node has all other peers in its peer list
+				if len(ts.peers) == nodeCount-1 {
+					// so let's take the next node
+					continue ALL_SWAP_PEERS
+				}
+				// don't overheat the CPU...
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
 
 		// iterate all nodes, then send each other test messages
 	ITER:
