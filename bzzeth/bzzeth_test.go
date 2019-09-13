@@ -114,8 +114,15 @@ func TestBzzEthHandshake(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
-	p := b.peers.get(node.ID())
+	// after successful handshake, expect peer added to peer pool
+	var p *Peer
+	for i := 0; i < 10; i++ {
+		p = b.peers.get(node.ID())
+		if p != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if p == nil {
 		t.Fatal("bzzeth peer not added")
 	}
@@ -133,6 +140,9 @@ func TestBzzEthHandshake(t *testing.T) {
 // TestBzzBzzHandshake tests that a handshake between two Swarm nodes
 func TestBzzBzzHandshake(t *testing.T) {
 	// redefine isSwarmNodeFunc to force recognise remote peer as swarm node
+	defer func(f func(*Peer) bool) {
+		isSwarmNodeFunc = f
+	}(isSwarmNodeFunc)
 	isSwarmNodeFunc = func(_ *Peer) bool { return true }
 
 	tester, b, teardown, err := newBzzEthTester()
@@ -147,11 +157,17 @@ func TestBzzBzzHandshake(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// after handshake expect peer added to pool
-	time.Sleep(100 * time.Millisecond)
-	p := b.peers.get(node.ID())
+	// after successful handshake, expect peer added to peer pool
+	var p *Peer
+	for i := 0; i < 10; i++ {
+		p = b.peers.get(node.ID())
+		if p != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if p == nil {
-		t.Fatal("bzzeth swarm peer not added")
+		t.Fatal("bzzeth peer not added")
 	}
 
 	// after closing the protocol, expect disconnect
@@ -166,6 +182,9 @@ func TestBzzBzzHandshake(t *testing.T) {
 // disconnects the peer
 func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	// redefine isSwarmNodeFunc to force recognise remote peer as swarm node
+	defer func(f func(*Peer) bool) {
+		isSwarmNodeFunc = f
+	}(isSwarmNodeFunc)
 	isSwarmNodeFunc = func(_ *Peer) bool { return true }
 
 	tester, b, teardown, err := newBzzEthTester()
@@ -180,11 +199,17 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// after handshake expect peer added to pool
-	time.Sleep(100 * time.Millisecond)
-	p := b.peers.get(node.ID())
+	// after successful handshake, expect peer added to peer pool
+	var p *Peer
+	for i := 0; i < 10; i++ {
+		p = b.peers.get(node.ID())
+		if p != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if p == nil {
-		t.Fatal("bzzeth swarm peer not added")
+		t.Fatal("bzzeth peer not added")
 	}
 
 	// Send a dummy handshake message, wait for sometime and check if peer is dropped
@@ -192,9 +217,16 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	p = b.peers.get(node.ID())
-	if p != nil {
-		t.Fatal("bzzeth swarm peer still connected")
+	// after successful handshake, expect peer added to peer pool
+	var p1 *Peer
+	for i := 0; i < 10; i++ {
+		p1 = b.peers.get(node.ID())
+		if p1 != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if p1 != nil {
+		t.Fatal("bzzeth peer still connected")
 	}
 }
