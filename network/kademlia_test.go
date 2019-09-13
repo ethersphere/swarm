@@ -37,13 +37,9 @@ func init() {
 	log.Root().SetHandler(h)
 }
 
-func testKadPeerAddr(s string, lightNode bool) *BzzAddr {
+func testKadPeerAddr(s string) *BzzAddr {
 	a := pot.NewAddressFromString(s)
 	bzzAddr := NewBzzAddr(a, a)
-	if lightNode {
-		bzzAddr.Capabilities.Add(lightCapability)
-	}
-	bzzAddr.Capabilities.Add(fullCapability)
 	return bzzAddr
 }
 
@@ -57,11 +53,6 @@ func newTestKademliaParams() *KadParams {
 type testKademlia struct {
 	*Kademlia
 	t *testing.T
-}
-
-type testKadAddrSpec struct {
-	bits      string
-	lightNode bool
 }
 
 func newTestKademlia(t *testing.T, b string) *testKademlia {
@@ -89,20 +80,9 @@ func (tk *testKademlia) Off(offs ...string) {
 }
 
 func (tk *testKademlia) Register(regs ...string) {
-	var specs []testKadAddrSpec
-	for _, r := range regs {
-		specs = append(specs, testKadAddrSpec{
-			bits:      r,
-			lightNode: false,
-		})
-	}
-	tk.RegisterWithCapability(specs...)
-}
-
-func (tk *testKademlia) RegisterWithCapability(regs ...testKadAddrSpec) {
 	var as []*BzzAddr
-	for _, r := range regs {
-		as = append(as, testKadPeerAddr(r.bits, r.lightNode))
+	for _, s := range regs {
+		as = append(as, testKadPeerAddr(s))
 	}
 	err := tk.Kademlia.Register(as...)
 	if err != nil {
@@ -231,6 +211,7 @@ func TestHighMinBinSize(t *testing.T) {
 	}
 }
 
+// TestCapabilitiesIndex checks that capability indices contains only the peers that have the filters' capability bits set
 func TestCapabilitiesIndex(t *testing.T) {
 	kp := NewKadParams()
 	addr := RandomBzzAddr()
@@ -325,6 +306,55 @@ func TestCapabilitiesIndex(t *testing.T) {
 	})
 	if c != 3 {
 		t.Fatalf("EachAddrFiltered 'other' expected 3 capability matches, got %d", c)
+	}
+
+	allBzzPeer := &BzzPeer{
+		BzzAddr: allAddr,
+	}
+	allPeer := NewPeer(allBzzPeer, k)
+	k.On(allPeer)
+
+	c = 0
+	k.EachConn(base, 255, func(_ *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConn expected 1 peer, got %d", c)
+	}
+
+	c = 0
+	k.EachConnFiltered(base, "other", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if !cp.Match(testOtherCapability) {
+			t.Fatalf("EachConnFiltered 'other' missing capability %v", testOtherCapability)
+		}
+		cp = p.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachConnFiltered 'other' missing capability %v", testMoreCapability)
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'other' expected 1 peer, got %d", c)
+	}
+
+	c = 0
+	k.EachConnFiltered(base, "more", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if !cp.Match(testOtherCapability) {
+			t.Fatalf("EachConnFiltered 'more' missing capability %v", testOtherCapability)
+		}
+		cp = p.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachConnFiltered 'more' missing capability %v", testMoreCapability)
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'more' expected 1 peer, got %d", c)
 	}
 }
 
