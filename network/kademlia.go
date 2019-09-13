@@ -141,24 +141,24 @@ func (k *Kademlia) RegisterCapabilityIndex(s string, c capability.Capability) er
 }
 
 // adds a peer to any capability indices it matches
-func (k *Kademlia) addToCapabilityIndex(p interface{}, connected bool) {
+func (k *Kademlia) addToCapabilityIndex(p interface{}) {
+	var ok bool
 	var eAddr *BzzAddr
 	var ePeer *Peer
-	if connected {
-		ePeer = p.(*Peer)
+	ePeer, ok = p.(*Peer)
+	if ok {
 		eAddr = ePeer.BzzAddr
 	} else {
 		eAddr = p.(*entry).BzzAddr
 	}
 	for s, idxItem := range k.capabilityIndex {
 		for _, vCap := range eAddr.Capabilities.Caps {
-			log.Debug("in add to capability compare", "idx", s, "peer", vCap, "idx", idxItem.Capability)
 			if idxItem.Id != vCap.Id {
 				continue
 			}
 			if vCap.Match(idxItem.Capability) {
-				log.Debug("Added peer to capability index", "conn", connected, "s", s, "v", vCap, "p", p)
-				if connected {
+				log.Trace("Added peer to capability index", "conn", ok, "s", s, "v", vCap, "p", p)
+				if ok {
 					k.capabilityIndex[s].conns, _, _ = pot.Add(idxItem.conns, ePeer, Pof)
 				} else {
 					k.capabilityIndex[s].addrs, _, _ = pot.Add(idxItem.addrs, newEntry(eAddr), Pof)
@@ -181,12 +181,13 @@ func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool)
 	} else {
 		eAddr = p.(*entry).BzzAddr
 	}
-	for _, idxItem := range k.capabilityIndex {
+	for s, idxItem := range k.capabilityIndex {
 		if ok {
 			conns, _, found, _ := pot.Swap(idxItem.conns, ePeer, Pof, func(_ pot.Val) pot.Val {
 				return nil
 			})
 			if found {
+				log.Trace("Removed peer from capability conns index", "s", s, "p", ePeer)
 				idxItem.conns = conns
 			}
 		}
@@ -195,6 +196,7 @@ func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool)
 				return nil
 			})
 			if found {
+				log.Trace("Removed peer from capability addrs index", "s", s, "p", eAddr)
 				idxItem.addrs = addrs
 			}
 		}
@@ -278,7 +280,7 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 
 			return v
 		})
-		k.addToCapabilityIndex(newEntry(p), false)
+		k.addToCapabilityIndex(newEntry(p))
 		size++
 	}
 
@@ -418,7 +420,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 		// found among live peers, do nothing
 		return v
 	})
-	k.addToCapabilityIndex(p, true)
+	k.addToCapabilityIndex(p)
 	if ins {
 		a := newEntry(p.BzzAddr)
 		a.conn = p
