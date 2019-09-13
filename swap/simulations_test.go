@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/network"
@@ -523,30 +524,13 @@ func TestBasicSwapSimulation(t *testing.T) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelSimRun()
 
-	_, err = sim.AddNodesAndConnectFull(nodeCount)
+	ids, err := sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	log.Debug("Wait for all connections to be established")
-	// first check: let's make sure that all nodes have been connected to the others
-	// this is the maximum number of possible connections
-	maxConns := nodeCount * (nodeCount - 1) / 2
-CONNS:
-	for {
-		select {
-		// let's be nice and make sure we catch a timeout
-		case <-ctx.Done():
-			t.Fatal("Timed out waiting for all connections to be established")
-		default:
-			// this should be true when all connections have been established
-			if len(sim.Net.Conns) == maxConns {
-				break CONNS
-			}
-		}
-		// don't overheat the CPU...
-		time.Sleep(5 * time.Millisecond)
-	}
+	simulations.VerifyFull(t, sim.Net, ids)
 
 	log.Info("starting simulation...")
 
@@ -586,10 +570,6 @@ CONNS:
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		_, err = sim.WaitTillHealthy(ctx)
-		if err != nil {
-			return err
-		}
 
 		nodes := sim.UpNodeIDs()
 		msgCount := 0
