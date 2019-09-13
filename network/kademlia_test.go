@@ -37,9 +37,14 @@ func init() {
 	log.Root().SetHandler(h)
 }
 
-func testKadPeerAddr(s string) *BzzAddr {
+func testKadPeerAddr(s string, lightNode bool) *BzzAddr {
 	a := pot.NewAddressFromString(s)
-	return NewBzzAddr(a, a)
+	bzzAddr := NewBzzAddr(a, a)
+	if lightNode {
+		bzzAddr.Capabilities.Add(lightCapability)
+	}
+	bzzAddr.Capabilities.Add(fullCapability)
+	return bzzAddr
 }
 
 func newTestKademliaParams() *KadParams {
@@ -52,6 +57,11 @@ func newTestKademliaParams() *KadParams {
 type testKademlia struct {
 	*Kademlia
 	t *testing.T
+}
+
+type testKadAddrSpec struct {
+	bits      string
+	lightNode bool
 }
 
 func newTestKademlia(t *testing.T, b string) *testKademlia {
@@ -79,9 +89,20 @@ func (tk *testKademlia) Off(offs ...string) {
 }
 
 func (tk *testKademlia) Register(regs ...string) {
+	var specs []testKadAddrSpec
+	for _, r := range regs {
+		specs = append(specs, testKadAddrSpec{
+			bits:      r,
+			lightNode: false,
+		})
+	}
+	tk.RegisterWithCapability(specs...)
+}
+
+func (tk *testKademlia) RegisterWithCapability(regs ...testKadAddrSpec) {
 	var as []*BzzAddr
-	for _, s := range regs {
-		as = append(as, testKadPeerAddr(s))
+	for _, r := range regs {
+		as = append(as, testKadPeerAddr(r.bits, r.lightNode))
 	}
 	err := tk.Kademlia.Register(as...)
 	if err != nil {
@@ -207,6 +228,103 @@ func TestHighMinBinSize(t *testing.T) {
 	testMinBinSizes := []int{3, 4, 5}
 	for _, k := range testMinBinSizes {
 		testKad(k)
+	}
+}
+
+func TestCapabilitiesIndex(t *testing.T) {
+	kp := NewKadParams()
+	addr := RandomBzzAddr()
+	base := addr.OAddr
+	k := NewKademlia(base, kp)
+
+	testMoreCapability := capability.NewCapability(42, 3)
+	testMoreCapability.Set(0)
+	testMoreCapability.Set(2)
+	k.RegisterCapabilityIndex("more", *testMoreCapability)
+
+	testLessCapability := capability.NewCapability(42, 3)
+	testLessCapability.Set(2)
+	k.RegisterCapabilityIndex("less", *testLessCapability)
+
+	testNoneCapability := capability.NewCapability(42, 3)
+	testNoneCapability.Set(1)
+	k.RegisterCapabilityIndex("none", *testNoneCapability)
+
+	testOtherCapability := capability.NewCapability(666, 3)
+	testOtherCapability.Set(0)
+	testOtherCapability.Set(2)
+	k.RegisterCapabilityIndex("other", *testOtherCapability)
+
+	moreAddr := RandomBzzAddr()
+	moreAddr.Capabilities.Add(testMoreCapability)
+
+	lessAddr := RandomBzzAddr()
+	lessAddr.Capabilities.Add(testLessCapability)
+
+	otherAddr := RandomBzzAddr()
+	otherAddr.Capabilities.Add(testOtherCapability)
+
+	allAddr := RandomBzzAddr()
+	allAddr.Capabilities.Add(testOtherCapability)
+	allAddr.Capabilities.Add(testMoreCapability)
+
+	k.Register(moreAddr, lessAddr, otherAddr, allAddr)
+
+	var addrs []*BzzAddr
+	k.EachAddr(base, 255, func(a *BzzAddr, _ int) bool {
+		addrs = append(addrs, a)
+		return true
+	})
+	if len(addrs) != 4 {
+		t.Fatalf("EachAddr expected 3 peers, got %d", len(addrs))
+	}
+
+	var c int
+	k.EachAddrFiltered(base, "more", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		cp := a.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachAddrFiltered 'more' capability mismatch, expected %v, got %v", testMoreCapability, cp)
+		}
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered 'full' expected 2 peer, got %d", c)
+	}
+
+	c = 0
+	k.EachAddrFiltered(base, "less", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 3 {
+		t.Fatalf("EachAddrFiltered 'less' expected 2 peers, got %d", c)
+	}
+
+	c = 0
+	k.EachAddrFiltered(base, "none", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachAddrFiltered 'none' expected 0 peers, got %d", c)
+	}
+
+	c = 0
+	k.EachAddrFiltered(base, "other", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		cp := a.Capabilities.Get(666)
+		if !cp.Match(testOtherCapability) {
+			t.Fatalf("EachAddrFiltered 'other' capability mismatch, expected %v, got %v", testOtherCapability, cp)
+		}
+		cp = a.Capabilities.Get(42)
+		if cp != nil {
+			c++
+		}
+		return true
+	})
+	if c != 3 {
+		t.Fatalf("EachAddrFiltered 'other' expected 3 capability matches, got %d", c)
 	}
 }
 
