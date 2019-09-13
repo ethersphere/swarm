@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -549,17 +550,6 @@ CONNS:
 
 	log.Info("starting simulation...")
 
-	// setup a filter for all received messages
-	// we count all received messages by any peer in order to know when the last
-	// peer has actually received and processed the message
-	msgs := sim.PeerEvents(
-		context.Background(),
-		sim.NodeIDs(),
-		// Watch when testSpec messages 0 and 1 are received.
-		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("testSpec").MsgCode(0),
-		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("testSpec").MsgCode(1),
-	)
-
 	// we don't want any cheques to be issued for this test, we only want to test accounting across nodes
 	// for this we define a "global" maximum amount of messages to be sent;
 	// this formula should ensure that we trigger enough messages but not enough to trigger cheques
@@ -568,27 +558,25 @@ CONNS:
 	// need some synchronization to make sure we wait enough before checking all balances:
 	// all messages should have been received, otherwise there may be some imbalances!
 	allMessagesArrived := make(chan struct{})
-	// count all messages received in the simulation
-	recvCount := 0
+
+	metricsReg := metrics.AccountingRegistry
+	cter := metricsReg.Get("account.msg.credit")
+	counter := cter.(metrics.Counter)
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		for m := range msgs {
-			if m.Error != nil {
-				log.Error("bzz message", "err", m.Error)
-				continue
+		for {
+			maxMsgsInt64 := int64(maxMsgs)
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
-			// received a message
-			recvCount++
 			// all messages have been received
-			if recvCount == maxMsgs {
+			if counter.Count() == maxMsgsInt64 {
 				close(allMessagesArrived)
 				return
 			}
+			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 
@@ -624,7 +612,7 @@ CONNS:
 				}
 				ts := item.(*testService)
 				// the node has all other peers in its peer list
-				if len(ts.peers) == nodeCount-1 {
+				if len(ts.swap.peers) == nodeCount-1 {
 					// so let's take the next node
 					continue ALL_SWAP_PEERS
 				}
@@ -676,12 +664,6 @@ CONNS:
 		}
 		log.Debug("all messages arrived")
 
-		// unfortunately we still need some waiting here...messages should all have arrived,
-		// but probably not all processed yet (balances not updated).
-		// without this wait, we still get occasionally failures with imbalances
-		// (travis CI is not terrific in terms of resources)
-		time.Sleep(1 * time.Second)
-
 		//now iterate again and check that every node has the same
 		//balance with a peer as that peer with the same node,
 		//but in inverted signs
@@ -727,7 +709,7 @@ CONNS:
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-
+	counter.Clear()
 	log.Info("Simulation ended")
 }
 
