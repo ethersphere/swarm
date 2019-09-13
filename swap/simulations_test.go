@@ -562,6 +562,7 @@ CONNS:
 	metricsReg := metrics.AccountingRegistry
 	cter := metricsReg.Get("account.msg.credit")
 	counter := cter.(metrics.Counter)
+	counter.Clear()
 
 	go func() {
 		for {
