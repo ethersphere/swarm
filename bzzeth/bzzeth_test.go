@@ -130,6 +130,38 @@ func TestBzzEthHandshake(t *testing.T) {
 	}
 }
 
+// TestBzzBzzHandshake tests that a handshake between two Swarm nodes
+func TestBzzBzzHandshake(t *testing.T) {
+	// redefine isSwarmNodeFunc to force recognise remote peer as swarm node
+	isSwarmNodeFunc = func(_ *Peer) bool { return true }
+
+	tester, b, teardown, err := newBzzEthTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	node := tester.Nodes[0]
+	err = handshakeExchange(tester, node.ID(), false, true)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// after handshake expect peer added to pool
+	time.Sleep(100 * time.Millisecond)
+	p := b.peers.get(node.ID())
+	if p == nil {
+		t.Fatal("bzzeth swarm peer not added")
+	}
+
+	// after closing the protocol, expect disconnect
+	close(b.quit)
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("?")})
+	if err == nil || err.Error() != "timed out waiting for peers to disconnect" {
+		t.Fatal(err)
+	}
+}
+
 // TestBzzBzzHandshakeWithMessage tests that a handshake between two Swarm nodes and message exchange
 // disconnects the peer
 func TestBzzBzzHandshakeWithMessage(t *testing.T) {
