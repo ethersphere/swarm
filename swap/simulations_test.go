@@ -276,7 +276,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelSimRun()
 
-	_, err = sim.AddNodesAndConnectChain(nodeCount)
+	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +313,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			default:
 			}
 			// the node has all other peers in its peer list
-			if len(ts1.peers) == 1 && len(ts2.peers) == 1 {
+			if len(ts1.swap.peers) == 1 && len(ts2.swap.peers) == 1 {
 				break
 			}
 			// don't overheat the CPU...
@@ -400,7 +400,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelSimRun()
 
-	_, err = sim.AddNodesAndConnectChain(nodeCount)
+	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +441,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			default:
 			}
 			// the node has all other peers in its peer list
-			if len(debitorSvc.peers) == 1 && len(creditorSvc.peers) == 1 {
+			if len(debitorSvc.swap.peers) == 1 && len(creditorSvc.swap.peers) == 1 {
 				break
 			}
 			// don't overheat the CPU...
