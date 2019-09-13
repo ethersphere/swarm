@@ -20,6 +20,7 @@ type BzzAddr struct {
 	Capabilities *capability.Capabilities
 }
 
+// EncodeRLP implements rlp.Encoder
 func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	err := rlp.Encode(w, b.OAddr)
 	if err != nil {
@@ -40,6 +41,7 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	return nil
 }
 
+// EncodeRLP implements rlp.Decoder
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	var err error
 
@@ -63,6 +65,8 @@ func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// NewBzzAddr creates a new BzzAddr with the specified byte values for over- and underlayaddresses
+// It will contain an empty capabilities object
 func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
 	return &BzzAddr{
 		OAddr:        oaddr,

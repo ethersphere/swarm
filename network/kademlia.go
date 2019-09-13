@@ -524,9 +524,8 @@ func (k *Kademlia) Off(p *Peer) {
 	k.setNeighbourhoodDepth()
 }
 
-// EachConn is an iterator with args (base, po, f) applies f to each live peer
-// that has proximity order po or less as measured from the base
-// if base is nil, kademlia base address is used
+// EachConnFiltered performs the same action as EachConn
+// with the difference that it will only return peers that matches the specified capability index filter
 func (k *Kademlia) EachConnFiltered(base []byte, capKey string, o int, f func(*Peer, int) bool) error {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
