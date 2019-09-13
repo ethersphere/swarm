@@ -38,8 +38,7 @@ func init() {
 
 func testKadPeerAddr(s string) *BzzAddr {
 	a := pot.NewAddressFromString(s)
-	bzzAddr := NewBzzAddr(a, a)
-	return bzzAddr
+	return NewBzzAddr(a, a)
 }
 
 func newTestKademliaParams() *KadParams {
@@ -217,19 +216,23 @@ func TestCapabilitiesIndex(t *testing.T) {
 	base := addr.OAddr
 	k := NewKademlia(base, kp)
 
+	// "more" matches "more" only
 	testMoreCapability := capability.NewCapability(42, 3)
 	testMoreCapability.Set(0)
 	testMoreCapability.Set(2)
 	k.RegisterCapabilityIndex("more", *testMoreCapability)
 
+	// "less" matches "more" and "less"
 	testLessCapability := capability.NewCapability(42, 3)
 	testLessCapability.Set(2)
 	k.RegisterCapabilityIndex("less", *testLessCapability)
 
+	// "none" matches neither "more" nor "less"
 	testNoneCapability := capability.NewCapability(42, 3)
 	testNoneCapability.Set(1)
 	k.RegisterCapabilityIndex("none", *testNoneCapability)
 
+	// "other" is a different capability array
 	testOtherCapability := capability.NewCapability(666, 3)
 	testOtherCapability.Set(0)
 	testOtherCapability.Set(2)
@@ -244,22 +247,27 @@ func TestCapabilitiesIndex(t *testing.T) {
 	otherAddr := RandomBzzAddr()
 	otherAddr.Capabilities.Add(testOtherCapability)
 
+	// all includes two different capability arrays
 	allAddr := RandomBzzAddr()
 	allAddr.Capabilities.Add(testOtherCapability)
 	allAddr.Capabilities.Add(testMoreCapability)
 
+	// proceed to check the matches, first for the "known peers" pot
+	// first adding the different peer configurations to the kademli
 	k.Register(moreAddr, lessAddr, otherAddr, allAddr)
 
-	var addrs []*BzzAddr
-	k.EachAddr(base, 255, func(a *BzzAddr, _ int) bool {
-		addrs = append(addrs, a)
+	// Call without filter should still return all peers
+	var c int
+	k.EachAddr(base, 255, func(_ *BzzAddr, _ int) bool {
+		c++
 		return true
 	})
-	if len(addrs) != 4 {
-		t.Fatalf("EachAddr expected 3 peers, got %d", len(addrs))
+	if c != 4 {
+		t.Fatalf("EachAddr expected 3 peers, got %d", c)
 	}
 
-	var c int
+	// Matches "more", "all"
+	c = 0
 	k.EachAddrFiltered(base, "more", 255, func(a *BzzAddr, _ int) bool {
 		c++
 		cp := a.Capabilities.Get(42)
@@ -272,6 +280,7 @@ func TestCapabilitiesIndex(t *testing.T) {
 		t.Fatalf("EachAddrFiltered 'full' expected 2 peer, got %d", c)
 	}
 
+	// Matches "more", "less", "all"
 	c = 0
 	k.EachAddrFiltered(base, "less", 255, func(a *BzzAddr, _ int) bool {
 		c++
@@ -281,6 +290,7 @@ func TestCapabilitiesIndex(t *testing.T) {
 		t.Fatalf("EachAddrFiltered 'less' expected 2 peers, got %d", c)
 	}
 
+	// No matches
 	c = 0
 	k.EachAddrFiltered(base, "none", 255, func(a *BzzAddr, _ int) bool {
 		c++
@@ -290,6 +300,8 @@ func TestCapabilitiesIndex(t *testing.T) {
 		t.Fatalf("EachAddrFiltered 'none' expected 0 peers, got %d", c)
 	}
 
+	// Matches "other", "all"
+	// Also checks that "all" has both capabilities
 	c = 0
 	k.EachAddrFiltered(base, "other", 255, func(a *BzzAddr, _ int) bool {
 		c++
@@ -307,12 +319,15 @@ func TestCapabilitiesIndex(t *testing.T) {
 		t.Fatalf("EachAddrFiltered 'other' expected 3 capability matches, got %d", c)
 	}
 
+	// Now check the connection pot index
+	// We add the "all" peer
 	allBzzPeer := &BzzPeer{
 		BzzAddr: allAddr,
 	}
 	allPeer := NewPeer(allBzzPeer, k)
 	k.On(allPeer)
 
+	// Call without filter should return the single connected peer
 	c = 0
 	k.EachConn(base, 255, func(_ *Peer, _ int) bool {
 		c++
@@ -322,6 +337,7 @@ func TestCapabilitiesIndex(t *testing.T) {
 		t.Fatalf("EachConn expected 1 peer, got %d", c)
 	}
 
+	// Check that the peer exists in the indices for both capability arrays
 	c = 0
 	k.EachConnFiltered(base, "other", 255, func(p *Peer, _ int) bool {
 		c++
