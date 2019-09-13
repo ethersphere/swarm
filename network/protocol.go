@@ -138,7 +138,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 	bzz := &Bzz{
 		Hive:          NewHive(config.HiveParams, kad, store),
 		NetworkID:     config.NetworkID,
-		localAddr:     &BzzAddr{config.OverlayAddr, config.UnderlayAddr, capability.NewCapabilities()},
+		localAddr:     NewBzzAddr(config.OverlayAddr, config.UnderlayAddr),
 		handshakes:    make(map[enode.ID]*HandshakeMsg),
 		streamerRun:   streamerRun,
 		streamerSpec:  streamerSpec,

@@ -235,6 +235,7 @@ func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	return newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, addr, lightNode)
 }
 
+// TestBzzHandshakeRLPSerialization verifies the reversibility of RLP serialization of HandshakeMsg
 func TestBzzHandshakeRLPSerialization(t *testing.T) {
 	caps := capability.NewCapabilities()
 	caps.Add(fullCapability)

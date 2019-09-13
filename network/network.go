@@ -20,6 +20,7 @@ type BzzAddr struct {
 	Capabilities *capability.Capabilities
 }
 
+// EncodeRLP implements rlp.Encoder
 func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	err := rlp.Encode(w, b.OAddr)
 	if err != nil {
@@ -40,6 +41,7 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	return nil
 }
 
+// EncodeRLP implements rlp.Decoder
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	var err error
 
@@ -63,6 +65,8 @@ func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// NewBzzAddr creates a new BzzAddr with the specified byte values for over- and underlayaddresses
+// It will contain an empty capabilities object
 func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
 	return &BzzAddr{
 		OAddr:        oaddr,
@@ -105,7 +109,8 @@ func (a *BzzAddr) String() string {
 	return fmt.Sprintf("%x <%s> cap:%s", a.OAddr, a.UAddr, a.Capabilities)
 }
 
-// RandomBzzAddr is a utility method generating an address from a public key
+// RandomBzzAddr is a utility method generating a private key and corresponding enode id
+// It in turn calls NewBzzAddrFromEnode to generate a corresponding overlay address from enode
 func RandomBzzAddr() *BzzAddr {
 	key, err := crypto.GenerateKey()
 	if err != nil {
@@ -115,20 +120,26 @@ func RandomBzzAddr() *BzzAddr {
 	return NewBzzAddrFromEnode(node)
 }
 
+// NewBzzAddrFromEnode creates a BzzAddr where the overlay address is the byte representation of the enode i
+// It is only used for test purposes
+// TODO: This method should be replaced by (optionally deterministic) generation of addresses using NewEnode and PrivateKeyToBzzKey
 func NewBzzAddrFromEnode(enod *enode.Node) *BzzAddr {
 	return &BzzAddr{OAddr: enod.ID().Bytes(), UAddr: []byte(enod.URLv4()), Capabilities: capability.NewCapabilities()}
 }
 
+// WithCapabilities is a chained constructor method to set the capabilities array for a BzzAddr
 func (b *BzzAddr) WithCapabilities(c *capability.Capabilities) *BzzAddr {
 	b.Capabilities = c
 	return b
 }
 
+// PrivateKeyToBzzKey create a swarm overlay address from the given private key
 func PrivateKeyToBzzKey(prvKey *ecdsa.PrivateKey) []byte {
 	pubkeyBytes := crypto.FromECDSAPub(&prvKey.PublicKey)
 	return crypto.Keccak256Hash(pubkeyBytes).Bytes()
 }
 
+// EnodeParams contains the parameters used to create new Enode Records
 type EnodeParams struct {
 	PrivateKey *ecdsa.PrivateKey
 	EnodeKey   *ecdsa.PrivateKey
@@ -136,6 +147,7 @@ type EnodeParams struct {
 	Bootnode   bool
 }
 
+// NewEnodeRecord creates a new valid swarm node ENR record from the given parameters
 func NewEnodeRecord(params *EnodeParams) (*enr.Record, error) {
 
 	if params.PrivateKey == nil {
@@ -150,6 +162,7 @@ func NewEnodeRecord(params *EnodeParams) (*enr.Record, error) {
 	return &record, nil
 }
 
+// NewEnode creates a new enode object for the given parameters
 func NewEnode(params *EnodeParams) (*enode.Node, error) {
 	record, err := NewEnodeRecord(params)
 	if err != nil {

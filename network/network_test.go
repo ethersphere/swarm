@@ -7,6 +7,7 @@ import (
 	"github.com/ethersphere/swarm/network/capability"
 )
 
+// TestBzzAddrRLPSerialzation verifies reverisibility of RLP serialization of BzzAddr
 func TestBzzAddrRLPSerialization(t *testing.T) {
 	caps := capability.NewCapabilities()
 	caps.Add(lightCapability)

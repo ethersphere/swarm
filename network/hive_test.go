@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethersphere/swarm/network/capability"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/state"
 )
@@ -101,7 +100,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	}
 }
 
-// TestHiveStatePersistance creates a protocol simulation with n peers for a node
+// TestHiveStatePersistence creates a protocol simulation with n peers for a node
 // After protocols complete, the node is shut down and the state is stored.
 // Another simulation is created, where 0 nodes are created, but where the stored state is passed
 // The test succeeds if all the peers from the stored state are known after the protocols of the
@@ -109,8 +108,7 @@ func TestRegisterAndConnect(t *testing.T) {
 //
 // Actual connectivity is not in scope for this test, as the peers loaded from state are not known to
 // the simulation; the test only verifies that the peers are known to the node
-func TestHiveStatePersistance(t *testing.T) {
-	//	t.Skip("persistence test does not retrieve capabilities properly")
+func TestHiveStatePersistence(t *testing.T) {
 	dir, err := ioutil.TempDir("", "hive_test_store")
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +152,7 @@ func TestHiveStatePersistance(t *testing.T) {
 	h1, cleanup1 := startHive(t, dir)
 	peers := make(map[string]bool)
 	for i := 0; i < peersCount; i++ {
-		raddr := RandomBzzAddr().WithCapabilities(capability.NewCapabilities())
+		raddr := RandomBzzAddr()
 		h1.Register(raddr)
 		peers[raddr.String()] = true
 	}

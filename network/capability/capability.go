@@ -200,6 +200,7 @@ func (c *Capability) Match(capCompare *Capability) bool {
 	return true
 }
 
+// Match returns true if all bits set in all capability arguments are also set in the receiver's capabilities
 func (c *Capabilities) Match(capsCompare *Capabilities) bool {
 	for _, capCompare := range capsCompare.Caps {
 

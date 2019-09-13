@@ -126,6 +126,9 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	return k
 }
 
+// RegisterCapabilityIndex adds an entry to the capability index of the kademlia
+// The capability index is associated with the supplied string s
+// Any peers matching any bits set in the capability in the index, will be added to the index (or removed on removal)
 func (k *Kademlia) RegisterCapabilityIndex(s string, c capability.Capability) error {
 	if s == "" {
 		return errors.New("Cannot add index with empty string key")
@@ -137,7 +140,7 @@ func (k *Kademlia) RegisterCapabilityIndex(s string, c capability.Capability) er
 	return nil
 }
 
-// blindly add index to
+// adds a peer to any capability indices it matches
 func (k *Kademlia) addToCapabilityIndex(p interface{}, connected bool) {
 	var eAddr *BzzAddr
 	var ePeer *Peer
@@ -163,6 +166,22 @@ func (k *Kademlia) addToCapabilityIndex(p interface{}, connected bool) {
 			}
 		}
 	}
+}
+
+// removes a peer from any capability indices it matches
+func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool) {
+	var ok bool
+	var eAddr *BzzAddr
+	var ePeer *Peer
+	ePeer, ok = p.(*Peer)
+	if ok {
+		eAddr = ePeer.BzzAddr
+	} else if disconnectOnly {
+		return
+	} else {
+		eAddr = p.(*entry).BzzAddr
+	}
+	_ = eAddr
 }
 
 // entry represents a Kademlia table entry (an extension of BzzAddr)
@@ -485,9 +504,8 @@ func (k *Kademlia) Off(p *Peer) {
 	k.setNeighbourhoodDepth()
 }
 
-// EachConn is an iterator with args (base, po, f) applies f to each live peer
-// that has proximity order po or less as measured from the base
-// if base is nil, kademlia base address is used
+// EachConnFiltered performs the same action as EachConn
+// with the difference that it will only return peers that matches the specified capability index filter
 func (k *Kademlia) EachConnFiltered(base []byte, capKey string, o int, f func(*Peer, int) bool) error {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
@@ -523,6 +541,8 @@ func (k *Kademlia) eachConn(base []byte, db *pot.Pot, o int, f func(*Peer, int) 
 	})
 }
 
+// EachAddrFiltered performs the same action as EachAddr
+// with the difference that it will only return peers that matches the specified capability index filter
 func (k *Kademlia) EachAddrFiltered(base []byte, capKey string, o int, f func(*BzzAddr, int) bool) error {
 	k.lock.RLock()
 	defer k.lock.RUnlock()

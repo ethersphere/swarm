@@ -206,8 +206,7 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			outMsg := &peersMsg{Peers: sortPeers(peers)}
-			go d.Send(context.TODO(), outMsg)
+			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
 		}
 	}
 	d.sentPeers = true
