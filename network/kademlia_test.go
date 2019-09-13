@@ -893,7 +893,7 @@ func TestCapabilityIndex(t *testing.T) {
 		c++
 		cp := p.Capabilities.Get(666)
 		if cp != nil {
-			t.Fatalf("EachAddrFiltered 'more' should not contain a peer with capabilitiy %v", testOtherCapability)
+			t.Fatalf("EachAddrFiltered 'more' should not contain a peer with capability %v", testOtherCapability)
 		}
 		return true
 	})
