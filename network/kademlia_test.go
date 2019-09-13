@@ -209,170 +209,6 @@ func TestHighMinBinSize(t *testing.T) {
 	}
 }
 
-// TestCapabilitiesIndex checks that capability indices contains only the peers that have the filters' capability bits set
-func TestCapabilitiesIndex(t *testing.T) {
-	kp := NewKadParams()
-	addr := RandomBzzAddr()
-	base := addr.OAddr
-	k := NewKademlia(base, kp)
-
-	// "more" matches "more" only
-	testMoreCapability := capability.NewCapability(42, 3)
-	testMoreCapability.Set(0)
-	testMoreCapability.Set(2)
-	k.RegisterCapabilityIndex("more", *testMoreCapability)
-
-	// "less" matches "more" and "less"
-	testLessCapability := capability.NewCapability(42, 3)
-	testLessCapability.Set(2)
-	k.RegisterCapabilityIndex("less", *testLessCapability)
-
-	// "none" matches neither "more" nor "less"
-	testNoneCapability := capability.NewCapability(42, 3)
-	testNoneCapability.Set(1)
-	k.RegisterCapabilityIndex("none", *testNoneCapability)
-
-	// "other" is a different capability array
-	testOtherCapability := capability.NewCapability(666, 3)
-	testOtherCapability.Set(0)
-	testOtherCapability.Set(2)
-	k.RegisterCapabilityIndex("other", *testOtherCapability)
-
-	moreAddr := RandomBzzAddr()
-	moreAddr.Capabilities.Add(testMoreCapability)
-
-	lessAddr := RandomBzzAddr()
-	lessAddr.Capabilities.Add(testLessCapability)
-
-	otherAddr := RandomBzzAddr()
-	otherAddr.Capabilities.Add(testOtherCapability)
-
-	// all includes two different capability arrays
-	allAddr := RandomBzzAddr()
-	allAddr.Capabilities.Add(testOtherCapability)
-	allAddr.Capabilities.Add(testMoreCapability)
-
-	// proceed to check the matches, first for the "known peers" pot
-	// first adding the different peer configurations to the kademli
-	k.Register(moreAddr, lessAddr, otherAddr, allAddr)
-
-	// Call without filter should still return all peers
-	var c int
-	k.EachAddr(base, 255, func(_ *BzzAddr, _ int) bool {
-		c++
-		return true
-	})
-	if c != 4 {
-		t.Fatalf("EachAddr expected 3 peers, got %d", c)
-	}
-
-	// Matches "more", "all"
-	c = 0
-	k.EachAddrFiltered(base, "more", 255, func(a *BzzAddr, _ int) bool {
-		c++
-		cp := a.Capabilities.Get(42)
-		if !cp.Match(testMoreCapability) {
-			t.Fatalf("EachAddrFiltered 'more' capability mismatch, expected %v, got %v", testMoreCapability, cp)
-		}
-		return true
-	})
-	if c != 2 {
-		t.Fatalf("EachAddrFiltered 'full' expected 2 peer, got %d", c)
-	}
-
-	// Matches "more", "less", "all"
-	c = 0
-	k.EachAddrFiltered(base, "less", 255, func(a *BzzAddr, _ int) bool {
-		c++
-		return true
-	})
-	if c != 3 {
-		t.Fatalf("EachAddrFiltered 'less' expected 2 peers, got %d", c)
-	}
-
-	// No matches
-	c = 0
-	k.EachAddrFiltered(base, "none", 255, func(a *BzzAddr, _ int) bool {
-		c++
-		return true
-	})
-	if c != 0 {
-		t.Fatalf("EachAddrFiltered 'none' expected 0 peers, got %d", c)
-	}
-
-	// Matches "other", "all"
-	// Also checks that "all" has both capabilities
-	c = 0
-	k.EachAddrFiltered(base, "other", 255, func(a *BzzAddr, _ int) bool {
-		c++
-		cp := a.Capabilities.Get(666)
-		if !cp.Match(testOtherCapability) {
-			t.Fatalf("EachAddrFiltered 'other' capability mismatch, expected %v, got %v", testOtherCapability, cp)
-		}
-		cp = a.Capabilities.Get(42)
-		if cp != nil {
-			c++
-		}
-		return true
-	})
-	if c != 3 {
-		t.Fatalf("EachAddrFiltered 'other' expected 3 capability matches, got %d", c)
-	}
-
-	// Now check the connection pot index
-	// We add the "all" peer
-	allBzzPeer := &BzzPeer{
-		BzzAddr: allAddr,
-	}
-	allPeer := NewPeer(allBzzPeer, k)
-	k.On(allPeer)
-
-	// Call without filter should return the single connected peer
-	c = 0
-	k.EachConn(base, 255, func(_ *Peer, _ int) bool {
-		c++
-		return true
-	})
-	if c != 1 {
-		t.Fatalf("EachConn expected 1 peer, got %d", c)
-	}
-
-	// Check that the peer exists in the indices for both capability arrays
-	c = 0
-	k.EachConnFiltered(base, "other", 255, func(p *Peer, _ int) bool {
-		c++
-		cp := p.Capabilities.Get(666)
-		if !cp.Match(testOtherCapability) {
-			t.Fatalf("EachConnFiltered 'other' missing capability %v", testOtherCapability)
-		}
-		cp = p.Capabilities.Get(42)
-		if !cp.Match(testMoreCapability) {
-			t.Fatalf("EachConnFiltered 'other' missing capability %v", testMoreCapability)
-		}
-		return true
-	})
-	if c != 1 {
-		t.Fatalf("EachConnFiltered 'other' expected 1 peer, got %d", c)
-	}
-
-	c = 0
-	k.EachConnFiltered(base, "more", 255, func(p *Peer, _ int) bool {
-		c++
-		cp := p.Capabilities.Get(666)
-		if !cp.Match(testOtherCapability) {
-			t.Fatalf("EachConnFiltered 'more' missing capability %v", testOtherCapability)
-		}
-		cp = p.Capabilities.Get(42)
-		if !cp.Match(testMoreCapability) {
-			t.Fatalf("EachConnFiltered 'more' missing capability %v", testMoreCapability)
-		}
-		return true
-	})
-	if c != 1 {
-		t.Fatalf("EachConnFiltered 'more' expected 1 peer, got %d", c)
-	}
-}
-
 // TestHealthStrict tests the simplest definition of health
 // Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
@@ -806,4 +642,262 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 			// all fine
 		}
 	})
+}
+
+// TestCapabilitiesIndex checks that capability indices contains only the peers that have the filters' capability bits set
+func TestCapabilityIndex(t *testing.T) {
+	kp := NewKadParams()
+	addr := RandomBzzAddr()
+	base := addr.OAddr
+	k := NewKademlia(base, kp)
+
+	// "more" matches "more" only
+	testMoreCapability := capability.NewCapability(42, 3)
+	testMoreCapability.Set(0)
+	testMoreCapability.Set(2)
+	k.RegisterCapabilityIndex("more", *testMoreCapability)
+
+	// "less" matches "more" and "less"
+	testLessCapability := capability.NewCapability(42, 3)
+	testLessCapability.Set(2)
+	k.RegisterCapabilityIndex("less", *testLessCapability)
+
+	// "none" matches neither "more" nor "less"
+	testNoneCapability := capability.NewCapability(42, 3)
+	testNoneCapability.Set(1)
+	k.RegisterCapabilityIndex("none", *testNoneCapability)
+
+	// "other" is a different capability array
+	testOtherCapability := capability.NewCapability(666, 3)
+	testOtherCapability.Set(0)
+	testOtherCapability.Set(2)
+	k.RegisterCapabilityIndex("other", *testOtherCapability)
+
+	moreAddr := RandomBzzAddr()
+	moreAddr.Capabilities.Add(testMoreCapability)
+
+	lessAddr := RandomBzzAddr()
+	lessAddr.Capabilities.Add(testLessCapability)
+
+	otherAddr := RandomBzzAddr()
+	otherAddr.Capabilities.Add(testOtherCapability)
+
+	// all includes two different capability arrays
+	allAddr := RandomBzzAddr()
+	allAddr.Capabilities.Add(testOtherCapability)
+	allAddr.Capabilities.Add(testMoreCapability)
+
+	// proceed to check the matches, first for the "known peers" pot
+	// first adding the different peer configurations to the kademli
+	k.Register(moreAddr, lessAddr, otherAddr, allAddr)
+
+	// Call without filter should still return all peers
+	var c int
+	k.EachAddr(base, 255, func(_ *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 4 {
+		t.Fatalf("EachAddr expected 3 peers, got %d", c)
+	}
+
+	// Matches "more", "all"
+	c = 0
+	k.EachAddrFiltered(base, "more", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		cp := a.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachAddrFiltered 'more' capability mismatch, expected %v, got %v", testMoreCapability, cp)
+		}
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered 'full' expected 2 peer, got %d", c)
+	}
+
+	// Matches "more", "less", "all"
+	c = 0
+	k.EachAddrFiltered(base, "less", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 3 {
+		t.Fatalf("EachAddrFiltered 'less' expected 2 peers, got %d", c)
+	}
+
+	// No matches
+	c = 0
+	k.EachAddrFiltered(base, "none", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachAddrFiltered 'none' expected 0 peers, got %d", c)
+	}
+
+	// Matches "other", "all"
+	// Also checks that "all" has both capabilities
+	c = 0
+	k.EachAddrFiltered(base, "other", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		cp := a.Capabilities.Get(666)
+		if !cp.Match(testOtherCapability) {
+			t.Fatalf("EachAddrFiltered 'other' capability mismatch, expected %v, got %v", testOtherCapability, cp)
+		}
+		cp = a.Capabilities.Get(42)
+		if cp != nil {
+			c++
+		}
+		return true
+	})
+	if c != 3 {
+		t.Fatalf("EachAddrFiltered 'other' expected 3 capability matches, got %d", c)
+	}
+
+	// Now check the connection pot index
+	// We add the "all" and "less" peers
+	allBzzPeer := &BzzPeer{
+		BzzAddr: allAddr,
+	}
+	allPeer := NewPeer(allBzzPeer, k)
+	k.On(allPeer)
+
+	lessBzzPeer := &BzzPeer{
+		BzzAddr: lessAddr,
+	}
+	lessPeer := NewPeer(lessBzzPeer, k)
+	k.On(lessPeer)
+
+	// Call without filter should return the single connected peer
+	c = 0
+	k.EachConn(base, 255, func(_ *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachConn expected 2 peers, got %d", c)
+	}
+
+	// Check that the "all" peer exists in the indices for both capability arrays
+	// first the "other" index ...
+	c = 0
+	k.EachConnFiltered(base, "other", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if !cp.Match(testOtherCapability) {
+			t.Fatalf("EachConnFiltered 'other' missing capability %v", testOtherCapability)
+		}
+		cp = p.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachConnFiltered 'other' missing capability %v", testMoreCapability)
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'other' expected 1 peer, got %d", c)
+	}
+
+	// ...then the "more" index
+	c = 0
+	k.EachConnFiltered(base, "more", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if !cp.Match(testOtherCapability) {
+			t.Fatalf("EachConnFiltered 'more' missing capability %v", testOtherCapability)
+		}
+		cp = p.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachConnFiltered 'more' missing capability %v", testMoreCapability)
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'more' expected 1 peer, got %d", c)
+	}
+
+	// Disconnect the "all" peer
+	k.Off(allPeer)
+
+	// Check that the "all" is now removed from connections
+	c = 0
+	k.EachConnFiltered(base, "other", 255, func(_ *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachConnFiltered 'other' expected 0 peers, got %d", c)
+	}
+
+	// Check that there is still an "other" peer among known peers
+	// (the two matched peers will be "all" and "other")
+	c = 0
+	k.EachAddrFiltered(base, "other", 255, func(_ *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered 'other' expected 2 peers, got %d", c)
+	}
+
+	// Check that the "less" peer is still registered as connected
+	c = 0
+	k.EachConnFiltered(base, "less", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(42)
+		if !cp.Match(testLessCapability) {
+			t.Fatalf("EachConnFiltered 'less' missing capability %v", testLessCapability)
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'less' expected 1 peer, got %d", c)
+	}
+
+	// Remove "less" from both connection and known peers (pruning) list
+	// TODO replace with the "prune" method when one is implemented
+	k.removeFromCapabilityIndex(lessPeer, false)
+
+	// Check that the "less" peer is no longer registered as connected
+	c = 0
+	k.EachConnFiltered(base, "less", 255, func(p *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachConnFiltered 'less' expected 0 peers, got %d", c)
+	}
+
+	// check that the "less" peer is not known anymore
+	// (the two matched peers will be "all" and "more")
+	c = 0
+	k.EachAddrFiltered(base, "less", 255, func(p *BzzAddr, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(42)
+		if !cp.Match(testMoreCapability) {
+			t.Fatalf("EachConnFiltered 'less' should now return only capability 'more': %v", testMoreCapability)
+		}
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered 'less' expected 2 peer, got %d", c)
+	}
+
+	// Remove "all" from known peers list (pruning only)
+	// TODO replace with the "prune" method when one is implemented
+	k.removeFromCapabilityIndex(allPeer, false)
+
+	// check that the "less" peer is not known anymore
+	// (the two matched peers will be "all" and "more")
+	c = 0
+	k.EachAddrFiltered(base, "more", 255, func(p *BzzAddr, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if cp != nil {
+			t.Fatalf("EachAddrFiltered 'more' should not contain a peer with capabilitiy %v", testOtherCapability)
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachAddrFiltered 'more' expected 1 peer, got %d", c)
+	}
 }

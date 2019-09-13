@@ -209,6 +209,7 @@ func remove(t *Pot, val Val, pof Pof) (r *Pot, po int, found bool) {
 // if f(v) returns v' <> v then v' is inserted into the Pot
 // if (v) == v the Pot is not changed
 // it panics if Pof(f(v), k) show that v' and v are not key-equal
+// BUG if "default" empty pot is supplied (created with NewPot(nil, 0), quieried address NOT found, then returned pot will be a nil value
 func Swap(t *Pot, k Val, pof Pof, f func(v Val) Val) (r *Pot, po int, found bool, change bool) {
 	var val Val
 	if t.pin == nil {

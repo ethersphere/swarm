@@ -181,7 +181,24 @@ func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool)
 	} else {
 		eAddr = p.(*entry).BzzAddr
 	}
-	_ = eAddr
+	for _, idxItem := range k.capabilityIndex {
+		if ok {
+			conns, _, found, _ := pot.Swap(idxItem.conns, ePeer, Pof, func(_ pot.Val) pot.Val {
+				return nil
+			})
+			if found {
+				idxItem.conns = conns
+			}
+		}
+		if !disconnectOnly {
+			addrs, _, found, _ := pot.Swap(idxItem.addrs, eAddr, Pof, func(_ pot.Val) pot.Val {
+				return nil
+			})
+			if found {
+				idxItem.addrs = addrs
+			}
+		}
+	}
 }
 
 // entry represents a Kademlia table entry (an extension of BzzAddr)
@@ -501,6 +518,7 @@ func (k *Kademlia) Off(p *Peer) {
 		// v cannot be nil, but no need to check
 		return nil
 	})
+	k.removeFromCapabilityIndex(p, true)
 	k.setNeighbourhoodDepth()
 }
 
