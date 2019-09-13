@@ -94,7 +94,7 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 // If any message is received in this case, the peer needs to be dropped
 func (b *BzzEth) handleMsgFromSwarmNode(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		p.logger.Debug("bzzeth.handleMsgFromSwarmNode")
+		p.logger.Warn("bzzeth.handleMsgFromSwarmNode")
 		return errRcvdMsgFromSwarmNode
 	}
 }
