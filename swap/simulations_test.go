@@ -285,12 +285,6 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		log.Info("simulation running")
-		disconnected := watchDisconnections(ctx, sim)
-		defer func() {
-			if err != nil && disconnected.bool() {
-				err = errors.New("disconnect events received")
-			}
-		}()
 
 		p1 := sim.UpNodeIDs()[0]
 		p2 := sim.UpNodeIDs()[1]
@@ -409,12 +403,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		log.Info("simulation running")
-		disconnected := watchDisconnections(ctx, sim)
-		defer func() {
-			if err != nil && disconnected.bool() {
-				err = errors.New("disconnect events received")
-			}
-		}()
 
 		// define the nodes
 		debitor := sim.UpNodeIDs()[0]
@@ -606,14 +594,6 @@ CONNS:
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		log.Info("simulation running")
-		/*
-			disconnected := watchDisconnections(ctx, sim)
-			defer func() {
-				if err != nil && disconnected.bool() {
-					err = errors.New("disconnect events received")
-				}
-			}()
-		*/
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -765,34 +745,6 @@ func waitForChequeProcessed(ts *testService) error {
 	}
 }
 
-// watchDisconnections receives simulation peer events in a new goroutine and sets atomic value
-// disconnected to true in case of a disconnect event.
-func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disconnected *boolean) {
-	log.Debug("Watching for disconnections")
-	disconnections := sim.PeerEvents(
-		ctx,
-		sim.NodeIDs(),
-		simulation.NewPeerEventsFilter().Drop(),
-	)
-	disconnected = new(boolean)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case d := <-disconnections:
-				if d.Error != nil {
-					log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", d.Error)
-				} else {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-				}
-				disconnected.set(true)
-			}
-		}
-	}()
-	return disconnected
-}
-
 func (ts *testService) Protocols() []p2p.Protocol {
 	spec := newTestSpec()
 	return []p2p.Protocol{
@@ -841,27 +793,4 @@ func (ts *testService) Start(server *p2p.Server) error {
 // are all terminated.
 func (ts *testService) Stop() error {
 	return nil
-}
-
-// boolean is used to concurrently set
-// and read a boolean value.
-type boolean struct {
-	v  bool
-	mu sync.RWMutex
-}
-
-// set sets the value.
-func (b *boolean) set(v bool) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.v = v
-}
-
-// bool reads the value.
-func (b *boolean) bool() bool {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	return b.v
 }
