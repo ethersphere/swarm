@@ -81,7 +81,7 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 		t.Fatalf("Could not create localStore")
 	}
 
-	netStore = storage.NewNetStore(localStore, bzzAddr,  enode.ID{})
+	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
 
 	cleanup = func() {
 		err := os.RemoveAll(dir)
@@ -268,7 +268,7 @@ func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, req
 			Triggers: []p2ptest.Trigger{
 				{
 					Code: 1,
-					Msg: offered,
+					Msg:  offered,
 					Peer: peerID,
 				},
 			},
@@ -366,7 +366,7 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	// overwrite finishDeliveryFunc to test deterministic delivery of headers
 	finishDeliveryTesting := func(hashes map[string]bool) {
-		checkDelivery(t,wantedIndexes, wanted, hashes)
+		checkDelivery(t, wantedIndexes, wanted, hashes)
 	}
 	finishDeliveryFunc = finishDeliveryTesting
 
@@ -398,7 +398,7 @@ func TestNewBlockHeaders(t *testing.T) {
 
 func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
 	// Check if requested headers arrived and are stored in localstore
-	for i, _ := range wantedIndexes {
+	for i := range wantedIndexes {
 		chunk, err := netstore.Store.Get(context.Background(), chunk.ModeGetLookup, wanted[i])
 		if err != nil {
 			t.Fatalf("chunk  %v not found %v", hex.EncodeToString(wanted[i]), wantedData[i])
@@ -417,11 +417,10 @@ func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData
 	if yes {
 		t.Fatalf("unsolicited header %v is not dropped", hex.EncodeToString(hash))
 	}
-	return
 }
 
 func checkDelivery(t *testing.T, wantedIndexes []int, wanted [][]byte, hashes map[string]bool) {
-	for i, _ := range wantedIndexes {
+	for i := range wantedIndexes {
 		hash := hex.EncodeToString(wanted[i])
 		if _, ok := hashes[hash]; !ok {
 			t.Fatalf("Header  %v not delivered", hash)
