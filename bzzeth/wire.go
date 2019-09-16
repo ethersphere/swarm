@@ -16,7 +16,11 @@
 
 package bzzeth
 
-import "github.com/ethersphere/swarm/p2p/protocols"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethersphere/swarm/p2p/protocols"
+)
 
 // Spec is the protocol spec for bzzeth
 var Spec = &protocols.Spec{
@@ -38,14 +42,9 @@ type Handshake struct {
 }
 
 // NewBlockHeaders is sent from the Ethereum client to the Swarm node
-type NewBlockHeaders struct {
-	Headers []HeaderHash
-}
-
-// HeaderHash encodes an ethereum block hash
-type HeaderHash struct {
-	Hash   []byte // block hash
-	Number []byte // block height
+type NewBlockHeaders []struct {
+	Hash   common.Hash // block hash
+	Number uint64      // block height
 }
 
 // GetBlockHeaders is used between a Swarm node and the Ethereum node in two cases:
@@ -60,5 +59,5 @@ type GetBlockHeaders struct {
 // multiple responses to the same request, whatever the node has it sends right away
 type BlockHeaders struct {
 	ID      uint32   // request id
-	Headers [][]byte // slice of chunk data (rlp encoded headers)
+	Headers []rlp.RawValue // list of rlp encoded block headers
 }
