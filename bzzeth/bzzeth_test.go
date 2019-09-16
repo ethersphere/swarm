@@ -221,14 +221,7 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	}
 
 	// after successful handshake, expect peer added to peer pool
-	var p *Peer
-	for i := 0; i < 10; i++ {
-		p = b.peers.get(node.ID())
-		if p != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	p := getPeerAfterConnection
 	if p == nil {
 		t.Fatal("bzzeth peer not added")
 	}
@@ -238,7 +231,7 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// after successful handshake, expect peer added to peer pool
+	// after a dummy message.. expect the peer to get disconnected
 	p1 := isPeerDisconnected(node.ID(), b)
 	if p1 != nil {
 		t.Fatal("bzzeth peer still connected")

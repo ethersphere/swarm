@@ -277,7 +277,7 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 			}
 		}
 	}
-	log.Debug("Stored headers ", "count", len(chunks))
+	log.Debug("Stored all headers ", "count", len(chunks))
 
 	// finish storage is used mostly in testing
 	// in normal scenario.. it just logs Trace
