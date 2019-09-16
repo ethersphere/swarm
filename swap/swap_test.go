@@ -27,7 +27,9 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"os"
+	"path"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/internal/debug"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
@@ -1069,6 +1072,40 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
+}
+
+func TestSwapLogToFile(t *testing.T) {
+
+	var err error
+
+	dir, err := ioutil.TempDir("", "swap_test_log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	//Test log in fileSetSwaplogpath
+	debug.SetSwaplogpath(dir)
+
+	TestResetBalance(t)
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil || len(files) == 0 {
+		t.Fatal(err)
+	}
+
+	fileP := path.Join(dir, files[0].Name())
+
+	var b []byte
+	b, err = ioutil.ReadFile(fileP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, "sending cheque") {
+		t.Fatalf("expected the log to contain sending cheque")
+	}
+
 }
 
 // dummyMsgRW implements MessageReader and MessageWriter

@@ -129,6 +129,11 @@ func RotatingFileHandler(logdir string) (log.Handler, error) {
 	return rfh, nil
 }
 
+// SetSwaplogpath sets the path for swap logs
+func SetSwaplogpath(path string) {
+	swaplogpath = path
+}
+
 // SwapRotatingFileHandler wraps RotatingFileHandler, saves in path defined by swaplogfileFlag
 func SwapRotatingFileHandler() (log.Handler, error) {
 	return RotatingFileHandler(swaplogpath)
@@ -150,7 +155,7 @@ func Setup(ctx *cli.Context, logdir string) error {
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
 	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
 	log.Root().SetHandler(glogger)
-	swaplogpath = ctx.GlobalString(swaplogpathFlag.Name)
+	SetSwaplogpath(ctx.GlobalString(swaplogpathFlag.Name))
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
