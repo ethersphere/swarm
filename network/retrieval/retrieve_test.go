@@ -235,9 +235,8 @@ func TestRequestFromPeers(t *testing.T) {
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr:   network.RandomBzzAddr(),
-		LightNode: false,
-		Peer:      protocolsPeer,
+		BzzAddr: network.RandomBzzAddr(),
+		Peer:    protocolsPeer,
 	}, to)
 
 	to.On(peer)
@@ -252,35 +251,6 @@ func TestRequestFromPeers(t *testing.T) {
 
 	if id.ID() != dummyPeerID {
 		t.Fatalf("Expected an id, got %v", id)
-	}
-}
-
-// RequestFromPeers should not return light nodes
-func TestRequestFromPeersWithLightNode(t *testing.T) {
-	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
-
-	addr := network.RandomBzzAddr()
-	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
-
-	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
-
-	// setting up a lightnode
-	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr:   network.RandomBzzAddr(),
-		LightNode: true,
-		Peer:      protocolsPeer,
-	}, to)
-
-	to.On(peer)
-
-	r := New(to, nil, to.BaseAddr(), nil)
-	req := storage.NewRequest(storage.Address(hash0[:]))
-
-	// making a request which should return with "no peer found"
-	_, err := r.findPeer(context.Background(), req)
-
-	if err != ErrNoPeerFound {
-		t.Fatalf("expected '%v', got %v", ErrNoPeerFound, err)
 	}
 }
 
