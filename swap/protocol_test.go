@@ -51,7 +51,7 @@ func TestHandshake(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	err = testDeploy(ctx, swap.backend, swap)
+	err = testDeploy(ctx, swap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestHandshake(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &HandshakeMsg{
-					ContractAddress: swap.owner.Contract,
+					ContractAddress: swap.GetParams().ContractAddress,
 				},
 				Peer: creditor.ID(),
 			},
@@ -92,7 +92,7 @@ func TestHandshake(t *testing.T) {
 			{
 				Code: 0,
 				Msg: &HandshakeMsg{
-					ContractAddress: swap.owner.Contract,
+					ContractAddress: swap.GetParams().ContractAddress,
 				},
 				Peer: debitor.ID(),
 			},
@@ -121,11 +121,11 @@ func TestEmitCheque(t *testing.T) {
 	ctx := context.Background()
 
 	log.Debug("deploy to simulated backend")
-	err := testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	err := testDeploy(ctx, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	err = testDeploy(ctx, debitorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestEmitCheque(t *testing.T) {
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
 	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
-	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestEmitCheque(t *testing.T) {
 	log.Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:         debitorSwap.owner.Contract,
+			Contract:         debitorSwap.GetParams().ContractAddress,
 			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: 42,
 		},
@@ -202,6 +202,11 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	debitorSwap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 
+	ctx := context.Background()
+	err := testDeploy(ctx, debitorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -45,7 +46,6 @@ type protoCtrl struct {
 }
 
 var (
-	cryptoUtils pss.CryptoUtils
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -61,8 +61,6 @@ func init() {
 	adapters.RegisterServices(services)
 
 	psslogmain = log.New("psslog", "*")
-
-	cryptoUtils = pss.NewCryptoUtils()
 
 	pssprotocols = make(map[string]*protoCtrl)
 }
@@ -231,13 +229,7 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			keys, err := cryptoUtils.NewKeyPair(ctxlocal)
-			if err != nil {
-				return nil, err
-			}
-			privkey, err := cryptoUtils.GetPrivateKey(keys)
+			privkey, err := ethCrypto.GenerateKey()
 			if err != nil {
 				return nil, err
 			}

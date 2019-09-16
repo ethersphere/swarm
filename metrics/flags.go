@@ -121,7 +121,7 @@ func datadirDiskUsage(path string, d time.Duration) {
 	for range time.Tick(d) {
 		bytes, err := dirSize(path)
 		if err != nil {
-			log.Warn("cannot get disk space", "err", err)
+			log.Trace("cannot get disk space", "err", err)
 		}
 
 		metrics.GetOrRegisterGauge("datadir.usage", nil).Update(bytes)

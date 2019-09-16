@@ -117,13 +117,13 @@ func (pssapi *API) BaseAddr() (PssAddress, error) {
 // Retrieves the node's public key in hex form
 func (pssapi *API) GetPublicKey() (keybytes hexutil.Bytes) {
 	key := pssapi.Pss.PublicKey()
-	keybytes = pssapi.Pss.Crypto.FromECDSAPub(key)
+	keybytes = pssapi.Pss.Crypto.SerializePublicKey(key)
 	return keybytes
 }
 
 // Set Public key to associate with a particular Pss peer
 func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic Topic, addr PssAddress) error {
-	pk, err := pssapi.Pss.Crypto.UnmarshalPubkey(pubkey)
+	pk, err := pssapi.Pss.Crypto.UnmarshalPublicKey(pubkey)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkey)
 	}
