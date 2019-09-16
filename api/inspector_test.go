@@ -39,7 +39,7 @@ func TestInspectorPeerStreams(t *testing.T) {
 	}
 	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
 
-	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, nil, stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
 	), false, false)))

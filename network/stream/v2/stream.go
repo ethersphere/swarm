@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,6 +39,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/swap"
 )
 
 const (
@@ -91,6 +93,41 @@ var (
 	}
 )
 
+// StreamPrices defines the price matrix that correlates a message
+// type to a certain price (or price function)
+type StreamPrices struct {
+	priceMatrix map[reflect.Type]*protocols.Price
+}
+
+// Price implements the protocols.Price interface and returns the price for a specific message
+func (s *StreamPrices) Price(msg interface{}) *protocols.Price {
+	return &protocols.Price{
+		Value:   s.chunkDeliveryPrice(),
+		PerByte: true,
+		Payer:   protocols.Receiver,
+	}
+	//t := reflect.TypeOf(msg).Elem()
+	//return s.priceMatrix[t]
+}
+
+func (s *StreamPrices) chunkDeliveryPrice() uint64 {
+	return swap.ChunkDeliveryPrice
+}
+
+// createPriceOracle sets up a matrix which can be queried to get
+// the price for a message via the Price method
+func (r *Registry) createPriceOracle() {
+	s := &StreamPrices{}
+	s.priceMatrix = map[reflect.Type]*protocols.Price{
+		reflect.TypeOf(ChunkDelivery{}): {
+			Value:   s.chunkDeliveryPrice(),
+			PerByte: true,
+			Payer:   protocols.Receiver,
+		},
+	}
+	r.prices = s
+}
+
 // Registry is the base type that handles all client/server operations on a node
 // it is instantiated once per stream protocol instance, that is, it should have
 // one instance per node
@@ -105,11 +142,12 @@ type Registry struct {
 	quit                    chan struct{}             // signal shutdown
 	lastReceivedChunkTimeMu sync.RWMutex              // synchronize access to lastReceivedChunkTime
 	lastReceivedChunkTime   time.Time                 // last received chunk time
-	logger                  log.Logger                // the logger for the registry. appends base address to all logs
+	prices                  protocols.Prices
+	logger                  log.Logger // the logger for the registry. appends base address to all logs
 }
 
 // New creates a new stream protocol handler
-func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider) *Registry {
+func New(intervalsStore state.Store, baseKey []byte, balance protocols.Balance, providers ...StreamProvider) *Registry {
 	r := &Registry{
 		intervalsStore: intervalsStore,
 		peers:          make(map[enode.ID]*Peer),
@@ -122,7 +160,11 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 	for _, p := range providers {
 		r.providers[p.StreamName()] = p
 	}
-
+	r.createPriceOracle()
+	if balance != nil && !reflect.ValueOf(balance).IsNil() {
+		// swap is enabled, so setup the hook
+		r.spec.Hook = protocols.NewAccounting(balance, r.prices)
+	}
 	return r
 }
 

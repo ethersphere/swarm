@@ -495,8 +495,8 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		return elem
 	}
 	opts := &SyncSimServiceOptions{
-		StreamConstructorFunc: func(s state.Store, b []byte, p ...StreamProvider) node.Service {
-			return New(s, b, p...)
+		StreamConstructorFunc: func(s state.Store, b []byte, a protocols.Balance, p ...StreamProvider) node.Service {
+			return New(s, b, a, p...)
 		},
 	}
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -511,7 +511,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 	}
 
 	// second node should start with the mock protocol
-	opts.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+	opts.StreamConstructorFunc = func(s state.Store, b []byte, a protocols.Balance, p ...StreamProvider) node.Service {
 		return newMock(infoReqHook)
 	}
 

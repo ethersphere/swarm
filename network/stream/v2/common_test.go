@@ -37,6 +37,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
@@ -96,7 +97,7 @@ func nodeBinIndexes(t *testing.T, store interface {
 type SyncSimServiceOptions struct {
 	InitialChunkCount     uint64
 	SyncOnlyWithinDepth   bool
-	StreamConstructorFunc func(state.Store, []byte, ...StreamProvider) node.Service
+	StreamConstructorFunc func(state.Store, []byte, protocols.Balance, ...StreamProvider) node.Service
 }
 
 func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -104,8 +105,8 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		o = new(SyncSimServiceOptions)
 	}
 	if o.StreamConstructorFunc == nil {
-		o.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
-			return New(s, b, p...)
+		o.StreamConstructorFunc = func(s state.Store, b []byte, a protocols.Balance, p ...StreamProvider) node.Service {
+			return New(s, b, a, p...)
 		}
 	}
 	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -164,7 +165,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		}
 
 		sp := NewSyncProvider(netStore, kad, true, o.SyncOnlyWithinDepth)
-		ss := o.StreamConstructorFunc(store, addr.Over(), sp)
+		ss := o.StreamConstructorFunc(store, addr.Over(), nil, sp)
 
 		cleanup = func() {
 			//ss.Stop() // wait for handlers to finish before closing localstore
