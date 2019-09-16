@@ -501,10 +501,10 @@ func TestMultiChequeSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-// TestSimpleSimulation starts 16 nodes, then in a simple round robin fashion sends messages to each other.
+// TestBasicSwapSimulation starts 16 nodes, then in a simple round robin fashion sends messages to each other.
 // Then checks that accounting is ok. It checks the actual amount of balances without any cheques sent,
 // in order to verify that the most basic accounting works.
-func TestSimpleSimulation(t *testing.T) {
+func TestBasicSwapSimulation(t *testing.T) {
 	nodeCount := 16
 	// create the shared backend and params
 	params, err := newSharedBackendSwaps(nodeCount)

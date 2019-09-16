@@ -845,11 +845,13 @@ func TestContractIntegration(t *testing.T) {
 // when testing, we don't need to wait for a transaction to be mined
 func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
 
-	if stb, ok := backend.(*swapTestBackend); !ok {
+	var stb *swapTestBackend
+	var ok bool
+	if stb, ok = backend.(*swapTestBackend); !ok {
 		return nil, errors.New("not the expected test backend")
-	} else {
-		stb.Commit()
 	}
+	stb.Commit()
+
 	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
 	if err != nil {
 		return nil, err
