@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -75,13 +76,13 @@ func (s *Swap) APIs() []rpc.API {
 
 // Start is a node.Service interface method
 func (s *Swap) Start(server *p2p.Server) error {
-	s.logger.Info("Swap service started")
+	log.Info("Swap service started")
 	return nil
 }
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
-	s.logger.Info("Swap service stopping")
+	log.Info("Swap service stopping")
 	return s.Close()
 }
 

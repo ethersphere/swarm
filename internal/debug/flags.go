@@ -55,9 +55,9 @@ var (
 		Name:  "debug",
 		Usage: "Prepends log messages with call-site location (file and line number)",
 	}
-	debugfileFlag = cli.StringFlag{
-		Name:  "debugfile",
-		Usage: "Write execution logs to the given file",
+	swaplogpathFlag = cli.StringFlag{
+		Name:  "slogpath",
+		Usage: "Write execution logs of swap to the given directory",
 		Value: "",
 	}
 	pprofFlag = cli.BoolFlag{
@@ -95,14 +95,15 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag, debugfileFlag,
+	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag, swaplogpathFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
 }
 
 var (
-	ostream log.Handler
-	glogger *log.GlogHandler
+	ostream     log.Handler
+	glogger     *log.GlogHandler
+	swaplogpath string
 )
 
 func init() {
@@ -115,17 +116,31 @@ func init() {
 	glogger = log.NewGlogHandler(ostream)
 }
 
+// RotatingFileHandler returns a RotatingFileHandler
+func RotatingFileHandler(logdir string) (log.Handler, error) {
+	rfh, err := log.RotatingFileHandler(
+		logdir,
+		262144,
+		log.JSONFormatOrderedEx(false, true),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rfh, nil
+}
+
+// SwapRotatingFileHandler wraps RotatingFileHandler, saves in path defined by swaplogfileFlag
+func SwapRotatingFileHandler() (log.Handler, error) {
+	return RotatingFileHandler(swaplogpath)
+}
+
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context) error {
+func Setup(ctx *cli.Context, logdir string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	if logdir := ctx.GlobalString(debugfileFlag.Name); logdir != "" {
-		rfh, err := log.RotatingFileHandler(
-			logdir,
-			262144,
-			log.JSONFormatOrderedEx(false, true),
-		)
+	if logdir != "" {
+		rfh, err := RotatingFileHandler(logdir)
 		if err != nil {
 			return err
 		}
@@ -135,6 +150,7 @@ func Setup(ctx *cli.Context) error {
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
 	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
 	log.Root().SetHandler(glogger)
+	swaplogpath = ctx.GlobalString(swaplogpathFlag.Name)
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)

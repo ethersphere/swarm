@@ -523,7 +523,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 		t.Fatal(err2)
 	}
 	log.Debug("creating simulated backend")
-	swap := New(nil, stateStore, key, testBackend)
+	swap := New(stateStore, key, testBackend)
 	return swap, dir
 }
 
@@ -1083,30 +1083,4 @@ func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
 // WriteMsg is from the MessageWriter interface
 func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 	return nil
-}
-
-func TestFileLogger(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	handler, err := log.FileHandler("/home/git/go/src/github.com/ethersphere/swarm/testlog/test.log", log.TerminalFormat(true))
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), handler))
-	log.Error("Test")
-}
-
-func TestRotatingFileLogger(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	handler, err := log.RotatingFileHandler("/home/git/go/src/github.com/ethersphere/swarm/testlog/testRotating.log", 200, log.TerminalFormat(true))
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), handler))
-	log.Error("Test")
 }
