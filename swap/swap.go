@@ -106,8 +106,8 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectT
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: %s", err)
 	}
-	if disconnectThreshold < paymentThreshold {
-		return nil, fmt.Errorf("swap init error: disconnect threshold lower than payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
+	if disconnectThreshold <= paymentThreshold {
+		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
 	}
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {

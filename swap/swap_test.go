@@ -307,6 +307,7 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
+//TestNewSwapFailure attempt to initialze SWAP with (a combination of) parameters which are not allowed. The test checks whether there is indeed indeed fails
 func TestNewSwapFailure(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarmSwap")
 	if err != nil {
@@ -334,7 +335,7 @@ func TestNewSwapFailure(t *testing.T) {
 		t.Error(err)
 	}
 
-	type SWAPConfig struct {
+	type testSwapConfig struct {
 		dbPath              string
 		prvkey              *ecdsa.PrivateKey
 		backendURL          string
@@ -342,23 +343,23 @@ func TestNewSwapFailure(t *testing.T) {
 		paymentThreshold    uint64
 	}
 
-	var config SWAPConfig
+	var config testSwapConfig
 
 	for _, tc := range []struct {
 		name      string
-		configure func(*SWAPConfig)
-		check     func(*testing.T, *SWAPConfig)
+		configure func(*testSwapConfig)
+		check     func(*testing.T, *testSwapConfig)
 	}{
 		{
 			name: "no backedURL",
-			configure: func(config *SWAPConfig) {
+			configure: func(config *testSwapConfig) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ""
 				config.disconnectThreshold = DefaultDisconnectThreshold
 				config.paymentThreshold = DefaultPaymentThreshold
 			},
-			check: func(t *testing.T, config *SWAPConfig) {
+			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
 				_, err := New(
 					config.dbPath,
@@ -374,14 +375,14 @@ func TestNewSwapFailure(t *testing.T) {
 		},
 		{
 			name: "disconnect threshold lower than payment threshold",
-			configure: func(config *SWAPConfig) {
+			configure: func(config *testSwapConfig) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ipcEndpoint
 				config.disconnectThreshold = DefaultDisconnectThreshold
 				config.paymentThreshold = DefaultDisconnectThreshold + 1
 			},
-			check: func(t *testing.T, config *SWAPConfig) {
+			check: func(t *testing.T, config *testSwapConfig) {
 				_, err := New(
 					config.dbPath,
 					config.prvkey,
@@ -389,20 +390,20 @@ func TestNewSwapFailure(t *testing.T) {
 					config.disconnectThreshold,
 					config.paymentThreshold,
 				)
-				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower than payment threshold.") {
+				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower or at payment threshold.") {
 					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP")
 				}
 			},
 		},
 		{
 			name: "invalid backendURL",
-			configure: func(config *SWAPConfig) {
+			configure: func(config *testSwapConfig) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
 				config.disconnectThreshold = DefaultDisconnectThreshold
-				config.paymentThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultPaymentThreshold
 			},
-			check: func(t *testing.T, config *SWAPConfig) {
+			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
 				_, err := New(
 					config.dbPath,
