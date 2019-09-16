@@ -20,9 +20,9 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -109,7 +109,6 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 		return nil
 	}
 }
-
 
 // handleMsgFromSwarmNode is used in the case if this node is connected to a Swarm node
 // If any message is received in this case, the peer needs to be dropped
@@ -207,7 +206,7 @@ func finishStorage(chunks []chunk.Chunk) {
 var finishDeliveryFunc = finishDelivery
 
 func finishDelivery(hashes map[string]bool) {
-	for addr, _ := range hashes {
+	for addr := range hashes {
 		log.Trace("Header delivered", "Address", addr)
 	}
 }
@@ -268,7 +267,7 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 	// Store all the valid header chunks in one shot
 	results, err := b.netStore.Put(ctx, chunk.ModePutUpload, chunks...)
 	if err != nil {
-		for i, _ := range results {
+		for i := range results {
 			ch := chunks[i]
 			log.Warn("bzzeth.store", "hash", ch.Address().Hex(), "err", err)
 			// ignore all other errors, but invalid chunk incurs peer drop
