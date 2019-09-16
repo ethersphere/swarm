@@ -360,7 +360,7 @@ func TestNewSwapFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *SWAPConfig) {
 				defer os.RemoveAll(config.dbPath)
-				_, err := NewSWAP(
+				_, err := New(
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
@@ -382,7 +382,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.paymentThreshold = DefaultDisconnectThreshold + 1
 			},
 			check: func(t *testing.T, config *SWAPConfig) {
-				_, err := NewSWAP(
+				_, err := New(
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
@@ -404,7 +404,7 @@ func TestNewSwapFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *SWAPConfig) {
 				defer os.RemoveAll(config.dbPath)
-				_, err := NewSWAP(
+				_, err := New(
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
