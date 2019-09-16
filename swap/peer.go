@@ -166,7 +166,6 @@ func (p *Peer) sendCheque() error {
 	}
 
 	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
-
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

@@ -481,9 +481,6 @@ func TestResetBalance(t *testing.T) {
 	defer clean2()
 
 	ctx := context.Background()
-	// deploying would strictly speaking not be necessary, as the signing would also just work
-	// with empty contract addresses. Nevertheless to avoid later suprises and for
-	// coherence and clarity we deploy here so that we get a simulated contract address
 	err := testDeploy(ctx, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
@@ -496,8 +493,9 @@ func TestResetBalance(t *testing.T) {
 	// create Peer instances
 	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
-	cPeer := newDummyPeer()
-	dPeer := newDummyPeer()
+	cPeer := newDummyPeerWithSpec(Spec)
+	dPeer := newDummyPeerWithSpec(Spec)
+	fmt.Println(1)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
