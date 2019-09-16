@@ -22,26 +22,21 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
-	"flag"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
-	"github.com/ethersphere/swarm/testutil"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
-)
-
-var (
-	loglevel = flag.Int("loglevel", 0, "verbosity of logs")
+	"github.com/ethersphere/swarm/testutil"
 )
 
 func init() {
@@ -86,7 +81,7 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 		t.Fatalf("Could not create localStore")
 	}
 
-	netStore = storage.NewNetStore(localStore, enode.ID{})
+	netStore = storage.NewNetStore(localStore, bzzAddr,  enode.ID{})
 
 	cleanup = func() {
 		err := os.RemoveAll(dir)
