@@ -21,10 +21,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
@@ -226,7 +229,12 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	// convert rlp.RawValue to bytes
 	var headers [][]byte
 	for _, h := range msg.Headers {
-		headers = append(headers, h)
+		displayHeader(h)
+		res, err := rlp.EncodeToBytes(h)
+		if err != nil {
+			log.Error("Could not encode header to bytes", "hash", h.Hash())
+		}
+		headers = append(headers, res)
 	}
 
 	err := b.deliverAndStoreAll(ctx, req, headers)
@@ -234,6 +242,23 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.ID, "err", err)
 		p.Drop()
 	}
+}
+
+// debug function to display header contents
+func displayHeader(hdr types.Header) {
+	log.Debug("Header ", "ParentHash", hdr.ParentHash.Hex())
+	log.Debug("Header ", "UncleHash", hdr.UncleHash.Hex())
+	log.Debug("Header ", "Coinbase", hdr.Coinbase.Hex())
+	log.Debug("Header ", "Root", hdr.Root.Hex())
+	log.Debug("Header ", "TxHash", hdr.TxHash.Hex())
+	log.Debug("Header ", "ReceiptHash", hdr.ReceiptHash.Hex())
+	log.Debug("Header ", "MixDigest", hdr.MixDigest.Hex())
+
+	log.Debug("Header ", "Difficulty", hdr.Difficulty)
+	log.Debug("Header ", "Number", hdr.Number)
+	log.Debug("Header ", "GasLimit", hdr.GasLimit)
+	log.Debug("Header ", "GasUsed", hdr.GasUsed)
+	log.Debug("Header ", "Time", time.Unix(int64(hdr.Time), 0))
 }
 
 // Validates and headers asynchronously and stores the valid chunks in one go

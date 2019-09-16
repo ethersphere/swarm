@@ -23,11 +23,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"io/ioutil"
+	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -92,7 +94,6 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 		if err != nil {
 			t.Fatalf("Could not close netStore")
 		}
-
 	}
 	return prvkey, netStore, cleanup
 }
@@ -285,7 +286,7 @@ func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, req
 		})
 }
 
-func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, wantedData []rlp.RawValue) error {
+func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, wantedData []types.Header) error {
 	return tester.TestExchanges(
 		p2ptest.Exchange{
 			Label: "BlockHeaders",
@@ -309,6 +310,7 @@ func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, reques
 // - If a unsolicited header is received, dont store it on localstore
 // Apart from that it also tests if all the headers are delivered and stored in localstore
 func TestNewBlockHeaders(t *testing.T) {
+	var wg sync.WaitGroup
 	prvKey, netstore, cleanup := newTestNetworkStore(t)
 	defer cleanup()
 
@@ -322,7 +324,8 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	offered := make(NewBlockHeaders, 256)
 	for i := 0; i < len(offered); i++ {
-		offered[i].Hash = common.BytesToHash(crypto.Keccak256([]byte{uint8(i)}))
+		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(i))}
+		offered[i].Hash = hdr.Hash()
 		offered[i].Number = uint64(i)
 	}
 
@@ -343,10 +346,10 @@ func TestNewBlockHeaders(t *testing.T) {
 	}
 
 	wanted := make([][]byte, len(wantedIndexes))
-	wantedData := make([]rlp.RawValue, len(wantedIndexes)+1)
+	wantedData := make([]types.Header, len(wantedIndexes)+1)
 	for i, w := range wantedIndexes {
-		wanted[i] = crypto.Keccak256([]byte{uint8(w)})
-		wantedData[i] = rlp.RawValue{uint8(w)}
+		wantedData[i] = types.Header{Number: new(big.Int).SetUint64(uint64(w))}
+		wanted[i] = wantedData[i].Hash().Bytes()
 	}
 
 	// overwrite newRequestIDFunc to be deterministic
@@ -361,12 +364,14 @@ func TestNewBlockHeaders(t *testing.T) {
 	// overwrite finishStorageFunc to test deterministic storage of headers
 	finishStorageTesting := func(chunks []chunk.Chunk) {
 		checkStorage(t, wantedIndexes, wanted, wantedData, netstore)
+		wg.Done()
 	}
 	finishStorageFunc = finishStorageTesting
 
 	// overwrite finishDeliveryFunc to test deterministic delivery of headers
 	finishDeliveryTesting := func(hashes map[string]bool) {
 		checkDelivery(t, wantedIndexes, wanted, hashes)
+		wg.Done()
 	}
 	finishDeliveryFunc = finishDeliveryTesting
 
@@ -378,38 +383,62 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	// Add a header to localstore
 	// this header should not be requested in GetBlockHeaders
-	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk([]byte{uint8(IgnoreIndexes[0])}))
+	hdr := types.Header{Number: new(big.Int).SetUint64(uint64(IgnoreIndexes[0]))}
+	res, err := rlp.EncodeToBytes(hdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk(res))
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Adding ignored hash also .. this hash will be ignored while storing
 	err = newBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), &offered, wanted)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a unsolicited header
-	wantedData[len(wantedIndexes)] = rlp.RawValue{uint8(255)}
+	wantedData[len(wantedIndexes)] = types.Header{Number: new(big.Int).SetUint64(255)}
 	err = blockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedData)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Add two.. one for storage and another for delivery
+	// these groups are moved to Done after storage and delivery checks are complete
+	wg.Add(2)
+
+	// Wait for the storage and delivery checks to complete
+	// only after that the cleanup functions should be allowed
+	wg.Wait()
+
 }
 
-func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
+func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []types.Header, netstore *storage.NetStore) {
 	// Check if requested headers arrived and are stored in localstore
 	for i := range wantedIndexes {
 		chunk, err := netstore.Store.Get(context.Background(), chunk.ModeGetLookup, wanted[i])
 		if err != nil {
-			t.Fatalf("chunk  %v not found %v", hex.EncodeToString(wanted[i]), wantedData[i])
+			t.Fatalf("chunk  %v not found %v", hex.EncodeToString(wanted[i]), wantedData[i].Number)
 		}
-		if !bytes.Equal(wantedData[i], chunk.Data()) {
+
+		res, err := rlp.EncodeToBytes(wantedData[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(res, chunk.Data()) {
 			t.Fatalf("expected %v, got %v", wanted[i], chunk.Data())
 		}
 	}
 
 	// check if unsolicited header delivery is dropped and not in localstore
-	hash := crypto.Keccak256(wantedData[len(wantedIndexes)])
+	res, err := rlp.EncodeToBytes(wantedData[len(wantedIndexes)])
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := crypto.Keccak256(res)
 	yes, err := netstore.Store.Has(context.Background(), hash)
 	if err != nil {
 		t.Fatal(err)
