@@ -212,7 +212,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	defer cleanup()
 
 	// create a dummy pper
-	cPeer := newDummyPeer()
+	cPeer := newDummyPeerWithSpec(Spec)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
@@ -267,7 +267,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	defer clean()
 
 	// create a dummy pper
-	cPeer := newDummyPeer()
+	cPeer := newDummyPeerWithSpec(Spec)
 	debitor, err := creditorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)

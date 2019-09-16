@@ -453,15 +453,17 @@ func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 	testDeploy(context.Background(), swap)
-	testPeer := newDummyPeer()
+	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
-	err := swap.Add(-DefaultPaymentThreshold, testPeer.Peer)
-	fmt.Println(err, 1)
-	// var cheque *Cheque
-	// _ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
-	// if cheque.CumulativePayout != DefaultPaymentThreshold {
-	// 	t.Fatal()
-	// }
+	if err := swap.Add(-DefaultPaymentThreshold, testPeer.Peer); err != nil {
+		t.Fatal()
+	}
+
+	var cheque *Cheque
+	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
+	if cheque.CumulativePayout != DefaultPaymentThreshold {
+		t.Fatal()
+	}
 }
 
 // TestResetBalance tests that balances are correctly reset
@@ -702,19 +704,24 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 	return swap, clean
 }
 
-// creates a dummy swap.Peer
-func newDummyPeer() *Peer {
-	return &Peer{
-		Peer: newDummyProtocolPeer(),
-	}
+type dummyPeer struct {
+	*protocols.Peer
 }
 
 // creates a dummy protocols.Peer with dummy MsgReadWriter
-func newDummyProtocolPeer() *protocols.Peer {
+func newDummyPeer() *dummyPeer {
+	return newDummyPeerWithSpec(nil)
+}
+
+// creates a dummy protocols.Peer with dummy MsgReadWriter
+func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
 	rw := &dummyMsgRW{}
-	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, Spec)
-	return protoPeer
+	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), rw, spec)
+	dummy := &dummyPeer{
+		Peer: protoPeer,
+	}
+	return dummy
 }
 
 // creates cheque structure for testing
