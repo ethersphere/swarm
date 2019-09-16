@@ -688,7 +688,7 @@ func TestCapabilityIndex(t *testing.T) {
 	allAddr.Capabilities.Add(testMoreCapability)
 
 	// proceed to check the matches, first for the "known peers" pot
-	// first adding the different peer configurations to the kademli
+	// first adding the different peer configurations to the kademlia
 	k.Register(moreAddr, lessAddr, otherAddr, allAddr)
 
 	// Call without filter should still return all peers
