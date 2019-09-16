@@ -80,7 +80,7 @@ func NewParams() *Params {
 	}
 }
 
-// New - swap constructor
+// new - swap constructor without integrity check
 func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
 	return &Swap{
 		store:               stateStore,
@@ -94,8 +94,8 @@ func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Back
 	}
 }
 
-// NewSWAP - swap constructor with integrity checks
-func NewSWAP(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
+// New - swap constructor with integrity checks
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
 	// we MUST have a backend
 	if backendURL == "" {
 		return nil, errors.New("swap init error: no backend URL given")

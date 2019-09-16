@@ -44,7 +44,6 @@ import (
 	"github.com/ethersphere/swarm/bzzeth"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/ens"
-	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -79,7 +78,6 @@ type Swarm struct {
 	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz // the logistic manager
 	bzzEth            *bzzeth.BzzEth
-	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
@@ -119,10 +117,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
-		//TODO: is this needed here?
-		self.backend, _ = ethclient.Dial(self.config.SwapBackendURL)
 		// create the accounting objects
-		self.swap, err = swap.NewSWAP(
+		self.swap, err = swap.New(
 			self.config.Path,
 			self.privateKey,
 			self.config.SwapBackendURL,

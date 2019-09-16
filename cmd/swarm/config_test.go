@@ -238,8 +238,9 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold),
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold),
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold + 1),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold + 1),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -286,12 +287,12 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if info.SwapPaymentThreshold != swap.DefaultPaymentThreshold {
-		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", swap.DefaultPaymentThreshold, info.SwapPaymentThreshold)
+	if info.SwapPaymentThreshold != (swap.DefaultPaymentThreshold + 1) {
+		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", swap.DefaultPaymentThreshold+1, info.SwapPaymentThreshold)
 	}
 
-	if info.SwapDisconnectThreshold != swap.DefaultDisconnectThreshold {
-		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold, info.SwapDisconnectThreshold)
+	if info.SwapDisconnectThreshold != (swap.DefaultDisconnectThreshold + 1) {
+		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold+1, info.SwapDisconnectThreshold)
 	}
 
 	node.Shutdown()
