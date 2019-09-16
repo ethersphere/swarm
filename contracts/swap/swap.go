@@ -46,10 +46,10 @@ type Backend interface {
 }
 
 // Deploy deploys an instance of the underlying contract and returns its `Contract` abstraction
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (common.Address, Contract, *types.Transaction, error) {
+func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
 	addr, tx, s, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
 	c := simpleContract{instance: s, address: addr}
-	return addr, c, tx, err
+	return c, tx, err
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
@@ -86,62 +86,14 @@ type CashChequeResult struct {
 
 // Params encapsulates some contract parameters (currently mostly informational)
 type Params struct {
-	ContractCode, ContractAbi string
-}
-
-// ValidateCode checks that the on-chain code at address matches the expected swap
-// contract code.
-func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
-	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
-	if err != nil {
-		return err
-	}
-	referenceCode := common.FromHex(contract.SimpleSwapDeployedCode)
-	if !bytes.Equal(codeReadFromAddress, referenceCode) {
-		return ErrNotASwapContract
-	}
-	return nil
-}
-
-// WaitFunc is the default function to wait for transactions
-// We can overwrite this in tests so that we don't need to wait for mining
-var WaitFunc = waitForTx
-
-// waitForTx waits for transaction to be mined and returns the receipt
-func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
-	// it blocks here until tx is mined
-	receipt, err := bind.WaitMined(auth.Context, backend, tx)
-	if err != nil {
-		return nil, err
-	}
-	// indicate whether the transaction did not revert
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, ErrTransactionReverted
-	}
-	return receipt, nil
+	ContractCode    string
+	ContractAbi     string
+	ContractAddress common.Address
 }
 
 type simpleContract struct {
 	instance *contract.SimpleSwap
 	address  common.Address
-}
-
-// ContractParams returns contract information
-func (s simpleContract) ContractParams() *Params {
-	return &Params{
-		ContractCode: contract.SimpleSwapBin,
-		ContractAbi:  contract.SimpleSwapABI,
-	}
-}
-
-// PaidOut returns the total paid out amount for the given address
-func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
-	return s.instance.PaidOut(opts, addr)
-}
-
-// Issuer returns the contract owner from the blockchain
-func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
-	return s.instance.Issuer(opts)
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
@@ -176,4 +128,55 @@ func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend B
 	}
 
 	return result, receipt, nil
+}
+
+// ContractParams returns contract information
+func (s simpleContract) ContractParams() *Params {
+	return &Params{
+		ContractCode:    contract.SimpleSwapBin,
+		ContractAbi:     contract.SimpleSwapABI,
+		ContractAddress: s.address,
+	}
+}
+
+// Issuer returns the contract owner from the blockchain
+func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
+	return s.instance.Issuer(opts)
+}
+
+// PaidOut returns the total paid out amount for the given address
+func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
+	return s.instance.PaidOut(opts, addr)
+}
+
+// ValidateCode checks that the on-chain code at address matches the expected swap
+// contract code.
+func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
+	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
+	if err != nil {
+		return err
+	}
+	referenceCode := common.FromHex(contract.SimpleSwapDeployedCode)
+	if !bytes.Equal(codeReadFromAddress, referenceCode) {
+		return ErrNotASwapContract
+	}
+	return nil
+}
+
+// WaitFunc is the default function to wait for transactions
+// We can overwrite this in tests so that we don't need to wait for mining
+var WaitFunc = waitForTx
+
+// waitForTx waits for transaction to be mined and returns the receipt
+func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
+	// it blocks here until tx is mined
+	receipt, err := bind.WaitMined(auth.Context, backend, tx)
+	if err != nil {
+		return nil, err
+	}
+	// indicate whether the transaction did not revert
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, ErrTransactionReverted
+	}
+	return receipt, nil
 }

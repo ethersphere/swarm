@@ -61,7 +61,6 @@ type Swap struct {
 
 // Owner encapsulates information related to accessing the contract
 type Owner struct {
-	Contract   common.Address    // address of swap contract
 	address    common.Address    // owner address
 	privateKey *ecdsa.PrivateKey // private key
 	publicKey  *ecdsa.PublicKey  // public key
@@ -130,7 +129,7 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 
 // DeploySuccess is for convenience log output
 func (s *Swap) DeploySuccess() string {
-	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.owner.Contract.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
+	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.GetParams().ContractAddress.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
 }
 
 // Add is the (sole) accounting function
@@ -217,7 +216,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.owner.Contract, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
@@ -352,14 +351,9 @@ func (s *Swap) Close() error {
 	return s.store.Close()
 }
 
-// GetParams returns contract parameters (Bin, ABI) from the contract
+// GetParams returns contract parameters (Bin, ABI, contractAddress) from the contract
 func (s *Swap) GetParams() *swap.Params {
 	return s.contract.ContractParams()
-}
-
-// setChequebookAddr sets the chequebook address
-func (s *Swap) setChequebookAddr(chequebookAddr common.Address) {
-	s.owner.Contract = chequebookAddr
 }
 
 // getContractOwner retrieve the owner of the chequebook at address from the blockchain
@@ -380,7 +374,7 @@ func (s *Swap) StartChequebook(chequebookAddr common.Address) error {
 		}
 		log.Info("Using the provided chequebook", "chequebookAddr", chequebookAddr)
 	} else {
-		if err := s.Deploy(context.Background(), s.backend); err != nil {
+		if err := s.Deploy(context.Background()); err != nil {
 			return err
 		}
 		log.Info("New SWAP contract deployed", "contract info", s.DeploySuccess())
@@ -398,42 +392,40 @@ func (s *Swap) BindToContractAt(address common.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	s.setChequebookAddr(address)
 	return nil
 }
 
 // Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context, backend swap.Backend) error {
+func (s *Swap) Deploy(ctx context.Context) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
 	log.Info("deploying new swap", "owner", opts.From.Hex())
-	address, err := s.deployLoop(opts, backend, s.owner.address, defaultHarddepositTimeoutDuration)
+	address, err := s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
 		log.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	s.setChequebookAddr(address)
 	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
-func (s *Swap) deployLoop(opts *bind.TransactOpts, backend swap.Backend, owner common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
+func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
 
-		if _, s.contract, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+		if s.contract, tx, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
 			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
-		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
+		if addr, err = bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
 			log.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}

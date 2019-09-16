@@ -319,11 +319,11 @@ func TestResetBalance(t *testing.T) {
 	// deploying would strictly speaking not be necessary, as the signing would also just work
 	// with empty contract addresses. Nevertheless to avoid later suprises and for
 	// coherence and clarity we deploy here so that we get a simulated contract address
-	err := testDeploy(ctx, creditorSwap.backend, creditorSwap)
+	err := testDeploy(ctx, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap.backend, debitorSwap)
+	err = testDeploy(ctx, debitorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,11 +333,11 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.owner.Contract)
+	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.owner.Contract)
+	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -670,15 +670,14 @@ func TestValidateCode(t *testing.T) {
 	defer clean()
 
 	// deploy a new swap contract
-	opts := bind.NewKeyedTransactor(ownerKey)
-	addr, _, _, err := cswap.Deploy(opts, swap.backend, ownerAddress, 0*time.Second)
+	err := testDeploy(context.TODO(), swap)
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
 	testBackend.Commit()
 
-	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != nil {
+	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
@@ -738,7 +737,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("deploy issuer swap")
 
 	ctx := context.TODO()
-	err := testDeploy(ctx, testBackend, issuerSwap)
+	err := testDeploy(ctx, issuerSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -746,7 +745,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("deployed. signing cheque")
 
 	cheque := newTestCheque()
-	cheque.ChequeParams.Contract = issuerSwap.owner.Contract
+	cheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
 	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -771,7 +770,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 	depoTx := types.NewTransaction(
 		nonce,
-		issuerSwap.owner.Contract,
+		issuerSwap.GetParams().ContractAddress,
 		big.NewInt(int64(cheque.CumulativePayout)),
 		50000,
 		big.NewInt(int64(0)),
@@ -808,7 +807,7 @@ func TestContractIntegration(t *testing.T) {
 
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
-	bouncingCheque.ChequeParams.Contract = issuerSwap.owner.Contract
+	bouncingCheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
 	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10
 	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
@@ -841,12 +840,12 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, backend cswap.Backend, swap *Swap) (err error) {
+func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	swap.owner.Contract, swap.contract, _, err = cswap.Deploy(opts, backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
 	testBackend.Commit()
 
 	return err
