@@ -61,19 +61,19 @@ func newTestKademlia(t *testing.T, b string) *testKademlia {
 	}
 }
 
-func (tk *testKademlia) newTestKadPeer(s string, lightNode bool) *Peer {
-	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s), LightNode: lightNode}, tk.Kademlia)
+func (tk *testKademlia) newTestKadPeer(s string) *Peer {
+	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, tk.Kademlia)
 }
 
 func (tk *testKademlia) On(ons ...string) {
 	for _, s := range ons {
-		tk.Kademlia.On(tk.newTestKadPeer(s, false))
+		tk.Kademlia.On(tk.newTestKadPeer(s))
 	}
 }
 
 func (tk *testKademlia) Off(offs ...string) {
 	for _, s := range offs {
-		tk.Kademlia.Off(tk.newTestKadPeer(s, false))
+		tk.Kademlia.Off(tk.newTestKadPeer(s))
 	}
 }
 
