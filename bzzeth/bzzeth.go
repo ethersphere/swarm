@@ -18,6 +18,7 @@ package bzzeth
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
@@ -125,8 +126,9 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 
 	// collect the addresses of blocks that are not in our localstore
 	var addresses []chunk.Address
-	for _, h := range msg.Headers {
-		addresses = append(addresses, h.Hash)
+	for _, h := range *msg {
+		addresses = append(addresses, h.Hash.Bytes())
+		log.Trace("Received hashes ", "Header", hex.EncodeToString(h.Hash.Bytes()))
 	}
 	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
 
@@ -142,6 +144,8 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 		vhash := addresses[i]
 		if wantHeaderFunc(vhash, b.kad) {
 			hashes = append(hashes, vhash)
+		} else {
+			p.logger.Trace("ignoring header. Not in proximity ", "Address", hex.EncodeToString(addresses[i]))
 		}
 	}
 
@@ -156,24 +160,22 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 
 	// this loop blocks until all delivered or context done
 	// only needed to log results
+	deliveredCnt := 0
 	for {
 		select {
 		case hash, ok := <-deliveries:
-			// calculate the delivery count by looking at the status in the request
-			deliveredCnt := getDeliveryCount(req)
-
 			if !ok {
-				p.logger.Debug("bzzeth.handleNewBlockHeaders", "hash", hash, "delivered", deliveredCnt)
+				p.logger.Debug("bzzeth.handleNewBlockHeaders", "hash", hex.EncodeToString(hash), "delivered", deliveredCnt)
 				return
 			}
-
+			deliveredCnt++
+			p.logger.Trace("bzzeth.handleNewBlockHeaders", "hash", hex.EncodeToString(hash), "delivered", deliveredCnt)
 			if deliveredCnt == len(req.hashes) {
-				p.logger.Debug("bzzeth.handleNewBlockHeaders", "hash", hash, "delivered", deliveredCnt)
+				p.logger.Debug("Delivered all headers", "count", deliveredCnt)
+				finishDeliveryFunc(req.hashes)
 				return
 			}
 		case <-ctx.Done():
-			// calculate the delivery count by looking at the status in the request
-			deliveredCnt := getDeliveryCount(req)
 			p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt, "err", err)
 			return
 		}
@@ -190,17 +192,24 @@ func wantHeader(hash []byte, kad *network.Kademlia) bool {
 	return chunk.Proximity(kad.BaseAddr(), hash) >= kad.NeighbourhoodDepth()
 }
 
-// Calculates the no of headers delivered in a given request
-func getDeliveryCount(req *request) int {
-	deliveredCnt := 0
-	req.lock.Lock()
-	defer req.lock.Unlock()
-	for _, done := range req.hashes {
-		if done {
-			deliveredCnt++
-		}
+// finishStorageFunc is used to determine if all the requested headers are stored
+// this is used in testing if the headers are indeed stored in the localstore
+var finishStorageFunc = finishStorage
+
+func finishStorage(chunks []chunk.Chunk) {
+	for _, c := range chunks {
+		log.Trace("Header stored", "Address", c.Address().Hex())
 	}
-	return deliveredCnt
+}
+
+// finishDeliveryFunc is used to determine if all the requested headers are delivered
+// this is used in testing .. otherwise it just logs trace
+var finishDeliveryFunc = finishDelivery
+
+func finishDelivery(hashes map[string]bool) {
+	for addr, _ := range hashes {
+		log.Trace("Header delivered", "Address", addr)
+	}
 }
 
 // handleBlockHeaders handles block headers message
@@ -214,7 +223,14 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 		p.Drop()
 		return
 	}
-	err := b.deliverAndStoreAll(ctx, req, msg.Headers)
+
+	// convert rlp.RawValue to bytes
+	var headers [][]byte
+	for _, h := range msg.Headers {
+		headers = append(headers, h)
+	}
+
+	err := b.deliverAndStoreAll(ctx, req, headers)
 	if err != nil {
 		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.ID, "err", err)
 		p.Drop()
@@ -224,8 +240,9 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 // Validates and headers asynchronously and stores the valid chunks in one go
 func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [][]byte) error {
 	errC := make(chan error, len(headers))
-	chunksC := make(chan chunk.Chunk, len(headers))
 
+	chunks := make([]chunk.Chunk, 0)
+	var chunkL sync.RWMutex
 	var wg sync.WaitGroup
 	for _, h := range headers {
 		hdr := make([]byte, len(h))
@@ -238,20 +255,17 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 				errC <- err
 				return
 			}
-			chunksC <- ch
+			chunkL.Lock()
+			defer chunkL.Unlock()
+			chunks = append(chunks, ch)
 		}()
 	}
 
 	// wait for all validations to get over and close the channels
 	wg.Wait()
-	close(chunksC)
 	close(errC)
 
 	// Store all the valid header chunks in one shot
-	chunks := make([]chunk.Chunk, 0)
-	for c := range chunksC {
-		chunks = append(chunks, c)
-	}
 	results, err := b.netStore.Put(ctx, chunk.ModePutUpload, chunks...)
 	if err != nil {
 		for i, _ := range results {
@@ -263,6 +277,11 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 			}
 		}
 	}
+	log.Debug("Stored headers ", "count", len(chunks))
+
+	// finish storage is used mostly in testing
+	// in normal scenario.. it just logs Trace
+	finishStorageFunc(chunks)
 	return <-errC
 }
 
