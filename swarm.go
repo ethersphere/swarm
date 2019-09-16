@@ -208,7 +208,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr) // nodeID.Bytes())
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
@@ -228,7 +228,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, retrieval.Spec, self.streamer.Run, self.retrieval.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, self.retrieval.Spec(), self.streamer.Run, self.retrieval.Run)
 
 	self.bzzEth = bzzeth.New()
 

@@ -38,6 +38,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/swap"
 	opentracing "github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -53,7 +54,7 @@ var (
 
 	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
-	Spec = &protocols.Spec{
+	spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
 		Version:    1,
 		MaxMsgSize: 10 * 1024 * 1024,
@@ -79,11 +80,11 @@ func (p *RetrievalPrices) Price(msg interface{}) *protocols.Price {
 }
 
 func (p *RetrievalPrices) retrieveRequestPrice() uint64 {
-	return uint64(1)
+	return swap.RetrieveRequestPrice
 }
 
 func (p *RetrievalPrices) chunkDeliveryPrice() uint64 {
-	return uint64(1)
+	return swap.ChunkDeliveryPrice
 }
 
 // createPriceOracle sets up a matrix which can be queried to get
@@ -111,21 +112,27 @@ type Retrieval struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
+	spec     *protocols.Spec
 	prices   protocols.Prices
 	logger   log.Logger
 	quit     chan struct{}
 }
 
 // New returns a new instance of the retrieval protocol handler
-func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte) *Retrieval {
+func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance) *Retrieval {
 	r := &Retrieval{
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
+		spec:     spec,
 		netStore: ns,
 		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
 	}
 	r.createPriceOracle()
+	if balance != nil && !reflect.ValueOf(balance).IsNil() {
+		// swap is enabled, so setup the hook
+		r.spec.Hook = protocols.NewAccounting(balance, r.prices)
+	}
 	return r
 }
 
@@ -226,7 +233,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
-		if !p.HasCap(Spec.Name) {
+		if !p.HasCap(r.spec.Name) {
 			return true
 		}
 
@@ -453,16 +460,16 @@ func (r *Retrieval) Stop() error {
 func (r *Retrieval) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    Spec.Name,
-			Version: Spec.Version,
-			Length:  Spec.Length(),
+			Name:    r.spec.Name,
+			Version: r.spec.Version,
+			Length:  r.spec.Length(),
 			Run:     r.runProtocol,
 		},
 	}
 }
 
 func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, Spec)
+	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
 
 	return r.Run(bp)
@@ -470,4 +477,8 @@ func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (r *Retrieval) APIs() []rpc.API {
 	return nil
+}
+
+func (r *Retrieval) Spec() *protocols.Spec {
+	return r.spec
 }
