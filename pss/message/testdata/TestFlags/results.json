@@ -1,6 +1,0 @@
-{
-	"r=false; s=false": "00",
-	"r=false; s=true": "01",
-	"r=true; s=false": "02",
-	"r=true; s=true": "03"
-}
