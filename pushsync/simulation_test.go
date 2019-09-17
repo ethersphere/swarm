@@ -61,22 +61,22 @@ var (
 // * creates a simulation with connectivity loaded from a snapshot
 // * for each test case, two nodes are chosen randomly, an uploader and a downloader
 // * uploader uploads a number of chunks
-// * wait until the uploaded chunks are synced
-// * downloader downloads the chunk
+// * wait until the uploaded chunks are push-synced
+// * downloader has one shot to download all the chunks
 // Testcases are run concurrently
 func TestPushsyncSimulation(t *testing.T) {
 	nodeCnt := *nodeCntFlag
 	chunkCnt := *chunkCntFlag
 	testcases := *testCasesFlag
 
-	err := testSyncerWithPubSub(nodeCnt, chunkCnt, testcases, newServiceFunc)
+	err := testPushsyncSimulation(nodeCnt, chunkCnt, testcases, newServiceFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
-	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
+func testPushsyncSimulation(nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"pushsync": sf,
 	})
 	defer sim.Close()
@@ -90,28 +90,17 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.Servic
 	}
 
 	start := time.Now()
-	log.Info("Snapshot loaded. Simulation starting", "at", start)
+	log.Error("Snapshot loaded. Simulation starting", "at", start)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		errc := make(chan error)
+		var errg errgroup.Group
 		for j := 0; j < testcases; j++ {
 			j := j
-			go func() {
-				err := uploadAndDownload(ctx, sim, nodeCnt, chunkCnt, j)
-				select {
-				case errc <- err:
-				case <-ctx.Done():
-				}
-			}()
+			errg.Go(func() error {
+				return uploadAndDownload(ctx, sim, nodeCnt, chunkCnt, j)
+			})
 		}
-		i := 0
-		for err := range errc {
-			if err != nil {
-				return err
-			}
-			i++
-			if i >= testcases {
-				return nil
-			}
+		if err := errg.Wait(); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -119,7 +108,7 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, testcases int, sf simulation.Servic
 	if result.Error != nil {
 		return fmt.Errorf("simulation error: %v", result.Error)
 	}
-	log.Info("simulation", "duration", time.Since(start))
+	log.Error("simulation", "duration", time.Since(start))
 	return nil
 }
 
@@ -186,9 +175,8 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	netStore := storage.NewNetStore(lstore, addr.Over(), n.ID())
 
 	// setup pss
-	kadParams := network.NewKadParams()
-	kad := network.NewKademlia(addr.Over(), kadParams)
-	bucket.Store(simulation.BucketKeyKademlia, kad)
+	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+	kad := k.(*network.Kademlia)
 
 	privKey, err := crypto.GenerateKey()
 	pssp := pss.NewParams().WithPrivateKey(privKey)
@@ -200,6 +188,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	bucket.Store(bucketKeyNetStore, netStore)
 
 	r := retrieval.New(kad, netStore, kad.BaseAddr())
+	netStore.RemoteGet = r.RequestFromPeers
 
 	pubSub := pss.NewPubSub(ps)
 	// setup pusher

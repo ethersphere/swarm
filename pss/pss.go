@@ -160,23 +160,28 @@ func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
 }
 
 func (o *outbox) processOutbox() {
-	for slot := range o.process {
-		go func(slot int) {
-			msg := o.msg(slot)
-			metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
-			if err := o.forward(msg.msg); err != nil {
-				metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
-				// if we failed to forward, re-insert message in the queue
-				log.Debug(err.Error())
-				// reenqueue the message for processing
-				o.reenqueue(slot)
-				log.Debug("Message re-enqued", "slot", slot)
-				return
-			}
-			// free the outbox slot
-			o.free(slot)
-			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-		}(slot)
+	for {
+		select {
+		case slot := <-o.process:
+			go func(slot int) {
+				msg := o.msg(slot)
+				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+				if err := o.forward(msg.msg); err != nil {
+					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+					// if we failed to forward, re-insert message in the queue
+					log.Debug(err.Error())
+					// reenqueue the message for processing
+					o.reenqueue(slot)
+					log.Debug("Message re-enqued", "slot", slot)
+					return
+				}
+				// free the outbox slot
+				o.free(slot)
+				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+			}(slot)
+		case <-o.quitC:
+			return
+		}
 	}
 }
 
@@ -185,7 +190,10 @@ func (o outbox) msg(slot int) *outboxMsg {
 }
 
 func (o outbox) free(slot int) {
-	o.slots <- slot
+	select {
+	case o.slots <- slot:
+	case <-o.quitC:
+	}
 }
 
 func (o outbox) reenqueue(slot int) {
@@ -326,7 +334,10 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, spec)
 	p.addPeer(pp)
 	defer p.removePeer(pp)
-	return pp.Run(p.handle)
+	handle := func(ctx context.Context, msg interface{}) error {
+		return p.handle(ctx, pp, msg)
+	}
+	return pp.Run(handle)
 }
 
 func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
@@ -455,17 +466,25 @@ func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	delete(handlers, hndlr)
 }
 
+// generic peer-specific handler for incoming messages
+// calls pss msg handler asyncronously
+func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
+	go func() {
+		if err := p.handlePssMsg(ctx, msg.(*PssMsg)); err != nil {
+			log.Warn("handler error", "err", err)
+			peer.Drop()
+		}
+	}()
+	return nil
+}
+
 // Filters incoming messages for processing or forwarding.
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handle(ctx context.Context, msg interface{}) error {
+func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *PssMsg) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
-	pssmsg, ok := msg.(*PssMsg)
-	if !ok {
-		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T", msg)
-	}
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
@@ -578,10 +597,13 @@ func (p *Pss) executeHandlers(topic Topic, payload []byte, from PssAddress, raw 
 			log.Warn("noproxhandler")
 			continue
 		}
+		// h := h
+		// go func() {
 		err := (h.f)(payload, peer, asymmetric, keyid)
 		if err != nil {
 			log.Warn("Pss handler failed", "err", err)
 		}
+		// }()
 	}
 }
 
