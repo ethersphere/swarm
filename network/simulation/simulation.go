@@ -106,6 +106,7 @@ func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
+		hp.DisableAutoConnect = true
 
 		k, _ := bucket.LoadOrStore(BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 		kad := k.(*network.Kademlia)
