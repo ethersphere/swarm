@@ -5,15 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/epiclabs-io/ut"
 	"github.com/ethersphere/swarm/pss/internal/ticker"
 	"github.com/tilinna/clock"
 )
 
 // TestNewTicker tests whether the ticker calls a callback function periodically
-func TestNewTicker(tx *testing.T) {
-	t := ut.BeginTest(tx, false) // set to true to generate test results
-	defer t.FinishTest()
+func TestNewTicker(t *testing.T) {
 	var err error
 
 	testClock := clock.NewMock(time.Unix(0, 0))
@@ -39,9 +36,12 @@ func TestNewTicker(tx *testing.T) {
 
 	wg.Wait()
 	err = testTicker.Stop()
-	t.Ok(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = testTicker.Stop()
-	t.MustFailWith(err, ticker.ErrAlreadyStopped)
-
+	if err != ticker.ErrAlreadyStopped {
+		t.Fatal("Expected Stop() to return ticker.ErrAlreadyStopped when trying to stop an already stopped ticker")
+	}
 }
