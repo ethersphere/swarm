@@ -96,7 +96,6 @@ type Retrieval struct {
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
 	spec     *protocols.Spec
-	prices   protocols.Prices
 	logger   log.Logger
 	quit     chan struct{}
 }
