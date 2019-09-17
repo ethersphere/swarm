@@ -125,10 +125,11 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *Accounti
 //   - calculates the cost for the local node sending a msg of size to peer using the Prices interface
 //   - credits/debits local node using balance interface
 func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
-	// get the price for a message (through the protocol spec)
-	price := ah.Price(msg)
-	// this message doesn't need accounting
-	if price == nil {
+	// get the price for a message
+	var price *Price
+	var ok bool
+	// if the msg implements `Price`, it is an accounted message
+	if price, ok = msg.(*Price); !ok {
 		return nil
 	}
 	// evaluate the price for sending messages
