@@ -153,6 +153,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 		bzz.retrievalSpec = nil
 	}
 
+	bzz.localAddr.Capabilities = kad.Capabilities
 	// temporary soon-to-be-legacy light/full, as above
 	if config.LightNode {
 		bzz.localAddr.Capabilities.Add(newLightCapability())
@@ -229,11 +230,18 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 // * hive
 // Bzz implements the node.Service interface
 func (b *Bzz) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "hive",
-		Version:   "3.0",
-		Service:   b.Hive,
-	}}
+	return []rpc.API{
+		{
+			Namespace: "hive",
+			Version:   "3.0",
+			Service:   b.Hive,
+		},
+		{
+			Namespace: "bzz",
+			Version:   "4.0",
+			Service:   capability.NewAPI(b.Kademlia.Capabilities),
+		},
+	}
 }
 
 // RunProtocol is a wrapper for swarm subprotocols
