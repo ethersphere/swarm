@@ -101,13 +101,8 @@ type StreamPrices struct {
 
 // Price implements the protocols.Price interface and returns the price for a specific message
 func (s *StreamPrices) Price(msg interface{}) *protocols.Price {
-	return &protocols.Price{
-		Value:   s.chunkDeliveryPrice(),
-		PerByte: true,
-		Payer:   protocols.Receiver,
-	}
-	//t := reflect.TypeOf(msg).Elem()
-	//return s.priceMatrix[t]
+	t := reflect.TypeOf(msg).Elem()
+	return s.priceMatrix[t]
 }
 
 func (s *StreamPrices) chunkDeliveryPrice() uint64 {
