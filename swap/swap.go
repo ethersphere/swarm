@@ -57,8 +57,8 @@ type Swap struct {
 	params              *Params            // economic and operational parameters
 	contract            swap.Contract      // reference to the smart contract
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
-	paymentThreshold    uint64             // amount of debt to a peer at which the node will initiate payment
-	disconnectThreshold uint64             // amount of debt of a peer at which the node will disconnect
+	paymentThreshold    int64              // amount of debt to a peer at which the node will initiate payment
+	disconnectThreshold int64              // amount of debt of a peer at which the node will disconnect
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -88,8 +88,8 @@ func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Back
 		backend:             backend,
 		owner:               createOwner(prvkey),
 		params:              NewParams(),
-		disconnectThreshold: disconnectThreshold,
-		paymentThreshold:    paymentThreshold,
+		disconnectThreshold: int64(disconnectThreshold),
+		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
 	}
 }
@@ -173,8 +173,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 	// Check if balance with peer is over the disconnect threshold
 	balance := swapPeer.getBalance()
-	if disconnectThreshold := int64(s.disconnectThreshold); balance >= disconnectThreshold {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), disconnectThreshold)
+	if balance >= s.disconnectThreshold {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
 	}
 
 	if err = swapPeer.updateBalance(amount); err != nil {
@@ -184,8 +184,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	if paymentThreshold := int64(s.paymentThreshold); swapPeer.getBalance() <= -paymentThreshold {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", paymentThreshold)
+	if swapPeer.getBalance() <= -s.paymentThreshold {
+		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
