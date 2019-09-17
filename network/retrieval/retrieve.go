@@ -432,7 +432,7 @@ FINDPEER:
 		goto FINDPEER
 	}
 
-	ret := RetrieveRequest{
+	ret := &RetrieveRequest{
 		Addr: req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID)

@@ -16,7 +16,7 @@
 
 // Pss provides devp2p functionality for swarm nodes without the need for a direct tcp connection between them.
 //
-// Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until it reaches its destination: The node or nodes who can successfully decrypt the message.
+// Messages are encapsulated in a devp2p message structure `message.Message`. These capsules are forwarded from node to node using ordinary tcp devp2p until it reaches its destination: The node or nodes who can successfully decrypt the message.
 //
 // Routing of messages is done using swarm's own kademlia routing. Optionally routing can be turned off, forcing the message to be sent to all peers, similar to the behavior of the whisper protocol.
 //
@@ -50,11 +50,11 @@
 //
 // Under the hood, pss implements its own MsgReadWriter, which bridges MsgReadWriter.WriteMsg with Pss.SendRaw, and deftly adds an InjectMsg method which pipes incoming messages to appear on the MsgReadWriter.ReadMsg channel.
 //
-// An incoming connection is nothing more than an actual PssMsg appearing with a certain Topic. If a Handler har been registered to that Topic, the message will be passed to it. This constitutes a "new" connection if:
+// An incoming connection is nothing more than an actual message.Message appearing with a certain Topic. If a Handler har been registered to that Topic, the message will be passed to it. This constitutes a "new" connection if:
 //
 // - The pss node never called AddPeer with this combination of remote peer address and topic, and
 //
-// - The pss node never received a PssMsg from this remote peer with this specific Topic before.
+// - The pss node never received a message.Message from this remote peer with this specific Topic before.
 //
 // If it is a "new" connection, the protocol will be "run" on the remote peer, in the same manner as if it was pre-emptively added.
 //
