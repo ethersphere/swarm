@@ -187,7 +187,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 
 	bucket.Store(bucketKeyNetStore, netStore)
 
-	r := retrieval.New(kad, netStore, kad.BaseAddr())
+	r := retrieval.New(kad, netStore, kad.BaseAddr(), nil)
 	netStore.RemoteGet = r.RequestFromPeers
 
 	pubSub := pss.NewPubSub(ps)
