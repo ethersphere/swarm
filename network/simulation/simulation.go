@@ -107,15 +107,9 @@ func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
-		var kad *network.Kademlia
 
-		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
-		if kv, ok := bucket.Load(BucketKeyKademlia); ok {
-			kad = kv.(*network.Kademlia)
-		} else {
-			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
-			bucket.Store(BucketKeyKademlia, kad)
-		}
+		k, _ := bucket.LoadOrStore(BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+		kad := k.(*network.Kademlia)
 
 		config := &network.BzzConfig{
 			OverlayAddr:  addr.Over(),

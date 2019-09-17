@@ -318,13 +318,8 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	var kad *network.Kademlia
-	if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
-		kad = kv.(*network.Kademlia)
-	} else {
-		kad = network.NewKademlia(addr.Over(), network.NewKadParams())
-		bucket.Store(simulation.BucketKeyKademlia, kad)
-	}
+	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+	kad := k.(*network.Kademlia)
 
 	netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
