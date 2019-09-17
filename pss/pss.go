@@ -326,7 +326,9 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, spec)
 	p.addPeer(pp)
 	defer p.removePeer(pp)
-	return pp.Run(p.handleMsg)
+	return pp.Run(func(ctx context.Context, msg interface{}) error {
+		return p.handlePeerMsg(ctx, pp, msg)
+	})
 }
 
 func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
@@ -459,18 +461,27 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handleMsg(ctx context.Context, msg interface{}) error {
-	go p.handle(ctx, msg)
-	return nil
-}
-
-func (p *Pss) handle(ctx context.Context, msg interface{}) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
+func (p *Pss) handlePeerMsg(ctx context.Context, pp *protocols.Peer, msg interface{}) error {
 
 	pssmsg, ok := msg.(*message.Message)
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *message.Message, got %T", msg)
 	}
+
+	go func() {
+		err := p.handleMsg(ctx, pssmsg)
+		if err != nil {
+			log.Error("pss message handler fail: %v", err)
+			pp.Drop()
+		}
+	}()
+
+	return nil
+}
+
+func (p *Pss) handleMsg(ctx context.Context, pssmsg *message.Message) error {
+	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
+
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
