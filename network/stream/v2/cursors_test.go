@@ -68,31 +68,39 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		if len(nodeIDs) != nodeCount {
 			return errors.New("not enough nodes up")
 		}
 
-		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
+		// periodically check for cursors
+		for i := 0; i < 100; i++ {
+			// wait for the nodes to exchange StreamInfo messages
+			time.Sleep(10 * time.Millisecond)
 
-		idOne := nodeIDs[0]
-		idOther := nodeIDs[1]
-		onesCursors := nodeRegistry(sim, idOne).getPeer(idOther).getCursorsCopy()
-		othersCursors := nodeRegistry(sim, idOther).getPeer(idOne).getCursorsCopy()
+			idOne := nodeIDs[0]
+			idOther := nodeIDs[1]
+			onesCursors := nodeRegistry(sim, idOne).getPeer(idOther).getCursorsCopy()
+			othersCursors := nodeRegistry(sim, idOther).getPeer(idOne).getCursorsCopy()
 
-		onesBins := nodeInitialBinIndexes(sim, idOne)
-		othersBins := nodeInitialBinIndexes(sim, idOther)
+			onesBins := nodeInitialBinIndexes(sim, idOne)
+			othersBins := nodeInitialBinIndexes(sim, idOther)
 
-		if err := compareNodeBinsToStreams(t, onesCursors, othersBins); err != nil {
-			return err
+			err1 := compareNodeBinsToStreams(t, onesCursors, othersBins)
+			if err1 != nil {
+				err = err1 // set the resulting error when the loop is done
+			}
+			err2 := compareNodeBinsToStreams(t, othersCursors, onesBins)
+			if err2 != nil {
+				err = err2 // set the resulting error when the loop is done
+			}
+			if err1 == nil && err2 == nil {
+				return nil
+			}
 		}
-		if err := compareNodeBinsToStreams(t, othersCursors, onesBins); err != nil {
-			return err
-		}
 
-		return nil
+		return err
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
