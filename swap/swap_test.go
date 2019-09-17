@@ -307,7 +307,7 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
-//TestNewSwapFailure attempt to initialze SWAP with (a combination of) parameters which are not allowed. The test checks whether there is indeed indeed fails
+//TestNewSwapFailure attempts to initialze SWAP with (a combination of) parameters which are not allowed. The test checks whether there are indeed failures
 func TestNewSwapFailure(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarmSwap")
 	if err != nil {
