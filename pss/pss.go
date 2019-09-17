@@ -326,7 +326,7 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, spec)
 	p.addPeer(pp)
 	defer p.removePeer(pp)
-	return pp.Run(p.handle)
+	return pp.Run(p.handleMsg)
 }
 
 func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
@@ -459,6 +459,11 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
+func (p *Pss) handleMsg(ctx context.Context, msg interface{}) error {
+	go p.handle(ctx, msg)
+	return nil
+}
+
 func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
