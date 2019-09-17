@@ -462,7 +462,12 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 // calls pss msg handler asyncronously
 func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
 	go func() {
-		if err := p.handlePssMsg(ctx, msg.(*PssMsg)); err != nil {
+		pssmsg, ok := msg.(*message.Message)
+		if !ok {
+			log.Error("invalid message typ", "msg", msg)
+			peer.Drop()
+		}
+		if err := p.handlePssMsg(ctx, pssmsg); err != nil {
 			log.Warn("handler error", "err", err)
 			peer.Drop()
 		}
@@ -474,13 +479,9 @@ func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{})
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *PssMsg) error {
+func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
-	pssmsg, ok := msg.(*message.Message)
-	if !ok {
-		return fmt.Errorf("invalid message type. Expected *message.Message, got %T", msg)
-	}
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
