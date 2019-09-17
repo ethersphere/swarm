@@ -18,50 +18,16 @@ package pss
 
 import (
 	"encoding/json"
-	"fmt"
-	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/storage"
-)
-
-const (
-	pssControlSym = 1
-	pssControlRaw = 1 << 1
-	TopicLength   = 4 // in bytes Taken from Whisper
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 var (
-	topicHashMutex = sync.Mutex{}
-	topicHashFunc  = storage.MakeHashFunc("SHA256")()
-	rawTopic       = Topic{}
+	rawTopic = message.Topic{}
 )
-
-// Topic is the PSS encapsulation of the Whisper topic type
-type Topic [TopicLength]byte
-
-func (t *Topic) String() string {
-	return hexutil.Encode(t[:])
-}
-
-// MarshalJSON implements the json.Marshaler interface
-func (t Topic) MarshalJSON() (b []byte, err error) {
-	return json.Marshal(t.String())
-}
-
-// MarshalJSON implements the json.Marshaler interface
-func (t *Topic) UnmarshalJSON(input []byte) error {
-	topicbytes, err := hexutil.Decode(string(input[1 : len(input)-1]))
-	if err != nil {
-		return err
-	}
-	copy(t[:], topicbytes)
-	return nil
-}
 
 // PssAddress is an alias for []byte. It represents a variable length address
 type PssAddress []byte
@@ -83,94 +49,19 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// holds the digest of a message used for caching
-type digest [digestLength]byte
-
-// conceals bitwise operations on the control flags byte
-type msgParams struct {
-	raw bool
-	sym bool
-}
-
-func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
-	if len(paramBytes) != 1 {
-		return nil
-	}
-	return &msgParams{
-		raw: paramBytes[0]&pssControlRaw > 0,
-		sym: paramBytes[0]&pssControlSym > 0,
-	}
-}
-
-func (m *msgParams) Bytes() (paramBytes []byte) {
-	var b byte
-	if m.raw {
-		b |= pssControlRaw
-	}
-	if m.sym {
-		b |= pssControlSym
-	}
-	paramBytes = append(paramBytes, b)
-	return paramBytes
-}
-
 type outboxMsg struct {
-	msg       *PssMsg
+	msg       *message.Message
 	startedAt time.Time
 }
 
-func newOutboxMsg(msg *PssMsg) *outboxMsg {
+func newOutboxMsg(msg *message.Message) *outboxMsg {
 	return &outboxMsg{
 		msg:       msg,
 		startedAt: time.Now(),
 	}
 }
 
-// PssMsg encapsulates messages transported over pss.
-type PssMsg struct {
-	To      []byte
-	Control []byte
-	Expire  uint32
-	Topic   Topic
-	Payload []byte
-}
-
-func newPssMsg(param *msgParams) *PssMsg {
-	return &PssMsg{
-		Control: param.Bytes(),
-	}
-}
-
-// message is flagged as raw / external encryption
-func (msg *PssMsg) isRaw() bool {
-	return msg.Control[0]&pssControlRaw > 0
-}
-
-// message is flagged as symmetrically encrypted
-func (msg *PssMsg) isSym() bool {
-	return msg.Control[0]&pssControlSym > 0
-}
-
-// serializes the message for use in cache
-func (msg *PssMsg) serialize() []byte {
-	rlpdata, _ := rlp.EncodeToBytes(struct {
-		To      []byte
-		Topic   Topic
-		Payload []byte
-	}{
-		To:      msg.To,
-		Topic:   msg.Topic,
-		Payload: msg.Payload,
-	})
-	return rlpdata
-}
-
-// String representation of PssMsg
-func (msg *PssMsg) String() string {
-	return fmt.Sprintf("PssMsg: Recipient: %x, Topic: %v", common.ToHex(msg.To), msg.Topic.String())
-}
-
-// Signature for a message handler function for a PssMsg
+// Signature for a message handler function for a Message
 // Implementations of this type are passed to Pss.Register together with a topic,
 type HandlerFunc func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
 
@@ -217,26 +108,4 @@ func (store *stateStore) Load(key string) ([]byte, error) {
 
 func (store *stateStore) Save(key string, v []byte) error {
 	return nil
-}
-
-// BytesToTopic hashes an arbitrary length byte slice and truncates it to the length of a topic, using only the first bytes of the digest
-func BytesToTopic(b []byte) Topic {
-	topicHashMutex.Lock()
-	defer topicHashMutex.Unlock()
-	topicHashFunc.Reset()
-	topicHashFunc.Write(b)
-	return toTopic(topicHashFunc.Sum(nil))
-}
-
-// toTopic converts from the byte array representation of a topic
-// into the Topic type.
-func toTopic(b []byte) (t Topic) {
-	sz := TopicLength
-	if x := len(b); x < TopicLength {
-		sz = x
-	}
-	for i := 0; i < sz; i++ {
-		t[i] = b[i]
-	}
-	return t
 }
