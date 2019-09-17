@@ -571,7 +571,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
-		_, err = io.Copy(tw, file)
+		_, err := io.Copy(tw, file)
 		return err
 	}
 
