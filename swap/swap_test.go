@@ -610,7 +610,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
 		// balance is not expected to be affected once past the disconnect threshold
-		if peerBalance < int64(swap.disconnectThreshold) {
+		if peerBalance < swap.disconnectThreshold {
 			peerBalance += booking.amount
 		}
 		expectedBalances[peerID] = peerBalance
