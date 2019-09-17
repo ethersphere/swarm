@@ -17,7 +17,6 @@
 package network
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"fmt"
 	"sync"
@@ -255,19 +254,13 @@ func TestBzzHandshakeRLPSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 	if msg.Version != msgRecovered.Version {
-		t.Fatal("version mismatch")
+		t.Fatalf("version mismatch, expected %v, got %v", msg.Version, msgRecovered.Version)
 	}
 	if msg.NetworkID != msgRecovered.NetworkID {
-		t.Fatal("networkid mismatch")
+		t.Fatalf("networkid mismatch, expected %v, got %v", msg.NetworkID, msgRecovered.NetworkID)
 	}
-	if !bytes.Equal(msg.Addr.OAddr, msgRecovered.Addr.OAddr) {
-		t.Fatal("OAddr mismatch")
-	}
-	if !bytes.Equal(msg.Addr.UAddr, msgRecovered.Addr.UAddr) {
-		t.Fatal("UAddr mismatch")
-	}
-	if !fullCapability.IsSameAs(msgRecovered.Addr.Capabilities.Get(0)) {
-		t.Fatal("capabilities mismatch")
+	if !msg.Addr.Match(msgRecovered.Addr) {
+		t.Fatalf("bzzaddr mismatch, expected %v, got %v", msg.Addr, msgRecovered.Addr)
 	}
 }
 

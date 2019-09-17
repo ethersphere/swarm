@@ -41,7 +41,7 @@ func (b *BzzAddr) EncodeRLP(w io.Writer) error {
 	return nil
 }
 
-// EncodeRLP implements rlp.Decoder
+// DecodeRLP implements rlp.Decoder
 func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
 	var err error
 
