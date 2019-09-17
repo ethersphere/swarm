@@ -392,7 +392,7 @@ func TestConfigFileOverrides(t *testing.T) {
 	}
 
 	if info.DbCapacity != 9000000 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
+		t.Fatalf("Expected DbCapacity to be %d, got %d", 9000000, info.DbCapacity)
 	}
 
 	if info.HiveParams.KeepAliveInterval != 6000000000 {
