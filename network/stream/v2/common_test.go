@@ -118,15 +118,9 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 			return nil, nil, err
 		}
 
-		var kad *network.Kademlia
-
 		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
-		if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
-			kad = kv.(*network.Kademlia)
-		} else {
-			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
-			bucket.Store(simulation.BucketKeyKademlia, kad)
-		}
+		k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+		kad := k.(*network.Kademlia)
 
 		netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 		lnetStore := storage.NewLNetStore(netStore)
