@@ -44,10 +44,10 @@ var (
 	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", metrics.AccountingRegistry)
 )
 
-// Prices defines how prices are being passed on to the accounting instance
-type Prices interface {
+// PricedMessage defines how a message type identifies itself as to be accounted
+type PricedMessage interface {
 	// Return the Price for a message
-	Price(interface{}) *Price
+	Price() *Price
 }
 
 // Payer is the base type to define who pays in an exchange between peers
@@ -100,13 +100,11 @@ type Balance interface {
 // while interfacing with protocols and its prices through the Prices interface
 type Accounting struct {
 	Balance // interface to accounting logic
-	Prices  // interface to prices logic
 }
 
 // NewAccounting creates a new instance of Accounting
-func NewAccounting(balance Balance, po Prices) *Accounting {
+func NewAccounting(balance Balance) *Accounting {
 	ah := &Accounting{
-		Prices:  po,
 		Balance: balance,
 	}
 	return ah
@@ -126,14 +124,14 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *Accounti
 //   - credits/debits local node using balance interface
 func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	// get the price for a message
-	var price *Price
+	var pricedMessage PricedMessage
 	var ok bool
 	// if the msg implements `Price`, it is an accounted message
-	if price, ok = msg.(*Price); !ok {
+	if pricedMessage, ok = msg.(PricedMessage); !ok {
 		return nil
 	}
 	// evaluate the price for sending messages
-	costToLocalNode := price.For(Sender, size)
+	costToLocalNode := pricedMessage.Price().For(Sender, size)
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
@@ -146,13 +144,14 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 //   - credits/debits local node using balance interface
 func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 	// get the price for a message (through the protocol spec)
-	price := ah.Price(msg)
-	// this message doesn't need accounting
-	if price == nil {
+	var pricedMessage PricedMessage
+	var ok bool
+	// if the msg implements `Price`, it is an accounted message
+	if pricedMessage, ok = msg.(PricedMessage); !ok {
 		return nil
 	}
 	// evaluate the price for receiving messages
-	costToLocalNode := price.For(Receiver, size)
+	costToLocalNode := pricedMessage.Price().For(Receiver, size)
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
