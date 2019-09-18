@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -141,7 +142,7 @@ func Label(e *entry) string {
 
 // Hex is the hexadecimal serialisation of the entry address
 func (e *entry) Hex() string {
-	return fmt.Sprintf("%x", e.Address())
+	return hex.EncodeToString(e.Address())
 }
 
 // Register enters each address as kademlia peer record into the
@@ -581,7 +582,7 @@ func (k *Kademlia) KademliaInfo() KademliaInfo {
 }
 
 func (k *Kademlia) kademliaInfo() (ki KademliaInfo) {
-	ki.Self = fmt.Sprintf("%x", k.BaseAddr())
+	ki.Self = hex.EncodeToString(k.BaseAddr())
 	ki.Depth = depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	ki.TotalConnections = k.conns.Size()
 	ki.TotalKnown = k.addrs.Size()
@@ -596,7 +597,7 @@ func (k *Kademlia) kademliaInfo() (ki KademliaInfo) {
 		row := []string{}
 		f(func(val pot.Val) bool {
 			e := val.(*Peer)
-			row = append(row, fmt.Sprintf("%x", e.Address()))
+			row = append(row, hex.EncodeToString(e.Address()))
 			return true
 		})
 		sort.Strings(row)
@@ -613,7 +614,7 @@ func (k *Kademlia) kademliaInfo() (ki KademliaInfo) {
 		row := []string{}
 		f(func(val pot.Val) bool {
 			e := val.(*entry)
-			row = append(row, fmt.Sprintf("%x", e.Address()))
+			row = append(row, hex.EncodeToString(e.Address()))
 			return true
 		})
 		sort.Strings(row)
@@ -659,7 +660,7 @@ func (k *Kademlia) string() string {
 		rest -= size
 		f(func(val pot.Val) bool {
 			e := val.(*Peer)
-			row = append(row, fmt.Sprintf("%x", e.Address()[:2]))
+			row = append(row, hex.EncodeToString(e.Address()[:2]))
 			rowlen++
 			return rowlen < 4
 		})
