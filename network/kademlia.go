@@ -95,6 +95,7 @@ type Kademlia struct {
 }
 
 type KademliaInfo struct {
+	Self             string     `json:"self"`
 	Depth            int        `json:"depth"`
 	TotalConnections int        `json:"total_connections"`
 	TotalKnown       int        `json:"total_known"`
@@ -580,6 +581,7 @@ func (k *Kademlia) KademliaInfo() KademliaInfo {
 }
 
 func (k *Kademlia) kademliaInfo() (ki KademliaInfo) {
+	ki.Self = fmt.Sprintf("%x", k.BaseAddr())
 	ki.Depth = depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	ki.TotalConnections = k.conns.Size()
 	ki.TotalKnown = k.addrs.Size()
