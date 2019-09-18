@@ -128,7 +128,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-p.getBalance())
 
-	amount, err := p.swap.oracle.GetPrice(honey)
+	amount, err := p.swap.honeyPriceOracle.GetPrice(honey)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
@@ -166,7 +166,6 @@ func (p *Peer) sendCheque() error {
 	}
 
 	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
-
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

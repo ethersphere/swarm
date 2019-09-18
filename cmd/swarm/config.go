@@ -27,10 +27,10 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/common"
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/naoina/toml"
@@ -59,33 +59,35 @@ var (
 
 //constants for environment variables
 const (
-	SwarmEnvChequebookAddr       = "SWARM_CHEQUEBOOK_ADDR"
-	SwarmEnvAccount              = "SWARM_ACCOUNT"
-	SwarmEnvBzzKeyHex            = "SWARM_BZZ_KEY_HEX"
-	SwarmEnvListenAddr           = "SWARM_LISTEN_ADDR"
-	SwarmEnvPort                 = "SWARM_PORT"
-	SwarmEnvNetworkID            = "SWARM_NETWORK_ID"
-	SwarmEnvSwapEnable           = "SWARM_SWAP_ENABLE"
-	SwarmEnvSwapBackendURL       = "SWARM_SWAP_BACKEND_URL"
-	SwarmEnvSyncDisable          = "SWARM_SYNC_DISABLE"
-	SwarmEnvSyncUpdateDelay      = "SWARM_ENV_SYNC_UPDATE_DELAY"
-	SwarmEnvMaxStreamPeerServers = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
-	SwarmEnvLightNodeEnable      = "SWARM_LIGHT_NODE_ENABLE"
-	SwarmEnvDeliverySkipCheck    = "SWARM_DELIVERY_SKIP_CHECK"
-	SwarmEnvENSAPI               = "SWARM_ENS_API"
-	SwarmEnvENSAddr              = "SWARM_ENS_ADDR"
-	SwarmEnvCORS                 = "SWARM_CORS"
-	SwarmEnvBootnodes            = "SWARM_BOOTNODES"
-	SwarmEnvPSSEnable            = "SWARM_PSS_ENABLE"
-	SwarmEnvStorePath            = "SWARM_STORE_PATH"
-	SwarmEnvStoreCapacity        = "SWARM_STORE_CAPACITY"
-	SwarmEnvStoreCacheCapacity   = "SWARM_STORE_CACHE_CAPACITY"
-	SwarmEnvBootnodeMode         = "SWARM_BOOTNODE_MODE"
-	SwarmEnvNATInterface         = "SWARM_NAT_INTERFACE"
-	SwarmAccessPassword          = "SWARM_ACCESS_PASSWORD"
-	SwarmAutoDefaultPath         = "SWARM_AUTO_DEFAULTPATH"
-	SwarmGlobalstoreAPI          = "SWARM_GLOBALSTORE_API"
-	GethEnvDataDir               = "GETH_DATADIR"
+	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
+	SwarmEnvAccount                 = "SWARM_ACCOUNT"
+	SwarmEnvBzzKeyHex               = "SWARM_BZZ_KEY_HEX"
+	SwarmEnvListenAddr              = "SWARM_LISTEN_ADDR"
+	SwarmEnvPort                    = "SWARM_PORT"
+	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
+	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
+	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
+	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
+	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
+	SwarmEnvSyncDisable             = "SWARM_SYNC_DISABLE"
+	SwarmEnvSyncUpdateDelay         = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SwarmEnvMaxStreamPeerServers    = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
+	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
+	SwarmEnvDeliverySkipCheck       = "SWARM_DELIVERY_SKIP_CHECK"
+	SwarmEnvENSAPI                  = "SWARM_ENS_API"
+	SwarmEnvENSAddr                 = "SWARM_ENS_ADDR"
+	SwarmEnvCORS                    = "SWARM_CORS"
+	SwarmEnvBootnodes               = "SWARM_BOOTNODES"
+	SwarmEnvPSSEnable               = "SWARM_PSS_ENABLE"
+	SwarmEnvStorePath               = "SWARM_STORE_PATH"
+	SwarmEnvStoreCapacity           = "SWARM_STORE_CAPACITY"
+	SwarmEnvStoreCacheCapacity      = "SWARM_STORE_CACHE_CAPACITY"
+	SwarmEnvBootnodeMode            = "SWARM_BOOTNODE_MODE"
+	SwarmEnvNATInterface            = "SWARM_NAT_INTERFACE"
+	SwarmAccessPassword             = "SWARM_ACCESS_PASSWORD"
+	SwarmAutoDefaultPath            = "SWARM_AUTO_DEFAULTPATH"
+	SwarmGlobalstoreAPI             = "SWARM_GLOBALSTORE_API"
+	GethEnvDataDir                  = "GETH_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -176,11 +178,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if keyid := ctx.GlobalString(SwarmAccountFlag.Name); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
-
-	if chbookaddr := ctx.GlobalString(ChequebookAddrFlag.Name); chbookaddr != "" {
+	if chbookaddr := ctx.GlobalString(SwarmSwapChequebookAddrFlag.Name); chbookaddr != "" {
 		currentConfig.Contract = common.HexToAddress(chbookaddr)
 	}
-
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
 		id, err := strconv.ParseUint(networkid, 10, 64)
 		if err != nil {
@@ -190,50 +190,44 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 			currentConfig.NetworkID = id
 		}
 	}
-
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		if datadir := ctx.GlobalString(utils.DataDirFlag.Name); datadir != "" {
 			currentConfig.Path = expandPath(datadir)
 		}
 	}
-
 	bzzport := ctx.GlobalString(SwarmPortFlag.Name)
 	if len(bzzport) > 0 {
 		currentConfig.Port = bzzport
 	}
-
 	if bzzaddr := ctx.GlobalString(SwarmListenAddrFlag.Name); bzzaddr != "" {
 		currentConfig.ListenAddr = bzzaddr
 	}
-
 	if ctx.GlobalIsSet(SwarmSwapEnabledFlag.Name) {
 		currentConfig.SwapEnabled = true
 	}
-
+	if swapBackendURL := ctx.GlobalString(SwarmSwapBackendURLFlag.Name); swapBackendURL != "" {
+		currentConfig.SwapBackendURL = swapBackendURL
+	}
+	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
+		currentConfig.SwapPaymentThreshold = paymentThreshold
+	}
+	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
+		currentConfig.SwapDisconnectThreshold = disconnectThreshold
+	}
 	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
 		currentConfig.SyncEnabled = false
 	}
-
 	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
 		currentConfig.SyncUpdateDelay = d
 	}
-
 	// any value including 0 is acceptable
 	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
-
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
 	}
-
 	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
 		currentConfig.DeliverySkipCheck = true
 	}
-
-	currentConfig.SwapBackendURL = ctx.GlobalString(SwarmSwapBackendURLFlag.Name)
-	if currentConfig.SwapEnabled && currentConfig.SwapBackendURL == "" {
-		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
-	}
-
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {
 		ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)
 		// preserve backward compatibility to disable ENS with --ens-api=""
@@ -243,40 +237,30 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		for i := range ensAPIs {
 			ensAPIs[i] = expandPath(ensAPIs[i])
 		}
-
 		currentConfig.EnsAPIs = ensAPIs
 	}
-
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
 	}
-
 	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
 		currentConfig.ChunkDbPath = storePath
 	}
-
 	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
 		currentConfig.DbCapacity = storeCapacity
 	}
-
 	if ctx.GlobalIsSet(SwarmStoreCacheCapacity.Name) {
 		currentConfig.CacheCapacity = ctx.GlobalUint(SwarmStoreCacheCapacity.Name)
 	}
-
 	if ctx.GlobalIsSet(SwarmBootnodeModeFlag.Name) {
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
 	}
-
 	if ctx.GlobalIsSet(SwarmDisableAutoConnectFlag.Name) {
 		currentConfig.DisableAutoConnect = ctx.GlobalBool(SwarmDisableAutoConnectFlag.Name)
 	}
-
 	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
 		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
 	}
-
 	return currentConfig
-
 }
 
 // dumpConfig is the dumpconfig command.

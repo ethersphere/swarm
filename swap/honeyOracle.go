@@ -16,14 +16,15 @@
 
 package swap
 
-// PriceOracle is the interface through which Oracles will deliver prices
-type PriceOracle interface {
+// HoneyOracle is the interface through which Oracles will deliver prices
+type HoneyOracle interface {
 	GetPrice(honey uint64) (uint64, error)
 }
 
-// NewPriceOracle returns the actual oracle to be used for discovering the price
+// NewHoneyPriceOracle returns the actual oracle to be used for discovering the price
 // It will return a default one
-func NewPriceOracle() PriceOracle {
+func NewHoneyPriceOracle() HoneyOracle {
+
 	return &fixedPriceOracle{
 		honeyPrice: defaultHoneyPrice,
 	}

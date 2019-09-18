@@ -20,13 +20,18 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
 	mrand "math/rand"
 	"os"
+	"path"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -301,6 +307,166 @@ func TestRepeatedBookings(t *testing.T) {
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
 }
 
+//TestNewSwapFailure attempts to initialze SWAP with (a combination of) parameters which are not allowed. The test checks whether there are indeed failures
+func TestNewSwapFailure(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swarmSwap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	// a simple rpc endpoint for testing dialing
+	ipcEndpoint := path.Join(dir, "TestSwarmSwap.ipc")
+
+	// windows namedpipes are not on filesystem but on NPFS
+	if runtime.GOOS == "windows" {
+		b := make([]byte, 8)
+		rand.Read(b)
+		ipcEndpoint = `\\.\pipe\TestSwarm-` + hex.EncodeToString(b)
+	}
+
+	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	defer server.Stop()
+
+	prvKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Error(err)
+	}
+
+	type testSwapConfig struct {
+		dbPath              string
+		prvkey              *ecdsa.PrivateKey
+		backendURL          string
+		disconnectThreshold uint64
+		paymentThreshold    uint64
+	}
+
+	var config testSwapConfig
+
+	for _, tc := range []struct {
+		name      string
+		configure func(*testSwapConfig)
+		check     func(*testing.T, *testSwapConfig)
+	}{
+		{
+			name: "no backedURL",
+			configure: func(config *testSwapConfig) {
+				config.dbPath = dir
+				config.prvkey = prvKey
+				config.backendURL = ""
+				config.disconnectThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultPaymentThreshold
+			},
+			check: func(t *testing.T, config *testSwapConfig) {
+				defer os.RemoveAll(config.dbPath)
+				_, err := New(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.disconnectThreshold,
+					config.paymentThreshold,
+				)
+				if !strings.Contains(err.Error(), "no backend URL given") {
+					t.Fatal("no backendURL, but created SWAP")
+				}
+			},
+		},
+		{
+			name: "disconnect threshold lower than payment threshold",
+			configure: func(config *testSwapConfig) {
+				config.dbPath = dir
+				config.prvkey = prvKey
+				config.backendURL = ipcEndpoint
+				config.disconnectThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultDisconnectThreshold + 1
+			},
+			check: func(t *testing.T, config *testSwapConfig) {
+				_, err := New(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.disconnectThreshold,
+					config.paymentThreshold,
+				)
+				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower or at payment threshold.") {
+					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP")
+				}
+			},
+		},
+		{
+			name: "invalid backendURL",
+			configure: func(config *testSwapConfig) {
+				config.prvkey = prvKey
+				config.backendURL = "invalid backendURL"
+				config.disconnectThreshold = DefaultDisconnectThreshold
+				config.paymentThreshold = DefaultPaymentThreshold
+			},
+			check: func(t *testing.T, config *testSwapConfig) {
+				defer os.RemoveAll(config.dbPath)
+				_, err := New(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.disconnectThreshold,
+					config.paymentThreshold,
+				)
+				if !strings.Contains(err.Error(), "swap init error: error connecting to Ethereum API") {
+					t.Fatal("invalid backendURL, but created SWAP", err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, err := ioutil.TempDir("", "swarmSwap")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(dir)
+			config.dbPath = dir
+
+			tc.configure(&config)
+			if tc.check != nil {
+				tc.check(t, &config)
+			}
+		})
+
+	}
+}
+
+//TestDisconnectThreshold tests that the disconnect threshold is reached when adding the DefaultDisconnectThreshold amount to the peers balance
+func TestDisconnectThreshold(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+	testPeer := newDummyPeer()
+	testDeploy(context.Background(), swap)
+	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
+	swap.Add(DefaultDisconnectThreshold, testPeer.Peer)
+	err := swap.Add(1, testPeer.Peer)
+	if !strings.Contains(err.Error(), "disconnect threshold") {
+		t.Fatal(err)
+	}
+}
+
+//TestPaymentThreshold tests that the payment threshold is reached when subtracting the DefaultPaymentThreshold amount from the peers balance
+func TestPaymentThreshold(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+	testDeploy(context.Background(), swap)
+	testPeer := newDummyPeerWithSpec(Spec)
+	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
+	if err := swap.Add(-DefaultPaymentThreshold, testPeer.Peer); err != nil {
+		t.Fatal()
+	}
+
+	var cheque *Cheque
+	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
+	if cheque.CumulativePayout != DefaultPaymentThreshold {
+		t.Fatal()
+	}
+}
+
 // TestResetBalance tests that balances are correctly reset
 // The test deploys creates swap instances for each node,
 // deploys simulated contracts, sets the balance of each
@@ -316,9 +482,6 @@ func TestResetBalance(t *testing.T) {
 	defer clean2()
 
 	ctx := context.Background()
-	// deploying would strictly speaking not be necessary, as the signing would also just work
-	// with empty contract addresses. Nevertheless to avoid later suprises and for
-	// coherence and clarity we deploy here so that we get a simulated contract address
 	err := testDeploy(ctx, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
@@ -333,6 +496,7 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
+	fmt.Println(1)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
@@ -487,7 +651,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	}
 
 	var newBalance int64
-	stateStore.Get(testPeer.ID().String(), &newBalance)
+	stateStore.Get(testPeer.Peer.ID().String(), &newBalance)
 
 	// compare the balances
 	if tmpBalance != newBalance {
@@ -522,7 +686,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 	}
 	log.Debug("creating simulated backend")
 
-	swap := New(stateStore, key, testBackend)
+	swap := new(stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
 	return swap, dir
 }
 
