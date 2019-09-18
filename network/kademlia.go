@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/rand"
 	"sort"
 	"strings"
@@ -98,6 +99,7 @@ type Kademlia struct {
 	nDepth          int             // stores the last neighbourhood depth
 	nDepthMu        sync.RWMutex    // protects neighbourhood depth nDepth
 	nDepthSig       []chan struct{} // signals when neighbourhood depth nDepth is changed
+	searching       color           // Color of entries ion global index (conns) to search for
 }
 
 type KademliaInfo struct {
@@ -125,6 +127,7 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		capabilityIndex: make(map[string]*capabilityIndex),
 		addrs:           pot.NewPot(nil, 0),
 		conns:           pot.NewPot(nil, 0),
+		searching:       black,
 	}
 	k.RegisterCapabilityIndex("full", *fullCapability)
 	k.RegisterCapabilityIndex("light", *lightCapability)
@@ -164,9 +167,9 @@ func (k *Kademlia) addToCapabilityIndex(p interface{}) {
 			if vCap.Match(idxItem.Capability) {
 				log.Trace("Added peer to capability index", "conn", ok, "s", s, "v", vCap, "p", p)
 				if ok {
-					k.capabilityIndex[s].conns, _, _ = pot.Add(idxItem.conns, ePeer, Pof)
+					k.capabilityIndex[s].conns, _, _ = pot.Add(idxItem.conns, newEntryFromPeer(ePeer, idxItem.searching), Pof)
 				} else {
-					k.capabilityIndex[s].addrs, _, _ = pot.Add(idxItem.addrs, newEntry(eAddr), Pof)
+					k.capabilityIndex[s].addrs, _, _ = pot.Add(idxItem.addrs, newEntryFromBzzAddress(eAddr, idxItem.searching), Pof)
 				}
 			}
 		}
@@ -188,7 +191,8 @@ func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool)
 	}
 	for s, idxItem := range k.capabilityIndex {
 		if ok {
-			conns, _, found, _ := pot.Swap(idxItem.conns, ePeer, Pof, func(_ pot.Val) pot.Val {
+			peerEntry := newEntryFromPeer(ePeer, idxItem.searching)
+			conns, _, found, _ := pot.Swap(idxItem.conns, peerEntry, Pof, func(_ pot.Val) pot.Val {
 				return nil
 			})
 			if found {
@@ -208,28 +212,47 @@ func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool)
 	}
 }
 
+const (
+	black = iota
+	red
+)
+type color int
+
 // entry represents a Kademlia table entry (an extension of BzzAddr)
 type entry struct {
 	*BzzAddr
 	conn    *Peer
 	seenAt  time.Time
 	retries int
+	use  	color
 }
 
-// newEntry creates a kademlia peer from a *Peer
-func newEntry(p *BzzAddr) *entry {
+// newEntryFromBzzAddress creates a kademlia entry from a *BzzAddr
+func newEntryFromBzzAddress(p *BzzAddr, initialColor color) *entry {
 	return &entry{
 		BzzAddr: p,
 		seenAt:  time.Now(),
+		use: 	 initialColor,
+	}
+}
+
+// newEntryFromPeer creates a kademlia entry from a *Peer
+func newEntryFromPeer(p *Peer, initialColor color) *entry {
+	return &entry{
+		BzzAddr: p.BzzAddr,
+		conn:	 p,
+		seenAt:  time.Now(),
+		use: 	 initialColor,
 	}
 }
 
 // index providing quick access to all peers having a certain capability set
 type capabilityIndex struct {
 	*capability.Capability
-	conns *pot.Pot
-	addrs *pot.Pot
-	depth int
+	conns     *pot.Pot
+	addrs     *pot.Pot
+	depth     int
+	searching color
 }
 
 // NewCapabilityIndex creates a new capability index with a copy the provided capabilities array
@@ -251,6 +274,17 @@ func (e *entry) Hex() string {
 	return hex.EncodeToString(e.Address())
 }
 
+func (e *entry) flipUse() {
+	e.use = flipColor(e.use)
+}
+
+func flipColor(color color) color {
+	if color == black {
+		return red
+	} else {
+		return black
+	}
+}
 // Register enters each address as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers ...*BzzAddr) error {
@@ -272,7 +306,7 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 			if v == nil {
 				log.Trace("registering new peer", "addr", p)
 				// insert new offline peer into conns
-				return newEntry(p)
+				return newEntryFromBzzAddress(p, k.searching)
 			}
 
 			e := v.(*entry)
@@ -281,12 +315,12 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 			if !bytes.Equal(e.BzzAddr.UAddr, p.UAddr) {
 				log.Trace("underlay addr is different, so add again", "new", p, "old", e.BzzAddr)
 				// insert new offline peer into conns
-				return newEntry(p)
+				return newEntryFromBzzAddress(p, k.searching)
 			}
 
 			return v
 		})
-		k.addToCapabilityIndex(newEntry(p))
+		k.addToCapabilityIndex(newEntryFromBzzAddress(p, k.searching))
 		size++
 	}
 
@@ -419,22 +453,22 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	metrics.GetOrRegisterCounter("kad.on", nil).Inc(1)
 
 	var ins bool
-	k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
+	peerEntry := newEntryFromPeer(p, k.searching)
+	k.conns, _, _, _ = pot.Swap(k.conns, peerEntry, Pof, func(v pot.Val) pot.Val {
 		// if not found live
 		if v == nil {
 			ins = true
 			// insert new online peer into conns
-			return p
+			return peerEntry
 		}
 		// found among live peers, do nothing
 		return v
 	})
 	k.addToCapabilityIndex(p)
 	if ins {
-		a := newEntry(p.BzzAddr)
-		a.conn = p
+		a := newEntryFromBzzAddress(p.BzzAddr, k.searching)
 		// insert new online peer into addrs
-		k.addrs, _, _, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
+		k.addrs, _, _, _ = pot.Swap(k.addrs, a, Pof, func(v pot.Val) pot.Val {
 			return a
 		})
 	}
@@ -537,7 +571,7 @@ func (k *Kademlia) Off(p *Peer) {
 		if v == nil {
 			panic(fmt.Sprintf("connected peer not found %v", p))
 		}
-		return newEntry(p.BzzAddr)
+		return newEntryFromBzzAddress(p.BzzAddr, k.searching)
 	})
 	// note the following only ran if the peer was a lightnode
 	k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(_ pot.Val) pot.Val {
@@ -561,6 +595,21 @@ func (k *Kademlia) EachConnFiltered(base []byte, capKey string, o int, f func(*P
 	return nil
 }
 
+// EachConnFiltered performs the same action as EachConn
+// with the difference that it will only return peers that matches the specified capability index filter
+func (k *Kademlia) EachConnFilteredLB(base []byte, capKey string, o int, f func(*Peer, int) (bool, bool)) error {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	c, ok := k.capabilityIndex[capKey]
+	if !ok {
+		return fmt.Errorf("Unregistered capability index '%s'", capKey)
+	}
+	if k.eachConnLB(base, c.conns, c.searching, o, f) {
+		c.searching = flipColor(c.searching)
+	}
+	return nil
+}
+
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
@@ -568,6 +617,21 @@ func (k *Kademlia) EachConn(base []byte, o int, f func(*Peer, int) bool) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	k.eachConn(base, k.conns, o, f)
+}
+
+// EachConnLB is an iterator with args (base, po, f) applies f to each live peer
+// that has proximity order po or less as measured from the base
+// if base is nil, kademlia base address is used.
+// f function should return two booleans: First one indicates if it wants to continue iterating,
+// second one signals if the peer has been used and a request should be accounted to that peer.
+// It return first the peers not used in the last iteration (entry.color == k.searching)
+func (k *Kademlia) EachConnLB(base []byte, o int, f func(*Peer, int) (bool, bool)) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	if k.eachConnLB(base, k.conns, k.searching, o, f) {
+		k.searching = flipColor(k.searching)
+		log.Debug("Flipping color of kademlia", "newColor", k.searching)
+	}
 }
 
 func (k *Kademlia) eachConn(base []byte, db *pot.Pot, o int, f func(*Peer, int) bool) {
@@ -581,9 +645,55 @@ func (k *Kademlia) eachConn(base []byte, db *pot.Pot, o int, f func(*Peer, int) 
 		if po > o {
 			return true
 		}
-		return f(val.(*Peer), po)
+		return f(val.(*entry).conn, po)
 	})
 }
+
+// returns true if it has completed a iteration (so the current searching color must change)
+func (k *Kademlia) eachConnLB(base []byte, db *pot.Pot, searching color, o int, f func(*Peer, int) (bool, bool)) bool{
+	if len(base) == 0 {
+		base = k.base
+	}
+	if db == nil {
+		db = k.conns
+	}
+	oneUsed := false
+	anySkip := false
+	f2 := func(val pot.Val, po int) bool {
+		if po > o {
+			return true
+		}
+
+		entry, _ := val.(*entry)
+		if entry.use != searching {
+			anySkip = true
+			log.Debug("Skipping peer because of color", "peer", hexutil.Encode(entry.BzzAddr.OAddr[:8]), "color", entry.use, "searching", searching)
+			// Skip it because LB
+			return true
+		} else {
+			continueIterating, markUsed := f(entry.conn, po)
+			if markUsed {
+				// count as used
+				entry.flipUse()
+				log.Warn("Using peer", "peer", hexutil.Encode(entry.BzzAddr.OAddr[:8]), "color", flipColor(entry.use), "newColor", entry.use)
+				oneUsed = true
+			}
+			return continueIterating
+		}
+	}
+	db.EachNeighbour(base, Pof, f2)
+	if anySkip && !oneUsed {
+		// We skip some entries because LB color but we didn't found one to use,
+		// so we repeat again with flipped color
+		searching = flipColor(searching)
+		db.EachNeighbour(base, Pof, f2)
+		return true
+	} else {
+		return false
+	}
+}
+
+
 
 // EachAddrFiltered performs the same action as EachAddr
 // with the difference that it will only return peers that matches the specified capability index filter
@@ -815,7 +925,7 @@ func (k *Kademlia) string() string {
 		row := []string{fmt.Sprintf("%2d", size)}
 		rest -= size
 		bin.ValIterator(func(val pot.Val) bool {
-			e := val.(*Peer)
+			e := val.(*entry)
 			row = append(row, hex.EncodeToString(e.Address()[:2]))
 			rowlen++
 			return rowlen < 4

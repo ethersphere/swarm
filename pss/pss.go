@@ -803,21 +803,28 @@ func (p *Pss) forward(msg *message.Message) error {
 		onlySendOnce = true
 	}
 
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
+	p.Kademlia.EachConnLB(to, addressLength*8, func(sp *network.Peer, po int) (continueIt bool, peerUsed bool) {
 		if po < broadcastThreshold && sent > 0 {
-			return false // stop iterating
+			return // stop iterating, peer not used
 		}
+		peerUsed = true
 		if sendFunc(p, sp, msg) {
 			sent++
 			if onlySendOnce {
-				return false
+				continueIt = false
+				// stop iterating peer used
+				return
 			}
 			if po == addressLength*8 {
+				continueIt = false
 				// stop iterating if successfully sent to the exact recipient (perfect match of full address)
-				return false
+				// peer used
+				return
 			}
 		}
-		return true
+		continueIt = true
+		// continue iterating, peer used
+		return
 	})
 
 	// cache the message

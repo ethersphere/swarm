@@ -18,6 +18,7 @@ package network
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -368,6 +369,50 @@ func binStr(a *BzzAddr) string {
 		return "<nil>"
 	}
 	return pot.ToBin(a.Address())[:8]
+}
+
+func TestEachConnLB(t *testing.T) {
+	tk := newTestKademlia(t, "00000000")
+	base := tk.base
+	tk.On("00100000")
+	tk.On("00100001")
+	tk.On("00010101")
+	stats := make(map[string]int)
+	f := func(peer *Peer, po int) (bool, bool) {
+		stats[peer.String()] =  stats[peer.String()] + 1
+		// return false to only use one peer and mark it as used
+		return false, true
+	}
+	// Let n be the number of peers (3)
+	// Executing 2 * n times. We expect 2 access to each peer
+	tk.EachConnLB(base, 255, f)
+	tk.EachConnLB(base, 255, f)
+	tk.EachConnLB(base, 255, f)
+	tk.EachConnLB(base, 255, f)
+	tk.EachConnLB(base, 255, f)
+	tk.EachConnLB(base, 255, f)
+	for addr, count := range stats {
+		log.Warn("Stats", "addr", addr, "count", count)
+		if count != 2  {
+			t.Errorf("Expected 2 access to peer %v but got %v", addr, count)
+		}
+	}
+
+	stats = make(map[string]int)
+	// For each number k where m * n <= k < (m+1) *n, if we request k access,
+	// each peer should have m or m+1 access
+	k := int(rand.Int31n(200))
+	m := k / 3
+	log.Warn("k/3", "k", k, "m", m)
+	for i := 0 ; i < k ; i++ {
+		tk.EachConnLB(base, 255, f)
+	}
+	for addr, count := range stats {
+		log.Warn("Stats", "addr", addr, "count", count)
+		if count != m && count != (m+1)  {
+			t.Errorf("Expected %v or %v access to peer %v but got %v", m, m+1, addr, count)
+		}
+	}
 }
 
 func TestSuggestPeerFindPeers(t *testing.T) {
