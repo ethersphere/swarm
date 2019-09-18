@@ -54,6 +54,7 @@ type Config struct {
 	// Swap configs
 	SwapBackendURL string
 	SwapEnabled    bool
+	SwapLogPath    string
 
 	*network.HiveParams
 	Pss                  *pss.Params
@@ -101,6 +102,7 @@ func NewConfig() (c *Config) {
 		SyncUpdateDelay:      15 * time.Second,
 		SwapEnabled:          false,
 		SwapBackendURL:       "",
+		SwapLogPath:          "",
 	}
 
 	return

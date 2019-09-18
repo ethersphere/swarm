@@ -45,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/internal/debug"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
@@ -61,6 +60,7 @@ var (
 	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
 	gasLimit           = uint64(8000000)
 	testBackend        *swapTestBackend
+	swaplogpath        string
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -87,6 +87,15 @@ func init() {
 	testBackend = newTestBackend()
 	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	testBackend.Commit()
+
+	//Swap log default path
+	var err error
+	swaplogpath, err = ioutil.TempDir("", "swap_test_log")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(swaplogpath)
+
 }
 
 // newTestBackend creates a new test backend instance
@@ -526,7 +535,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 		t.Fatal(err2)
 	}
 	log.Debug("creating simulated backend")
-	swap := New(stateStore, key, testBackend)
+	swap := New(swaplogpath, stateStore, key, testBackend)
 	return swap, dir
 }
 
@@ -1077,23 +1086,14 @@ func TestSwapLogToFile(t *testing.T) {
 
 	var err error
 
-	dir, err := ioutil.TempDir("", "swap_test_log")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	//Test log in fileSetSwaplogpath
-	debug.SetSwaplogpath(dir)
-
 	TestResetBalance(t)
 
-	files, err := ioutil.ReadDir(dir)
+	files, err := ioutil.ReadDir(swaplogpath)
 	if err != nil || len(files) == 0 {
 		t.Fatal(err)
 	}
 
-	fileP := path.Join(dir, files[0].Name())
+	fileP := path.Join(swaplogpath, files[0].Name())
 
 	var b []byte
 	b, err = ioutil.ReadFile(fileP)

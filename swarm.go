@@ -135,7 +135,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		// create the accounting objects
-		self.swap = swap.New(swapStore, self.privateKey, self.backend)
+		self.swap = swap.New(config.SwapLogPath, swapStore, self.privateKey, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}

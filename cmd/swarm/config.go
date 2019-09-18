@@ -67,6 +67,7 @@ const (
 	SwarmEnvNetworkID            = "SWARM_NETWORK_ID"
 	SwarmEnvSwapEnable           = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL       = "SWARM_SWAP_BACKEND_URL"
+	SwarmEnvSwapLogPath          = "SWARM_SWAP_LOG_PATH"
 	SwarmEnvSyncDisable          = "SWARM_SYNC_DISABLE"
 	SwarmEnvSyncUpdateDelay      = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SwarmEnvMaxStreamPeerServers = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
@@ -232,6 +233,11 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	currentConfig.SwapBackendURL = ctx.GlobalString(SwarmSwapBackendURLFlag.Name)
 	if currentConfig.SwapEnabled && currentConfig.SwapBackendURL == "" {
 		utils.Fatalf(SwarmErrSwapSetNoBackendURL)
+	}
+
+	currentConfig.SwapLogPath = ctx.GlobalString(SwarmSwapLogPathFlag.Name)
+	if !currentConfig.SwapEnabled && currentConfig.SwapLogPath != "" {
+		utils.Fatalf(SwarmErrSwapNotSetLogPath)
 	}
 
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {

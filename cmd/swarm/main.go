@@ -80,6 +80,7 @@ var gitCommit string
 var (
 	SwarmErrNoBZZAccount        = "bzzaccount option is required but not set; check your config file, command line or environment variables"
 	SwarmErrSwapSetNoBackendURL = "SWAP is enabled but --swap-backend-url is not set"
+	SwarmErrSwapNotSetLogPath   = "SWAP is disable but --swap-audit-logpath is set; check your config file and enable swap"
 )
 
 // this help command gets added to any subcommand that does not define it explicitly
