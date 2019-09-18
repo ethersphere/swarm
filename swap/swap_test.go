@@ -88,8 +88,8 @@ func init() {
 	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	testBackend.Commit()
 
-	//Swap log default path
 	var err error
+	//Swap log default path
 	swaplogpath, err = ioutil.TempDir("", "swap_test_log")
 	if err != nil {
 		panic(err)
@@ -1083,9 +1083,6 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 }
 
 func TestSwapLogToFile(t *testing.T) {
-
-	var err error
-
 	TestResetBalance(t)
 
 	files, err := ioutil.ReadDir(swaplogpath)
