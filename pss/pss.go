@@ -36,9 +36,10 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/internal/ticker"
+	"github.com/ethersphere/swarm/pss/internal/ttlset"
 	"github.com/ethersphere/swarm/pss/message"
-	"github.com/ethersphere/swarm/storage"
-	"golang.org/x/crypto/sha3"
+	"github.com/tilinna/clock"
 )
 
 const (
@@ -50,7 +51,6 @@ const (
 	defaultOutboxCapacity      = 100000
 	protocolName               = "pss"
 	protocolVersion            = 2
-	hasherCount                = 8
 )
 
 var (
@@ -64,13 +64,6 @@ var spec = &protocols.Spec{
 	Messages: []interface{}{
 		message.Message{},
 	},
-}
-
-// cache is used for preventing backwards routing
-// will also be instrumental in flood guard mechanism
-// and mailbox implementation
-type cacheEntry struct {
-	expiresAt time.Time
 }
 
 // abstraction to enable access to p2p.protocols.Peer.Send
@@ -201,6 +194,8 @@ func (o outbox) reenqueue(slot int) {
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
+	forwardCache *ttlset.TTLSet
+	gcTicker     *ticker.Ticker
 
 	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
@@ -209,17 +204,13 @@ type Pss struct {
 	peers   map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
 	peersMu sync.RWMutex
 
-	fwdCache   map[message.Digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	fwdCacheMu sync.RWMutex
-	cacheTTL   time.Duration // how long to keep messages in fwdCache (not implemented)
-	msgTTL     time.Duration
-	capstring  string
-	outbox     outbox
+	msgTTL    time.Duration
+	capstring string
+	outbox    outbox
 
 	// message handling
 	handlers           map[message.Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu         sync.RWMutex
-	hashPool           sync.Pool
 	topicHandlerCaps   map[message.Topic]*handlerCaps // caches capabilities of each topic's handlers
 	topicHandlerCapsMu sync.RWMutex
 
@@ -239,6 +230,9 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")
 	}
+
+	clock := clock.Realtime() //TODO: Clock should be injected by Params so it can be mocked.
+
 	c := p2p.Cap{
 		Name:    protocolName,
 		Version: protocolVersion,
@@ -251,26 +245,25 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		quitC:      make(chan struct{}),
 
 		peers:     make(map[string]*protocols.Peer),
-		fwdCache:  make(map[message.Digest]cacheEntry),
-		cacheTTL:  params.CacheTTL,
 		msgTTL:    params.MsgTTL,
 		capstring: c.String(),
 
 		handlers:         make(map[message.Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[message.Topic]*handlerCaps),
-
-		hashPool: sync.Pool{
-			New: func() interface{} {
-				return sha3.NewLegacyKeccak256()
-			},
+	}
+	ps.forwardCache = ttlset.New(&ttlset.Config{
+		EntryTTL: params.CacheTTL,
+		Clock:    clock,
+	})
+	ps.gcTicker = ticker.New(&ticker.Config{
+		Clock:    clock,
+		Interval: params.CacheTTL,
+		Callback: func() {
+			ps.forwardCache.GC()
+			metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
 		},
-	}
+	})
 	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
-
-	for i := 0; i < hasherCount; i++ {
-		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
-		ps.hashPool.Put(hashfunc)
-	}
 
 	return ps, nil
 }
@@ -282,13 +275,9 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 func (p *Pss) Start(srv *p2p.Server) error {
 	go func() {
 		ticker := time.NewTicker(defaultCleanInterval)
-		cacheTicker := time.NewTicker(p.cacheTTL)
 		defer ticker.Stop()
-		defer cacheTicker.Stop()
 		for {
 			select {
-			case <-cacheTicker.C:
-				p.cleanFwdCache()
 			case <-ticker.C:
 				p.cleanKeys()
 			case <-p.quitC:
@@ -307,6 +296,9 @@ func (p *Pss) Start(srv *p2p.Server) error {
 
 func (p *Pss) Stop() error {
 	log.Info("Pss shutting down")
+	if err := p.gcTicker.Stop(); err != nil {
+		return err
+	}
 	close(p.quitC)
 	return nil
 }
@@ -819,23 +811,6 @@ func (p *Pss) forward(msg *message.Message) error {
 		return nil
 	}
 }
-
-/////////////////////////////////////////////////////////////////////
-// SECTION: Caching
-/////////////////////////////////////////////////////////////////////
-
-// cleanFwdCache is used to periodically remove expired entries from the forward cache
-func (p *Pss) cleanFwdCache() {
-	metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
-	p.fwdCacheMu.Lock()
-	defer p.fwdCacheMu.Unlock()
-	for k, v := range p.fwdCache {
-		if v.expiresAt.Before(time.Now()) {
-			delete(p.fwdCache, k)
-		}
-	}
-}
-
 func label(b []byte) string {
 	return fmt.Sprintf("%04x", b[:2])
 }
@@ -843,38 +818,18 @@ func label(b []byte) string {
 // add a message to the cache
 func (p *Pss) addFwdCache(msg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
-
-	var entry cacheEntry
-	var ok bool
-
-	p.fwdCacheMu.Lock()
-	defer p.fwdCacheMu.Unlock()
-
-	digest := msg.Digest()
-	if entry, ok = p.fwdCache[digest]; !ok {
-		entry = cacheEntry{}
-	}
-	entry.expiresAt = time.Now().Add(p.cacheTTL)
-	p.fwdCache[digest] = entry
-	return nil
+	return p.forwardCache.Add(msg.Digest())
 }
 
 // check if message is in the cache
 func (p *Pss) checkFwdCache(msg *message.Message) bool {
-	p.fwdCacheMu.Lock()
-	defer p.fwdCacheMu.Unlock()
-
-	digest := msg.Digest()
-	entry, ok := p.fwdCache[digest]
-	if ok {
-		if entry.expiresAt.After(time.Now()) {
-			log.Trace("unexpired cache", "digest", fmt.Sprintf("%x", digest))
-			metrics.GetOrRegisterCounter("pss.checkfwdcache.unexpired", nil).Inc(1)
-			return true
-		}
-		metrics.GetOrRegisterCounter("pss.checkfwdcache.expired", nil).Inc(1)
+	hit := p.forwardCache.Has(msg.Digest())
+	if hit {
+		metrics.GetOrRegisterCounter("pss.checkfwdcache.hit", nil).Inc(1)
+	} else {
+		metrics.GetOrRegisterCounter("pss.checkfwdcache.miss", nil).Inc(1)
 	}
-	return false
+	return hit
 }
 
 func validateAddress(addr PssAddress) error {
