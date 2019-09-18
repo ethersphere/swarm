@@ -1093,18 +1093,17 @@ func TestSwapLogToFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileP := path.Join(swaplogpath, files[0].Name())
+	logFile := path.Join(swaplogpath, files[0].Name())
 
 	var b []byte
-	b, err = ioutil.ReadFile(fileP)
+	b, err = ioutil.ReadFile(logFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := string(b)
-	if !strings.Contains(s, "sending cheque") {
-		t.Fatalf("expected the log to contain sending cheque")
+	logString := string(b)
+	if !strings.Contains(logString, "sending cheque") {
+		t.Fatalf("expected the log to contain \"sending cheque\"")
 	}
-
 }
 
 // dummyMsgRW implements MessageReader and MessageWriter
