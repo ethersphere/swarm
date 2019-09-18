@@ -1233,6 +1233,24 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 }
 
+func TestPeerGetLastSentCumulativePayout(t *testing.T) {
+	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
+	defer clean()
+
+	if peer.getLastSentCumulativePayout() != 0 {
+		t.Fatalf("last cumulative payout should be 0 in the beginning, was %d", peer.getLastSentCumulativePayout())
+	}
+
+	cheque := newTestCheque()
+	if err := peer.setLastSentCheque(cheque); err != nil {
+		t.Fatal(err)
+	}
+
+	if peer.getLastSentCumulativePayout() != cheque.CumulativePayout {
+		t.Fatalf("last cumulative payout should be the payout of the last sent cheque, was: %d, expected %d", peer.getLastSentCumulativePayout(), cheque.CumulativePayout)
+	}
+}
+
 // dummyMsgRW implements MessageReader and MessageWriter
 // but doesn't do anything. Useful for dummy message sends
 type dummyMsgRW struct{}
