@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -95,6 +97,7 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 	resp := &peersMsg{
 		Peers: []*BzzAddr{a},
 	}
+	log.Warn("notifypeer", "notify", resp)
 	go d.Send(context.TODO(), resp)
 }
 
@@ -127,6 +130,27 @@ type peersMsg struct {
 	Peers []*BzzAddr
 }
 
+// DecodeRLP implements rlp.Decoder interface
+func (p *peersMsg) DecodeRLP(s *rlp.Stream) error {
+	_, err := s.List()
+	if err != nil {
+		return err
+	}
+	_, err = s.List()
+	if err != nil {
+		return err
+	}
+	for {
+		var addr BzzAddr
+		err = s.Decode(&addr)
+		if err != nil {
+			break
+		}
+		p.Peers = append(p.Peers, &addr)
+	}
+	return nil
+}
+
 // String pretty prints a peersMsg
 func (msg peersMsg) String() string {
 	return fmt.Sprintf("%T: %v", msg, msg.Peers)
@@ -140,7 +164,6 @@ func (d *Peer) handlePeersMsg(msg *peersMsg) error {
 	if len(msg.Peers) == 0 {
 		return nil
 	}
-
 	for _, a := range msg.Peers {
 		d.seen(a)
 		NotifyPeer(a, d.kad)

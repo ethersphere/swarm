@@ -338,11 +338,8 @@ func newTestDiscoveryPeer(addr pot.Address, kad *network.Kademlia) *network.Peer
 	p := p2p.NewPeer(enode.ID{}, "test", []p2p.Cap{})
 	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
 	bp := &network.BzzPeer{
-		Peer: pp,
-		BzzAddr: &network.BzzAddr{
-			OAddr: addr.Bytes(),
-			UAddr: []byte(fmt.Sprintf("%x", addr[:])),
-		},
+		Peer:    pp,
+		BzzAddr: network.NewBzzAddr(addr.Bytes(), []byte(fmt.Sprintf("%x", addr[:]))),
 	}
 	return network.NewPeer(bp, kad)
 }

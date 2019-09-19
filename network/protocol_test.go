@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
@@ -36,7 +37,7 @@ import (
 )
 
 const (
-	TestProtocolVersion = 12
+	TestProtocolVersion = 13
 )
 
 var TestProtocolNetworkID = DefaultTestNetworkID
@@ -77,11 +78,11 @@ func newBzzHandshakeMsg(version uint64, networkId uint64, addr *BzzAddr, lightNo
 		cap = newFullCapability()
 	}
 	capabilities.Add(cap)
+	addr.Capabilities = capabilities
 	msg := &HandshakeMsg{
-		Version:      version,
-		NetworkID:    networkId,
-		Addr:         addr,
-		Capabilities: capabilities,
+		Version:   version,
+		NetworkID: networkId,
+		Addr:      addr,
 	}
 
 	return msg
@@ -118,7 +119,7 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 		mu.Lock()
 		nodeToAddr[p.ID()] = addrs[0]
 		mu.Unlock()
-		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String())}
+		bzzAddr := NewBzzAddr(addrs[0], []byte(p.Node().String()))
 		addrs = addrs[1:]
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
 	}
@@ -184,7 +185,6 @@ func newBzzHandshakeTester(n int, prvkey *ecdsa.PrivateKey, lightNode bool) (*bz
 	var record enr.Record
 	bzzkey := PrivateKeyToBzzKey(prvkey)
 	record.Set(NewENRAddrEntry(bzzkey))
-	record.Set(ENRLightNodeEntry(lightNode))
 	err := enode.SignV4(&record, prvkey)
 	if err != nil {
 		return nil, err
@@ -234,6 +234,36 @@ func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	return newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, addr, lightNode)
 }
 
+// TestBzzHandshakeRLPSerialization verifies the reversibility of RLP serialization of HandshakeMsg
+func TestBzzHandshakeRLPSerialization(t *testing.T) {
+	caps := capability.NewCapabilities()
+	caps.Add(fullCapability)
+	addr := RandomBzzAddr().WithCapabilities(caps)
+	msg := &HandshakeMsg{
+		Version:   42,
+		NetworkID: 666,
+		Addr:      addr,
+	}
+	b, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var msgRecovered HandshakeMsg
+	err = rlp.DecodeBytes(b, &msgRecovered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Version != msgRecovered.Version {
+		t.Fatalf("version mismatch, expected %v, got %v", msg.Version, msgRecovered.Version)
+	}
+	if msg.NetworkID != msgRecovered.NetworkID {
+		t.Fatalf("networkid mismatch, expected %v, got %v", msg.NetworkID, msgRecovered.NetworkID)
+	}
+	if !msg.Addr.Match(msgRecovered.Addr) {
+		t.Fatalf("bzzaddr mismatch, expected %v, got %v", msg.Addr, msgRecovered.Addr)
+	}
+}
+
 func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	lightNode := false
 	prvkey, err := crypto.GenerateKey()
@@ -249,7 +279,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(TestProtocolVersion, 321, NewAddr(node), false),
+		newBzzHandshakeMsg(TestProtocolVersion, 321, NewBzzAddrFromEnode(node), false),
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
 	)
 
@@ -273,7 +303,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewAddr(node), false),
+		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false),
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
 	)
 
@@ -296,13 +326,13 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	defer s.Stop()
 	node := s.Nodes[0]
 
-	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false)
-	cap := msg.Capabilities.Get(0)
+	msg := newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false)
+	cap := msg.Addr.Capabilities.Get(0)
 	cap.Set(14)
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Capabilities)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Addr.Capabilities)},
 	)
 
 	if err != nil {
@@ -324,7 +354,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
-		newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewAddr(node), false),
+		newBzzHandshakeMsg(TestProtocolVersion, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false),
 	)
 
 	if err != nil {
@@ -354,7 +384,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			defer pt.Stop()
 
 			node := pt.Nodes[0]
-			addr := NewAddr(node)
+			addr := NewBzzAddrFromEnode(node)
 
 			err = pt.testHandshake(
 				correctBzzHandshake(pt.addr, false),
@@ -374,7 +404,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			select {
 
 			case <-pt.bzz.handshakes[node.ID()].done:
-				for _, cp := range pt.bzz.handshakes[node.ID()].Capabilities.Caps {
+				for _, cp := range pt.bzz.handshakes[node.ID()].peerAddr.Capabilities.Caps {
 					if cp.String() != nodeCapability.String() {
 						t.Fatalf("peer LightNode flag is %v, should be %v", cp.String(), nodeCapability.String())
 					}

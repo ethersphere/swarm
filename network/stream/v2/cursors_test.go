@@ -550,11 +550,8 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
 		peerAddr := pot.RandomAddressAt(pivotAddr, i)
 		bzzPeer := &network.BzzPeer{
-			Peer: protoPeer,
-			BzzAddr: &network.BzzAddr{
-				OAddr: peerAddr.Bytes(),
-				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
-			},
+			Peer:    protoPeer,
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
 		}
 		peer := network.NewPeer(bzzPeer, pivotKad)
 		pivotKad.On(peer)

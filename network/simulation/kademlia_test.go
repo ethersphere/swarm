@@ -128,7 +128,7 @@ func TestWaitTillHealthy(t *testing.T) {
 func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 	return map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = discovery
 			config := &network.BzzConfig{

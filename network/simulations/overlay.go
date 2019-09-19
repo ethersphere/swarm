@@ -65,7 +65,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	}
 	s.mtx.Unlock()
 
-	addr := network.NewAddr(node)
+	addr := network.NewBzzAddrFromEnode(node)
 
 	kp := network.NewKadParams()
 	kp.NeighbourhoodSize = 2

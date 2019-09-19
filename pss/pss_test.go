@@ -108,7 +108,7 @@ func TestAPITopic(t *testing.T) {
 // matching of address hints; whether a message could be or is for the node
 func TestAddressMatch(t *testing.T) {
 
-	localaddr := network.RandomAddr().Over()
+	localaddr := network.RandomBzzAddr().Over()
 	copy(localaddr[:8], []byte("deadbeef"))
 	remoteaddr := []byte("feedbeef")
 	kadparams := network.NewKadParams()
@@ -160,7 +160,7 @@ func TestAddressMatch(t *testing.T) {
 func TestAddressMatchProx(t *testing.T) {
 
 	// recipient node address
-	localAddr := network.RandomAddr().Over()
+	localAddr := network.RandomBzzAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
 
 	// set up kademlia
@@ -191,11 +191,8 @@ func TestAddressMatchProx(t *testing.T) {
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
 		peerAddr := pot.RandomAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
-			Peer: protoPeer,
-			BzzAddr: &network.BzzAddr{
-				OAddr: peerAddr.Bytes(),
-				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
-			},
+			Peer:    protoPeer,
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
 		}
 		peer := network.NewPeer(bzzPeer, kad)
 		kad.On(peer)
@@ -481,8 +478,8 @@ func TestKeys(t *testing.T) {
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := make(PssAddress, 32)
-	copy(addr, network.RandomAddr().Over())
-	outkey := network.RandomAddr().Over()
+	copy(addr, network.RandomBzzAddr().Over())
+	outkey := network.RandomBzzAddr().Over()
 	topicobj := message.NewTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topicobj, addr)
 	outkeyid, err := ps.SetSymmetricKey(outkey, topicobj, addr, false)
@@ -529,7 +526,7 @@ func TestGetPublickeyEntries(t *testing.T) {
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 
-	peeraddr := network.RandomAddr().Over()
+	peeraddr := network.RandomBzzAddr().Over()
 	topicaddr := make(map[message.Topic]PssAddress)
 	topicaddr[message.Topic{0x13}] = peeraddr
 	topicaddr[message.Topic{0x2a}] = peeraddr[:16]
@@ -589,12 +586,12 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	}
 
 	// initialize kad
-	baseaddr := network.RandomAddr()
+	baseaddr := network.RandomBzzAddr()
 	kad := network.NewKademlia((baseaddr).Over(), network.NewKadParams())
 	rw := &p2p.MsgPipeRW{}
 
 	// one peer has a mismatching version of pss
-	wrongpssaddr := network.RandomAddr()
+	wrongpssaddr := network.RandomBzzAddr()
 	wrongpsscap := p2p.Cap{
 		Name:    protocolName,
 		Version: 0,
@@ -602,11 +599,11 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	nid := enode.ID{0x01}
 	wrongpsspeer := network.NewPeer(&network.BzzPeer{
 		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(wrongpssaddr.Over()), []p2p.Cap{wrongpsscap}), rw, nil),
-		BzzAddr: &network.BzzAddr{OAddr: wrongpssaddr.Over(), UAddr: nil},
+		BzzAddr: network.NewBzzAddr(wrongpssaddr.Over(), nil),
 	}, kad)
 
 	// one peer doesn't even have pss (boo!)
-	nopssaddr := network.RandomAddr()
+	nopssaddr := network.RandomBzzAddr()
 	nopsscap := p2p.Cap{
 		Name:    "nopss",
 		Version: 1,
@@ -614,7 +611,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	nid = enode.ID{0x02}
 	nopsspeer := network.NewPeer(&network.BzzPeer{
 		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
-		BzzAddr: &network.BzzAddr{OAddr: nopssaddr.Over(), UAddr: nil},
+		BzzAddr: network.NewBzzAddr(nopssaddr.Over(), nil),
 	}, kad)
 
 	// add peers to kademlia and activate them
@@ -647,7 +644,7 @@ func TestRawAllow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseAddr := network.RandomAddr()
+	baseAddr := network.RandomBzzAddr()
 	kad := network.NewKademlia((baseAddr).Over(), network.NewKadParams())
 	ps := newTestPss(privKey, kad, nil)
 	defer ps.Stop()
@@ -892,8 +889,8 @@ func testSendSym(t *testing.T) {
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
-	lrecvkey := network.RandomAddr().Over()
-	rrecvkey := network.RandomAddr().Over()
+	lrecvkey := network.RandomBzzAddr().Over()
+	rrecvkey := network.RandomBzzAddr().Over()
 
 	var lkeyids [2]string
 	var rkeyids [2]string
@@ -1373,7 +1370,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	rand.Read(msg)
 	topic := message.NewTopic([]byte("foo"))
 	to := make(PssAddress, 32)
-	copy(to[:], network.RandomAddr().Over())
+	copy(to[:], network.RandomBzzAddr().Over())
 	symkeyid, err := ps.GenerateSymmetricKey(topic, to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
@@ -1415,7 +1412,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	rand.Read(msg)
 	topic := message.NewTopic([]byte("foo"))
 	to := make(PssAddress, 32)
-	copy(to[:], network.RandomAddr().Over())
+	copy(to[:], network.RandomBzzAddr().Over())
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1463,7 +1460,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	topic := message.NewTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
-		copy(to[:], network.RandomAddr().Over())
+		copy(to[:], network.RandomBzzAddr().Over())
 		keyid, err = ps.GenerateSymmetricKey(topic, to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
@@ -1535,7 +1532,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	defer ps.Stop()
 	topic := message.NewTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
-		copy(addr[i], network.RandomAddr().Over())
+		copy(addr[i], network.RandomBzzAddr().Over())
 		keyid, err = ps.GenerateSymmetricKey(topic, addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
@@ -1628,7 +1625,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 	}
 	return map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err

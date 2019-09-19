@@ -84,7 +84,7 @@
 //      	os.Exit(1)
 //      }
 //
-//      addr := pot.RandomAddress() // should be a real address, of course
+//      addr := pot.RandomBzzAddress() // should be a real address, of course
 //      psc.AddPssPeer(addr, spec)
 //
 //      // use the protocol for something

@@ -237,11 +237,6 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 			return true
 		}
 
-		// skip light nodes, even though they support `bzz-retrieve` protocol
-		if p.LightNode {
-			return true
-		}
-
 		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
 		if bytes.Equal(req.Origin.Bytes(), id.Bytes()) {
 			return true
