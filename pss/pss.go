@@ -39,8 +39,8 @@ import (
 	"github.com/ethersphere/swarm/pss/internal/ticker"
 	"github.com/ethersphere/swarm/pss/internal/ttlset"
 	"github.com/ethersphere/swarm/pss/message"
-	"github.com/tilinna/clock"
 	"github.com/ethersphere/swarm/pss/outbox"
+	"github.com/tilinna/clock"
 )
 
 const (
