@@ -18,13 +18,13 @@ package network
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/rand"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -381,7 +381,7 @@ func TestEachConnLB(t *testing.T) {
 	stats := make(map[string]int)
 	f := func(peer *Peer, po int) (bool, bool) {
 		key := hexutil.Encode(peer.Address()[:8])
-		stats[key] =  stats[key] + 1
+		stats[key] = stats[key] + 1
 		// return false to only use one peer and mark it as used
 		return false, true
 	}
@@ -395,7 +395,7 @@ func TestEachConnLB(t *testing.T) {
 	tk.EachConnLB(base, 255, f)
 	for addr, count := range stats {
 		log.Warn("Stats", "addr", addr, "count", count)
-		if count != 2  {
+		if count != 2 {
 			t.Errorf("Expected 2 access to peer %v but got %v", addr, count)
 		}
 	}
@@ -406,12 +406,12 @@ func TestEachConnLB(t *testing.T) {
 	k := int(rand.Int31n(200))
 	m := k / 3
 	log.Warn("k/3", "k", k, "m", m)
-	for i := 0 ; i < k ; i++ {
+	for i := 0; i < k; i++ {
 		tk.EachConnLB(base, 255, f)
 	}
 	for addr, count := range stats {
 		log.Warn("Stats", "addr", addr, "count", count)
-		if count != m && count != (m+1)  {
+		if count != m && count != (m+1) {
 			t.Errorf("Expected %v or %v access to peer %v but got %v", m, m+1, addr, count)
 		}
 	}
@@ -501,21 +501,21 @@ func TestOffEffectingAddressBookNormalNode(t *testing.T) {
 	// peer added to kademlia
 	tk.On("01000000")
 	// peer should be in the address book
-	if tk.globalIndex.addrs.Size() != 1 {
+	if tk.defaultIndex.addrs.Size() != 1 {
 		t.Fatal("known peer addresses should contain 1 entry")
 	}
 	// peer should be among live connections
-	if tk.globalIndex.conns.Size() != 1 {
+	if tk.defaultIndex.conns.Size() != 1 {
 		t.Fatal("live peers should contain 1 entry")
 	}
 	// remove peer from kademlia
 	tk.Off("01000000")
 	// peer should be in the address book
-	if tk.globalIndex.addrs.Size() != 1 {
+	if tk.defaultIndex.addrs.Size() != 1 {
 		t.Fatal("known peer addresses should contain 1 entry")
 	}
 	// peer should not be among live connections
-	if tk.globalIndex.conns.Size() != 0 {
+	if tk.defaultIndex.conns.Size() != 0 {
 		t.Fatal("live peers should contain 0 entry")
 	}
 }
