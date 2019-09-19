@@ -43,6 +43,9 @@ var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
 var auditLog log.Logger // logger for Swap related messages and audit trail
 
+// swapLogLevel indicates filter level of log messages
+const swapLogLevel = 3
+
 // Swap represents the Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
@@ -81,29 +84,30 @@ func NewParams() *Params {
 }
 
 // newLogger returns a new logger
-func newLogger(h interface{}) log.Logger {
-	logLevel := 3
+func newLogger(logpath string) log.Logger {
 	swapLogger := log.New("swaplog", "*")
-	hd, ok := h.(log.Handler)
 
-	if !ok {
+	defaultHandler := log.Root().GetHandler()
+	rfh, err := swapRotatingLogHandler(logpath)
+
+	if err != nil {
 		//default handler just in case the handler is not set
-		hd = log.Root().GetHandler()
-		swapLogger.SetHandler(hd)
+		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
+		swapLogger.SetHandler(defaultHandler)
 		return swapLogger
 	}
 
 	//Filters messages with the correct logLevel for swap
-	hd = log.LvlFilterHandler(log.Lvl(logLevel), hd)
+	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
 
 	//Dispatches the logs to the default swarm log and also the filtered swap file logger.
-	swapLogger.SetHandler(log.MultiHandler(log.Root().GetHandler(), hd))
+	swapLogger.SetHandler(log.MultiHandler(defaultHandler, rfh))
 
 	return swapLogger
 }
 
-// swapRotatingFileHandler returns a RotatingFileHandler for log storage
-func swapRotatingFileHandler(logdir string) (log.Handler, error) {
+// swapRotatingLogHandler returns a RotatingFileHandler or Swarm Logger
+func swapRotatingLogHandler(logdir string) (log.Handler, error) {
 	return log.RotatingFileHandler(
 		logdir,
 		262144,
@@ -113,8 +117,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 
 // New - swap constructor
 func New(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend) *Swap {
-	hd, _ := swapRotatingFileHandler(logpath)
-	auditLog = newLogger(hd)
+	auditLog = newLogger(logpath)
 
 	return &Swap{
 		store:               stateStore,

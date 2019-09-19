@@ -180,6 +180,7 @@ func init() {
 		SwarmTomlConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSwapBackendURLFlag,
+		SwarmSwapLogPathFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,
