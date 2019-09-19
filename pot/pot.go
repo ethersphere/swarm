@@ -448,14 +448,36 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 	return n, common
 }
 
-// Each is a synchronous iterator over the elements of pot with function f.
-func (t *Pot) Each(f func(Val) bool) bool {
-	return t.each(f)
+// ValConsumer is a function that consumes a Val and returns if it wants to consume more or not
+// Consumer<Val> in generic notation
+type ValConsumer func(Val) bool
+
+// ValIterator is a function that iterates values and executes for each of them a supplied ValConsumer.
+// it returns the result of the last ValConsumer executed. Usually is the pin of a pot but if could be the last element
+// executed in some other order. It could hint users of this interface to continue iterating other Val collections.
+// Iterator<Val>  Iterator<T> => func (Consumer<T>) bool
+type ValIterator func(ValConsumer) bool
+
+type Bin struct {
+	ProximityOrder int
+	Size           int
+	ValIterator    ValIterator
 }
 
-// each is a synchronous iterator over the elements of pot with function f.
-// the iteration ends if the function return false or there are no more elements.
-func (t *Pot) each(f func(Val) bool) bool {
+// BinConsumer is called with a ProximityOrder, size and ValIterator of a Bin.
+// It consumes a bin and if desired iterates over Val's in the bin using the ValIterator
+// The function should return true if it wants to consume a new bin or false otherwise
+// Consumer<Bin> in generics notation
+type BinConsumer func(bin *Bin) bool
+
+// Each is a synchronous iterator over the elements of pot with function f.
+func (t *Pot) Each(consumer ValConsumer) bool {
+	return t.each(consumer)
+}
+
+// each is a synchronous iterator over the elements of pot with consumer f.
+// the iteration ends if the consumer return false or there are no more elements.
+func (t *Pot) each(f ValConsumer) bool {
 	if t == nil || t.size == 0 {
 		return false
 	}
@@ -467,75 +489,97 @@ func (t *Pot) each(f func(Val) bool) bool {
 	return f(t.pin)
 }
 
-// eachFrom is a synchronous iterator over the elements of pot with function f,
+// eachFrom is a synchronous iterator over the elements of pot with consumer,
 // starting from certain proximity order po, which is passed as a second parameter.
 // the iteration ends if the function return false or there are no more elements.
-func (t *Pot) eachFrom(f func(Val) bool, po int) bool {
+func (t *Pot) eachFrom(consumer ValConsumer, po int) bool {
 	if t == nil || t.size == 0 {
 		return false
 	}
 	_, beg := t.getPos(po)
 	for i := beg; i < len(t.bins); i++ {
-		if !t.bins[i].each(f) {
+		if !t.bins[i].each(consumer) {
 			return false
 		}
 	}
-	return f(t.pin)
+	return consumer(t.pin)
 }
 
-// EachBin iterates over bins of the pivot node and offers iterators to the caller on each
-// subtree passing the proximity order and the size
-// the iteration continues until the function's return value is false
-// or there are no more subtries
-func (t *Pot) EachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val) bool) bool) bool) {
-	t.eachBin(val, pof, po, f)
+// EachBin iterates over bins relative to the pivot Val node and offers iterators to the caller on each
+// subtree passing the proximity order and the size the iteration continues until the function's return value is false
+// or there are no more subtrees.
+// The order the bins are consumed depends on the bins po with respect to the pivot Val.
+// minProximityOrder gives the caller the possibility of filtering the bins by proximityOrder >= minProximityOrder
+// If pivotVal is the root val it iterates the bin as stored in this pot.
+func (t *Pot) EachBin(pivotVal Val, pof Pof, minProximityOrder int, binConsumer BinConsumer) {
+	t.eachBin(pivotVal, pof, minProximityOrder, binConsumer)
 }
 
-func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val) bool) bool) bool) {
+func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin BinConsumer) {
 	if t == nil || t.size == 0 {
 		return
 	}
-	spr, _ := pof(t.pin, val, t.po)
-	_, lim := t.getPos(spr)
+	valProximityOrder, _ := pof(t.pin, pivotVal, t.po)
+	_, pivotBinIndex := t.getPos(valProximityOrder)
 	var size int
-	var n *Pot
-	for i := 0; i < lim; i++ {
-		n = t.bins[i]
-		size += n.size
-		if n.po < po {
+	var pot *Pot
+	// Consume all bins before the pivotVal bin (or all bins if the pivotVal is the t.pin)
+	// Always filtering bins with proximityOrder < minProximityOrder
+	for i := 0; i < pivotBinIndex; i++ {
+		pot = t.bins[i]
+		size += pot.size
+		if pot.po < minProximityOrder {
 			continue
 		}
-		if !f(n.po, n.size, n.each) {
+		bin := &Bin{
+			ProximityOrder: pot.po,
+			Size:           pot.size,
+			ValIterator:    pot.each,
+		}
+		if !consumeBin(bin) {
 			return
 		}
 	}
-	if lim == len(t.bins) {
-		if spr >= po {
-			f(spr, 1, func(g func(Val) bool) bool {
-				return g(t.pin)
-			})
+	// If pivotBinIndex == len(t.bins), the pivotVal is the t.pin. We consume a virtual bin with max valProximityOrder
+	// and only one element.
+	if pivotBinIndex == len(t.bins) {
+		if valProximityOrder >= minProximityOrder {
+			bin := &Bin{
+				ProximityOrder: valProximityOrder,
+				Size:           1,
+				// Only iterate the pin
+				ValIterator: func(consume ValConsumer) bool {
+					return consume(t.pin)
+				},
+			}
+			consumeBin(bin)
 		}
 		return
 	}
 
-	n = t.bins[lim]
+	pot = t.bins[pivotBinIndex]
 
-	spo := spr
-	if n.po == spr {
+	spo := valProximityOrder
+	if pot.po == valProximityOrder {
 		spo++
-		size += n.size
+		size += pot.size
 	}
-	if spr >= po {
-		if !f(spr, t.size-size, func(g func(Val) bool) bool {
-			return t.eachFrom(func(v Val) bool {
-				return g(v)
-			}, spo)
-		}) {
+	// Consuming all bins after the bin where the pivotVal is
+	if valProximityOrder >= minProximityOrder {
+		bin := &Bin{
+			ProximityOrder: valProximityOrder,
+			Size:           t.size - size,
+			ValIterator: func(consume ValConsumer) bool {
+				return t.eachFrom(consume, spo)
+			},
+		}
+		if !consumeBin(bin) {
 			return
 		}
 	}
-	if n.po == spr {
-		n.eachBin(val, pof, po, f)
+	// Consume bin where the pivotVal is
+	if pot.po == valProximityOrder {
+		pot.eachBin(pivotVal, pof, minProximityOrder, consumeBin)
 	}
 
 }
