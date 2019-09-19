@@ -84,8 +84,8 @@ func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	return p.swap.saveLastSentCheque(p.ID(), cheque)
 }
 
-func (p *Peer) getLastCumulativePayout() uint64 {
-	lastCheque := p.getLastReceivedCheque()
+func (p *Peer) getLastSentCumulativePayout() uint64 {
+	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
@@ -133,7 +133,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
 
-	total := p.getLastCumulativePayout()
+	total := p.getLastSentCumulativePayout()
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
