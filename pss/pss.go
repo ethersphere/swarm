@@ -594,13 +594,10 @@ func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddre
 			log.Warn("noproxhandler")
 			continue
 		}
-		// h := h
-		// go func() {
 		err := (h.f)(payload, peer, asymmetric, keyid)
 		if err != nil {
 			log.Warn("Pss handler failed", "err", err)
 		}
-		// }()
 	}
 }
 
