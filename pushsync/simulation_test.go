@@ -161,7 +161,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 	// setup localstore
 	n := ctx.Config.Node()
-	addr := network.NewAddr(n)
+	addr := network.NewBzzAddrFromEnode(n)
 	dir, err := ioutil.TempDir("", "pushsync-test")
 	if err != nil {
 		return nil, nil, err
