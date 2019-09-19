@@ -138,7 +138,19 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		}
 
 		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
+		wantCursorsCount := 17
+		for i := 499; i >= 0; i-- { // wait time 5s
+			time.Sleep(10 * time.Millisecond)
+			count1 := nodeRegistry(sim, nodeIDs[0]).getPeer(nodeIDs[1]).cursorsCount()
+			count2 := nodeRegistry(sim, nodeIDs[1]).getPeer(nodeIDs[0]).cursorsCount()
+			if count1 >= wantCursorsCount && count2 >= wantCursorsCount {
+				break
+			}
+			if i == 0 {
+				return fmt.Errorf("got cursors %v and %v, want %v", count1, count2, wantCursorsCount)
+			}
+		}
+
 		idPivot := nodeIDs[0]
 		pivotSyncer := nodeRegistry(sim, idPivot)
 		pivotKademlia := nodeKademlia(sim, idPivot)
