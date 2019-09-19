@@ -334,9 +334,6 @@ func waitToPushSynced(tagname string) {
 		time.Sleep(200 * time.Millisecond)
 
 		rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
-		if rpcClient != nil {
-			defer rpcClient.Close()
-		}
 		if err != nil {
 			log.Error("error dialing host", "err", err)
 			continue
@@ -347,10 +344,12 @@ func waitToPushSynced(tagname string) {
 		synced, err := bzzClient.IsPushSynced(tagname)
 		if err != nil {
 			log.Error(err.Error())
+			rpcClient.Close()
 			continue
 		}
 
 		if synced {
+			rpcClient.Close()
 			return
 		}
 	}
