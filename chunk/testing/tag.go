@@ -49,7 +49,7 @@ func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, sent, synced, t
 	}
 
 	tSynced := tag.Get(chunk.StateSynced)
-	if tStored != stored {
+	if tSynced != synced {
 		t.Fatalf("mismatch synced chunks, got %d want %d", tSynced, synced)
 	}
 
