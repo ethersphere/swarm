@@ -49,6 +49,5 @@ func Trace(msg string, ctx ...interface{}) {
 
 // GetHandler return the Handler assigned to root
 func GetHandler() l.Handler {
-	lh := l.Root()
-	return lh.GetHandler()
+	return l.Root().GetHandler()
 }

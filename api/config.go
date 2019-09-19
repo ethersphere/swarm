@@ -57,7 +57,7 @@ type Config struct {
 	SwapEnabled             bool           // whether SWAP incentives are enabled
 	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
 	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
-	SwapLogPath             string         // dir path to swap related audit logs
+	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract
 	// end of Swap configs
 

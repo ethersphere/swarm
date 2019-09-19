@@ -89,13 +89,13 @@ func NewParams() *Params {
 func newLogger(logpath string) log.Logger {
 	swapLogger := log.New("swaplog", "*")
 
-	defaultHandler := log.Root().GetHandler()
-	rfh, err := swapRotatingLogHandler(logpath)
+	lh := log.Root().GetHandler()
+	rfh, err := swapRotatingFileHandler(logpath)
 
 	if err != nil {
-		//default handler just in case the handler is not set
 		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
-		swapLogger.SetHandler(defaultHandler)
+		//sets a fallback logger, it will use the swarm logger.
+		swapLogger.SetHandler(lh)
 		return swapLogger
 	}
 
@@ -103,13 +103,14 @@ func newLogger(logpath string) log.Logger {
 	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
 
 	//Dispatches the logs to the default swarm log and also the filtered swap file logger.
-	swapLogger.SetHandler(log.MultiHandler(defaultHandler, rfh))
+	swapLogger.SetHandler(log.MultiHandler(lh, rfh))
 
 	return swapLogger
 }
 
-// swapRotatingLogHandler returns a RotatingFileHandler or Swarm Logger
-func swapRotatingLogHandler(logdir string) (log.Handler, error) {
+// swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
+// the files are split based on the limit parameter expressed in bytes
+func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 	return log.RotatingFileHandler(
 		logdir,
 		262144,

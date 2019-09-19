@@ -701,7 +701,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string
 	}
 	log.Debug("creating simulated backend")
 
-	//Swap log default path
+	// Dir for storing swap related logs
 	logdir, err := ioutil.TempDir("", "swap_test_log")
 	log.Debug("creating swap log dir")
 	if err != nil {

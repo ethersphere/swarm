@@ -110,7 +110,8 @@ func init() {
 	glogger = log.NewGlogHandler(ostream)
 }
 
-// rotatingFileHandler returns a RotatingFileHandler
+// rotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
+// the files are split based on the limit parameter expressed in bytes
 func rotatingFileHandler(logdir string) (log.Handler, error) {
 	return log.RotatingFileHandler(
 		logdir,
