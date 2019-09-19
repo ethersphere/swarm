@@ -67,7 +67,7 @@ func TestChunkDelivery(t *testing.T) {
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
-	})
+	}, false)
 	defer sim.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -183,7 +183,7 @@ func TestDeliveryForwarding(t *testing.T) {
 func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simulation, uploader, forwarder, fetching enode.ID) {
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
-	})
+	}, false)
 
 	fetching, err := sim.AddNode()
 	if err != nil {

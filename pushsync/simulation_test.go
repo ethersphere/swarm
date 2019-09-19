@@ -78,7 +78,7 @@ func TestPushsyncSimulation(t *testing.T) {
 func testPushsyncSimulation(nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"pushsync": sf,
-	})
+	}, true)
 	defer sim.Close()
 
 	ctx := context.Background()

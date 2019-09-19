@@ -99,14 +99,16 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 	return s
 }
 
-// NewBzzInProc is the same as NewInProc but injects bzz as a default protocol
-func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
+// NewBzzInProc is the same as NewInProc but injects bzz as a default protocol.
+// Argument disableAutoConnect sets Hive DisableAutoConnect option and it is required
+// to be true for snapshot tests.
+func NewBzzInProc(services map[string]ServiceFunc, disableAutoConnect bool) (s *Simulation) {
 	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 		addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
-		hp.DisableAutoConnect = true
+		hp.DisableAutoConnect = disableAutoConnect
 
 		k, _ := bucket.LoadOrStore(BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 		kad := k.(*network.Kademlia)
