@@ -333,23 +333,25 @@ func waitToPushSynced(tagname string) {
 	for {
 		time.Sleep(200 * time.Millisecond)
 
-		rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
-		if err != nil {
-			log.Error("error dialing host", "err", err)
-			continue
-		}
+		if func() (synced bool) {
+			rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
+			if rpcClient != nil {
+				defer rpcClient.Close()
+			}
+			if err != nil {
+				log.Error("error dialing host", "err", err)
+				return false
+			}
 
-		bzzClient := client.NewBzz(rpcClient)
+			bzzClient := client.NewBzz(rpcClient)
 
-		synced, err := bzzClient.IsPushSynced(tagname)
-		if err != nil {
-			log.Error(err.Error())
-			rpcClient.Close()
-			continue
-		}
-
-		if synced {
-			rpcClient.Close()
+			synced, err = bzzClient.IsPushSynced(tagname)
+			if err != nil {
+				log.Error(err.Error())
+				return false
+			}
+			return synced
+		}() {
 			return
 		}
 	}
