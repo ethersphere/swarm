@@ -75,61 +75,6 @@ func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
 	}
 }
 
-// EncodeRLP implements rlp.Encoder
-func (b *BzzAddr) EncodeRLP(w io.Writer) error {
-	err := rlp.Encode(w, b.OAddr)
-	if err != nil {
-		return err
-	}
-	err = rlp.Encode(w, b.UAddr)
-	if err != nil {
-		return err
-	}
-	y, err := rlp.EncodeToBytes(b.Capabilities)
-	if err != nil {
-		return err
-	}
-	err = rlp.Encode(w, y)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// DecodeRLP implements rlp.Decoder
-func (b *BzzAddr) DecodeRLP(s *rlp.Stream) error {
-	var err error
-
-	b.OAddr, err = s.Bytes()
-	if err != nil {
-		return fmt.Errorf("oaddr --- %v", err)
-	}
-	b.UAddr, err = s.Bytes()
-	if err != nil {
-		return fmt.Errorf("uaddr --- %v", err)
-	}
-
-	y, err := s.Bytes()
-	if err != nil {
-		return fmt.Errorf("capsbytes --- %v", err)
-	}
-	err = rlp.DecodeBytes(y, &b.Capabilities)
-	if err != nil {
-		return fmt.Errorf("caps --- %v", err)
-	}
-	return nil
-}
-
-// NewBzzAddr creates a new BzzAddr with the specified byte values for over- and underlayaddresses
-// It will contain an empty capabilities object
-func NewBzzAddr(oaddr []byte, uaddr []byte) *BzzAddr {
-	return &BzzAddr{
-		OAddr:        oaddr,
-		UAddr:        uaddr,
-		Capabilities: capability.NewCapabilities(),
-	}
-}
-
 // Address implements OverlayPeer interface to be used in Overlay.
 func (a *BzzAddr) Address() []byte {
 	return a.OAddr

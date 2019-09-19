@@ -942,5 +942,4 @@ func testCapabilityIndexRemove(t *testing.T) {
 	if c != 1 {
 		t.Fatalf("EachAddrFiltered '42:101' expected 1 peer, got %d", c)
 	}
-	return NewPeer(peerBzz, k), nil
 }
