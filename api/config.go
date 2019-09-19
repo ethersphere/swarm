@@ -72,6 +72,7 @@ type Config struct {
 	Enode                *enode.Node `toml:"-"`
 	NetworkID            uint64
 	SyncEnabled          bool
+	PushSyncEnabled      bool
 	SyncingSkipCheck     bool
 	DeliverySkipCheck    bool
 	MaxStreamPeerServers int
@@ -103,6 +104,7 @@ func NewConfig() (c *Config) {
 		Port:                    DefaultHTTPPort,
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
+		PushSyncEnabled:         false,
 		SyncingSkipCheck:        false,
 		DeliverySkipCheck:       true,
 		MaxStreamPeerServers:    10000,

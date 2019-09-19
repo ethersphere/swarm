@@ -69,7 +69,7 @@ const (
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
-	SwarmEnvSyncDisable             = "SWARM_SYNC_DISABLE"
+	SwarmSyncMode                   = "SWARM_SYNC_MODE"
 	SwarmEnvSyncUpdateDelay         = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SwarmEnvMaxStreamPeerServers    = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
@@ -214,8 +214,8 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
-	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
-		currentConfig.SyncEnabled = false
+	if ctx.GlobalIsSet(SwarmSyncModeFlag.Name) {
+		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = syncModeParse(ctx.GlobalString(SwarmSyncModeFlag.Name))
 	}
 	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
 		currentConfig.SyncUpdateDelay = d
@@ -261,6 +261,22 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
 	}
 	return currentConfig
+}
+
+func syncModeParse(s string) (pullSync, pushSync bool) {
+	switch s {
+	case "pull":
+		return true, false
+	case "push":
+		return false, true
+	case "all":
+		return true, true
+	case "none":
+		return false, false
+	default:
+		utils.Fatalf("unknown cli flag %s value: %v", SwarmSyncModeFlag.Name, s)
+		return
+	}
 }
 
 // dumpConfig is the dumpconfig command.

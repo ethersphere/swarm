@@ -231,7 +231,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
-		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSyncModeFlag.Name), "none",
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", SwarmDeliverySkipCheckFlag.Name),
@@ -277,6 +277,10 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 
 	if info.SyncEnabled {
 		t.Fatal("Expected Sync to be disabled, but is true")
+	}
+
+	if info.PushSyncEnabled {
+		t.Fatal("Expected Push Sync to be disabled, but is true")
 	}
 
 	if !info.DeliverySkipCheck {
@@ -412,7 +416,7 @@ func TestConfigEnvVars(t *testing.T) {
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmPortFlag.EnvVar, httpPort))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIdFlag.EnvVar, "999"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
-	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncDisabledFlag.EnvVar, "true"))
+	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncModeFlag.EnvVar, "none"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmDeliverySkipCheckFlag.EnvVar, "true"))
 
 	dir, err := ioutil.TempDir("", "bzztest")
@@ -495,6 +499,10 @@ func TestConfigEnvVars(t *testing.T) {
 		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
+	if info.PushSyncEnabled {
+		t.Fatal("Expected Push Sync to be disabled, but is true")
+	}
+
 	if !info.DeliverySkipCheck {
 		t.Fatal("Expected DeliverySkipCheck to be enabled, but it is not")
 	}
@@ -516,6 +524,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = true
+	defaultConf.PushSyncEnabled = true
 	defaultConf.NetworkID = 54
 	defaultConf.Port = "8588"
 	defaultConf.DbCapacity = 9000000
@@ -553,7 +562,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "77",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
-		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSyncModeFlag.Name), "none",
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
@@ -595,6 +604,10 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 
 	if info.SyncEnabled {
 		t.Fatal("Expected Sync to be disabled, but is true")
+	}
+
+	if info.PushSyncEnabled {
+		t.Fatal("Expected Push Sync to be disabled, but is true")
 	}
 
 	if info.DbCapacity != 9000000 {

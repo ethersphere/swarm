@@ -237,9 +237,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	pubsub := pss.NewPubSub(self.ps)
-	self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
-	self.storer = pushsync.NewStorer(self.netStore, pubsub)
+	if config.PushSyncEnabled {
+		pubsub := pss.NewPubSub(self.ps)
+		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
+		self.storer = pushsync.NewStorer(self.netStore, pubsub)
+	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
 
@@ -473,6 +475,13 @@ func (s *Swarm) Stop() error {
 	}
 	if err := s.retrieval.Stop(); err != nil {
 		log.Error("retrieval stop", "err", err)
+	}
+
+	if s.pushSync != nil {
+		s.pushSync.Close()
+	}
+	if s.storer != nil {
+		s.storer.Close()
 	}
 
 	if s.netStore != nil {
