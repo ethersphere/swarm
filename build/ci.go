@@ -300,7 +300,7 @@ func doLint(cmdline []string) {
 	configs := []string{
 		"run",
 		"--tests",
-		"--deadline=2m",
+		"--deadline=5m",
 		"--disable-all",
 		"--enable=goimports",
 		"--enable=varcheck",
