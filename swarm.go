@@ -44,7 +44,6 @@ import (
 	"github.com/ethersphere/swarm/bzzeth"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/ens"
-	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -52,6 +51,7 @@ import (
 	"github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
+	pssmessage "github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -79,7 +79,6 @@ type Swarm struct {
 	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz // the logistic manager
 	bzzEth            *bzzeth.BzzEth
-	backend           cswap.Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
@@ -117,25 +116,20 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if config.SwapEnabled {
 		// for now, Swap can only be enabled in a whitelisted network
 		if self.config.NetworkID != swap.AllowedNetworkID {
-			return nil, fmt.Errorf("swap can only be enabled under Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
+			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
-		// if Swap is enabled, we MUST have a contract API
-		if self.config.SwapBackendURL == "" {
-			return nil, errors.New("swap enabled but no contract address given; fatal error condition, aborting")
-		}
-		log.Info("connecting to SWAP API", "url", self.config.SwapBackendURL)
-		self.backend, err = ethclient.Dial(self.config.SwapBackendURL)
-		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", self.config.SwapBackendURL, err)
-		}
-
-		// initialize the balances store
-		swapStore, err := state.NewDBStore(filepath.Join(config.Path, "swap.db"))
+		// create the accounting objects
+		self.swap, err = swap.New(
+			config.SwapLogPath,
+			self.config.Path,
+			self.privateKey,
+			self.config.SwapBackendURL,
+			self.config.SwapDisconnectThreshold,
+			self.config.SwapPaymentThreshold,
+		)
 		if err != nil {
 			return nil, err
 		}
-		// create the accounting objects
-		self.swap = swap.New(config.SwapLogPath, swapStore, self.privateKey, self.backend)
 		// start anonymous metrics collection
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
@@ -208,7 +202,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr) // nodeID.Bytes())
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
@@ -228,7 +222,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, retrieval.Spec, self.streamer.Run, self.retrieval.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, self.retrieval.Spec(), self.streamer.Run, self.retrieval.Run)
 
 	self.bzzEth = bzzeth.New()
 
@@ -567,7 +561,7 @@ func (s *Swarm) APIs() []rpc.API {
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
-func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
+func (s *Swarm) RegisterPssProtocol(topic *pssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 

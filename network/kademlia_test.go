@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -37,7 +38,7 @@ func init() {
 
 func testKadPeerAddr(s string) *BzzAddr {
 	a := pot.NewAddressFromString(s)
-	return &BzzAddr{OAddr: a, UAddr: a}
+	return NewBzzAddr(a, a)
 }
 
 func newTestKademliaParams() *KadParams {
@@ -60,19 +61,19 @@ func newTestKademlia(t *testing.T, b string) *testKademlia {
 	}
 }
 
-func (tk *testKademlia) newTestKadPeer(s string, lightNode bool) *Peer {
-	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s), LightNode: lightNode}, tk.Kademlia)
+func (tk *testKademlia) newTestKadPeer(s string) *Peer {
+	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, tk.Kademlia)
 }
 
 func (tk *testKademlia) On(ons ...string) {
 	for _, s := range ons {
-		tk.Kademlia.On(tk.newTestKadPeer(s, false))
+		tk.Kademlia.On(tk.newTestKadPeer(s))
 	}
 }
 
 func (tk *testKademlia) Off(offs ...string) {
 	for _, s := range offs {
-		tk.Kademlia.Off(tk.newTestKadPeer(s, false))
+		tk.Kademlia.Off(tk.newTestKadPeer(s))
 	}
 }
 
@@ -95,7 +96,7 @@ func (tk *testKademlia) Register(regs ...string) {
 //
 // TODO: Make test adapt to change in NeighbourhoodSize
 func TestNeighbourhoodDepth(t *testing.T) {
-	baseAddressBytes := RandomAddr().OAddr
+	baseAddressBytes := RandomBzzAddr().OAddr
 	kad := NewKademlia(baseAddressBytes, NewKadParams())
 
 	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
@@ -472,31 +473,6 @@ func TestOffEffectingAddressBookNormalNode(t *testing.T) {
 	}
 }
 
-// a light node should not be in the address book
-func TestOffEffectingAddressBookLightNode(t *testing.T) {
-	tk := newTestKademlia(t, "00000000")
-	// light node peer added to kademlia
-	tk.Kademlia.On(tk.newTestKadPeer("01000000", true))
-	// peer should not be in the address book
-	if tk.addrs.Size() != 0 {
-		t.Fatal("known peer addresses should contain 0 entry")
-	}
-	// peer should be among live connections
-	if tk.conns.Size() != 1 {
-		t.Fatal("live peers should contain 1 entry")
-	}
-	// remove peer from kademlia
-	tk.Kademlia.Off(tk.newTestKadPeer("01000000", true))
-	// peer should not be in the address book
-	if tk.addrs.Size() != 0 {
-		t.Fatal("known peer addresses should contain 0 entry")
-	}
-	// peer should not be among live connections
-	if tk.conns.Size() != 0 {
-		t.Fatal("live peers should contain 0 entry")
-	}
-}
-
 func TestSuggestPeerRetries(t *testing.T) {
 	tk := newTestKademlia(t, "00000000")
 	tk.RetryInterval = int64(300 * time.Millisecond) // cycle
@@ -552,11 +528,8 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 	p := p2p.NewPeer(enode.ID{}, "foo", []p2p.Cap{})
 	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
 	bp := &BzzPeer{
-		Peer: pp,
-		BzzAddr: &BzzAddr{
-			OAddr: addr.Bytes(),
-			UAddr: []byte(fmt.Sprintf("%x", addr[:])),
-		},
+		Peer:    pp,
+		BzzAddr: NewBzzAddr(addr.Bytes(), []byte(fmt.Sprintf("%x", addr[:]))),
 	}
 	return NewPeer(bp, kad)
 }
@@ -669,4 +642,304 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 			// all fine
 		}
 	})
+}
+
+// TestCapabilitiesIndex checks that capability indices contains only the peers that have the filters' capability bits set
+// It tests the state of the indices after registering, connecting, disconnecting and removing peers
+//
+// It sets up peers with capability arrays 42:101, 42:001 and 666:101, and registers these capabilities as filters in the kademlia
+// It also sets up a peer with both capability arrays 42:101 and 666:101
+// Lastly it registers a filter for the capability 42:010 in the kademlia which will match no peers
+//
+// The tests are split up to make them easier to read
+func TestCapabilityIndex(t *testing.T) {
+	t.Run("register", testCapabilityIndexRegister)
+	t.Run("connect", testCapabilityIndexConnect)
+	t.Run("disconnect", testCapabilityIndexDisconnect)
+	t.Run("remove", testCapabilityIndexRemove)
+}
+
+// set up capabilities and peers for each individual test
+func testCapabilityIndexHelper() (*Kademlia, map[string]*Peer, map[string]*capability.Capability) {
+
+	bzzAddrs := make(map[string]*BzzAddr)
+	discPeers := make(map[string]*Peer)
+	caps := make(map[string]*capability.Capability)
+
+	kp := NewKadParams()
+	addr := RandomBzzAddr()
+	base := addr.OAddr
+	k := NewKademlia(base, kp)
+
+	caps["42:101"] = capability.NewCapability(42, 3)
+	caps["42:101"].Set(0)
+	caps["42:101"].Set(2)
+	k.RegisterCapabilityIndex("42:101", *caps["42:101"])
+
+	caps["42:001"] = capability.NewCapability(42, 3)
+	caps["42:001"].Set(2)
+	k.RegisterCapabilityIndex("42:001", *caps["42:001"])
+
+	caps["42:010"] = capability.NewCapability(42, 3)
+	caps["42:010"].Set(1)
+	k.RegisterCapabilityIndex("42:010", *caps["42:010"])
+
+	caps["666:101"] = capability.NewCapability(666, 3)
+	caps["666:101"].Set(0)
+	caps["666:101"].Set(2)
+	k.RegisterCapabilityIndex("666:101", *caps["666:101"])
+
+	bzzAddrs["42:101"] = RandomBzzAddr()
+	bzzAddrs["42:101"].Capabilities.Add(caps["42:101"])
+	discPeers["42:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:101"]}, k)
+
+	bzzAddrs["42:001"] = RandomBzzAddr()
+	bzzAddrs["42:001"].Capabilities.Add(caps["42:001"])
+	discPeers["42:001"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:001"]}, k)
+
+	bzzAddrs["666:101"] = RandomBzzAddr()
+	bzzAddrs["666:101"].Capabilities.Add(caps["666:101"])
+	discPeers["666:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["666:101"]}, k)
+
+	bzzAddrs["42:101,666:101"] = RandomBzzAddr()
+	bzzAddrs["42:101,666:101"].Capabilities.Add(caps["666:101"])
+	bzzAddrs["42:101,666:101"].Capabilities.Add(caps["42:101"])
+	discPeers["42:101,666:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:101,666:101"]}, k)
+
+	k.Register(bzzAddrs["42:101"], bzzAddrs["42:001"], bzzAddrs["666:101"], bzzAddrs["42:101,666:101"])
+
+	return k, discPeers, caps
+}
+
+// test indices after registering peers
+func testCapabilityIndexRegister(t *testing.T) {
+
+	k, _, caps := testCapabilityIndexHelper()
+
+	// Call without filter should still return all peers
+	c := 0
+	k.EachAddr(k.BaseAddr(), 255, func(_ *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 4 {
+		t.Fatalf("EachAddr expected 3 peers, got %d", c)
+	}
+
+	// match capability 42:101
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "42:101", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		cp := a.Capabilities.Get(42)
+		if !cp.Match(caps["42:101"]) {
+			t.Fatalf("EachAddrFiltered '42:101' capability mismatch, expected %v, got %v", caps["42:101"], cp)
+		}
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered 'full' expected 2 peer, got %d", c)
+	}
+
+	// Match capability 42:101 and 42:001
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "42:001", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 3 {
+		t.Fatalf("EachAddrFiltered '42:001' expected 2 peers, got %d", c)
+	}
+
+	// Match no capability
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "42:010", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachAddrFiltered '42:010' expected 0 peers, got %d", c)
+	}
+
+	// Match 666:101
+	// Also checks that one node has both 42:101 and 666:101
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "666:101", 255, func(a *BzzAddr, _ int) bool {
+		c++
+		cp := a.Capabilities.Get(666)
+		if !cp.Match(caps["666:101"]) {
+			t.Fatalf("EachAddrFiltered 'other' capability mismatch, expected %v, got %v", caps["666:101"], cp)
+		}
+		cp = a.Capabilities.Get(42)
+		if cp != nil {
+			c++
+		}
+		return true
+	})
+	if c != 3 {
+		t.Fatalf("EachAddrFiltered 'other' expected 3 capability matches, got %d", c)
+	}
+}
+
+// test indices after connecting peers
+func testCapabilityIndexConnect(t *testing.T) {
+
+	k, discPeers, caps := testCapabilityIndexHelper()
+
+	// Set 42:101 and 42:101,666:101 as connected
+	k.On(discPeers["42:001"])
+	k.On(discPeers["42:101,666:101"])
+
+	// Call without filter should return the single connected peer
+	c := 0
+	k.EachConn(k.BaseAddr(), 255, func(_ *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachConn expected 2 peers, got %d", c)
+	}
+
+	// Check that the "42:101,666:101" peer exists in the indices for both capability arrays
+	// first the "666:101" index ...
+	c = 0
+	k.EachConnFiltered(k.BaseAddr(), "666:101", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if !cp.Match(caps["666:101"]) {
+			t.Fatalf("EachConnFiltered '666:101' missing capability %v", caps["666:101"])
+		}
+		cp = p.Capabilities.Get(42)
+		if !cp.Match(caps["42:101"]) {
+			t.Fatalf("EachConnFiltered '666:101' missing capability %v", caps["42:101"])
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'other' expected 1 peer, got %d", c)
+	}
+
+	// ... and in 42:101
+	c = 0
+	k.EachConnFiltered(k.BaseAddr(), "42:101", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if !cp.Match(caps["666:101"]) {
+			t.Fatalf("EachConnFiltered '42:101' missing capability %v", caps["666:101"])
+		}
+		cp = p.Capabilities.Get(42)
+		if !cp.Match(caps["42:101"]) {
+			t.Fatalf("EachConnFiltered '42:101' missing capability %v", caps["42:101"])
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered 'more' expected 1 peer, got %d", c)
+	}
+}
+
+// test indices after disconnecting peers
+func testCapabilityIndexDisconnect(t *testing.T) {
+
+	k, discPeers, caps := testCapabilityIndexHelper()
+
+	// Set "42:101" and "42:101,666:101" as connected
+	// And then disconnect the "42:101,666:101" peer
+	k.On(discPeers["42:001"])
+	k.On(discPeers["42:101,666:101"])
+	k.Off(discPeers["42:101,666:101"])
+
+	// Check that the "42:101,666:101" is now removed from connections
+	c := 0
+	k.EachConnFiltered(k.BaseAddr(), "666:101", 255, func(_ *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachConnFiltered '666:101' expected 0 peers, got %d", c)
+	}
+
+	// Check that there is still a "666:101" peer among known peers
+	// (the two matched peers will be "42:101,666:101" and "666:101")
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "666:101", 255, func(_ *BzzAddr, _ int) bool {
+		c++
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered '666:101' expected 2 peers, got %d", c)
+	}
+
+	// Check that the "42:001" peer is still registered as connected
+	c = 0
+	k.EachConnFiltered(k.BaseAddr(), "42:001", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(42)
+		if !cp.Match(caps["42:001"]) {
+			t.Fatalf("EachConnFiltered '42:001' missing capability %v", caps["42:001"])
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachConnFiltered '42:001' expected 1 peer, got %d", c)
+	}
+}
+
+// test indices after (disconnecting and) removing peers
+func testCapabilityIndexRemove(t *testing.T) {
+
+	k, discPeers, caps := testCapabilityIndexHelper()
+
+	// Set "42:101" and "42:101,666:101" as connected
+	// And then disconnect the "42:101,666:101" peer
+	k.On(discPeers["42:001"])
+	k.On(discPeers["42:101,666:101"])
+	k.Off(discPeers["42:101,666:101"])
+
+	// Remove "less" from both connection and known peers (pruning) list
+	// TODO replace with the "prune" method when one is implemented
+	k.removeFromCapabilityIndex(discPeers["42:001"], false)
+
+	// Check that the "42:001" peer is no longer registered as connected
+	c := 0
+	k.EachConnFiltered(k.BaseAddr(), "42:001", 255, func(p *Peer, _ int) bool {
+		c++
+		return true
+	})
+	if c != 0 {
+		t.Fatalf("EachConnFiltered '42:001' expected 0 peers, got %d", c)
+	}
+
+	// check that the "42:001" peer is not known anymore
+	// (the two matched peers will be "42:101,666:101" and "42:101")
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "42:001", 255, func(p *BzzAddr, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(42)
+		if !cp.Match(caps["42:101"]) {
+			t.Fatalf("EachConnFiltered '42:001' should now return only capability '42:101': %v", caps["42:101"])
+		}
+		return true
+	})
+	if c != 2 {
+		t.Fatalf("EachAddrFiltered '42:001' expected 2 peer, got %d", c)
+	}
+
+	// Remove "42:101,666:101" from known peers list (pruning only)
+	// TODO replace with the "prune" method when one is implemented
+	k.removeFromCapabilityIndex(discPeers["42:101,666:101"], false)
+
+	// check that the "42:101,666:101" peer is not known anymore
+	// (the only matched peer should now be "42:101")
+	c = 0
+	k.EachAddrFiltered(k.BaseAddr(), "42:101", 255, func(p *BzzAddr, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(666)
+		if cp != nil {
+			t.Fatalf("EachAddrFiltered '42:101' should not contain a peer with capability %v", caps["666:101"])
+		}
+		return true
+	})
+	if c != 1 {
+		t.Fatalf("EachAddrFiltered '42:101' expected 1 peer, got %d", c)
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 type testCase struct {
@@ -247,7 +248,7 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 	resultMap := make(map[pot.Address]int)
 
 	defer func() { sendFunc = sendMsg }()
-	sendFunc = func(_ *Pss, sp *network.Peer, _ *PssMsg) bool {
+	sendFunc = func(_ *Pss, sp *network.Peer, _ *message.Message) bool {
 		if tries < nFails {
 			tries++
 			return false
@@ -337,17 +338,14 @@ func newTestDiscoveryPeer(addr pot.Address, kad *network.Kademlia) *network.Peer
 	p := p2p.NewPeer(enode.ID{}, "test", []p2p.Cap{})
 	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
 	bp := &network.BzzPeer{
-		Peer: pp,
-		BzzAddr: &network.BzzAddr{
-			OAddr: addr.Bytes(),
-			UAddr: []byte(fmt.Sprintf("%x", addr[:])),
-		},
+		Peer:    pp,
+		BzzAddr: network.NewBzzAddr(addr.Bytes(), []byte(fmt.Sprintf("%x", addr[:]))),
 	}
 	return network.NewPeer(bp, kad)
 }
 
-func newTestMsg(addr []byte) *PssMsg {
-	msg := newPssMsg(&msgParams{})
+func newTestMsg(addr []byte) *message.Message {
+	msg := message.New(message.Flags{})
 	msg.To = addr[:]
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	msg.Topic = [4]byte{}

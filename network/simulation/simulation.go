@@ -102,20 +102,13 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 // NewBzzInProc is the same as NewInProc but injects bzz as a default protocol
 func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
 	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
-		addr := network.NewAddr(ctx.Config.Node())
-
+		addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false
-		var kad *network.Kademlia
 
-		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
-		if kv, ok := bucket.Load(BucketKeyKademlia); ok {
-			kad = kv.(*network.Kademlia)
-		} else {
-			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
-			bucket.Store(BucketKeyKademlia, kad)
-		}
+		k, _ := bucket.LoadOrStore(BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+		kad := k.(*network.Kademlia)
 
 		config := &network.BzzConfig{
 			OverlayAddr:  addr.Over(),

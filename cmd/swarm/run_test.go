@@ -131,7 +131,10 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 	}
 
 	// connect the nodes together
-	for _, node := range cluster.Nodes {
+	for i, node := range cluster.Nodes {
+		if i == 0 {
+			continue
+		}
 		if err := node.Client.Call(nil, "admin_addPeer", cluster.Nodes[0].Enode); err != nil {
 			t.Fatal(err)
 		}
@@ -167,31 +170,18 @@ func (c *testCluster) Stop() {
 }
 
 func (c *testCluster) StartNewNodes(t *testing.T, size int) {
-	c.Nodes = make([]*testNode, 0, size)
-
-	errors := make(chan error, size)
-	nodes := make(chan *testNode, size)
+	c.Nodes = make([]*testNode, size)
 	for i := 0; i < size; i++ {
-		go func(nodeIndex int) {
-			dir := filepath.Join(c.TmpDir, fmt.Sprintf("swarm%02d", nodeIndex))
-			if err := os.Mkdir(dir, 0700); err != nil {
-				errors <- err
-				return
-			}
+		name := fmt.Sprintf("swarm%02d", i)
 
-			node := newTestNode(t, dir)
-			node.Name = fmt.Sprintf("swarm%02d", nodeIndex)
-			nodes <- node
-		}(i)
-	}
-
-	for i := 0; i < size; i++ {
-		select {
-		case node := <-nodes:
-			c.Nodes = append(c.Nodes, node)
-		case err := <-errors:
-			t.Error(err)
+		dir := filepath.Join(c.TmpDir, name)
+		if err := os.Mkdir(dir, 0777); err != nil {
+			t.Fatal(err)
 		}
+
+		node := newTestNode(t, dir)
+		node.Name = name
+		c.Nodes[i] = node
 	}
 
 	if t.Failed() {

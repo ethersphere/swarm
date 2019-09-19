@@ -75,9 +75,6 @@ func TestNewSwarm(t *testing.T) {
 				if s.config != config {
 					t.Error("config is not the same object")
 				}
-				if s.backend != nil {
-					t.Error("backend is not nil")
-				}
 				if s.privateKey == nil {
 					t.Error("private key is not set")
 				}
@@ -121,8 +118,8 @@ func TestNewSwarm(t *testing.T) {
 				config.NetworkID = swap.AllowedNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s.backend == nil {
-					t.Error("backend is nil")
+				if s.swap == nil {
+					t.Error("swap is nil")
 				}
 			},
 		},
@@ -133,8 +130,8 @@ func TestNewSwarm(t *testing.T) {
 				config.SwapEnabled = false
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s.backend != nil {
-					t.Error("backend is not nil")
+				if s.swap != nil {
+					t.Error("swap is not nil")
 				}
 			},
 		},
@@ -219,19 +216,6 @@ func TestNewSwarmFailure(t *testing.T) {
 		configure func(*api.Config)
 		check     func(*testing.T, *Swarm, *api.Config)
 	}{
-		{
-			name: "with swap enabled and api endpoint blank",
-			configure: func(config *api.Config) {
-				config.SwapBackendURL = ""
-				config.SwapEnabled = true
-				config.NetworkID = swap.AllowedNetworkID
-			},
-			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s != nil {
-					t.Error("swarm struct is not nil")
-				}
-			},
-		},
 		{
 			name: "with swap enabled and default network ID",
 			configure: func(config *api.Config) {

@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 const (
@@ -34,7 +35,7 @@ const (
 
 var (
 	// control topic is used before symmetric key issuance completes
-	controlTopic = pss.Topic{0x00, 0x00, 0x00, 0x01}
+	controlTopic = message.Topic{0x00, 0x00, 0x00, 0x01}
 )
 
 // when code is MsgCodeStart, Payload is address
@@ -80,8 +81,8 @@ type sendBin struct {
 // only subscription address bins that match the address of a notification client have entries.
 type notifier struct {
 	bins      map[string]*sendBin
-	topic     pss.Topic // identifies the resource for pss receiver
-	threshold int       // amount of address bytes used in bins
+	topic     message.Topic // identifies the resource for pss receiver
+	threshold int           // amount of address bytes used in bins
 	updateC   <-chan []byte
 	quitC     chan struct{}
 }
@@ -191,7 +192,7 @@ func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []by
 	quitC := make(chan struct{})
 	c.notifiers[name] = &notifier{
 		bins:      make(map[string]*sendBin),
-		topic:     pss.BytesToTopic([]byte(name)),
+		topic:     message.NewTopic([]byte(name)),
 		threshold: threshold,
 		updateC:   updateC,
 		quitC:     quitC,
@@ -330,7 +331,7 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 
 func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
-	topic := pss.BytesToTopic(msg.Name)
+	topic := message.NewTopic(msg.Name)
 
 	// \TODO keep track of and add actual address
 	updaterAddr := pss.PssAddress([]byte{})

@@ -24,6 +24,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -45,20 +47,6 @@ func TestConfigDump(t *testing.T) {
 		t.Fatal(err)
 	}
 	swarm.Expect(string(out))
-	swarm.ExpectExit()
-}
-
-func TestConfigFailsSwapEnabledNoBackendURL(t *testing.T) {
-	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
-		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
-		fmt.Sprintf("--%s", SwarmSwapEnabledFlag.Name),
-		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
-	}
-
-	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SwarmErrSwapSetNoBackendURL + "\n")
 	swarm.ExpectExit()
 }
 
@@ -251,7 +239,10 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold + 1),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold + 1),
 	}
+
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {
@@ -294,6 +285,14 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 
 	if info.Cors != "*" {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
+	}
+
+	if info.SwapPaymentThreshold != (swap.DefaultPaymentThreshold + 1) {
+		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", swap.DefaultPaymentThreshold+1, info.SwapPaymentThreshold)
+	}
+
+	if info.SwapDisconnectThreshold != (swap.DefaultDisconnectThreshold + 1) {
+		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold+1, info.SwapDisconnectThreshold)
 	}
 
 	node.Shutdown()
