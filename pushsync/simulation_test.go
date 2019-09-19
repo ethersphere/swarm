@@ -157,7 +157,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 }
 
 // newServiceFunc constructs a minimal service needed for a simulation test for Push Sync, namely:
-// localstore, netstore, stream and pss
+// localstore, netstore, retrieval and pss. Bzz service is required on the same node.
 func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 	// setup localstore
 	n := ctx.Config.Node()
