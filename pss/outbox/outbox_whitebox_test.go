@@ -2,10 +2,14 @@ package outbox
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/pss/message"
 )
 
+const timeout = 2 * time.Second
+
+//Tests that a slot in the outbox is not freed until a message is successfully forwarded
 func TestFullOutbox(t *testing.T) {
 
 	outboxCapacity := 2
@@ -34,12 +38,16 @@ func TestFullOutbox(t *testing.T) {
 	//As we haven't signaled processC, the messages are still in the outbox
 	err = testOutbox.Enqueue(testOutboxMessage)
 	if err != ErrOutboxFull {
-		t.Fatalf("unexpected error, got %v, wanted %v", err, ErrOutboxFull)
+		t.Fatalf("unexpected error type, got %v, wanted %v", err, ErrOutboxFull)
 	}
 	processC <- struct{}{}
 
-	//There should be a slot again in the outbox to enqueue
-	<-testOutbox.slots
+	//There should be a slot in the outbox to enqueue
+	select {
+	case <-testOutbox.slots:
+	case <-time.After(timeout):
+		t.Fatalf("timeout waiting for a free slot")
+	}
 }
 
 var testOutboxMessage = NewOutboxMessage(&message.Message{

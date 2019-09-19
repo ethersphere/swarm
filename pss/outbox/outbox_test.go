@@ -3,15 +3,17 @@ package outbox_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/pss/outbox"
 )
 
+const timeout = 2 * time.Second
+
 func TestOutbox(t *testing.T) {
 
 	outboxCapacity := 2
-	failed := make([]interface{}, 0)
 	failedC := make(chan struct{})
 	successC := make(chan struct{})
 	continueC := make(chan struct{})
@@ -23,7 +25,6 @@ func TestOutbox(t *testing.T) {
 			successC <- struct{}{}
 			return nil
 		} else {
-			failed = append(failed, msg)
 			failedC <- struct{}{}
 			<-continueC
 			return errors.New("forced test error forwarding message")
@@ -53,11 +54,11 @@ func TestOutbox(t *testing.T) {
 		t.Fatalf("unexpected error enqueueing, %v", err)
 	}
 	//We wait for the forward function to fail
-	<-failedC
+	select {
+	case <-failedC:
+	case <-time.After(timeout):
+		t.Fatalf("timeout waiting for failedC")
 
-	failedMessages := len(failed)
-	if failedMessages != 1 {
-		t.Fatalf("unexpected number of failed messages, got %v, wanted 1", failedMessages)
 	}
 
 	// The message will be retried once we send to continueC, so first, we change the forward function
@@ -65,7 +66,11 @@ func TestOutbox(t *testing.T) {
 	continueC <- struct{}{}
 
 	//We wait for the retry and success
-	<-successC
+	select {
+	case <-successC:
+	case <-time.After(timeout):
+		t.Fatalf("timeout waiting for successC")
+	}
 }
 
 var testOutboxMessage = outbox.NewOutboxMessage(&message.Message{
