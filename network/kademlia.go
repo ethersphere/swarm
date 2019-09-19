@@ -251,7 +251,7 @@ type capabilityIndex struct {
 	searching color
 }
 
-// NewCGlobalIndex creates a new index for no capability with black starting color and nil capabilities
+// NewGlobalIndex creates a new index for no capability with black starting color and nil capabilities
 func NewGlobalIndex() *capabilityIndex {
 	return &capabilityIndex{
 		Capability: nil,
