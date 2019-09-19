@@ -18,6 +18,7 @@ package network
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/rand"
 	"os"
 	"testing"
@@ -379,7 +380,8 @@ func TestEachConnLB(t *testing.T) {
 	tk.On("00010101")
 	stats := make(map[string]int)
 	f := func(peer *Peer, po int) (bool, bool) {
-		stats[peer.String()] =  stats[peer.String()] + 1
+		key := hexutil.Encode(peer.Address()[:8])
+		stats[key] =  stats[key] + 1
 		// return false to only use one peer and mark it as used
 		return false, true
 	}
@@ -499,21 +501,21 @@ func TestOffEffectingAddressBookNormalNode(t *testing.T) {
 	// peer added to kademlia
 	tk.On("01000000")
 	// peer should be in the address book
-	if tk.addrs.Size() != 1 {
+	if tk.globalIndex.addrs.Size() != 1 {
 		t.Fatal("known peer addresses should contain 1 entry")
 	}
 	// peer should be among live connections
-	if tk.conns.Size() != 1 {
+	if tk.globalIndex.conns.Size() != 1 {
 		t.Fatal("live peers should contain 1 entry")
 	}
 	// remove peer from kademlia
 	tk.Off("01000000")
 	// peer should be in the address book
-	if tk.addrs.Size() != 1 {
+	if tk.globalIndex.addrs.Size() != 1 {
 		t.Fatal("known peer addresses should contain 1 entry")
 	}
 	// peer should not be among live connections
-	if tk.conns.Size() != 0 {
+	if tk.globalIndex.conns.Size() != 0 {
 		t.Fatal("live peers should contain 0 entry")
 	}
 }

@@ -88,8 +88,8 @@ func TestNetworkID(t *testing.T) {
 		//...check that their size of the kademlia is of the expected size
 		//the assumption is that it should be the size of the group minus 1 (the node itself)
 		for _, node := range netIDGroup {
-			if kademlias[node].addrs.Size() != len(netIDGroup)-1 {
-				t.Fatalf("Kademlia size has not expected peer size. Kademlia size: %d, expected size: %d", kademlias[node].addrs.Size(), len(netIDGroup)-1)
+			if kademlias[node].globalIndex.addrs.Size() != len(netIDGroup)-1 {
+				t.Fatalf("Kademlia size has not expected peer size. Kademlia size: %d, expected size: %d", kademlias[node].globalIndex.addrs.Size(), len(netIDGroup)-1)
 			}
 			kademlias[node].EachAddr(nil, 0, func(addr *BzzAddr, _ int) bool {
 				found := false
