@@ -116,12 +116,6 @@ func (p *Pusher) sync() {
 
 	// register handler for pssReceiptTopic on pss pubsub
 	deregister := p.ps.Register(pssReceiptTopic, false, func(msg []byte, _ *p2p.Peer) error {
-		// go func() {
-		// 	if err := p.handleReceiptMsg(msg); err != nil {
-		// 		log.Warn("handleReceiptMsg", "err", err)
-		// 	}
-		// }()
-		// return nil
 		return p.handleReceiptMsg(msg)
 	})
 	defer deregister()
