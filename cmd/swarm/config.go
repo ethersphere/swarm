@@ -208,10 +208,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	}
 	if swapBackendURL := ctx.GlobalString(SwarmSwapBackendURLFlag.Name); swapBackendURL != "" {
 		currentConfig.SwapBackendURL = swapBackendURL
-	
-	
+	}
 	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
-		currentConfig.SwapLogPath = swapLogPath 
+		currentConfig.SwapLogPath = swapLogPath
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
