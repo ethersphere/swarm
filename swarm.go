@@ -120,6 +120,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		}
 		// create the accounting objects
 		self.swap, err = swap.New(
+			config.SwapLogPath,
 			self.config.Path,
 			self.privateKey,
 			self.config.SwapBackendURL,
@@ -519,14 +520,14 @@ func (s *Swarm) APIs() []rpc.API {
 		// public APIs
 		{
 			Namespace: "bzz",
-			Version:   "3.0",
+			Version:   "4.0",
 			Service:   &Info{s.config},
 			Public:    true,
 		},
 		// admin APIs
 		{
 			Namespace: "bzz",
-			Version:   "3.0",
+			Version:   "4.0",
 			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.streamer),
 			Public:    false,
 		},

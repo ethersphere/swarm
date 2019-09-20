@@ -67,43 +67,26 @@ var (
 	ErrNoPeerFound = errors.New("no peer found")
 )
 
-// RetrievalPrices define the price matrix that correlates a message
-// type to a certain price (or price function)
-type RetrievalPrices struct {
-	priceMatrix map[reflect.Type]*protocols.Price
-}
-
-// Price implements the protocols.Price interface and returns the price for a specific message
-func (p *RetrievalPrices) Price(msg interface{}) *protocols.Price {
-	t := reflect.TypeOf(msg).Elem()
-	return p.priceMatrix[t]
-}
-
-func (p *RetrievalPrices) retrieveRequestPrice() uint64 {
-	return swap.RetrieveRequestPrice
-}
-
-func (p *RetrievalPrices) chunkDeliveryPrice() uint64 {
-	return swap.ChunkDeliveryPrice
-}
-
-// createPriceOracle sets up a matrix which can be queried to get
-// the price for a message via the Price method
-func (r *Retrieval) createPriceOracle() {
-	p := &RetrievalPrices{}
-	p.priceMatrix = map[reflect.Type]*protocols.Price{
-		reflect.TypeOf(ChunkDelivery{}): {
-			Value:   p.chunkDeliveryPrice(),
-			PerByte: true,
-			Payer:   protocols.Receiver,
-		},
-		reflect.TypeOf(RetrieveRequest{}): {
-			Value:   p.retrieveRequestPrice(),
-			PerByte: false,
-			Payer:   protocols.Sender,
-		},
+// Price is the method through which a message type marks itself
+// as implementing the protocols.Price protocol and thus
+// as swap-enabled message
+func (rr *RetrieveRequest) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   swap.RetrieveRequestPrice,
+		PerByte: false,
+		Payer:   protocols.Sender,
 	}
-	r.prices = p
+}
+
+// Price is the method through which a message type marks itself
+// as implementing the protocols.Price protocol and thus
+// as swap-enabled message
+func (cd *ChunkDelivery) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   swap.ChunkDeliveryPrice,
+		PerByte: true,
+		Payer:   protocols.Receiver,
+	}
 }
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
@@ -113,7 +96,6 @@ type Retrieval struct {
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
 	spec     *protocols.Spec
-	prices   protocols.Prices
 	logger   log.Logger
 	quit     chan struct{}
 }
@@ -128,10 +110,9 @@ func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance pr
 		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
 	}
-	r.createPriceOracle()
 	if balance != nil && !reflect.ValueOf(balance).IsNil() {
 		// swap is enabled, so setup the hook
-		r.spec.Hook = protocols.NewAccounting(balance, r.prices)
+		r.spec.Hook = protocols.NewAccounting(balance)
 	}
 	return r
 }

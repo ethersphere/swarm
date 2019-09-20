@@ -36,7 +36,13 @@ import (
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	colorable "github.com/mattn/go-colorable"
 )
+
+func init() {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
 
 /*
 TestHandshake creates two mock nodes and initiates an exchange;

@@ -110,17 +110,23 @@ func init() {
 	glogger = log.NewGlogHandler(ostream)
 }
 
+// rotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
+// the files are split based on the limit parameter expressed in bytes
+func rotatingFileHandler(logdir string) (log.Handler, error) {
+	return log.RotatingFileHandler(
+		logdir,
+		262144,
+		log.JSONFormatOrderedEx(false, true),
+	)
+}
+
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context, logdir string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
 	if logdir != "" {
-		rfh, err := log.RotatingFileHandler(
-			logdir,
-			262144,
-			log.JSONFormatOrderedEx(false, true),
-		)
+		rfh, err := rotatingFileHandler(logdir)
 		if err != nil {
 			return err
 		}

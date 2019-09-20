@@ -21,12 +21,12 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 

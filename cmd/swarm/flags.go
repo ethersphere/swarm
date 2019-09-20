@@ -17,7 +17,10 @@
 // Command feed allows the user to create and update signed Swarm feeds
 package main
 
-import cli "gopkg.in/urfave/cli.v1"
+import (
+	"github.com/ethersphere/swarm/network"
+	cli "gopkg.in/urfave/cli.v1"
+)
 
 var (
 	SwarmSwapChequebookAddrFlag = cli.StringFlag{
@@ -52,7 +55,8 @@ var (
 	}
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:   "bzznetworkid",
-		Usage:  "Network identifier (integer, default 3=swarm testnet)",
+		Usage:  "Numerical network identifier. The default is the public swarm testnet",
+		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
 	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
@@ -74,6 +78,11 @@ var (
 		Name:   "swap-disconnect-threshold",
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
+	}
+	SwarmSwapLogPathFlag = cli.StringFlag{
+		Name:   "swap-audit-logpath",
+		Usage:  "Write execution logs of swap audit to the given directory",
+		EnvVar: SwarmEnvSwapLogPath,
 	}
 	SwarmSyncDisabledFlag = cli.BoolTFlag{
 		Name:   "nosync",

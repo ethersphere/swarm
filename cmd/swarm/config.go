@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -36,6 +35,7 @@ import (
 	"github.com/naoina/toml"
 
 	bzzapi "github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/network"
 )
 
 var (
@@ -69,6 +69,7 @@ const (
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
+	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
 	SwarmEnvSyncDisable             = "SWARM_SYNC_DISABLE"
 	SwarmEnvSyncUpdateDelay         = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SwarmEnvMaxStreamPeerServers    = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
@@ -181,14 +182,10 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if chbookaddr := ctx.GlobalString(SwarmSwapChequebookAddrFlag.Name); chbookaddr != "" {
 		currentConfig.Contract = common.HexToAddress(chbookaddr)
 	}
-	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
-		id, err := strconv.ParseUint(networkid, 10, 64)
-		if err != nil {
-			utils.Fatalf("invalid cli flag %s: %v", SwarmNetworkIdFlag.Name, err)
-		}
-		if id != 0 {
-			currentConfig.NetworkID = id
-		}
+
+	networkid := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
+	if networkid != 0 && networkid != network.DefaultNetworkID {
+		currentConfig.NetworkID = networkid
 	}
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		if datadir := ctx.GlobalString(utils.DataDirFlag.Name); datadir != "" {
@@ -207,6 +204,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	}
 	if swapBackendURL := ctx.GlobalString(SwarmSwapBackendURLFlag.Name); swapBackendURL != "" {
 		currentConfig.SwapBackendURL = swapBackendURL
+	}
+	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
+		currentConfig.SwapLogPath = swapLogPath
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold

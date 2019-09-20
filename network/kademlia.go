@@ -68,7 +68,8 @@ type KadParams struct {
 	RetryExponent     int   // exponent to multiply retry intervals with
 	MaxRetries        int   // maximum number of redial attempts
 	// function to sanction or prevent suggesting a peer
-	Reachable func(*BzzAddr) bool `json:"-"`
+	Reachable    func(*BzzAddr) bool      `json:"-"`
+	Capabilities *capability.Capabilities `json:"-"`
 }
 
 // NewKadParams returns a params struct with default values
@@ -81,6 +82,7 @@ func NewKadParams() *KadParams {
 		RetryInterval:     4200000000, // 4.2 sec
 		MaxRetries:        42,
 		RetryExponent:     2,
+		Capabilities:      capability.NewCapabilities(),
 	}
 }
 
@@ -113,6 +115,9 @@ type KademliaInfo struct {
 func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
+	}
+	if params.Capabilities == nil {
+		params.Capabilities = capability.NewCapabilities()
 	}
 	k := &Kademlia{
 		base:            addr,
@@ -224,6 +229,7 @@ type capabilityIndex struct {
 	*capability.Capability
 	conns *pot.Pot
 	addrs *pot.Pot
+	depth int
 }
 
 // NewCapabilityIndex creates a new capability index with a copy the provided capabilities array
@@ -450,6 +456,10 @@ func (k *Kademlia) setNeighbourhoodDepth() {
 		k.nDepth = nDepth
 		changed = true
 	}
+	// TODO: when hive is refactored, notifies should be made for depth change in any cap index
+	for _, idx := range k.capabilityIndex {
+		idx.depth = capabilityDepthForPot(idx, k.NeighbourhoodSize, k.base)
+	}
 	k.nDepthMu.Unlock()
 
 	if len(k.nDepthSig) > 0 && changed {
@@ -463,6 +473,7 @@ func (k *Kademlia) setNeighbourhoodDepth() {
 			}
 		}
 	}
+
 }
 
 // NeighbourhoodDepth returns the value calculated by depthForPot function
@@ -471,6 +482,16 @@ func (k *Kademlia) NeighbourhoodDepth() int {
 	k.nDepthMu.RLock()
 	defer k.nDepthMu.RUnlock()
 	return k.nDepth
+}
+
+func (k *Kademlia) NeighbourhoodDepthCapability(s string) (int, error) {
+	k.nDepthMu.RLock()
+	defer k.nDepthMu.RUnlock()
+	idx, ok := k.capabilityIndex[s]
+	if !ok {
+		return -1, fmt.Errorf("Unknown capability index %v", s)
+	}
+	return idx.depth, nil
 }
 
 // SubscribeToNeighbourhoodDepthChange returns the channel that signals
@@ -629,6 +650,10 @@ func neighbourhoodRadiusForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []by
 	}
 	p.EachNeighbour(pivotAddr, Pof, f)
 	return depth
+}
+
+func capabilityDepthForPot(idx *capabilityIndex, neighbourhoodSize int, pivotAddr []byte) (depth int) {
+	return depthForPot(idx.conns, neighbourhoodSize, pivotAddr)
 }
 
 // depthForPot returns the depth for the pot
