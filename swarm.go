@@ -120,6 +120,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		}
 		// create the accounting objects
 		self.swap, err = swap.New(
+			config.SwapLogPath,
 			self.config.Path,
 			self.privateKey,
 			self.config.SwapBackendURL,
