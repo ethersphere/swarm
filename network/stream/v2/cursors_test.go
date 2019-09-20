@@ -58,7 +58,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
 			InitialChunkCount: chunkCount,
 		}),
-	}, false)
+	}, true)
 	defer sim.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
@@ -121,7 +121,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
 			InitialChunkCount: chunkCount,
 		}),
-	}, false)
+	}, true)
 	defer sim.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
@@ -215,7 +215,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		serviceNameStream: newSyncSimServiceFunc(nil),
-	}, false)
+	}, true)
 	defer sim.Close()
 
 	// load the snapshot
@@ -343,7 +343,7 @@ func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulati
 
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		serviceNameStream: newSyncSimServiceFunc(nil),
-	}, false)
+	}, true)
 
 	nodeIDs, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
@@ -521,7 +521,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 	}
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		serviceNameStream: newSyncSimServiceFunc(opts),
-	}, false)
+	}, true)
 	defer sim.Close()
 
 	// create the first node with the non mock initialiser
