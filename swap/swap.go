@@ -94,15 +94,15 @@ func newLogger(logpath string, selfAddress common.Address) log.Logger {
 
 	if err != nil {
 		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
-		//sets a fallback logger, it will use the swarm logger.
+		// use the default swarm logger as a fallback
 		swapLogger.SetHandler(lh)
 		return swapLogger
 	}
 
-	//Filters messages with the correct logLevel for swap
+	// filter messages with the correct log level for swap
 	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
 
-	//Dispatches the logs to the default swarm log and also the filtered swap file logger.
+	// dispatch the logs to the default swarm log and also the filtered swap logger
 	swapLogger.SetHandler(log.MultiHandler(lh, rfh))
 
 	return swapLogger
