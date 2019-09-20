@@ -165,6 +165,7 @@ const (
 	balancePrefix        = "balance_"
 	sentChequePrefix     = "sent_cheque_"
 	receivedChequePrefix = "received_cheque_"
+	usedChequebookKey    = "used_chequebook"
 )
 
 // returns the store key for retrieving a peer's balance
@@ -437,41 +438,56 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 }
 
 // StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
-func (s *Swap) StartChequebook(chequebookAddr common.Address) error {
-	if chequebookAddr != (common.Address{}) {
-		if err := s.BindToContractAt(chequebookAddr); err != nil {
-			return err
-		}
-		log.Info("Using the provided chequebook", "chequebookAddr", chequebookAddr)
-	} else {
-		if err := s.Deploy(context.Background()); err != nil {
-			return err
-		}
-		log.Info("New SWAP contract deployed", "contract info", s.DeploySuccess())
+func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
+	var toUseChequebook common.Address
+	// attempt to read chequebook from disk
+	err := s.store.Get(usedChequebookKey, &toUseChequebook)
+	// error reading from disk
+	if err != nil && err != state.ErrNotFound {
+		return fmt.Errorf("Error reading previously used chequebook: %s", err)
 	}
-	return nil
+	// nothing written to state disk before, no flag provided: deploying new chequebook
+	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
+		chequebook, err := s.Deploy(context.TODO())
+		if err != nil {
+			return fmt.Errorf("Error deploying chequebook: %s", err)
+		}
+		toUseChequebook = chequebook
+	}
+	// read from state, but provided flag is not the same
+	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != toUseChequebook) {
+		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
+	}
+	if chequebookAddrFlag != (common.Address{}) {
+		toUseChequebook = chequebookAddrFlag
+	}
+	log.Info("Using the chequebook", "chequebookAddr", toUseChequebook)
+	return s.bindToContractAt(toUseChequebook)
 }
 
-// BindToContractAt binds an instance of an already existing chequebook contract at address and sets chequebookAddr
-func (s *Swap) BindToContractAt(address common.Address) (err error) {
-
+// BindToContractAt binds to an instance of an already existing chequebook contract at address
+func (s *Swap) bindToContractAt(address common.Address) (err error) {
+	// validate whether address is a chequebook
 	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
 		return fmt.Errorf("contract validation for %v failed: %v", address, err)
 	}
+	// get the instance and save it on swap.contract
 	s.contract, err = contract.InstanceAt(address, s.backend)
 	if err != nil {
 		return err
 	}
+	s.store.Put(usedChequebookKey, address)
 	return nil
 }
 
 // Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context) error {
+func (s *Swap) Deploy(ctx context.Context) (common.Address, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
+<<<<<<< HEAD
 	auditLog.Info("deploying new swap", "owner", opts.From.Hex())
 	address, err := s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
@@ -481,6 +497,10 @@ func (s *Swap) Deploy(ctx context.Context) error {
 	auditLog.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
+=======
+	log.Info("deploying new swap", "owner", opts.From.Hex())
+	return s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
+>>>>>>> 45db7f217... swap, contracts/swap: save used chequebook to state and attempt to load from state at boot-up
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
@@ -491,8 +511,13 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 			time.Sleep(deployDelay)
 		}
 
+<<<<<<< HEAD
 		if s.contract, tx, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
 			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+=======
+		if addr, tx, _, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+>>>>>>> 45db7f217... swap, contracts/swap: save used chequebook to state and attempt to load from state at boot-up
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
