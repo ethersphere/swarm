@@ -34,6 +34,7 @@ import (
 )
 
 var (
+	CapabilityID              = capability.CapabilityID(0)
 	capabilitiesRetrieve      = 0
 	capabilitiesPush          = 1
 	capabilitiesRelayRetrieve = 4
@@ -82,7 +83,7 @@ func init() {
 
 // temporary convenience functions for legacy "LightNode"
 func newLightCapability() *capability.Capability {
-	c := capability.NewCapability(0, 16)
+	c := capability.NewCapability(CapabilityID, 16)
 	c.Set(capabilitiesRetrieve)
 	c.Set(capabilitiesPush)
 	return c
@@ -93,7 +94,7 @@ func isLightCapability(c *capability.Capability) bool {
 
 // temporary convenience functions for legacy "full node"
 func newFullCapability() *capability.Capability {
-	c := capability.NewCapability(0, 16)
+	c := capability.NewCapability(CapabilityID, 16)
 	c.Set(capabilitiesRetrieve)
 	c.Set(capabilitiesPush)
 	c.Set(capabilitiesRelayRetrieve)
@@ -153,6 +154,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 		bzz.retrievalSpec = nil
 	}
 
+	bzz.localAddr.Capabilities = kad.Capabilities
 	// temporary soon-to-be-legacy light/full, as above
 	if config.LightNode {
 		bzz.localAddr.Capabilities.Add(newLightCapability())
@@ -229,11 +231,18 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 // * hive
 // Bzz implements the node.Service interface
 func (b *Bzz) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "hive",
-		Version:   "3.0",
-		Service:   b.Hive,
-	}}
+	return []rpc.API{
+		{
+			Namespace: "hive",
+			Version:   "3.0",
+			Service:   b.Hive,
+		},
+		{
+			Namespace: "bzz",
+			Version:   "4.0",
+			Service:   capability.NewAPI(b.Kademlia.Capabilities),
+		},
+	}
 }
 
 // RunProtocol is a wrapper for swarm subprotocols
