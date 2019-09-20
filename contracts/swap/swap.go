@@ -45,11 +45,10 @@ type Backend interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 }
 
-// Deploy deploys an instance of the underlying contract and returns its `Contract` abstraction
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
-	addr, tx, s, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: s, address: addr}
-	return c, tx, err
+// Deploy deploys an instance of the underlying contract and returns its address
+func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (common.Address, *types.Transaction, *contract.SimpleSwap, error) {
+	addr, tx, i, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
+	return addr, tx, i, err
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
