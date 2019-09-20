@@ -453,7 +453,7 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 type ValConsumer func(Val) bool
 
 // ValIterator is a function that iterates values and executes for each of them a supplied ValConsumer.
-// it returns the result of the last ValConsumer executed. Usually is the pin of a pot but if could be the last element
+// it returns the result of the last ValConsumer executed. Usually is the pin of a pot but it could be the last element
 // executed in some other order. It could hint users of this interface to continue iterating other Val collections.
 // Iterator<Val>  Iterator<T> => func (Consumer<T>) bool
 type ValIterator func(ValConsumer) bool
@@ -522,19 +522,19 @@ func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin B
 	valProximityOrder, _ := pof(t.pin, pivotVal, t.po)
 	_, pivotBinIndex := t.getPos(valProximityOrder)
 	var size int
-	var pot *Pot
+	var subPot *Pot
 	// Consume all bins before the pivotVal bin (or all bins if the pivotVal is the t.pin)
 	// Always filtering bins with proximityOrder < minProximityOrder
 	for i := 0; i < pivotBinIndex; i++ {
-		pot = t.bins[i]
-		size += pot.size
-		if pot.po < minProximityOrder {
+		subPot = t.bins[i]
+		size += subPot.size
+		if subPot.po < minProximityOrder {
 			continue
 		}
 		bin := &Bin{
-			ProximityOrder: pot.po,
-			Size:           pot.size,
-			ValIterator:    pot.each,
+			ProximityOrder: subPot.po,
+			Size:           subPot.size,
+			ValIterator:    subPot.each,
 		}
 		if !consumeBin(bin) {
 			return
@@ -557,14 +557,15 @@ func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin B
 		return
 	}
 
-	pot = t.bins[pivotBinIndex]
+	subPot = t.bins[pivotBinIndex]
 
 	spo := valProximityOrder
-	if pot.po == valProximityOrder {
+	if subPot.po == valProximityOrder {
 		spo++
-		size += pot.size
+		size += subPot.size
 	}
 	// Consuming all bins after the bin where the pivotVal is
+	// (All bins will be provided to the user as one virtual bin with po = valProximityOrder)
 	if valProximityOrder >= minProximityOrder {
 		bin := &Bin{
 			ProximityOrder: valProximityOrder,
@@ -578,8 +579,8 @@ func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin B
 		}
 	}
 	// Consume bin where the pivotVal is
-	if pot.po == valProximityOrder {
-		pot.eachBin(pivotVal, pof, minProximityOrder, consumeBin)
+	if subPot.po == valProximityOrder {
+		subPot.eachBin(pivotVal, pof, minProximityOrder, consumeBin)
 	}
 
 }
