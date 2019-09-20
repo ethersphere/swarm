@@ -55,8 +55,8 @@ type Config struct {
 	// Swap configs
 	SwapBackendURL          string         // Ethereum API endpoint
 	SwapEnabled             bool           // whether SWAP incentives are enabled
-	SwapPaymentThreshold    uint64         // balance in Honey that a peer owes from us at which payment will be initiated to peer
-	SwapDisconnectThreshold uint64         // balance in Honey that we owe from a peer at which the node disconnects
+	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
+	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
 	Contract                common.Address // address of the chequebook contract
 	// end of Swap configs
 

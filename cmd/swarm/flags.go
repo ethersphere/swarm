@@ -67,12 +67,12 @@ var (
 	}
 	SwarmSwapPaymentThresholdFlag = cli.Uint64Flag{
 		Name:   "swap-payment-threshold",
-		Usage:  "honey amount indebted to a peer at which you will initiate payment",
+		Usage:  "honey amount at which payment is triggered",
 		EnvVar: SwarmEnvSwapPaymentThreshold,
 	}
 	SwarmSwapDisconnectThresholdFlag = cli.Uint64Flag{
 		Name:   "swap-disconnect-threshold",
-		Usage:  "honey amount at debt of a peer at which you will disconnect",
+		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
 	SwarmSyncDisabledFlag = cli.BoolTFlag{

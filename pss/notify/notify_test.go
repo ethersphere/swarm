@@ -17,6 +17,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
 )
@@ -106,7 +107,7 @@ func TestStart(t *testing.T) {
 	}
 
 	rsrcName := "foo.eth"
-	rsrcTopic := pss.BytesToTopic([]byte(rsrcName))
+	rsrcTopic := message.NewTopic([]byte(rsrcName))
 
 	// wait for kademlia table to populate
 	time.Sleep(time.Second)
@@ -236,7 +237,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{

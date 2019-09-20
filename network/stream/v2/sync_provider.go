@@ -334,7 +334,7 @@ func (s *syncProvider) updateSyncSubscriptions(p *Peer, subBins, quitBins []int)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := p.Send(ctx, StreamInfoReq{Streams: streams}); err != nil {
+		if err := p.Send(ctx, &StreamInfoReq{Streams: streams}); err != nil {
 			p.logger.Error("error establishing subsequent subscription", "err", err)
 			p.Drop()
 			return

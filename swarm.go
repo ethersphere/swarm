@@ -51,6 +51,7 @@ import (
 	"github.com/ethersphere/swarm/network/stream/v2"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
+	pssmessage "github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -200,7 +201,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr) // nodeID.Bytes())
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
@@ -220,7 +221,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, retrieval.Spec, self.streamer.Run, self.retrieval.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, self.retrieval.Spec(), self.streamer.Run, self.retrieval.Run)
 
 	self.bzzEth = bzzeth.New()
 
@@ -559,7 +560,7 @@ func (s *Swarm) APIs() []rpc.API {
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
-func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
+func (s *Swarm) RegisterPssProtocol(topic *pssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
 	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 

@@ -57,8 +57,8 @@ type Swap struct {
 	params              *Params            // economic and operational parameters
 	contract            swap.Contract      // reference to the smart contract
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
-	paymentThreshold    int64              // amount of debt to a peer at which the node will initiate payment
-	disconnectThreshold int64              // amount of debt of a peer at which the node will disconnect
+	paymentThreshold    int64              // honey amount at which a payment is triggered
+	disconnectThreshold int64              // honey amount at which a peer disconnects
 }
 
 // Owner encapsulates information related to accessing the contract
