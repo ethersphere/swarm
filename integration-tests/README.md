@@ -13,7 +13,7 @@ This folder contains the test environments, as well as the integration tests par
 2. Setup a private deployment for a push-sync integration test
 
 ```
-helmsman -apply -f tony.yaml
+helmsman -apply -f deployment.yaml
 ```
 
 3. Apply a smoke test job:
@@ -28,7 +28,7 @@ kubectl apply -f a.yaml -n pushsync
 1. Remove the `swarm` deployment
 
 ```
-helm del --purge swarm-private --tiller-namespace tony
+helm del --purge swarm-private --tiller-namespace pushsync
 ```
 
 2. Remove the smoke test job
