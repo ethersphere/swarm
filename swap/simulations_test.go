@@ -88,6 +88,30 @@ func newTestSpec() *protocols.Spec {
 	}
 }
 
+func (m *testMsgBySender) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   1000, // arbitrary price for now
+		PerByte: true,
+		Payer:   protocols.Sender,
+	}
+}
+
+func (m *testMsgByReceiver) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   100, // arbitrary price for now
+		PerByte: false,
+		Payer:   protocols.Receiver,
+	}
+}
+
+func (m *testMsgBigPrice) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   DefaultPaymentThreshold + 1,
+		PerByte: false,
+		Payer:   protocols.Sender,
+	}
+}
+
 // testService encapsulates objects needed for the simulation
 type testService struct {
 	lock  sync.Mutex
@@ -142,7 +166,6 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			dir := params.dirs[params.count]
 			// every node is a different instance of a Swap and gets a different entry in the map
 			params.count++
-			// to create the accounting, we also need a `Price` instance
 			ts.spec = newTestSpec()
 			// create the accounting instance and assign to the spec
 			ts.spec.Hook = protocols.NewAccounting(balance)

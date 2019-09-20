@@ -1733,6 +1733,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 }
 
 func TestSwapLogToFile(t *testing.T) {
+<<<<<<< HEAD
 	// create a log dir
 	logDirDebitor, err := ioutil.TempDir("", "swap_test_log")
 	log.Debug("creating swap log dir")
@@ -1751,6 +1752,14 @@ func TestSwapLogToFile(t *testing.T) {
 	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
 	// we are only checking one of the two nodes for logs
 	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params, testBackend)
+=======
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
+	// create both test swap accounts
+	creditorSwap, storeDirCreditor, logDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
+	debitorSwap, storeDirDebitor, logDirDebitor := newBaseTestSwap(t, ownerKey, testBackend)
+>>>>>>> swap: rebased to latest master
 
 	clean := func() {
 		creditorSwap.Close()
