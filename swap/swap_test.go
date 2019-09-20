@@ -1004,15 +1004,21 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap) (err error) {
+func testDeploy(ctx context.Context, swap *Swap) error {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	address, _, _, err := cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	if err != nil {
+		return err
+	}
+	swap.contract, err = cswap.InstanceAt(address, swap.backend)
+	if err != nil {
+		return err
+	}
 	testBackend.Commit()
-
-	return err
+	return nil
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
