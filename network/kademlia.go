@@ -686,7 +686,7 @@ func (k *Kademlia) eachConnLB(base []byte, index *capabilityIndex, o int, f func
 			if markUsed {
 				// count as used
 				entry.flipUse()
-				log.Warn("Using peer", "peer", hexutil.Encode(entry.BzzAddr.OAddr[:8]), "color", flipColor(entry.use), "newColor", entry.use)
+				log.Debug("Using peer", "peer", hexutil.Encode(entry.BzzAddr.OAddr[:8]), "color", flipColor(entry.use), "newColor", entry.use)
 			}
 			lastContinue = continueIterating
 			return continueIterating
