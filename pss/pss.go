@@ -52,6 +52,7 @@ const (
 	defaultOutboxCapacity      = 100000
 	protocolName               = "pss"
 	protocolVersion            = 2
+	CapabilityID               = capability.CapabilityID(1)
 	capabilitiesSend           = 0 // node sends pss messages
 	capabilitiesReceive        = 1 // node processes pss messages
 	capabilitiesForward        = 4 // node forwards pss messages on behalf of network
@@ -272,7 +273,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	})
 	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
 
-	cp := capability.NewCapability(1, 8)
+	cp := capability.NewCapability(CapabilityID, 8)
 	cp.Set(capabilitiesSend)
 	cp.Set(capabilitiesReceive)
 	cp.Set(capabilitiesPartial)

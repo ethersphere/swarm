@@ -34,6 +34,7 @@ import (
 )
 
 var (
+	CapabilityID              = capability.CapabilityID(0)
 	capabilitiesRetrieve      = 0
 	capabilitiesPush          = 1
 	capabilitiesRelayRetrieve = 4
@@ -82,7 +83,7 @@ func init() {
 
 // temporary convenience functions for legacy "LightNode"
 func newLightCapability() *capability.Capability {
-	c := capability.NewCapability(0, 16)
+	c := capability.NewCapability(CapabilityID, 16)
 	c.Set(capabilitiesRetrieve)
 	c.Set(capabilitiesPush)
 	return c
@@ -93,7 +94,7 @@ func isLightCapability(c *capability.Capability) bool {
 
 // temporary convenience functions for legacy "full node"
 func newFullCapability() *capability.Capability {
-	c := capability.NewCapability(0, 16)
+	c := capability.NewCapability(CapabilityID, 16)
 	c.Set(capabilitiesRetrieve)
 	c.Set(capabilitiesPush)
 	c.Set(capabilitiesRelayRetrieve)
