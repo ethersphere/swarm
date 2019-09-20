@@ -48,12 +48,6 @@ func (b *ENRAddrEntry) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-type ENRLightNodeEntry bool
-
-func (b ENRLightNodeEntry) ENRKey() string {
-	return "bzzlightnode"
-}
-
 type ENRBootNodeEntry bool
 
 func (b ENRBootNodeEntry) ENRKey() string {
@@ -61,22 +55,19 @@ func (b ENRBootNodeEntry) ENRKey() string {
 }
 
 func getENRBzzPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *protocols.Spec) *BzzPeer {
-	var lightnode ENRLightNodeEntry
 	var bootnode ENRBootNodeEntry
 
 	// retrieve the ENR Record data
 	record := p.Node().Record()
-	record.Load(&lightnode)
 	record.Load(&bootnode)
 
-	// get the address; separate function as long as we need swarm/network:NewAddr() to call it
+	// get the address; separate function as long as we need swarm/network:NewBzzAddrFromEnode() to call it
 	addr := getENRBzzAddr(p.Node())
 
 	// build the peer using the retrieved data
 	return &BzzPeer{
-		Peer:      protocols.NewPeer(p, rw, spec),
-		LightNode: bool(lightnode),
-		BzzAddr:   addr,
+		Peer:    protocols.NewPeer(p, rw, spec),
+		BzzAddr: addr,
 	}
 }
 
@@ -86,8 +77,5 @@ func getENRBzzAddr(nod *enode.Node) *BzzAddr {
 	record := nod.Record()
 	record.Load(&addr)
 
-	return &BzzAddr{
-		OAddr: addr.data,
-		UAddr: []byte(nod.String()),
-	}
+	return NewBzzAddr(addr.data, []byte(nod.String()))
 }

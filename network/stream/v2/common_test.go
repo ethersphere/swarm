@@ -110,22 +110,16 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 	}
 	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 		n := ctx.Config.Node()
-		addr := network.NewAddr(n)
+		addr := network.NewBzzAddrFromEnode(n)
 
 		localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		var kad *network.Kademlia
-
 		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
-		if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
-			kad = kv.(*network.Kademlia)
-		} else {
-			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
-			bucket.Store(simulation.BucketKeyKademlia, kad)
-		}
+		k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+		kad := k.(*network.Kademlia)
 
 		netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 		lnetStore := storage.NewLNetStore(netStore)
@@ -133,7 +127,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(bucketKeyLocalStore, localStore)
 
-		ret := retrieval.New(kad, netStore, kad.BaseAddr())
+		ret := retrieval.New(kad, netStore, kad.BaseAddr(), nil)
 		netStore.RemoteGet = ret.RequestFromPeers
 
 		if o.InitialChunkCount > 0 {

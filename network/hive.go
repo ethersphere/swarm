@@ -209,7 +209,8 @@ func (h *Hive) PeerInfo(id enode.ID) interface{} {
 	if p == nil {
 		return nil
 	}
-	addr := NewAddr(p.Node())
+	// TODO this is bogus, the overlay address will not be correct
+	addr := NewBzzAddrFromEnode(p.Node())
 	return struct {
 		OAddr hexutil.Bytes
 		UAddr hexutil.Bytes

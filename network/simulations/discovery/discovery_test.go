@@ -491,7 +491,7 @@ func triggerChecks(trigger chan enode.ID, net *simulations.Network, id enode.ID)
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	addr := network.NewAddr(ctx.Config.Node())
+	addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 
 	kp := network.NewKadParams()
 	kp.NeighbourhoodSize = testNeighbourhoodSize

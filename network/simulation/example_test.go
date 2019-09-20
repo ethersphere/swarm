@@ -36,7 +36,7 @@ func ExampleSimulation_WaitTillHealthy() {
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{

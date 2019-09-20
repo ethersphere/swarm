@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 // Wrapper for receiving pss messages when using the pss API
@@ -50,7 +51,7 @@ func NewAPI(ps *Pss) *API {
 //
 // All incoming messages to the node matching this topic will be encapsulated in the APIMsg
 // struct and sent to the subscriber
-func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool, prox bool) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic message.Topic, raw bool, prox bool) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -90,7 +91,7 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool, prox bool
 	return psssub, nil
 }
 
-func (pssapi *API) GetAddress(topic Topic, asymmetric bool, key string) (PssAddress, error) {
+func (pssapi *API) GetAddress(topic message.Topic, asymmetric bool, key string) (PssAddress, error) {
 	var addr PssAddress
 	if asymmetric {
 		peer, ok := pssapi.Pss.pubKeyPool[key][topic]
@@ -122,7 +123,7 @@ func (pssapi *API) GetPublicKey() (keybytes hexutil.Bytes) {
 }
 
 // Set Public key to associate with a particular Pss peer
-func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic Topic, addr PssAddress) error {
+func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic message.Topic, addr PssAddress) error {
 	pk, err := pssapi.Pss.Crypto.UnmarshalPublicKey(pubkey)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkey)
@@ -139,50 +140,50 @@ func (pssapi *API) GetSymmetricKey(symkeyid string) (hexutil.Bytes, error) {
 	return hexutil.Bytes(symkey), err
 }
 
-func (pssapi *API) GetSymmetricAddressHint(topic Topic, symkeyid string) (PssAddress, error) {
+func (pssapi *API) GetSymmetricAddressHint(topic message.Topic, symkeyid string) (PssAddress, error) {
 	return pssapi.Pss.symKeyPool[symkeyid][topic].address, nil
 }
 
-func (pssapi *API) GetAsymmetricAddressHint(topic Topic, pubkeyid string) (PssAddress, error) {
+func (pssapi *API) GetAsymmetricAddressHint(topic message.Topic, pubkeyid string) (PssAddress, error) {
 	return pssapi.Pss.pubKeyPool[pubkeyid][topic].address, nil
 }
 
-func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
-	topicbytes := BytesToTopic([]byte(topicstring))
+func (pssapi *API) StringToTopic(topicstring string) (message.Topic, error) {
+	topicbytes := message.NewTopic([]byte(topicstring))
 	if topicbytes == rawTopic {
 		return rawTopic, errors.New("Topic string hashes to 0x00000000 and cannot be used")
 	}
 	return topicbytes, nil
 }
 
-func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {
+func (pssapi *API) SendAsym(pubkeyhex string, topic message.Topic, msg hexutil.Bytes) error {
 	if err := validateMsg(msg); err != nil {
 		return err
 	}
 	return pssapi.Pss.SendAsym(pubkeyhex, topic, msg[:])
 }
 
-func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
+func (pssapi *API) SendSym(symkeyhex string, topic message.Topic, msg hexutil.Bytes) error {
 	if err := validateMsg(msg); err != nil {
 		return err
 	}
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }
 
-func (pssapi *API) SendRaw(addr hexutil.Bytes, topic Topic, msg hexutil.Bytes) error {
+func (pssapi *API) SendRaw(addr hexutil.Bytes, topic message.Topic, msg hexutil.Bytes) error {
 	if err := validateMsg(msg); err != nil {
 		return err
 	}
 	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:])
 }
 
-func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
+func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]message.Topic, error) {
 	topics, _, err := pssapi.Pss.GetPublickeyPeers(pubkeyhex)
 	return topics, err
 
 }
 
-func (pssapi *API) GetPeerAddress(pubkeyhex string, topic Topic) (PssAddress, error) {
+func (pssapi *API) GetPeerAddress(pubkeyhex string, topic message.Topic) (PssAddress, error) {
 	return pssapi.Pss.getPeerAddress(pubkeyhex, topic)
 }
 

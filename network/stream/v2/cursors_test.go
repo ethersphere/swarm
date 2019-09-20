@@ -68,31 +68,51 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	getCursorsCopy := func(sim *simulation.Simulation, idOne, idOther enode.ID) map[string]uint64 {
+		r := nodeRegistry(sim, idOne)
+		if r == nil {
+			return nil
+		}
+		p := r.getPeer(idOther)
+		if p == nil {
+			return nil
+		}
+		return p.getCursorsCopy()
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		if len(nodeIDs) != nodeCount {
 			return errors.New("not enough nodes up")
 		}
 
-		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
+		// periodically check for cursors
+		for i := 0; i < 100; i++ {
+			// wait for the nodes to exchange StreamInfo messages
+			time.Sleep(10 * time.Millisecond)
 
-		idOne := nodeIDs[0]
-		idOther := nodeIDs[1]
-		onesCursors := nodeRegistry(sim, idOne).getPeer(idOther).getCursorsCopy()
-		othersCursors := nodeRegistry(sim, idOther).getPeer(idOne).getCursorsCopy()
+			idOne := nodeIDs[0]
+			idOther := nodeIDs[1]
+			onesCursors := getCursorsCopy(sim, idOne, idOther)
+			othersCursors := getCursorsCopy(sim, idOther, idOne)
 
-		onesBins := nodeInitialBinIndexes(sim, idOne)
-		othersBins := nodeInitialBinIndexes(sim, idOther)
+			onesBins := nodeInitialBinIndexes(sim, idOne)
+			othersBins := nodeInitialBinIndexes(sim, idOther)
 
-		if err := compareNodeBinsToStreams(t, onesCursors, othersBins); err != nil {
-			return err
+			err1 := compareNodeBinsToStreams(t, onesCursors, othersBins)
+			if err1 != nil {
+				err = err1 // set the resulting error when the loop is done
+			}
+			err2 := compareNodeBinsToStreams(t, othersCursors, onesBins)
+			if err2 != nil {
+				err = err2 // set the resulting error when the loop is done
+			}
+			if err1 == nil && err2 == nil {
+				return nil
+			}
 		}
-		if err := compareNodeBinsToStreams(t, othersCursors, onesBins); err != nil {
-			return err
-		}
 
-		return nil
+		return err
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
@@ -130,7 +150,19 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		}
 
 		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
+		wantCursorsCount := 17
+		for i := 499; i >= 0; i-- { // wait time 5s
+			time.Sleep(10 * time.Millisecond)
+			count1 := nodeRegistry(sim, nodeIDs[0]).getPeer(nodeIDs[1]).cursorsCount()
+			count2 := nodeRegistry(sim, nodeIDs[1]).getPeer(nodeIDs[0]).cursorsCount()
+			if count1 >= wantCursorsCount && count2 >= wantCursorsCount {
+				break
+			}
+			if i == 0 {
+				return fmt.Errorf("got cursors %v and %v, want %v", count1, count2, wantCursorsCount)
+			}
+		}
+
 		idPivot := nodeIDs[0]
 		pivotSyncer := nodeRegistry(sim, idPivot)
 		pivotKademlia := nodeKademlia(sim, idPivot)
@@ -542,11 +574,8 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
 		peerAddr := pot.RandomAddressAt(pivotAddr, i)
 		bzzPeer := &network.BzzPeer{
-			Peer: protoPeer,
-			BzzAddr: &network.BzzAddr{
-				OAddr: peerAddr.Bytes(),
-				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
-			},
+			Peer:    protoPeer,
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
 		}
 		peer := network.NewPeer(bzzPeer, pivotKad)
 		pivotKad.On(peer)

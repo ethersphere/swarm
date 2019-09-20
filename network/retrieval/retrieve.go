@@ -38,6 +38,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/swap"
 	opentracing "github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -53,7 +54,7 @@ var (
 
 	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
-	Spec = &protocols.Spec{
+	spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
 		Version:    1,
 		MaxMsgSize: 10 * 1024 * 1024,
@@ -66,43 +67,26 @@ var (
 	ErrNoPeerFound = errors.New("no peer found")
 )
 
-// RetrievalPrices define the price matrix that correlates a message
-// type to a certain price (or price function)
-type RetrievalPrices struct {
-	priceMatrix map[reflect.Type]*protocols.Price
-}
-
-// Price implements the protocols.Price interface and returns the price for a specific message
-func (p *RetrievalPrices) Price(msg interface{}) *protocols.Price {
-	t := reflect.TypeOf(msg).Elem()
-	return p.priceMatrix[t]
-}
-
-func (p *RetrievalPrices) retrieveRequestPrice() uint64 {
-	return uint64(1)
-}
-
-func (p *RetrievalPrices) chunkDeliveryPrice() uint64 {
-	return uint64(1)
-}
-
-// createPriceOracle sets up a matrix which can be queried to get
-// the price for a message via the Price method
-func (r *Retrieval) createPriceOracle() {
-	p := &RetrievalPrices{}
-	p.priceMatrix = map[reflect.Type]*protocols.Price{
-		reflect.TypeOf(ChunkDelivery{}): {
-			Value:   p.chunkDeliveryPrice(),
-			PerByte: true,
-			Payer:   protocols.Receiver,
-		},
-		reflect.TypeOf(RetrieveRequest{}): {
-			Value:   p.retrieveRequestPrice(),
-			PerByte: false,
-			Payer:   protocols.Sender,
-		},
+// Price is the method through which a message type marks itself
+// as implementing the protocols.Price protocol and thus
+// as swap-enabled message
+func (rr *RetrieveRequest) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   swap.RetrieveRequestPrice,
+		PerByte: false,
+		Payer:   protocols.Sender,
 	}
-	r.prices = p
+}
+
+// Price is the method through which a message type marks itself
+// as implementing the protocols.Price protocol and thus
+// as swap-enabled message
+func (cd *ChunkDelivery) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   swap.ChunkDeliveryPrice,
+		PerByte: true,
+		Payer:   protocols.Receiver,
+	}
 }
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
@@ -111,21 +95,25 @@ type Retrieval struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
-	prices   protocols.Prices
+	spec     *protocols.Spec
 	logger   log.Logger
 	quit     chan struct{}
 }
 
 // New returns a new instance of the retrieval protocol handler
-func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte) *Retrieval {
+func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance) *Retrieval {
 	r := &Retrieval{
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
+		spec:     spec,
 		netStore: ns,
 		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
 	}
-	r.createPriceOracle()
+	if balance != nil && !reflect.ValueOf(balance).IsNil() {
+		// swap is enabled, so setup the hook
+		r.spec.Hook = protocols.NewAccounting(balance)
+	}
 	return r
 }
 
@@ -226,12 +214,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
-		if !p.HasCap(Spec.Name) {
-			return true
-		}
-
-		// skip light nodes, even though they support `bzz-retrieve` protocol
-		if p.LightNode {
+		if !p.HasCap(r.spec.Name) {
 			return true
 		}
 
@@ -425,7 +408,7 @@ FINDPEER:
 		goto FINDPEER
 	}
 
-	ret := RetrieveRequest{
+	ret := &RetrieveRequest{
 		Addr: req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID)
@@ -453,16 +436,16 @@ func (r *Retrieval) Stop() error {
 func (r *Retrieval) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    Spec.Name,
-			Version: Spec.Version,
-			Length:  Spec.Length(),
+			Name:    r.spec.Name,
+			Version: r.spec.Version,
+			Length:  r.spec.Length(),
 			Run:     r.runProtocol,
 		},
 	}
 }
 
 func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, Spec)
+	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
 
 	return r.Run(bp)
@@ -470,4 +453,8 @@ func (r *Retrieval) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (r *Retrieval) APIs() []rpc.API {
 	return nil
+}
+
+func (r *Retrieval) Spec() *protocols.Spec {
+	return r.spec
 }

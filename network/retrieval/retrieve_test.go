@@ -231,18 +231,17 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 func TestRequestFromPeers(t *testing.T) {
 	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
-	addr := network.RandomAddr()
+	addr := network.RandomBzzAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr:   network.RandomAddr(),
-		LightNode: false,
-		Peer:      protocolsPeer,
+		BzzAddr: network.RandomBzzAddr(),
+		Peer:    protocolsPeer,
 	}, to)
 
 	to.On(peer)
 
-	s := New(to, nil, to.BaseAddr())
+	s := New(to, nil, to.BaseAddr(), nil)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.Background(), req)
@@ -255,76 +254,30 @@ func TestRequestFromPeers(t *testing.T) {
 	}
 }
 
-// RequestFromPeers should not return light nodes
-func TestRequestFromPeersWithLightNode(t *testing.T) {
-	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
-
-	addr := network.RandomAddr()
-	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
-
-	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
-
-	// setting up a lightnode
-	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr:   network.RandomAddr(),
-		LightNode: true,
-		Peer:      protocolsPeer,
-	}, to)
-
-	to.On(peer)
-
-	r := New(to, nil, to.BaseAddr())
-	req := storage.NewRequest(storage.Address(hash0[:]))
-
-	// making a request which should return with "no peer found"
-	_, err := r.findPeer(context.Background(), req)
-
-	if err != ErrNoPeerFound {
-		t.Fatalf("expected '%v', got %v", ErrNoPeerFound, err)
-	}
-}
-
-//TestHasPriceImplementation is to check that Retrieval implements protocols.Prices
+//TestHasPriceImplementation is to check that Retrieval provides priced messages
 func TestHasPriceImplementation(t *testing.T) {
-	addr := network.RandomAddr()
-	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
-	r := New(to, nil, to.BaseAddr())
-
-	if r.prices == nil {
-		t.Fatal("No prices implementation available for retrieve protocol")
-	}
-
-	pricesInstance, ok := r.prices.(*RetrievalPrices)
-	if !ok {
-		t.Fatal("Retrieval does not have the expected Prices instance")
-	}
-	price := pricesInstance.Price(&ChunkDelivery{})
-	if price == nil || price.Value == 0 || price.Value != pricesInstance.chunkDeliveryPrice() {
+	price := (&ChunkDelivery{}).Price()
+	if price == nil || price.Value == 0 {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
 
-	price = pricesInstance.Price(&RetrieveRequest{})
-	if price == nil || price.Value == 0 || price.Value != pricesInstance.retrieveRequestPrice() {
+	price = (&RetrieveRequest{}).Price()
+	if price == nil || price.Value == 0 {
 		t.Fatal("No prices set for retrieve requests")
 	}
 }
 
 func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	n := ctx.Config.Node()
-	addr := network.NewAddr(n)
+	addr := network.NewBzzAddrFromEnode(n)
 
 	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var kad *network.Kademlia
-	if kv, ok := bucket.Load(simulation.BucketKeyKademlia); ok {
-		kad = kv.(*network.Kademlia)
-	} else {
-		kad = network.NewKademlia(addr.Over(), network.NewKadParams())
-		bucket.Store(simulation.BucketKeyKademlia, kad)
-	}
+	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
+	kad := k.(*network.Kademlia)
 
 	netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
 	lnetStore := storage.NewLNetStore(netStore)
@@ -341,7 +294,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := New(kad, netStore, kad.BaseAddr())
+	r := New(kad, netStore, kad.BaseAddr(), nil)
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)
@@ -442,7 +395,7 @@ func nodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig 
 			t.Fatalf("unable to create enode: %v", err)
 		}
 
-		n := network.NewAddr(nod)
+		n := network.NewBzzAddrFromEnode(nod)
 		foundPo = chunk.Proximity(baseaddr, n.Over())
 	}
 

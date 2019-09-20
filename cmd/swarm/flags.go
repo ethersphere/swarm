@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	ChequebookAddrFlag = cli.StringFlag{
+	SwarmSwapChequebookAddrFlag = cli.StringFlag{
 		Name:   "chequebook",
 		Usage:  "chequebook contract address",
 		EnvVar: SwarmEnvChequebookAddr,
@@ -68,6 +68,16 @@ var (
 		Name:   "swap-backend-url",
 		Usage:  "URL of the Ethereum API provider to use to settle SWAP payments",
 		EnvVar: SwarmEnvSwapBackendURL,
+	}
+	SwarmSwapPaymentThresholdFlag = cli.Uint64Flag{
+		Name:   "swap-payment-threshold",
+		Usage:  "honey amount at which payment is triggered",
+		EnvVar: SwarmEnvSwapPaymentThreshold,
+	}
+	SwarmSwapDisconnectThresholdFlag = cli.Uint64Flag{
+		Name:   "swap-disconnect-threshold",
+		Usage:  "honey amount at which a peer disconnects",
+		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
 	SwarmSyncDisabledFlag = cli.BoolTFlag{
 		Name:   "nosync",

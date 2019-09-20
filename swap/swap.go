@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
@@ -54,9 +56,9 @@ type Swap struct {
 	owner               *Owner             // contract access
 	params              *Params            // economic and operational parameters
 	contract            swap.Contract      // reference to the smart contract
-	oracle              PriceOracle        // the oracle providing the ether price for honey
-	paymentThreshold    int64              // balance difference required for sending cheque
-	disconnectThreshold int64              // balance difference required for dropping peer
+	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
+	paymentThreshold    int64              // honey amount at which a payment is triggered
+	disconnectThreshold int64              // honey amount at which a peer disconnects
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -78,18 +80,45 @@ func NewParams() *Params {
 	}
 }
 
-// New - swap constructor
-func New(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend) *Swap {
+// new - swap constructor without integrity check
+func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
 	return &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
 		owner:               createOwner(prvkey),
 		params:              NewParams(),
-		paymentThreshold:    DefaultPaymentThreshold,
-		disconnectThreshold: DefaultDisconnectThreshold,
-		oracle:              NewPriceOracle(),
+		disconnectThreshold: int64(disconnectThreshold),
+		paymentThreshold:    int64(paymentThreshold),
+		honeyPriceOracle:    NewHoneyPriceOracle(),
 	}
+}
+
+// New - swap constructor with integrity checks
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
+	// we MUST have a backend
+	if backendURL == "" {
+		return nil, errors.New("swap init error: no backend URL given")
+	}
+	log.Info("connecting to SWAP API", "url", backendURL)
+	// initialize the balances store
+	stateStore, err := state.NewDBStore(filepath.Join(dbPath, "swap.db"))
+	if err != nil {
+		return nil, fmt.Errorf("swap init error: %s", err)
+	}
+	if disconnectThreshold <= paymentThreshold {
+		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
+	}
+	backend, err := ethclient.Dial(backendURL)
+	if err != nil {
+		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
+	}
+	return new(
+		stateStore,
+		prvkey,
+		backend,
+		disconnectThreshold,
+		paymentThreshold), nil
 }
 
 const (
@@ -242,7 +271,8 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 
 	lastCheque := p.getLastReceivedCheque()
 
-	expectedAmount, err := s.oracle.GetPrice(cheque.Honey)
+	// TODO: there should probably be a lock here?
+	expectedAmount, err := s.honeyPriceOracle.GetPrice(cheque.Honey)
 	if err != nil {
 		return 0, err
 	}

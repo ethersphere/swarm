@@ -33,6 +33,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 const (
@@ -46,8 +47,8 @@ type Client struct {
 	BaseAddrHex string
 
 	// peers
-	peerPool map[pss.Topic]map[string]*pssRPCRW
-	protos   map[pss.Topic]*p2p.Protocol
+	peerPool map[message.Topic]map[string]*pssRPCRW
+	protos   map[message.Topic]*p2p.Protocol
 
 	// rpc connections
 	rpc  *rpc.Client
@@ -71,7 +72,7 @@ type pssRPCRW struct {
 	closed   bool
 }
 
-func (c *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topicobj pss.Topic) (*pssRPCRW, error) {
+func (c *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topicobj message.Topic) (*pssRPCRW, error) {
 	topic := topicobj.String()
 	err := c.rpc.Call(nil, "pss_setPeerPublicKey", pubkeyid, topic, hexutil.Encode(addr[:]))
 	if err != nil {
@@ -218,8 +219,8 @@ func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 func newClient() (client *Client) {
 	client = &Client{
 		quitC:    make(chan struct{}),
-		peerPool: make(map[pss.Topic]map[string]*pssRPCRW),
-		protos:   make(map[pss.Topic]*p2p.Protocol),
+		peerPool: make(map[message.Topic]map[string]*pssRPCRW),
+		protos:   make(map[message.Topic]*p2p.Protocol),
 	}
 	return
 }
@@ -232,7 +233,7 @@ func newClient() (client *Client) {
 // when an incoming message is received from a peer that is not yet known to the client,
 // this peer object is instantiated, and the protocol is run on it.
 func (c *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
-	topicobj := pss.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
+	topicobj := message.NewTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	topichex := topicobj.String()
 	msgC := make(chan pss.APIMsg)
 	c.peerPool[topicobj] = make(map[string]*pssRPCRW)

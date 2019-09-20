@@ -248,7 +248,7 @@ func newServices() adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddr(ctx.Config.Node())
+			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{

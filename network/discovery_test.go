@@ -17,8 +17,8 @@
 package network
 
 import (
+	"bytes"
 	"crypto/ecdsa"
-	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -48,7 +48,7 @@ func TestSubPeersMsg(t *testing.T) {
 	}
 
 	node := s.Nodes[0]
-	raddr := NewAddr(node)
+	raddr := NewBzzAddrFromEnode(node)
 	pp.Register(raddr)
 
 	// start the hive and wait for the connection
@@ -114,18 +114,15 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	connect := func(a pot.Address, po int) (addrs []*BzzAddr) {
 		n := rand.Intn(maxPeersPerPO)
 		for i := 0; i < n; i++ {
-			peer, err := newDiscPeer(pot.RandomAddressAt(a, po))
-			if err != nil {
-				t.Fatal(err)
-			}
+			peer := newDiscPeer(pot.RandomAddressAt(a, po))
 			hive.On(peer)
 			addrs = append(addrs, peer.BzzAddr)
 		}
 		return addrs
 	}
 	register := func(a pot.Address, po int) {
-		addr := pot.RandomAddressAt(a, po)
-		hive.Register(&BzzAddr{OAddr: addr[:]})
+		discPeer := newDiscPeer(a)
+		hive.Register(discPeer.BzzAddr)
 	}
 
 	// generate connected and just registered peers
@@ -238,20 +235,20 @@ func testSortPeers(peers []*BzzAddr) []*BzzAddr {
 // as we are not creating a real node via the protocol,
 // we need to create the discovery peer objects for the additional kademlia
 // nodes manually
-func newDiscPeer(addr pot.Address) (*Peer, error) {
-	pKey, err := ecdsa.GenerateKey(crypto.S256(), crand.Reader)
-	if err != nil {
-		return nil, err
-	}
+func newDiscPeer(addr pot.Address) *Peer {
+	// deterministically create enode id
+	// Input to the non-random input buffer is 2xaddress since it munches 256 bits
+	addrSeed := append(addr.Bytes(), addr.Bytes()...)
+	pKey, _ := ecdsa.GenerateKey(crypto.S256(), bytes.NewBuffer(addrSeed))
 	pubKey := pKey.PublicKey
 	nod := enode.NewV4(&pubKey, net.IPv4(127, 0, 0, 1), 0, 0)
-	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String())}
+	bzzAddr := NewBzzAddr(addr[:], []byte(nod.String()))
 	id := nod.ID()
 	p2pPeer := p2p.NewPeer(id, id.String(), nil)
 	return NewPeer(&BzzPeer{
 		Peer:    protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
 		BzzAddr: bzzAddr,
-	}, nil), nil
+	}, nil)
 }
 
 type dummyMsgRW struct{}
