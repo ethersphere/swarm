@@ -8,18 +8,20 @@ This folder contains the test environments, as well as the integration tests par
 
 * `pushsync/deployment/version.yaml`
 
-* `smoke-job.yaml`
+* `pushsync/smoke-job.yaml`
 
 2. Setup a private deployment for a push-sync integration test
 
 ```
+cd pushsync
 helmsman -apply -f deployment.yaml
 ```
 
 3. Apply a smoke test job:
 
 ```
-kubectl apply -f a.yaml -n pushsync
+cd pushsync
+kubectl apply -f smoke-job.yaml -n pushsync
 ```
 
 
