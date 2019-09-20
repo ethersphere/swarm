@@ -1,0 +1,14 @@
+smoke:
+  image:
+    repository: nonsens3/swarm-smoke
+    tag: anton
+
+swarm:
+  image:
+    repository: nonsens3/swarm
+    tag: anton
+
+bootnode:
+  image:
+    repository: nonsens3/swarm
+    tag: anton

@@ -1,0 +1,35 @@
+settings:
+  # Name of the service account within each namespace that should be used for tiller
+  serviceAccount: "tiller"
+
+namespaces:
+  kube-system:
+  pushsync:
+    protected: false
+    installTiller: true
+    labels:
+      env: "pushsync"
+
+helmRepos:
+  stable: "https://kubernetes-charts.storage.googleapis.com"
+  incubator: "http://storage.googleapis.com/kubernetes-charts-incubator"
+  ethersphere: "https://raw.githubusercontent.com/ethersphere/helm-charts-artifacts/master/"
+
+apps:
+  # Private cluster
+  private-swarm:
+    tillerNamespace: "pushsync"
+    namespace: "pushsync"
+    name: "swarm-private"
+    enabled: true
+    chart: "ethersphere/swarm-private"
+    #chart: "/home/nonsense/code/helm-charts/artifacts/swarm-private-0.0.2.tgz"
+    version: "0.0.5"
+    description: "(Private) Swarm cluster"
+    valuesFiles:
+      - "deployment/private-swarm.yaml"
+      - "deployment/version.yaml"
+    set:
+      swarm.replicaCount: "$PUSHSYNC_PRIVATE_REPLICAS"
+    wait: true
+    timeout: 600
