@@ -453,8 +453,8 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 type ValConsumer func(Val) bool
 
 // ValIterator is a function that iterates values and executes for each of them a supplied ValConsumer.
-// it returns the result of the last ValConsumer executed. Usually is the pin of a pot but it could be the last element
-// executed in some other order. It could hint users of this interface to continue iterating other Val collections.
+// it returns the result of the last ValConsumer executed. It could hint users of this interface to continue iterating other ValIterators
+// (for example in EachBin will continue or not with the next Bin).
 // Iterator<Val>  Iterator<T> => func (Consumer<T>) bool
 type ValIterator func(ValConsumer) bool
 
