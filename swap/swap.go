@@ -24,11 +24,13 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -119,14 +121,14 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
+func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, params *Params) *Swap {
 	auditLog = newLogger(logpath)
 	return &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
 		owner:               createOwner(prvkey),
-		params:              NewParams(),
+		params:              params,
 		disconnectThreshold: int64(disconnectThreshold),
 		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
@@ -152,13 +154,43 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
 	}
-	return new(
+
+	// need to prompt user for initial deposit amount
+	// if 0, can not cash in cheques
+	var prompter console.UserPrompter
+	var params = NewParams()
+
+	prompter = console.Stdin
+
+	// we may not need this check, and we could maybe even get rid of this constant completely
+	if DefaultInitialDepositAmount == 0 {
+		// ask user for input
+		input, err := prompter.PromptInput("Please provide a value for your initial deposit amount of your chequebook:")
+		if err != nil {
+			return nil, err
+		}
+		// check input
+		val, err := strconv.ParseInt(input, 10, 64)
+		if err != nil {
+			// maybe we should provide a fallback here? A bad input results in stopping the boot
+			fmt.Errorf("Conversion error while reading user input: %v", err)
+		}
+		log.Info("Chequebook initial deposit amount: ", "amount", val)
+		params = &Params{
+			InitialDepositAmount: uint64(val),
+		}
+	}
+
+	swap := new(
 		logpath,
 		stateStore,
 		prvkey,
 		backend,
 		disconnectThreshold,
-		paymentThreshold), nil
+		paymentThreshold,
+		params)
+
+	return swap, nil
 }
 
 const (

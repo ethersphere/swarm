@@ -708,7 +708,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string
 		t.Fatal(err)
 	}
 
-	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
+	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold, NewParams())
 	return swap, dir, logdir
 }
 
