@@ -120,8 +120,8 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 
 // new - swap constructor without integrity check
 func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
-	selfAddress := crypto.PubkeyToAddress(prvkey.PublicKey)
-	auditLog = newLogger(logpath, selfAddress)
+	address := crypto.PubkeyToAddress(prvkey.PublicKey)
+	auditLog = newLogger(logpath, address)
 	return &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
