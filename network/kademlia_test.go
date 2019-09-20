@@ -943,3 +943,57 @@ func testCapabilityIndexRemove(t *testing.T) {
 		t.Fatalf("EachAddrFiltered '42:101' expected 1 peer, got %d", c)
 	}
 }
+
+// TestCapabilityNeighbourhoodDepth tests that depth calculations filtered by capability is correct
+func TestCapabilityNeighbourhoodDepth(t *testing.T) {
+	baseAddressBytes := RandomBzzAddr().OAddr
+	kad := NewKademlia(baseAddressBytes, NewKadParams())
+	cap_both := capability.NewCapability(42, 2)
+	cap_both.Set(0)
+	cap_both.Set(1)
+	kad.RegisterCapabilityIndex("both", *cap_both)
+	cap_one := capability.NewCapability(42, 2)
+	cap_one.Set(0)
+	kad.RegisterCapabilityIndex("one", *cap_one)
+
+	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
+
+	// generate the peers
+	var peers []*Peer
+	for i := 0; i < 2; i++ {
+		addr := pot.RandomAddressAt(baseAddress, i)
+		p := newTestDiscoveryPeer(addr, kad)
+		p.BzzAddr.Capabilities.Add(cap_both)
+		peers = append(peers)
+		kad.Register(p.BzzAddr)
+		kad.On(p)
+	}
+
+	addrClosestBoth := pot.RandomAddressAt(baseAddress, 7)
+	peerClosestBoth := newTestDiscoveryPeer(addrClosestBoth, kad)
+	peerClosestBoth.BzzAddr.Capabilities.Add(cap_both)
+	kad.Register(peerClosestBoth.BzzAddr)
+	kad.On(peerClosestBoth)
+
+	addrClosestOne := pot.RandomAddressAt(baseAddress, 7)
+	peerClosestOne := newTestDiscoveryPeer(addrClosestOne, kad)
+	peerClosestOne.BzzAddr.Capabilities.Add(cap_one)
+	kad.Register(peerClosestOne.BzzAddr)
+	kad.On(peerClosestOne)
+
+	depth, err := kad.NeighbourhoodDepthCapability("both")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if depth != 1 {
+		t.Fatalf("cap 'both' expected depth 1, was %d", depth)
+	}
+
+	depth, err = kad.NeighbourhoodDepthCapability("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if depth != 2 {
+		t.Fatalf("cap 'one' expected depth 2, was %d", depth)
+	}
+}
