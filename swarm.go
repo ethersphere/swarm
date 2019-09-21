@@ -118,14 +118,19 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
+		swapParams := &swap.Params{
+			LogPath:              self.config.SwapLogPath,
+			InitialDepositAmount: self.config.SwapInitialDeposit,
+			DisconnectThreshold:  int64(self.config.SwapDisconnectThreshold),
+			PaymentThreshold:     int64(self.config.SwapPaymentThreshold),
+		}
+
 		// create the accounting objects
 		self.swap, err = swap.New(
-			config.SwapLogPath,
 			self.config.Path,
 			self.privateKey,
 			self.config.SwapBackendURL,
-			self.config.SwapDisconnectThreshold,
-			self.config.SwapPaymentThreshold,
+			swapParams,
 		)
 		if err != nil {
 			return nil, err

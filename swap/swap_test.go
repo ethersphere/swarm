@@ -338,13 +338,13 @@ func TestNewSwapFailure(t *testing.T) {
 		t.Error(err)
 	}
 
+	params := newDefaultParams()
+
 	type testSwapConfig struct {
-		logPath             string
-		dbPath              string
-		prvkey              *ecdsa.PrivateKey
-		backendURL          string
-		disconnectThreshold uint64
-		paymentThreshold    uint64
+		dbPath     string
+		prvkey     *ecdsa.PrivateKey
+		backendURL string
+		params     *Params
 	}
 
 	var config testSwapConfig
@@ -360,18 +360,15 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ""
-				config.disconnectThreshold = DefaultDisconnectThreshold
-				config.paymentThreshold = DefaultPaymentThreshold
+				params = params
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
 				_, err := New(
-					config.logPath,
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
-					config.disconnectThreshold,
-					config.paymentThreshold,
+					params,
 				)
 				if !strings.Contains(err.Error(), "no backend URL given") {
 					t.Fatal("no backendURL, but created SWAP")
@@ -384,17 +381,15 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ipcEndpoint
-				config.disconnectThreshold = DefaultDisconnectThreshold
-				config.paymentThreshold = DefaultDisconnectThreshold + 1
+				params = params
+				params.PaymentThreshold = params.DisconnectThreshold + 1
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				_, err := New(
-					config.logPath,
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
-					config.disconnectThreshold,
-					config.paymentThreshold,
+					params,
 				)
 				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower or at payment threshold.") {
 					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP")
@@ -406,18 +401,15 @@ func TestNewSwapFailure(t *testing.T) {
 			configure: func(config *testSwapConfig) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
-				config.disconnectThreshold = DefaultDisconnectThreshold
-				config.paymentThreshold = DefaultPaymentThreshold
+				params.PaymentThreshold = DefaultPaymentThreshold
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
 				_, err := New(
-					config.logPath,
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
-					config.disconnectThreshold,
-					config.paymentThreshold,
+					params,
 				)
 				if !strings.Contains(err.Error(), "swap init error: error connecting to Ethereum API") {
 					t.Fatal("invalid backendURL, but created SWAP", err)
@@ -438,7 +430,6 @@ func TestNewSwapFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer os.RemoveAll(logDir)
-			config.logPath = logDir
 
 			tc.configure(&config)
 			if tc.check != nil {
@@ -624,7 +615,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
 		// balance is not expected to be affected once past the disconnect threshold
-		if peerBalance < swap.disconnectThreshold {
+		if peerBalance < swap.params.DisconnectThreshold {
 			peerBalance += booking.amount
 		}
 		expectedBalances[peerID] = peerBalance
@@ -640,9 +631,8 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	// create a test swap account
-	swap, testDir, logDir := newBaseTestSwap(t, ownerKey)
+	swap, testDir := newBaseTestSwap(t, ownerKey)
 	defer os.RemoveAll(testDir)
-	defer os.RemoveAll(logDir)
 
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
@@ -687,9 +677,18 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 	}
 }
 
-// create a test swap account with a backend
-// creates a stateStore for persistence and a Swap account
-func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string) {
+// newDefaultParmas creates a set of default params for tests
+func newDefaultParams() *Params {
+	return &Params{
+		LogPath:              "",
+		InitialDepositAmount: 9999999999,
+		PaymentThreshold:     DefaultPaymentThreshold,
+		DisconnectThreshold:  DefaultDisconnectThreshold,
+	}
+}
+
+// newBaseTestSwapWithParams creates a swap with the given params
+func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Params) (*Swap, string) {
 	t.Helper()
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
@@ -700,16 +699,15 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string
 		t.Fatal(err)
 	}
 	log.Debug("creating simulated backend")
+	swap := new(stateStore, key, testBackend, params)
+	return swap, dir
+}
 
-	// Dir for storing swap related logs
-	logdir, err := ioutil.TempDir("", "swap_test_log")
-	log.Debug("creating swap log dir")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold, NewParams())
-	return swap, dir, logdir
+// create a test swap account with a backend
+// creates a stateStore for persistence and a Swap account
+func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
+	params := newDefaultParams()
+	return newBaseTestSwapWithParams(t, key, params)
 }
 
 // create a test swap account with a backend
@@ -717,11 +715,10 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string
 // returns a cleanup function
 func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 	t.Helper()
-	swap, dir, logDir := newBaseTestSwap(t, key)
+	swap, dir := newBaseTestSwap(t, key)
 	clean := func() {
 		swap.Close()
 		os.RemoveAll(dir)
-		os.RemoveAll(logDir)
 	}
 	return swap, clean
 }
@@ -1029,7 +1026,7 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 // deploy for testing (needs simulated backend commit)
 func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
+	opts.Value = big.NewInt(int64(0))
 	opts.Context = ctx
 
 	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
@@ -1257,22 +1254,32 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 }
 
 func TestSwapLogToFile(t *testing.T) {
+	// create a log dir
+	logDirDebitor, err := ioutil.TempDir("", "swap_test_log")
+	log.Debug("creating swap log dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// set the log dir to the params
+	params := newDefaultParams()
+	params.LogPath = logDirDebitor
+
 	// create both test swap accounts
-	creditorSwap, storeDirCreditor, logDirCreditor := newBaseTestSwap(t, beneficiaryKey)
-	debitorSwap, storeDirDebitor, logDirDebitor := newBaseTestSwap(t, ownerKey)
+	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey)
+	// we are only checking one of the two nodes for logs
+	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params)
 
 	clean := func() {
 		creditorSwap.Close()
 		debitorSwap.Close()
 		os.RemoveAll(storeDirCreditor)
-		os.RemoveAll(logDirCreditor)
 		os.RemoveAll(storeDirDebitor)
-		os.RemoveAll(logDirDebitor)
 	}
 	defer clean()
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap)
+	err = testDeploy(ctx, creditorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1286,7 +1293,6 @@ func TestSwapLogToFile(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	fmt.Println(1)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)

@@ -115,6 +115,7 @@ func TestNewSwarm(t *testing.T) {
 			configure: func(config *api.Config) {
 				config.SwapBackendURL = ipcEndpoint
 				config.SwapEnabled = true
+				config.SwapInitialDeposit = 999999999
 				config.NetworkID = swap.AllowedNetworkID
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {

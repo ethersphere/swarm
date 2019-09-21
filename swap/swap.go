@@ -55,17 +55,15 @@ const swapLogLevel = 3
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api                 API
-	store               state.Store        // store is needed in order to keep balances and cheques across sessions
-	peers               map[enode.ID]*Peer // map of all swap Peers
-	peersLock           sync.RWMutex       // lock for peers map
-	backend             contract.Backend   // the backend (blockchain) used
-	owner               *Owner             // contract access
-	params              *Params            // economic and operational parameters
-	contract            swap.Contract      // reference to the smart contract
-	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
-	paymentThreshold    int64              // honey amount at which a payment is triggered
-	disconnectThreshold int64              // honey amount at which a peer disconnects
+	api              API
+	store            state.Store        // store is needed in order to keep balances and cheques across sessions
+	peers            map[enode.ID]*Peer // map of all swap Peers
+	peersLock        sync.RWMutex       // lock for peers map
+	backend          contract.Backend   // the backend (blockchain) used
+	owner            *Owner             // contract access
+	params           *Params            // economic and operational parameters
+	contract         swap.Contract      // reference to the smart contract
+	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -77,14 +75,10 @@ type Owner struct {
 
 // Params encapsulates param
 type Params struct {
-	InitialDepositAmount uint64
-}
-
-// NewParams returns a Params struct filled with default values
-func NewParams() *Params {
-	return &Params{
-		InitialDepositAmount: DefaultInitialDepositAmount,
-	}
+	LogPath              string // optional audit log path
+	InitialDepositAmount uint64 // initial deposit amount for the chequebook
+	PaymentThreshold     int64  // honey amount at which a payment is triggered
+	DisconnectThreshold  int64  // honey amount at which a peer disconnects
 }
 
 // newLogger returns a new logger
@@ -121,22 +115,20 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, params *Params) *Swap {
-	auditLog = newLogger(logpath)
+func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, params *Params) *Swap {
+	auditLog = newLogger(params.LogPath)
 	return &Swap{
-		store:               stateStore,
-		peers:               make(map[enode.ID]*Peer),
-		backend:             backend,
-		owner:               createOwner(prvkey),
-		params:              params,
-		disconnectThreshold: int64(disconnectThreshold),
-		paymentThreshold:    int64(paymentThreshold),
-		honeyPriceOracle:    NewHoneyPriceOracle(),
+		store:            stateStore,
+		peers:            make(map[enode.ID]*Peer),
+		backend:          backend,
+		owner:            createOwner(prvkey),
+		params:           params,
+		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
 }
 
 // New - swap constructor with integrity checks
-func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params) (*Swap, error) {
 	// we MUST have a backend
 	if backendURL == "" {
 		return nil, errors.New("swap init error: no backend URL given")
@@ -147,23 +139,21 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: %s", err)
 	}
-	if disconnectThreshold <= paymentThreshold {
-		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
+	if params.DisconnectThreshold <= params.PaymentThreshold {
+		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
 	}
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
 	}
 
-	// need to prompt user for initial deposit amount
-	// if 0, can not cash in cheques
-	var prompter console.UserPrompter
-	var params = NewParams()
+	if params != nil && params.InitialDepositAmount == 0 {
+		// need to prompt user for initial deposit amount
+		// if 0, can not cash in cheques
+		var prompter console.UserPrompter
+		prompter = console.Stdin
 
-	prompter = console.Stdin
-
-	// we may not need this check, and we could maybe even get rid of this constant completely
-	if DefaultInitialDepositAmount == 0 {
+		// we may not need this check, and we could maybe even get rid of this constant completely
 		// ask user for input
 		input, err := prompter.PromptInput("Please provide a value for your initial deposit amount of your chequebook:")
 		if err != nil {
@@ -176,18 +166,13 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 			fmt.Errorf("Conversion error while reading user input: %v", err)
 		}
 		log.Info("Chequebook initial deposit amount: ", "amount", val)
-		params = &Params{
-			InitialDepositAmount: uint64(val),
-		}
+		params.InitialDepositAmount = uint64(val)
 	}
 
 	swap := new(
-		logpath,
 		stateStore,
 		prvkey,
 		backend,
-		disconnectThreshold,
-		paymentThreshold,
 		params)
 
 	return swap, nil
@@ -245,8 +230,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 	// Check if balance with peer is over the disconnect threshold
 	balance := swapPeer.getBalance()
-	if balance >= s.disconnectThreshold {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
+	if balance >= s.params.DisconnectThreshold {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
 	}
 
 	if err = swapPeer.updateBalance(amount); err != nil {
@@ -256,8 +241,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	if swapPeer.getBalance() <= -s.paymentThreshold {
-		auditLog.Info("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
+		auditLog.Info("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.params.PaymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
