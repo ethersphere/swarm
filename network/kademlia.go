@@ -69,8 +69,7 @@ type KadParams struct {
 	RetryExponent     int   // exponent to multiply retry intervals with
 	MaxRetries        int   // maximum number of redial attempts
 	// function to sanction or prevent suggesting a peer
-	Reachable    func(*BzzAddr) bool      `json:"-"`
-	Capabilities *capability.Capabilities `json:"-"`
+	Reachable func(*BzzAddr) bool `json:"-"`
 }
 
 // NewKadParams returns a params struct with default values
@@ -83,7 +82,6 @@ func NewKadParams() *KadParams {
 		RetryInterval:     4200000000, // 4.2 sec
 		MaxRetries:        42,
 		RetryExponent:     2,
-		Capabilities:      capability.NewCapabilities(),
 	}
 }
 
@@ -116,9 +114,6 @@ type KademliaInfo struct {
 func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
-	}
-	if params.Capabilities == nil {
-		params.Capabilities = capability.NewCapabilities()
 	}
 	k := &Kademlia{
 		base:            addr,
