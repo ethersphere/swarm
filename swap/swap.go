@@ -475,7 +475,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 func (s *Swap) bindToContractAt(address common.Address) (err error) {
 	// validate whether address is a chequebook
 	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
-		return fmt.Errorf("contract validation for %v failed: %v", address, err)
+		return fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
 	// get the instance and save it on swap.contract
 	s.contract, err = contract.InstanceAt(address, s.backend)
@@ -484,7 +484,7 @@ func (s *Swap) bindToContractAt(address common.Address) (err error) {
 	}
 	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.GetParams().NetworkID)
 	// saving chequebook
-	return s.saveChequebook(address)
+	return s.saveChequebook(s.GetParams().NetworkID, address)
 }
 
 // Deploy deploys the Swap contract and sets the contract address
@@ -525,6 +525,6 @@ func (s *Swap) loadChequebook(networkID string) (common.Address, error) {
 	return chequebook, err
 }
 
-func (s *Swap) saveChequebook(chequebook common.Address) error {
-	return s.store.Put(usedChequebookAtAddressKey(s.GetParams().NetworkID), chequebook)
+func (s *Swap) saveChequebook(networkID string, chequebook common.Address) error {
+	return s.store.Put(usedChequebookAtAddressKey(networkID), chequebook)
 }
