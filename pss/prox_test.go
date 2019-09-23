@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -21,9 +20,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/testutil"
 )
 
 // needed to make the enode id of the receiving node available to the handler for triggers
@@ -57,7 +54,7 @@ type testData struct {
 
 var (
 	pof   = pot.DefaultPof(256) // generate messages and index them
-	topic = message.NewTopic([]byte{0xf3, 0x9e, 0x06, 0x82})
+	topic = BytesToTopic([]byte{0xf3, 0x9e, 0x06, 0x82})
 )
 
 func (td *testData) pushNotification(val handlerNotification) {
@@ -214,7 +211,7 @@ func TestProxNetwork(t *testing.T) {
 }
 
 func TestProxNetworkLong(t *testing.T) {
-	if !*testutil.Longrunning {
+	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("8_nodes,_100_messages,_30_seconds", func(t *testing.T) {
@@ -236,7 +233,7 @@ func TestProxNetworkLong(t *testing.T) {
 
 func testProxNetwork(t *testing.T, nodeCount int, msgCount int, timeout time.Duration) {
 	td := newTestData()
-	handlerContextFuncs := make(map[message.Topic]handlerContextFunc)
+	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
 	services := newProxServices(td, true, handlerContextFuncs, td.kademlias)
 	td.sim = simulation.NewInProc(services)
@@ -382,7 +379,7 @@ func nodeMsgHandler(td *testData, config *adapters.NodeConfig) *handler {
 
 // an adaptation of the same services setup as in pss_test.go
 // replaces pss_test.go when those tests are rewritten to the new swarm/network/simulation package
-func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[message.Topic]handlerContextFunc, kademlias map[enode.ID]*network.Kademlia) map[string]simulation.ServiceFunc {
+func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]handlerContextFunc, kademlias map[enode.ID]*network.Kademlia) map[string]simulation.ServiceFunc {
 	stateStore := state.NewInmemoryStore()
 	kademlia := func(id enode.ID, bzzkey []byte) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
@@ -405,7 +402,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[messag
 			// however, we need to keep track of it in the test driver as well.
 			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
-			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
+			addr := network.NewAddr(ctx.Config.Node())
 			bzzPrivateKey, err = simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
@@ -422,14 +419,17 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[messag
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			b.Store(simulation.BucketKeyKademlia, pskad)
-			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil, nil, nil), nil, nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil), nil, nil
 		},
 		"pss": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
 			initTest()
 
-			// create keys and set up the pss object
-			privkey, err := ethCrypto.GenerateKey()
+			// create keys in whisper and set up the pss object
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			defer cancel()
+			keys, err := wapi.NewKeyPair(ctxlocal)
+			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)

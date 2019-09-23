@@ -19,13 +19,14 @@ package client
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -33,10 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/testutil"
 )
 
 type protoCtrl struct {
@@ -46,6 +47,10 @@ type protoCtrl struct {
 }
 
 var (
+	debugdebugflag = flag.Bool("vv", false, "veryverbose")
+	debugflag      = flag.Bool("v", false, "verbose")
+	w              *whisper.Whisper
+	wapi           *whisper.PublicWhisperAPI
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
@@ -55,12 +60,26 @@ var (
 var services = newServices()
 
 func init() {
-	testutil.Init()
+	flag.Parse()
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
 
+	loglevel := log.LvlInfo
+	if *debugflag {
+		loglevel = log.LvlDebug
+	} else if *debugdebugflag {
+		loglevel = log.LvlTrace
+	}
+
 	psslogmain = log.New("psslog", "*")
+	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+	hf := log.LvlFilterHandler(loglevel, hs)
+	h := log.CallerFileHandler(hf)
+	log.Root().SetHandler(h)
+
+	w = whisper.New(&whisper.DefaultConfig)
+	wapi = whisper.NewPublicWhisperAPI(w)
 
 	pssprotocols = make(map[string]*protoCtrl)
 }
@@ -229,7 +248,13 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			privkey, err := ethCrypto.GenerateKey()
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			keys, err := wapi.NewKeyPair(ctxlocal)
+			if err != nil {
+				return nil, err
+			}
+			privkey, err := w.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
@@ -248,7 +273,7 @@ func newServices() adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
+			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -256,7 +281,7 @@ func newServices() adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil, nil, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
 		},
 	}
 }

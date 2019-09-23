@@ -22,9 +22,10 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,25 +34,28 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/pss/crypto"
-	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
 	initOnce        = sync.Once{}
+	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
+	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
+	w               *whisper.Whisper
+	wapi            *whisper.PublicWhisperAPI
 	psslogmain      log.Logger
 	pssprotocols    map[string]*protoCtrl
 	useHandshake    bool
@@ -61,7 +65,7 @@ var (
 )
 
 func init() {
-	testutil.Init()
+	flag.Parse()
 	rand.Seed(time.Now().Unix())
 	initTest()
 }
@@ -70,22 +74,28 @@ func initTest() {
 	initOnce.Do(
 		func() {
 			psslogmain = log.New("psslog", "*")
+			hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+			hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
+			h := log.CallerFileHandler(hf)
+			log.Root().SetHandler(h)
+
+			w = whisper.New(&whisper.DefaultConfig)
+			wapi = whisper.NewPublicWhisperAPI(w)
 
 			pssprotocols = make(map[string]*protoCtrl)
 		},
 	)
 }
 
-// test that API topic conversion functions give predictable results
-
-func TestAPITopic(t *testing.T) {
+// test that topic conversion functions give predictable results
+func TestTopic(t *testing.T) {
 
 	api := &API{}
 
 	topicstr := strings.Join([]string{PingProtocol.Name, strconv.Itoa(int(PingProtocol.Version))}, ":")
 
-	// message.NewTopic is the authoritative topic conversion source
-	topicobj := message.NewTopic([]byte(topicstr))
+	// bytestotopic is the authoritative topic conversion source
+	topicobj := BytesToTopic([]byte(topicstr))
 
 	// string to topic and bytes to topic must match
 	topicapiobj, _ := api.StringToTopic(topicstr)
@@ -102,13 +112,55 @@ func TestAPITopic(t *testing.T) {
 	if topichex != pingtopichex {
 		t.Fatalf("protocol topic conversion mismatch; %s != %s", topichex, pingtopichex)
 	}
+
+	// json marshal of topic
+	topicjsonout, err := topicobj.MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(topicjsonout)[1:len(topicjsonout)-1] != topichex {
+		t.Fatalf("topic json marshal mismatch; %s != \"%s\"", topicjsonout, topichex)
+	}
+
+	// json unmarshal of topic
+	var topicjsonin Topic
+	topicjsonin.UnmarshalJSON(topicjsonout)
+	if topicjsonin != topicobj {
+		t.Fatalf("topic json unmarshal mismatch: %x != %x", topicjsonin, topicobj)
+	}
+}
+
+// test bit packing of message control flags
+func TestMsgParams(t *testing.T) {
+	var ctrl byte
+	ctrl |= pssControlRaw
+	p := newMsgParamsFromBytes([]byte{ctrl})
+	m := newPssMsg(p)
+	if !m.isRaw() || m.isSym() {
+		t.Fatal("expected raw=true and sym=false")
+	}
+	ctrl |= pssControlSym
+	p = newMsgParamsFromBytes([]byte{ctrl})
+	m = newPssMsg(p)
+	if !m.isRaw() || !m.isSym() {
+		t.Fatal("expected raw=true and sym=true")
+	}
+	ctrl &= 0xff &^ pssControlRaw
+	p = newMsgParamsFromBytes([]byte{ctrl})
+	m = newPssMsg(p)
+	if m.isRaw() || !m.isSym() {
+		t.Fatal("expected raw=false and sym=true")
+	}
 }
 
 // test if we can insert into cache, match items with cache and cache expiry
 func TestCache(t *testing.T) {
 	var err error
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
-	privkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
+	privkey, err := w.GetPrivateKey(keys)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,38 +170,45 @@ func TestCache(t *testing.T) {
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
-	wparams := &crypto.WrapParams{
-		Sender:   privkey,
-		Receiver: &privkey.PublicKey,
+	wparams := &whisper.MessageParams{
+		TTL:      defaultWhisperTTL,
+		Src:      privkey,
+		Dst:      &privkey.PublicKey,
+		Topic:    whisper.TopicType(PingTopic),
+		WorkTime: defaultWhisperWorkTime,
+		PoW:      defaultWhisperPoW,
+		Payload:  data,
 	}
-	env, err := ps.Crypto.Wrap(data, wparams)
-	msg := &message.Message{
+	woutmsg, err := whisper.NewSentMessage(wparams)
+	env, err := woutmsg.Wrap(wparams)
+	msg := &PssMsg{
 		Payload: env,
 		To:      to,
-		Topic:   PingTopic,
 	}
-	envtwo, err := ps.Crypto.Wrap(datatwo, wparams)
-	msgtwo := &message.Message{
+	wparams.Payload = datatwo
+	woutmsg, err = whisper.NewSentMessage(wparams)
+	envtwo, err := woutmsg.Wrap(wparams)
+	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
-		Topic:   PingTopic,
 	}
-	envthree, err := ps.Crypto.Wrap(datathree, wparams)
-	msgthree := &message.Message{
+	wparams.Payload = datathree
+	woutmsg, err = whisper.NewSentMessage(wparams)
+	envthree, err := woutmsg.Wrap(wparams)
+	msgthree := &PssMsg{
 		Payload: envthree,
 		To:      to,
-		Topic:   PingTopic,
 	}
 
-	digestone := msg.Digest()
+	digestone := ps.msgDigest(msg)
 	if err != nil {
 		t.Fatalf("could not store cache msgone: %v", err)
 	}
-	digesttwo := msgtwo.Digest()
+	digesttwo := ps.msgDigest(msgtwo)
 	if err != nil {
 		t.Fatalf("could not store cache msgtwo: %v", err)
 	}
-	digestthree := msgthree.Digest()
+	digestthree := ps.msgDigest(msgthree)
 	if err != nil {
 		t.Fatalf("could not store cache msgthree: %v", err)
 	}
@@ -194,22 +253,25 @@ func TestCache(t *testing.T) {
 // matching of address hints; whether a message could be or is for the node
 func TestAddressMatch(t *testing.T) {
 
-	localaddr := network.RandomBzzAddr().Over()
+	localaddr := network.RandomAddr().Over()
 	copy(localaddr[:8], []byte("deadbeef"))
 	remoteaddr := []byte("feedbeef")
 	kadparams := network.NewKadParams()
 	kad := network.NewKademlia(localaddr, kadparams)
-	privkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
+	privkey, err := w.GetPrivateKey(keys)
 	pssp := NewParams().WithPrivateKey(privkey)
 	ps, err := New(kad, pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	pssmsg := &message.Message{
+	pssmsg := &PssMsg{
 		To: remoteaddr,
 	}
 
@@ -244,8 +306,9 @@ func TestAddressMatch(t *testing.T) {
 // verify that node can be set as recipient regardless of explicit message address match if minimum one handler of a topic is explicitly set to allow it
 // note that in these tests we use the raw capability on handlers for convenience
 func TestAddressMatchProx(t *testing.T) {
+
 	// recipient node address
-	localAddr := network.RandomBzzAddr().Over()
+	localAddr := network.RandomAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
 
 	// set up kademlia
@@ -255,15 +318,9 @@ func TestAddressMatchProx(t *testing.T) {
 	peerCount := nnPeerCount + 2
 
 	// set up pss
-	privKey, err := ethCrypto.GenerateKey()
+	privKey, err := crypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
-	// enqueue method now is blocking, so we need always somebody processing the outbox
-	go func() {
-		for slot := range ps.outbox.process {
-			ps.outbox.free(slot)
-		}
-	}()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -276,8 +333,11 @@ func TestAddressMatchProx(t *testing.T) {
 		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
 		peerAddr := pot.RandomAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
-			Peer:    protoPeer,
-			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
+			Peer: protoPeer,
+			BzzAddr: &network.BzzAddr{
+				OAddr: peerAddr.Bytes(),
+				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
+			},
 		}
 		peer := network.NewPeer(bzzPeer, kad)
 		kad.On(peer)
@@ -320,7 +380,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 	// first the unit test on the method that calculates possible receipient using prox
 	for i, distance := range remoteDistances {
-		pssMsg := message.New(message.Flags{})
+		pssMsg := newPssMsg(&msgParams{})
 		pssMsg.To = make([]byte, len(localAddr))
 		copy(pssMsg.To, localAddr)
 		var byteIdx = distance / 8
@@ -335,15 +395,15 @@ func TestAddressMatchProx(t *testing.T) {
 	// for each distance check if we are possible recipient when prox variant is used is set
 
 	// this handler will increment a counter for every message that gets passed to the handler
-	recvC := make(chan struct{})
+	var receives int
 	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		log.Trace("in allowraw handler")
-		recvC <- struct{}{}
+		receives++
 		return nil
 	}
 
 	// register it marking prox capability
-	topic := message.NewTopic([]byte{0x2a})
+	topic := BytesToTopic([]byte{0x2a})
 	hndlrProxDereg := ps.Register(&topic, &handler{
 		f: rawHandlerFunc,
 		caps: &handlerCaps{
@@ -353,32 +413,27 @@ func TestAddressMatchProx(t *testing.T) {
 	})
 
 	// test the distances
+	var prevReceive int
 	for i, distance := range remoteDistances {
 		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		var data [32]byte
 		rand.Read(data[:])
-		pssMsg := message.New(message.Flags{Raw: true})
+		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = data[:]
-		pssMsg.Topic = topic
+		pssMsg.Payload = &whisper.Envelope{
+			Topic: whisper.TopicType(topic),
+			Data:  data[:],
+		}
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-		defer cancel()
-		ps.handle(ctx, nil, pssMsg)
-		select {
-		case <-recvC:
-			if !expects[i] {
-				t.Fatalf("unexpected prox receive when distance %d recipient %v", distance, expects[i])
-			}
-		case <-ctx.Done():
-			if expects[i] {
-				t.Fatalf("expected prox receive when distance %d recipient %v", distance, expects[i])
-			}
+		ps.handle(context.TODO(), pssMsg)
+		if (!expects[i] && prevReceive != receives) || (expects[i] && prevReceive == receives) {
+			t.Fatalf("expected distance %d recipient %v when prox is set for handler", distance, expects[i])
 		}
+		prevReceive = receives
 	}
 
 	// now add a non prox-capable handler and test
@@ -388,188 +443,199 @@ func TestAddressMatchProx(t *testing.T) {
 			raw: true,
 		},
 	})
+	receives = 0
+	prevReceive = 0
 	for i, distance := range remoteDistances {
 		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
 		var data [32]byte
 		rand.Read(data[:])
-		pssMsg := message.New(message.Flags{Raw: true})
+		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = data[:]
-		pssMsg.Topic = topic
+		pssMsg.Payload = &whisper.Envelope{
+			Topic: whisper.TopicType(topic),
+			Data:  data[:],
+		}
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-		defer cancel()
-		ps.handle(ctx, nil, pssMsg)
-		select {
-		case <-recvC:
-			if !expects[i] {
-				t.Fatalf("unexpected prox receive when distance %d recipient %v", distance, expects[i])
-			}
-		case <-ctx.Done():
-			if expects[i] {
-				t.Fatalf("expected prox receive when distance %d recipient %v", distance, expects[i])
-			}
+		ps.handle(context.TODO(), pssMsg)
+		if (!expects[i] && prevReceive != receives) || (expects[i] && prevReceive == receives) {
+			t.Fatalf("expected distance %d recipient %v when prox is set for handler", distance, expects[i])
 		}
+		prevReceive = receives
 	}
 
 	// now deregister the prox capable handler, now none of the messages will be handled
 	hndlrProxDereg()
+	receives = 0
 
-	for i, distance := range remoteDistances {
+	for _, distance := range remoteDistances {
 		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
-		pssMsg := message.New(message.Flags{Raw: true})
+		pssMsg := newPssMsg(&msgParams{raw: true})
 		pssMsg.To = remoteAddr
 		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-		pssMsg.Payload = []byte(remotePotAddr.String())
-		pssMsg.Topic = topic
+		pssMsg.Payload = &whisper.Envelope{
+			Topic: whisper.TopicType(topic),
+			Data:  []byte(remotePotAddr.String()),
+		}
 
 		log.Trace("noprox addrs", "local", localAddr, "remote", remoteAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-		defer cancel()
-		ps.handle(ctx, nil, pssMsg)
-		select {
-		case <-recvC:
-			t.Fatalf("unexpected prox receive when distance %d recipient %v when no handler", distance, expects[i])
-		case <-ctx.Done():
+		ps.handle(context.TODO(), pssMsg)
+		if receives != 0 {
+			t.Fatalf("expected distance %d to not be recipient when prox is not set for handler", distance)
 		}
+
 	}
 }
 
-func TestMessageOutbox(t *testing.T) {
+// verify that message queueing happens when it should, and that expired and corrupt messages are dropped
+func TestMessageProcessing(t *testing.T) {
+
+	t.Skip("Disabled due to probable faulty logic for outbox expectations")
 	// setup
-	privkey, err := ethCrypto.GenerateKey()
+	privkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	addr := make([]byte, 32)
 	addr[0] = 0x01
-	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-	outboxCapacity := 2
-
-	successC := make(chan struct{})
-	forward := func(msg *message.Message) error {
-		successC <- struct{}{}
-		return nil
-	}
-	ps.outbox = newOutbox(outboxCapacity, ps.quitC, forward)
-
-	ps.Start(nil)
+	ps := newTestPss(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams())
 	defer ps.Stop()
 
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	// message should pass
+	msg := newPssMsg(&msgParams{})
+	msg.To = addr
+	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
+	msg.Payload = &whisper.Envelope{
+		Topic: [4]byte{},
+		Data:  []byte{0x66, 0x6f, 0x6f},
 	}
-	usedSlots := ps.outbox.len()
-	if usedSlots != 1 {
-		t.Fatalf("incorrect outbox length. expected 1, got %v", usedSlots)
-	}
-	t.Log("Message enqueued", "Outbox len", ps.outbox.len())
-
-	select {
-	case <-successC:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for success forward")
-	}
-
-	failed := make([]*message.Message, 0)
-	failedC := make(chan struct{})
-	continueC := make(chan struct{})
-	failedForward := func(msg *message.Message) error {
-		failed = append(failed, msg)
-		failedC <- struct{}{}
-		<-continueC
-		return errors.New("Forced test error forwarding message")
-	}
-
-	ps.outbox.forward = failedForward
-
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("Expected no error enqueing, got %v", err.Error())
-	}
-
-	select {
-	case <-failedC:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for failing forward")
-	}
-
-	if len(failed) == 0 {
-		t.Fatal("Incorrect number of failed messages, expected 1 got 0")
-	}
-	// The message will be retried once we send to continueC, so first, we change the forward function
-	ps.outbox.forward = forward
-	continueC <- struct{}{}
-	select {
-	case <-successC:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for second success forward")
-	}
-
-}
-
-func TestOutboxFull(t *testing.T) {
-	// setup
-	privkey, err := ethCrypto.GenerateKey()
-	if err != nil {
+	if err := ps.handle(context.TODO(), msg); err != nil {
 		t.Fatal(err.Error())
 	}
-
-	addr := make([]byte, 32)
-	addr[0] = 0x01
-	ps := newTestPssStart(privkey, network.NewKademlia(addr, network.NewKadParams()), NewParams(), false)
-	defer ps.Stop()
-	outboxCapacity := 2
-
-	procChan := make(chan struct{})
-	succesForward := func(msg *message.Message) error {
-		<-procChan
-		log.Info("Message processed")
-		return nil
+	tmr := time.NewTimer(time.Millisecond * 100)
+	var outmsg *outboxMsg
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	default:
 	}
-	ps.outbox = newOutbox(outboxCapacity, ps.quitC, succesForward)
-
-	ps.Start(nil)
-
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error enqueing first message, got %v", err)
+	if outmsg != nil {
+		t.Fatalf("expected outbox empty after full address on msg, but had message %s", msg)
 	}
-	err = ps.enqueue(testRandomMessage())
-	if err != nil {
-		t.Fatalf("expected no error enqueing second message, got %v", err)
-	}
-	//As we haven't signaled procChan, the messages are still in the outbox
 
-	err = ps.enqueue(testRandomMessage())
+	// message should pass and queue due to partial length
+	msg.To = addr[0:1]
+	msg.Payload.Data = []byte{0x78, 0x79, 0x80, 0x80, 0x79}
+	if err := ps.handle(context.TODO(), msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 100)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	}
+	if outmsg == nil {
+		t.Fatal("expected message in outbox on encrypt fail, but empty")
+	}
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected only one queued message but also had message %v", msg)
+	}
+
+	// full address mismatch should put message in queue
+	msg.To[0] = 0xff
+	if err := ps.handle(context.TODO(), msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 10)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	}
+	if outmsg == nil {
+		t.Fatal("expected message in outbox on address mismatch, but empty")
+	}
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected only one queued message but also had message %v", msg)
+	}
+
+	// expired message should be dropped
+	msg.Expire = uint32(time.Now().Add(-time.Second).Unix())
+	if err := ps.handle(context.TODO(), msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 10)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected empty queue but have message %v", msg)
+	}
+
+	// invalid message should return error
+	fckedupmsg := &struct {
+		pssMsg *PssMsg
+	}{
+		pssMsg: &PssMsg{},
+	}
+	if err := ps.handle(context.TODO(), fckedupmsg); err == nil {
+		t.Fatalf("expected error from processMsg but error nil")
+	}
+
+	// outbox full should return error
+	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
+
+	omsg := newOutboxMsg(msg)
+	for i := 0; i < defaultOutboxCapacity; i++ {
+		ps.outbox <- omsg
+	}
+	msg.Payload.Data = []byte{0x62, 0x61, 0x72}
+	err = ps.handle(context.TODO(), msg)
 	if err == nil {
-		t.Fatalf("expected error enqueing third message, instead got nil")
-	}
-	procChan <- struct{}{}
-	//There should be a slot again in the outbox
-	select {
-	case <-ps.outbox.slots:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for a free slot")
+		t.Fatal("expected error when mailbox full, but was nil")
 	}
 }
 
 // set and generate pubkeys and symkeys
 func TestKeys(t *testing.T) {
 	// make our key and init pss with it
-	ourprivkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ourkeys, err := wapi.NewKeyPair(ctx)
+	if err != nil {
+		t.Fatalf("create 'our' key fail")
+	}
+	ctx, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	theirkeys, err := wapi.NewKeyPair(ctx)
+	if err != nil {
+		t.Fatalf("create 'their' key fail")
+	}
+	ourprivkey, err := w.GetPrivateKey(ourkeys)
 	if err != nil {
 		t.Fatalf("failed to retrieve 'our' private key")
 	}
-	theirprivkey, err := ethCrypto.GenerateKey()
+	theirprivkey, err := w.GetPrivateKey(theirkeys)
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
@@ -578,9 +644,9 @@ func TestKeys(t *testing.T) {
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := make(PssAddress, 32)
-	copy(addr, network.RandomBzzAddr().Over())
-	outkey := network.RandomBzzAddr().Over()
-	topicobj := message.NewTopic([]byte("foo:42"))
+	copy(addr, network.RandomAddr().Over())
+	outkey := network.RandomAddr().Over()
+	topicobj := BytesToTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topicobj, addr)
 	outkeyid, err := ps.SetSymmetricKey(outkey, topicobj, addr, false)
 	if err != nil {
@@ -593,12 +659,12 @@ func TestKeys(t *testing.T) {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
 
-	// get the key back from crypto backend, check that it's still the same
-	outkeyback, err := ps.Crypto.GetSymmetricKey(outkeyid)
+	// get the key back from whisper, check that it's still the same
+	outkeyback, err := ps.w.GetSymKey(outkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	inkey, err := ps.Crypto.GetSymmetricKey(inkeyid)
+	inkey, err := ps.w.GetSymKey(inkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -619,24 +685,24 @@ func TestKeys(t *testing.T) {
 // check that we can retrieve previously added public key entires per topic and peer
 func TestGetPublickeyEntries(t *testing.T) {
 
-	privkey, err := ethCrypto.GenerateKey()
+	privkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 
-	peeraddr := network.RandomBzzAddr().Over()
-	topicaddr := make(map[message.Topic]PssAddress)
-	topicaddr[message.Topic{0x13}] = peeraddr
-	topicaddr[message.Topic{0x2a}] = peeraddr[:16]
-	topicaddr[message.Topic{0x02, 0x9a}] = []byte{}
+	peeraddr := network.RandomAddr().Over()
+	topicaddr := make(map[Topic]PssAddress)
+	topicaddr[Topic{0x13}] = peeraddr
+	topicaddr[Topic{0x2a}] = peeraddr[:16]
+	topicaddr[Topic{0x02, 0x9a}] = []byte{}
 
-	remoteprivkey, err := ethCrypto.GenerateKey()
+	remoteprivkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	remotepubkeybytes := ps.Crypto.SerializePublicKey(&remoteprivkey.PublicKey)
+	remotepubkeybytes := crypto.FromECDSAPub(&remoteprivkey.PublicKey)
 	remotepubkeyhex := common.ToHex(remotepubkeybytes)
 
 	pssapi := NewAPI(ps)
@@ -680,18 +746,18 @@ OUTER:
 func TestPeerCapabilityMismatch(t *testing.T) {
 
 	// create privkey for forwarder node
-	privkey, err := ethCrypto.GenerateKey()
+	privkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// initialize kad
-	baseaddr := network.RandomBzzAddr()
+	baseaddr := network.RandomAddr()
 	kad := network.NewKademlia((baseaddr).Over(), network.NewKadParams())
 	rw := &p2p.MsgPipeRW{}
 
 	// one peer has a mismatching version of pss
-	wrongpssaddr := network.RandomBzzAddr()
+	wrongpssaddr := network.RandomAddr()
 	wrongpsscap := p2p.Cap{
 		Name:    protocolName,
 		Version: 0,
@@ -699,11 +765,11 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	nid := enode.ID{0x01}
 	wrongpsspeer := network.NewPeer(&network.BzzPeer{
 		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(wrongpssaddr.Over()), []p2p.Cap{wrongpsscap}), rw, nil),
-		BzzAddr: network.NewBzzAddr(wrongpssaddr.Over(), nil),
+		BzzAddr: &network.BzzAddr{OAddr: wrongpssaddr.Over(), UAddr: nil},
 	}, kad)
 
 	// one peer doesn't even have pss (boo!)
-	nopssaddr := network.RandomBzzAddr()
+	nopssaddr := network.RandomAddr()
 	nopsscap := p2p.Cap{
 		Name:    "nopss",
 		Version: 1,
@@ -711,7 +777,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	nid = enode.ID{0x02}
 	nopsspeer := network.NewPeer(&network.BzzPeer{
 		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
-		BzzAddr: network.NewBzzAddr(nopssaddr.Over(), nil),
+		BzzAddr: &network.BzzAddr{OAddr: nopssaddr.Over(), UAddr: nil},
 	}, kad)
 
 	// add peers to kademlia and activate them
@@ -722,10 +788,10 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	kad.On(nopsspeer)
 
 	// create pss
-	pssmsg := &message.Message{
+	pssmsg := &PssMsg{
 		To:      []byte{},
 		Expire:  uint32(time.Now().Add(time.Second).Unix()),
-		Payload: nil,
+		Payload: &whisper.Envelope{},
 	}
 	ps := newTestPss(privkey, kad, nil)
 	defer ps.Stop()
@@ -738,22 +804,23 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 
 // verifies that message handlers for raw messages only are invoked when minimum one handler for the topic exists in which raw messages are explicitly allowed
 func TestRawAllow(t *testing.T) {
+
 	// set up pss like so many times before
-	privKey, err := ethCrypto.GenerateKey()
+	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseAddr := network.RandomBzzAddr()
+	baseAddr := network.RandomAddr()
 	kad := network.NewKademlia((baseAddr).Over(), network.NewKadParams())
 	ps := newTestPss(privKey, kad, nil)
 	defer ps.Stop()
-	topic := message.NewTopic([]byte{0x2a})
+	topic := BytesToTopic([]byte{0x2a})
 
 	// create handler innards that increments every time a message hits it
-	recvC := make(chan struct{})
+	var receives int
 	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		log.Trace("in allowraw handler")
-		recvC <- struct{}{}
+		receives++
 		return nil
 	}
 
@@ -764,21 +831,17 @@ func TestRawAllow(t *testing.T) {
 	ps.Register(&topic, hndlrNoRaw)
 
 	// test it with a raw message, should be poo-poo
-	pssMsg := message.New(message.Flags{
-		Raw: true,
+	pssMsg := newPssMsg(&msgParams{
+		raw: true,
 	})
 	pssMsg.To = baseAddr.OAddr
 	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
-	pssMsg.Topic = topic
-	pssMsg.Payload = nil
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-	ps.handle(ctx, nil, pssMsg)
-	select {
-	case <-recvC:
+	pssMsg.Payload = &whisper.Envelope{
+		Topic: whisper.TopicType(topic),
+	}
+	ps.handle(context.TODO(), pssMsg)
+	if receives > 0 {
 		t.Fatalf("Expected handler not to be executed with raw cap off")
-	case <-ctx.Done():
 	}
 
 	// now wrap the same handler function with raw capabilities and register it
@@ -791,28 +854,21 @@ func TestRawAllow(t *testing.T) {
 	deregRawHandler := ps.Register(&topic, hndlrRaw)
 
 	// should work now
-	pssMsg.Payload = []byte("Raw Deal")
-	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-	ps.handle(ctx, nil, pssMsg)
-	select {
-	case <-recvC:
-	case <-ctx.Done():
+	pssMsg.Payload.Data = []byte("Raw Deal")
+	ps.handle(context.TODO(), pssMsg)
+	if receives == 0 {
 		t.Fatalf("Expected handler to be executed with raw cap on")
 	}
 
 	// now deregister the raw capable handler
+	prevReceives := receives
 	deregRawHandler()
 
 	// check that raw messages fail again
-	pssMsg.Payload = []byte("Raw Trump")
-	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-	ps.handle(ctx, nil, pssMsg)
-	select {
-	case <-recvC:
-		t.Fatalf("Expected handler not to be executed with raw cap off")
-	case <-ctx.Done():
+	pssMsg.Payload.Data = []byte("Raw Trump")
+	ps.handle(context.TODO(), pssMsg)
+	if receives != prevReceives {
+		t.Fatalf("Expected handler not to be executed when raw handler is retracted")
 	}
 }
 
@@ -1000,8 +1056,8 @@ func testSendSym(t *testing.T) {
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
-	lrecvkey := network.RandomBzzAddr().Over()
-	rrecvkey := network.RandomBzzAddr().Over()
+	lrecvkey := network.RandomAddr().Over()
+	rrecvkey := network.RandomAddr().Over()
 
 	var lkeyids [2]string
 	var rkeyids [2]string
@@ -1175,7 +1231,7 @@ func TestNetwork(t *testing.T) {
 // nodes/recipientAddresses/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
-	if !*testutil.Longrunning {
+	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/2000/4/sim", testNetwork)
@@ -1185,7 +1241,7 @@ func TestNetwork2000(t *testing.T) {
 }
 
 func TestNetwork5000(t *testing.T) {
-	if !*testutil.Longrunning {
+	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/5000/4/sim", testNetwork)
@@ -1195,7 +1251,7 @@ func TestNetwork5000(t *testing.T) {
 }
 
 func TestNetwork10000(t *testing.T) {
-	if !*testutil.Longrunning {
+	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("3/10000/4/sim", testNetwork)
@@ -1474,19 +1530,22 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	privkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
+	privkey, err := w.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
-	topic := message.NewTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
-	copy(to[:], network.RandomBzzAddr().Over())
+	copy(to[:], network.RandomAddr().Over())
 	symkeyid, err := ps.GenerateSymmetricKey(topic, to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
-	symkey, err := ps.Crypto.GetSymmetricKey(symkeyid)
+	symkey, err := ps.w.GetSymKey(symkeyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey: %v", err)
 	}
@@ -1516,22 +1575,24 @@ func benchmarkAsymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	privkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
+	privkey, err := w.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	defer ps.Stop()
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
-	topic := message.NewTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
-	copy(to[:], network.RandomBzzAddr().Over())
+	copy(to[:], network.RandomAddr().Over())
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendAsym(common.ToHex(ps.Crypto.SerializePublicKey(&privkey.PublicKey)), topic, msg)
+		ps.SendAsym(common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
 	}
 }
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
-	b.Skip("Test doesn't work. Test messages are not valid, they need Control field")
 	for i := 100; i < 100000; i = i * 10 {
 		for j := 32; j < 10000; j = j * 8 {
 			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceChangeaddr)
@@ -1559,41 +1620,53 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
 		}
 	}
-	pssmsgs := make([]*message.Message, 0, keycount)
+	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
-	privkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
+	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
 		ps = newTestPss(privkey, nil, nil)
 	}
 	defer ps.Stop()
-	topic := message.NewTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
-		copy(to[:], network.RandomBzzAddr().Over())
+		copy(to[:], network.RandomAddr().Over())
 		keyid, err = ps.GenerateSymmetricKey(topic, to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
-		symkey, err := ps.Crypto.GetSymmetricKey(keyid)
+		symkey, err := ps.w.GetSymKey(keyid)
 		if err != nil {
 			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
-		wparams := &crypto.WrapParams{
-			SymmetricKey: symkey,
+		wparams := &whisper.MessageParams{
+			TTL:      defaultWhisperTTL,
+			KeySym:   symkey,
+			Topic:    whisper.TopicType(topic),
+			WorkTime: defaultWhisperWorkTime,
+			PoW:      defaultWhisperPoW,
+			Payload:  []byte("xyzzy"),
+			Padding:  []byte("1234567890abcdef"),
 		}
-		payload, err := ps.Crypto.Wrap([]byte("xyzzy"), wparams)
+		woutmsg, err := whisper.NewSentMessage(wparams)
 		if err != nil {
-			b.Fatalf("could not generate envelope: %v", err)
+			b.Fatalf("could not create whisper message: %v", err)
+		}
+		env, err := woutmsg.Wrap(wparams)
+		if err != nil {
+			b.Fatalf("could not generate whisper envelope: %v", err)
 		}
 		ps.Register(&topic, &handler{
 			f: noopHandlerFunc,
 		})
-		pssmsgs = append(pssmsgs, &message.Message{
+		pssmsgs = append(pssmsgs, &PssMsg{
 			To:      to,
-			Topic:   topic,
-			Payload: payload,
+			Payload: env,
 		})
 	}
 	b.ResetTimer()
@@ -1605,7 +1678,6 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 }
 
 func BenchmarkSymkeyBruteforceSameaddr(b *testing.B) {
-	b.Skip("Test doesn't work. Test messages are not valid, they need Control field")
 	for i := 100; i < 100000; i = i * 10 {
 		for j := 32; j < 10000; j = j * 8 {
 			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceSameaddr)
@@ -1634,57 +1706,58 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 	}
 	addr := make([]PssAddress, keycount)
-	privkey, err := ethCrypto.GenerateKey()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
+	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &Params{SymKeyCacheCapacity: int(cachesize)})
 	} else {
 		ps = newTestPss(privkey, nil, nil)
 	}
 	defer ps.Stop()
-	topic := message.NewTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
-		copy(addr[i], network.RandomBzzAddr().Over())
+		copy(addr[i], network.RandomAddr().Over())
 		keyid, err = ps.GenerateSymmetricKey(topic, addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
 
 	}
-	symkey, err := ps.Crypto.GetSymmetricKey(keyid)
+	symkey, err := ps.w.GetSymKey(keyid)
 	if err != nil {
 		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
-	wparams := &crypto.WrapParams{
-		SymmetricKey: symkey,
+	wparams := &whisper.MessageParams{
+		TTL:      defaultWhisperTTL,
+		KeySym:   symkey,
+		Topic:    whisper.TopicType(topic),
+		WorkTime: defaultWhisperWorkTime,
+		PoW:      defaultWhisperPoW,
+		Payload:  []byte("xyzzy"),
+		Padding:  []byte("1234567890abcdef"),
 	}
-	payload, err := ps.Crypto.Wrap([]byte("xyzzy"), wparams)
+	woutmsg, err := whisper.NewSentMessage(wparams)
 	if err != nil {
-		b.Fatalf("could not generate envelope: %v", err)
+		b.Fatalf("could not create whisper message: %v", err)
+	}
+	env, err := woutmsg.Wrap(wparams)
+	if err != nil {
+		b.Fatalf("could not generate whisper envelope: %v", err)
 	}
 	ps.Register(&topic, &handler{
 		f: noopHandlerFunc,
 	})
-	pssmsg := &message.Message{
+	pssmsg := &PssMsg{
 		To:      addr[len(addr)-1][:],
-		Topic:   topic,
-		Payload: payload,
+		Payload: env,
 	}
 	for i := 0; i < b.N; i++ {
 		if err := ps.process(pssmsg, false, false); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
-}
-
-func testRandomMessage() *message.Message {
-	addr := make([]byte, 32)
-	addr[0] = 0x01
-	msg := message.New(message.Flags{})
-	msg.To = addr
-	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Topic = [4]byte{}
-	msg.Payload = []byte{0x66, 0x6f, 0x6f}
-	return msg
 }
 
 // setup simulated network with bzz/discovery and pss services.
@@ -1736,7 +1809,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 	}
 	return map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
+			addr := network.NewAddr(ctx.Config.Node())
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
@@ -1752,13 +1825,16 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			}
 			pskad := kademlia(ctx.Config.ID, addr.OAddr)
 			bucket.Store(simulation.BucketKeyKademlia, pskad)
-			return network.NewBzz(config, pskad, stateStore, nil, nil, nil, nil), nil, nil
+			return network.NewBzz(config, pskad, stateStore, nil, nil), nil, nil
 		},
 		protocolName: func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
 			initTest()
 
-			privkey, err := ethCrypto.GenerateKey()
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			keys, err := wapi.NewKeyPair(ctxlocal)
+			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
@@ -1801,19 +1877,13 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 				protocol: pp,
 				run:      p2pp.Run,
 			}
-
 			return ps, cleanupFunc, nil
+
 		},
 	}
 }
 
-// New Test Pss that will be started
 func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Params) *Pss {
-	return newTestPssStart(privkey, kad, ppextra, true)
-}
-
-// New Test Pss but with a parameter to select if the pss process should start
-func newTestPssStart(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *Params, start bool) *Pss {
 	nid := enode.PubkeyToIDV4(&privkey.PublicKey)
 	// set up routing if kademlia is not passed to us
 	if kad == nil {
@@ -1831,11 +1901,9 @@ func newTestPssStart(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *
 	if err != nil {
 		return nil
 	}
-	if start {
-		err = ps.Start(nil)
-		if err != nil {
-			return nil
-		}
+	err = ps.Start(nil)
+	if err != nil {
+		return nil
 	}
 
 	return ps
@@ -1850,7 +1918,7 @@ func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic message.Topic, to hexutil.Bytes) ([2]string, error) {
+func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to hexutil.Bytes) ([2]string, error) {
 
 	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, PssAddress(to), true)
 	if err != nil {

@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
-	"github.com/ethersphere/swarm/pss/message"
 )
 
 const (
@@ -77,8 +76,8 @@ type PssReadWriter struct {
 	LastActive time.Time
 	rw         chan p2p.Msg
 	spec       *protocols.Spec
-	topic      *message.Topic
-	sendFunc   func(string, message.Topic, []byte) error
+	topic      *Topic
+	sendFunc   func(string, Topic, []byte) error
 	key        string
 	closed     bool
 }
@@ -120,7 +119,7 @@ func (prw *PssReadWriter) injectMsg(msg p2p.Msg) error {
 type Protocol struct {
 	*Pss
 	proto        *p2p.Protocol
-	topic        *message.Topic
+	topic        *Topic
 	spec         *protocols.Spec
 	pubKeyRWPool map[string]p2p.MsgReadWriter
 	symKeyRWPool map[string]p2p.MsgReadWriter
@@ -135,7 +134,7 @@ type Protocol struct {
 // only one is specified, the protocol will not be valid
 // for the other, and will make the message handler
 // return errors
-func RegisterProtocol(ps *Pss, topic *message.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *ProtocolParams) (*Protocol, error) {
+func RegisterProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *ProtocolParams) (*Protocol, error) {
 	if !options.Asymmetric && !options.Symmetric {
 		return nil, fmt.Errorf("specify at least one of asymmetric or symmetric messaging mode")
 	}
@@ -199,12 +198,12 @@ func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid str
 }
 
 // check if (peer) symmetric key is currently registered with this topic
-func (p *Protocol) isActiveSymKey(key string, topic message.Topic) bool {
+func (p *Protocol) isActiveSymKey(key string, topic Topic) bool {
 	return p.symKeyRWPool[key] != nil
 }
 
 // check if (peer) asymmetric key is currently registered with this topic
-func (p *Protocol) isActiveAsymKey(key string, topic message.Topic) bool {
+func (p *Protocol) isActiveAsymKey(key string, topic Topic) bool {
 	return p.pubKeyRWPool[key] != nil
 }
 
@@ -228,7 +227,7 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // `key` and `asymmetric` specifies what encryption key
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
-func (p *Protocol) AddPeer(peer *p2p.Peer, topic message.Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+func (p *Protocol) AddPeer(peer *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
 	rw := &PssReadWriter{
 		Pss:   p.Pss,
 		rw:    make(chan p2p.Msg),
@@ -279,6 +278,6 @@ func (p *Protocol) RemovePeer(asymmetric bool, key string) {
 }
 
 // Uniform translation of protocol specifiers to topic
-func ProtocolTopic(spec *protocols.Spec) message.Topic {
-	return message.NewTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
+func ProtocolTopic(spec *protocols.Spec) Topic {
+	return BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 }

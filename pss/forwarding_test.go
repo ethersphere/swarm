@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/pss/message"
 )
 
 type testCase struct {
@@ -248,7 +248,7 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 	resultMap := make(map[pot.Address]int)
 
 	defer func() { sendFunc = sendMsg }()
-	sendFunc = func(_ *Pss, sp *network.Peer, _ *message.Message) bool {
+	sendFunc = func(_ *Pss, sp *network.Peer, _ *PssMsg) bool {
 		if tries < nFails {
 			tries++
 			return false
@@ -259,11 +259,8 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 	}
 
 	msg := newTestMsg(recipientAddr)
-	err := ps.forward(msg)
+	ps.forward(msg)
 
-	if err != nil {
-		t.Fatal(fmt.Sprintf("test [%s]\nmsg can't be forwarded. Expected no error but got %v", c.name, err.Error()))
-	}
 	// check test results
 	var fail bool
 	precision := len(recipientAddr)
@@ -324,7 +321,7 @@ func addPeers(kad *network.Kademlia, addresses []pot.Address) {
 }
 
 func createPss(t *testing.T, kad *network.Kademlia) *Pss {
-	privKey, err := ethCrypto.GenerateKey()
+	privKey, err := crypto.GenerateKey()
 	pssp := NewParams().WithPrivateKey(privKey)
 	ps, err := New(kad, pssp)
 	if err != nil {
@@ -338,17 +335,22 @@ func newTestDiscoveryPeer(addr pot.Address, kad *network.Kademlia) *network.Peer
 	p := p2p.NewPeer(enode.ID{}, "test", []p2p.Cap{})
 	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
 	bp := &network.BzzPeer{
-		Peer:    pp,
-		BzzAddr: network.NewBzzAddr(addr.Bytes(), []byte(fmt.Sprintf("%x", addr[:]))),
+		Peer: pp,
+		BzzAddr: &network.BzzAddr{
+			OAddr: addr.Bytes(),
+			UAddr: []byte(fmt.Sprintf("%x", addr[:])),
+		},
 	}
 	return network.NewPeer(bp, kad)
 }
 
-func newTestMsg(addr []byte) *message.Message {
-	msg := message.New(message.Flags{})
+func newTestMsg(addr []byte) *PssMsg {
+	msg := newPssMsg(&msgParams{})
 	msg.To = addr[:]
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
-	msg.Topic = [4]byte{}
-	msg.Payload = []byte("i have nothing to hide")
+	msg.Payload = &whisper.Envelope{
+		Topic: [4]byte{},
+		Data:  []byte("i have nothing to hide"),
+	}
 	return msg
 }

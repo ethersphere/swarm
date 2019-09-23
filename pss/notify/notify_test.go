@@ -3,34 +3,41 @@ package notify
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
-	"github.com/ethersphere/swarm/pss/crypto"
-	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	psses map[string]*pss.Pss
-	crypt crypto.Crypto
+	loglevel = flag.Int("l", 3, "loglevel")
+	psses    map[string]*pss.Pss
+	w        *whisper.Whisper
+	wapi     *whisper.PublicWhisperAPI
 )
 
 func init() {
-	testutil.Init()
+	flag.Parse()
+	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+	hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
+	h := log.CallerFileHandler(hf)
+	log.Root().SetHandler(h)
 
-	crypt = crypto.New()
+	w = whisper.New(&whisper.DefaultConfig)
+	wapi = whisper.NewPublicWhisperAPI(w)
 	psses = make(map[string]*pss.Pss)
 }
 
@@ -107,7 +114,7 @@ func TestStart(t *testing.T) {
 	}
 
 	rsrcName := "foo.eth"
-	rsrcTopic := message.NewTopic([]byte(rsrcName))
+	rsrcTopic := pss.BytesToTopic([]byte(rsrcName))
 
 	// wait for kademlia table to populate
 	time.Sleep(time.Second)
@@ -131,7 +138,7 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubkey, err := crypt.UnmarshalPublicKey(pubkeybytes)
+	pubkey, err := crypto.UnmarshalPubkey(pubkeybytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +228,13 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			privkey, err := ethCrypto.GenerateKey()
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			keys, err := wapi.NewKeyPair(ctxlocal)
+			if err != nil {
+				return nil, err
+			}
+			privkey, err := w.GetPrivateKey(keys)
 			if err != nil {
 				return nil, err
 			}
@@ -233,11 +246,12 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			psses[hexutil.Encode(crypt.SerializePublicKey(&privkey.PublicKey))] = ps
+			//psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
+			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -245,7 +259,7 @@ func newServices(allowRaw bool) adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil, nil, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
 		},
 	}
 }

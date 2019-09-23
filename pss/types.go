@@ -18,16 +18,77 @@ package pss
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethersphere/swarm/pss/message"
+	"github.com/ethereum/go-ethereum/rlp"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/ethersphere/swarm/storage"
+)
+
+const (
+	defaultWhisperTTL = 6000
+)
+
+const (
+	pssControlSym = 1
+	pssControlRaw = 1 << 1
 )
 
 var (
-	rawTopic = message.Topic{}
+	topicHashMutex = sync.Mutex{}
+	topicHashFunc  = storage.MakeHashFunc("SHA256")()
+	rawTopic       = Topic{}
 )
+
+// TopicLength sets the length of the message topic
+const TopicLength = 4
+
+// Topic is the PSS encapsulation of the Whisper topic type
+type Topic [TopicLength]byte
+
+// NewTopic hashes an arbitrary length byte slice and truncates it to the length of a topic, using only the first bytes of the digest
+func NewTopic(b []byte) Topic {
+	topicHashFunc := storage.MakeHashFunc("SHA256")()
+	topicHashFunc.Write(b)
+	return toTopic(topicHashFunc.Sum(nil))
+}
+
+// toTopic converts from the byte array representation of a topic
+// into the Topic type.
+func toTopic(b []byte) (t Topic) {
+	sz := TopicLength
+	if x := len(b); x < TopicLength {
+		sz = x
+	}
+	for i := 0; i < sz; i++ {
+		t[i] = b[i]
+	}
+	return t
+}
+
+func (t *Topic) String() string {
+	return hexutil.Encode(t[:])
+}
+
+// MarshalJSON implements the json.Marshaler interface
+func (t Topic) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(t.String())
+}
+
+// UnmarshalJSON implements the json.Marshaler interface
+func (t *Topic) UnmarshalJSON(input []byte) error {
+	topicbytes, err := hexutil.Decode(string(input[1 : len(input)-1]))
+	if err != nil {
+		return err
+	}
+	copy(t[:], topicbytes)
+	return nil
+}
 
 // PssAddress is an alias for []byte. It represents a variable length address
 type PssAddress []byte
@@ -49,19 +110,91 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+// holds the digest of a message used for caching
+type digest [digestLength]byte
+
+// conceals bitwise operations on the control flags byte
+type msgParams struct {
+	raw bool
+	sym bool
+}
+
+func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
+	if len(paramBytes) != 1 {
+		return nil
+	}
+	return &msgParams{
+		raw: paramBytes[0]&pssControlRaw > 0,
+		sym: paramBytes[0]&pssControlSym > 0,
+	}
+}
+
+func (m *msgParams) Bytes() (paramBytes []byte) {
+	var b byte
+	if m.raw {
+		b |= pssControlRaw
+	}
+	if m.sym {
+		b |= pssControlSym
+	}
+	paramBytes = append(paramBytes, b)
+	return paramBytes
+}
+
 type outboxMsg struct {
-	msg       *message.Message
+	msg       *PssMsg
 	startedAt time.Time
 }
 
-func newOutboxMsg(msg *message.Message) *outboxMsg {
+func newOutboxMsg(msg *PssMsg) *outboxMsg {
 	return &outboxMsg{
 		msg:       msg,
 		startedAt: time.Now(),
 	}
 }
 
-// Signature for a message handler function for a Message
+// PssMsg encapsulates messages transported over pss.
+type PssMsg struct {
+	To      []byte
+	Control []byte
+	Expire  uint32
+	Payload *whisper.Envelope
+}
+
+func newPssMsg(param *msgParams) *PssMsg {
+	return &PssMsg{
+		Control: param.Bytes(),
+	}
+}
+
+// message is flagged as raw / external encryption
+func (msg *PssMsg) isRaw() bool {
+	return msg.Control[0]&pssControlRaw > 0
+}
+
+// message is flagged as symmetrically encrypted
+func (msg *PssMsg) isSym() bool {
+	return msg.Control[0]&pssControlSym > 0
+}
+
+// serializes the message for use in cache
+func (msg *PssMsg) serialize() []byte {
+	rlpdata, _ := rlp.EncodeToBytes(struct {
+		To      []byte
+		Payload *whisper.Envelope
+	}{
+		To:      msg.To,
+		Payload: msg.Payload,
+	})
+	return rlpdata
+}
+
+// String representation of PssMsg
+func (msg *PssMsg) String() string {
+	return fmt.Sprintf("PssMsg: Recipient: %x", common.ToHex(msg.To))
+}
+
+// Signature for a message handler function for a PssMsg
 // Implementations of this type are passed to Pss.Register together with a topic,
 type HandlerFunc func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
 
@@ -108,4 +241,13 @@ func (store *stateStore) Load(key string) ([]byte, error) {
 
 func (store *stateStore) Save(key string, v []byte) error {
 	return nil
+}
+
+// BytesToTopic hashes an arbitrary length byte slice and truncates it to the length of a topic, using only the first bytes of the digest
+func BytesToTopic(b []byte) Topic {
+	topicHashMutex.Lock()
+	defer topicHashMutex.Unlock()
+	topicHashFunc.Reset()
+	topicHashFunc.Write(b)
+	return Topic(whisper.BytesToTopic(topicHashFunc.Sum(nil)))
 }

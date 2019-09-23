@@ -2,7 +2,7 @@
 
 Pss provides devp2p functionality for swarm nodes without the need for a direct tcp connection between them.
 
-Messages are encapsulated in a devp2p message structure `message.Message`. These capsules are forwarded from node to node using ordinary tcp devp2p until they reach their destination: The node or nodes who can successfully decrypt the message.
+Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until they reach their destination: The node or nodes who can successfully decrypt the message.
 
 | Layer     | Contents        |
 |-----------|-----------------|
