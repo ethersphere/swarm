@@ -145,7 +145,6 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		pivotKademlia := nodeKademlia(sim, idPivot)
 		pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
 
-		idPivot = nodeIDs[0]
 		for i := 1; i < j; i++ {
 			idOther := nodeIDs[i]
 			otherKademlia := sim.MustNodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
