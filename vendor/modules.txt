@@ -328,8 +328,6 @@ github.com/syndtr/goleveldb/leveldb/filter
 github.com/syndtr/goleveldb/leveldb/journal
 github.com/syndtr/goleveldb/leveldb/memdb
 github.com/syndtr/goleveldb/leveldb/table
-# github.com/tilinna/clock v1.0.2
-github.com/tilinna/clock
 # github.com/tyler-smith/go-bip39 v0.0.0-20181017060643-dbb3b84ba2ef
 github.com/tyler-smith/go-bip39
 github.com/tyler-smith/go-bip39/wordlists
