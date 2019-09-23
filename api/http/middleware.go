@@ -3,7 +3,6 @@ package http
 import (
 	"fmt"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/spancontext"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/pborman/uuid"
 )
 
@@ -150,13 +150,22 @@ func InstrumentOpenTracing(h http.Handler) http.Handler {
 	})
 }
 
-func RecoverPanic(h http.Handler) http.Handler {
+func PinningEnabledPassthrough(h http.Handler, api *pin.API, checkHeader bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Error("panic recovery!", "stack trace", string(debug.Stack()), "url", r.URL.String(), "headers", r.Header)
+		// if checkHeader is true, it means that the passthrough should happen if the header is set and the pinAPI is not nil
+		if checkHeader {
+			headerPin := r.Header.Get(PinHeaderName)
+			if strings.ToLower(headerPin) == "true" && api == nil {
+				respondError(w, r, "Pinning disabled on this node", http.StatusForbidden)
+				return
 			}
-		}()
+		} else {
+			// the check assumes just pinAPI not nil
+			if api == nil {
+				respondError(w, r, "Pinning disabled on this node", http.StatusForbidden)
+				return
+			}
+		}
 		h.ServeHTTP(w, r)
 	})
 }

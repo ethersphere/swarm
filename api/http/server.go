@@ -106,7 +106,6 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 	server := &Server{api: api, pinAPI: pinAPI}
 
 	defaultMiddlewares := []Adapter{
-		RecoverPanic,
 		SetRequestID,
 		SetRequestHost,
 		InitLoggingResponseWriter,
@@ -118,6 +117,12 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 		return InitUploadTag(h, api.Tags)
 	})
 
+	pinAdapter := func(checkHeader bool) Adapter {
+		return Adapter(func(h http.Handler) http.Handler {
+			return PinningEnabledPassthrough(h, server.pinAPI, checkHeader)
+		})
+	}
+
 	defaultPostMiddlewares := append(defaultMiddlewares, tagAdapter)
 
 	mux := http.NewServeMux()
@@ -128,7 +133,7 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostFiles),
-			defaultPostMiddlewares...,
+			append(defaultPostMiddlewares, pinAdapter(true))...,
 		),
 		"DELETE": Adapt(
 			http.HandlerFunc(server.HandleDelete),
@@ -142,7 +147,7 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostRaw),
-			defaultPostMiddlewares...,
+			append(defaultPostMiddlewares, pinAdapter(true))...,
 		),
 	})
 	mux.Handle("/bzz-immutable:/", methodHandler{
@@ -182,15 +187,15 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 	mux.Handle("/bzz-pin:/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleGetPins),
-			defaultMiddlewares...,
+			append(defaultMiddlewares, pinAdapter(false))...,
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePin),
-			defaultPostMiddlewares...,
+			append(defaultMiddlewares, pinAdapter(false))...,
 		),
 		"DELETE": Adapt(
 			http.HandlerFunc(server.HandleUnpin),
-			defaultMiddlewares...,
+			append(defaultMiddlewares, pinAdapter(false))...,
 		),
 	})
 	mux.Handle("/", methodHandler{
