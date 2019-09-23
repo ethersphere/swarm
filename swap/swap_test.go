@@ -32,7 +32,6 @@ import (
 	"path"
 	"reflect"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -67,7 +66,7 @@ var (
 	testChequeContract2 = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDE") // second contract not created by ownerKey
 	gasLimit            = uint64(8000000)
 	testBackend         *swapTestBackend
-	testNetworkID       = int64(42)
+	testNetworkID       = "42"
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -105,11 +104,6 @@ func newTestBackend() *swapTestBackend {
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
 	}
-}
-
-// NetworkID must be implemented to be a valid contracts.Backend
-func (b swapTestBackend) NetworkID(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(testNetworkID), nil
 }
 
 // Test getting a peer's balance
@@ -460,7 +454,7 @@ func TestNewSwapFailure(t *testing.T) {
 
 //TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook tests that we cannot connect to another instance of a chequebook contract if on the same networkID we have already saved an instance of a chequebook
 func TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook(t *testing.T) {
-	var expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", strconv.Itoa(int(testNetworkID)))
+	var expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", testNetworkID)
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
 	// deploy
@@ -469,7 +463,7 @@ func TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook(t *testing.T) 
 		t.Fatal(err)
 	}
 	//save
-	swap.saveChequebook(swap.GetParams().NetworkID, swap.GetParams().ContractAddress)
+	swap.saveChequebook(swap.GetParams().ContractAddress)
 	// we cannot give a flag, while on the same networkID we have already saved another instance of the chequebook
 	err = swap.StartChequebook(testChequeContract2)
 	if err.Error() != expectedError.Error() {
@@ -499,7 +493,7 @@ func TestStartChequebookWithParamAndPreviouslySameUsedChequebook(t *testing.T) {
 		t.Fatal(err)
 	}
 	//save
-	swap.saveChequebook(swap.GetParams().NetworkID, swap.GetParams().ContractAddress)
+	swap.saveChequebook(swap.GetParams().ContractAddress)
 	// we cannot give a flag, while on the same networkID we have already saved another instance of the chequebook
 	err = swap.StartChequebook(swap.GetParams().ContractAddress)
 	if err != nil {
@@ -766,7 +760,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string
 		t.Fatal(err)
 	}
 
-	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
+	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold, testNetworkID)
 	return swap, dir, logdir
 }
 

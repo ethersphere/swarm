@@ -64,6 +64,7 @@ type Swap struct {
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
+	networkID           string             // the Ethereum network ID to which the node is connected
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -119,7 +120,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
+func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, networkID string) *Swap {
 	auditLog = newLogger(logpath)
 	return &Swap{
 		store:               stateStore,
@@ -130,6 +131,7 @@ func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backe
 		disconnectThreshold: int64(disconnectThreshold),
 		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
+		networkID:           networkID,
 	}
 }
 
@@ -149,8 +151,13 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
 	}
 	backend, err := ethclient.Dial(backendURL)
+
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
+	}
+	networkID, err := backend.NetworkID(context.TODO())
+	if err != nil {
+		return nil, err
 	}
 	return new(
 		logpath,
@@ -158,7 +165,9 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 		prvkey,
 		backend,
 		disconnectThreshold,
-		paymentThreshold), nil
+		paymentThreshold,
+		networkID.String(),
+	), nil
 }
 
 const (
@@ -183,7 +192,7 @@ func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
 }
 
-func usedChequebookAtAddressKey(networkID string) string {
+func usedChequebookAtNetworkKey(networkID string) string {
 	return usedChequebookAtNetworkPrefix + networkID
 }
 
@@ -443,12 +452,8 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 
 // StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
 func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
-	// load the network ID on which we attempt to start our chequebook
-	networkID, err := s.backend.NetworkID(context.TODO())
-	if err != nil {
-		return err
-	}
-	toUseChequebook, err := s.loadChequebook(networkID.String())
+
+	toUseChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
 		return fmt.Errorf("Error reading previously used chequebook: %s", err)
@@ -463,7 +468,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != toUseChequebook) {
-		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", networkID)
+		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", s.networkID)
 	}
 	if chequebookAddrFlag != (common.Address{}) {
 		toUseChequebook = chequebookAddrFlag
@@ -482,9 +487,9 @@ func (s *Swap) bindToContractAt(address common.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.GetParams().NetworkID)
+	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.networkID)
 	// saving chequebook
-	return s.saveChequebook(s.GetParams().NetworkID, address)
+	return s.saveChequebook(address)
 }
 
 // Deploy deploys the Swap contract and sets the contract address
@@ -519,12 +524,12 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 	return addr, err
 }
 
-func (s *Swap) loadChequebook(networkID string) (common.Address, error) {
+func (s *Swap) loadChequebook() (common.Address, error) {
 	var chequebook common.Address
-	err := s.store.Get(usedChequebookAtAddressKey(networkID), &chequebook)
+	err := s.store.Get(usedChequebookAtNetworkKey(s.networkID), &chequebook)
 	return chequebook, err
 }
 
-func (s *Swap) saveChequebook(networkID string, chequebook common.Address) error {
-	return s.store.Put(usedChequebookAtAddressKey(networkID), chequebook)
+func (s *Swap) saveChequebook(chequebook common.Address) error {
+	return s.store.Put(usedChequebookAtNetworkKey(s.networkID), chequebook)
 }
