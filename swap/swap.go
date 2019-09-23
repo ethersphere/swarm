@@ -162,10 +162,10 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 }
 
 const (
-	balancePrefix        = "balance_"
-	sentChequePrefix     = "sent_cheque_"
-	receivedChequePrefix = "received_cheque_"
-	usedChequebookKey    = "used_chequebook"
+	balancePrefix                 = "balance_"
+	sentChequePrefix              = "sent_cheque_"
+	receivedChequePrefix          = "received_cheque_"
+	usedChequebookAtNetworkPrefix = "used_chequebook_at_network"
 )
 
 // returns the store key for retrieving a peer's balance
@@ -181,6 +181,10 @@ func sentChequeKey(peer enode.ID) string {
 // returns the store key for retrieving a peer's last received cheque
 func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
+}
+
+func usedChequebookAtAddressKey(networkID string) string {
+	return usedChequebookAtNetworkPrefix + networkID
 }
 
 func keyToID(key string, prefix string) enode.ID {
@@ -439,9 +443,12 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 
 // StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
 func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
-	var toUseChequebook common.Address
-	// attempt to read chequebook from disk
-	err := s.store.Get(usedChequebookKey, &toUseChequebook)
+	// load the network ID on which we attempt to start our chequebook
+	networkID, err := s.backend.NetworkID(context.TODO())
+	if err != nil {
+		return err
+	}
+	toUseChequebook, err := s.loadChequebook(networkID.String())
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
 		return fmt.Errorf("Error reading previously used chequebook: %s", err)
@@ -456,12 +463,11 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != toUseChequebook) {
-		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
+		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", networkID)
 	}
 	if chequebookAddrFlag != (common.Address{}) {
 		toUseChequebook = chequebookAddrFlag
 	}
-	auditLog.Info("Using the chequebook", "chequebookAddr", toUseChequebook)
 	return s.bindToContractAt(toUseChequebook)
 }
 
@@ -476,8 +482,9 @@ func (s *Swap) bindToContractAt(address common.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	s.store.Put(usedChequebookKey, address)
-	return nil
+	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.GetParams().NetworkID)
+	// saving chequebook
+	return s.saveChequebook(address)
 }
 
 // Deploy deploys the Swap contract and sets the contract address
@@ -510,4 +517,14 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 		return addr, nil
 	}
 	return addr, err
+}
+
+func (s *Swap) loadChequebook(networkID string) (common.Address, error) {
+	var chequebook common.Address
+	err := s.store.Get(usedChequebookAtAddressKey(networkID), &chequebook)
+	return chequebook, err
+}
+
+func (s *Swap) saveChequebook(chequebook common.Address) error {
+	return s.store.Put(usedChequebookAtAddressKey(s.GetParams().NetworkID), chequebook)
 }
