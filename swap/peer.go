@@ -164,7 +164,7 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 
-	auditLog.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	auditLog.Info("sending cheque", "peer", p.ID().String(), "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})
