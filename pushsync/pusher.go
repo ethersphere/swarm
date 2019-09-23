@@ -252,7 +252,7 @@ func (p *Pusher) handleReceiptMsg(msg []byte) error {
 		return err
 	}
 	p.logger.Trace("Handler", "receipt", label(receipt.Addr))
-	p.pushReceipt(receipt.Addr)
+	go p.pushReceipt(receipt.Addr)
 	return nil
 }
 
