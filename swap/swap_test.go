@@ -64,7 +64,7 @@ var (
 	beneficiaryAddress  = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
 	testChequeSig       = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
 	testChequeContract  = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
-	testChequeContract2 = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract not created by ownerKey
+	testChequeContract2 = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDE") // second contract not created by ownerKey
 	gasLimit            = uint64(8000000)
 	testBackend         *swapTestBackend
 	testNetworkID       = int64(42)
