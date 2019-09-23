@@ -143,6 +143,7 @@ func dummyHandshakeMessage(tester *p2ptest.ProtocolTester, peerID enode.ID) erro
 // on successful handshake the protocol does not go idle
 // peer added to the pool and serves headers is registered
 func TestBzzEthHandshake(t *testing.T) {
+	t.Helper()
 	tester, b, teardown, err := newBzzEthTester(t, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +277,7 @@ func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, req
 				{
 					Code: 2,
 					Msg: GetBlockHeaders{
-						ID:     requestID,
+						Rid:    requestID,
 						Hashes: wanted,
 					},
 					Peer: peerID,
@@ -293,7 +294,7 @@ func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, reques
 				{
 					Code: 3,
 					Msg: BlockHeaders{
-						ID:      requestID,
+						Rid:     requestID,
 						Headers: wantedData,
 					},
 					Peer: peerID,
@@ -302,7 +303,7 @@ func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, reques
 		})
 }
 
-// Test bzzeth full eth node sends new block header hashes
+// TestNewBlockHeaders full eth node sends new block header hashes
 // respond with a GetBlockHeaders requesting headers falling into the proximity of this node
 // Also test two other conditions
 // - If a header is already present in localstore, dont request it in GetBlockHeaders
@@ -320,33 +321,39 @@ func TestNewBlockHeaders(t *testing.T) {
 	}
 	defer teardown()
 
-	offered := make(NewBlockHeaders, 256)
-	for i := 0; i < len(offered); i++ {
-		offered[i].Hash = common.BytesToHash(crypto.Keccak256([]byte{uint8(i)}))
-		offered[i].Number = uint64(i)
+	//Construct the blocks hashes that are offered from the eth node
+	offeredBlocks := make(NewBlockHeaders, 256)
+	for i := 0; i < len(offeredBlocks); i++ {
+		offeredBlocks[i].Hash = common.BytesToHash(crypto.Keccak256([]byte{uint8(i)}))
+		offeredBlocks[i].BlockHeight = uint64(i)
 	}
 
 	// redefine wantHeadeFunc for this test
 	wantedIndexes := []int{1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233}
-	IgnoreIndexes := []int{77}
+	ignoreIndexes := []int{77}
 	wantHeaderFunc = func(hash []byte, _ *network.Kademlia) bool {
 		for _, i := range wantedIndexes {
-			if bytes.Equal(hash, offered[i].Hash.Bytes()) {
+			if bytes.Equal(hash, offeredBlocks[i].Hash.Bytes()) {
 				return true
 			}
-			// Add the ignore headers (headers in localstore already) to the valid list
-			if bytes.Equal(hash, offered[IgnoreIndexes[0]].Hash.Bytes()) {
+		}
+
+		// Check if it is in the ignore headers (headers in localstore already)
+		// If yes, then add to the valid list
+		for _, i := range ignoreIndexes {
+			if bytes.Equal(hash, offeredBlocks[i].Hash.Bytes()) {
 				return true
 			}
 		}
 		return false
 	}
 
-	wanted := make([][]byte, len(wantedIndexes))
-	wantedData := make([]rlp.RawValue, len(wantedIndexes)+1)
+	// construct the wanted headers
+	wantedHeaderHashes := make([][]byte, len(wantedIndexes))
+	wantedHeaderData := make([]rlp.RawValue, len(wantedIndexes)+1)
 	for i, w := range wantedIndexes {
-		wanted[i] = crypto.Keccak256([]byte{uint8(w)})
-		wantedData[i] = rlp.RawValue{uint8(w)}
+		wantedHeaderHashes[i] = crypto.Keccak256([]byte{uint8(w)})
+		wantedHeaderData[i] = rlp.RawValue{uint8(w)}
 	}
 
 	// overwrite newRequestIDFunc to be deterministic
@@ -360,13 +367,13 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	// overwrite finishStorageFunc to test deterministic storage of headers
 	finishStorageTesting := func(chunks []chunk.Chunk) {
-		checkStorage(t, wantedIndexes, wanted, wantedData, netstore)
+		checkStorage(t, wantedIndexes, wantedHeaderHashes, wantedHeaderData, netstore)
 	}
 	finishStorageFunc = finishStorageTesting
 
 	// overwrite finishDeliveryFunc to test deterministic delivery of headers
 	finishDeliveryTesting := func(hashes map[string]bool) {
-		checkDelivery(t, wantedIndexes, wanted, hashes)
+		checkDelivery(t, wantedIndexes, wantedHeaderHashes, hashes)
 	}
 	finishDeliveryFunc = finishDeliveryTesting
 
@@ -378,25 +385,27 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	// Add a header to localstore
 	// this header should not be requested in GetBlockHeaders
-	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk([]byte{uint8(IgnoreIndexes[0])}))
+	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk([]byte{uint8(ignoreIndexes[0])}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = newBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), &offered, wanted)
+	err = newBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), &offeredBlocks, wantedHeaderHashes)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a unsolicited header
-	wantedData[len(wantedIndexes)] = rlp.RawValue{uint8(255)}
-	err = blockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedData)
+	wantedHeaderData[len(wantedIndexes)] = rlp.RawValue{uint8(255)}
+	err = blockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedHeaderData)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
+	t.Helper()
+
 	// Check if requested headers arrived and are stored in localstore
 	for i := range wantedIndexes {
 		chunk, err := netstore.Store.Get(context.Background(), chunk.ModeGetLookup, wanted[i])
@@ -420,6 +429,7 @@ func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData
 }
 
 func checkDelivery(t *testing.T, wantedIndexes []int, wanted [][]byte, hashes map[string]bool) {
+	t.Helper()
 	for i := range wantedIndexes {
 		hash := hex.EncodeToString(wanted[i])
 		if _, ok := hashes[hash]; !ok {

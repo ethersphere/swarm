@@ -22,6 +22,8 @@ import (
 	"errors"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -54,10 +56,10 @@ type BzzEth struct {
 }
 
 // New constructs the BzzEth node service
-func New(ns *storage.NetStore, kad *network.Kademlia) *BzzEth {
+func New(netStore *storage.NetStore, kad *network.Kademlia) *BzzEth {
 	return &BzzEth{
 		peers:    newPeers(),
-		netStore: ns,
+		netStore: netStore,
 		kad:      kad,
 		quit:     make(chan struct{}),
 	}
@@ -97,14 +99,12 @@ func (b *BzzEth) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 // handlers are called asynchronously so handler calls do not block incoming msg processing
 func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		p.logger.Debug("bzzeth.handleMsg")
+		p.logger.Trace("bzzeth.handleMsg")
 		switch msg := msg.(type) {
 		case *NewBlockHeaders:
 			go b.handleNewBlockHeaders(ctx, p, msg)
 		case *BlockHeaders:
 			go b.handleBlockHeaders(ctx, p, msg)
-		default:
-			p.logger.Error("Invalid msg")
 		}
 		return nil
 	}
@@ -119,17 +119,22 @@ func (b *BzzEth) handleMsgFromSwarmNode(p *Peer) func(context.Context, interface
 	}
 }
 
-// handles new header hashes - strategy; only request headers that are in Kad Nearest Neighbourhood
+// handleNewBlockHeaders handles new header hashes
+// only request headers that are in Kad Nearest Neighbourhood
 func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlockHeaders) {
-	p.logger.Debug("bzzeth.handleNewBlockHeaders")
+	p.logger.Trace("bzzeth.handleNewBlockHeaders")
 
 	// collect the addresses of blocks that are not in our localstore
-	var addresses []chunk.Address
-	for _, h := range *msg {
-		addresses = append(addresses, h.Hash.Bytes())
+	addresses := make([]chunk.Address, len(*msg))
+	for i, h := range *msg {
+		addresses[i] = h.Hash.Bytes()
 		log.Trace("Received hashes ", "Header", hex.EncodeToString(h.Hash.Bytes()))
 	}
 	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
+	if err != nil {
+		log.Error("Error checking hashesh in store", "Reason", err)
+		return
+	}
 
 	// collect the hashes of block headers we want
 	var hashes [][]byte
@@ -164,7 +169,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 		select {
 		case hash, ok := <-deliveries:
 			if !ok {
-				p.logger.Debug("bzzeth.handleNewBlockHeaders", "hash", hex.EncodeToString(hash), "delivered", deliveredCnt)
+				p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt)
 				return
 			}
 			deliveredCnt++
@@ -213,63 +218,63 @@ func finishDelivery(hashes map[string]bool) {
 
 // handleBlockHeaders handles block headers message
 func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHeaders) {
-	p.logger.Debug("bzzeth.handleBlockHeaders", "id", msg.ID)
+	p.logger.Debug("bzzeth.handleBlockHeaders", "id", msg.Rid)
 
 	// retrieve the request for this id
-	req, ok := p.requests.get(msg.ID)
+	req, ok := p.requests.get(msg.Rid)
 	if !ok {
-		p.logger.Warn("bzzeth.handleBlockHeaders: nonexisting request id", "id", msg.ID)
+		p.logger.Warn("bzzeth.handleBlockHeaders: nonexisting request id", "id", msg.Rid)
 		p.Drop()
 		return
 	}
 
 	// convert rlp.RawValue to bytes
-	var headers [][]byte
-	for _, h := range msg.Headers {
-		headers = append(headers, h)
+	headers := make([][]byte, len(msg.Headers))
+	for i, h := range msg.Headers {
+		headers[i] = h
 	}
 
 	err := b.deliverAndStoreAll(ctx, req, headers)
 	if err != nil {
-		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.ID, "err", err)
+		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.Rid, "err", err)
 		p.Drop()
 	}
 }
 
 // Validates and headers asynchronously and stores the valid chunks in one go
 func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [][]byte) error {
-	errC := make(chan error, len(headers))
-
 	chunks := make([]chunk.Chunk, 0)
 	var chunkL sync.RWMutex
-	var wg sync.WaitGroup
+	var wg errgroup.Group
 	for _, h := range headers {
 		hdr := make([]byte, len(h))
 		copy(hdr, h)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() error {
 			ch, err := b.validateHeader(ctx, hdr, req)
 			if err != nil {
-				errC <- err
-				return
+				return err
 			}
 			chunkL.Lock()
 			defer chunkL.Unlock()
 			chunks = append(chunks, ch)
-		}()
+			return nil
+		})
 	}
+	// finish storage is used mostly in testing
+	// in normal scenario.. it just logs Trace
+	defer finishStorageFunc(chunks)
 
 	// wait for all validations to get over and close the channels
-	wg.Wait()
-	close(errC)
+	err := wg.Wait()
+	if err != nil {
+		return err
+	}
 
 	// Store all the valid header chunks in one shot
 	results, err := b.netStore.Put(ctx, chunk.ModePutUpload, chunks...)
 	if err != nil {
 		for i := range results {
-			ch := chunks[i]
-			log.Warn("bzzeth.store", "hash", ch.Address().Hex(), "err", err)
+			log.Error("bzzeth.store", "hash", chunks[i].Address().Hex(), "err", err)
 			// ignore all other errors, but invalid chunk incurs peer drop
 			if err == chunk.ErrChunkInvalid {
 				return err
@@ -277,11 +282,7 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 		}
 	}
 	log.Debug("Stored all headers ", "count", len(chunks))
-
-	// finish storage is used mostly in testing
-	// in normal scenario.. it just logs Trace
-	finishStorageFunc(chunks)
-	return <-errC
+	return nil
 }
 
 // validateHeader check for correctness and validity of the header
@@ -302,8 +303,6 @@ func (b *BzzEth) validateHeader(ctx context.Context, header []byte, req *request
 		// header is not present in the request hash.
 		return nil, errUnsolicitedHeader
 	}
-
-	// TODO: Ethereum block header validation should come here
 }
 
 // Checks if the given hash is expected in this request
@@ -311,7 +310,7 @@ func isHeaderExpected(req *request, addr string) (rcvdFlag bool, ok bool) {
 	req.lock.RLock()
 	defer req.lock.RUnlock()
 	rcvdFlag, ok = req.hashes[addr]
-	return
+	return rcvdFlag, ok
 }
 
 // Set the given hash as received in the request
@@ -325,7 +324,6 @@ func setHeaderAsReceived(req *request, addr string) {
 func newChunk(data []byte) chunk.Chunk {
 	hash := crypto.Keccak256(data)
 	return chunk.NewChunk(hash, data)
-
 }
 
 // Protocols returns the p2p protocol

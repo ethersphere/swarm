@@ -154,7 +154,7 @@ func (r *requests) get(id uint32) (*request, bool) {
 func (p *Peer) getBlockHeaders(ctx context.Context, hashes [][]byte, deliveries chan []byte) (*request, error) {
 	req, id := p.requests.create(hashes, deliveries)
 	err := p.Send(ctx, &GetBlockHeaders{
-		ID:     id,
+		Rid:    id,
 		Hashes: hashes,
 	})
 	if err != nil {
