@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/swap"
 )
 
 // TestNewSwarm validates Swarm fields in repsect to the provided configuration.
@@ -107,19 +106,6 @@ func TestNewSwarm(t *testing.T) {
 				}
 				if s.sfs == nil {
 					t.Error("swarm filesystem not initialized")
-				}
-			},
-		},
-		{
-			name: "with swap",
-			configure: func(config *api.Config) {
-				config.SwapBackendURL = ipcEndpoint
-				config.SwapEnabled = true
-				config.NetworkID = swap.AllowedNetworkID
-			},
-			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s.swap == nil {
-					t.Error("swap is nil")
 				}
 			},
 		},
