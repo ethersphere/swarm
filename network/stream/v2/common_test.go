@@ -57,8 +57,6 @@ var (
 	bucketKeyFileStore         = "filestore"
 	bucketKeyLocalStore        = "localstore"
 	bucketKeyInitialBinIndexes = "bin-indexes"
-
-	simContextTimeout = 90 * time.Second
 )
 
 func nodeRegistry(sim *simulation.Simulation, id enode.ID) (s *Registry) {
