@@ -104,7 +104,8 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 // to be true for snapshot tests.
 func NewBzzInProc(services map[string]ServiceFunc, disableAutoConnect bool) (s *Simulation) {
 	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
-		addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
+		addr := network.NewAddr(ctx.Config.Node())
+
 		hp := network.NewHiveParams()
 		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 		hp.Discovery = false

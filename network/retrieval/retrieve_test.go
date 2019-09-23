@@ -231,12 +231,13 @@ func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simula
 func TestRequestFromPeers(t *testing.T) {
 	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
-	addr := network.RandomBzzAddr()
+	addr := network.RandomAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "bzz-retrieve", Version: 1}}), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
-		BzzAddr: network.RandomBzzAddr(),
-		Peer:    protocolsPeer,
+		BzzAddr:   network.RandomAddr(),
+		LightNode: false,
+		Peer:      protocolsPeer,
 	}, to)
 
 	to.On(peer)
@@ -269,7 +270,7 @@ func TestHasPriceImplementation(t *testing.T) {
 
 func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 	n := ctx.Config.Node()
-	addr := network.NewBzzAddrFromEnode(n)
+	addr := network.NewAddr(n)
 
 	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
 	if err != nil {
@@ -395,7 +396,7 @@ func nodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig 
 			t.Fatalf("unable to create enode: %v", err)
 		}
 
-		n := network.NewBzzAddrFromEnode(nod)
+		n := network.NewAddr(nod)
 		foundPo = chunk.Proximity(baseaddr, n.Over())
 	}
 
