@@ -456,10 +456,9 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
+// StartChequebook start the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
 func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
-
-	toUseChequebook, err := s.loadChequebook()
+	chequebookToUse, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
 		return fmt.Errorf("Error reading previously used chequebook: %s", err)
@@ -470,17 +469,17 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 		if err != nil {
 			return fmt.Errorf("Error deploying chequebook: %s", err)
 		}
-		toUseChequebook = chequebook
+		chequebookToUse = chequebook
 	}
 	// read from state, but provided flag is not the same
-	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != toUseChequebook) {
+	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != chequebookToUse) {
 		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", s.networkID)
 	}
 	if chequebookAddrFlag != (common.Address{}) {
-		toUseChequebook = chequebookAddrFlag
+		chequebookToUse = chequebookAddrFlag
 	}
-	log.Info("Using the chequebook", "chequebookAddr", toUseChequebook)
-	return s.bindToContractAt(toUseChequebook)
+	log.Info("Using the chequebook", "chequebookAddr", chequebookToUse)
+	return s.bindToContractAt(chequebookToUse)
 }
 
 // BindToContractAt binds to an instance of an already existing chequebook contract at address
