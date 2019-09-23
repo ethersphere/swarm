@@ -64,6 +64,7 @@ type Swap struct {
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
+	logger              log.Logger
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -120,8 +121,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 
 // new - swap constructor without integrity check
 func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
-	address := crypto.PubkeyToAddress(prvkey.PublicKey)
-	auditLog = newLogger(logpath, address)
+	auditLog = newLogger(logpath, crypto.PubkeyToAddress(prvkey.PublicKey))
 	return &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
@@ -131,6 +131,7 @@ func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backe
 		disconnectThreshold: int64(disconnectThreshold),
 		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
+		logger:              newLogger(logpath, crypto.PubkeyToAddress(prvkey.PublicKey)),
 	}
 }
 

@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -40,6 +41,7 @@ type Peer struct {
 	lastReceivedCheque *Cheque
 	lastSentCheque     *Cheque
 	balance            int64
+	logger             log.Logger
 }
 
 // NewPeer creates a new swap Peer instance
@@ -49,6 +51,7 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 		swap:            s,
 		beneficiary:     beneficiary,
 		contractAddress: contractAddress,
+		logger:          log.New("peer", p.ID()),
 	}
 
 	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {
