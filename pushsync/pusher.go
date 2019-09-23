@@ -82,7 +82,7 @@ func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 		receipts:      make(chan []byte),
 		ps:            ps,
 		logger:        log.New("self", label(ps.BaseAddr())),
-		retryInterval: 100 * time.Millisecond,
+		retryInterval: 3 * time.Second,
 	}
 	go p.sync()
 	return p
