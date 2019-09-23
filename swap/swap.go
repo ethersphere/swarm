@@ -171,32 +171,38 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 }
 
 const (
-	balancePrefix                 = "balance_"
-	sentChequePrefix              = "sent_cheque_"
-	receivedChequePrefix          = "received_cheque_"
-	usedChequebookAtNetworkPrefix = "used_chequebook_at_network"
+	balancePrefix        = "balance_"
+	sentChequePrefix     = "sent_cheque_"
+	receivedChequePrefix = "received_cheque_"
+	usedChequebookPrefix = "used_chequebook"
 )
 
-// returns the store key for retrieving a peer's balance
-func balanceKey(peer enode.ID) string {
-	return balancePrefix + peer.String()
+func networkIDPrefix(networkID string) string {
+	return networkID + "_"
 }
 
-// returns the store key for retrieving a peer's last sent cheque
-func sentChequeKey(peer enode.ID) string {
-	return sentChequePrefix + peer.String()
+// returns the store key for retrieving a peer's balance at a certain Ethereum networkID
+func balanceKey(peer enode.ID, networkID string) string {
+	return networkIDPrefix(networkID) + balancePrefix + peer.String()
 }
 
-// returns the store key for retrieving a peer's last received cheque
-func receivedChequeKey(peer enode.ID) string {
-	return receivedChequePrefix + peer.String()
+// returns the store key for retrieving a peer's last sent cheque at a certain Ethereum networkID
+func sentChequeKey(peer enode.ID, networkID string) string {
+	return networkIDPrefix(networkID) + sentChequePrefix + peer.String()
 }
 
-func usedChequebookAtNetworkKey(networkID string) string {
-	return usedChequebookAtNetworkPrefix + networkID
+// returns the store key for retrieving a peer's last received cheque at a certain Ethereum networkID
+func receivedChequeKey(peer enode.ID, networkID string) string {
+	return networkIDPrefix(networkID) + receivedChequePrefix + peer.String()
+}
+
+// return the store key for retrieving the peers used chequebook at at a certain Ethereum networkID
+func usedChequebookKey(networkID string) string {
+	return networkIDPrefix(networkID) + usedChequebookPrefix
 }
 
 func keyToID(key string, prefix string) enode.ID {
+	fmt.Println(key, prefix)
 	return enode.HexID(key[len(prefix):])
 }
 
@@ -367,7 +373,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peer := keyToID(string(key), balancePrefix)
+		peer := keyToID(string(key), s.networkID+balancePrefix)
 		if _, peerHasBalance := balances[peer]; !peerHasBalance {
 			var peerBalance int64
 			err = json.Unmarshal(value, &peerBalance)
@@ -388,7 +394,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(receivedChequeKey(p), &cheque)
+	err = s.store.Get(receivedChequeKey(p, s.networkID), &cheque)
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
@@ -398,7 +404,7 @@ func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
 // loadLastSentCheque loads the last sent cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(sentChequeKey(p), &cheque)
+	err = s.store.Get(sentChequeKey(p, s.networkID), &cheque)
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
@@ -408,7 +414,7 @@ func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
 // loadBalance loads the current balance for the peer from the store
 // and returns 0 if there was no prior balance saved
 func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
-	err = s.store.Get(balanceKey(p), &balance)
+	err = s.store.Get(balanceKey(p, s.networkID), &balance)
 	if err == state.ErrNotFound {
 		return 0, nil
 	}
@@ -417,17 +423,17 @@ func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p enode.ID, cheque *Cheque) error {
-	return s.store.Put(receivedChequeKey(p), cheque)
+	return s.store.Put(receivedChequeKey(p, s.networkID), cheque)
 }
 
 // saveLastSentCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastSentCheque(p enode.ID, cheque *Cheque) error {
-	return s.store.Put(sentChequeKey(p), cheque)
+	return s.store.Put(sentChequeKey(p, s.networkID), cheque)
 }
 
 // saveBalance saves balance as the current balance for peer
 func (s *Swap) saveBalance(p enode.ID, balance int64) error {
-	return s.store.Put(balanceKey(p), balance)
+	return s.store.Put(balanceKey(p, s.networkID), balance)
 }
 
 // Close cleans up swap
@@ -527,10 +533,10 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 
 func (s *Swap) loadChequebook() (common.Address, error) {
 	var chequebook common.Address
-	err := s.store.Get(usedChequebookAtNetworkKey(s.networkID), &chequebook)
+	err := s.store.Get(usedChequebookKey(s.networkID), &chequebook)
 	return chequebook, err
 }
 
 func (s *Swap) saveChequebook(chequebook common.Address) error {
-	return s.store.Put(usedChequebookAtNetworkKey(s.networkID), chequebook)
+	return s.store.Put(usedChequebookKey(s.networkID), chequebook)
 }
