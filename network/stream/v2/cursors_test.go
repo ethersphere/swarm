@@ -68,6 +68,18 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	getCursorsCopy := func(sim *simulation.Simulation, idOne, idOther enode.ID) map[string]uint64 {
+		r := nodeRegistry(sim, idOne)
+		if r == nil {
+			return nil
+		}
+		p := r.getPeer(idOther)
+		if p == nil {
+			return nil
+		}
+		return p.getCursorsCopy()
+	}
+
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		if len(nodeIDs) != nodeCount {
@@ -81,8 +93,8 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 
 			idOne := nodeIDs[0]
 			idOther := nodeIDs[1]
-			onesCursors := nodeRegistry(sim, idOne).getPeer(idOther).getCursorsCopy()
-			othersCursors := nodeRegistry(sim, idOther).getPeer(idOne).getCursorsCopy()
+			onesCursors := getCursorsCopy(sim, idOne, idOther)
+			othersCursors := getCursorsCopy(sim, idOther, idOne)
 
 			onesBins := nodeInitialBinIndexes(sim, idOne)
 			othersBins := nodeInitialBinIndexes(sim, idOther)

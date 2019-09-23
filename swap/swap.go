@@ -32,16 +32,21 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
+
+var auditLog log.Logger // logger for Swap related messages and audit trail
+
+// swapLogLevel indicates filter level of log messages
+const swapLogLevel = 3
 
 // Swap represents the Swarm Accounting Protocol
 // a peer to peer micropayment system
@@ -80,8 +85,42 @@ func NewParams() *Params {
 	}
 }
 
+// newLogger returns a new logger
+func newLogger(logpath string) log.Logger {
+	swapLogger := log.New("swaplog", "*")
+
+	lh := log.Root().GetHandler()
+	rfh, err := swapRotatingFileHandler(logpath)
+
+	if err != nil {
+		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
+		//sets a fallback logger, it will use the swarm logger.
+		swapLogger.SetHandler(lh)
+		return swapLogger
+	}
+
+	//Filters messages with the correct logLevel for swap
+	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
+
+	//Dispatches the logs to the default swarm log and also the filtered swap file logger.
+	swapLogger.SetHandler(log.MultiHandler(lh, rfh))
+
+	return swapLogger
+}
+
+// swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
+// the files are split based on the limit parameter expressed in bytes
+func swapRotatingFileHandler(logdir string) (log.Handler, error) {
+	return log.RotatingFileHandler(
+		logdir,
+		262144,
+		log.JSONFormatOrderedEx(false, true),
+	)
+}
+
 // new - swap constructor without integrity check
-func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
+func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
+	auditLog = newLogger(logpath)
 	return &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
@@ -95,7 +134,7 @@ func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Back
 }
 
 // New - swap constructor with integrity checks
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
+func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
 	// we MUST have a backend
 	if backendURL == "" {
 		return nil, errors.New("swap init error: no backend URL given")
@@ -114,6 +153,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectT
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
 	}
 	return new(
+		logpath,
 		stateStore,
 		prvkey,
 		backend,
@@ -185,7 +225,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.paymentThreshold {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+		auditLog.Info("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
@@ -212,13 +252,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
-	log.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
+	auditLog.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
 
-	log.Debug("received cheque processed and verified", "peer", p.ID().String())
+	auditLog.Debug("received cheque processed and verified", "peer", p.ID().String())
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -249,17 +289,17 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		log.Error("error cashing cheque", "err", err)
+		auditLog.Error("error cashing cheque", "err", err)
 		return
 	}
 
 	if result.Bounced {
-		log.Error("cheque bounced", "tx", receipt.TxHash)
+		auditLog.Warn("cheque bounced", "tx", receipt.TxHash)
 		return
 		// TODO: do something here
 	}
 
-	log.Debug("cash tx mined", "receipt", receipt)
+	auditLog.Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -283,7 +323,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		auditLog.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -432,13 +472,13 @@ func (s *Swap) Deploy(ctx context.Context) error {
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	log.Info("deploying new swap", "owner", opts.From.Hex())
+	auditLog.Info("deploying new swap", "owner", opts.From.Hex())
 	address, err := s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
-		log.Error("unable to deploy swap", "error", err)
+		auditLog.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
+	auditLog.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
 }
@@ -452,11 +492,11 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 		}
 
 		if s.contract, tx, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
-			log.Warn("chequebook deploy error", "try", try, "error", err)
+			auditLog.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
 		return addr, nil

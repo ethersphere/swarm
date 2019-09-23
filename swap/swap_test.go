@@ -23,6 +23,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -54,6 +55,7 @@ import (
 )
 
 var (
+	loglevel           = flag.Int("logleveld", 2, "verbosity of debug logs")
 	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
 	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
 	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
@@ -314,6 +316,7 @@ func TestNewSwapFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
+
 	// a simple rpc endpoint for testing dialing
 	ipcEndpoint := path.Join(dir, "TestSwarmSwap.ipc")
 
@@ -336,6 +339,7 @@ func TestNewSwapFailure(t *testing.T) {
 	}
 
 	type testSwapConfig struct {
+		logPath             string
 		dbPath              string
 		prvkey              *ecdsa.PrivateKey
 		backendURL          string
@@ -362,6 +366,7 @@ func TestNewSwapFailure(t *testing.T) {
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
 				_, err := New(
+					config.logPath,
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
@@ -384,6 +389,7 @@ func TestNewSwapFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				_, err := New(
+					config.logPath,
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
@@ -406,6 +412,7 @@ func TestNewSwapFailure(t *testing.T) {
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
 				_, err := New(
+					config.logPath,
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
@@ -425,6 +432,13 @@ func TestNewSwapFailure(t *testing.T) {
 			}
 			defer os.RemoveAll(dir)
 			config.dbPath = dir
+
+			logDir, err := ioutil.TempDir("", "swap_test_log")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(logDir)
+			config.logPath = logDir
 
 			tc.configure(&config)
 			if tc.check != nil {
@@ -626,8 +640,9 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	// create a test swap account
-	swap, testDir := newBaseTestSwap(t, ownerKey)
+	swap, testDir, logDir := newBaseTestSwap(t, ownerKey)
 	defer os.RemoveAll(testDir)
+	defer os.RemoveAll(logDir)
 
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
@@ -674,20 +689,27 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
-func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
+func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string) {
 	t.Helper()
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
 		t.Fatal(err)
 	}
-	stateStore, err2 := state.NewDBStore(dir)
-	if err2 != nil {
-		t.Fatal(err2)
+	stateStore, err := state.NewDBStore(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
 	log.Debug("creating simulated backend")
 
-	swap := new(stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
-	return swap, dir
+	// Dir for storing swap related logs
+	logdir, err := ioutil.TempDir("", "swap_test_log")
+	log.Debug("creating swap log dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
+	return swap, dir, logdir
 }
 
 // create a test swap account with a backend
@@ -695,10 +717,11 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
 // returns a cleanup function
 func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
 	t.Helper()
-	swap, dir := newBaseTestSwap(t, key)
+	swap, dir, logDir := newBaseTestSwap(t, key)
 	clean := func() {
 		swap.Close()
 		os.RemoveAll(dir)
+		os.RemoveAll(logDir)
 	}
 	return swap, clean
 }
@@ -1230,6 +1253,80 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	// check that no invalid cheque was saved
 	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
+	}
+}
+
+func TestSwapLogToFile(t *testing.T) {
+	// create both test swap accounts
+	creditorSwap, storeDirCreditor, logDirCreditor := newBaseTestSwap(t, beneficiaryKey)
+	debitorSwap, storeDirDebitor, logDirDebitor := newBaseTestSwap(t, ownerKey)
+
+	clean := func() {
+		creditorSwap.Close()
+		debitorSwap.Close()
+		os.RemoveAll(storeDirCreditor)
+		os.RemoveAll(logDirCreditor)
+		os.RemoveAll(storeDirDebitor)
+		os.RemoveAll(logDirDebitor)
+	}
+	defer clean()
+
+	ctx := context.Background()
+	err := testDeploy(ctx, creditorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create Peer instances
+	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
+	// so creditor is the model of the remote mode for the debitor! (and vice versa)
+	cPeer := newDummyPeerWithSpec(Spec)
+	dPeer := newDummyPeerWithSpec(Spec)
+	fmt.Println(1)
+	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// set balances arbitrarily
+	testAmount := int64(DefaultPaymentThreshold + 42)
+	debitor.setBalance(testAmount)
+	creditor.setBalance(-testAmount)
+
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	// now simulate sending the cheque to the creditor from the debitor
+	creditor.sendCheque()
+
+	if logDirDebitor == "" {
+		t.Fatal("Swap Log Dir is not defined")
+	}
+
+	files, err := ioutil.ReadDir(logDirDebitor)
+	if err != nil || len(files) == 0 {
+		t.Fatal(err)
+	}
+
+	logFile := path.Join(logDirDebitor, files[0].Name())
+
+	var b []byte
+	b, err = ioutil.ReadFile(logFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logString := string(b)
+	if !strings.Contains(logString, "sending cheque") {
+		t.Fatalf("expected the log to contain \"sending cheque\"")
 	}
 }
 

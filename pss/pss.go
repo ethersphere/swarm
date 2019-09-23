@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
@@ -51,6 +52,12 @@ const (
 	defaultOutboxCapacity      = 100000
 	protocolName               = "pss"
 	protocolVersion            = 2
+	CapabilityID               = capability.CapabilityID(1)
+	capabilitiesSend           = 0 // node sends pss messages
+	capabilitiesReceive        = 1 // node processes pss messages
+	capabilitiesForward        = 4 // node forwards pss messages on behalf of network
+	capabilitiesPartial        = 5 // node accepts partially addressed messages
+	capabilitiesEmpty          = 6 // node accepts messages with empty address
 )
 
 var (
@@ -89,6 +96,7 @@ type Params struct {
 	privateKey          *ecdsa.PrivateKey
 	SymKeyCacheCapacity int
 	AllowRaw            bool // If true, enables sending and receiving messages without builtin pss encryption
+	AllowForward        bool
 }
 
 // Sane defaults for Pss
@@ -272,6 +280,16 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		},
 	})
 	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
+
+	cp := capability.NewCapability(CapabilityID, 8)
+	cp.Set(capabilitiesSend)
+	cp.Set(capabilitiesReceive)
+	cp.Set(capabilitiesPartial)
+	cp.Set(capabilitiesEmpty)
+	if params.AllowForward {
+		cp.Set(capabilitiesForward)
+	}
+	k.Capabilities.Add(cp)
 
 	return ps, nil
 }

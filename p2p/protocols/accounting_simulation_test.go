@@ -243,7 +243,7 @@ func (t *testNode) Add(a int64, p *Peer) error {
 func (t *testNode) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	spec := createTestSpec()
 	//create accounting hook
-	spec.Hook = NewAccounting(t, &dummyPrices{})
+	spec.Hook = NewAccounting(t)
 
 	//create a peer for this node
 	tp := &testPeer{NewPeer(p, rw, spec), t.i, t.bal.id2n[p.ID()], t.bal.wg}
