@@ -181,9 +181,9 @@ func networkIDPrefix(networkID string) string {
 	return networkID + "_"
 }
 
-// returns the store key for retrieving a peer's balance at a certain Ethereum networkID
-func balanceKey(peer enode.ID, networkID string) string {
-	return networkIDPrefix(networkID) + balancePrefix + peer.String()
+// returns the store key for retrieving a peer's balance
+func balanceKey(peer enode.ID) string {
+	return balancePrefix + peer.String()
 }
 
 // returns the store key for retrieving a peer's last sent cheque at a certain Ethereum networkID
@@ -202,7 +202,6 @@ func usedChequebookKey(networkID string) string {
 }
 
 func keyToID(key string, prefix string) enode.ID {
-	fmt.Println(key, prefix)
 	return enode.HexID(key[len(prefix):])
 }
 
@@ -373,7 +372,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 
 	// add store balances, if peer was not already added
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peer := keyToID(string(key), s.networkID+balancePrefix)
+		peer := keyToID(string(key), balancePrefix)
 		if _, peerHasBalance := balances[peer]; !peerHasBalance {
 			var peerBalance int64
 			err = json.Unmarshal(value, &peerBalance)
@@ -414,7 +413,7 @@ func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
 // loadBalance loads the current balance for the peer from the store
 // and returns 0 if there was no prior balance saved
 func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
-	err = s.store.Get(balanceKey(p, s.networkID), &balance)
+	err = s.store.Get(balanceKey(p), &balance)
 	if err == state.ErrNotFound {
 		return 0, nil
 	}
@@ -433,7 +432,7 @@ func (s *Swap) saveLastSentCheque(p enode.ID, cheque *Cheque) error {
 
 // saveBalance saves balance as the current balance for peer
 func (s *Swap) saveBalance(p enode.ID, balance int64) error {
-	return s.store.Put(balanceKey(p, s.networkID), balance)
+	return s.store.Put(balanceKey(p), balance)
 }
 
 // Close cleans up swap

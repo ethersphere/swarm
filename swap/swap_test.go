@@ -190,9 +190,9 @@ type storeKeysTestCases struct {
 // Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
 func TestStoreKeys(t *testing.T) {
 	testCases := []storeKeysTestCases{
-		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "42_balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_used_chequebook"},
-		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "42_balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_used_chequebook"},
-		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "42_balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_used_chequebook"},
+		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_used_chequebook"},
+		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_used_chequebook"},
+		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_used_chequebook"},
 	}
 	testStoreKeys(t, testCases)
 }
@@ -200,7 +200,7 @@ func TestStoreKeys(t *testing.T) {
 func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
-			actualBalanceKey := balanceKey(testCase.nodeID, testNetworkID)
+			actualBalanceKey := balanceKey(testCase.nodeID)
 			actualSentChequeKey := sentChequeKey(testCase.nodeID, testNetworkID)
 			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID, testNetworkID)
 			actualUsedChequebookKey := usedChequebookKey(testNetworkID)
@@ -274,7 +274,7 @@ func TestStoreBalances(t *testing.T) {
 func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
 	t.Helper()
 	var peerBalance int64
-	err := s.store.Get(balanceKey(peer, s.networkID), &peerBalance)
+	err := s.store.Get(balanceKey(peer), &peerBalance)
 	if err != nil && err != state.ErrNotFound {
 		t.Error("Unexpected peer balance retrieval failure.")
 	}
