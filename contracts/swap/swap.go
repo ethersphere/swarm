@@ -43,7 +43,6 @@ var (
 type Backend interface {
 	bind.ContractBackend
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
-	NetworkID(ctx context.Context) (*big.Int, error)
 }
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
@@ -74,13 +73,11 @@ type Params struct {
 	ContractCode    string
 	ContractAbi     string
 	ContractAddress common.Address
-	NetworkID       string
 }
 
 type simpleContract struct {
-	instance  *contract.SimpleSwap
-	address   common.Address
-	networkID string
+	instance *contract.SimpleSwap
+	address  common.Address
 }
 
 // Deploy deploys an instance of the underlying contract and returns its address
@@ -97,11 +94,7 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 	if err != nil {
 		return nil, err
 	}
-	networkID, err := backend.NetworkID(context.TODO())
-	if err != nil {
-		return nil, err
-	}
-	c := simpleContract{instance: simple, address: address, networkID: networkID.String()}
+	c := simpleContract{instance: simple, address: address}
 	return c, err
 }
 
@@ -145,7 +138,6 @@ func (s simpleContract) ContractParams() *Params {
 		ContractCode:    contract.SimpleSwapBin,
 		ContractAbi:     contract.SimpleSwapABI,
 		ContractAddress: s.address,
-		NetworkID:       s.networkID,
 	}
 }
 
