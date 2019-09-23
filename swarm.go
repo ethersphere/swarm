@@ -370,7 +370,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
+		if err := s.swap.StartChequebook(s.config.SwapInitialDeposit, s.config.Contract); err != nil {
 			return err
 		}
 	} else {

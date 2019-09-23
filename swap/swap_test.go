@@ -32,6 +32,7 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
+	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -55,15 +57,17 @@ import (
 )
 
 var (
-	loglevel           = flag.Int("logleveld", 2, "verbosity of debug logs")
-	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
-	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
-	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
-	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
-	testChequeSig      = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
-	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
-	gasLimit           = uint64(8000000)
-	testBackend        *swapTestBackend
+	loglevel            = flag.Int("logleveld", 2, "verbosity of debug logs")
+	ownerKey, _         = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	ownerAddress        = crypto.PubkeyToAddress(ownerKey.PublicKey)
+	beneficiaryKey, _   = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
+	beneficiaryAddress  = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
+	testChequeSig       = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
+	testChequeContract  = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
+	testChequeContract2 = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract not created by ownerKey
+	gasLimit            = uint64(8000000)
+	testBackend         *swapTestBackend
+	testNetworkID       = int64(42)
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -101,6 +105,11 @@ func newTestBackend() *swapTestBackend {
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
 	}
+}
+
+// NetworkID must be implemented to be a valid contracts.Backend
+func (b swapTestBackend) NetworkID(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(testNetworkID), nil
 }
 
 // Test getting a peer's balance
@@ -437,6 +446,58 @@ func TestNewSwapFailure(t *testing.T) {
 			}
 		})
 
+	}
+}
+
+//TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook tests that we cannot connect to another instance of a chequebook contract if on the same networkID we have already saved an instance of a chequebook
+func TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook(t *testing.T) {
+	var expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", strconv.Itoa(int(testNetworkID)))
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+	// deploy
+	err := testDeploy(context.TODO(), swap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	//save
+	swap.saveChequebook(swap.GetParams().NetworkID, swap.GetParams().ContractAddress)
+	// we cannot give a flag, while on the same networkID we have already saved another instance of the chequebook
+	err = swap.StartChequebook(1, testChequeContract2)
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Error is not equal to expected error. Error: %s, Expected: %s", err, expectedError)
+	}
+}
+
+//TestStartChequebookNoChequebookParamAndPreviouslyOtherUsedChequebook tests that we cannot connect to a chequebook that is not a chequebook
+func TestStartChequebookNoChequebookParamAndPreviouslyOtherUsedChequebook(t *testing.T) {
+	var expectedError = fmt.Errorf("contract validation for %v failed: %v", testChequeContract2.Hex(), swap.ErrNotASwapContract)
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+
+	err := swap.StartChequebook(1, testChequeContract2)
+	if err == nil {
+		t.Fatalf("No error, expected error: %s", expectedError)
+	}
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Error is not equal to expected error. Error: %s, Expected: %s", err, expectedError)
+	}
+}
+
+//TestStartChequebookWithParamAndPreviouslySameUsedChequebook tests that we can connect to an existing chequebook
+func TestStartChequebookWithParamAndPreviouslySameUsedChequebook(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+	// deploy
+	err := testDeploy(context.TODO(), swap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	//save
+	swap.saveChequebook(swap.GetParams().NetworkID, swap.GetParams().ContractAddress)
+	// we cannot give a flag, while on the same networkID we have already saved another instance of the chequebook
+	err = swap.StartChequebook(1, swap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1024,15 +1085,21 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap) (err error) {
+func testDeploy(ctx context.Context, swap *Swap) error {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Value = big.NewInt(int64(0))
 	opts.Context = ctx
 
-	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	address, _, _, err := cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	if err != nil {
+		return err
+	}
+	swap.contract, err = cswap.InstanceAt(address, swap.backend)
+	if err != nil {
+		return err
+	}
 	testBackend.Commit()
-
-	return err
+	return nil
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together

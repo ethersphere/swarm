@@ -147,28 +147,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
 	}
 
-	if params != nil && params.InitialDepositAmount == 0 {
-		// need to prompt user for initial deposit amount
-		// if 0, can not cash in cheques
-		var prompter console.UserPrompter
-		prompter = console.Stdin
-
-		// we may not need this check, and we could maybe even get rid of this constant completely
-		// ask user for input
-		input, err := prompter.PromptInput("Please provide a value for your initial deposit amount of your chequebook:")
-		if err != nil {
-			return nil, err
-		}
-		// check input
-		val, err := strconv.ParseInt(input, 10, 64)
-		if err != nil {
-			// maybe we should provide a fallback here? A bad input results in stopping the boot
-			fmt.Errorf("Conversion error while reading user input: %v", err)
-		}
-		log.Info("Chequebook initial deposit amount: ", "amount", val)
-		params.InitialDepositAmount = uint64(val)
-	}
-
 	swap := new(
 		stateStore,
 		prvkey,
@@ -179,9 +157,10 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 }
 
 const (
-	balancePrefix        = "balance_"
-	sentChequePrefix     = "sent_cheque_"
-	receivedChequePrefix = "received_cheque_"
+	balancePrefix                 = "balance_"
+	sentChequePrefix              = "sent_cheque_"
+	receivedChequePrefix          = "received_cheque_"
+	usedChequebookAtNetworkPrefix = "used_chequebook_at_network"
 )
 
 // returns the store key for retrieving a peer's balance
@@ -197,6 +176,10 @@ func sentChequeKey(peer enode.ID) string {
 // returns the store key for retrieving a peer's last received cheque
 func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
+}
+
+func usedChequebookAtAddressKey(networkID string) string {
+	return usedChequebookAtNetworkPrefix + networkID
 }
 
 func keyToID(key string, prefix string) enode.ID {
@@ -454,50 +437,81 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 }
 
 // StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
-func (s *Swap) StartChequebook(chequebookAddr common.Address) error {
-	if chequebookAddr != (common.Address{}) {
-		if err := s.BindToContractAt(chequebookAddr); err != nil {
-			return err
-		}
-		log.Info("Using the provided chequebook", "chequebookAddr", chequebookAddr)
-	} else {
-		if err := s.Deploy(context.Background()); err != nil {
-			return err
-		}
-		log.Info("New SWAP contract deployed", "contract info", s.DeploySuccess())
+func (s *Swap) StartChequebook(initialDepositAmount uint64, chequebookAddrFlag common.Address) error {
+	var toUseInitialDepositAmount *big.Int
+	// load the network ID on which we attempt to start our chequebook
+	networkID, err := s.backend.NetworkID(context.TODO())
+	if err != nil {
+		return err
 	}
-	return nil
+	toUseChequebook, err := s.loadChequebook(networkID.String())
+	// error reading from disk
+	if err != nil && err != state.ErrNotFound {
+		return fmt.Errorf("Error reading previously used chequebook: %s", err)
+	}
+	// nothing written to state disk before, no flag provided: deploying new chequebook
+	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
+		if initialDepositAmount == 0 {
+			// need to prompt user for initial deposit amount
+			var prompter console.UserPrompter
+			prompter = console.Stdin
+
+			// we may not need this check, and we could maybe even get rid of this constant completely
+			// ask user for input
+			input, err := prompter.PromptInput("Please provide a value for your initial deposit amount of your chequebook:")
+			if err != nil {
+				return err
+			}
+			// check input
+			val, err := strconv.ParseInt(input, 10, 64)
+			if err != nil {
+				// maybe we should provide a fallback here? A bad input results in stopping the boot
+				fmt.Errorf("Conversion error while reading user input: %v", err)
+			}
+			log.Info("Chequebook initial deposit amount: ", "amount", val)
+			toUseInitialDepositAmount = big.NewInt(int64(val))
+		}
+		chequebook, err := s.Deploy(context.TODO(), toUseInitialDepositAmount)
+		if err != nil {
+			return fmt.Errorf("Error deploying chequebook: %s", err)
+		}
+		toUseChequebook = chequebook
+	}
+	// read from state, but provided flag is not the same
+	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != toUseChequebook) {
+		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", networkID)
+	}
+	if chequebookAddrFlag != (common.Address{}) {
+		toUseChequebook = chequebookAddrFlag
+	}
+	return s.bindToContractAt(toUseChequebook)
 }
 
-// BindToContractAt binds an instance of an already existing chequebook contract at address and sets chequebookAddr
-func (s *Swap) BindToContractAt(address common.Address) (err error) {
-
+// BindToContractAt binds to an instance of an already existing chequebook contract at address
+func (s *Swap) bindToContractAt(address common.Address) (err error) {
+	// validate whether address is a chequebook
 	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
-		return fmt.Errorf("contract validation for %v failed: %v", address, err)
+		return fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
+	// get the instance and save it on swap.contract
 	s.contract, err = contract.InstanceAt(address, s.backend)
 	if err != nil {
 		return err
 	}
-	return nil
+	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.GetParams().NetworkID)
+	// saving chequebook
+	return s.saveChequebook(s.GetParams().NetworkID, address)
 }
 
 // Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context) error {
+func (s *Swap) Deploy(ctx context.Context, initialDepositAmount *big.Int) (common.Address, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
-	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
+	opts.Value = initialDepositAmount
 	opts.Context = ctx
 
-	auditLog.Info("deploying new swap", "owner", opts.From.Hex())
-	address, err := s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
-	if err != nil {
-		auditLog.Error("unable to deploy swap", "error", err)
-		return err
-	}
-	auditLog.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
-
-	return err
+	log.Info("deploying new swap", "owner", opts.From.Hex())
+	return s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
@@ -508,7 +522,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 			time.Sleep(deployDelay)
 		}
 
-		if s.contract, tx, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+		if addr, tx, _, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
 			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
@@ -519,4 +533,14 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 		return addr, nil
 	}
 	return addr, err
+}
+
+func (s *Swap) loadChequebook(networkID string) (common.Address, error) {
+	var chequebook common.Address
+	err := s.store.Get(usedChequebookAtAddressKey(networkID), &chequebook)
+	return chequebook, err
+}
+
+func (s *Swap) saveChequebook(networkID string, chequebook common.Address) error {
+	return s.store.Put(usedChequebookAtAddressKey(networkID), chequebook)
 }
