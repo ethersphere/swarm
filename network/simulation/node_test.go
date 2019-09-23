@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -216,6 +217,69 @@ func TestAddNodes(t *testing.T) {
 	if count != nodesCount {
 		t.Errorf("expected %v nodes, got %v", nodesCount, count)
 	}
+}
+
+func TestAddBootNode(t *testing.T) {
+	sim := NewInProc(noopServiceFuncMap)
+	defer sim.Close()
+
+	id, err := sim.AddBootNode()
+	if err != nil {
+		t.Fatalf("Failed to add bootnode: %s", err)
+	}
+
+	bootNode := sim.Net.GetNode(id)
+	if !bootNode.Config.BootNode {
+		t.Fatalf("Bootnode did not have the respective flag in its config")
+	}
+
+	for _, node := range sim.Net.GetBootNodes() {
+		if !bytes.Equal(node.ID().Bytes(), bootNode.ID().Bytes()) {
+			t.Fatalf("Found an unexpected bootnode with ID: %s", node.ID().String())
+		}
+	}
+}
+
+func TestAddBootNodes(t *testing.T) {
+	bootNodeCount := 10
+
+	sim := NewInProc(noopServiceFuncMap)
+	defer sim.Close()
+
+	ids, err := sim.AddBootNodes(bootNodeCount)
+	if err != nil {
+		t.Fatalf("Failed to add bootnodes: %s", err)
+	}
+
+	bootNodes := sim.Net.GetBootNodes()
+	for _, id := range ids {
+		match := false
+		for _, node := range bootNodes {
+			if bytes.Equal(id.Bytes(), node.ID().Bytes()) {
+				match = true
+			}
+		}
+
+		if !match {
+			t.Fatalf("Added a bootnode with enode.ID, %s, but it was not found via GetBootNodes", id.String())
+		}
+	}
+}
+
+func TestAddNodesAndConnectToBootNode(t *testing.T) {
+	nodeCount := 20
+
+	sim := NewInProc(noopServiceFuncMap)
+	defer sim.Close()
+
+	ids, bootNodeID, err := sim.AddNodesAndConnectToBootNode(nodeCount)
+	if err != nil {
+		t.Fatalf("AddNodesAndConnectToBootNode Failed: %s", err)
+	}
+
+	// VerifyStar takes a map and an index to the bootnode, so append it and use the index
+	ids = append(ids, bootNodeID)
+	simulations.VerifyStar(t, sim.Net, ids, len(ids)-1)
 }
 
 func TestAddNodesAndConnectFull(t *testing.T) {

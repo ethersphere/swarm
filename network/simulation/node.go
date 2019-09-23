@@ -83,6 +83,13 @@ func AddNodeWithMsgEvents(enable bool) AddNodeOption {
 	}
 }
 
+// AddNodeAsBootNode toggles whether the node will be configured as a bootnode
+func AddNodeAsBootNode(enable bool) AddNodeOption {
+	return func(o *adapters.NodeConfig) {
+		o.BootNode = enable
+	}
+}
+
 // AddNodeWithService specifies a service that should be
 // started on a node. This option can be repeated as variadic
 // argument toe AddNode and other add node related methods.
@@ -108,10 +115,6 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 
 	// add ENR records to the underlying node
 	// most importantly the bzz overlay address
-	//
-	// for now we have no way of setting bootnodes or lightnodes in sims
-	// so we just let them be set to false
-	// they should perhaps be possible to override them with AddNodeOption
 	bzzPrivateKey, err := BzzPrivateKeyFromConfig(conf)
 	if err != nil {
 		return enode.ID{}, err
@@ -119,7 +122,9 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 
 	enodeParams := &network.EnodeParams{
 		PrivateKey: bzzPrivateKey,
+		Bootnode:   conf.BootNode,
 	}
+
 	record, err := network.NewEnodeRecord(enodeParams)
 	conf.Record = *record
 
@@ -146,6 +151,29 @@ func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []enode.ID,
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// AddBootNode creates a bootnode using AddNode(opts) and appends it to Simulation.bootNodes
+func (s *Simulation) AddBootNode(opts ...AddNodeOption) (id enode.ID, err error) {
+	opts = append(opts, AddNodeAsBootNode(true))
+	id, err = s.AddNode(opts...)
+	if err != nil {
+		return id, err
+	}
+
+	return id, nil
+}
+
+// AddBootNodes creates count number of bootnodes using AddNodes(count, opts)
+// and appends them to Simulation.bootNodes
+func (s *Simulation) AddBootNodes(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+	opts = append(opts, AddNodeAsBootNode(true))
+	ids, err = s.AddNodes(count, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, err
 }
 
 // AddNodesAndConnectFull is a helpper method that combines
@@ -226,6 +254,28 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	return ids, nil
 }
 
+// AddNodesAndConnectToBootNode is a helper method that combines
+// AddNodes, AddBootNode and ConnectNodesStar, where the center node is a new bootnode.
+// The count parameter excludes the bootnode.
+func (s *Simulation) AddNodesAndConnectToBootNode(count int, opts ...AddNodeOption) (ids []enode.ID, bootNodeID enode.ID, err error) {
+	bootNodeID, err = s.AddBootNode(opts...)
+	if err != nil {
+		return nil, bootNodeID, err
+	}
+
+	ids, err = s.AddNodes(count, opts...)
+	if err != nil {
+		return nil, bootNodeID, err
+	}
+
+	err = s.Net.ConnectNodesStar(ids, bootNodeID)
+	if err != nil {
+		return nil, bootNodeID, err
+	}
+
+	return ids, bootNodeID, nil
+}
+
 // UploadSnapshot uploads a snapshot to the simulation
 // This method tries to open the json file provided, applies the config to all nodes
 // and then loads the snapshot into the Simulation network
@@ -267,19 +317,21 @@ func (s *Simulation) StartNode(id enode.ID) (err error) {
 }
 
 // StartRandomNode starts a random node.
-func (s *Simulation) StartRandomNode() (id enode.ID, err error) {
-	n := s.Net.GetRandomDownNode()
+// Nodes can be excluded by providing their enode.ID.
+func (s *Simulation) StartRandomNode(excludeIDs ...enode.ID) (id enode.ID, err error) {
+	n := s.Net.GetRandomDownNode(excludeIDs...)
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
 	return n.ID(), s.Net.Start(n.ID())
 }
 
-// StartRandomNodes starts random nodes.
-func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
+// StartRandomNodes starts random nodes. Nodes
+// Nodes can be excluded by providing their enode.ID.
+func (s *Simulation) StartRandomNodes(count int, excludeIDs ...enode.ID) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
 	for i := 0; i < count; i++ {
-		n := s.Net.GetRandomDownNode()
+		n := s.Net.GetRandomDownNode(excludeIDs...)
 		if n == nil {
 			return nil, ErrNodeNotFound
 		}
@@ -298,19 +350,9 @@ func (s *Simulation) StopNode(id enode.ID) (err error) {
 }
 
 // StopRandomNode stops a random node.
-func (s *Simulation) StopRandomNode(protect ...enode.ID) (id enode.ID, err error) {
-	found := false
-	var n *simulations.Node
-outer:
-	for !found {
-		n = s.Net.GetRandomUpNode()
-		for _, v := range protect {
-			if bytes.Equal(n.ID().Bytes(), v.Bytes()) {
-				continue outer
-			}
-		}
-		found = true
-	}
+// Nodes can be excluded by providing their enode.ID.
+func (s *Simulation) StopRandomNode(excludeIDs ...enode.ID) (id enode.ID, err error) {
+	n := s.Net.GetRandomUpNode(excludeIDs...)
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
@@ -318,10 +360,11 @@ outer:
 }
 
 // StopRandomNodes stops random nodes.
-func (s *Simulation) StopRandomNodes(count int) (ids []enode.ID, err error) {
+// Nodes can be excluded by providing their enode.ID.
+func (s *Simulation) StopRandomNodes(count int, excludeIDs ...enode.ID) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
 	for i := 0; i < count; i++ {
-		n := s.Net.GetRandomUpNode()
+		n := s.Net.GetRandomUpNode(excludeIDs...)
 		if n == nil {
 			return nil, ErrNodeNotFound
 		}
@@ -339,7 +382,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// derive a private key for swarm for the node key
+// BzzPrivateKeyFromConfig derives a private key for swarm for the node key
 // returns the private key used to generate the bzz key
 func BzzPrivateKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, error) {
 	// pad the seed key some arbitrary data as ecdsa.GenerateKey takes 40 bytes seed data

@@ -117,6 +117,7 @@ func NewBzzInProc(services map[string]ServiceFunc, disableAutoConnect bool) (s *
 			OverlayAddr:  addr.Over(),
 			UnderlayAddr: addr.Under(),
 			HiveParams:   hp,
+			BootnodeMode: ctx.Config.BootNode,
 		}
 		return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 	}
