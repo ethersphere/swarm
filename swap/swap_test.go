@@ -103,6 +103,11 @@ func newTestBackend() *swapTestBackend {
 	}
 }
 
+// NetworkID must be implemented to be a valid contracts.Backend
+func (b swapTestBackend) NetworkID(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(42), nil
+}
+
 // Test getting a peer's balance
 func TestPeerBalance(t *testing.T) {
 	// create a test swap account
