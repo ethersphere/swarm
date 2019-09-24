@@ -151,7 +151,6 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
 	}
 	backend, err := ethclient.Dial(backendURL)
-
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
 	}
