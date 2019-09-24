@@ -41,7 +41,7 @@ type Peer struct {
 	lastReceivedCheque *Cheque
 	lastSentCheque     *Cheque
 	balance            int64
-	logger             log.Logger
+	logger             log.Logger // logger for swap related messages and audit trail with peer identifier
 }
 
 // NewPeer creates a new swap Peer instance

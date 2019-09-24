@@ -63,7 +63,7 @@ type Swap struct {
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
 	logpath             string             // path to log files in case they are persisted to disk
-	logger              log.Logger         // logger exclusive for swap entries
+	logger              log.Logger         // logger for swap related messages and audit trail
 }
 
 // Owner encapsulates information related to accessing the contract
