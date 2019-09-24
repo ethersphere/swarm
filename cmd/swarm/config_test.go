@@ -241,6 +241,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
 		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold + 1),
 		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold + 1),
+		fmt.Sprintf("--%s", SwarmEnablePinningFlag.Name),
 	}
 
 	node.Cmd = runSwarm(t, flags...)
@@ -293,6 +294,10 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 
 	if info.SwapDisconnectThreshold != (swap.DefaultDisconnectThreshold + 1) {
 		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold+1, info.SwapDisconnectThreshold)
+	}
+
+	if info.EnablePinning != true {
+		t.Fatalf("expected EnablePinning to be %t but got %t", true, info.EnablePinning)
 	}
 
 	node.Shutdown()
