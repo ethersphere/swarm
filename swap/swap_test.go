@@ -1286,7 +1286,7 @@ func TestSwapLogToFile(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	fmt.Println(1)
+
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
@@ -1313,8 +1313,11 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	files, err := ioutil.ReadDir(logDirDebitor)
-	if err != nil || len(files) == 0 {
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("expected at least 1 file in the log directory, found none")
 	}
 
 	logFile := path.Join(logDirDebitor, files[0].Name())
