@@ -65,6 +65,7 @@ type Swap struct {
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
 	logger              log.Logger
+	logpath             string
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -89,24 +90,31 @@ func NewParams() *Params {
 // newLogger returns a new logger
 func newLogger(logpath string, selfAddress common.Address) log.Logger {
 	swapLogger := log.New("swaplog", "*", "selfAddress", selfAddress)
+	setLoggerHandler(logpath, swapLogger)
+	return swapLogger
+}
 
+func newPeerLogger(logpath string, peerID enode.ID) log.Logger {
+	peerLogger := log.New("swaplog", "*", "peer", peerID)
+	setLoggerHandler(logpath, peerLogger)
+	return peerLogger
+}
+
+func setLoggerHandler(logpath string, logger log.Logger) {
 	lh := log.Root().GetHandler()
 	rfh, err := swapRotatingFileHandler(logpath)
 
 	if err != nil {
 		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
 		// use the default swarm logger as a fallback
-		swapLogger.SetHandler(lh)
-		return swapLogger
+		logger.SetHandler(lh)
+	} else {
+		// filter messages with the correct log level for swap
+		rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
+
+		// dispatch the logs to the default swarm log and also the filtered swap logger
+		logger.SetHandler(log.MultiHandler(lh, rfh))
 	}
-
-	// filter messages with the correct log level for swap
-	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
-
-	// dispatch the logs to the default swarm log and also the filtered swap logger
-	swapLogger.SetHandler(log.MultiHandler(lh, rfh))
-
-	return swapLogger
 }
 
 // swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
@@ -131,6 +139,7 @@ func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backe
 		disconnectThreshold: int64(disconnectThreshold),
 		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
+		logpath:             logpath,
 		logger:              newLogger(logpath, crypto.PubkeyToAddress(prvkey.PublicKey)),
 	}
 }
