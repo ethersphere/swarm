@@ -84,8 +84,13 @@ type Params struct {
 // newLogger returns a new logger
 func newLogger(logpath string) log.Logger {
 	swapLogger := log.New("swaplog", "*")
-
 	lh := log.Root().GetHandler()
+
+	if logpath == "" {
+		swapLogger.SetHandler(lh)
+		return swapLogger
+	}
+
 	rfh, err := swapRotatingFileHandler(logpath)
 
 	if err != nil {
@@ -150,12 +155,11 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if params != nil && params.InitialDepositAmount == 0 {
 		// need to prompt user for initial deposit amount
 		// if 0, can not cash in cheques
-		var prompter console.UserPrompter
-		prompter = console.Stdin
+		prompter := console.Stdin
 
 		// we may not need this check, and we could maybe even get rid of this constant completely
 		// ask user for input
-		input, err := prompter.PromptInput("Please provide a value for your initial deposit amount of your chequebook:")
+		input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment")
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +167,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		val, err := strconv.ParseInt(input, 10, 64)
 		if err != nil {
 			// maybe we should provide a fallback here? A bad input results in stopping the boot
-			fmt.Errorf("Conversion error while reading user input: %v", err)
+			return nil, fmt.Errorf("Conversion error while reading user input: %v", err)
 		}
 		log.Info("Chequebook initial deposit amount: ", "amount", val)
 		params.InitialDepositAmount = uint64(val)

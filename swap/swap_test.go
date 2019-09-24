@@ -360,7 +360,6 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ""
-				params = params
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
@@ -381,7 +380,6 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ipcEndpoint
-				params = params
 				params.PaymentThreshold = params.DisconnectThreshold + 1
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
@@ -677,11 +675,11 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 	}
 }
 
-// newDefaultParmas creates a set of default params for tests
+// newDefaultParams creates a set of default params for tests
 func newDefaultParams() *Params {
 	return &Params{
 		LogPath:              "",
-		InitialDepositAmount: 9999999999,
+		InitialDepositAmount: 42,
 		PaymentThreshold:     DefaultPaymentThreshold,
 		DisconnectThreshold:  DefaultDisconnectThreshold,
 	}
@@ -945,27 +943,6 @@ func TestContractIntegration(t *testing.T) {
 	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
-	// test cashing in, for this we need balance in the contract
-	// => send some money
-	log.Debug("send money to contract")
-	nonce, err := testBackend.NonceAt(ctx, issuerSwap.owner.address, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	depoTx := types.NewTransaction(
-		nonce,
-		issuerSwap.GetParams().ContractAddress,
-		big.NewInt(int64(cheque.CumulativePayout)),
-		50000,
-		big.NewInt(int64(0)),
-		[]byte{},
-	)
-	depoTxs, err := types.SignTx(depoTx, types.HomesteadSigner{}, issuerSwap.owner.privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testBackend.SendTransaction(context.TODO(), depoTxs)
-
 	log.Debug("cash-in the cheque")
 	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	testBackend.Commit()
@@ -1026,7 +1003,7 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 // deploy for testing (needs simulated backend commit)
 func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(int64(0))
+	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
 	opts.Context = ctx
 
 	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
@@ -1260,6 +1237,7 @@ func TestSwapLogToFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(logDirDebitor)
 
 	// set the log dir to the params
 	params := newDefaultParams()

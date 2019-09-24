@@ -60,8 +60,8 @@ var (
 		EnvVar: SwarmEnvInitialDeposit,
 	}
 	SwarmSwapChequebookAddrFlag = cli.StringFlag{
-		Name:   "chequebook",
-		Usage:  "chequebook contract address",
+		Name:   "swap-chequebook",
+		Usage:  "SWAP chequebook contract address",
 		EnvVar: SwarmEnvChequebookAddr,
 	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
