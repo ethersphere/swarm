@@ -178,6 +178,7 @@ func TestAddressMatchProx(t *testing.T) {
 
 	//Forwarding will fail. Since in this test we are not relying on forwarding, but just handling, the test is valid
 	ps.outbox.Start()
+	defer ps.outbox.Stop()
 
 	// create kademlia peers, so we have peers both inside and outside minproxlimit
 	var peers []*network.Peer

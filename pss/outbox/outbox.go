@@ -72,22 +72,27 @@ func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 
 //ProcessOutbox starts a routine that tries to forward messages present in the outbox queue
 func (o *Outbox) processOutbox() {
-	for slot := range o.process {
-		go func(slot int) {
-			msg := o.queue[slot]
-			metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
-			if err := o.forwardFunc(msg.msg); err != nil {
-				metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
-				log.Debug(err.Error())
-				// requeue the message for processing
-				o.requeue(slot)
-				log.Debug("Message requeued", "slot", slot)
-				return
-			}
-			//message processed, free the outbox slot
-			o.free(slot)
-			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-		}(slot)
+	for {
+		select {
+		case <-o.stopC:
+			return
+		case slot := <-o.process:
+			go func(slot int) {
+				msg := o.queue[slot]
+				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+				if err := o.forwardFunc(msg.msg); err != nil {
+					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+					log.Debug(err.Error())
+					// requeue the message for processing
+					o.requeue(slot)
+					log.Debug("Message requeued", "slot", slot)
+					return
+				}
+				//message processed, free the outbox slot
+				o.free(slot)
+				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+			}(slot)
+		}
 	}
 }
 

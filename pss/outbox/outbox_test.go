@@ -11,6 +11,7 @@ import (
 
 const timeout = 2 * time.Second
 
+//Tests successful and failed forwarding. Failure to forward should requeue the failed message
 func TestOutbox(t *testing.T) {
 
 	outboxCapacity := 2
