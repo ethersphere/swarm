@@ -64,7 +64,7 @@ type Swap struct {
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
-	networkID           string             // the Ethereum network ID to which the node is connected
+	backendNetworkID    string             // the Ethereum network ID to which the node is connected
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -120,7 +120,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, networkID string) *Swap {
+func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, backendNetworkID string) *Swap {
 	auditLog = newLogger(logpath)
 	return &Swap{
 		store:               stateStore,
@@ -131,7 +131,7 @@ func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backe
 		disconnectThreshold: int64(disconnectThreshold),
 		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
-		networkID:           networkID,
+		backendNetworkID:    backendNetworkID,
 	}
 }
 
@@ -393,7 +393,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(receivedChequeKey(p, s.networkID), &cheque)
+	err = s.store.Get(receivedChequeKey(p, s.backendNetworkID), &cheque)
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
@@ -403,7 +403,7 @@ func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
 // loadLastSentCheque loads the last sent cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(sentChequeKey(p, s.networkID), &cheque)
+	err = s.store.Get(sentChequeKey(p, s.backendNetworkID), &cheque)
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
@@ -422,12 +422,12 @@ func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p enode.ID, cheque *Cheque) error {
-	return s.store.Put(receivedChequeKey(p, s.networkID), cheque)
+	return s.store.Put(receivedChequeKey(p, s.backendNetworkID), cheque)
 }
 
 // saveLastSentCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastSentCheque(p enode.ID, cheque *Cheque) error {
-	return s.store.Put(sentChequeKey(p, s.networkID), cheque)
+	return s.store.Put(sentChequeKey(p, s.backendNetworkID), cheque)
 }
 
 // saveBalance saves balance as the current balance for peer
@@ -466,18 +466,18 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
 		chequebook, err := s.Deploy(context.TODO())
 		if err != nil {
-			return fmt.Errorf("Error deploying chequebook: %s", err)
+			return fmt.Errorf("Error deploying chequebook: %v", err)
 		}
 		chequebookToUse = chequebook
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != chequebookToUse) {
-		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", s.networkID)
+		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %v", s.backendNetworkID)
 	}
 	if chequebookAddrFlag != (common.Address{}) {
 		chequebookToUse = chequebookAddrFlag
 	}
-	log.Info("Using the chequebook", "chequebookAddr", chequebookToUse)
+	auditLog.Info("Using the chequebook", "chequebookAddr", chequebookToUse)
 	return s.bindToContractAt(chequebookToUse)
 }
 
@@ -492,7 +492,7 @@ func (s *Swap) bindToContractAt(address common.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.networkID)
+	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.backendNetworkID)
 	// saving chequebook
 	return s.saveChequebook(address)
 }
@@ -531,10 +531,10 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 
 func (s *Swap) loadChequebook() (common.Address, error) {
 	var chequebook common.Address
-	err := s.store.Get(usedChequebookKey(s.networkID), &chequebook)
+	err := s.store.Get(usedChequebookKey(s.backendNetworkID), &chequebook)
 	return chequebook, err
 }
 
 func (s *Swap) saveChequebook(chequebook common.Address) error {
-	return s.store.Put(usedChequebookKey(s.networkID), chequebook)
+	return s.store.Put(usedChequebookKey(s.backendNetworkID), chequebook)
 }

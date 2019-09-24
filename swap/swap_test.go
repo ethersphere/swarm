@@ -622,7 +622,7 @@ func TestPaymentThreshold(t *testing.T) {
 	}
 
 	var cheque *Cheque
-	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID(), swap.networkID), &cheque)
+	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID(), swap.backendNetworkID), &cheque)
 	if cheque.CumulativePayout != DefaultPaymentThreshold {
 		t.Fatal()
 	}
@@ -657,7 +657,6 @@ func TestResetBalance(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	fmt.Println(1)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
@@ -1439,7 +1438,6 @@ func TestSwapLogToFile(t *testing.T) {
 	// so creditor is the model of the remote mode for the debitor! (and vice versa)
 	cPeer := newDummyPeerWithSpec(Spec)
 	dPeer := newDummyPeerWithSpec(Spec)
-	fmt.Println(1)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
