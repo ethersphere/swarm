@@ -262,7 +262,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			osp.Finish()
 			break
 		case <-ctx.Done(): // global fetcher timeout
-			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref)
+			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref, "err", ctx.Err())
 			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
 
 			osp.LogFields(olog.Bool("fail", true))
