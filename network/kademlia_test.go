@@ -19,6 +19,7 @@ package network
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -30,6 +31,49 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 )
+
+func TestSugestedPeers(t *testing.T) {
+	tk := newTestKademlia(t, "00000000")
+
+	addresses := addressGenerator(200)
+	//tk.Register("01111111")
+	//tk.On("01111111")
+	//tk.Register("10111111")
+	//tk.On("10111111")
+
+	tk.Register(addresses...)
+
+	for !tk.checkHealth(true) {
+		suggestedPeer, depth, _ := tk.SuggestPeer()
+		if suggestedPeer != nil {
+			log.Warn("suggestedPeer", "peer", suggestedPeer.String()[:9], "depth", depth)
+			tk.On(pot.ToBin(suggestedPeer.UAddr))
+		}
+	}
+	log.Warn(tk.String())
+	log.Warn(strconv.FormatBool(tk.checkHealth(true)))
+	log.Warn("len", "value", len(addresses))
+
+}
+
+func addressGenerator(numAdress int) []string {
+	address := ""
+	base := "00000000"
+	var addresses []string
+	for n := 0; n < numAdress; n++ {
+	inner:
+		for i := 0; i < 8; i++ {
+			address = address + strconv.Itoa(rand.Intn(2))
+		}
+		if address == base {
+			address = ""
+			goto inner
+		}
+		addresses = append(addresses, address)
+		address = ""
+	}
+	return addresses
+}
 
 func init() {
 	h := log.LvlFilterHandler(log.LvlWarn, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
@@ -175,6 +219,7 @@ func TestNeighbourhoodDepth(t *testing.T) {
 func TestHighMinBinSize(t *testing.T) {
 	// a function to test for different MinBinSize values
 	testKad := func(minBinSize int) {
+
 		// create a test kademlia
 		tk := newTestKademlia(t, "11111111")
 		// set its MinBinSize to desired value
@@ -326,7 +371,7 @@ func TestHealthStrict(t *testing.T) {
 	tk.checkHealth(false)
 }
 
-func (tk *testKademlia) checkHealth(expectHealthy bool) {
+func (tk *testKademlia) checkHealth(expectHealthy bool) bool {
 	tk.t.Helper()
 	kid := common.Bytes2Hex(tk.BaseAddr())
 	addrs := [][]byte{tk.BaseAddr()}
@@ -344,8 +389,9 @@ func (tk *testKademlia) checkHealth(expectHealthy bool) {
 	// - we are connected to all known neighbors
 	health := healthParams.Healthy()
 	if expectHealthy != health {
-		tk.t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, tk.String())
+		return false
 	}
+	return true
 }
 
 func (tk *testKademlia) checkSuggestPeer(expAddr string, expDepth int, expChanged bool) {
