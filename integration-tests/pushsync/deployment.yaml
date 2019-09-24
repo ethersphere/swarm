@@ -23,7 +23,6 @@ apps:
     name: "swarm-private"
     enabled: true
     chart: "ethersphere/swarm-private"
-    #chart: "/home/nonsense/code/helm-charts/artifacts/swarm-private-0.0.2.tgz"
     version: "0.0.5"
     description: "(Private) Swarm cluster"
     valuesFiles:

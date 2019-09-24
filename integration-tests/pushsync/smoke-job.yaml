@@ -21,7 +21,7 @@ spec:
         - --metrics.influxdb.password=swarm
         - --metrics.influxdb.database=metrics
         - --metrics.influxdb.tags=host=upload-sync-a
-        - --filesize=10000
+        - --filesize=100000
         - --timeout=1600
         - --pushsync-delay
         - --sync-mode=pushsync

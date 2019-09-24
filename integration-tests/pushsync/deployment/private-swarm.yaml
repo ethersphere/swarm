@@ -35,7 +35,7 @@ swarm:
       operator: "Exists"
       effect: "NoExecute"
   metricsEnabled: true
-  tracingEnabled: false
+  tracingEnabled: true
   profilingEnabled: true
   terminationGracePeriodSeconds: 3
   imagePullPolicy: Always
