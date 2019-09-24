@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethersphere/swarm/p2p/simulations"
 	"github.com/ethersphere/swarm/network"
 )
 

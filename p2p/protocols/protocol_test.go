@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rlp"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 )

@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
+	"github.com/ethersphere/swarm/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 

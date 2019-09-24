@@ -108,8 +108,6 @@ github.com/ethereum/go-ethereum/console
 github.com/ethereum/go-ethereum/p2p/nat
 github.com/ethereum/go-ethereum/rlp
 github.com/ethereum/go-ethereum/metrics/influxdb
-github.com/ethereum/go-ethereum/p2p/simulations
-github.com/ethereum/go-ethereum/p2p/simulations/adapters
 github.com/ethereum/go-ethereum
 github.com/ethereum/go-ethereum/accounts/abi
 github.com/ethereum/go-ethereum/event
@@ -146,7 +144,6 @@ github.com/ethereum/go-ethereum/miner
 github.com/ethereum/go-ethereum/whisper/whisperv6
 github.com/ethereum/go-ethereum/internal/jsre
 github.com/ethereum/go-ethereum/internal/web3ext
-github.com/ethereum/go-ethereum/p2p/simulations/pipes
 github.com/ethereum/go-ethereum/accounts/abi/bind/backends
 github.com/ethereum/go-ethereum/metrics/prometheus
 github.com/ethereum/go-ethereum/internal/ethapi
