@@ -82,7 +82,7 @@ func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 		receipts:      make(chan []byte),
 		ps:            ps,
 		logger:        log.New("self", label(ps.BaseAddr())),
-		retryInterval: 3 * time.Second,
+		retryInterval: 10 * time.Second,
 	}
 	go p.sync()
 	return p
@@ -124,8 +124,8 @@ func (p *Pusher) sync() {
 	var batchStartTime time.Time
 	ctx := context.Background()
 
-	var average uint64 = 100000 // microseconds
-	var measurements uint64
+	//var average uint64 = 100000 // microseconds
+	//var measurements uint64
 
 	for {
 		select {
@@ -191,7 +191,7 @@ func (p *Pusher) sync() {
 			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
 
 			// calibrate retryInterval based on roundtrip times
-			measurements, average = p.updateRetryInterval(item, measurements, average)
+			// measurements, average = p.updateRetryInterval(item, measurements, average)
 
 			// collect synced addresses and corresponding items to do subsequent batch operations
 			syncedAddrs = append(syncedAddrs, addr)
