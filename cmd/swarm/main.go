@@ -194,6 +194,7 @@ func init() {
 		SwarmAccountFlag,
 		SwarmBzzKeyHexFlag,
 		SwarmNetworkIdFlag,
+		SwarmEnablePinningFlag,
 		// upload flags
 		SwarmApiFlag,
 		SwarmRecursiveFlag,

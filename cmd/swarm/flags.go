@@ -223,4 +223,8 @@ var (
 		Name:  "pin",
 		Usage: "Use this flag to pin the file after upload is complete. This flag is used when uploading a file.",
 	}
+	SwarmEnablePinningFlag = cli.BoolFlag{
+		Name:  "enable-pinning",
+		Usage: "Use this flag to enable the pinning feature",
+	}
 )

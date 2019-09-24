@@ -260,6 +260,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
 		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
 	}
+	if ctx.GlobalBool(SwarmEnablePinningFlag.Name) {
+		currentConfig.EnablePinning = true
+	}
 	return currentConfig
 }
 
