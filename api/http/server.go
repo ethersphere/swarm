@@ -106,6 +106,7 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 	server := &Server{api: api, pinAPI: pinAPI}
 
 	defaultMiddlewares := []Adapter{
+		RecoverPanic,
 		SetRequestID,
 		SetRequestHost,
 		InitLoggingResponseWriter,
