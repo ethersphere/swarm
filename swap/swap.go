@@ -62,8 +62,8 @@ type Swap struct {
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
-	logger              log.Logger
-	logpath             string
+	logpath             string             // path to log files in case they are persisted to disk
+	logger              log.Logger         // logger exclusive for swap entries
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -85,19 +85,22 @@ func NewParams() *Params {
 	}
 }
 
-// newSwapLogger returns a new logger
+// newSwapLogger returns a new logger for standard swap logs
 func newSwapLogger(s *Swap) log.Logger {
 	swapLogger := log.New("swaplog", "*", "selfAddress", s.owner.address)
 	setLoggerHandler(s.logpath, swapLogger)
 	return swapLogger
 }
 
+// newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) log.Logger {
 	peerLogger := log.New("swaplog", "*", "selfAddress", s.owner.address, "peer", peerID)
 	setLoggerHandler(s.logpath, peerLogger)
 	return peerLogger
 }
 
+// setLoggerHandler will set the logger handle to write logs to the specified path
+// or use the default swarm logger in case this isn't specified or an error occurs
 func setLoggerHandler(logpath string, logger log.Logger) {
 	lh := log.Root().GetHandler()
 	rfh, err := swapRotatingFileHandler(logpath)
