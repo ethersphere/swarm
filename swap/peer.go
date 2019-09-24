@@ -51,7 +51,7 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 		swap:            s,
 		beneficiary:     beneficiary,
 		contractAddress: contractAddress,
-		logger:          newPeerLogger(s.logpath, p.ID()),
+		logger:          newPeerLogger(s, p.ID()),
 	}
 
 	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {

@@ -85,16 +85,16 @@ func NewParams() *Params {
 	}
 }
 
-// newLogger returns a new logger
-func newLogger(logpath string, selfAddress common.Address) log.Logger {
-	swapLogger := log.New("swaplog", "*", "selfAddress", selfAddress)
-	setLoggerHandler(logpath, swapLogger)
+// newSwapLogger returns a new logger
+func newSwapLogger(s *Swap) log.Logger {
+	swapLogger := log.New("swaplog", "*", "selfAddress", s.owner.address)
+	setLoggerHandler(s.logpath, swapLogger)
 	return swapLogger
 }
 
-func newPeerLogger(logpath string, peerID enode.ID) log.Logger {
-	peerLogger := log.New("swaplog", "*", "peer", peerID)
-	setLoggerHandler(logpath, peerLogger)
+func newPeerLogger(s *Swap, peerID enode.ID) log.Logger {
+	peerLogger := log.New("swaplog", "*", "selfAddress", s.owner.address, "peer", peerID)
+	setLoggerHandler(s.logpath, peerLogger)
 	return peerLogger
 }
 
@@ -127,7 +127,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 
 // new - swap constructor without integrity check
 func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
-	return &Swap{
+	s := &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
 		backend:             backend,
@@ -137,8 +137,9 @@ func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backe
 		paymentThreshold:    int64(paymentThreshold),
 		honeyPriceOracle:    NewHoneyPriceOracle(),
 		logpath:             logpath,
-		logger:              newLogger(logpath, crypto.PubkeyToAddress(prvkey.PublicKey)),
 	}
+	s.logger = newSwapLogger(s)
+	return s
 }
 
 // New - swap constructor with integrity checks
