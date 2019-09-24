@@ -56,17 +56,15 @@ import (
 )
 
 var (
-	loglevel            = flag.Int("logleveld", 2, "verbosity of debug logs")
-	ownerKey, _         = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
-	ownerAddress        = crypto.PubkeyToAddress(ownerKey.PublicKey)
-	beneficiaryKey, _   = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
-	beneficiaryAddress  = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
-	testChequeSig       = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
-	testChequeContract  = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
-	testChequeContract2 = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDE") // second contract not created by ownerKey
-	gasLimit            = uint64(8000000)
-	testBackend         *swapTestBackend
-	testNetworkID       = "42"
+	loglevel           = flag.Int("logleveld", 2, "verbosity of debug logs")
+	ownerKey, _        = crypto.HexToECDSA("634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd")
+	ownerAddress       = crypto.PubkeyToAddress(ownerKey.PublicKey)
+	beneficiaryKey, _  = crypto.HexToECDSA("6f05b0a29723ca69b1fc65d11752cee22c200cf3d2938e670547f7ae525be112")
+	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
+	testChequeSig      = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
+	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
+	gasLimit           = uint64(8000000)
+	testBackend        *swapTestBackend
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -81,6 +79,7 @@ type booking struct {
 // additional properties for the tests
 type swapTestBackend struct {
 	*backends.SimulatedBackend
+	networkID string // simulated Ethereum network ID
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
 }
@@ -103,6 +102,7 @@ func newTestBackend() *swapTestBackend {
 	}, gasLimit)
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
+		networkID:        "42",
 	}
 }
 
@@ -201,9 +201,9 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
 			actualBalanceKey := balanceKey(testCase.nodeID)
-			actualSentChequeKey := sentChequeKey(testCase.nodeID, testNetworkID)
-			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID, testNetworkID)
-			actualUsedChequebookKey := usedChequebookKey(testNetworkID)
+			actualSentChequeKey := sentChequeKey(testCase.nodeID, testBackend.networkID)
+			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID, testBackend.networkID)
+			actualUsedChequebookKey := usedChequebookKey(testBackend.networkID)
 
 			if actualBalanceKey != testCase.expectedBalanceKey {
 				t.Fatalf("Expected balance key to be %s, but is %s instead.", testCase.expectedBalanceKey, actualBalanceKey)
@@ -220,15 +220,15 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 
 			}
 
-			nodeID := keyToID(actualBalanceKey, testNetworkID+"_"+balancePrefix)
+			nodeID := keyToID(actualBalanceKey, balancePrefix)
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
-			nodeID = keyToID(actualSentChequeKey, testNetworkID+"_"+sentChequePrefix)
+			nodeID = keyToID(actualSentChequeKey, testBackend.networkID+"_"+sentChequePrefix)
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
-			nodeID = keyToID(actualReceivedChequeKey, testNetworkID+"_"+receivedChequePrefix)
+			nodeID = keyToID(actualReceivedChequeKey, testBackend.networkID+"_"+receivedChequePrefix)
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
@@ -459,52 +459,140 @@ func TestNewSwapFailure(t *testing.T) {
 	}
 }
 
-//TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook tests that we cannot connect to another instance of a chequebook contract if on the same networkID we have already saved an instance of a chequebook
-func TestStartChequebookWithParamAndPreviouslyOtherUsedChequebook(t *testing.T) {
-	var expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", testNetworkID)
-	swap, clean := newTestSwap(t, ownerKey)
-	defer clean()
-	// deploy
-	err := testDeploy(context.TODO(), swap)
-	if err != nil {
-		t.Fatal(err)
+func TestStartChequebookFailure(t *testing.T) {
+	type chequebookConfig struct {
+		passIn        common.Address
+		expectedError error
 	}
-	//save
-	swap.saveChequebook(swap.GetParams().ContractAddress)
-	// we cannot give a flag, while on the same networkID we have already saved another instance of the chequebook
-	err = swap.StartChequebook(testChequeContract2)
-	if err.Error() != expectedError.Error() {
-		t.Fatalf("Error is not equal to expected error. Error: %s, Expected: %s", err, expectedError)
+
+	var config chequebookConfig
+
+	for _, tc := range []struct {
+		name      string
+		configure func(*chequebookConfig)
+		check     func(*testing.T, *chequebookConfig)
+	}{
+		{
+			name: "with pass in and save",
+			configure: func(config *chequebookConfig) {
+				config.passIn = testChequeContract
+				config.expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", testBackend.networkID)
+			},
+			check: func(t *testing.T, config *chequebookConfig) {
+				// create SWAP
+				swap, clean := newTestSwap(t, ownerKey)
+				defer clean()
+				// deploy a chequebook
+				err := testDeploy(context.TODO(), swap)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// save chequebook on SWAP
+				err = swap.saveChequebook(swap.GetParams().ContractAddress)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// try to connect with a different address
+				err = swap.StartChequebook(config.passIn)
+				if err.Error() != config.expectedError.Error() {
+					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
+				}
+			},
+		},
+		{
+			name: "with wrong pass in",
+			configure: func(config *chequebookConfig) {
+				config.passIn = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8370000000000") // address without deployed chequebook
+				config.expectedError = fmt.Errorf("contract validation for %v failed: %v", config.passIn.Hex(), swap.ErrNotASwapContract)
+			},
+			check: func(t *testing.T, config *chequebookConfig) {
+				// create SWAP
+				swap, clean := newTestSwap(t, ownerKey)
+				defer clean()
+				// try to connect with an addres not containing a chequebook instance
+				err := swap.StartChequebook(config.passIn)
+				if err.Error() != config.expectedError.Error() {
+					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.configure(&config)
+			if tc.check != nil {
+				tc.check(t, &config)
+			}
+		})
 	}
 }
 
-//TestStartChequebookNoChequebookParamAndPreviouslyOtherUsedChequebook tests that we cannot connect to a chequebook that is not a chequebook
-func TestStartChequebookNoChequebookParamAndPreviouslyOtherUsedChequebook(t *testing.T) {
-	var expectedError = fmt.Errorf("contract validation for %v failed: %v", testChequeContract2.Hex(), swap.ErrNotASwapContract)
-	swap, clean := newTestSwap(t, ownerKey)
-	defer clean()
+func TestStartChequebookSuccess(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		check func(*testing.T)
+	}{
+		{
+			name: "with same pass in as previously used",
+			check: func(t *testing.T) {
+				// create SWAP
+				swap, clean := newTestSwap(t, ownerKey)
+				defer clean()
 
-	err := swap.StartChequebook(testChequeContract2)
-	if err.Error() != expectedError.Error() {
-		t.Fatalf("Error is not equal to expected error. Error: %s, Expected: %s", err, expectedError)
-	}
-}
+				// deploy a chequebook
+				err := testDeploy(context.TODO(), swap)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-//TestStartChequebookWithParamAndPreviouslySameUsedChequebook tests that we can connect to an existing chequebook
-func TestStartChequebookWithParamAndPreviouslySameUsedChequebook(t *testing.T) {
-	swap, clean := newTestSwap(t, ownerKey)
-	defer clean()
-	// deploy
-	err := testDeploy(context.TODO(), swap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	//save
-	swap.saveChequebook(swap.GetParams().ContractAddress)
-	// we cannot give a flag, while on the same networkID we have already saved another instance of the chequebook
-	err = swap.StartChequebook(swap.GetParams().ContractAddress)
-	if err != nil {
-		t.Fatal(err)
+				// save chequebook on SWAP
+				err = swap.saveChequebook(swap.GetParams().ContractAddress)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// start chequebook with same pass in as deployed
+				err = swap.StartChequebook(swap.GetParams().ContractAddress)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// err should be nil
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "with correct pass in",
+			check: func(t *testing.T) {
+				// create SWAP
+				swap, clean := newTestSwap(t, ownerKey)
+				defer clean()
+
+				// deploy a chequebook
+				err := testDeploy(context.TODO(), swap)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// start chequebook with same pass in as deployed
+				err = swap.StartChequebook(swap.GetParams().ContractAddress)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// err should be nil
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.check != nil {
+				tc.check(t)
+			}
+		})
 	}
 }
 
@@ -767,7 +855,7 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string, string
 		t.Fatal(err)
 	}
 
-	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold, testNetworkID)
+	swap := new(logdir, stateStore, key, testBackend, DefaultDisconnectThreshold, DefaultPaymentThreshold, testBackend.networkID)
 	return swap, dir, logdir
 }
 
