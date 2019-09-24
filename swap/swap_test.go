@@ -509,7 +509,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				// create SWAP
 				swap, clean := newTestSwap(t, ownerKey)
 				defer clean()
-				// try to connect with an addres not containing a chequebook instance
+				// try to connect with an address not containing a chequebook instance
 				err := swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
