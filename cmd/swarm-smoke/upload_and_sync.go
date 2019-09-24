@@ -331,6 +331,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 }
 
 func waitToPushSynced(tagname string) {
+	defer metrics.GetOrRegisterResettingTimer("upload-and-sync.wait-to-push-sync", nil).UpdateSince(time.Now())
+
 	for {
 		time.Sleep(200 * time.Millisecond)
 
