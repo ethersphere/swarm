@@ -111,7 +111,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	auditLog.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	p.logger.Debug("updated balance", "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
 
@@ -167,7 +167,7 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 
-	auditLog.Info("sending cheque", "peer", p.ID().String(), "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})
