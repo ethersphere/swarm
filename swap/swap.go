@@ -43,8 +43,6 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-var auditLog log.Logger // logger for Swap related messages and audit trail
-
 // swapLogLevel indicates filter level of log messages
 const swapLogLevel = 3
 
@@ -129,7 +127,6 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 
 // new - swap constructor without integrity check
 func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
-	auditLog = newLogger(logpath, crypto.PubkeyToAddress(prvkey.PublicKey))
 	return &Swap{
 		store:               stateStore,
 		peers:               make(map[enode.ID]*Peer),
@@ -236,7 +233,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.paymentThreshold {
-		auditLog.Info("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+		swapPeer.logger.Info("balance for peer went over the payment threshold, sending cheque", "payment threshold", s.paymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
@@ -263,13 +260,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
-	auditLog.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
+	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
 
-	auditLog.Debug("received cheque processed and verified", "peer", p.ID().String())
+	p.logger.Debug("received cheque, processed and verified")
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -300,17 +297,17 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		auditLog.Error("error cashing cheque", "err", err)
+		s.logger.Error("error cashing cheque", "err", err)
 		return
 	}
 
 	if result.Bounced {
-		auditLog.Warn("cheque bounced", "tx", receipt.TxHash)
+		s.logger.Warn("cheque bounced", "tx", receipt.TxHash)
 		return
 		// TODO: do something here
 	}
 
-	auditLog.Debug("cash tx mined", "receipt", receipt)
+	s.logger.Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -334,7 +331,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		auditLog.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		p.logger.Error("error while saving last received cheque", "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -483,13 +480,13 @@ func (s *Swap) Deploy(ctx context.Context) error {
 	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
 	opts.Context = ctx
 
-	auditLog.Info("deploying new swap", "owner", opts.From.Hex())
+	s.logger.Info("deploying new swap", "owner", opts.From.Hex())
 	address, err := s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
-		auditLog.Error("unable to deploy swap", "error", err)
+		s.logger.Error("unable to deploy swap", "error", err)
 		return err
 	}
-	auditLog.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
+	s.logger.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
 
 	return err
 }
@@ -503,11 +500,11 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 		}
 
 		if s.contract, tx, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+			s.logger.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
-			auditLog.Warn("chequebook deploy error", "try", try, "error", err)
+			s.logger.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
 		return addr, nil
