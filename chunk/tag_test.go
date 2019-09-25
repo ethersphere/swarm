@@ -138,13 +138,12 @@ func TestTagConcurrentIncrements(t *testing.T) {
 // TestTagsMultipleConcurrentIncrements tests Inc calls concurrently
 func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	ts := NewTags()
-	ctx := context.Background()
 	n := 100
 	wg := sync.WaitGroup{}
 	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
-		tag, err := ts.Create(ctx, s, int64(n))
+		tag, err := ts.Create(s, int64(n))
 		if err != nil {
 			t.Fatal(err)
 		}
