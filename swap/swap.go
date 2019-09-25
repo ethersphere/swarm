@@ -64,7 +64,7 @@ type Swap struct {
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
-	backendNetworkID    uint64             // the Ethereum network ID to which the node is connected
+	backendNetworkID    uint64             // the backend network ID to which the node is connected
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -145,25 +145,25 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	// initialize the balances store
 	stateStore, err := state.NewDBStore(filepath.Join(dbPath, "swap.db"))
 	if err != nil {
-		return nil, fmt.Errorf("swap init error: %s", err)
+		return nil, fmt.Errorf("swap init error: error initializing statestore: %v", err)
 	}
 	if disconnectThreshold <= paymentThreshold {
 		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
 	}
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {
-		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
+		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %v", backendURL, err)
 	}
 	networkID, err := backend.NetworkID(context.TODO())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("swap init error: error retrieving networkID from backendURL: %v", err)
 	}
 	var usedBeforeAtNetwork uint64
 	var usedBefore bool
 	err = stateStore.Get(usedBeforeAtNetworkKey(networkID.String()), &usedBeforeAtNetwork)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
-		return nil, err
+		return nil, fmt.Errorf("swap init error: error querying usedBeforeAtNetwork from statestore: %v", err)
 	}
 	// read from database
 	if err == nil {
@@ -171,13 +171,13 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	}
 	// if used before on a different network, abort
 	if usedBefore && usedBeforeAtNetwork != networkID.Uint64() {
-		return nil, fmt.Errorf("swap init error: database previously used on different Ethereum network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, networkID)
+		return nil, fmt.Errorf("swap init error: statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, networkID)
 	}
 	// put the networkID in the statestore
 	if !usedBefore {
 		err = stateStore.Put(usedBeforeAtNetworkKey(networkID.String()), networkID.Uint64())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("swap init error: error writing current backend networkID to statestore: %v", err)
 		}
 	}
 
@@ -205,12 +205,12 @@ func balanceKey(peer enode.ID) string {
 	return balancePrefix + peer.String()
 }
 
-// returns the store key for retrieving a peer's last sent cheque at a certain Ethereum networkID
+// returns the store key for retrieving a peer's last sent cheque at a certain backend networkID
 func sentChequeKey(peer enode.ID) string {
 	return sentChequePrefix + peer.String()
 }
 
-// returns the store key for retrieving a peer's last received cheque at a certain Ethereum networkID
+// returns the store key for retrieving a peer's last received cheque at a certain backend networkID
 func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
 }
@@ -490,7 +490,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != chequebookToUse) {
-		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %v", s.backendNetworkID)
+		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
 	}
 	if chequebookAddrFlag != (common.Address{}) {
 		chequebookToUse = chequebookAddrFlag
