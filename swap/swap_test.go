@@ -79,7 +79,7 @@ type booking struct {
 // additional properties for the tests
 type swapTestBackend struct {
 	*backends.SimulatedBackend
-	networkID string // simulated Ethereum network ID
+	networkID uint64 // simulated Ethereum network ID
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
 }
@@ -102,7 +102,7 @@ func newTestBackend() *swapTestBackend {
 	}, gasLimit)
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
-		networkID:        "42",
+		networkID:        42,
 	}
 }
 
@@ -190,9 +190,9 @@ type storeKeysTestCases struct {
 // Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
 func TestStoreKeys(t *testing.T) {
 	testCases := []storeKeysTestCases{
-		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "42_used_chequebook"},
-		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "42_used_chequebook"},
-		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "42_used_chequebook"},
+		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "used_chequebook"},
+		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "used_chequebook"},
+		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "used_chequebook"},
 	}
 	testStoreKeys(t, testCases)
 }
@@ -201,9 +201,9 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
 			actualBalanceKey := balanceKey(testCase.nodeID)
-			actualSentChequeKey := sentChequeKey(testCase.nodeID, testBackend.networkID)
-			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID, testBackend.networkID)
-			actualUsedChequebookKey := usedChequebookKey(testBackend.networkID)
+			actualSentChequeKey := sentChequeKey(testCase.nodeID)
+			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID)
+			actualUsedChequebookKey := usedChequebookKey
 
 			if actualBalanceKey != testCase.expectedBalanceKey {
 				t.Fatalf("Expected balance key to be %s, but is %s instead.", testCase.expectedBalanceKey, actualBalanceKey)
@@ -224,11 +224,11 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
-			nodeID = keyToID(actualSentChequeKey, testBackend.networkID+"_"+sentChequePrefix)
+			nodeID = keyToID(actualSentChequeKey, sentChequePrefix)
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
-			nodeID = keyToID(actualReceivedChequeKey, testBackend.networkID+"_"+receivedChequePrefix)
+			nodeID = keyToID(actualReceivedChequeKey, receivedChequePrefix)
 			if nodeID != testCase.nodeID {
 				t.Fatalf("Expected node ID to be %v, but is %v instead.", testCase.nodeID, nodeID)
 			}
@@ -476,7 +476,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			name: "with pass in and save",
 			configure: func(config *chequebookConfig) {
 				config.passIn = testChequeContract
-				config.expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %s", testBackend.networkID)
+				config.expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %d", testBackend.networkID)
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
@@ -622,7 +622,7 @@ func TestPaymentThreshold(t *testing.T) {
 	}
 
 	var cheque *Cheque
-	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID(), swap.backendNetworkID), &cheque)
+	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
 	if cheque.CumulativePayout != DefaultPaymentThreshold {
 		t.Fatal()
 	}

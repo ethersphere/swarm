@@ -64,7 +64,7 @@ type Swap struct {
 	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
 	paymentThreshold    int64              // honey amount at which a payment is triggered
 	disconnectThreshold int64              // honey amount at which a peer disconnects
-	backendNetworkID    string             // the Ethereum network ID to which the node is connected
+	backendNetworkID    uint64             // the Ethereum network ID to which the node is connected
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -120,7 +120,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, backendNetworkID string) *Swap {
+func new(logpath string, stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64, backendNetworkID uint64) *Swap {
 	auditLog = newLogger(logpath)
 	return &Swap{
 		store:               stateStore,
@@ -158,6 +158,29 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	if err != nil {
 		return nil, err
 	}
+	var usedBeforeAtNetwork uint64
+	var usedBefore bool
+	err = stateStore.Get(usedBeforeAtNetworkKey(networkID.String()), &usedBeforeAtNetwork)
+	// error reading from database
+	if err != nil && err != state.ErrNotFound {
+		return nil, err
+	}
+	// read from database
+	if err == nil {
+		usedBefore = true
+	}
+	// if used before on a different network, abort
+	if usedBefore && usedBeforeAtNetwork != networkID.Uint64() {
+		return nil, fmt.Errorf("swap init error: database previously used on different Ethereum network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, networkID)
+	}
+	// put the networkID in the statestore
+	if !usedBefore {
+		err = stateStore.Put(usedBeforeAtNetworkKey(networkID.String()), networkID.Uint64())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return new(
 		logpath,
 		stateStore,
@@ -165,20 +188,17 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 		backend,
 		disconnectThreshold,
 		paymentThreshold,
-		networkID.String(),
+		networkID.Uint64(),
 	), nil
 }
 
 const (
-	balancePrefix        = "balance_"
-	sentChequePrefix     = "sent_cheque_"
-	receivedChequePrefix = "received_cheque_"
-	usedChequebookPrefix = "used_chequebook"
+	balancePrefix             = "balance_"
+	sentChequePrefix          = "sent_cheque_"
+	receivedChequePrefix      = "received_cheque_"
+	usedBeforeAtNetworkPrefix = "used_before_at_network_"
+	usedChequebookKey         = "used_chequebook"
 )
-
-func networkIDPrefix(networkID string) string {
-	return networkID + "_"
-}
 
 // returns the store key for retrieving a peer's balance
 func balanceKey(peer enode.ID) string {
@@ -186,18 +206,17 @@ func balanceKey(peer enode.ID) string {
 }
 
 // returns the store key for retrieving a peer's last sent cheque at a certain Ethereum networkID
-func sentChequeKey(peer enode.ID, networkID string) string {
-	return networkIDPrefix(networkID) + sentChequePrefix + peer.String()
+func sentChequeKey(peer enode.ID) string {
+	return sentChequePrefix + peer.String()
 }
 
 // returns the store key for retrieving a peer's last received cheque at a certain Ethereum networkID
-func receivedChequeKey(peer enode.ID, networkID string) string {
-	return networkIDPrefix(networkID) + receivedChequePrefix + peer.String()
+func receivedChequeKey(peer enode.ID) string {
+	return receivedChequePrefix + peer.String()
 }
 
-// return the store key for retrieving the peers used chequebook at at a certain Ethereum networkID
-func usedChequebookKey(networkID string) string {
-	return networkIDPrefix(networkID) + usedChequebookPrefix
+func usedBeforeAtNetworkKey(networkID string) string {
+	return usedBeforeAtNetworkPrefix + networkID
 }
 
 func keyToID(key string, prefix string) enode.ID {
@@ -392,7 +411,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(receivedChequeKey(p, s.backendNetworkID), &cheque)
+	err = s.store.Get(receivedChequeKey(p), &cheque)
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
@@ -402,7 +421,7 @@ func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
 // loadLastSentCheque loads the last sent cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(sentChequeKey(p, s.backendNetworkID), &cheque)
+	err = s.store.Get(sentChequeKey(p), &cheque)
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
@@ -421,12 +440,12 @@ func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastReceivedCheque(p enode.ID, cheque *Cheque) error {
-	return s.store.Put(receivedChequeKey(p, s.backendNetworkID), cheque)
+	return s.store.Put(receivedChequeKey(p), cheque)
 }
 
 // saveLastSentCheque saves cheque as the last received cheque for peer
 func (s *Swap) saveLastSentCheque(p enode.ID, cheque *Cheque) error {
-	return s.store.Put(sentChequeKey(p, s.backendNetworkID), cheque)
+	return s.store.Put(sentChequeKey(p), cheque)
 }
 
 // saveBalance saves balance as the current balance for peer
@@ -530,10 +549,10 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, default
 
 func (s *Swap) loadChequebook() (common.Address, error) {
 	var chequebook common.Address
-	err := s.store.Get(usedChequebookKey(s.backendNetworkID), &chequebook)
+	err := s.store.Get(usedChequebookKey, &chequebook)
 	return chequebook, err
 }
 
 func (s *Swap) saveChequebook(chequebook common.Address) error {
-	return s.store.Put(usedChequebookKey(s.backendNetworkID), chequebook)
+	return s.store.Put(usedChequebookKey, chequebook)
 }
