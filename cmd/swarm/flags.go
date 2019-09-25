@@ -233,4 +233,8 @@ var (
 		Name:  "enable-pinning",
 		Usage: "Use this flag to enable the pinning feature",
 	}
+	SwarmNoTrackUploadFlag = cli.BoolFlag{
+		Name:  "no-track",
+		Usage: "Use this flag to disable tracking of the upload progress through the CLI (gives back a machine-readable content addressed hash)",
+	}
 )

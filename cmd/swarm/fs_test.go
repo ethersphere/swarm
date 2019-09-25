@@ -222,6 +222,7 @@ func doUploadEmptyDir(t *testing.T, node *testNode) string {
 		"--bzzapi", node.URL,
 		"--recursive",
 		"up",
+		"--no-track",
 		tmpDir}
 
 	log.Info("swarmfs cli test: uploading dir with 'swarm up'")
