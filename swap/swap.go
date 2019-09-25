@@ -194,12 +194,11 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 }
 
 const (
-	balancePrefix             = "balance_"
-	sentChequePrefix          = "sent_cheque_"
-	receivedChequePrefix      = "received_cheque_"
-	usedBeforeAtNetworkPrefix = "used_before_at_network_"
-	usedChequebookKey         = "used_chequebook"
-	usedBeforeAtNetworkKey    = "used_before_at_network"
+	balancePrefix          = "balance_"
+	sentChequePrefix       = "sent_cheque_"
+	receivedChequePrefix   = "received_cheque_"
+	usedChequebookKey      = "used_chequebook"
+	usedBeforeAtNetworkKey = "used_before_at_network"
 )
 
 // returns the store key for retrieving a peer's balance
