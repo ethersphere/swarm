@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -588,6 +589,66 @@ func TestPotEachNeighbourAsync(t *testing.T) {
 			t.Fatalf("incorrect neighbour calls in async iterator. %v items missed:\n%v", len(m), n)
 		}
 	}
+}
+
+func TestEachBinDesc(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	pot := NewPot(baseAddr, 0)
+	pot, _, _ = testAdd(pot, pof, 1, "01111111", "01000000", "10111111", "11011111", "11101111")
+	binConsumer := func(bin *Bin) bool {
+		fmt.Println("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
+		bin.ValIterator(func(val Val) bool {
+			addr := val.(*testAddr)
+			fmt.Println("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
+			return true
+		})
+		return true
+	}
+	fmt.Println("****************Forward order****************")
+	pot.eachBin(pot.pin, pof, 0, binConsumer)
+	fmt.Println("****************Reverse order****************")
+	pot.eachBinDesc(pot.pin, pof, 0, binConsumer)
+
+	//Test eachBinDesc for a given address. For example one address with po 2 with respect to t.pin
+	pivotAddr := newTestAddr("11010000", 6)
+	fmt.Println("****************Forward order with pivot 11010000****************")
+	pot.eachBin(pivotAddr, pof, 0, binConsumer)
+	fmt.Println("****************Reverse order with pivot 11010000****************")
+	pot.eachBinDesc(pivotAddr, pof, 0, binConsumer)
+}
+
+func TestEachBinDescPivotInAMissingBin(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	pot := NewPot(baseAddr, 0)
+	pot, _, _ = testAdd(pot, pof, 1, "01111111", "01000000", "10111111", "11101111", "11101011", "11111110")
+	binConsumer := func(bin *Bin) bool {
+		fmt.Println("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
+		bin.ValIterator(func(val Val) bool {
+			addr := val.(*testAddr)
+			fmt.Println("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
+			return true
+		})
+		return true
+	}
+
+	//Test eachBinDesc for an address with a po that we don't have a bin for
+	pivotAddr := newTestAddr("11010000", 7)
+	fmt.Println("****************Forward order with pivot 11010000****************")
+	pot.eachBin(pivotAddr, pof, 0, binConsumer)
+	fmt.Println("****************Reverse order with pivot 11010000****************")
+	pot.eachBinDesc(pivotAddr, pof, 0, binConsumer)
+}
+
+func toBinaryByte(addr *testAddr) string {
+	formatted := strconv.FormatInt(int64(addr.Address()[0]), 2)
+	if len(formatted) < 8 {
+		for i := 0; i < 8-len(formatted); i++ {
+			formatted = "0" + formatted
+		}
+	}
+	return formatted
 }
 
 func benchmarkEachNeighbourSync(t *testing.B, max, count int, d time.Duration) {

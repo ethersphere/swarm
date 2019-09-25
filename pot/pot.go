@@ -470,26 +470,26 @@ type Bin struct {
 // Consumer<Bin> in generics notation
 type BinConsumer func(bin *Bin) bool
 
-// Each is a synchronous iterator over the elements of pot with function f.
+// Each is a synchronous iterator over the elements of pot with a consumer.
 func (t *Pot) Each(consumer ValConsumer) bool {
 	return t.each(consumer)
 }
 
-// each is a synchronous iterator over the elements of pot with consumer f.
+// each is a synchronous iterator over the elements of pot with a consumer.
 // the iteration ends if the consumer return false or there are no more elements.
-func (t *Pot) each(f ValConsumer) bool {
+func (t *Pot) each(consume ValConsumer) bool {
 	if t == nil || t.size == 0 {
 		return false
 	}
 	for _, n := range t.bins {
-		if !n.each(f) {
+		if !n.each(consume) {
 			return false
 		}
 	}
-	return f(t.pin)
+	return consume(t.pin)
 }
 
-// eachFrom is a synchronous iterator over the elements of pot with consumer,
+// eachFrom is a synchronous iterator over the elements of pot with a consumer,
 // starting from certain proximity order po, which is passed as a second parameter.
 // the iteration ends if the function return false or there are no more elements.
 func (t *Pot) eachFrom(consumer ValConsumer, po int) bool {
@@ -511,10 +511,16 @@ func (t *Pot) eachFrom(consumer ValConsumer, po int) bool {
 // The order the bins are consumed depends on the bins po with respect to the pivot Val.
 // minProximityOrder gives the caller the possibility of filtering the bins by proximityOrder >= minProximityOrder
 // If pivotVal is the root val it iterates the bin as stored in this pot.
-func (t *Pot) EachBin(pivotVal Val, pof Pof, minProximityOrder int, binConsumer BinConsumer) {
-	t.eachBin(pivotVal, pof, minProximityOrder, binConsumer)
+// ascending flag controls the sorting of bins in the iterator. True => will be for farthest to closest, false => closest to farthest
+func (t *Pot) EachBin(pivotVal Val, pof Pof, minProximityOrder int, binConsumer BinConsumer, ascending bool) {
+	if ascending {
+		t.eachBin(pivotVal, pof, minProximityOrder, binConsumer)
+	} else {
+		t.eachBinDesc(pivotVal, pof, minProximityOrder, binConsumer)
+	}
 }
 
+// eachBin traverse bin in ascending order (farthest to nearest)
 func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin BinConsumer) {
 	if t == nil || t.size == 0 {
 		return
@@ -585,14 +591,96 @@ func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin B
 
 }
 
+// eachBinDesc traverse bins in descending po order (nearest to farthest). Returns if the user wants to continue iterating
+func (t *Pot) eachBinDesc(pivotVal Val, pof Pof, minProximityOrder int, consumeBin BinConsumer) bool {
+	if t == nil || t.size == 0 {
+		return false
+	}
+	valProximityOrder, _ := pof(t.pin, pivotVal, t.po)
+	_, pivotBinIndex := t.getPos(valProximityOrder)
+
+	var subPot *Pot
+	// If pivotBinIndex == len(t.bins), the pivotVal is the t.pin. We consume a virtual bin with max valProximityOrder
+	// and only one element.
+	if pivotBinIndex == len(t.bins) {
+		if valProximityOrder >= minProximityOrder {
+			bin := &Bin{
+				ProximityOrder: valProximityOrder,
+				Size:           1,
+				// Only iterate the pin
+				ValIterator: func(consume ValConsumer) bool {
+					return consume(t.pin)
+				},
+			}
+			if !consumeBin(bin) {
+				return false
+			}
+		}
+	} else { // pivotVal is anywhere on the subtree
+		subPot = t.bins[pivotBinIndex]
+		// Consume bin where the pivotVal is, there we will have closest bins and t.pin that will have valProximityOrder
+		if subPot.po == valProximityOrder {
+			if !subPot.eachBinDesc(pivotVal, pof, minProximityOrder, consumeBin) {
+				return false
+			}
+		}
+
+		higherPo := valProximityOrder
+		nextBinsStart := pivotBinIndex
+		if subPot.po == valProximityOrder {
+			nextBinsStart++
+			higherPo++
+		}
+		var size int = 1 //One for the pin
+		for i := nextBinsStart; i < len(t.bins); i++ {
+			size += t.bins[i].size
+		}
+		// Consuming all bins after the bin where the pivotVal is
+		// (All bins will be provided to the user as one virtual bin with po = valProximityOrder)
+		if valProximityOrder >= minProximityOrder {
+			bin := &Bin{
+				ProximityOrder: valProximityOrder,
+				Size:           size,
+				ValIterator: func(consume ValConsumer) bool {
+					return t.eachFrom(consume, higherPo)
+				},
+			}
+			if !consumeBin(bin) {
+				return false
+			}
+		}
+	}
+
+	// Finally we will consume all bins before the pivotVal bin (or all bins if the pivotVal is the t.pin)
+	// Always filtering bins with proximityOrder < minProximityOrder
+	for i := pivotBinIndex - 1; i >= 0; i-- {
+		subPot = t.bins[i]
+		if subPot.po < minProximityOrder {
+			return true
+		}
+		bin := &Bin{
+			ProximityOrder: subPot.po,
+			Size:           subPot.size,
+			ValIterator:    subPot.each,
+		}
+		if !consumeBin(bin) {
+			return false
+		}
+	}
+	return true
+
+}
+
+type NeighbourConsumer = func(Val, int) bool
+
 // EachNeighbour is a synchronous iterator over neighbours of any target val
 // the order of elements retrieved reflect proximity order to the target
 // TODO: add maximum proxbin to start range of iteration
-func (t *Pot) EachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
-	return t.eachNeighbour(val, pof, f)
+func (t *Pot) EachNeighbour(val Val, pof Pof, consume NeighbourConsumer) bool {
+	return t.eachNeighbour(val, pof, consume)
 }
 
-func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
+func (t *Pot) eachNeighbour(val Val, pof Pof, consume NeighbourConsumer) bool {
 	if t == nil || t.size == 0 {
 		return false
 	}
@@ -605,7 +693,7 @@ func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
 	if !eq {
 		n, il = t.getPos(po)
 		if n != nil {
-			next = n.eachNeighbour(val, pof, f)
+			next = n.eachNeighbour(val, pof, consume)
 			if !next {
 				return false
 			}
@@ -615,14 +703,14 @@ func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
 		}
 	}
 
-	next = f(t.pin, po)
+	next = consume(t.pin, po)
 	if !next {
 		return false
 	}
 
 	for i := l - 1; i > ir; i-- {
 		next = t.bins[i].each(func(v Val) bool {
-			return f(v, po)
+			return consume(v, po)
 		})
 		if !next {
 			return false
@@ -632,7 +720,7 @@ func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
 	for i := il - 1; i >= 0; i-- {
 		n := t.bins[i]
 		next = n.each(func(v Val) bool {
-			return f(v, n.po)
+			return consume(v, n.po)
 		})
 		if !next {
 			return false

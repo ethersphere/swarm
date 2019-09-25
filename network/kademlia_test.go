@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -375,104 +374,6 @@ func binStr(a *BzzAddr) string {
 		return "<nil>"
 	}
 	return pot.ToBin(a.Address())[:8]
-}
-
-func TestEachConnLB(t *testing.T) {
-	tk := newTestKademlia(t, "00000000")
-	base := tk.base
-	tk.On("00100000")
-	tk.On("00100001")
-	tk.On("00010101")
-	stats := make(map[string]int)
-	f := func(peer *Peer, po int) (bool, bool) {
-		key := hexutil.Encode(peer.Address()[:8])
-		stats[key] = stats[key] + 1
-		// return false to only use one peer and mark it as used
-		return false, true
-	}
-	// Let n be the number of peers (3)
-	// Executing 2 * n times. We expect 2 access to each peer
-	tk.EachConnLB(base, 255, f)
-	tk.EachConnLB(base, 255, f)
-	tk.EachConnLB(base, 255, f)
-	tk.EachConnLB(base, 255, f)
-	tk.EachConnLB(base, 255, f)
-	tk.EachConnLB(base, 255, f)
-	for addr, count := range stats {
-		log.Debug("Stats", "addr", addr, "count", count)
-		if count != 2 {
-			t.Errorf("Expected 2 access to peer %v but got %v", addr, count)
-		}
-	}
-
-	stats = make(map[string]int)
-	// For each number k where m * n <= k < (m+1) *n, if we request k access,
-	// each peer should have m or m+1 access
-	k := 43
-	m := k / 3
-	log.Debug("k/3", "k", k, "m", m)
-	for i := 0; i < k; i++ {
-		tk.EachConnLB(base, 255, f)
-	}
-	for addr, count := range stats {
-		log.Debug("Stats", "addr", addr, "count", count)
-		if count != m && count != (m+1) {
-			t.Errorf("Expected %v or %v access to peer %v but got %v", m, m+1, addr, count)
-		}
-	}
-}
-
-func TestEachConnFilteredLB(t *testing.T) {
-	tk := newTestKademlia(t, "00000000")
-	base := tk.base
-	caps := make(map[string]*capability.Capability)
-
-	capKey := "42:101"
-	caps[capKey] = capability.NewCapability(42, 3)
-	caps[capKey].Set(0)
-	caps[capKey].Set(2)
-	tk.RegisterCapabilityIndex(capKey, *caps[capKey])
-
-	peer := tk.newTestKadPeerWithCapabilities("00100000", caps[capKey])
-	capPeerAddress := hexutil.Encode(peer.Address()[:8])
-	tk.Kademlia.On(peer)
-	tk.On("00100000")
-	tk.On("00100001")
-	tk.On("00010101")
-	stats := make(map[string]int)
-	f := func(peer *Peer, po int) (bool, bool) {
-		key := hexutil.Encode(peer.Address()[:8])
-		stats[key] = stats[key] + 1
-		// return false to only use one peer and mark it as used
-		return false, true
-	}
-	stats = make(map[string]int)
-	// Let n is the total number of peers (3), let na is the number of peers with
-	// capability a (1)
-	// For each number k where m * n <= k < (m+1) *n, if we request k access without capability,
-	// and ka where ma * na <= ka < (ma+1) access for capability a each peer of na should have m or m+1 access
-	// plus ma or ma+1 access
-	//
-	n := 3
-	na := 1
-	k := 130
-	ka := 47
-	m := k / n
-	ma := ka / na
-
-	for i := 0; i < k; i++ {
-		tk.EachConnLB(base, 255, f)
-	}
-	for i := 0; i < ka; i++ {
-		tk.EachConnFilteredLB(base, capKey,255, f)
-	}
-	min := m + ma
-	max := m +1  + ma + 1
-	log.Debug("Expected capability Accesses", "min", min, "max", max)
-	capAccesses := stats[capPeerAddress]
-	if min > capAccesses || capAccesses > max {
-		t.Errorf("Expected [%v , %v ] access to peer %v but got %v", min, max, capPeerAddress, capAccesses)
-	}
 }
 
 func TestSuggestPeerFindPeers(t *testing.T) {
