@@ -159,7 +159,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 
 		// we may not need this check, and we could maybe even get rid of this constant completely
 		// ask user for input
-		input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment")
+		input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
 		if err != nil {
 			return nil, err
 		}
