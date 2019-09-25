@@ -356,7 +356,9 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Error("handle post raw got an error retrieving tag", "tagUID", tagUID, "err", err)
 	}
 
-	ctx, sp := spancontext.StartSpan(tag.Context(), "http.post")
+	// start an http.post span to measure how long the HTTP POST request took, and link it with the tag.Context()
+	// N.B. this is independent context (used for tracing), to the HTTP request context - r.Context()
+	_, sp := spancontext.StartSpan(tag.Context(), "http.post")
 	defer sp.Finish()
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -385,7 +387,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Debug("resolved key", "ruid", ruid, "key", addr)
 	} else {
-		addr, err = s.api.NewManifest(ctx, toEncrypt)
+		addr, err = s.api.NewManifest(r.Context(), toEncrypt)
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -393,7 +395,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Debug("new manifest", "ruid", ruid, "key", addr)
 	}
-	newAddr, err := s.api.UpdateManifest(ctx, addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 		case tarContentType:
 			_, err := s.handleTarUpload(r, mw)
