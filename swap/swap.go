@@ -207,12 +207,12 @@ func balanceKey(peer enode.ID) string {
 	return balancePrefix + peer.String()
 }
 
-// returns the store key for retrieving a peer's last sent cheque at a certain backend networkID
+// returns the store key for retrieving a peer's last sent cheque
 func sentChequeKey(peer enode.ID) string {
 	return sentChequePrefix + peer.String()
 }
 
-// returns the store key for retrieving a peer's last received cheque at a certain backend networkID
+// returns the store key for retrieving a peer's last received cheque
 func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
 }
