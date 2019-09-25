@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -75,11 +76,12 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 					}
 
 					select {
-					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data):
+					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data).WithTagID(dataItem.Tag):
 						count++
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
 						sinceItem = &item
+						log.Trace("subscribe.push", "ref", fmt.Sprintf("%x", sinceItem.Address), "binid", sinceItem.BinID)
 						return false, nil
 					case <-stopChan:
 						// gracefully stop the iteration

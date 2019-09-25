@@ -40,12 +40,15 @@ type Chunk interface {
 	Data() []byte
 	PinCounter() uint64
 	WithPinCounter(p uint64) Chunk
+	TagID() uint32
+	WithTagID(t uint32) Chunk
 }
 
 type chunk struct {
 	addr       Address
 	sdata      []byte
 	pinCounter uint64
+	tagID      uint32
 }
 
 func NewChunk(addr Address, data []byte) Chunk {
@@ -60,6 +63,11 @@ func (c *chunk) WithPinCounter(p uint64) Chunk {
 	return c
 }
 
+func (c *chunk) WithTagID(t uint32) Chunk {
+	c.tagID = t
+	return c
+}
+
 func (c *chunk) Address() Address {
 	return c.addr
 }
@@ -70,6 +78,10 @@ func (c *chunk) Data() []byte {
 
 func (c *chunk) PinCounter() uint64 {
 	return c.pinCounter
+}
+
+func (c *chunk) TagID() uint32 {
+	return c.tagID
 }
 
 func (self *chunk) String() string {
