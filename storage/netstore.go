@@ -234,6 +234,8 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
 
+		ctx = context.WithValue(ctx, "remote.fetch", osp)
+
 		log.Trace("remote.fetch", "ref", ref)
 
 		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
