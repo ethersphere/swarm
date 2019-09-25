@@ -22,10 +22,8 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/spancontext"
 )
 
 // Tags hold tag information indexed by a unique random uint32
@@ -43,19 +41,12 @@ func NewTags() *Tags {
 // Create creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
 func (ts *Tags) Create(s string, total int64) (*Tag, error) {
-	t := &Tag{
-		Uid:       rand.Uint32(),
-		Name:      s,
-		StartedAt: time.Now(),
-		Total:     total,
-	}
+	t := NewTag(rand.Uint32(), s, total)
+
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
 	}
 
-	// context here is used only to store the root span `new.upload.tag` within Tag,
-	// we don't need any type of ctx Deadline or cancellation for this particular ctx
-	t.ctx, t.span = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t, nil
 }
 

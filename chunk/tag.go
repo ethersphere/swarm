@@ -63,9 +63,8 @@ type Tag struct {
 	span opentracing.Span // tracing root span
 }
 
-// New creates a new tag, stores it by the name and returns it
-// it returns an error if the tag with this name already exists
-func NewTag(ctx context.Context, uid uint32, s string, total int64) *Tag {
+// NewTag creates a new tag, and returns it
+func NewTag(uid uint32, s string, total int64) *Tag {
 	t := &Tag{
 		Uid:       uid,
 		Name:      s,
@@ -73,7 +72,9 @@ func NewTag(ctx context.Context, uid uint32, s string, total int64) *Tag {
 		Total:     total,
 	}
 
-	t.ctx, t.span = spancontext.StartSpan(ctx, "new.upload.tag")
+	// context here is used only to store the root span `new.upload.tag` within Tag,
+	// we don't need any type of ctx Deadline or cancellation for this particular ctx
+	t.ctx, t.span = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t
 }
 

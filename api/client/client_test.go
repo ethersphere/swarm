@@ -228,7 +228,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	chunktesting.CheckTag(t, tag, 8, 8, 0, 0, 0, 8)
+	chunktesting.CheckTag(t, tag, 9, 9, 0, 0, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string, expected []byte) {
@@ -372,7 +372,7 @@ func TestClientMultipartUpload(t *testing.T) {
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	chunktesting.CheckTag(t, tag, 8, 8, 0, 0, 0, 8)
+	chunktesting.CheckTag(t, tag, 9, 9, 0, 0, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {
