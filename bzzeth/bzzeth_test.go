@@ -84,15 +84,14 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
 
 	cleanup = func() {
-		err := os.RemoveAll(dir)
-		if err != nil {
-			t.Fatalf("Could not remove localstore dir")
-		}
 		err = netStore.Close()
 		if err != nil {
 			t.Fatalf("Could not close netStore")
 		}
-
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Fatalf("Could not remove localstore dir")
+		}
 	}
 	return prvkey, netStore, cleanup
 }
