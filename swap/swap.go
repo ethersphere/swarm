@@ -152,12 +152,12 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
 	}
 
+	// we may not need this check, and we could maybe even get rid of this constant completely
 	if params != nil && params.InitialDepositAmount == 0 {
 		// need to prompt user for initial deposit amount
 		// if 0, can not cash in cheques
 		prompter := console.Stdin
 
-		// we may not need this check, and we could maybe even get rid of this constant completely
 		// ask user for input
 		input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
 		if err != nil {
