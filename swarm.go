@@ -122,10 +122,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
 		swapParams := &swap.Params{
-			LogPath:              self.config.SwapLogPath,
-			InitialDepositAmount: self.config.SwapInitialDeposit,
-			DisconnectThreshold:  int64(self.config.SwapDisconnectThreshold),
-			PaymentThreshold:     int64(self.config.SwapPaymentThreshold),
+			LogPath:             self.config.SwapLogPath,
+			DisconnectThreshold: int64(self.config.SwapDisconnectThreshold),
+			PaymentThreshold:    int64(self.config.SwapPaymentThreshold),
 		}
 
 		// create the accounting objects
@@ -378,7 +377,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
 	if s.config.SwapEnabled {
-		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
+		if err := s.swap.StartChequebook(s.config.Contract, s.config.SwapInitialDeposit); err != nil {
 			return err
 		}
 	} else {

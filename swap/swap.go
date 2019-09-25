@@ -76,10 +76,9 @@ type Owner struct {
 
 // Params encapsulates param
 type Params struct {
-	LogPath              string // optional audit log path
-	InitialDepositAmount uint64 // initial deposit amount for the chequebook
-	PaymentThreshold     int64  // honey amount at which a payment is triggered
-	DisconnectThreshold  int64  // honey amount at which a peer disconnects
+	LogPath             string // optional audit log path
+	PaymentThreshold    int64  // honey amount at which a payment is triggered
+	DisconnectThreshold int64  // honey amount at which a peer disconnects
 }
 
 // newLogger returns a new logger
@@ -180,27 +179,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		}
 		log.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
 	}
-	// we may not need this check, and we could maybe even get rid of this constant completely
-	if params != nil && params.InitialDepositAmount == 0 {
-		// need to prompt user for initial deposit amount
-		// if 0, can not cash in cheques
-		prompter := console.Stdin
-
-		// ask user for input
-		input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
-		if err != nil {
-			return nil, err
-		}
-		// check input
-		val, err := strconv.ParseInt(input, 10, 64)
-		if err != nil {
-			// maybe we should provide a fallback here? A bad input results in stopping the boot
-			return nil, fmt.Errorf("Conversion error while reading user input: %v", err)
-		}
-		log.Info("Chequebook initial deposit amount: ", "amount", val)
-		params.InitialDepositAmount = uint64(val)
-	}
-
 	return new(
 		stateStore,
 		prvkey,
@@ -245,11 +223,6 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 		privateKey: prvkey,
 		publicKey:  pubkey,
 	}
-}
-
-// DeploySuccess is for convenience log output
-func (s *Swap) DeploySuccess() string {
-	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.GetParams().ContractAddress.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
 }
 
 // Add is the (sole) accounting function
@@ -487,8 +460,27 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
+func promptInitialDepositAmount() (uint64, error) {
+	// need to prompt user for initial deposit amount
+	// if 0, can not cash in cheques
+	prompter := console.Stdin
+
+	// ask user for input
+	input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
+	if err != nil {
+		return 0, err
+	}
+	// check input
+	val, err := strconv.ParseInt(input, 10, 64)
+	if err != nil {
+		// maybe we should provide a fallback here? A bad input results in stopping the boot
+		return 0, fmt.Errorf("Conversion error while reading user input: %v", err)
+	}
+	return uint64(val), nil
+}
+
 // StartChequebook start the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
-func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
+func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) error {
 	chequebookToUse, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
@@ -496,7 +488,14 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 	}
 	// nothing written to state disk before, no flag provided: deploying new chequebook
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
-		chequebook, err := s.Deploy(context.TODO())
+		var toDeposit = initialDepositAmount
+		if toDeposit == 0 {
+			toDeposit, err = promptInitialDepositAmount()
+			if err != nil {
+				return err
+			}
+		}
+		chequebook, err := s.Deploy(context.TODO(), toDeposit)
 		if err != nil {
 			return fmt.Errorf("Error deploying chequebook: %v", err)
 		}
@@ -525,19 +524,18 @@ func (s *Swap) bindToContractAt(address common.Address) (err error) {
 	if err != nil {
 		return err
 	}
-	auditLog.Info("Using the chequebook", "chequebookAddr", address, "networkID", s.backendNetworkID)
 	// saving chequebook
 	return s.saveChequebook(address)
 }
 
 // Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context) (common.Address, error) {
+func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (common.Address, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
-	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
+	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
 
-	log.Info("deploying new swap", "owner", opts.From.Hex())
+	log.Info("deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
 	return s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
 }
 
