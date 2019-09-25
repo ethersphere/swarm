@@ -65,6 +65,7 @@ const (
 	SwarmEnvPort                    = "SWARM_PORT"
 	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
 	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
+	SwarmEnvChequebookFactory       = "SWARM_SWAP_CHEQUEBOOK_FACTORY"
 	SwarmEnvInitialDeposit          = "SWARM_INITIAL_DEPOSIT"
 	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
@@ -183,7 +184,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if chbookaddr := ctx.GlobalString(SwarmSwapChequebookAddrFlag.Name); chbookaddr != "" {
 		currentConfig.Contract = common.HexToAddress(chbookaddr)
 	}
-
+	if chbookfactoryaddr := ctx.GlobalString(SwarmSwapChequebookFactoryFlag.Name); chbookfactoryaddr != "" {
+		currentConfig.SwapChequebookFactory = common.HexToAddress(chbookfactoryaddr)
+	}
 	networkid := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	if networkid != 0 && networkid != network.DefaultNetworkID {
 		currentConfig.NetworkID = networkid

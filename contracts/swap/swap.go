@@ -20,7 +20,6 @@
 package swap
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/big"
@@ -29,12 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswap"
 )
 
 var (
-	// ErrNotASwapContract is given when an address is verified not to have a SWAP contract based on its bytecode
-	ErrNotASwapContract = errors.New("not a swap contract")
 	// ErrTransactionReverted is given when the transaction that cashes a cheque is reverted
 	ErrTransactionReverted = errors.New("Transaction reverted")
 )
@@ -48,13 +45,15 @@ type Backend interface {
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
-	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
+	// Address gets the address of this contract instance
+	Address() common.Address
 }
 
 // CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
@@ -78,12 +77,13 @@ type Params struct {
 type simpleContract struct {
 	instance *contract.SimpleSwap
 	address  common.Address
+	backend  Backend
 }
 
 // Deploy deploys an instance of the underlying contract and returns its instance and the transaction identifier
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
+func Deploy(auth *bind.TransactOpts, backend Backend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
 	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: instance, address: addr}
+	c := simpleContract{instance: instance, address: addr, backend: backend}
 	return c, tx, err
 }
 
@@ -95,17 +95,17 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := simpleContract{instance: instance, address: address}
+	c := simpleContract{instance: instance, address: address, backend: backend}
 	return c, err
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
-func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
+func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
 	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {
 		return nil, nil, err
 	}
-	receipt, err := WaitFunc(auth, backend, tx)
+	receipt, err := WaitFunc(auth, s.backend, tx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,18 +152,8 @@ func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.
 	return s.instance.PaidOut(opts, addr)
 }
 
-// ValidateCode checks that the on-chain code at address matches the expected swap
-// contract code.
-func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
-	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
-	if err != nil {
-		return err
-	}
-	referenceCode := common.FromHex(contract.SimpleSwapDeployedCode)
-	if !bytes.Equal(codeReadFromAddress, referenceCode) {
-		return ErrNotASwapContract
-	}
-	return nil
+func (s simpleContract) Address() common.Address {
+	return s.address
 }
 
 // WaitFunc is the default function to wait for transactions

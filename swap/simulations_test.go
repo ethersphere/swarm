@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -40,6 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
+	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
+	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -195,7 +198,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		}
 		keys[i] = key
 		addrs[i] = crypto.PubkeyToAddress(key.PublicKey)
-		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(10000000000)}
+		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(10000 * int64(RetrieveRequestPrice))}
 		dir, err := ioutil.TempDir("", fmt.Sprintf("swap_test_store_%x", addrs[i].Hex()))
 		if err != nil {
 			return nil, err
@@ -210,13 +213,22 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	// then create the single SimulatedBackend
 	gasLimit := uint64(8000000000)
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
-	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend}
+	defaultBackend.Commit()
+
+	factoryAddress, _, _, _ := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(keys[0]), defaultBackend)
+	defaultBackend.Commit()
+
+	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend, factoryAddress: factoryAddress}
 	// finally, create all Swap instances for each node, which share the same backend
 	var owner *Owner
 	defParams := newDefaultParams(t)
 	for i := 0; i < nodeCount; i++ {
 		owner = createOwner(keys[i])
-		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, defParams)
+		factory, err := cswap.FactoryAt(testBackend.factoryAddress, testBackend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, defParams, factory)
 	}
 
 	params.backend = testBackend
