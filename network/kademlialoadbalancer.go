@@ -1,11 +1,12 @@
 package network
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethersphere/swarm/log"
 	"sort"
 	"strconv"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethersphere/swarm/log"
 )
 
 // KademliaBackend is the required interface of KademliaLoadBalancer.
@@ -80,7 +81,7 @@ func (klb KademliaLoadBalancer) EachBinNodeAddress(consumeBin LBBinConsumer) {
 // Only peers with the provided capabilities capKey are considered.
 // All peers in that bin will be provided to the LBBinConsumer sorted by least used first.
 func (klb KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, consumeBin LBBinConsumer) {
-	klb.kademlia.EachBinDescFiltered(base, capKey, 0, func(peerBin *PeerBin) bool {
+	_ = klb.kademlia.EachBinDescFiltered(base, capKey, 0, func(peerBin *PeerBin) bool {
 		peers := klb.peerBinToPeerList(peerBin)
 		return consumeBin(LBBin{LBPeers: peers, ProximityOrder: peerBin.ProximityOrder})
 	})

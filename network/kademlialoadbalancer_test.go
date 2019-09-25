@@ -115,9 +115,9 @@ func TestEachBinFiltered(t *testing.T) {
 
 	capKey := "42:101"
 	caps[capKey] = capability.NewCapability(42, 3)
-	caps[capKey].Set(0)
-	caps[capKey].Set(2)
-	tk.RegisterCapabilityIndex(capKey, *caps[capKey])
+	_ = caps[capKey].Set(0)
+	_ = caps[capKey].Set(2)
+	_ = tk.RegisterCapabilityIndex(capKey, *caps[capKey])
 
 	capPeer := tk.newTestKadPeerWithCapabilities("10100000", caps[capKey])
 	tk.Kademlia.On(capPeer)

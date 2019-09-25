@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
@@ -91,7 +90,7 @@ func NewKadParams() *KadParams {
 type Kademlia struct {
 	lock            sync.RWMutex
 	capabilityIndex map[string]*capabilityIndex
-	defaultIndex    *capabilityIndex     // Index with pots and searching color
+	defaultIndex    *capabilityIndex     // Index with pots
 	*KadParams                           // Kademlia configuration parameters
 	base            []byte               // immutable baseaddress of the table
 	depth           uint8                // stores the last current depth of saturation
@@ -215,13 +214,6 @@ func (k *Kademlia) removeFromCapabilityIndex(p interface{}, disconnectOnly bool)
 	}
 }
 
-const (
-	black = iota
-	red
-)
-
-type color int
-
 // entry represents a Kademlia table entry (an extension of BzzAddr)
 type entry struct {
 	*BzzAddr
@@ -255,7 +247,7 @@ type capabilityIndex struct {
 	depth int
 }
 
-// NewDefaultIndex creates a new index for no capability with black starting color and nil capabilities
+// NewDefaultIndex creates a new index for no capability
 func NewDefaultIndex() *capabilityIndex {
 	return &capabilityIndex{
 		Capability: nil,
