@@ -160,7 +160,7 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	}
 	var usedBeforeAtNetwork uint64
 	var usedBefore bool
-	err = stateStore.Get(usedBeforeAtNetworkKey(networkID.String()), &usedBeforeAtNetwork)
+	err = stateStore.Get(usedBeforeAtNetworkKey, &usedBeforeAtNetwork)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
 		return nil, fmt.Errorf("swap init error: error querying usedBeforeAtNetwork from statestore: %v", err)
@@ -175,10 +175,11 @@ func New(logpath string, dbPath string, prvkey *ecdsa.PrivateKey, backendURL str
 	}
 	// put the networkID in the statestore
 	if !usedBefore {
-		err = stateStore.Put(usedBeforeAtNetworkKey(networkID.String()), networkID.Uint64())
+		err = stateStore.Put(usedBeforeAtNetworkKey, networkID.Uint64())
 		if err != nil {
 			return nil, fmt.Errorf("swap init error: error writing current backend networkID to statestore: %v", err)
 		}
+		log.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
 	}
 
 	return new(
@@ -198,6 +199,7 @@ const (
 	receivedChequePrefix      = "received_cheque_"
 	usedBeforeAtNetworkPrefix = "used_before_at_network_"
 	usedChequebookKey         = "used_chequebook"
+	usedBeforeAtNetworkKey    = "used_before_at_network"
 )
 
 // returns the store key for retrieving a peer's balance
@@ -213,10 +215,6 @@ func sentChequeKey(peer enode.ID) string {
 // returns the store key for retrieving a peer's last received cheque at a certain backend networkID
 func receivedChequeKey(peer enode.ID) string {
 	return receivedChequePrefix + peer.String()
-}
-
-func usedBeforeAtNetworkKey(networkID string) string {
-	return usedBeforeAtNetworkPrefix + networkID
 }
 
 func keyToID(key string, prefix string) enode.ID {
@@ -488,6 +486,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) error {
 		}
 		chequebookToUse = chequebook
 	}
+
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != chequebookToUse) {
 		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")

@@ -476,7 +476,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			name: "with pass in and save",
 			configure: func(config *chequebookConfig) {
 				config.passIn = testChequeContract
-				config.expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before at networkID %d", testBackend.networkID)
+				config.expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
