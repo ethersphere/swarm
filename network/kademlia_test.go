@@ -18,6 +18,7 @@ package network
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"testing"
@@ -35,34 +36,55 @@ import (
 func TestSugestedPeers(t *testing.T) {
 	tk := newTestKademlia(t, "00000000")
 
-	addresses := addressGenerator(200)
-	//tk.Register("01111111")
-	//tk.On("01111111")
-	//tk.Register("10111111")
-	//tk.On("10111111")
+	addresses := addressGenerator(100)
+	//addresses = append(addresses, "00000111")
+	//addresses = append(addresses, "00000110")
+	//addresses = append(addresses, "00000100")
+	//addresses = append(addresses, "00000101")
 
 	tk.Register(addresses...)
 
 	for !tk.checkHealth(true) {
-		suggestedPeer, depth, _ := tk.SuggestPeer()
+		suggestedPeer, _, _ := tk.SuggestPeer()
 		if suggestedPeer != nil {
-			log.Warn("suggestedPeer", "peer", suggestedPeer.String()[:9], "depth", depth)
-			tk.On(pot.ToBin(suggestedPeer.UAddr))
+			tk.On(pot.ToBin(suggestedPeer.OAddr))
 		}
 	}
+
+	var binsConns = make([]int, 10)
+	var binsAddrs = make([]int, 10)
+
+	consumerConns := func(bin *pot.Bin) bool {
+		binsConns[bin.ProximityOrder] = bin.Size
+		return true
+	}
+	consumerAddr := func(bin *pot.Bin) bool {
+		binsAddrs[bin.ProximityOrder] = bin.Size
+		return true
+	}
+
+	tk.conns.EachBin(tk.base, Pof, 0, consumerConns)
+	tk.addrs.EachBin(tk.base, Pof, 0, consumerAddr)
+
+	for k, v := range binsConns {
+		//If less than expected size and not all peers added
+		if tk.expectedBinSize(k) > v && binsAddrs[k] > v {
+			t.Fatalf("Unexpected number of peers in bin")
+		}
+	}
+
 	log.Warn(tk.String())
 	log.Warn(strconv.FormatBool(tk.checkHealth(true)))
-	log.Warn("len", "value", len(addresses))
 
 }
 
-func addressGenerator(numAdress int) []string {
+func addressGenerator(numAddress int) []string {
 	address := ""
 	base := "00000000"
 	var addresses []string
-	for n := 0; n < numAdress; n++ {
+	for n := 0; n < numAddress; n++ {
 	inner:
-		for i := 0; i < 8; i++ {
+		for len(address) < 8 {
 			address = address + strconv.Itoa(rand.Intn(2))
 		}
 		if address == base {

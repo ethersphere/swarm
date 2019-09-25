@@ -62,14 +62,10 @@ const minBinSize = 2
 
 type expectedBinSize func(int, int) int
 
-func (k *Kademlia) binSize(binNumber int) int {
+func (k *Kademlia) expectedBinSize(binNumber int) int {
+	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 
-	if k.depth < 0 {
-		return minBinSize
-	}
-	binSize := int(minBinSize * math.Pow(2, float64(int(k.depth)-binNumber)))
-	log.Warn("expected binSize for", "bin", binNumber, "saturation", k.depth, "sizeb", binSize)
-
+	binSize := int(minBinSize * math.Pow(2, float64(int(depth-1)-(binNumber))))
 	if binSize < minBinSize {
 		return minBinSize
 	}
@@ -94,7 +90,7 @@ type KadParams struct {
 // NewKadParams returns a params struct with default values
 func NewKadParams() *KadParams {
 	return &KadParams{
-		MaxProxDisplay:    32,
+		MaxProxDisplay:    10,
 		NeighbourhoodSize: 2,
 		MinBinSize:        2,
 		MaxBinSize:        4,
@@ -329,7 +325,6 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	saturationDepth = -1 // the deepest PO such that all shallower bins have >= k.MinBinSize peers
 	var pastDepth bool   // whether po of iteration >= depth
 	var currentMaxMinBinSize = minBinSize
-	log.Warn("PreEachbin")
 
 	k.conns.EachBin(k.base, Pof, 0, func(bin *pot.Bin) bool {
 
@@ -337,11 +332,10 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 		po := bin.ProximityOrder
 		size := bin.Size
 
-		expectedBinSize := k.binSize(po)
+		expectedBinSize := k.expectedBinSize(po)
 		if currentMaxMinBinSize < expectedBinSize {
 			currentMaxMinBinSize = expectedBinSize
 		}
-
 		for ; lastPO < po; lastPO++ {
 			// find the lowest unsaturated bin
 			if saturationDepth == -1 {
@@ -362,8 +356,6 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 			size = expectedBinSize - 1
 		}
 		// process non-empty unsaturated bins
-		log.Warn("Saturation depth", "size", saturationDepth)
-
 		if size < expectedBinSize {
 			// find the lowest unsaturated bin
 			if saturationDepth == -1 {
@@ -434,12 +426,13 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 			return cur < len(bins) && suggestedPeer == nil
 		})
 	}
-	if suggestedPeer != nil {
-		log.Warn("***********************Suggested peer", "peer", pot.ToBin(suggestedPeer.UAddr)[:9])
-	}
+	//if suggestedPeer != nil {
+	//	//log.Warn("***********************Suggested peer", "peer", pot.ToBin(suggestedPeer.UAddr)[:9])
+	//}
 
 	if uint8(saturationDepth) < k.depth {
 		k.depth = uint8(saturationDepth)
+		log.Warn("Changed saturationdepth to ", "val", k.depth)
 		return suggestedPeer, saturationDepth, true
 	}
 	return suggestedPeer, 0, false
@@ -975,12 +968,13 @@ func (k *Kademlia) saturation() int {
 	prev := -1
 	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
 	k.conns.EachBin(k.base, Pof, 0, func(bin *pot.Bin) bool {
+		expectedBinSize := k.expectedBinSize(bin.ProximityOrder)
 		prev++
 		po := bin.ProximityOrder
 		if po >= radius {
 			return false
 		}
-		return prev == po && bin.Size >= k.MinBinSize
+		return prev == po && bin.Size >= expectedBinSize
 	})
 	if prev < 0 {
 		return 0
@@ -1005,18 +999,17 @@ func (k *Kademlia) isSaturated(peersPerBin []int, depth int) bool {
 	unsaturatedBins := make([]int, 0)
 	k.conns.EachBin(k.base, Pof, 0, func(bin *pot.Bin) bool {
 		po := bin.ProximityOrder
-		expectedBinSize := k.binSize(po)
+		expectedBinSize := k.expectedBinSize(po)
 		if po >= depth {
 			return false
 		}
 		log.Trace("peers per bin", "peersPerBin[po]", peersPerBin[po], "po", po)
 		size := bin.Size
-		// if there are actually peers in the PeerPot who can fulfill k.MinBinSize
+		// if there are actually peers in the PeerPot who can fulfill expectedBinSize
 		if size < expectedBinSize && size < peersPerBin[po] {
 			log.Trace("connections for po", "po", po, "size", size)
 			unsaturatedBins = append(unsaturatedBins, po)
 		}
-		log.Warn("PeersReady to add", "peers", peersPerBin[po])
 		return true
 	})
 
