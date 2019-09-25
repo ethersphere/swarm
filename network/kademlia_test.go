@@ -34,32 +34,34 @@ import (
 )
 
 func TestSugestedPeers(t *testing.T) {
-	tk := newTestKademlia(t, "00000000")
-
-	addresses := addressGenerator(100)
-	//addresses = append(addresses, "00000111")
-	//addresses = append(addresses, "00000110")
-	//addresses = append(addresses, "00000100")
-	//addresses = append(addresses, "00000101")
+	base := "10000101"
+	tk := newTestKademlia(t, base)
+	addresses := addressGenerator(100, base)
 
 	tk.Register(addresses...)
 
-	for !tk.checkHealth(true) {
+	//for !tk.checkHealth(true) {
+	//	suggestedPeer, _, _ := tk.SuggestPeer()
+	//	if suggestedPeer != nil {
+	//		tk.On(pot.ToBin(suggestedPeer.OAddr))
+	//	}
+	//}
+	for range addresses {
 		suggestedPeer, _, _ := tk.SuggestPeer()
 		if suggestedPeer != nil {
 			tk.On(pot.ToBin(suggestedPeer.OAddr))
 		}
 	}
 
-	var binsConns = make([]int, 10)
-	var binsAddrs = make([]int, 10)
+	var binsConns []int
+	var binsAddrs []int
 
 	consumerConns := func(bin *pot.Bin) bool {
-		binsConns[bin.ProximityOrder] = bin.Size
+		binsConns = append(binsConns, bin.Size)
 		return true
 	}
 	consumerAddr := func(bin *pot.Bin) bool {
-		binsAddrs[bin.ProximityOrder] = bin.Size
+		binsAddrs = append(binsAddrs, bin.Size)
 		return true
 	}
 
@@ -69,32 +71,13 @@ func TestSugestedPeers(t *testing.T) {
 	for k, v := range binsConns {
 		//If less than expected size and not all peers added
 		if tk.expectedBinSize(k) > v && binsAddrs[k] > v {
-			t.Fatalf("Unexpected number of peers in bin")
+			t.Fatalf("unexpected number of peers in bin, got %v, expected %v", v, tk.expectedBinSize(k))
 		}
 	}
 
 	log.Warn(tk.String())
 	log.Warn(strconv.FormatBool(tk.checkHealth(true)))
 
-}
-
-func addressGenerator(numAddress int) []string {
-	address := ""
-	base := "00000000"
-	var addresses []string
-	for n := 0; n < numAddress; n++ {
-	inner:
-		for len(address) < 8 {
-			address = address + strconv.Itoa(rand.Intn(2))
-		}
-		if address == base {
-			address = ""
-			goto inner
-		}
-		addresses = append(addresses, address)
-		address = ""
-	}
-	return addresses
 }
 
 func init() {
@@ -129,6 +112,25 @@ func newTestKademlia(t *testing.T, b string) *testKademlia {
 
 func (tk *testKademlia) newTestKadPeer(s string) *Peer {
 	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, tk.Kademlia)
+}
+
+func addressGenerator(numAddress int, base string) []string {
+	log.Warn("base is", "val", base)
+	address := ""
+	var addresses []string
+	for n := 0; n < numAddress; n++ {
+		address = ""
+	inner:
+		for len(address) < 8 {
+			address = address + strconv.Itoa(rand.Intn(2))
+		}
+		if address == base {
+			address = ""
+			goto inner
+		}
+		addresses = append(addresses, address)
+	}
+	return addresses
 }
 
 func (tk *testKademlia) On(ons ...string) {
