@@ -23,11 +23,6 @@ import (
 )
 
 var (
-	SwarmSwapChequebookAddrFlag = cli.StringFlag{
-		Name:   "chequebook",
-		Usage:  "chequebook contract address",
-		EnvVar: SwarmEnvChequebookAddr,
-	}
 	SwarmAccountFlag = cli.StringFlag{
 		Name:   "bzzaccount",
 		Usage:  "Swarm account key file",
@@ -58,6 +53,16 @@ var (
 		Usage:  "Numerical network identifier. The default is the public swarm testnet",
 		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
+	}
+	SwarmSwapInitialDepositFlag = cli.StringFlag{
+		Name:   "swap-initial-deposit",
+		Usage:  "Initial deposit amount for swap chequebook",
+		EnvVar: SwarmEnvInitialDeposit,
+	}
+	SwarmSwapChequebookAddrFlag = cli.StringFlag{
+		Name:   "swap-chequebook",
+		Usage:  "SWAP chequebook contract address",
+		EnvVar: SwarmEnvChequebookAddr,
 	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
