@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"github.com/ethersphere/swarm/network/timeouts"
+	"github.com/ethersphere/swarm/spancontext"
 	"sync"
 	"time"
 
@@ -106,6 +108,8 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 			go b.handleNewBlockHeaders(ctx, p, msg)
 		case *BlockHeaders:
 			go b.handleBlockHeaders(ctx, p, msg)
+		case *GetBlockHeaders:
+			go b.handleGetBlockHeaders(ctx, p, msg)
 		default:
 			p.logger.Error("Invalid msg")
 		}
@@ -226,18 +230,11 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 		return
 	}
 
-	// convert rlp.RawValue to bytes
-	var headers [][]byte
-	for _, h := range msg.Headers {
+	for _,h := range msg.Headers {
 		displayHeader(h)
-		res, err := rlp.EncodeToBytes(h)
-		if err != nil {
-			log.Error("Could not encode header to bytes", "hash", h.Hash())
-		}
-		headers = append(headers, res)
 	}
 
-	err := b.deliverAndStoreAll(ctx, req, headers)
+	err := b.deliverAndStoreAll(ctx, req, msg.Headers)
 	if err != nil {
 		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.ID, "err", err)
 		p.Drop()
@@ -245,7 +242,14 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 }
 
 // debug function to display header contents
-func displayHeader(hdr types.Header) {
+func displayHeader(h []byte) {
+	var hdr types.Header
+	err := rlp.DecodeBytes(h, &hdr)
+	if err != nil {
+		log.Error("Could not decode header")
+		return
+	}
+
 	log.Debug("Header ", "ParentHash", hdr.ParentHash.Hex())
 	log.Debug("Header ", "UncleHash", hdr.UncleHash.Hex())
 	log.Debug("Header ", "Coinbase", hdr.Coinbase.Hex())
@@ -351,6 +355,193 @@ func newChunk(data []byte) chunk.Chunk {
 	hash := crypto.Keccak256(data)
 	return chunk.NewChunk(hash, data)
 
+}
+
+// handles GetBlockHeader requests, in the protocol handler this call is asynchronous
+// so it is safe to have it run until delivery is finished
+func (b *BzzEth) handleGetBlockHeaders(ctx context.Context, p *Peer, msg *GetBlockHeaders) {
+	p.logger.Debug("bzzeth.handleGetBlockHeaders", "id", msg.ID)
+	total := len(msg.Hashes)
+	ctx, osp := spancontext.StartSpan(ctx, "bzzeth.handleGetBlockHeaders")
+	defer osp.Finish()
+
+	// deliver in batches, this blocks until total number of requests are delivered or considered not found
+	deliveries := make(chan []byte)
+	trigger := make(chan chan [][]byte)
+	batches := make(chan [][]byte)
+	defer close(trigger)
+	go readToBatches(deliveries, trigger)
+
+	// asynchronously request all headers as swarm chunks
+	go b.requestAll(ctx, deliveries, msg.Hashes)
+	deliveredCnt := 0
+	var err error
+	// this loop terminates if
+	// - batches channel is closed (because the underlying deliveries channel is closed) OR
+	// - context is done
+	// the implementation aspires to send as many as possible as early as possible
+DELIVERY:
+	for headers := range batches {
+		deliveredCnt += len(headers)
+		if err = p.Send(ctx, &BlockHeaders{
+			ID:      msg.ID,
+			Headers: headers,
+		}); err != nil { // in case of a send error, the peer will disconnect so can safely return
+			break DELIVERY
+		}
+		select {
+		case trigger <- batches: // signal that we are ready for another batch
+		case <-ctx.Done():
+			break DELIVERY
+		}
+	}
+
+	p.logger.Debug("bzzeth.handleGetBlockHeaders", "id", msg.ID, "total", total, "delivered", deliveredCnt, "err", err)
+
+	if err == nil && deliveredCnt < total { // if there was no send error and we deliver less than requested
+		p.Send(ctx, &BlockHeaders{ID: msg.ID}) // it is prudent to send an empty BlockHeaders message
+	}
+}
+
+var batchWait = 100 * time.Millisecond
+
+// readToBatches reads items from an input channel into a buffer and
+// sends non-empty buffers on a channel read from the out
+func readToBatches(in chan []byte, out chan chan [][]byte) {
+	var buffer [][]byte
+	var trigger chan chan [][]byte
+BATCH:
+	for {
+		select {
+		case batches := <-trigger: // new batch channel available
+			if batches == nil { // terminate if batches channel is closed, no more batches accepted
+				return
+			}
+			batches <- buffer // otherwise write buffer into batch channel
+			if in == nil {    // terminate if in channel is already closed, sent last batch
+				return
+			}
+			buffer = nil  // otherwise start new buffer
+			trigger = nil // block this case: disallow new batches until enough in buffer
+
+		case item, more := <-in: // reading input
+			if !more {
+				in = nil       // block this case: disallow read from closed channel
+				continue BATCH // wait till last batch can send
+			}
+			// otherwise collect item in buffer
+			buffer = append(buffer, item)
+
+		default:
+			if len(buffer) > 0 { // if buffer is not empty
+				trigger = out  // allow sending batch
+				continue BATCH // wait till next batch can send
+			}
+			time.Sleep(batchWait) // otherwise wait and continue
+		}
+	}
+}
+
+// requestAll requests each hash and channel
+func (b *BzzEth) requestAll(ctx context.Context, deliveries chan []byte, hashes [][]byte) {
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
+	// missingHeaders collects hashes of headers not found within swarm
+	// ie., the hashes to request from the eth full nodes
+	missingHeaders := make(chan []byte)
+
+	wg := sync.WaitGroup{}
+	defer close(deliveries)
+	wg.Add(1)
+BZZ:
+	for _, h := range hashes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			header, err := b.getBlockHeaderBzz(ctx, h)
+			if err != nil {
+				log.Debug("bzzeth.requestAll: netstore.Get can not retrieve chunk", "ref", hex.EncodeToString(h), "err", err)
+				select {
+				case missingHeaders <- h: // fallback: request header from eth peers
+				case <-ctx.Done():
+				}
+				return
+			}
+			select {
+			case deliveries <- header:
+			case <-ctx.Done():
+			}
+		}()
+		select {
+		case <-ctx.Done():
+			break BZZ
+		default:
+		}
+	}
+
+	// fall back to retrieval from eth clients
+	// collect missing block header hashes
+	// terminates after missingHeaders is read and closed or context is done
+	go b.getBlockHeadersEth(ctx, missingHeaders, deliveries)
+
+	// wait till all hashes are requested from swarm, then close missingHeaders channel
+	// this cannot block as this function is called async
+	wg.Done()
+	wg.Wait()
+	close(missingHeaders)
+}
+
+// getBlockHeadersEth manages fetching headers from ethereum bzzeth nodes
+// This is part of the response to GetBlockHeaders requests by bzzeth light/syncing nodes
+// As a fallback after header retrieval from local storage and swarm network are unsuccessful
+// When called, it
+// - reads requested header hashes from a channel (headerC) and
+// - creates batch requests and sends them to an adequate bzzeth peer
+// - channels the responses into a delivery channel (deliveries)
+func (b *BzzEth) getBlockHeadersEth(ctx context.Context, headersC, deliveries chan []byte) {
+	// read header requests into batches
+	readNext := make(chan chan [][]byte)
+	batches := make(chan [][]byte)
+	go readToBatches(headersC, readNext)
+	readNext <- batches
+
+	// send GetBlockHeader requests to adequate bzzeth peers
+	// this loop terminates when batches channel is closed as a result of input headersC being closed
+	var reqs []*request
+	for headers := range batches {
+		p := b.peers.getEth() // find candidate peer to serve the headers
+		if p == nil {         // if no peer found just skip the batch TODO: smarter retry?
+			continue
+		}
+		// initiate request with the chosen peer
+		req, err := p.getBlockHeaders(ctx, headers, deliveries)
+		if err != nil { // in case of failure, no retries TODO: smarter retry?
+			continue
+		}
+		reqs = append(reqs, req) // remember the request so that it can be cancelled
+	}
+	cancelAll(reqs...)
+}
+
+// cancelAll cancels all requests given as arguments
+func cancelAll(reqs ...*request) {
+	for _, req := range reqs {
+		req.cancel()
+	}
+}
+
+// getBlockHeaderBzz retrieves a block header by its hash from swarm
+func (b *BzzEth) getBlockHeaderBzz(ctx context.Context, hash []byte) ([]byte, error) {
+	req := &storage.Request{
+		Addr: hash,
+		// Origin: b.ID(),
+	}
+	chunk, err := b.netStore.Get(ctx, chunk.ModeGetRequest, req)
+	if err != nil {
+		return nil, err
+	}
+	return chunk.Data(), nil
 }
 
 // Protocols returns the p2p protocol
