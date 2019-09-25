@@ -41,17 +41,18 @@ type DB interface {
 	Set(context.Context, chunk.ModeSet, ...storage.Address) error
 }
 
+var retryInterval = 10 * time.Second // time interval between retries
+
 // Pusher takes care of the push syncing
 type Pusher struct {
-	store         DB                     // localstore DB
-	tags          *chunk.Tags            // tags to update counts
-	quit          chan struct{}          // channel to signal quitting on all loops
-	closed        chan struct{}          // channel to signal sync loop terminated
-	pushed        map[string]*pushedItem // cache of items push-synced
-	receipts      chan []byte            // channel to receive receipts
-	ps            PubSub                 // PubSub interface to send chunks and receive receipts
-	logger        log.Logger             // custom logger
-	retryInterval time.Duration          // dynamically adjusted time interval between retries
+	store    DB                     // localstore DB
+	tags     *chunk.Tags            // tags to update counts
+	quit     chan struct{}          // channel to signal quitting on all loops
+	closed   chan struct{}          // channel to signal sync loop terminated
+	pushed   map[string]*pushedItem // cache of items push-synced
+	receipts chan []byte            // channel to receive receipts
+	ps       PubSub                 // PubSub interface to send chunks and receive receipts
+	logger   log.Logger             // custom logger
 }
 
 const maxMeasurements = 20000
@@ -74,15 +75,14 @@ type pushedItem struct {
 // - tags that hold the tags
 func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 	p := &Pusher{
-		store:         store,
-		tags:          tags,
-		quit:          make(chan struct{}),
-		closed:        make(chan struct{}),
-		pushed:        make(map[string]*pushedItem),
-		receipts:      make(chan []byte),
-		ps:            ps,
-		logger:        log.New("self", label(ps.BaseAddr())),
-		retryInterval: 10 * time.Second,
+		store:    store,
+		tags:     tags,
+		quit:     make(chan struct{}),
+		closed:   make(chan struct{}),
+		pushed:   make(map[string]*pushedItem),
+		receipts: make(chan []byte),
+		ps:       ps,
+		logger:   log.New("self", label(ps.BaseAddr())),
 	}
 	go p.sync()
 	return p
@@ -110,6 +110,7 @@ func (p *Pusher) sync() {
 	var unsubscribe func()
 	var syncedAddrs []storage.Address
 	defer close(p.closed)
+
 	// timer, initially set to 0 to fall through select case on timer.C for initialisation
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -123,9 +124,6 @@ func (p *Pusher) sync() {
 	chunksInBatch := -1
 	var batchStartTime time.Time
 	ctx := context.Background()
-
-	//var average uint64 = 100000 // microseconds
-	//var measurements uint64
 
 	for {
 		select {
@@ -190,9 +188,6 @@ func (p *Pusher) sync() {
 			metrics.GetOrRegisterResettingTimer("pusher.chunk.roundtrip", nil).Update(totalDuration)
 			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
 
-			// calibrate retryInterval based on roundtrip times
-			// measurements, average = p.updateRetryInterval(item, measurements, average)
-
 			// collect synced addresses and corresponding items to do subsequent batch operations
 			syncedAddrs = append(syncedAddrs, addr)
 			item.synced = true
@@ -232,7 +227,7 @@ func (p *Pusher) sync() {
 			// and start iterating on Push index from the beginning
 			chunks, unsubscribe = p.store.SubscribePush(ctx)
 			// reset timer to go off after retryInterval
-			timer.Reset(p.retryInterval)
+			timer.Reset(retryInterval)
 
 		case <-p.quit:
 			if unsubscribe != nil {
@@ -335,19 +330,4 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 		p.logger.Trace("self is not the closest to ref: send chunk to neighbourhood", "ref", hexaddr)
 	}
 	return true
-}
-
-// updateRetryInterval calibrates the period after which push index iterator restart from the beginning
-func (p *Pusher) updateRetryInterval(item *pushedItem, measurements uint64, average uint64) (uint64, uint64) {
-	if !item.shortcut { // only real network roundtrips counted, no shortcuts
-		roundtripDuration := time.Since(item.lastSentAt)
-		measurement := uint64(roundtripDuration) / 1000 // in microseconds
-		// recalculate average
-		average = (measurements*average + measurement) / (measurements + 1)
-		if measurement < maxMeasurements {
-			measurements++
-		}
-		p.retryInterval = time.Duration(average*2) * time.Microsecond
-	}
-	return measurements, average
 }
