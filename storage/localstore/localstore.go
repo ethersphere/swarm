@@ -311,7 +311,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return tag, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.Tag = binary.BigEndian.Uint32(value)
+			if value != nil {
+				e.Tag = binary.BigEndian.Uint32(value)
+			}
 			return e, nil
 		},
 	})
