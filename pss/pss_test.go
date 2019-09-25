@@ -280,7 +280,7 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg.Topic = topic
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 		ps.handle(ctx, nil, pssMsg)
 		select {
@@ -315,7 +315,7 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg.Topic = topic
 
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 		ps.handle(ctx, nil, pssMsg)
 		select {
@@ -344,7 +344,7 @@ func TestAddressMatchProx(t *testing.T) {
 		pssMsg.Topic = topic
 
 		log.Trace("noprox addrs", "local", localAddr, "remote", remoteAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 		ps.handle(ctx, nil, pssMsg)
 		select {
@@ -686,7 +686,7 @@ func TestRawAllow(t *testing.T) {
 	pssMsg.Topic = topic
 	pssMsg.Payload = nil
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	ps.handle(ctx, nil, pssMsg)
 	select {
@@ -706,7 +706,7 @@ func TestRawAllow(t *testing.T) {
 
 	// should work now
 	pssMsg.Payload = []byte("Raw Deal")
-	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	ps.handle(ctx, nil, pssMsg)
 	select {

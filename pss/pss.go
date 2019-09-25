@@ -170,10 +170,9 @@ func (o *outbox) processOutbox() {
 				if err := o.forward(msg.msg); err != nil {
 					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
 					// if we failed to forward, re-insert message in the queue
-					log.Debug(err.Error())
+					log.Warn(err.Error())
 					// reenqueue the message for processing
 					o.reenqueue(slot)
-					log.Debug("Message re-enqued", "slot", slot)
 					return
 				}
 				// free the outbox slot
@@ -482,7 +481,7 @@ func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{})
 	go func() {
 		pssmsg, ok := msg.(*message.Message)
 		if !ok {
-			log.Error("invalid message typ", "msg", msg)
+			log.Error("invalid message type", "msg", msg)
 			peer.Drop()
 		}
 		if err := p.handlePssMsg(ctx, pssmsg); err != nil {

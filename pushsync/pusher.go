@@ -55,17 +55,14 @@ type Pusher struct {
 	logger   log.Logger             // custom logger
 }
 
-const maxMeasurements = 20000
-
 // pushedItem captures the info needed for the pusher about a chunk during the
 // push-sync--receipt roundtrip
 type pushedItem struct {
-	tag         *chunk.Tag       // tag for the chunk
-	shortcut    bool             // if the chunk receipt was sent by self
-	firstSentAt time.Time        // first sent at time
-	lastSentAt  time.Time        // most recently sent at time
-	synced      bool             // set when chunk got synced
-	span        opentracing.Span // roundtrip span
+	tag      *chunk.Tag       // tag for the chunk
+	shortcut bool             // if the chunk receipt was sent by self
+	sentAt   time.Time        // first sent at time
+	synced   bool             // set when chunk got synced
+	span     opentracing.Span // roundtrip span
 }
 
 // NewPusher constructs a Pusher and starts up the push sync protocol
@@ -184,7 +181,7 @@ func (p *Pusher) sync() {
 				item.span.Finish()
 			}
 
-			totalDuration := time.Since(item.firstSentAt)
+			totalDuration := time.Since(item.sentAt)
 			metrics.GetOrRegisterResettingTimer("pusher.chunk.roundtrip", nil).Update(totalDuration)
 			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
 
@@ -296,7 +293,6 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 		if item.synced {
 			return false
 		}
-		item.lastSentAt = now
 	} else {
 		// first time encountered
 		addr := ch.Address()
@@ -304,9 +300,8 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 		// remember item
 		tag, _ := p.tags.Get(ch.TagID())
 		item = &pushedItem{
-			tag:         tag,
-			firstSentAt: now,
-			lastSentAt:  now,
+			tag:    tag,
+			sentAt: now,
 		}
 
 		// increment SENT count on tag  if it exists
