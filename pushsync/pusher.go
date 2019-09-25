@@ -248,7 +248,7 @@ func (p *Pusher) handleReceiptMsg(msg []byte) error {
 	if err != nil {
 		return err
 	}
-	p.logger.Trace("Handler", "receipt", label(receipt.Addr))
+	p.logger.Trace("handleReceiptMsg", "receipt", hex.EncodeToString(receipt.Addr))
 	go p.pushReceipt(receipt.Addr)
 	return nil
 }

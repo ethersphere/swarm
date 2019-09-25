@@ -78,9 +78,11 @@ func (s *Storer) handleChunkMsg(msg []byte) error {
 
 	ctx, osp := spancontext.StartSpan(context.Background(), "handle.chunk.msg")
 	defer osp.Finish()
-	osp.LogFields(olog.String("ref", hex.EncodeToString(chmsg.Addr)))
-	osp.SetTag("addr", hex.EncodeToString(chmsg.Addr))
-	s.logger.Trace("Storer Handler", "chunk", label(chmsg.Addr), "origin", label(chmsg.Origin))
+	hexaddr := hex.EncodeToString(chmsg.Addr)
+	osp.LogFields(olog.String("ref", hexaddr))
+	osp.SetTag("addr", hexaddr)
+	s.logger.Trace("handleChunkMsg", "chunk", hexaddr, "origin", label(chmsg.Origin))
+
 	return s.processChunkMsg(ctx, chmsg)
 }
 
@@ -91,7 +93,6 @@ func (s *Storer) handleChunkMsg(msg []byte) error {
 // Upon receiving the chunk is saved and a statement of custody
 // receipt message is sent as a response to the originator.
 func (s *Storer) processChunkMsg(ctx context.Context, chmsg *chunkMsg) error {
-	// TODO: double check if it falls in area of responsibility
 	ch := storage.NewChunk(chmsg.Addr, chmsg.Data)
 	if _, err := s.store.Put(ctx, chunk.ModePutSync, ch); err != nil {
 		return err
@@ -111,8 +112,9 @@ func (s *Storer) processChunkMsg(ctx context.Context, chmsg *chunkMsg) error {
 func (s *Storer) sendReceiptMsg(ctx context.Context, chmsg *chunkMsg) error {
 	ctx, osp := spancontext.StartSpan(ctx, "send.receipt")
 	defer osp.Finish()
-	osp.LogFields(olog.String("ref", hex.EncodeToString(chmsg.Addr)))
-	osp.SetTag("addr", hex.EncodeToString(chmsg.Addr))
+	hexaddr := hex.EncodeToString(chmsg.Addr)
+	osp.LogFields(olog.String("ref", hexaddr))
+	osp.SetTag("addr", hexaddr)
 	osp.LogFields(olog.String("origin", hex.EncodeToString(chmsg.Origin)))
 
 	rmsg := &receiptMsg{
@@ -124,6 +126,6 @@ func (s *Storer) sendReceiptMsg(ctx context.Context, chmsg *chunkMsg) error {
 		return err
 	}
 	to := chmsg.Origin
-	s.logger.Trace("send receipt", "addr", label(rmsg.Addr), "to", label(to))
+	s.logger.Trace("sendReceiptMsg", "addr", hexaddr, "to", label(to))
 	return s.ps.Send(to, pssReceiptTopic, msg)
 }
