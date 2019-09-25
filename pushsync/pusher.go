@@ -98,7 +98,7 @@ func (p *Pusher) Close() {
 // sync starts a forever loop that pushes chunks to their neighbourhood
 // and receives receipts (statements of custody) for them.
 // chunks that are not acknowledged with a receipt are retried
-// not earlier than retryInterval after they were last pushed
+// not earlier than retryInterval after they were last pushed (this is NOT done yet, still TODO)
 // the routine also updates counts of states on a tag in order
 // to monitor the proportion of saved, sent and synced chunks of
 // a file or collection
@@ -193,38 +193,43 @@ func (p *Pusher) sync() {
 		case <-timer.C:
 			// initially timer is set to go off as well as every time we hit the end of push index
 			// so no wait for retryInterval needed to set  items synced
-			metrics.GetOrRegisterCounter("pusher.subscribe-push", nil).Inc(1)
-			// if subscribe was running, stop it
-			if unsubscribe != nil {
-				unsubscribe()
-			}
+			func() {
+				defer metrics.GetOrRegisterResettingTimer("pusher.mark-and-sweep", nil).UpdateSince(time.Now())
 
-			// delete from pushed items
-			for i := 0; i < len(syncedAddrs); i++ {
-				delete(p.pushed, syncedAddrs[i].Hex())
-			}
-			// set chunk status to synced, insert to db GC index
-			if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
-				log.Error("pushsync: error setting chunks to synced", "err", err)
-			}
+				// if subscribe was running, stop it
+				if unsubscribe != nil {
+					unsubscribe()
+				}
 
-			// reset synced list
-			syncedAddrs = nil
+				// delete from pushed items
+				for i := 0; i < len(syncedAddrs); i++ {
+					delete(p.pushed, syncedAddrs[i].Hex())
+				}
 
-			// we don't want to record the first iteration
-			if chunksInBatch != -1 {
-				// this measurement is not a timer, but we want a histogram, so it fits the data structure
-				metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.hist", nil).Update(time.Duration(chunksInBatch))
-				metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.time", nil).UpdateSince(batchStartTime)
-				metrics.GetOrRegisterCounter("pusher.subscribe-push.chunks-in-batch", nil).Inc(int64(chunksInBatch))
-			}
-			chunksInBatch = 0
-			batchStartTime = time.Now()
+				// set chunk status to synced, insert to db GC index
+				if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+					log.Error("pushsync: error setting chunks to synced", "err", err)
+				}
 
-			// and start iterating on Push index from the beginning
-			chunks, unsubscribe = p.store.SubscribePush(ctx)
-			// reset timer to go off after retryInterval
-			timer.Reset(retryInterval)
+				// reset synced list
+				syncedAddrs = nil
+
+				// we don't want to record the first iteration
+				if chunksInBatch != -1 {
+					// hack: this measurement is NOT a timer, but we want a histogram for chunks in batch, so it fits the data structure
+					metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.hist", nil).Update(time.Duration(chunksInBatch))
+
+					metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.time", nil).UpdateSince(batchStartTime)
+					metrics.GetOrRegisterCounter("pusher.subscribe-push.chunks-in-batch", nil).Inc(int64(chunksInBatch))
+				}
+				chunksInBatch = 0
+				batchStartTime = time.Now()
+
+				// and start iterating on Push index from the beginning
+				chunks, unsubscribe = p.store.SubscribePush(ctx)
+				// reset timer to go off after retryInterval
+				timer.Reset(retryInterval)
+			}()
 
 		case <-p.quit:
 			if unsubscribe != nil {
