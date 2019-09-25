@@ -37,7 +37,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 	"github.com/pborman/uuid"
 	"golang.org/x/sync/errgroup"
-
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -208,6 +207,8 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			}
 		}
 
+		log.Trace("sync mode", "sync mode", syncMode)
+
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {
 				if allHostChunks[maxProxHost][i] == '0' {
@@ -330,6 +331,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 }
 
 func waitToPushSynced(tagname string) {
+	defer metrics.GetOrRegisterResettingTimer("upload-and-sync.wait-to-push-sync", nil).UpdateSince(time.Now())
+
 	for {
 		time.Sleep(200 * time.Millisecond)
 

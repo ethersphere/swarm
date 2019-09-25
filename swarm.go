@@ -52,6 +52,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	pssmessage "github.com/ethersphere/swarm/pss/message"
+	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -83,6 +84,8 @@ type Swarm struct {
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
+	pushSync          *pushsync.Pusher
+	storer            *pushsync.Storer
 	swap              *swap.Swap
 	stateStore        *state.DBStore
 	tags              *chunk.Tags
@@ -118,14 +121,19 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
+		swapParams := &swap.Params{
+			LogPath:              self.config.SwapLogPath,
+			InitialDepositAmount: self.config.SwapInitialDeposit,
+			DisconnectThreshold:  int64(self.config.SwapDisconnectThreshold),
+			PaymentThreshold:     int64(self.config.SwapPaymentThreshold),
+		}
+
 		// create the accounting objects
 		self.swap, err = swap.New(
-			config.SwapLogPath,
 			self.config.Path,
 			self.privateKey,
 			self.config.SwapBackendURL,
-			self.config.SwapDisconnectThreshold,
-			self.config.SwapPaymentThreshold,
+			swapParams,
 		)
 		if err != nil {
 			return nil, err
@@ -231,6 +239,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	if pss.IsActiveHandshake {
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
+	}
+
+	if config.PushSyncEnabled {
+		pubsub := pss.NewPubSub(self.ps)
+		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
+		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
@@ -466,6 +480,13 @@ func (s *Swarm) Stop() error {
 	}
 	if err := s.retrieval.Stop(); err != nil {
 		log.Error("retrieval stop", "err", err)
+	}
+
+	if s.pushSync != nil {
+		s.pushSync.Close()
+	}
+	if s.storer != nil {
+		s.storer.Close()
 	}
 
 	if s.netStore != nil {

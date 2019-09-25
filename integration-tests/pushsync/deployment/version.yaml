@@ -1,0 +1,14 @@
+smoke:
+  image:
+    repository: ethersphere/swarm
+    tag: edge-alltools
+
+swarm:
+  image:
+    repository: ethersphere/swarm
+    tag: edge-alltools
+
+bootnode:
+  image:
+    repository: ethersphere/swarm
+    tag: edge-alltools
