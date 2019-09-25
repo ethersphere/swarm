@@ -59,12 +59,13 @@ var (
 
 //constants for environment variables
 const (
-	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvAccount                 = "SWARM_ACCOUNT"
 	SwarmEnvBzzKeyHex               = "SWARM_BZZ_KEY_HEX"
 	SwarmEnvListenAddr              = "SWARM_LISTEN_ADDR"
 	SwarmEnvPort                    = "SWARM_PORT"
 	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
+	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
+	SwarmEnvInitialDeposit          = "SWARM_INITIAL_DEPOSIT"
 	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
@@ -207,6 +208,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	}
 	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
 		currentConfig.SwapLogPath = swapLogPath
+	}
+	if initialDepo := ctx.GlobalUint64(SwarmSwapInitialDepositFlag.Name); initialDepo != 0 {
+		currentConfig.SwapInitialDeposit = initialDepo
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
