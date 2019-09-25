@@ -73,12 +73,14 @@ type Config struct {
 	Enode                *enode.Node `toml:"-"`
 	NetworkID            uint64
 	SyncEnabled          bool
+	PushSyncEnabled      bool
 	SyncingSkipCheck     bool
 	DeliverySkipCheck    bool
 	MaxStreamPeerServers int
 	LightNodeEnabled     bool
 	BootnodeMode         bool
 	DisableAutoConnect   bool
+	EnablePinning        bool
 	SyncUpdateDelay      time.Duration
 	Cors                 string
 	BzzAccount           string
@@ -87,9 +89,8 @@ type Config struct {
 }
 
 //NewConfig creates a default config with all parameters to set to defaults
-func NewConfig() (c *Config) {
-
-	c = &Config{
+func NewConfig() *Config {
+	return &Config{
 		FileStoreParams:         storage.NewFileStoreParams(),
 		SwapBackendURL:          "",
 		SwapEnabled:             false,
@@ -105,13 +106,13 @@ func NewConfig() (c *Config) {
 		Port:                    DefaultHTTPPort,
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
+		PushSyncEnabled:         false,
 		SyncingSkipCheck:        false,
 		DeliverySkipCheck:       true,
 		MaxStreamPeerServers:    10000,
 		SyncUpdateDelay:         15 * time.Second,
+		EnablePinning:           false,
 	}
-
-	return
 }
 
 //some config params need to be initialized after the complete

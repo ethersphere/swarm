@@ -17,13 +17,25 @@
 package bzzeth
 
 import (
+	"bytes"
+	"context"
+	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/network"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -31,20 +43,57 @@ func init() {
 	testutil.Init()
 }
 
-func newBzzEthTester() (*p2ptest.ProtocolTester, *BzzEth, func(), error) {
-	b := New()
+func newBzzEthTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storage.NetStore) (*p2ptest.ProtocolTester, *BzzEth, func(), error) {
+	t.Helper()
 
-	prvkey, err := crypto.GenerateKey()
-	if err != nil {
-		return nil, nil, nil, err
+	if prvkey == nil {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			t.Fatalf("Could not generate key")
+		}
+		prvkey = key
 	}
 
+	b := New(netStore, nil)
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, b.Run)
 	teardown := func() {
 		protocolTester.Stop()
 	}
 
 	return protocolTester, b, teardown, nil
+}
+
+func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, cleanup func()) {
+	prvkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("Could not generate key")
+	}
+
+	dir, err := ioutil.TempDir("", "localstore-")
+	if err != nil {
+		t.Fatalf("Could not create localStore temp dir")
+	}
+
+	bzzAddr := network.PrivateKeyToBzzKey(prvkey)
+	localStore, err := localstore.New(dir, bzzAddr, nil)
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatalf("Could not create localStore")
+	}
+
+	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
+
+	cleanup = func() {
+		err = netStore.Close()
+		if err != nil {
+			t.Fatalf("Could not close netStore")
+		}
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Fatalf("Could not remove localstore dir")
+		}
+	}
+	return prvkey, netStore, cleanup
 }
 
 func handshakeExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, serveHeadersPeer, serveHeadersPivot bool) error {
@@ -93,7 +142,8 @@ func dummyHandshakeMessage(tester *p2ptest.ProtocolTester, peerID enode.ID) erro
 // on successful handshake the protocol does not go idle
 // peer added to the pool and serves headers is registered
 func TestBzzEthHandshake(t *testing.T) {
-	tester, b, teardown, err := newBzzEthTester()
+	t.Helper()
+	tester, b, teardown, err := newBzzEthTester(t, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,13 +173,7 @@ func TestBzzEthHandshake(t *testing.T) {
 
 // TestBzzBzzHandshake tests that a handshake between two Swarm nodes
 func TestBzzBzzHandshake(t *testing.T) {
-	// redefine isSwarmNodeFunc to force recognise remote peer as swarm node
-	defer func(f func(*Peer) bool) {
-		isSwarmNodeFunc = f
-	}(isSwarmNodeFunc)
-	isSwarmNodeFunc = func(_ *Peer) bool { return true }
-
-	tester, b, teardown, err := newBzzEthTester()
+	tester, b, teardown, err := newBzzEthTester(t, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +208,7 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	}(isSwarmNodeFunc)
 	isSwarmNodeFunc = func(_ *Peer) bool { return true }
 
-	tester, b, teardown, err := newBzzEthTester()
+	tester, b, teardown, err := newBzzEthTester(t, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,14 +221,7 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	}
 
 	// after successful handshake, expect peer added to peer pool
-	var p *Peer
-	for i := 0; i < 10; i++ {
-		p = b.peers.get(node.ID())
-		if p != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	p := getPeerAfterConnection
 	if p == nil {
 		t.Fatal("bzzeth peer not added")
 	}
@@ -194,7 +231,7 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// after successful handshake, expect peer added to peer pool
+	// after a dummy message.. expect the peer to get disconnected
 	p1 := isPeerDisconnected(node.ID(), b)
 	if p1 != nil {
 		t.Fatal("bzzeth peer still connected")
@@ -222,4 +259,180 @@ func isPeerDisconnected(id enode.ID, b *BzzEth) (p *Peer) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return
+}
+
+func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, offered *NewBlockHeaders, wanted [][]byte) error {
+	return tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "NewBlockHeaders",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 1,
+					Msg:  offered,
+					Peer: peerID,
+				},
+			},
+			Expects: []p2ptest.Expect{
+				{
+					Code: 2,
+					Msg: GetBlockHeaders{
+						Rid:    requestID,
+						Hashes: wanted,
+					},
+					Peer: peerID,
+				},
+			},
+		})
+}
+
+func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, wantedData []rlp.RawValue) error {
+	return tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "BlockHeaders",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 3,
+					Msg: BlockHeaders{
+						Rid:     requestID,
+						Headers: wantedData,
+					},
+					Peer: peerID,
+				},
+			},
+		})
+}
+
+// TestNewBlockHeaders full eth node sends new block header hashes
+// respond with a GetBlockHeaders requesting headers falling into the proximity of this node
+// Also test two other conditions
+// - If a header is already present in localstore, dont request it in GetBlockHeaders
+// - If a unsolicited header is received, dont store it on localstore
+// Apart from that it also tests if all the headers are delivered and stored in localstore
+func TestNewBlockHeaders(t *testing.T) {
+	prvKey, netstore, cleanup := newTestNetworkStore(t)
+	defer cleanup()
+
+	// bzz pivot - full eth node peer
+	// NewBlockHeaders trigger, expect
+	tester, _, teardown, err := newBzzEthTester(t, prvKey, netstore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	//Construct the blocks hashes that are offered from the eth node
+	offeredBlocks := make(NewBlockHeaders, 256)
+	for i := 0; i < len(offeredBlocks); i++ {
+		offeredBlocks[i].Hash = common.BytesToHash(crypto.Keccak256([]byte{uint8(i)}))
+		offeredBlocks[i].BlockHeight = uint64(i)
+	}
+
+	// redefine wantHeadeFunc for this test
+	wantedIndexes := []int{1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233}
+	ignoreIndexes := []int{77}
+	wantHeaderFunc = func(hash []byte, _ *network.Kademlia) bool {
+		for _, i := range wantedIndexes {
+			if bytes.Equal(hash, offeredBlocks[i].Hash.Bytes()) {
+				return true
+			}
+		}
+
+		// Check if it is in the ignore headers (headers in localstore already)
+		// If yes, then add to the valid list
+		for _, i := range ignoreIndexes {
+			if bytes.Equal(hash, offeredBlocks[i].Hash.Bytes()) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// construct the wanted headers
+	wantedHeaderHashes := make([][]byte, len(wantedIndexes))
+	wantedHeaderData := make([]rlp.RawValue, len(wantedIndexes)+1)
+	for i, w := range wantedIndexes {
+		wantedHeaderHashes[i] = crypto.Keccak256([]byte{uint8(w)})
+		wantedHeaderData[i] = rlp.RawValue{uint8(w)}
+	}
+
+	// overwrite newRequestIDFunc to be deterministic
+	defer func(f func() uint32) {
+		newRequestIDFunc = f
+	}(newRequestIDFunc)
+
+	newRequestIDFunc = func() uint32 {
+		return 42
+	}
+
+	// overwrite finishStorageFunc to test deterministic storage of headers
+	finishStorageTesting := func(chunks []chunk.Chunk) {
+		checkStorage(t, wantedIndexes, wantedHeaderHashes, wantedHeaderData, netstore)
+	}
+	finishStorageFunc = finishStorageTesting
+
+	// overwrite finishDeliveryFunc to test deterministic delivery of headers
+	finishDeliveryTesting := func(hashes map[string]bool) {
+		checkDelivery(t, wantedIndexes, wantedHeaderHashes, hashes)
+	}
+	finishDeliveryFunc = finishDeliveryTesting
+
+	node := tester.Nodes[0]
+	err = handshakeExchange(tester, node.ID(), true, true)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Add a header to localstore
+	// this header should not be requested in GetBlockHeaders
+	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk([]byte{uint8(ignoreIndexes[0])}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = newBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), &offeredBlocks, wantedHeaderHashes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a unsolicited header
+	wantedHeaderData[len(wantedIndexes)] = rlp.RawValue{uint8(255)}
+	err = blockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedHeaderData)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
+	t.Helper()
+
+	// Check if requested headers arrived and are stored in localstore
+	for i := range wantedIndexes {
+		chunk, err := netstore.Store.Get(context.Background(), chunk.ModeGetLookup, wanted[i])
+		if err != nil {
+			t.Fatalf("chunk  %v not found %v", hex.EncodeToString(wanted[i]), wantedData[i])
+		}
+		if !bytes.Equal(wantedData[i], chunk.Data()) {
+			t.Fatalf("expected %v, got %v", wanted[i], chunk.Data())
+		}
+	}
+
+	// check if unsolicited header delivery is dropped and not in localstore
+	hash := crypto.Keccak256(wantedData[len(wantedIndexes)])
+	yes, err := netstore.Store.Has(context.Background(), hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if yes {
+		t.Fatalf("unsolicited header %v is not dropped", hex.EncodeToString(hash))
+	}
+}
+
+func checkDelivery(t *testing.T, wantedIndexes []int, wanted [][]byte, hashes map[string]bool) {
+	t.Helper()
+	for i := range wantedIndexes {
+		hash := hex.EncodeToString(wanted[i])
+		if _, ok := hashes[hash]; !ok {
+			t.Fatalf("Header  %v not delivered", hash)
+		}
+	}
 }

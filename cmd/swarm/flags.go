@@ -79,15 +79,16 @@ var (
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
+	SwarmSyncModeFlag = cli.StringFlag{
+		Name:   "sync-mode",
+		Usage:  "Syncing mode (available modes: pull, push, all, none)",
+		EnvVar: SwarmSyncMode,
+		Value:  "pull",
+	}
 	SwarmSwapLogPathFlag = cli.StringFlag{
 		Name:   "swap-audit-logpath",
 		Usage:  "Write execution logs of swap audit to the given directory",
 		EnvVar: SwarmEnvSwapLogPath,
-	}
-	SwarmSyncDisabledFlag = cli.BoolTFlag{
-		Name:   "nosync",
-		Usage:  "Disable swarm syncing",
-		EnvVar: SwarmEnvSyncDisable,
 	}
 	SwarmSyncUpdateDelay = cli.DurationFlag{
 		Name:   "sync-update-delay",
@@ -222,5 +223,9 @@ var (
 	SwarmPinFlag = cli.BoolFlag{
 		Name:  "pin",
 		Usage: "Use this flag to pin the file after upload is complete. This flag is used when uploading a file.",
+	}
+	SwarmEnablePinningFlag = cli.BoolFlag{
+		Name:  "enable-pinning",
+		Usage: "Use this flag to enable the pinning feature",
 	}
 )
