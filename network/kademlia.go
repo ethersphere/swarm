@@ -91,15 +91,14 @@ func NewKadParams() *KadParams {
 type Kademlia struct {
 	lock            sync.RWMutex
 	capabilityIndex map[string]*capabilityIndex
-	defaultIndex    *capabilityIndex     // Index with pots
-	*KadParams                           // Kademlia configuration parameters
-	base            []byte               // immutable baseaddress of the table
-	depth           uint8                // stores the last current depth of saturation
-	nDepth          int                  // stores the last neighbourhood depth
-	nDepthMu        sync.RWMutex         // protects neighbourhood depth nDepth
-	nDepthSig       []chan struct{}      // signals when neighbourhood depth nDepth is changed
-	newPeerSig      []chan newPeerSignal // signals when new peer is added
-	removePeerSig   []chan *Peer         // signals when peer is removed
+	defaultIndex    *capabilityIndex   // Index with pots
+	*KadParams                         // Kademlia configuration parameters
+	base            []byte             // immutable baseaddress of the table
+	depth           uint8              // stores the last current depth of saturation
+	nDepth          int                // stores the last neighbourhood depth
+	nDepthMu        sync.RWMutex       // protects neighbourhood depth nDepth
+	nDepthSig       []chan struct{}    // signals when neighbourhood depth nDepth is changed
+	peerChangedSig  []peerSubscription // signals when new peer is added or removed
 }
 
 type KademliaInfo struct {
@@ -130,6 +129,12 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	k.RegisterCapabilityIndex("full", *fullCapability)
 	k.RegisterCapabilityIndex("light", *lightCapability)
 	return k
+}
+
+type peerSubscription struct {
+	newPeerC     chan newPeerSignal
+	removedPeerC chan *Peer
+	closed       bool
 }
 
 type newPeerSignal struct {
@@ -461,8 +466,14 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	k.addToCapabilityIndex(p)
 	// notify subscribers asynchronously
 	go func(p *Peer, po int) {
-		for _, c := range k.newPeerSig {
-			c <- newPeerSignal{peer: p, po: po}
+		for _, c := range k.peerChangedSig {
+			if c.closed {
+				close(c.newPeerC)
+				close(c.removedPeerC)
+			} else {
+				c.newPeerC <- newPeerSignal{peer: p, po: po}
+			}
+
 		}
 	}(p, po)
 
@@ -576,36 +587,28 @@ func (k *Kademlia) SubscribeToNeighbourhoodDepthChange() (c <-chan struct{}, uns
 func (k *Kademlia) SubscribeToPeerChanges() (addedC <-chan newPeerSignal, removedC <-chan *Peer, unsubscribe func()) {
 	newPeerC := make(chan newPeerSignal, 1)
 	removedPeerC := make(chan *Peer, 1)
-	var closeOnce sync.Once
 
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
-	k.newPeerSig = append(k.newPeerSig, newPeerC)
-	k.removePeerSig = append(k.removePeerSig, removedPeerC)
+	k.peerChangedSig = append(k.peerChangedSig, peerSubscription{
+		newPeerC:     newPeerC,
+		removedPeerC: removedPeerC,
+		closed:       false,
+	})
 
 	unsubscribe = func() {
 		k.lock.Lock()
 		defer k.lock.Unlock()
 
-		for i, c := range k.newPeerSig {
-			if c == newPeerC {
-				k.newPeerSig = append(k.newPeerSig[:i], k.newPeerSig[i+1:]...)
+		for i, c := range k.peerChangedSig {
+			if c.newPeerC == newPeerC {
+				c.closed = true
+				k.peerChangedSig = append(k.peerChangedSig[:i], k.peerChangedSig[i+1:]...)
 				break
 			}
 		}
 
-		for i, c := range k.removePeerSig {
-			if c == removedPeerC {
-				k.removePeerSig = append(k.removePeerSig[:i], k.removePeerSig[i+1:]...)
-				break
-			}
-		}
-
-		closeOnce.Do(func() {
-			close(newPeerC)
-			close(removedPeerC)
-		})
 	}
 
 	return newPeerC, removedPeerC, unsubscribe
@@ -631,8 +634,14 @@ func (k *Kademlia) Off(p *Peer) {
 	k.removeFromCapabilityIndex(p, true)
 	k.setNeighbourhoodDepth()
 	go func(p *Peer) {
-		for _, c := range k.removePeerSig {
-			c <- p
+		for _, c := range k.peerChangedSig {
+			if c.closed {
+				close(c.newPeerC)
+				close(c.removedPeerC)
+			} else {
+				c.removedPeerC <- p
+			}
+
 		}
 	}(p)
 }
