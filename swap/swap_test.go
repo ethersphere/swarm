@@ -101,7 +101,6 @@ func newTestBackend() *swapTestBackend {
 	}, gasLimit)
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
-		networkID:        42,
 	}
 }
 
