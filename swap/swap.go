@@ -166,7 +166,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err := checkChainID(chainID.Uint64(), stateStore); err != nil {
 		return nil, err
 	}
-	auditLog.Info("SWAP initialized on backend network ID", "ID", chainID.Uint64())
+	auditLog.Info("Using backend network ID", "ID", chainID.Uint64())
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// create the swap instance
