@@ -7,9 +7,12 @@
 
  ### Features
 
- - **Content Pinning:** You can now pin content to your local swarm node. This way you can guarantee that certain content stays on your node. Fore more information, read the [documentation](https://swarm-guide.readthedocs.io/en/latest/dapp_developer/index.html#pinning-content).
- - **Push sync:** Adittionally to our previous syncing algorithm, pull sync, we now also have "push sync" as an option available to synchronise the content across nodes. This feature is still under heavy development and is therefore disabled by default. If you want to try it out, you have to start you swarm node with `--sync-mode=all`.
- - **Progress bar via Tags:** [Tags](##put-link-to-tags-docs), together with push sync allow you to track the progress on content uploads. When using `swarm up`, you can now use the `--track` flag to see the progress.
+ - **Content Pinning:** You can now pin content to your local swarm node. This way you can guarantee that certain content stays on your node. You can enable pinning by setting the `--enable-pinning` flag. For more information, read the [documentation](https://swarm-guide.readthedocs.io/en/latest/dapp_developer/index.html#pinning-content).
+
+The following features are **experimental** and are **not enabled by default on our public testnet**. If you want to test these features, make sure to use a separate network (e.g. create your own swarm cluster) and set the same feature flags on all nodes.
+
+ - **Push sync:** Additionally to our previous syncing algorithm, pull sync, we now also have "push sync" as an option available to synchronise the content across nodes. If you want to try it out, you have to start you swarm node with `--sync-mode=all`.
+ - **Progress bar via Tags:** [Tags](##put-link-to-tags-docs) allow you to track the progress on content uploads. When using `swarm up`, you can now use the `--track` flag to see the upload progress. This feature requires push sync to be enabled.
  - **BzzEth:**
  - **SWAP:**
 
