@@ -488,12 +488,12 @@ func TestStartChequebookFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				// save chequebook on SWAP
-				err = saveChequebook(swap.GetParams().ContractAddress, swap.store)
+				err = swap.saveChequebook(swap.GetParams().ContractAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
 				// try to connect with a different address
-				_, err = StartChequebook(config.passIn, 0, swap.store, swap.owner, swap.backend)
+				_, err = swap.StartChequebook(config.passIn, 0)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -510,7 +510,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey)
 				defer clean()
 				// try to connect with an address not containing a chequebook instance
-				_, err := StartChequebook(config.passIn, 0, swap.store, swap.owner, swap.backend)
+				_, err := swap.StartChequebook(config.passIn, 0)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -545,13 +545,13 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// save chequebook on SWAP
-				err = saveChequebook(swap.GetParams().ContractAddress, swap.store)
+				err = swap.saveChequebook(swap.GetParams().ContractAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				// start chequebook with same pass in as deployed
-				_, err = StartChequebook(swap.GetParams().ContractAddress, 0, swap.store, swap.owner, swap.backend)
+				_, err = swap.StartChequebook(swap.GetParams().ContractAddress, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -571,7 +571,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// start chequebook with same pass in as deployed
-				_, err = StartChequebook(swap.GetParams().ContractAddress, 0, swap.store, swap.owner, swap.backend)
+				_, err = swap.StartChequebook(swap.GetParams().ContractAddress, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -850,7 +850,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
 	auditLog = newLogger(params.LogPath)
-	swap := new(stateStore, owner, testBackend, params, nil)
+	swap := new(stateStore, owner, testBackend, params)
 	return swap, dir
 }
 
