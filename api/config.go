@@ -57,6 +57,7 @@ type Config struct {
 	SwapEnabled             bool           // whether SWAP incentives are enabled
 	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
 	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
+	SwapInitialDeposit      uint64         // initial deposit amount to the chequebook
 	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract
 	// end of Swap configs
@@ -73,6 +74,7 @@ type Config struct {
 	Enode                *enode.Node `toml:"-"`
 	NetworkID            uint64
 	SyncEnabled          bool
+	PushSyncEnabled      bool
 	SyncingSkipCheck     bool
 	DeliverySkipCheck    bool
 	MaxStreamPeerServers int
@@ -93,6 +95,7 @@ func NewConfig() *Config {
 		FileStoreParams:         storage.NewFileStoreParams(),
 		SwapBackendURL:          "",
 		SwapEnabled:             false,
+		SwapInitialDeposit:      swap.DefaultInitialDepositAmount,
 		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
 		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 		SwapLogPath:             "",
@@ -105,6 +108,7 @@ func NewConfig() *Config {
 		Port:                    DefaultHTTPPort,
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
+		PushSyncEnabled:         false,
 		SyncingSkipCheck:        false,
 		DeliverySkipCheck:       true,
 		MaxStreamPeerServers:    10000,

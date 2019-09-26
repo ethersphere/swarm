@@ -22,7 +22,6 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/ethersphere/swarm/sctx"
 )
@@ -30,29 +29,24 @@ import (
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
 	tags *sync.Map
-	rng  *rand.Rand
 }
 
 // NewTags creates a tags object
 func NewTags() *Tags {
 	return &Tags{
 		tags: &sync.Map{},
-		rng:  rand.New(rand.NewSource(time.Now().Unix())),
 	}
 }
 
 // Create creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
 func (ts *Tags) Create(s string, total int64) (*Tag, error) {
-	t := &Tag{
-		Uid:       ts.rng.Uint32(),
-		Name:      s,
-		StartedAt: time.Now(),
-		Total:     total,
-	}
+	t := NewTag(rand.Uint32(), s, total)
+
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
 	}
+
 	return t, nil
 }
 

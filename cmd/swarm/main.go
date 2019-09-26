@@ -183,8 +183,9 @@ func init() {
 		SwarmSwapPaymentThresholdFlag,
 		SwarmSwapLogPathFlag,
 		SwarmSwapChequebookAddrFlag,
+		SwarmSwapInitialDepositFlag,
 		// end of swap flags
-		SwarmSyncDisabledFlag,
+		SwarmSyncModeFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,
 		SwarmLightNodeEnabled,
