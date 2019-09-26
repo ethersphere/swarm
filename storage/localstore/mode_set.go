@@ -216,6 +216,21 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange in
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pushIndex.DeleteInBatch(batch, item)
 
+	if db.tags != nil {
+		i, err = db.pushIndex.Get(item)
+		switch err {
+		case nil:
+			tag, _ := db.tags.Get(i.Tag)
+			if tag != nil {
+				tag.Inc(chunk.StateSynced)
+			}
+		case leveldb.ErrNotFound:
+			// the chunk is not accessed before
+		default:
+			return 0, err
+		}
+	}
+
 	// Add in gcIndex only if this chunk is not pinned
 	ok, err := db.pinIndex.Has(item)
 	if err != nil {
