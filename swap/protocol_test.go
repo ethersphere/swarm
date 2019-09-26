@@ -42,7 +42,6 @@ import (
 func init() {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-	auditLog = newLogger("")
 }
 
 /*
