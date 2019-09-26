@@ -62,7 +62,6 @@ type Swap struct {
 	backend          contract.Backend   // the backend (blockchain) used
 	owner            *Owner             // contract access
 	params           *Params            // economic and operational parameters
-	backendNetworkID uint64             // backend network ID used by SWAP to settle payments
 	contract         swap.Contract      // reference to the smart contract
 	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
 }
@@ -120,14 +119,13 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, backendNetworkID uint64, contract contract.Contract) *Swap {
+func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, contract contract.Contract) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
 		backend:          backend,
 		owner:            owner,
 		params:           params,
-		backendNetworkID: backendNetworkID,
 		contract:         contract,
 		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
@@ -191,7 +189,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		owner,
 		backend,
 		params,
-		networkID.Uint64(),
 		contract,
 	), nil
 }

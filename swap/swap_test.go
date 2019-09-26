@@ -79,7 +79,6 @@ type booking struct {
 // additional properties for the tests
 type swapTestBackend struct {
 	*backends.SimulatedBackend
-	networkID uint64 // simulated Ethereum network ID
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
 }
@@ -852,7 +851,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
 	auditLog = newLogger(params.LogPath)
-	swap := new(stateStore, owner, testBackend, params, testBackend.networkID, nil)
+	swap := new(stateStore, owner, testBackend, params, nil)
 	return swap, dir
 }
 
