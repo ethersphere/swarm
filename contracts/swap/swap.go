@@ -80,7 +80,7 @@ type simpleContract struct {
 	address  common.Address
 }
 
-// Deploy deploys an instance of the underlying contract and returns its address and the transaction identifier
+// Deploy deploys an instance of the underlying contract and returns its instance and the transaction identifier
 func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
 	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
 	c := simpleContract{instance: instance, address: addr}
@@ -91,11 +91,11 @@ func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.
 // It assumes that there is an existing contract instance at the given address, or an error is returned
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
 func InstanceAt(address common.Address, backend Backend) (Contract, error) {
-	simple, err := contract.NewSimpleSwap(address, backend)
+	instance, err := contract.NewSimpleSwap(address, backend)
 	if err != nil {
 		return nil, err
 	}
-	c := simpleContract{instance: simple, address: address}
+	c := simpleContract{instance: instance, address: address}
 	return c, err
 }
 

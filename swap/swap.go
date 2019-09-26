@@ -139,28 +139,28 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	auditLog = newLogger(params.LogPath)
 	// verify that backendURL is not empty
 	if backendURL == "" {
-		return nil, errors.New("swap init error: no backend URL given")
+		return nil, errors.New("no backend URL given")
 	}
-	log.Info("connecting to SWAP API", "url", backendURL)
+	auditLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	stateStore, err := state.NewDBStore(filepath.Join(dbPath, "swap.db"))
 	if err != nil {
-		return nil, fmt.Errorf("swap init error: error initializing statestore: %v", err)
+		return nil, fmt.Errorf("error while initializing statestore: %v", err)
 	}
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	if params.DisconnectThreshold <= params.PaymentThreshold {
-		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
+		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
 	}
 	// connect to the backend
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {
-		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %v", backendURL, err)
+		return nil, fmt.Errorf("error connecting to Ethereum API %s: %v", backendURL, err)
 	}
 	// get the networkID of the backend
 	networkID, err := backend.NetworkID(context.TODO())
 	if err != nil {
-		return nil, fmt.Errorf("swap init error: error retrieving networkID from backendURL: %v", err)
+		return nil, fmt.Errorf("error retrieving networkID from backendURL: %v", err)
 	}
 	// verify that we have not used SWAP before on a different networkID
 	usedBefore, err := checkNetworkID(networkID.Uint64(), stateStore)
@@ -171,9 +171,9 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if !usedBefore {
 		err = stateStore.Put(usedBeforeAtNetworkKey, networkID.Uint64())
 		if err != nil {
-			return nil, fmt.Errorf("swap init error: error writing current backend networkID to statestore: %v", err)
+			return nil, fmt.Errorf("error writing current backend networkID to statestore: %v", err)
 		}
-		log.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
+		auditLog.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
 	}
 	// start the chequebook
 	contract, err := StartChequebook(chequebookAddressFlag, initialDepositAmountFlag, stateStore, owner, backend)
@@ -503,7 +503,7 @@ func promptInitialDepositAmount() (uint64, error) {
 
 // StartChequebook start the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
 func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64, s state.Store, owner *Owner, backend contract.Backend) (contract.Contract, error) {
-	chequebookToUse, err := loadChequebook(s)
+	previouslyUsedChequebook, err := loadChequebook(s)
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
 		return nil, fmt.Errorf("Error reading previously used chequebook: %s", err)
@@ -525,18 +525,18 @@ func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uin
 		if err != nil {
 			return nil, err
 		}
+		auditLog.Info("Binded to chequebook", "chequebookAddr", contract.ContractParams().ContractAddress)
 		return contract, nil
 	}
 
 	// read from state, but provided flag is not the same
-	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != chequebookToUse) {
+	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
 		return nil, fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
 	}
 	if chequebookAddrFlag != (common.Address{}) {
-		chequebookToUse = chequebookAddrFlag
+		return bindToContractAt(chequebookAddrFlag, backend)
 	}
-	auditLog.Info("Using the chequebook", "chequebookAddr", chequebookToUse)
-	return bindToContractAt(chequebookToUse, backend)
+	return bindToContractAt(previouslyUsedChequebook, backend)
 }
 
 // BindToContractAt binds to an instance of an already existing chequebook contract at address
@@ -545,6 +545,7 @@ func bindToContractAt(address common.Address, backend contract.Backend) (contrac
 	if err := contract.ValidateCode(context.Background(), backend, address); err != nil {
 		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
+	auditLog.Info("Binded to chequebook", "chequebookAddr", address)
 	// get the instance
 	return contract.InstanceAt(address, backend)
 }
