@@ -529,7 +529,7 @@ func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uin
 		if err != nil {
 			return nil, err
 		}
-		auditLog.Info("Binded to chequebook", "chequebookAddr", contract.ContractParams().ContractAddress)
+		auditLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", owner)
 		return contract, nil
 	}
 
@@ -561,7 +561,7 @@ func Deploy(ctx context.Context, initialDepositAmount uint64, owner *Owner, back
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
 
-	auditLog.Info("deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
+	auditLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
 	return deployLoop(opts, defaultHarddepositTimeoutDuration, owner.address, backend)
 }
 
