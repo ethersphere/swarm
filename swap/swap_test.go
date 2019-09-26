@@ -410,8 +410,8 @@ func TestNewSwapFailure(t *testing.T) {
 					config.chequebookAddress,
 					config.initialDeposit,
 				)
-				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower or at payment threshold.") {
-					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP")
+				if !strings.Contains(err.Error(), "disconnect threshold lower or at payment threshold") {
+					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP", err.Error())
 				}
 			},
 		},
@@ -432,7 +432,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.chequebookAddress,
 					config.initialDeposit,
 				)
-				if !strings.Contains(err.Error(), "swap init error: error connecting to Ethereum API") {
+				if !strings.Contains(err.Error(), "error connecting to Ethereum API") {
 					t.Fatal("invalid backendURL, but created SWAP", err)
 				}
 			},

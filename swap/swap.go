@@ -147,8 +147,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing statestore: %v", err)
 	}
-	// create the owner of SWAP
-	owner := createOwner(prvkey)
 	if params.DisconnectThreshold <= params.PaymentThreshold {
 		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
 	}
@@ -175,6 +173,8 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		}
 		auditLog.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
 	}
+	// create the owner of SWAP
+	owner := createOwner(prvkey)
 	// start the chequebook
 	contract, err := StartChequebook(chequebookAddressFlag, initialDepositAmountFlag, stateStore, owner, backend)
 	if err != nil {
