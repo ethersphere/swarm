@@ -202,12 +202,14 @@ func checkNetworkID(currentNetworkID uint64, s state.Store) (err error) {
 		return fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
 	}
 	// initialized before, but on a different networkID
-	if connectedBlockchain != currentNetworkID {
+	if err != state.ErrNotFound && connectedBlockchain != currentNetworkID {
 		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentNetworkID)
 	}
-	// not initialized before
-	return s.Put(connectedBlockchainKey, currentNetworkID)
-
+	if err == state.ErrNotFound {
+		auditLog.Info("First time connected to SWAP. Storing network ID", currentNetworkID)
+		return s.Put(connectedBlockchainKey, currentNetworkID)
+	}
+	return nil
 }
 
 // returns the store key for retrieving a peer's balance
