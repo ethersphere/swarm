@@ -158,16 +158,16 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to Ethereum API %s: %v", backendURL, err)
 	}
-	// get the networkID of the backend
-	var networkID *big.Int
-	if networkID, err = backend.NetworkID(context.TODO()); err != nil {
-		return nil, fmt.Errorf("error retrieving networkID from backendURL: %v", err)
+	// get the chainID of the backend
+	var chainID *big.Int
+	if chainID, err = backend.ChainID(context.TODO()); err != nil {
+		return nil, fmt.Errorf("error retrieving chainID from backendURL: %v", err)
 	}
-	// verify that we have not used SWAP before on a different networkID
-	if err := checkNetworkID(networkID.Uint64(), stateStore); err != nil {
+	// verify that we have not used SWAP before on a different chainID
+	if err := checkChainID(chainID.Uint64(), stateStore); err != nil {
 		return nil, err
 	}
-	auditLog.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
+	auditLog.Info("SWAP initialized on backend network ID", "ID", chainID.Uint64())
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// start the chequebook
@@ -193,21 +193,21 @@ const (
 	connectedBlockchainKey = "connected_blockchain"
 )
 
-// checkNetworkID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
-func checkNetworkID(currentNetworkID uint64, s state.Store) (err error) {
+// checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
+func checkChainID(currentChainID uint64, s state.Store) (err error) {
 	var connectedBlockchain uint64
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
 		return fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
 	}
-	// initialized before, but on a different networkID
-	if err != state.ErrNotFound && connectedBlockchain != currentNetworkID {
-		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentNetworkID)
+	// initialized before, but on a different chainID
+	if err != state.ErrNotFound && connectedBlockchain != currentChainID {
+		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentChainID)
 	}
 	if err == state.ErrNotFound {
-		auditLog.Info("First time connected to SWAP. Storing network ID", currentNetworkID)
-		return s.Put(connectedBlockchainKey, currentNetworkID)
+		auditLog.Info("First time connected to SWAP. Storing chain ID", currentChainID)
+		return s.Put(connectedBlockchainKey, currentChainID)
 	}
 	return nil
 }
