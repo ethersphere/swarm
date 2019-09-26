@@ -97,8 +97,8 @@ func init() {
 // newTestBackend creates a new test backend instance
 func newTestBackend() *swapTestBackend {
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		ownerAddress:       {Balance: big.NewInt(1000000000)},
-		beneficiaryAddress: {Balance: big.NewInt(1000000000)},
+		ownerAddress:       {Balance: big.NewInt(1000000000000000000)},
+		beneficiaryAddress: {Balance: big.NewInt(1000000000000000000)},
 	}, gasLimit)
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
@@ -349,12 +349,16 @@ func TestNewSwapFailure(t *testing.T) {
 	}
 
 	params := newDefaultParams()
+	chequebookAddress := testChequeContract
+	InitialDeposit := uint64(1)
 
 	type testSwapConfig struct {
-		dbPath     string
-		prvkey     *ecdsa.PrivateKey
-		backendURL string
-		params     *Params
+		dbPath            string
+		prvkey            *ecdsa.PrivateKey
+		backendURL        string
+		params            *Params
+		chequebookAddress common.Address
+		initialDeposit    uint64
 	}
 
 	var config testSwapConfig
@@ -370,6 +374,9 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ""
+				config.params = params
+				config.chequebookAddress = chequebookAddress
+				config.initialDeposit = InitialDeposit
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
@@ -377,7 +384,9 @@ func TestNewSwapFailure(t *testing.T) {
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
-					params,
+					config.params,
+					config.chequebookAddress,
+					config.initialDeposit,
 				)
 				if !strings.Contains(err.Error(), "no backend URL given") {
 					t.Fatal("no backendURL, but created SWAP")
@@ -397,7 +406,9 @@ func TestNewSwapFailure(t *testing.T) {
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
-					params,
+					config.params,
+					config.chequebookAddress,
+					config.initialDeposit,
 				)
 				if !strings.Contains(err.Error(), "swap init error: disconnect threshold lower or at payment threshold.") {
 					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP")
@@ -417,7 +428,9 @@ func TestNewSwapFailure(t *testing.T) {
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
-					params,
+					config.params,
+					config.chequebookAddress,
+					config.initialDeposit,
 				)
 				if !strings.Contains(err.Error(), "swap init error: error connecting to Ethereum API") {
 					t.Fatal("invalid backendURL, but created SWAP", err)
@@ -477,12 +490,12 @@ func TestStartChequebookFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				// save chequebook on SWAP
-				err = swap.saveChequebook(swap.GetParams().ContractAddress)
+				err = saveChequebook(swap.GetParams().ContractAddress, swap.store)
 				if err != nil {
 					t.Fatal(err)
 				}
 				// try to connect with a different address
-				err = swap.StartChequebook(config.passIn)
+				_, err = StartChequebook(config.passIn, 0, swap.store, swap.owner, swap.backend)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -499,7 +512,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey)
 				defer clean()
 				// try to connect with an address not containing a chequebook instance
-				err := swap.StartChequebook(config.passIn)
+				_, err := StartChequebook(config.passIn, 0, swap.store, swap.owner, swap.backend)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -534,18 +547,13 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// save chequebook on SWAP
-				err = swap.saveChequebook(swap.GetParams().ContractAddress)
+				err = saveChequebook(swap.GetParams().ContractAddress, swap.store)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				// start chequebook with same pass in as deployed
-				err = swap.StartChequebook(swap.GetParams().ContractAddress)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				// err should be nil
+				_, err = StartChequebook(swap.GetParams().ContractAddress, 0, swap.store, swap.owner, swap.backend)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -565,7 +573,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// start chequebook with same pass in as deployed
-				err = swap.StartChequebook(swap.GetParams().ContractAddress)
+				_, err = StartChequebook(swap.GetParams().ContractAddress, 0, swap.store, swap.owner, swap.backend)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -824,10 +832,9 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 // newDefaultParams creates a set of default params for tests
 func newDefaultParams() *Params {
 	return &Params{
-		LogPath:              "",
-		InitialDepositAmount: 42,
-		PaymentThreshold:     DefaultPaymentThreshold,
-		DisconnectThreshold:  DefaultDisconnectThreshold,
+		LogPath:             "",
+		PaymentThreshold:    DefaultPaymentThreshold,
+		DisconnectThreshold: DefaultDisconnectThreshold,
 	}
 }
 
@@ -843,7 +850,9 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 		t.Fatal(err)
 	}
 	log.Debug("creating simulated backend")
-	swap := new(stateStore, key, testBackend, params, testBackend.networkID)
+	owner := createOwner(key)
+	auditLog = newLogger(params.LogPath)
+	swap := new(stateStore, owner, testBackend, params, testBackend.networkID, nil)
 	return swap, dir
 }
 
@@ -1086,10 +1095,10 @@ func TestContractIntegration(t *testing.T) {
 	defer cleanup()
 
 	opts := bind.NewKeyedTransactor(beneficiaryKey)
-	opts.Value = big.NewInt(0)
 	opts.Context = ctx
 
 	log.Debug("cash-in the cheque")
+
 	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	testBackend.Commit()
 	if err != nil {
@@ -1147,16 +1156,12 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap) error {
+func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(int64(swap.params.InitialDepositAmount))
+	opts.Value = big.NewInt(42)
 	opts.Context = ctx
 
-	address, _, _, err := cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
-	if err != nil {
-		return err
-	}
-	swap.contract, err = cswap.InstanceAt(address, swap.backend)
+	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
 		return err
 	}
