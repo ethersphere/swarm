@@ -352,12 +352,12 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 }
 
 // Balance returns the balance for a given peer
-func (s *Swap) Balance(peer enode.ID) (int64, error) {
-	swapPeer := s.getPeer(peer)
-	if swapPeer == nil {
-		return 0, state.ErrNotFound
+func (s *Swap) Balance(peer enode.ID) (balance int64, err error) {
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		return swapPeer.getBalance(), nil
 	}
-	return swapPeer.getBalance(), nil
+	err = s.store.Get(balanceKey(peer), &balance)
+	return balance, err
 }
 
 // Balances returns the balances for all known SWAP peers
