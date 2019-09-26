@@ -36,7 +36,7 @@ func TestProtocol(t *testing.T) {
 	tagCnt := 4
 	storerCnt := 4
 
-	sent := &sync.Map{}
+	sent := make(map[int]time.Time)
 	store := &sync.Map{}
 	// mock pubsub messenger
 	lb := newLoopBack()

@@ -54,7 +54,7 @@ func TestPusher(t *testing.T) {
 	tagCnt := 4
 
 	errc := make(chan error)
-	sent := &sync.Map{}
+	sent := make(map[int]time.Time)
 	synced := make(map[int]int)
 	quit := make(chan struct{})
 	defer close(quit)
@@ -118,7 +118,6 @@ func TestPusher(t *testing.T) {
 			t.Fatalf("timeout waiting for all chunks to be synced")
 		}
 	}
-
 }
 
 type testPubSub struct {
@@ -184,11 +183,12 @@ type testPushSyncIndex struct {
 	i, total int
 	tagIDs   []uint32 //
 	tags     *chunk.Tags
-	sent     *sync.Map // to store time of send for retry
-	synced   chan int  // to check if right amount of chunks
+	mtx      sync.Mutex
+	sent     map[int]time.Time // to store time of send for retry
+	synced   chan int          // to check if right amount of chunks
 }
 
-func newTestPushSyncIndex(chunkCnt int, tagIDs []uint32, tags *chunk.Tags, sent *sync.Map) *testPushSyncIndex {
+func newTestPushSyncIndex(chunkCnt int, tagIDs []uint32, tags *chunk.Tags, sent map[int]time.Time) *testPushSyncIndex {
 	return &testPushSyncIndex{
 		i:      0,
 		total:  chunkCnt,
@@ -209,6 +209,7 @@ func (tp *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chun
 	tagCnt := len(tp.tagIDs)
 	quit := make(chan struct{})
 	stop := func() { close(quit) }
+
 	go func() {
 		// feed fake chunks into the db, hashes encode the order so that
 		// it can be traced
@@ -219,14 +220,15 @@ func (tp *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chun
 			tagID := tp.tagIDs[i%tagCnt]
 			// remember when the chunk was put
 			// if sent again, dont modify the time
-			_, loaded := tp.sent.LoadOrStore(i, time.Now())
-			if !loaded {
+			_, found := tp.sent[i]
+			if !found {
 				// increment stored count on tag
 				if tag, _ := tp.tags.Get(tagID); tag != nil {
 					tag.Inc(chunk.StateStored)
 				}
 			}
-			tp.sent.Store(i, time.Now())
+			tp.sent[i] = time.Now()
+
 			select {
 			// chunks have no data and belong to tag i%tagCount
 			case chunks <- storage.NewChunk(addr, nil).WithTagID(tagID):
@@ -236,16 +238,18 @@ func (tp *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chun
 			}
 		}
 		// push the chunks already pushed but not yet synced
-		tp.sent.Range(func(k, _ interface{}) bool {
+		tp.mtx.Lock()
+		for k := range tp.sent {
 			log.Debug("resending", "idx", k)
-			return feed(k.(int))
-		})
+			feed(k)
+		}
 		// generate the new chunks from tp.i
 		for tp.i < tp.total && feed(tp.i) {
 			tp.i++
 		}
+		tp.mtx.Unlock()
+
 		log.Debug("sent chunks", "sent", tp.i, "total", tp.total)
-		close(chunks)
 	}()
 	return chunks, stop
 }
@@ -253,7 +257,9 @@ func (tp *testPushSyncIndex) SubscribePush(context.Context) (<-chan storage.Chun
 func (tp *testPushSyncIndex) Set(ctx context.Context, _ chunk.ModeSet, addrs ...storage.Address) error {
 	for _, addr := range addrs {
 		idx := int(binary.BigEndian.Uint64(addr[:8]))
-		tp.sent.Delete(idx)
+		tp.mtx.Lock()
+		delete(tp.sent, idx)
+		tp.mtx.Unlock()
 		tp.synced <- idx
 		log.Debug("set chunk synced", "idx", idx, "addr", addr)
 	}
@@ -299,9 +305,11 @@ func checkTags(t *testing.T, expTotal int64, tagIDs []uint32, tags *chunk.Tags) 
 			t.Fatal(err)
 		}
 		// the tag is adjusted after the store.Set calls show
-		err = tag.WaitTillDone(context.Background(), chunk.StateSynced)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		err = tag.WaitTillDone(ctx, chunk.StateSynced)
 		if err != nil {
-			t.Fatalf("error waiting for syncing on tag %v: %v", tag.Uid, err)
+			t.Fatalf("error waiting for syncing on tag %v: %v\n%v", tag.Uid, err, tag)
 		}
 
 		chunktesting.CheckTag(t, tag, 0, expTotal, 0, expTotal, expTotal, expTotal)

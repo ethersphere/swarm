@@ -90,7 +90,7 @@ func testPushsyncSimulation(nodeCnt, chunkCnt, testcases int, sf simulation.Serv
 	}
 
 	start := time.Now()
-	log.Error("Snapshot loaded. Simulation starting", "at", start)
+	log.Debug("Snapshot loaded. Simulation starting", "at", start)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		var errg errgroup.Group
 		for j := 0; j < testcases; j++ {
@@ -108,7 +108,7 @@ func testPushsyncSimulation(nodeCnt, chunkCnt, testcases int, sf simulation.Serv
 	if result.Error != nil {
 		return fmt.Errorf("simulation error: %v", result.Error)
 	}
-	log.Error("simulation", "duration", time.Since(start))
+	log.Info("simulation", "duration", time.Since(start))
 	return nil
 }
 
