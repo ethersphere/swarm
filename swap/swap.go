@@ -72,7 +72,7 @@ type Owner struct {
 	publicKey  *ecdsa.PublicKey  // public key
 }
 
-// Params encapsulates param
+// Params encapsulates parameters optionally set by the user
 type Params struct {
 	LogPath              string // optional audit log path
 	InitialDepositAmount uint64 // initial deposit amount for the chequebook
