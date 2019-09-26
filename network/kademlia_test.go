@@ -33,12 +33,14 @@ import (
 	"github.com/ethersphere/swarm/pot"
 )
 
-func TestSugestedPeers(t *testing.T) {
-	base := "10000101"
+func TestSugestPeers(t *testing.T) {
+	base := "00000000"
 	tk := newTestKademlia(t, base)
 	addresses := addressGenerator(100, base)
 
-	tk.Register(addresses...)
+	//tk.Register(addresses...)
+	tk.On("00100000")
+	tk.On("00010000")
 
 	//for !tk.checkHealth(true) {
 	//	suggestedPeer, _, _ := tk.SuggestPeer()
@@ -51,6 +53,7 @@ func TestSugestedPeers(t *testing.T) {
 		if suggestedPeer != nil {
 			tk.On(pot.ToBin(suggestedPeer.OAddr))
 		}
+		log.Warn(tk.String())
 	}
 
 	var binsConns []int
@@ -77,6 +80,115 @@ func TestSugestedPeers(t *testing.T) {
 
 	log.Warn(tk.String())
 	log.Warn(strconv.FormatBool(tk.checkHealth(true)))
+}
+
+func TestSugestPeers2(t *testing.T) {
+
+	base := "00000000"
+	tk := newTestKademlia(t, base)
+
+	//Add peers to bin 2 and 3 in order to be able to have depth 2
+	//This bins are also saturated since no more available peers for this bins
+	tk.On("00100000")
+	tk.On("00010000")
+
+	//No unconnected peers
+	tk.checkSuggestPeer("<nil>", 0, false)
+
+	//We add some addresses that fall in bin0 and bin1
+	tk.Register("10000000", "11000000", "11100000", "11110000", "11111000")
+	tk.Register("01000000", "01100000", "01110000")
+
+	//Bins should fill from  most empty to least empty and shallower to deeper
+	//first suggestion should be for bin 0
+	tk.checkSuggestPeer("11111000", 0, false)
+	tk.On("11111000")
+
+	//Since we now have 1 peer in bin0 and none in bin1, next suggested peer should be for bin1
+	tk.checkSuggestPeer("01110000", 0, false)
+	tk.On("01110000")
+
+	//Both bins 0 and 1 have at least 1 peer, so next suggested peer should be for 0 (shallower)
+	tk.checkSuggestPeer("11110000", 0, false)
+	tk.On("11110000")
+
+	//Bin0 has 2 peers, bin1 has 1 peer, should recommend peer for bin 1
+	tk.checkSuggestPeer("01100000", 0, false)
+	tk.On("01100000")
+
+	//Bin1 should be saturated (size == expectedSizeBin1)
+	expectedSizeBin1 := tk.expectedBinSize(1)
+	bin1Consumer := func(bin *pot.Bin) bool {
+		if bin.ProximityOrder == 1 {
+			if bin.Size != expectedSizeBin1 {
+				t.Fatalf("expectedsize doesnt match size of bin")
+			}
+			return false
+		}
+		return true
+	}
+	tk.conns.EachBin(tk.base, Pof, 0, bin1Consumer)
+
+	// next suggestions should all be bin0 peers
+	tk.checkSuggestPeer("11100000", 0, false)
+	tk.On("11100000")
+	tk.checkSuggestPeer("11000000", 0, false)
+	tk.On("11000000")
+
+	//Bin0 should also  be saturated now (size == expectedSizeBin0)
+	expectedSizeBin0 := tk.expectedBinSize(1)
+	bin0Consumer := func(bin *pot.Bin) bool {
+		if bin.ProximityOrder == 1 {
+			if bin.Size != expectedSizeBin0 {
+				t.Fatalf("expectedsize doesnt match size of bin")
+				return false
+			}
+		}
+		return true
+	}
+	tk.conns.EachBin(tk.base, Pof, 0, bin0Consumer)
+
+	//shouldn't suggest more peers
+	tk.checkSuggestPeer("<nil>", 0, false)
+
+	//We check for change of saturationDepth
+	tk.Off("11000000")
+	tk.checkSuggestPeer("11000000", 0, true)
+	tk.On("11000000")
+	//We check again, this time unsaturating bin1
+	tk.Off("01110000")
+	tk.checkSuggestPeer("01110000", 1, true)
+	tk.On("01110000")
+	//Again, all bins saturated, shouldn't get more suggestions
+	tk.checkSuggestPeer("<nil>", 0, false)
+
+	//Depth is 2
+	depth := depthForPot(tk.conns, tk.NeighbourhoodSize, tk.base)
+	if depth != 2 {
+		t.Fatalf("Expected depth to be 2")
+	}
+
+	log.Warn(tk.String())
+	log.Warn(strconv.FormatBool(tk.checkHealth(true)))
+
+	//Since depth is 2, bins >= 2  aren't considered saturated if peers left to connect
+	//We add adresses that fall in bin2 and bin3
+	tk.Register("00111000", "00110000")
+	tk.Register("00011000", "00011100")
+	tk.checkSuggestPeer("00110000", 0, false)
+	tk.On("00110000")
+	log.Warn(tk.String())
+	tk.checkSuggestPeer("00111000", 0, false)
+	tk.On("00111100")
+	tk.checkSuggestPeer("00011100", 0, false)
+	tk.On("00011100")
+	log.Warn(tk.String())
+
+	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2), and shallower bins aren't empty
+	depth = depthForPot(tk.conns, tk.NeighbourhoodSize, tk.base)
+	if depth != 3 {
+		t.Fatalf("Expected depth to be 3")
+	}
 
 }
 
@@ -282,10 +394,11 @@ func TestHighMinBinSize(t *testing.T) {
 // Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
 
-	// base address is all zeros
+	// base address is all ones
+	const base = "11111111"
 	// no peers
 	// unhealthy (and lonely)
-	tk := newTestKademlia(t, "11111111")
+	tk := newTestKademlia(t, base)
 	tk.checkHealth(false)
 
 	// know one peer but not connected
@@ -487,16 +600,24 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	tk.On("01000001")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
+	log.Warn(tk.String())
+
 	tk.Register("10000010", "01000010", "00100010")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 	tk.Register("00010010")
 	tk.checkSuggestPeer("00010010", 0, false)
+	log.Warn(tk.String())
 
 	tk.Off("00100001")
+	log.Warn(tk.String())
+
 	tk.checkSuggestPeer("00100010", 2, true)
+	log.Warn(tk.String())
 
 	tk.Off("01000001")
+	log.Warn(tk.String())
+
 	tk.checkSuggestPeer("01000010", 1, true)
 
 	tk.checkSuggestPeer("01000001", 0, false)
@@ -504,6 +625,7 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 	tk.On("01000001", "00100001")
+
 	tk.Register("10000100", "01000100", "00100100")
 	tk.Register("00000100", "00000101", "00000110")
 	tk.Register("00000010", "00000011", "00000001")
