@@ -54,7 +54,7 @@ var (
 var (
 	nodeCntFlag   = flag.Int("nodes", 4, "number of nodes in simulation")
 	chunkCntFlag  = flag.Int("chunks", 1000, "number of chunks per upload in simulation")
-	testCasesFlag = flag.Int("cases", 4, "number of concurrent upload-download cases to test in simulation")
+	testCasesFlag = flag.Int("cases", 2, "number of concurrent upload-download cases to test in simulation")
 )
 
 // test syncer using pss
