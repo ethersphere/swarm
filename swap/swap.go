@@ -119,14 +119,13 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, contract contract.Contract) *Swap {
+func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
 		backend:          backend,
 		owner:            owner,
 		params:           params,
-		contract:         contract,
 		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
 }
@@ -170,19 +169,18 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	auditLog.Info("SWAP initialized on backend network ID", "ID", chainID.Uint64())
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
-	// start the chequebook
-	var contract contract.Contract
-	if contract, err = StartChequebook(chequebookAddressFlag, initialDepositAmountFlag, stateStore, owner, backend); err != nil {
-		return nil, err
-	}
-	// create the SWAP instance
-	return new(
+	// create the swap instance
+	swap = new(
 		stateStore,
 		owner,
 		backend,
 		params,
-		contract,
-	), nil
+	)
+	// start the chequebook
+	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
+		return nil, err
+	}
+	return swap, nil
 }
 
 const (
@@ -496,8 +494,8 @@ func promptInitialDepositAmount() (uint64, error) {
 }
 
 // StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
-func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64, s state.Store, owner *Owner, backend contract.Backend) (contract contract.Contract, err error) {
-	previouslyUsedChequebook, err := loadChequebook(s)
+func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) (contract contract.Contract, err error) {
+	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
 		return nil, fmt.Errorf("Error reading previously used chequebook: %s", err)
@@ -515,22 +513,22 @@ func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uin
 				return nil, err
 			}
 		}
-		if contract, err = Deploy(context.TODO(), toDeposit, owner, backend); err != nil {
+		if contract, err = s.Deploy(context.TODO(), toDeposit); err != nil {
 			return nil, err
 		}
-		if err := saveChequebook(contract.ContractParams().ContractAddress, s); err != nil {
+		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
 			return nil, err
 		}
-		auditLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", owner.address)
+		auditLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address)
 		// first time connecting by deploying a new chequebook
 		return contract, nil
 	}
 	// first time connecting with a chequebookAddress passed in
 	if chequebookAddrFlag != (common.Address{}) {
-		return bindToContractAt(chequebookAddrFlag, backend)
+		return bindToContractAt(chequebookAddrFlag, s.backend)
 	}
 	// reconnecting with contract read from statestore
-	return bindToContractAt(previouslyUsedChequebook, backend)
+	return bindToContractAt(previouslyUsedChequebook, s.backend)
 }
 
 // BindToContractAt binds to an instance of an already existing chequebook contract at address
@@ -545,27 +543,27 @@ func bindToContractAt(address common.Address, backend contract.Backend) (contrac
 }
 
 // Deploy deploys the Swap contract
-func Deploy(ctx context.Context, initialDepositAmount uint64, owner *Owner, backend contract.Backend) (contract.Contract, error) {
-	opts := bind.NewKeyedTransactor(owner.privateKey)
+func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contract.Contract, error) {
+	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
 	auditLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
-	return deployLoop(opts, defaultHarddepositTimeoutDuration, owner.address, backend)
+	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
-func deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration, owner common.Address, backend contract.Backend) (instance contract.Contract, err error) {
+func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-		if instance, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+		if instance, tx, err = contract.Deploy(opts, s.backend, s.owner.address, defaultHarddepositTimeoutDuration); err != nil {
 			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
-		if _, err := bind.WaitDeployed(opts.Context, backend, tx); err != nil {
+		if _, err := bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
 			auditLog.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
@@ -574,12 +572,12 @@ func deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.
 	return nil, err
 }
 
-func loadChequebook(s state.Store) (common.Address, error) {
+func (s *Swap) loadChequebook() (common.Address, error) {
 	var chequebook common.Address
-	err := s.Get(connectedChequebookKey, &chequebook)
+	err := s.store.Get(connectedChequebookKey, &chequebook)
 	return chequebook, err
 }
 
-func saveChequebook(chequebook common.Address, s state.Store) error {
-	return s.Put(connectedChequebookKey, chequebook)
+func (s *Swap) saveChequebook(chequebook common.Address) error {
+	return s.store.Put(connectedChequebookKey, chequebook)
 }
