@@ -133,7 +133,15 @@ func new(stateStore state.Store, owner *Owner, backend contract.Backend, params 
 	}
 }
 
-// New - swap constructor with integrity checks
+/** New - prepares and creates all fields to create a swap instance
+- sets up a SWAP database
+- verifies whether the disconnect threshold is higher than the payment threshold
+- connects to the blockchain backend
+- verifies that we have not connected SWAP before on a different blockchain backend
+- starts the chequebook
+- creates the swap instance
+*/
+
 func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (*Swap, error) {
 	// auditLog for swap-logging purposes
 	auditLog = newLogger(params.LogPath)
