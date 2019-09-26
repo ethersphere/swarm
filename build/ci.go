@@ -145,6 +145,7 @@ func doInstall(cmdline []string) {
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
 		goinstall.Args = append(goinstall.Args, "-v")
+		goinstall.Args = append(goinstall.Args, "-trimpath")
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
 		return
@@ -159,6 +160,7 @@ func doInstall(cmdline []string) {
 	// Seems we are cross compiling, work around forbidden GOBIN
 	goinstall := goToolArch(*arch, *cc, "install", buildFlags(env)...)
 	goinstall.Args = append(goinstall.Args, "-v")
+	goinstall.Args = append(goinstall.Args, "-trimpath")
 	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
 	goinstall.Args = append(goinstall.Args, packages...)
 	build.MustRun(goinstall)
@@ -173,6 +175,7 @@ func doInstall(cmdline []string) {
 				if name == "main" {
 					gobuild := goToolArch(*arch, *cc, "build", buildFlags(env)...)
 					gobuild.Args = append(gobuild.Args, "-v")
+					gobuild.Args = append(gobuild.Args, "-trimpath")
 					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(cmd.Name())}...)
 					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
 					build.MustRun(gobuild)

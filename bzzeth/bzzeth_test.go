@@ -221,7 +221,7 @@ func TestBzzBzzHandshakeWithMessage(t *testing.T) {
 	}
 
 	// after successful handshake, expect peer added to peer pool
-	p := getPeerAfterConnection
+	p := getPeerAfterConnection(node.ID(), b)
 	if p == nil {
 		t.Fatal("bzzeth peer not added")
 	}
