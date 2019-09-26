@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
@@ -52,7 +53,7 @@ var (
 
 var (
 	nodeCntFlag   = flag.Int("nodes", 4, "number of nodes in simulation")
-	chunkCntFlag  = flag.Int("chunks", 4, "number of chunks per upload in simulation")
+	chunkCntFlag  = flag.Int("chunks", 1000, "number of chunks per upload in simulation")
 	testCasesFlag = flag.Int("cases", 4, "number of concurrent upload-download cases to test in simulation")
 )
 
@@ -140,7 +141,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 	log.Debug("uploaded", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
 
 	// wait till pushsync is done
-	syncTimeout := 30 * time.Second
+	syncTimeout := 120 * time.Second
 	sctx, cancel := context.WithTimeout(ctx, syncTimeout)
 	defer cancel()
 	err = tag.WaitTillDone(sctx, chunk.StateSynced)
@@ -244,7 +245,7 @@ func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, 
 		return nil, nil, err
 	}
 	for i := 0; i < n; i++ {
-		ch := storage.GenerateRandomChunk(int64(chunk.DefaultSize))
+		ch := chunktesting.GenerateTestRandomChunk()
 		addrs = append(addrs, ch.Address())
 		_, err := store.Put(ctx, chunk.ModePutUpload, ch.WithTagID(tag.Uid))
 		if err != nil {
@@ -257,9 +258,12 @@ func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, 
 
 func download(ctx context.Context, store *storage.NetStore, addrs []storage.Address) error {
 	var g errgroup.Group
+	sem := make(chan struct{}, 32) // limit the number of concurrent gets
 	for _, addr := range addrs {
 		addr := addr
+		sem <- struct{}{}
 		g.Go(func() error {
+			defer func() { <-sem }()
 			_, err := store.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(addr))
 			log.Debug("Get", "addr", hex.EncodeToString(addr[:]), "err", err)
 			return err
