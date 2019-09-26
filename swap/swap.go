@@ -137,7 +137,7 @@ func new(stateStore state.Store, owner *Owner, backend contract.Backend, params 
 // - connects to the blockchain backend;
 // - verifies that we have not connected SWAP before on a different blockchain backend;
 // - starts the chequebook; creates the swap instance
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (*Swap, error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (swap *Swap, err error) {
 	// auditLog for swap-logging purposes
 	auditLog = newLogger(params.LogPath)
 	// verify that backendURL is not empty
@@ -146,8 +146,8 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	}
 	auditLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
-	stateStore, err := state.NewDBStore(filepath.Join(dbPath, "swap.db"))
-	if err != nil {
+	var stateStore state.Store
+	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
 		return nil, fmt.Errorf("error while initializing statestore: %v", err)
 	}
 	if params.DisconnectThreshold <= params.PaymentThreshold {
@@ -159,28 +159,20 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, fmt.Errorf("error connecting to Ethereum API %s: %v", backendURL, err)
 	}
 	// get the networkID of the backend
-	networkID, err := backend.NetworkID(context.TODO())
-	if err != nil {
+	var networkID *big.Int
+	if networkID, err = backend.NetworkID(context.TODO()); err != nil {
 		return nil, fmt.Errorf("error retrieving networkID from backendURL: %v", err)
 	}
 	// verify that we have not used SWAP before on a different networkID
-	usedBefore, err := checkNetworkID(networkID.Uint64(), stateStore)
-	if err != nil {
-		return nil, fmt.Errorf("error checking network ID: %v", err)
+	if err := checkNetworkID(networkID.Uint64(), stateStore); err != nil {
+		return nil, err
 	}
-	// put the networkID in the statestore if this is the first time we initialize SWAP
-	if !usedBefore {
-		err = stateStore.Put(connectedBlockchainKey, networkID.Uint64())
-		if err != nil {
-			return nil, fmt.Errorf("error writing current backend networkID to statestore: %v", err)
-		}
-		auditLog.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
-	}
+	auditLog.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// start the chequebook
-	contract, err := StartChequebook(chequebookAddressFlag, initialDepositAmountFlag, stateStore, owner, backend)
-	if err != nil {
+	var contract contract.Contract
+	if contract, err = StartChequebook(chequebookAddressFlag, initialDepositAmountFlag, stateStore, owner, backend); err != nil {
 		return nil, err
 	}
 	// create the SWAP instance
@@ -202,20 +194,20 @@ const (
 )
 
 // checkNetworkID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
-func checkNetworkID(currentNetworkID uint64, s state.Store) (usedBefore bool, err error) {
+func checkNetworkID(currentNetworkID uint64, s state.Store) (err error) {
 	var connectedBlockchain uint64
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
-		return false, fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
+		return fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
 	}
-	if err == nil {
-		if connectedBlockchain != currentNetworkID {
-			return true, fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentNetworkID)
-		}
-		usedBefore = true
+	// initialized before, but on a different networkID
+	if connectedBlockchain != currentNetworkID {
+		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentNetworkID)
 	}
-	return usedBefore, nil
+	// not initialized before
+	return s.Put(connectedBlockchainKey, currentNetworkID)
+
 }
 
 // returns the store key for retrieving a peer's balance
@@ -556,7 +548,6 @@ func Deploy(ctx context.Context, initialDepositAmount uint64, owner *Owner, back
 	// initial topup value
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
-
 	auditLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
 	return deployLoop(opts, defaultHarddepositTimeoutDuration, owner.address, backend)
 }
