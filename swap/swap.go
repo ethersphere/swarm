@@ -501,12 +501,16 @@ func promptInitialDepositAmount() (uint64, error) {
 	return uint64(val), nil
 }
 
-// StartChequebook start the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
-func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64, s state.Store, owner *Owner, backend contract.Backend) (contract.Contract, error) {
+// StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
+func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64, s state.Store, owner *Owner, backend contract.Backend) (contract contract.Contract, err error) {
 	previouslyUsedChequebook, err := loadChequebook(s)
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
 		return nil, fmt.Errorf("Error reading previously used chequebook: %s", err)
+	}
+	// read from state, but provided flag is not the same
+	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
+		return nil, fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
 	}
 	// nothing written to state disk before, no flag provided: deploying new chequebook
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
@@ -517,25 +521,21 @@ func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uin
 				return nil, err
 			}
 		}
-		contract, err := Deploy(context.TODO(), toDeposit, owner, backend)
-		if err != nil {
+		if contract, err = Deploy(context.TODO(), toDeposit, owner, backend); err != nil {
 			return nil, err
 		}
-		err = saveChequebook(contract.ContractParams().ContractAddress, s)
-		if err != nil {
+		if err := saveChequebook(contract.ContractParams().ContractAddress, s); err != nil {
 			return nil, err
 		}
-		auditLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", owner)
+		auditLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", owner.address)
+		// first time connecting by deploying a new chequebook
 		return contract, nil
 	}
-
-	// read from state, but provided flag is not the same
-	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
-		return nil, fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
-	}
+	// first time connecting with a chequebookAddress passed in
 	if chequebookAddrFlag != (common.Address{}) {
 		return bindToContractAt(chequebookAddrFlag, backend)
 	}
+	// reconnecting with contract read from statestore
 	return bindToContractAt(previouslyUsedChequebook, backend)
 }
 
@@ -545,7 +545,7 @@ func bindToContractAt(address common.Address, backend contract.Backend) (contrac
 	if err := contract.ValidateCode(context.Background(), backend, address); err != nil {
 		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
-	auditLog.Info("Binded to chequebook", "chequebookAddr", address)
+	auditLog.Info("bound to chequebook", "chequebookAddr", address)
 	// get the instance
 	return contract.InstanceAt(address, backend)
 }
