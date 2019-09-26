@@ -1,12 +1,108 @@
-## v0.5.0 (Unreleased)
+## v0.5.0 (September xx, 2019)
 
  ### Notes
 
+ - This release is not backward compatible with the previous versions of Swarm. Please update your nodes.
+ - Ubuntu PPA support has been removed. We will add support for multiple software distribution platforms at a later stage. In the meanwhile you can still find the Swarm binaries at out [official download page](https://swarm-gateways.net/bzz:/swarm.eth/downloads/).
+
  ### Features
 
- ### Improvements
+ - **Content Pinning:** You can now pin content to your local swarm node. This way you can guarantee that certain content stays on your node. Fore more information, read the [documentation](https://swarm-guide.readthedocs.io/en/latest/dapp_developer/index.html#pinning-content).
+ - **Push sync:** Adittionally to our previous syncing algorithm, pull sync, we now also have "push sync" as an option available to synchronise the content across nodes. This feature is still under heavy development and is therefore disabled by default. If you want to try it out, you have to start you swarm node with `--sync-mode=all`.
+ - **Progress bar via Tags:** [Tags](##put-link-to-tags-docs), together with push sync allow you to track the progress on content uploads. When using `swarm up`, you can now use the `--track` flag to see the progress.
+ - **BzzEth:**
+ - **SWAP:**
 
- ### Bug fixes
+ ### Improvements
+- <TODO>
+
+ ### Commits
+
+* [#1816](https://github.com/ethersphere/swarm/pull/1816) build: add -trimpath build/install option
+* [#1789](https://github.com/ethersphere/swarm/pull/1789) swap: prompt user for initial deposit amount
+* [#1782](https://github.com/ethersphere/swarm/pull/1782) pushsync: initial implementation
+* [#1815](https://github.com/ethersphere/swarm/pull/1815) bzzeth: correct the order of cleanup steps in * newTestNetworkStore
+* [#1812](https://github.com/ethersphere/swarm/pull/1812) build: remove debian package and ubuntu ppa support
+* [#1813](https://github.com/ethersphere/swarm/pull/1813) build: remove nsis, maven and iOS pod configurations
+* [#1685](https://github.com/ethersphere/swarm/pull/1685) bzzeth: Phase 1
+* [#1783](https://github.com/ethersphere/swarm/pull/1783) network: Documented, simplified and cleaner eachBin * function in pot.go
+* [#1795](https://github.com/ethersphere/swarm/pull/1795) api, cmd: add pinning feature flag
+* [#1786](https://github.com/ethersphere/swarm/pull/1786) network/stream: refactor cursors tests
+* [#1791](https://github.com/ethersphere/swarm/pull/1791) network: Add capabilities if peer from store does not * have it
+* [#1754](https://github.com/ethersphere/swarm/pull/1754) Swap logger
+* [#1787](https://github.com/ethersphere/swarm/pull/1787) network: Add capability filtered depth calculation
+* [#1784](https://github.com/ethersphere/swarm/pull/1784) travis: remove go1.12 job
+* [#1761](https://github.com/ethersphere/swarm/pull/1761) cmd/swarm: correct bzznetworkid flag description
+* [#1764](https://github.com/ethersphere/swarm/pull/1764) network, pss: Capability in pss
+* [#1779](https://github.com/ethersphere/swarm/pull/1779) network/stream: handle nil peer in * TestNodesExchangeCorrectBinIndexes
+* [#1771](https://github.com/ethersphere/swarm/pull/1771) protocols, retrieval: swap-enabled messages implement * Price
+* [#1781](https://github.com/ethersphere/swarm/pull/1781) cmd/swarm-smoke: fix waitToPushSynced connection * closing
+* [#1777](https://github.com/ethersphere/swarm/pull/1777) cmd/swarm: simplify testCluster.StartNewNodes
+* [#1778](https://github.com/ethersphere/swarm/pull/1778) build: increase golangci-lint deadline
+* [#1780](https://github.com/ethersphere/swarm/pull/1780) docker: ignore build/bin when copying files
+* [#1769](https://github.com/ethersphere/swarm/pull/1769) swap: fix and rename Peer.getLastSentCumulativePayout
+* [#1776](https://github.com/ethersphere/swarm/pull/1776) network/stream: more resilient * TestNodesCorrectBinsDynamic
+* [#1713](https://github.com/ethersphere/swarm/pull/1713) network: Add Capabilities to Kademlia database
+* [#1775](https://github.com/ethersphere/swarm/pull/1775) network: add own address to KademliaInfo
+* [#1742](https://github.com/ethersphere/swarm/pull/1742) pss: Refactor. Step 2. Refactor forward cache
+* [#1729](https://github.com/ethersphere/swarm/pull/1729) all: configurable payment/disconnect thresholds
+* [#1760](https://github.com/ethersphere/swarm/pull/1760) network/stream/v2: more resilient * TestNodesExchangeCorrectBinIndexes
+* [#1770](https://github.com/ethersphere/swarm/pull/1770) stream: dereference StreamInfoReq structure in * updateSyncSubscriptions function
+* [#1765](https://github.com/ethersphere/swarm/pull/1765) network/retrieval: fix Price method reflect call
+* [#1734](https://github.com/ethersphere/swarm/pull/1734) pss: Refactor. Step 1. Refactor PssMsg
+* [#1758](https://github.com/ethersphere/swarm/pull/1758) network/retrieval: add balances to the retrieval * protocol
+* [#1762](https://github.com/ethersphere/swarm/pull/1762) network: fix data race in simulation.NewBzzInProc
+* [#1748](https://github.com/ethersphere/swarm/pull/1748) contracts/swap, swap: refactor contractAddress, * remove backend as inputParam, function order in contracts/swap
+* [#1745](https://github.com/ethersphere/swarm/pull/1745) bzzeth: protocol runloop now quits on peer disconnzethect
+* [#1752](https://github.com/ethersphere/swarm/pull/1752) api/client: fix data race in TarUpload
+* [#1749](https://github.com/ethersphere/swarm/pull/1749) api, metrics, network: check caps when deciding on * next peer for a chunk
+* [#1731](https://github.com/ethersphere/swarm/pull/1731) pss: Distill whisper elements in pss to a custom * fallback crypto
+* [#1538](https://github.com/ethersphere/swarm/pull/1538) network: new stream! protocol and pull syncer * implementation
+* [#1743](https://github.com/ethersphere/swarm/pull/1743) swap: fix rpc test to use peer balance
+* [#1710](https://github.com/ethersphere/swarm/pull/1710) all: support go 1.13 change to testing/flag packages
+* [#1725](https://github.com/ethersphere/swarm/pull/1725) swap: refactor lastReceivedCheque, lastSentCheque, * balances to peer
+* [#1740](https://github.com/ethersphere/swarm/pull/1740) network: terminate Hive connect goroutine on Stop
+* [#1733](https://github.com/ethersphere/swarm/pull/1733) Incentives rpc test
+* [#1718](https://github.com/ethersphere/swarm/pull/1718) swarm, swap: pass chequebook address at start-up
+* [#1721](https://github.com/ethersphere/swarm/pull/1721) swap: fix TestHandshake and TestEmitCheque
+* [#1717](https://github.com/ethersphere/swarm/pull/1717) cmd/swarm-smoke: prevent smoke test from executing * trackChunks twice when we debug
+* [#1683](https://github.com/ethersphere/swarm/pull/1683) swap, contracts, vendor: move to waiver-free * simplestswap
+* [#1698](https://github.com/ethersphere/swarm/pull/1698) pss: Modularize crypto and remove Whisper. Step 1 - * isolate whisper code
+* [#1695](https://github.com/ethersphere/swarm/pull/1695) pss: Improve pressure backstop queue handling - no * mutex
+* [#1709](https://github.com/ethersphere/swarm/pull/1709) cmd/swarm-snapshot: if 2 nodes to create snapshot use * connectChain
+* [#1675](https://github.com/ethersphere/swarm/pull/1675) network: Add API for Capabilities
+* [#1702](https://github.com/ethersphere/swarm/pull/1702) pss: fixed flaky test that was using a global * variable instead of a local one
+* [#1682](https://github.com/ethersphere/swarm/pull/1682) pss: Port tests to `network/simulation`
+* [#1700](https://github.com/ethersphere/swarm/pull/1700) storage: fix hasherstore seen check to happen when * error is nil
+* [#1689](https://github.com/ethersphere/swarm/pull/1689) vendor: upgrade go-ethereum to 1.9.2
+* [#1571](https://github.com/ethersphere/swarm/pull/1571) bzzeth: initial support for bzz-eth protocol
+* [#1696](https://github.com/ethersphere/swarm/pull/1696) network/stream: terminate runUpdateSyncing on peer * quit
+* [#1554](https://github.com/ethersphere/swarm/pull/1554) all: first working SWAP version
+* [#1684](https://github.com/ethersphere/swarm/pull/1684) chunk, storage: storage with multi chunk Set method
+* [#1686](https://github.com/ethersphere/swarm/pull/1686) chunk, storage: add HasMulti to chunk.Store
+* [#1691](https://github.com/ethersphere/swarm/pull/1691) chunk, shed, storage: chunk.Store GetMulti method
+* [#1649](https://github.com/ethersphere/swarm/pull/1649) api, chunk: progress bar support
+* [#1681](https://github.com/ethersphere/swarm/pull/1681) chunk, storage: chunk.Store multiple chunk Put
+* [#1679](https://github.com/ethersphere/swarm/pull/1679) storage: fix pyramid chunker and hasherstore possible * deadlocks
+* [#1672](https://github.com/ethersphere/swarm/pull/1672) pss: Use distance to determine single guaranteed * recipient
+* [#1674](https://github.com/ethersphere/swarm/pull/1674) storage: fix possible hasherstore deadlock on waitC * channel
+* [#1619](https://github.com/ethersphere/swarm/pull/1619) network: Add adaptive capabilities message
+* [#1648](https://github.com/ethersphere/swarm/pull/1648) p2p/protocols, p2p/testing; conditional propagation * of context
+* [#1673](https://github.com/ethersphere/swarm/pull/1673) api/http: remove unnecessary conversion
+* [#1670](https://github.com/ethersphere/swarm/pull/1670) storage: fix LazyChunkReader.join potential deadlock
+* [#1658](https://github.com/ethersphere/swarm/pull/1658) HTTP API support for pinning contents
+* [#1621](https://github.com/ethersphere/swarm/pull/1621) pot: Add Distance methods with tests
+* [#1667](https://github.com/ethersphere/swarm/pull/1667) README: Update Vendored Dependencies section
+* [#1647](https://github.com/ethersphere/swarm/pull/1647) network, p2p, vendor: move vendored p2p/testing under * swarm
+* [#1532](https://github.com/ethersphere/swarm/pull/1532) build, vendor: use go modules for vendoring
+* [#1509](https://github.com/ethersphere/swarm/pull/1509) api, chunk, cmd, shed, storage: add support for * pinning content
+* [#1620](https://github.com/ethersphere/swarm/pull/1620) docs/swarm-guide: cleanup
+* [#1615](https://github.com/ethersphere/swarm/pull/1615) travis: split jobs into different stages
+* [#1616](https://github.com/ethersphere/swarm/pull/1616) simulation: retry if we hit a collision on tcp/udp * ports
+* [#1614](https://github.com/ethersphere/swarm/pull/1614) api, chunk: rename Tag.New to Tag.Create
+* [#1580](https://github.com/ethersphere/swarm/pull/1580) pss: instrumentation and refactor
+* [#1576](https://github.com/ethersphere/swarm/pull/1576) api, cmd, network: add --disable-auto-connect flag
+
 
 ## v0.4.3 (July 25, 2019)
 
