@@ -133,6 +133,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			self.privateKey,
 			self.config.SwapBackendURL,
 			swapParams,
+			self.config.Contract,
+			self.config.SwapInitialDeposit,
 		)
 		if err != nil {
 			return nil, err
@@ -375,14 +377,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	// update uaddr to correct enode
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().URLv4()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
-
-	if s.config.SwapEnabled {
-		if err := s.swap.StartChequebook(s.config.Contract, s.config.SwapInitialDeposit); err != nil {
-			return err
-		}
-	} else {
-		log.Info("SWAP disabled: no chequebook set")
-	}
 
 	log.Info("Starting bzz service")
 

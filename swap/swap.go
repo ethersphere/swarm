@@ -120,21 +120,22 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // new - swap constructor without integrity check
-func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, params *Params, backendNetworkID uint64) *Swap {
-	auditLog = newLogger(params.LogPath)
+func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, backendNetworkID uint64, contract contract.Contract) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
 		backend:          backend,
-		owner:            createOwner(prvkey),
+		owner:            owner,
 		params:           params,
 		backendNetworkID: backendNetworkID,
+		contract:         contract,
 		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
 }
 
 // New - swap constructor with integrity checks
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params) (*Swap, error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (*Swap, error) {
+	auditLog = newLogger(params.LogPath)
 	// we MUST have a backend
 	if backendURL == "" {
 		return nil, errors.New("swap init error: no backend URL given")
@@ -145,6 +146,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: error initializing statestore: %v", err)
 	}
+	owner := createOwner(prvkey)
 	if params.DisconnectThreshold <= params.PaymentThreshold {
 		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
 	}
@@ -156,21 +158,12 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err != nil {
 		return nil, fmt.Errorf("swap init error: error retrieving networkID from backendURL: %v", err)
 	}
-	var usedBeforeAtNetwork uint64
-	var usedBefore bool
-	err = stateStore.Get(usedBeforeAtNetworkKey, &usedBeforeAtNetwork)
-	// error reading from database
-	if err != nil && err != state.ErrNotFound {
-		return nil, fmt.Errorf("swap init error: error querying usedBeforeAtNetwork from statestore: %v", err)
+	// verify that we
+	usedBefore, err := checkNetworkID(networkID.Uint64(), stateStore)
+	if err != nil {
+		return nil, fmt.Errorf("error checking network ID: %v", err)
 	}
-	// read from database
-	if err == nil {
-		usedBefore = true
-	}
-	// if used before on a different network, abort
-	if usedBefore && usedBeforeAtNetwork != networkID.Uint64() {
-		return nil, fmt.Errorf("swap init error: statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, networkID)
-	}
+
 	// put the networkID in the statestore
 	if !usedBefore {
 		err = stateStore.Put(usedBeforeAtNetworkKey, networkID.Uint64())
@@ -179,12 +172,17 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		}
 		log.Info("SWAP initialized on backend network ID", "ID", networkID.Uint64())
 	}
+	contract, err := StartChequebook(chequebookAddressFlag, initialDepositAmountFlag, stateStore, owner, backend)
+	if err != nil {
+		return nil, err
+	}
 	return new(
 		stateStore,
-		prvkey,
+		owner,
 		backend,
 		params,
 		networkID.Uint64(),
+		contract,
 	), nil
 }
 
@@ -195,6 +193,25 @@ const (
 	usedChequebookKey      = "used_chequebook"
 	usedBeforeAtNetworkKey = "used_before_at_network"
 )
+
+// checkNetworkID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
+func checkNetworkID(currentNetworkID uint64, s *state.DBStore) (usedBefore bool, err error) {
+	var usedBeforeAtNetwork uint64
+	err = s.Get(usedBeforeAtNetworkKey, &usedBeforeAtNetwork)
+	// error reading from database
+	if err != nil && err != state.ErrNotFound {
+		return false, fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
+	}
+	// if used before on a different network, abort
+	if usedBefore && usedBeforeAtNetwork != currentNetworkID {
+		return false, fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, currentNetworkID)
+	}
+	// read from database
+	if err == nil {
+		usedBefore = true
+	}
+	return usedBefore, nil
+}
 
 // returns the store key for retrieving a peer's balance
 func balanceKey(peer enode.ID) string {
@@ -480,11 +497,11 @@ func promptInitialDepositAmount() (uint64, error) {
 }
 
 // StartChequebook start the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
-func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) error {
-	chequebookToUse, err := s.loadChequebook()
+func StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64, s *state.DBStore, owner *Owner, backend contract.Backend) (contract.Contract, error) {
+	chequebookToUse, err := loadChequebook(s)
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
-		return fmt.Errorf("Error reading previously used chequebook: %s", err)
+		return nil, fmt.Errorf("Error reading previously used chequebook: %s", err)
 	}
 	// nothing written to state disk before, no flag provided: deploying new chequebook
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
@@ -492,80 +509,78 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDeposit
 		if toDeposit == 0 {
 			toDeposit, err = promptInitialDepositAmount()
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
-		chequebook, err := s.Deploy(context.TODO(), toDeposit)
+		contract, err := Deploy(context.TODO(), toDeposit, owner, backend)
 		if err != nil {
-			return fmt.Errorf("Error deploying chequebook: %v", err)
+			return nil, err
 		}
-		chequebookToUse = chequebook
+		err = saveChequebook(contract.ContractParams().ContractAddress, s)
+		if err != nil {
+			return nil, err
+		}
+		return contract, nil
 	}
 
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != chequebookToUse) {
-		return fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
+		return nil, fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
 	}
 	if chequebookAddrFlag != (common.Address{}) {
 		chequebookToUse = chequebookAddrFlag
 	}
 	auditLog.Info("Using the chequebook", "chequebookAddr", chequebookToUse)
-	return s.bindToContractAt(chequebookToUse)
+	return bindToContractAt(chequebookToUse, backend)
 }
 
 // BindToContractAt binds to an instance of an already existing chequebook contract at address
-func (s *Swap) bindToContractAt(address common.Address) (err error) {
+func bindToContractAt(address common.Address, backend contract.Backend) (contract.Contract, error) {
 	// validate whether address is a chequebook
-	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
-		return fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
+	if err := contract.ValidateCode(context.Background(), backend, address); err != nil {
+		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
-	// get the instance and save it on swap.contract
-	s.contract, err = contract.InstanceAt(address, s.backend)
-	if err != nil {
-		return err
-	}
-	// saving chequebook
-	return s.saveChequebook(address)
+	// get the instance
+	return contract.InstanceAt(address, backend)
 }
 
-// Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (common.Address, error) {
-	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+// Deploy deploys the Swap contract
+func Deploy(ctx context.Context, initialDepositAmount uint64, owner *Owner, backend contract.Backend) (contract.Contract, error) {
+	opts := bind.NewKeyedTransactor(owner.privateKey)
 	// initial topup value
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
 
-	log.Info("deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
-	return s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
+	auditLog.Info("deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
+	return deployLoop(opts, defaultHarddepositTimeoutDuration, owner.address, backend)
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
-func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
+func deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration, owner common.Address, backend contract.Backend) (instance contract.Contract, err error) {
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-
-		if addr, tx, _, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+		if instance, tx, err = contract.Deploy(opts, backend, owner, defaultHarddepositTimeoutDuration); err != nil {
+			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
-		if addr, err = bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
+		if _, err := bind.WaitDeployed(opts.Context, backend, tx); err != nil {
 			auditLog.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
-		return addr, nil
+		return instance, nil
 	}
-	return addr, err
+	return nil, err
 }
 
-func (s *Swap) loadChequebook() (common.Address, error) {
+func loadChequebook(s *state.DBStore) (common.Address, error) {
 	var chequebook common.Address
-	err := s.store.Get(usedChequebookKey, &chequebook)
+	err := s.Get(usedChequebookKey, &chequebook)
 	return chequebook, err
 }
 
-func (s *Swap) saveChequebook(chequebook common.Address) error {
-	return s.store.Put(usedChequebookKey, chequebook)
+func saveChequebook(chequebook common.Address, s *state.DBStore) error {
+	return s.Put(usedChequebookKey, chequebook)
 }

@@ -80,10 +80,11 @@ type simpleContract struct {
 	address  common.Address
 }
 
-// Deploy deploys an instance of the underlying contract and returns its address
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (common.Address, *types.Transaction, *contract.SimpleSwap, error) {
-	addr, tx, simpleSwap, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	return addr, tx, simpleSwap, err
+// Deploy deploys an instance of the underlying contract and returns its address and the transaction identifier
+func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
+	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
+	c := simpleContract{instance: instance, address: addr}
+	return c, tx, err
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
