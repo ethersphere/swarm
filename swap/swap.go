@@ -207,13 +207,12 @@ func checkNetworkID(currentNetworkID uint64, s state.Store) (usedBefore bool, er
 	if err != nil && err != state.ErrNotFound {
 		return false, fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
 	}
+	if err == nil {
+		usedBefore = true
+	}
 	// if used before on a different network, abort
 	if usedBefore && usedBeforeAtNetwork != currentNetworkID {
 		return false, fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, currentNetworkID)
-	}
-	// read from database
-	if err == nil {
-		usedBefore = true
 	}
 	return usedBefore, nil
 }
