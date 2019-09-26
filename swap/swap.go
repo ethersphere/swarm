@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,8 +73,9 @@ type Owner struct {
 	publicKey  *ecdsa.PublicKey  // public key
 }
 
-// Params encapsulates parameters optionally set by the user
+// Params encapsulates economic and operational parameters
 type Params struct {
+	OverlayAddr          []byte // this node's base address
 	LogPath              string // optional audit log path
 	InitialDepositAmount uint64 // initial deposit amount for the chequebook
 	PaymentThreshold     int64  // honey amount at which a payment is triggered
@@ -82,14 +84,14 @@ type Params struct {
 
 // newSwapLogger returns a new logger for standard swap logs
 func newSwapLogger(s *Swap) log.Logger {
-	swapLogger := log.New("swaplog", "*", "selfAddress", s.owner.address)
+	swapLogger := log.New("swaplog", "*", "base", hex.EncodeToString(s.params.OverlayAddr)[:16])
 	setLoggerHandler(s.params.LogPath, swapLogger)
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) log.Logger {
-	peerLogger := log.New("swaplog", "*", "selfAddress", s.owner.address, "peer", peerID)
+	peerLogger := log.New("swaplog", "*", "base", hex.EncodeToString(s.params.OverlayAddr)[:16], "peer", peerID.String()[:16])
 	setLoggerHandler(s.params.LogPath, peerLogger)
 	return peerLogger
 }

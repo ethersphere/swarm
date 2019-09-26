@@ -338,7 +338,7 @@ func TestNewSwapFailure(t *testing.T) {
 		t.Error(err)
 	}
 
-	params := newDefaultParams()
+	params := newDefaultParams(t)
 
 	type testSwapConfig struct {
 		dbPath     string
@@ -676,8 +676,14 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 }
 
 // newDefaultParams creates a set of default params for tests
-func newDefaultParams() *Params {
+func newDefaultParams(t *testing.T) *Params {
+	baseKey := make([]byte, 32)
+	_, err := rand.Read(baseKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &Params{
+		OverlayAddr:          baseKey,
 		LogPath:              "",
 		InitialDepositAmount: 42,
 		PaymentThreshold:     DefaultPaymentThreshold,
@@ -704,7 +710,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
 func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
-	params := newDefaultParams()
+	params := newDefaultParams(t)
 	return newBaseTestSwapWithParams(t, key, params)
 }
 
@@ -1240,7 +1246,7 @@ func TestSwapLogToFile(t *testing.T) {
 	defer os.RemoveAll(logDirDebitor)
 
 	// set the log dir to the params
-	params := newDefaultParams()
+	params := newDefaultParams(t)
 	params.LogPath = logDirDebitor
 
 	// create both test swap accounts
