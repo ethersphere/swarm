@@ -170,7 +170,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	}
 	// put the networkID in the statestore if this is the first time we initialize SWAP
 	if !usedBefore {
-		err = stateStore.Put(usedBeforeAtNetworkKey, networkID.Uint64())
+		err = stateStore.Put(connectedBlockchainKey, networkID.Uint64())
 		if err != nil {
 			return nil, fmt.Errorf("error writing current backend networkID to statestore: %v", err)
 		}
@@ -197,24 +197,23 @@ const (
 	balancePrefix          = "balance_"
 	sentChequePrefix       = "sent_cheque_"
 	receivedChequePrefix   = "received_cheque_"
-	usedChequebookKey      = "used_chequebook"
-	usedBeforeAtNetworkKey = "used_before_at_network"
+	connectedChequebookKey = "connected_chequebook"
+	connectedBlockchainKey = "connected_blockchain"
 )
 
 // checkNetworkID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
 func checkNetworkID(currentNetworkID uint64, s state.Store) (usedBefore bool, err error) {
-	var usedBeforeAtNetwork uint64
-	err = s.Get(usedBeforeAtNetworkKey, &usedBeforeAtNetwork)
+	var connectedBlockchain uint64
+	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
 		return false, fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
 	}
 	if err == nil {
+		if connectedBlockchain != currentNetworkID {
+			return true, fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentNetworkID)
+		}
 		usedBefore = true
-	}
-	// if used before on a different network, abort
-	if usedBefore && usedBeforeAtNetwork != currentNetworkID {
-		return false, fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", usedBeforeAtNetwork, currentNetworkID)
 	}
 	return usedBefore, nil
 }
@@ -584,10 +583,10 @@ func deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.
 
 func loadChequebook(s state.Store) (common.Address, error) {
 	var chequebook common.Address
-	err := s.Get(usedChequebookKey, &chequebook)
+	err := s.Get(connectedChequebookKey, &chequebook)
 	return chequebook, err
 }
 
 func saveChequebook(chequebook common.Address, s state.Store) error {
-	return s.Put(usedChequebookKey, chequebook)
+	return s.Put(connectedChequebookKey, chequebook)
 }
