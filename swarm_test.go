@@ -34,7 +34,6 @@ import (
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -106,20 +105,6 @@ func TestNewSwarm(t *testing.T) {
 				}
 				if s.sfs == nil {
 					t.Error("swarm filesystem not initialized")
-				}
-			},
-		},
-		{
-			name: "with swap",
-			configure: func(config *api.Config) {
-				config.SwapBackendURL = ipcEndpoint
-				config.SwapEnabled = true
-				config.SwapInitialDeposit = 999999999
-				config.NetworkID = swap.AllowedNetworkID
-			},
-			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s.swap == nil {
-					t.Error("swap is nil")
 				}
 			},
 		},
