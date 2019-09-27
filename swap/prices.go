@@ -33,9 +33,15 @@ allowing for a multi-currency design.
 */
 
 // Placeholder prices
+// Based on a very crude calculation: average monthly cost for bandwidth in the US / average monthly bill for bandwidth in the US
+// 67GB / $190 = $0.35 / GB
+// 0.35 / (1000000000 * 4096) = $0.0000014336 / chunk
+// 0.0000014336 / 166 * 1000000000000000000 = 8636144578.31 Wei / chunk
+// RetrieveRequestPrice = 0.1 *  8636144578.31 = 863614458
+// ChunkDeliveryPrice = 0.9 * 8636144578.31 = 7772530120
 const (
-	RetrieveRequestPrice = uint64(1)
-	ChunkDeliveryPrice   = uint64(1)
+	RetrieveRequestPrice = uint64(863614458)
+	ChunkDeliveryPrice   = uint64(7772530120)
 	// default conversion of honey into output currency - currently ETH in Wei
 	defaultHoneyPrice = uint64(1)
 )
