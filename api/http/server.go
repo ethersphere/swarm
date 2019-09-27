@@ -76,7 +76,7 @@ var (
 
 const (
 	TagHeaderName       = "x-swarm-tag"       // Presence of this in header indicates the tag
-	AnonymousHeaderName = "x-swarm-anonymous" // Presence of this in header indicates pinning required
+	AnonymousHeaderName = "x-swarm-anonymous" // Presence of this in header indicates only pull sync should be used for upload
 	PinHeaderName       = "x-swarm-pin"       // Presence of this in header indicates pinning required
 
 	encryptAddr    = "encrypt"
