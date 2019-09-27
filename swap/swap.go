@@ -503,6 +503,9 @@ func (s *Swap) Liquidbalance(peer enode.ID) (int64, error) {
 	var otherSwap contract.Contract
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
 		otherSwap, err := contract.InstanceAt(swapPeer.contractAddress, s.backend)
+		if err != nil {
+			return 0, err
+		}
 	}
 	balance, err := otherSwap.LiquidBalance(nil)
 	if err != nil {
