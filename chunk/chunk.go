@@ -231,6 +231,8 @@ const (
 	ModeSetAccess ModeSet = iota
 	// ModeSetSync: when a chunk is added to a pull sync batch or when a push sync receipt is received
 	ModeSetSync
+	ModeSetSyncPush
+	ModeSetSyncPull
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove
 	// ModeSetPin: when a chunk is pinned during upload or separately

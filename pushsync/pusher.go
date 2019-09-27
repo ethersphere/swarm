@@ -312,6 +312,11 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 
 		// increment SENT count on tag  if it exists
 		if tag != nil {
+			// skip anonymous tags
+			if tag.Anonymous {
+				return false
+			}
+
 			tag.Inc(chunk.StateSent)
 			// opentracing for chunk roundtrip
 			_, span := spancontext.StartSpan(tag.Context(), "chunk.sent")
