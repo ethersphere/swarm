@@ -69,7 +69,7 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		testSyncingViaGlobalSync(t, *chunks, *nodes)
 	} else {
 		chunkCounts := []int{4}
-		nodeCounts := []int{16, 32}
+		nodeCounts := []int{16} // 32 nodes flakes on travis
 
 		//if the `longrunning` flag has been provided
 		//run more test combinations
