@@ -204,7 +204,7 @@ func checkChainID(currentChainID uint64, s state.Store) (err error) {
 		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentChainID)
 	}
 	if err == state.ErrNotFound {
-		auditLog.Info("First time connected to SWAP. Storing chain ID", currentChainID)
+		auditLog.Info("First time connected to SWAP. Storing chain ID", "ID", currentChainID)
 		return s.Put(connectedBlockchainKey, currentChainID)
 	}
 	return nil
