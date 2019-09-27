@@ -226,13 +226,13 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 			tag, _ := db.tags.Get(i.Tag)
 			if tag != nil {
 				switch mode {
-				case chunk.ModeSetPullSync:
+				case chunk.ModeSetSyncPull:
 					if tag.Anonymous {
 						// this will not get called twice because we remove the item in L217
 						tag.Inc(chunk.StateSent)
 						moveToGc = true
 					}
-				case chunk.ModeSetPushSync:
+				case chunk.ModeSetSyncPush:
 					tag.Inc(chunk.StateSynced)
 					moveToGc = true
 				}
