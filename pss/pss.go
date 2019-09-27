@@ -257,7 +257,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		Kademlia: k,
 		KeyStore: loadKeyStore(),
 
-		kademliaLB: network.NewKademliaLoadBalancer(k),
+		kademliaLB: network.NewKademliaLoadBalancer(k, false),
 		privateKey: params.privateKey,
 		quitC:      make(chan struct{}),
 
