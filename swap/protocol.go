@@ -161,6 +161,7 @@ type swapAPI interface {
 	SentCheques() (map[enode.ID]*Cheque, error)
 	ReceivedCheque(peer enode.ID) (cheque *Cheque, err error)
 	ReceivedCheques() (map[enode.ID]*Cheque, error)
+	LiquidBalance(peer enode.ID) (int64, error)
 }
 
 // API would be the API accessor for protocol methods

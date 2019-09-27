@@ -53,6 +53,8 @@ type Contract interface {
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
+	// LiquidBalance is the balance of the chequebook - hardDeposits
+	LiquidBalance(opts *bind.CallOpts) (*big.Int, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
 }
@@ -145,6 +147,11 @@ func (s simpleContract) ContractParams() *Params {
 // Issuer returns the contract owner from the blockchain
 func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 	return s.instance.Issuer(opts)
+}
+
+// LiquidBalance is the balance of the contract minus the total hardDeposits
+func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
+	return s.instance.LiquidBalance(opts)
 }
 
 // PaidOut returns the total paid out amount for the given address

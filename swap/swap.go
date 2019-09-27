@@ -491,6 +491,26 @@ func (s *Swap) ReceivedCheques() (map[enode.ID]*Cheque, error) {
 	return cheques, nil
 }
 
+// Liquidbalance returns the liquidBalance of the chequebook of the peer. If no peer is given, it will return the balance of the node itself
+func (s *Swap) Liquidbalance(peer enode.ID) (int64, error) {
+	if peer == (enode.ID{}) {
+		balance, err := s.contract.LiquidBalance(nil)
+		if err != nil {
+			return 0, err
+		}
+		return balance.Int64(), nil
+	}
+	var otherSwap contract.Contract
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		otherSwap, err := contract.InstanceAt(swapPeer.contractAddress, s.backend)
+	}
+	balance, err := otherSwap.LiquidBalance(nil)
+	if err != nil {
+		return 0, err
+	}
+	return balance.Int64(), nil
+}
+
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
