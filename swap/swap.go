@@ -432,7 +432,7 @@ func (s *Swap) SentCheques() (map[enode.ID]*Cheque, error) {
 
 	// add store cheques, if peer was not already added
 	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peer := keyToID(string(key), balancePrefix)
+		peer := keyToID(string(key), sentChequePrefix)
 		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
@@ -473,7 +473,7 @@ func (s *Swap) ReceivedCheques() (map[enode.ID]*Cheque, error) {
 
 	// add store cheques, if peer was not already added
 	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peer := keyToID(string(key), balancePrefix)
+		peer := keyToID(string(key), receivedChequePrefix)
 		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
@@ -483,7 +483,7 @@ func (s *Swap) ReceivedCheques() (map[enode.ID]*Cheque, error) {
 		}
 		return stop, err
 	}
-	err := s.store.Iterate(sentChequePrefix, chequesIterFunction)
+	err := s.store.Iterate(receivedChequePrefix, chequesIterFunction)
 	if err != nil {
 		return nil, err
 	}
