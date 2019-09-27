@@ -109,6 +109,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 			estimatedTotal int64 = 0
 			contentType          = r.Header.Get("Content-Type")
 			headerTag            = r.Header.Get(TagHeaderName)
+			anonTag              = r.Header.Get(AnonymousHeaderName)
 		)
 		if headerTag != "" {
 			tagName = headerTag
@@ -131,8 +132,8 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 		}
 
 		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
-
-		t, err := tags.Create(tagName, estimatedTotal)
+		anon := anonTag == "true"
+		t, err := tags.Create(tagName, estimatedTotal, anon)
 		if err != nil {
 			log.Error("error creating tag", "err", err, "tagName", tagName)
 		}

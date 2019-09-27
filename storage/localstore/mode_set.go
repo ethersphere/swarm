@@ -78,9 +78,9 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 			db.binIDs.PutInBatch(batch, uint64(po), id)
 		}
 
-	case chunk.ModeSetSync:
+	case chunk.ModeSetSync, chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
 		for _, addr := range addrs {
-			c, err := db.setSync(batch, addr)
+			c, err := db.setSync(batch, addr, mode)
 			if err != nil {
 				return err
 			}
@@ -179,7 +179,7 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 // setSync adds the chunk to the garbage collection after syncing by updating indexes:
 //  - delete from push, insert to gc
 // Provided batch is updated.
-func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange int64, err error) {
+func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeSet) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
 
 	// need to get access timestamp here as it is not
@@ -214,7 +214,10 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange in
 	}
 	item.AccessTimestamp = now()
 	db.retrievalAccessIndex.PutInBatch(batch, item)
-	db.pushIndex.DeleteInBatch(batch, item)
+
+	// moveToGc toggles the deletion of the item from pushsync index
+	// it will be false in the case pull sync was called but push sync was meant on that chunk (!tag.Anonymous)
+	moveToGc := false
 
 	if db.tags != nil {
 		i, err = db.pushIndex.Get(item)
@@ -222,7 +225,17 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange in
 		case nil:
 			tag, _ := db.tags.Get(i.Tag)
 			if tag != nil {
-				tag.Inc(chunk.StateSynced)
+				switch mode {
+				case chunk.ModeSetPullSync:
+					if tag.Anonymous {
+						// this will not get called twice because we remove the item in L217
+						tag.Inc(chunk.StateSent)
+						moveToGc = true
+					}
+				case chunk.ModeSetPushSync:
+					tag.Inc(chunk.StateSynced)
+					moveToGc = true
+				}
 			}
 		case leveldb.ErrNotFound:
 			// the chunk is not accessed before
@@ -230,6 +243,10 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange in
 			return 0, err
 		}
 	}
+	if !moveToGc {
+		return 0, nil
+	}
+	db.pushIndex.DeleteInBatch(batch, item)
 
 	// Add in gcIndex only if this chunk is not pinned
 	ok, err := db.pinIndex.Has(item)
