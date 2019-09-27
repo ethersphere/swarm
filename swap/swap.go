@@ -377,6 +377,15 @@ func (s *Swap) Balance(peer enode.ID) (balance int64, err error) {
 	return balance, err
 }
 
+// LastSentCheque returns the last sent cheque for a given peer
+func (s *Swap) LastSentCheque(peer enode.ID) (cheque *Cheque, err error) {
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		return swapPeer.getLastSentCheque(), nil
+	}
+	err = s.store.Get(sentChequeKey(peer), cheque)
+	return cheque, err
+}
+
 // Balances returns the balances for all known SWAP peers
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
