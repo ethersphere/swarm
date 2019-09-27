@@ -618,7 +618,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
-	if cheque.CumulativePayout != DefaultPaymentThreshold {
+	if cheque.CumulativePayout != uint64(DefaultPaymentThreshold) {
 		t.Fatal()
 	}
 }

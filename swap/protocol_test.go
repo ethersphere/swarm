@@ -244,7 +244,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	cheque := creditor.getLastSentCheque()
-	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
+	expectedAmount := uint64(overDraft) + uint64(DefaultPaymentThreshold)
 	if cheque.CumulativePayout != expectedAmount {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
 	}

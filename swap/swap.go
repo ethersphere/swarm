@@ -310,10 +310,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
+	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
+	if err != nil {
+		return err
+	}
 	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
-	gasPrice := 30000000000 // 30 Gwei
 	// do a payout transaction if we get 2 times the gas costs
-	if (cheque.CumulativePayout - paidOut.Uint64()) > uint64(2*gasPrice) {
+	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*gasPrice.Uint64() {
 		opts := bind.NewKeyedTransactor(s.owner.privateKey)
 		opts.Context = ctx
 		// cash cheque in async, otherwise this blocks here until the TX is mined

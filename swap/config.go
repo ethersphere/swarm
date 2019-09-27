@@ -16,14 +16,16 @@
 
 package swap
 
-import "time"
+import (
+	"time"
+)
 
 // These are currently arbitrary values which have not been verified nor tested
 // Need experimentation to arrive to values which make sense
 const (
 	// Thresholds which trigger payment or disconnection. The unit is in honey (internal accounting unit)
-	DefaultPaymentThreshold    = 2441 * (RetrieveRequestPrice + ChunkDeliveryPrice) // Payment when the disbalance is an equivalent of 10 mb of data (2441 chunks)
-	DefaultDisconnectThreshold = 2 * DefaultPaymentThreshold
+	DefaultPaymentThreshold    = int64(2441 * (RetrieveRequestPrice + ChunkDeliveryPrice)) // Payment when the disbalance is an equivalent of 10 mb of data (2441 chunks)
+	DefaultDisconnectThreshold = int64(2 * DefaultPaymentThreshold)
 	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation
 	DefaultInitialDepositAmount = 0
