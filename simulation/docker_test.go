@@ -6,9 +6,14 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/ethersphere/swarm/internal/build"
 )
 
 func TestDockerAdapterBuild(t *testing.T) {
+	if env := build.Env(); env.Name == "local" {
+		t.Skip("skip locally")
+	}
+
 	if !IsDockerAvailable(client.DefaultDockerHost) {
 		t.Skip("could not connect to the docker daemon")
 	}
