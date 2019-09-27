@@ -303,6 +303,50 @@ func TestAPIResolve(t *testing.T) {
 	}
 }
 
+// TestRNSResolver tests resolving Address which can either contain content hashes
+// or RNS names
+func TestRNSResolver(t *testing.T) {
+	//doesntResolve := newTestResolveValidator("")
+
+	rnsDomain := "marcelosdomain.rsk"
+	rnsAddress := "0xfF33bC3B7324C2A808A9D415935f8D991E6C406c"
+	api := NewAPI(nil, nil, nil, nil, nil)
+
+	tests := []struct {
+		desc   string
+		r      Resolver
+		addr   string
+		result string
+		err    error
+	}{
+		{
+			desc: "No resolvers, returns error",
+			r:    api.Resolve(nil, rnsDomain),
+			addr: rnsAddress,
+		},
+	}
+	for _, x := range tests {
+		t.Run(x.desc, func(t *testing.T) {
+			res, err := x.r.Resolve(x.addr)
+			if err == nil {
+				if x.err != nil {
+					t.Fatalf("expected error %q, got result %q", x.err, res.Hex())
+				}
+				if res.Hex() != x.result {
+					t.Fatalf("expected result %q, got %q", x.result, res.Hex())
+				}
+			} else {
+				if x.err == nil {
+					t.Fatalf("expected no error, got %q", err)
+				}
+				if err.Error() != x.err.Error() {
+					t.Fatalf("expected error %q, got %q", x.err, err)
+				}
+			}
+		})
+	}
+}
+
 func TestMultiResolver(t *testing.T) {
 	doesntResolve := newTestResolveValidator("")
 

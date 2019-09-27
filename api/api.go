@@ -47,6 +47,7 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/opentracing/opentracing-go"
+	rns "github.com/rsksmart/rds-swarm/resolver"
 )
 
 var (
@@ -217,6 +218,15 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // Resolve a name into a content-addressed hash
 // where address could be an ENS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
+	// if address is .rsk, resolve it with RNS resolver
+	tld := path.Ext(address)
+	if strings.ToLower(tld) == ".rsk" {
+		resolved, err := rns.ResolveDomainAddress(address)
+		if err != nil {
+			return nil, err
+		}
+		return resolved[:], nil
+	}
 	// if DNS is not configured, return an error
 	if a.dns == nil {
 		if hashMatcher.MatchString(address) {
