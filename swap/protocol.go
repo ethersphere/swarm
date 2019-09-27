@@ -158,6 +158,7 @@ type swapAPI interface {
 	Balance(peer enode.ID) (int64, error)
 	Balances() (map[enode.ID]int64, error)
 	SentCheque(peer enode.ID) (cheque *Cheque, err error)
+	SentCheques() (map[enode.ID]*Cheque, error)
 	ReceivedCheque(peer enode.ID) (cheque *Cheque, err error)
 }
 
