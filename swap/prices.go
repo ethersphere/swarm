@@ -35,8 +35,8 @@ allowing for a multi-currency design.
 // Placeholder prices
 // Based on a very crude calculation: average monthly cost for bandwidth in the US / average monthly bill for bandwidth in the US
 // 67GB / $190 = $0.35 / GB
-// 0.35 / (1000000000 * 4096) = $0.0000014336 / chunk
-// 0.0000014336 / 166 * 1000000000000000000 = 8636144578.31 Wei / chunk
+// 0.35 / (10^9 * 4096) = $0.0000014336 / chunk
+// 0.0000014336 / 166 * 10^18 = 8636144578.31 Wei / chunk, where 166 is the current Ether price in Dollar
 // RetrieveRequestPrice = 0.1 *  8636144578.31 = 863614458
 // ChunkDeliveryPrice = 0.9 * 8636144578.31 = 7772530120
 const (
