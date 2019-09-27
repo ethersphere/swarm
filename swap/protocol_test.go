@@ -146,8 +146,9 @@ func TestEmitCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	balance := uint64(4200000000)
 	// set balance artificially
-	debitor.setBalance(42)
+	debitor.setBalance(int64(balance))
 	log.Debug("balance", "balance", debitor.getBalance())
 	// a safe check: at this point no cheques should be in the swap
 	if debitor.getLastReceivedCheque() != nil {
@@ -159,9 +160,9 @@ func TestEmitCheque(t *testing.T) {
 		ChequeParams: ChequeParams{
 			Contract:         debitorSwap.GetParams().ContractAddress,
 			Beneficiary:      creditorSwap.owner.address,
-			CumulativePayout: 42,
+			CumulativePayout: balance,
 		},
-		Honey: 42,
+		Honey: balance,
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {
@@ -226,7 +227,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
-	creditor.setBalance(-DefaultPaymentThreshold)
+	creditor.setBalance(-int64(DefaultPaymentThreshold))
 
 	// we expect a cheque at the end of the test, but not yet
 	if creditor.getLastSentCheque() != nil {
@@ -244,7 +245,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	cheque := creditor.getLastSentCheque()
-	expectedAmount := uint64(overDraft) + uint64(DefaultPaymentThreshold)
+	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
 	if cheque.CumulativePayout != expectedAmount {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
 	}
@@ -255,7 +256,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	// do some accounting again to trigger a second cheque
-	if err = debitorSwap.Add(int64(-DefaultPaymentThreshold), creditor.Peer); err != nil {
+	if err = debitorSwap.Add(-int64(DefaultPaymentThreshold), creditor.Peer); err != nil {
 		t.Fatal(err)
 	}
 
