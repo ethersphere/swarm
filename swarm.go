@@ -559,6 +559,9 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
+
+	// this is a workaround disabling syncing altogether from a node but
+	// must be changed when multiple stream implementations are at hand
 	if s.config.SyncEnabled {
 		apis = append(apis, s.streamer.APIs()...)
 	}
