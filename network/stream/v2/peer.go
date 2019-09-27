@@ -142,7 +142,7 @@ func (p *Peer) getOfferOrDrop(ruid uint) (o offer, shouldBreak bool) {
 	p.mtx.RUnlock()
 	if !ok {
 		p.logger.Error("ruid not found, dropping peer", "ruid", ruid)
-		p.Drop()
+		p.Drop("ruid not found")
 		return o, true
 	}
 	return o, false
@@ -156,7 +156,7 @@ func (p *Peer) getWantOrDrop(ruid uint) (w *want, shouldBreak bool) {
 	p.mtx.RUnlock()
 	if !ok {
 		p.logger.Error("ruid not found, dropping peer", "ruid", ruid)
-		p.Drop()
+		p.Drop("ruid not found")
 		return nil, true
 	}
 	return w, false
