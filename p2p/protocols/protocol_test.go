@@ -125,7 +125,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 			case *kill:
 				// demonstrates use of peerPool, killing another peer connection as a response to a message
 				id := msg.C
-				pp.Get(id).Drop()
+				pp.Get(id).Drop("reason")
 				return nil
 
 			case *drop:
