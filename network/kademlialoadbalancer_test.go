@@ -84,7 +84,7 @@ func TestAddedNodesMostSimilar(t *testing.T) {
 	fourthUses := klb.resourceUseStats.getUses(fourth)
 	thirdUses = klb.resourceUseStats.getUses(third)
 	if fourthUses != thirdUses {
-		t.Errorf("Expected %v use for new peer because most similiar is peer 3. Instead %v", thirdUses, fourthUses)
+		t.Errorf("Expected %v use for new peer because most similar is peer 3. Instead %v", thirdUses, fourthUses)
 	}
 
 }
@@ -226,7 +226,7 @@ func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*P
 			return
 		}
 	}
-	for i := po + 1; po < maxPo ; po++ {
+	for i := po + 1; po < maxPo; po++ {
 		bin = tkb.bins[i]
 		for _, peer := range bin {
 			if !consume(peer, po) {
@@ -234,7 +234,7 @@ func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*P
 			}
 		}
 	}
-	for i := po - 1; po >= 0 ; po-- {
+	for i := po - 1; po >= 0; po-- {
 		bin = tkb.bins[i]
 		for _, peer := range bin {
 			if !consume(peer, i) {
@@ -330,7 +330,7 @@ func (tkb *testKademliaBackend) removePeer(peer *Peer) {
 		for i, aPeer := range bin {
 			if aPeer == peer {
 				tkb.bins[po] = append(bin[:i], bin[i+1:]...)
-				if len(tkb.bins[po]) == 0  && tkb.maxPo >= po{
+				if len(tkb.bins[po]) == 0 && tkb.maxPo >= po {
 					tkb.updateMaxPo()
 				}
 				break

@@ -72,7 +72,7 @@ type KademliaLoadBalancer struct {
 	unsubscribeNotifier func()               //an unsubscribe function provided when subscribe to kademlia notifiers
 	quitC               chan struct{}
 
-	initCountFunc       func(peer *Peer, po int) int  //Function to use for initializing a new peer count
+	initCountFunc func(peer *Peer, po int) int //Function to use for initializing a new peer count
 }
 
 // Stop unsubscribe from notifiers
@@ -189,7 +189,6 @@ func (klb *KademliaLoadBalancer) mostSimilarPeerCount(newPeer *Peer, _ int) int 
 	})
 	return count
 }
-
 
 func (klb *KademliaLoadBalancer) removedPeer(peer *Peer) {
 	klb.resourceUseStats.lock.Lock()
