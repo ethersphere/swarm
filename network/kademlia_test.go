@@ -234,10 +234,9 @@ func TestHighMinBinSize(t *testing.T) {
 func TestHealthStrict(t *testing.T) {
 
 	// base address is all ones
-	const base = "11111111"
 	// no peers
 	// unhealthy (and lonely)
-	tk := newTestKademlia(t, base)
+	tk := newTestKademlia(t, "11111111")
 	tk.checkHealth(false)
 
 	// know one peer but not connected
@@ -391,16 +390,14 @@ func binStr(a *BzzAddr) string {
 	return pot.ToBin(a.Address())[:8]
 }
 
-//Tests peerSugestion. Depends on expectedBinSize implementation
-func TestSugestPeersFindPeers(t *testing.T) {
-
+//Tests peer suggestion. Depends on expectedMinBinSize implementation
+func TestSuggestPeersFindPeers(t *testing.T) {
 	base := "00000000"
 	tk := newTestKademlia(t, base)
 
 	//Add peers to bin 2 and 3 in order to be able to have depth 2
 	tk.On("00100000")
 	tk.On("00010000")
-
 	//No unconnected peers
 	tk.checkSuggestPeer("<nil>", 0, false)
 
@@ -425,19 +422,7 @@ func TestSugestPeersFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("01100000", 0, false)
 	tk.On("01100000")
 
-	//Bin1 should be saturated (size == expectedSizeBin1)
-	expectedSizeBin1 := tk.expectedBinSize(1)
-	bin1Consumer := func(bin *pot.Bin) bool {
-		if bin.ProximityOrder == 1 {
-			if bin.Size != expectedSizeBin1 {
-				t.Fatalf("expected size doesnt match size of bin")
-			}
-			return false
-		}
-		return true
-	}
-	tk.conns.EachBin(tk.base, Pof, 0, bin1Consumer)
-
+	//Bin1 should be saturated now (size == expectedSizeBin1)
 	//Next suggestions should all be bin0 peers
 	tk.checkSuggestPeer("11100000", 0, false)
 	tk.On("11100000")
@@ -445,18 +430,6 @@ func TestSugestPeersFindPeers(t *testing.T) {
 	tk.On("11000000")
 
 	//Bin0 should also  be saturated now (size == expectedSizeBin0)
-	expectedSizeBin0 := tk.expectedBinSize(0)
-	bin0Consumer := func(bin *pot.Bin) bool {
-		if bin.ProximityOrder == 0 {
-			if bin.Size != expectedSizeBin0 {
-				t.Fatalf("expectedsize doesnt match size of bin")
-				return false
-			}
-		}
-		return true
-	}
-	tk.conns.EachBin(tk.base, Pof, 0, bin0Consumer)
-
 	//All bins saturated, shouldn't suggest more peers
 	tk.checkSuggestPeer("<nil>", 0, false)
 
@@ -479,17 +452,13 @@ func TestSugestPeersFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("01110000", 1, true)
 	tk.On("01110000")
 
-	//same with the other peer
+	//Same with the other peer
 	tk.On("01000000")
 	tk.Off("01000000")
-	//Peer is callable again, but all bins  saturated. No peer sugested
+	//Peer is callable again, but all bins  saturated. No peer suggested
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 	//Depth is 2
-	depth := depthForPot(tk.conns, tk.NeighbourhoodSize, tk.base)
-	if depth != 2 {
-		t.Fatalf("Expected depth to be 2")
-	}
 	//Since depth is 2, bins >= 2 aren't considered saturated if peers left to connect
 	//We add addresses that fall in bin2 and bin3
 	tk.Register("00111000", "00110000")
@@ -504,19 +473,15 @@ func TestSugestPeersFindPeers(t *testing.T) {
 	tk.On("00011100")
 
 	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2), and shallower bins aren't empty
-	depth = depthForPot(tk.conns, tk.NeighbourhoodSize, tk.base)
-	if depth != 3 {
-		t.Fatalf("Expected depth to be 3")
-	}
-
 	//Bin0 and Bin1 not saturated, Bin2 saturated
 	tk.checkSuggestPeer("01000000", 0, false)
 	tk.On("01000000")
 	tk.checkSuggestPeer("10000000", 0, false)
 	tk.On("10000000")
 
-	//All bins saturated again. Bin0 is saturated (no peers left to add) but less than expectedSize
-	//add some bin0 peers
+	//All bins saturated again
+	//Bin0 is saturated (no peers left to add) but less than expectedSize
+	//Add some bin0 peers
 	tk.Register("11001100", "11111100", "11001111", "10100000")
 
 	//Bin0 is now  unsaturated
@@ -527,48 +492,10 @@ func TestSugestPeersFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("11001100", 0, false)
 	tk.On("11001100")
 
-	//Bin0 saturated (size == expectedSize)
-	expectedSizeBin0 = tk.expectedBinSize(0)
-	tk.conns.EachBin(tk.base, Pof, 0, bin0Consumer)
-
-	//One known peer left to add in bin0 (saturated), shouldn't be suggested
+	//Bin0 saturated now
+	//One known peer left to add in bin0, but since is saturated shouldn't be suggested
 	tk.checkSuggestPeer("<nil>", 0, false)
-}
 
-func TestExpectedBinSize(t *testing.T) {
-	base := "00000000"
-	tk := newTestKademlia(t, base)
-	addresses := addressGenerator(100, base)
-
-	tk.Register(addresses...)
-
-	for range addresses {
-		suggestedPeer, _, _ := tk.SuggestPeer()
-		if suggestedPeer != nil {
-			tk.On(pot.ToBin(suggestedPeer.OAddr))
-		}
-	}
-
-	var binsConns []int
-	var binsAddrs []int
-
-	consumerConns := func(bin *pot.Bin) bool {
-		binsConns = append(binsConns, bin.Size)
-		return true
-	}
-	consumerAddr := func(bin *pot.Bin) bool {
-		binsAddrs = append(binsAddrs, bin.Size)
-		return true
-	}
-	tk.conns.EachBin(tk.base, Pof, 0, consumerConns)
-	tk.addrs.EachBin(tk.base, Pof, 0, consumerAddr)
-
-	for k, v := range binsConns {
-		//If less than expectedBinSize and not all peers added
-		if v < tk.expectedBinSize(k) && v < binsAddrs[k] {
-			t.Fatalf("unexpected number of peers in bin, got %v, expected %v", v, tk.expectedBinSize(k))
-		}
-	}
 }
 
 // a node should stay in the address book if it's removed from the kademlia

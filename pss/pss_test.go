@@ -76,6 +76,7 @@ func initTest() {
 }
 
 // test that API topic conversion functions give predictable results
+
 func TestAPITopic(t *testing.T) {
 
 	api := &API{}
