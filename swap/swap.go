@@ -427,6 +427,38 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
+// SentCheques returns the last sent cheques for all known SWAP peers
+func (s *Swap) SentCheques() (map[enode.ID]*Cheque, error) {
+	cheques := make(map[enode.ID]*Cheque)
+
+	s.peersLock.Lock()
+	for peer, swapPeer := range s.peers {
+		swapPeer.lock.Lock()
+		cheques[peer] = swapPeer.getLastSentCheque()
+		swapPeer.lock.Unlock()
+	}
+	s.peersLock.Unlock()
+
+	// add store cheques, if peer was not already added
+	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peer := keyToID(string(key), balancePrefix)
+		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
+			var peerCheque Cheque
+			err = json.Unmarshal(value, &peerCheque)
+			if err == nil {
+				cheques[peer] = &peerCheque
+			}
+		}
+		return stop, err
+	}
+	err := s.store.Iterate(sentChequePrefix, chequesIterFunction)
+	if err != nil {
+		return nil, err
+	}
+
+	return cheques, nil
+}
+
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
 // and returns nil when there never was a cheque saved
 func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
