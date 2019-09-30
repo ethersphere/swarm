@@ -35,7 +35,6 @@ func (db *DB) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Addres
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
-
 	err = db.set(mode, addrs...)
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
@@ -80,6 +79,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 
 	case chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
 		for _, addr := range addrs {
+
 			c, err := db.setSync(batch, addr, mode)
 			if err != nil {
 				return err
@@ -217,7 +217,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 
 	// moveToGc toggles the deletion of the item from pushsync index
 	// it will be false in the case pull sync was called but push sync was meant on that chunk (!tag.Anonymous)
-	moveToGc := false
+	moveToGc := true
 
 	if db.tags != nil {
 		i, err = db.pushIndex.Get(item)
@@ -231,11 +231,11 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 						// this will not get called twice because we remove the item once after the !moveToGc check
 						tag.Inc(chunk.StateSent)
 						tag.Inc(chunk.StateSynced)
-						moveToGc = true
+					} else {
+						moveToGc = false
 					}
 				case chunk.ModeSetSyncPush:
 					tag.Inc(chunk.StateSynced)
-					moveToGc = true
 				}
 			}
 		case leveldb.ErrNotFound:
