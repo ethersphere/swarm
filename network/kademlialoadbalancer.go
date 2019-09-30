@@ -7,11 +7,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/log"
+
+	"github.com/ethersphere/swarm/network/gopubsub"
 )
 
 // KademliaBackend is the required interface of KademliaLoadBalancer.
 type KademliaBackend interface {
-	SubscribeToPeerChanges() (addedC <-chan newPeerSignal, removedC <-chan *Peer, unsubscribe func())
+	SubscribeToPeerChanges() (addedSub *gopubsub.Subscription, removedPeerSub *gopubsub.Subscription)
 	BaseAddr() []byte
 	EachBinDesc(base []byte, minProximityOrder int, consumer PeerBinConsumer)
 	EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error
@@ -20,14 +22,13 @@ type KademliaBackend interface {
 
 // Creates a new KademliaLoadBalancer from a KademliaBackend
 func NewKademliaLoadBalancer(kademlia KademliaBackend, useMostSimilarInit bool) *KademliaLoadBalancer {
-	chanNewPeerSignals, chanOffPeerSignals, unsubscribe := kademlia.SubscribeToPeerChanges()
+	newPeerSub, offPeerSub := kademlia.SubscribeToPeerChanges()
 	klb := &KademliaLoadBalancer{
-		kademlia:            kademlia,
-		resourceUseStats:    newResourceLoadBalancer(),
-		newPeerChannel:      chanNewPeerSignals,
-		offPeerChannel:      chanOffPeerSignals,
-		unsubscribeNotifier: unsubscribe,
-		quitC:               make(chan struct{}),
+		kademlia:         kademlia,
+		resourceUseStats: newResourceLoadBalancer(),
+		newPeerSub:       newPeerSub,
+		offPeerSub:       offPeerSub,
+		quitC:            make(chan struct{}),
 	}
 	if useMostSimilarInit {
 		klb.initCountFunc = klb.mostSimilarPeerCount
@@ -65,19 +66,19 @@ type LBBinConsumer func(bin LBBin) bool
 // The user of KademliaLoadBalancer should signal if the returned element (LBPeer) has been used with the
 // function lbPeer.Use()
 type KademliaLoadBalancer struct {
-	kademlia            KademliaBackend      //kademlia to obtain bins of peers
-	resourceUseStats    *resourceUseStats    //a resourceUseStats to count uses
-	newPeerChannel      <-chan newPeerSignal //a channel to be notified of new peers in kademlia
-	offPeerChannel      <-chan *Peer         //a channel to be notified of removed peers in kademlia
-	unsubscribeNotifier func()               //an unsubscribe function provided when subscribe to kademlia notifiers
-	quitC               chan struct{}
+	kademlia         KademliaBackend        //kademlia to obtain bins of peers
+	resourceUseStats *resourceUseStats      //a resourceUseStats to count uses
+	newPeerSub       *gopubsub.Subscription //a pubsub channel to be notified of new peers in kademlia
+	offPeerSub       *gopubsub.Subscription //a pubsub channel to be notified of removed peers in kademlia
+	quitC            chan struct{}
 
 	initCountFunc func(peer *Peer, po int) int //Function to use for initializing a new peer count
 }
 
 // Stop unsubscribe from notifiers
 func (klb KademliaLoadBalancer) Stop() {
-	klb.unsubscribeNotifier()
+	klb.newPeerSub.Unsubscribe()
+	klb.offPeerSub.Unsubscribe()
 	close(klb.quitC)
 }
 
@@ -127,7 +128,11 @@ func (klb *KademliaLoadBalancer) listenNewPeers() {
 		select {
 		case <-klb.quitC:
 			return
-		case signal, ok := <-klb.newPeerChannel:
+		case msg, ok := <-klb.newPeerSub.ReceiveChannel():
+			if !ok {
+				return
+			}
+			signal, ok := msg.(newPeerSignal)
 			if !ok {
 				return
 			}
@@ -141,8 +146,9 @@ func (klb *KademliaLoadBalancer) listenOffPeers() {
 		select {
 		case <-klb.quitC:
 			return
-		case peer := <-klb.offPeerChannel:
-			if peer != nil {
+		case msg := <-klb.offPeerSub.ReceiveChannel():
+			peer, ok := msg.(*Peer)
+			if peer != nil && ok {
 				klb.removedPeer(peer)
 			}
 		}

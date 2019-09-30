@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
+
+	"github.com/ethersphere/swarm/network/gopubsub"
 )
 
 // TestAddedNodes checks that when adding a node it is assigned the correct number of uses.
@@ -204,8 +206,8 @@ func TestEachBinFiltered(t *testing.T) {
 
 type testKademliaBackend struct {
 	baseAddr       []byte
-	addedChannel   chan newPeerSignal
-	removedChannel chan *Peer
+	addedChannel   *gopubsub.PubSubChannel
+	removedChannel *gopubsub.PubSubChannel
 	bins           map[int][]*Peer
 	subscribed     bool
 	maxPo          int
@@ -248,8 +250,8 @@ func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*P
 func newTestKademliaBackend(address string) *testKademliaBackend {
 	return &testKademliaBackend{
 		baseAddr:       pot.NewAddressFromString(address),
-		addedChannel:   make(chan newPeerSignal, 1),
-		removedChannel: make(chan *Peer, 1),
+		addedChannel:   gopubsub.New(),
+		removedChannel: gopubsub.New(),
 		bins:           make(map[int][]*Peer),
 	}
 }
@@ -258,14 +260,11 @@ func (tkb testKademliaBackend) BaseAddr() []byte {
 	return tkb.baseAddr
 }
 
-func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedC <-chan newPeerSignal, removedC <-chan *Peer, unsubscribe func()) {
-	unsubscribe = func() {
-		tkb.subscribed = false
-		close(tkb.addedChannel)
-		close(tkb.removedChannel)
-	}
+func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *gopubsub.Subscription, removedPeerSub *gopubsub.Subscription) {
+	addedSub = tkb.addedChannel.Subscribe()
+	removedPeerSub = tkb.removedChannel.Subscribe()
 	tkb.subscribed = true
-	return tkb.addedChannel, tkb.removedChannel, unsubscribe
+	return
 }
 
 func (tkb testKademliaBackend) EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error {
@@ -317,10 +316,10 @@ func (tkb *testKademliaBackend) addPeer(peer *Peer, po int) {
 	}
 	tkb.bins[po] = append(tkb.bins[po], peer)
 	if tkb.subscribed {
-		tkb.addedChannel <- newPeerSignal{
+		tkb.addedChannel.Publish(newPeerSignal{
 			peer: peer,
 			po:   po,
-		}
+		})
 	}
 	time.Sleep(100 * time.Millisecond)
 }
@@ -338,7 +337,7 @@ func (tkb *testKademliaBackend) removePeer(peer *Peer) {
 		}
 	}
 	if tkb.subscribed {
-		tkb.removedChannel <- peer
+		tkb.removedChannel.Publish(peer)
 	}
 }
 
