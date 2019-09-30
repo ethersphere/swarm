@@ -341,7 +341,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
+
 	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
+	w.Header().Set("Access-Control-Expose-Headers", TagHeaderName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -446,6 +449,8 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
+	w.Header().Set("Access-Control-Expose-Headers", TagHeaderName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }
