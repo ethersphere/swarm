@@ -221,11 +221,18 @@ func TestSentCheque(t *testing.T) {
 	// now simulate sending the cheque to the creditor from the debitor
 	creditor.sendCheque()
 
-	if lastCheque, _ := creditorSwap.SentCheque(dPeer.ID()); lastCheque != debitor.getLastReceivedCheque() || lastCheque == nil {
-		if lastCheque == nil {
-			t.Fatalf("Cheque Sent is empty")
-		}
-		t.Fatalf("Last cheque does not match, expected cheque for %v honey, got %v honey", lastCheque.Honey, debitor.getLastReceivedCheque().Honey)
+	lastSentCheque, err := debitorSwap.SentCheque(cPeer.ID())
+
+	if err != nil {
+		t.Fatalf("Could not retrieve last cheque sent %v", err)
+	}
+
+	if lastSentCheque == nil {
+		t.Fatalf("Last cheque sent is empty")
+	}
+
+	if lastSentCheque != creditor.getLastSentCheque() {
+		t.Fatalf("Last cheque does not match, expected cheque for %v honey, got %v honey", lastSentCheque.Honey, debitor.getLastReceivedCheque().Honey)
 	}
 
 }
