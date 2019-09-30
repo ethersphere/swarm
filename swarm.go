@@ -48,7 +48,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
-	"github.com/ethersphere/swarm/network/stream/v2"
+	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	pssmessage "github.com/ethersphere/swarm/pss/message"
@@ -122,11 +122,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
 		swapParams := &swap.Params{
-			OverlayAddr:          common.FromHex(self.config.BzzKey),
-			LogPath:              self.config.SwapLogPath,
-			InitialDepositAmount: self.config.SwapInitialDeposit,
-			DisconnectThreshold:  int64(self.config.SwapDisconnectThreshold),
-			PaymentThreshold:     int64(self.config.SwapPaymentThreshold),
+			OverlayAddr:         common.FromHex(self.config.BzzKey),
+			LogPath:             self.config.SwapLogPath,
+			DisconnectThreshold: int64(self.config.SwapDisconnectThreshold),
+			PaymentThreshold:    int64(self.config.SwapPaymentThreshold),
 		}
 
 		// create the accounting objects
@@ -135,6 +134,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			self.privateKey,
 			self.config.SwapBackendURL,
 			swapParams,
+			self.config.Contract,
+			self.config.SwapInitialDeposit,
 		)
 		if err != nil {
 			return nil, err
@@ -155,6 +156,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,
+		SyncEnabled:  config.SyncEnabled,
 	}
 
 	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -378,14 +380,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().URLv4()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
-	if s.config.SwapEnabled {
-		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
-			return err
-		}
-	} else {
-		log.Info("SWAP disabled: no chequebook set")
-	}
-
 	log.Info("Starting bzz service")
 
 	err := s.bzz.Start(srv)
@@ -567,7 +561,12 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-	apis = append(apis, s.streamer.APIs()...)
+
+	// this is a workaround disabling syncing altogether from a node but
+	// must be changed when multiple stream implementations are at hand
+	if s.config.SyncEnabled {
+		apis = append(apis, s.streamer.APIs()...)
+	}
 	apis = append(apis, s.bzzEth.APIs()...)
 
 	if s.ps != nil {

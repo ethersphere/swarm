@@ -90,12 +90,14 @@ func testDefault(t *testing.T, cluster *testCluster, toEncrypt bool) {
 	flags := []string{
 		"--bzzapi", cluster.Nodes[0].URL,
 		"up",
+		"--no-track",
 		tmpFileName}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
 		flags = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"up",
+			"--no-track",
 			"--encrypt",
 			tmpFileName}
 	}
@@ -204,6 +206,7 @@ func testRecursive(t *testing.T, cluster *testCluster, toEncrypt bool) {
 		"--bzzapi", cluster.Nodes[0].URL,
 		"--recursive",
 		"up",
+		"--no-track",
 		tmpUploadDir}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
@@ -211,6 +214,7 @@ func testRecursive(t *testing.T, cluster *testCluster, toEncrypt bool) {
 			"--bzzapi", cluster.Nodes[0].URL,
 			"--recursive",
 			"up",
+			"--no-track",
 			"--encrypt",
 			tmpUploadDir}
 	}
@@ -311,11 +315,12 @@ func testDefaultPath(t *testing.T, cluster *testCluster, toEncrypt bool, absDefa
 		"--defaultpath",
 		defaultPath,
 		"up",
-		tmp,
+		"--no-track",
 	}
 	if toEncrypt {
 		args = append(args, "--encrypt")
 	}
+	args = append(args, tmp)
 
 	up := runSwarm(t, args...)
 	hashRegexp := `[a-f\d]{64,128}`

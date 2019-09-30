@@ -395,6 +395,32 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 }
 
+// TestClientQueryTagByHash tests that the correct reply is received in regards to a hash of an ongoing upload
+func TestClientQueryTagByHash(t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil, nil)
+	defer srv.Close()
+
+	data := []byte("foo123")
+	client := NewClient(srv.URL)
+
+	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tagg, err := client.TagByHash(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check the tag was created successfully
+	tag := srv.Tags.All()[0]
+	chunktesting.CheckTag(t, tag, 1, 1, 0, 1, 0, 1)
+
+	// check that the tag we got back from the API is also correct
+	chunktesting.CheckTag(t, tagg, 1, 1, 0, 1, 0, 1)
+}
+
 func newTestSigner() (*feed.GenericSigner, error) {
 	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err != nil {

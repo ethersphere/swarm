@@ -45,22 +45,6 @@ type Backend interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 }
 
-// Deploy deploys an instance of the underlying contract and returns its `Contract` abstraction
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
-	addr, tx, s, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: s, address: addr}
-	return c, tx, err
-}
-
-// InstanceAt creates a new instance of a contract at a specific address.
-// It assumes that there is an existing contract instance at the given address, or an error is returned
-// This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
-func InstanceAt(address common.Address, backend bind.ContractBackend) (Contract, error) {
-	simple, err := contract.NewSimpleSwap(address, backend)
-	c := simpleContract{instance: simple, address: address}
-	return c, err
-}
-
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
@@ -94,6 +78,25 @@ type Params struct {
 type simpleContract struct {
 	instance *contract.SimpleSwap
 	address  common.Address
+}
+
+// Deploy deploys an instance of the underlying contract and returns its instance and the transaction identifier
+func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
+	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
+	c := simpleContract{instance: instance, address: addr}
+	return c, tx, err
+}
+
+// InstanceAt creates a new instance of a contract at a specific address.
+// It assumes that there is an existing contract instance at the given address, or an error is returned
+// This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
+func InstanceAt(address common.Address, backend Backend) (Contract, error) {
+	instance, err := contract.NewSimpleSwap(address, backend)
+	if err != nil {
+		return nil, err
+	}
+	c := simpleContract{instance: instance, address: address}
+	return c, err
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
