@@ -575,11 +575,11 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDura
 			time.Sleep(deployDelay)
 		}
 		if instance, tx, err = contract.Deploy(opts, s.backend, s.owner.address, defaultHarddepositTimeoutDuration); err != nil {
-			s.logger.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+			s.logger.Warn("can't send chequebook deploy tx, retrying...", "try", try, "error", err)
 			continue
 		}
 		if _, err := bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
-			s.logger.Warn("chequebook deploy error", "try", try, "error", err)
+			s.logger.Warn("chequebook deploy error, retrying...", "try", try, "error", err)
 			continue
 		}
 		return instance, nil
