@@ -76,7 +76,7 @@ func TestModeGetRequest(t *testing.T) {
 	})
 
 	// set chunk to synced state
-	err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}

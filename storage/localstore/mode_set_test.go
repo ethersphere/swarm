@@ -63,8 +63,8 @@ func TestModeSetAccess(t *testing.T) {
 	}
 }
 
-// TestModeSetSync validates ModeSetSync index values on the provided DB.
-func TestModeSetSync(t *testing.T) {
+// TestModeSetSyncPull validates ModeSetSyncPull index values on the provided DB.
+func TestModeSetSyncPull(t *testing.T) {
 	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db, cleanupFunc := newTestDB(t, nil)
@@ -82,7 +82,49 @@ func TestModeSetSync(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = db.Set(context.Background(), chunk.ModeSetSync, chunkAddresses(chunks)...)
+			err = db.Set(context.Background(), chunk.ModeSetSyncPull, chunkAddresses(chunks)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			binIDs := make(map[uint8]uint64)
+
+			for _, ch := range chunks {
+				po := db.po(ch.Address())
+				binIDs[po]++
+
+				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
+				newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
+				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+			}
+
+			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+
+			t.Run("gc size", newIndexGCSizeTest(db))
+		})
+	}
+}
+
+// TestModeSetSyncPush validates ModeSetSyncPush index values on the provided DB.
+func TestModeSetSyncPush(t *testing.T) {
+	for _, tc := range multiChunkTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
+
+			chunks := generateTestRandomChunks(tc.count)
+
+			wantTimestamp := time.Now().UTC().UnixNano()
+			defer setNow(func() (t int64) {
+				return wantTimestamp
+			})()
+
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = db.Set(context.Background(), chunk.ModeSetSyncPush, chunkAddresses(chunks)...)
 			if err != nil {
 				t.Fatal(err)
 			}

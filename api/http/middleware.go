@@ -132,7 +132,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 		}
 
 		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
-		anon := anonTag == "true"
+		anon := strings.ToLower(anonTag) == "true"
 		t, err := tags.Create(tagName, estimatedTotal, anon)
 		if err != nil {
 			log.Error("error creating tag", "err", err, "tagName", tagName)
