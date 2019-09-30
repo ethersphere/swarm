@@ -151,8 +151,9 @@ func new(stateStore state.Store, owner *Owner, backend contract.Backend, params 
 // - verifies that we have not connected SWAP before on a different blockchain backend;
 // - starts the chequebook; creates the swap instance
 func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (swap *Swap, err error) {
-	// verify that backendURL is not empty
+	// swap log for auditing purposes
 	swapLogger := newSwapLogger(params.LogPath, params.OverlayAddr)
+	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
