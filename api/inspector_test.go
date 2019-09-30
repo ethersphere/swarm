@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ethersphere/swarm/network"
-	stream "github.com/ethersphere/swarm/network/stream/v2"
+	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 

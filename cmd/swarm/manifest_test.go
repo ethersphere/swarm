@@ -100,11 +100,12 @@ func testManifestChange(t *testing.T, encrypt bool) {
 		"--defaultpath",
 		indexDataFilename,
 		"up",
-		origDir,
+		"--no-track",
 	}
 	if encrypt {
 		args = append(args, "--encrypt")
 	}
+	args = append(args, origDir)
 
 	origManifestHash := runSwarmExpectHash(t, args...)
 
@@ -125,6 +126,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
+			"--no-track",
 			humansDataFilename,
 		)
 
@@ -180,6 +182,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
+			"--no-track",
 			robotsDataFilename,
 		)
 
@@ -240,6 +243,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
+			"--no-track",
 			indexDataFilename,
 		)
 
@@ -298,6 +302,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
+			"--no-track",
 			robotsDataFilename,
 		)
 
@@ -464,12 +469,12 @@ func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 		"--defaultpath",
 		indexDataFilename,
 		"up",
-		origDir,
+		"--no-track",
 	}
 	if encrypt {
 		args = append(args, "--encrypt")
 	}
-
+	args = append(args, origDir)
 	origManifestHash := runSwarmExpectHash(t, args...)
 
 	checkHashLength(t, origManifestHash, encrypt)
@@ -487,6 +492,7 @@ func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 		"--bzzapi",
 		srv.URL,
 		"up",
+		"--no-track",
 		newIndexDataFilename,
 	)
 

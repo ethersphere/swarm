@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/api"
 	swarmhttp "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/pborman/uuid"
@@ -658,6 +659,33 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 		return "", err
 	}
 	return string(data), nil
+}
+
+// TagByHash queries the Swarm node for the state of the tag associated with the hash
+// this is used to poll progress while push-syncing
+func (c *Client) TagByHash(hash string) (*chunk.Tag, error) {
+	req, err := http.NewRequest("GET", c.Gateway+"/bzz-tag:/"+hash, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
+	}
+	data, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	tag := &chunk.Tag{}
+	err = json.Unmarshal(data, tag)
+
+	return tag, err
 }
 
 // ErrNoFeedUpdatesFound is returned when Swarm cannot find updates of the given feed
