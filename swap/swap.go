@@ -320,6 +320,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
 		opts := bind.NewKeyedTransactor(s.owner.privateKey)
 		opts.Context = ctx
+		opts.GasPrice = big.NewInt(20000000000)
 		// cash cheque in async, otherwise this blocks here until the TX is mined
 		go defaultCashCheque(s, otherSwap, opts, cheque)
 	}
@@ -662,6 +663,7 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contrac
 	// initial topup value
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
+	opts.GasPrice = big.NewInt(20000000000) // very high value for now
 	auditLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
 	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
 }
