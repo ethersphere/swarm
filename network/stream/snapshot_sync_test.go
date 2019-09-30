@@ -106,7 +106,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
-	filename := fmt.Sprintf("../testdata/snapshot_%d.json", nodeCount)
+	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
 	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
