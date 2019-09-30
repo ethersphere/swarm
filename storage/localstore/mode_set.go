@@ -78,7 +78,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 			db.binIDs.PutInBatch(batch, uint64(po), id)
 		}
 
-	case chunk.ModeSetSync, chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
+	case chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
 		for _, addr := range addrs {
 			c, err := db.setSync(batch, addr, mode)
 			if err != nil {
@@ -228,8 +228,9 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 				switch mode {
 				case chunk.ModeSetSyncPull:
 					if tag.Anonymous {
-						// this will not get called twice because we remove the item in L217
+						// this will not get called twice because we remove the item once after the !moveToGc check
 						tag.Inc(chunk.StateSent)
+						tag.Inc(chunk.StateSynced)
 						moveToGc = true
 					}
 				case chunk.ModeSetSyncPush:

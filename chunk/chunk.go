@@ -212,8 +212,10 @@ func (m ModeSet) String() string {
 	switch m {
 	case ModeSetAccess:
 		return "Access"
-	case ModeSetSync:
-		return "Sync"
+	case ModeSetSyncPush:
+		return "SyncPush"
+	case ModeSetSyncPull:
+		return "SyncPull"
 	case ModeSetRemove:
 		return "Remove"
 	case ModeSetPin:
@@ -229,9 +231,9 @@ func (m ModeSet) String() string {
 const (
 	// ModeSetAccess: when an update request is received for a chunk or chunk is retrieved for delivery
 	ModeSetAccess ModeSet = iota
-	// ModeSetSync: when a chunk is added to a pull sync batch or when a push sync receipt is received
-	ModeSetSync
+	// ModeSetSyncPush: when a push sync receipt is received for a chunk
 	ModeSetSyncPush
+	// ModeSetSyncPull: when a chunk is added to a pull sync batch
 	ModeSetSyncPull
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove

@@ -191,7 +191,7 @@ func (p *Pusher) sync() {
 				}
 
 				// set chunk status to synced, insert to db GC index
-				if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
 					log.Error("pushsync: error setting chunks to synced", "err", err)
 				}
 
