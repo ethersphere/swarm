@@ -76,8 +76,8 @@ type Owner struct {
 // Params encapsulates param
 type Params struct {
 	LogPath             string // optional audit log path
-	PaymentThreshold    int64  // honey amount at which a payment is triggered
-	DisconnectThreshold int64  // honey amount at which a peer disconnects
+	PaymentThreshold    uint64 // honey amount at which a payment is triggered
+	DisconnectThreshold uint64 // honey amount at which a peer disconnects
 }
 
 // newLogger returns a new logger
@@ -204,7 +204,7 @@ func checkChainID(currentChainID uint64, s state.Store) (err error) {
 		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentChainID)
 	}
 	if err == state.ErrNotFound {
-		auditLog.Info("First time connected to SWAP. Storing chain ID", currentChainID)
+		auditLog.Info("First time connected to SWAP. Storing chain ID", "ID", currentChainID)
 		return s.Put(connectedBlockchainKey, currentChainID)
 	}
 	return nil
@@ -251,7 +251,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 	// Check if balance with peer is over the disconnect threshold
 	balance := swapPeer.getBalance()
-	if balance >= s.params.DisconnectThreshold {
+	if balance >= int64(s.params.DisconnectThreshold) {
 		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
 	}
 
@@ -262,7 +262,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
+	if swapPeer.getBalance() <= -int64(s.params.PaymentThreshold) {
 		auditLog.Info("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.params.PaymentThreshold)
 		return swapPeer.sendCheque()
 	}
@@ -305,16 +305,24 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	opts := bind.NewKeyedTransactor(s.owner.privateKey)
-	opts.Context = ctx
-
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
 		return err
 	}
 
-	// cash cheque in async, otherwise this blocks here until the TX is mined
-	go defaultCashCheque(s, otherSwap, opts, cheque)
+	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
+	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
+	if err != nil {
+		return err
+	}
+	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
+	// do a payout transaction if we get 2 times the gas costs
+	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
+		opts := bind.NewKeyedTransactor(s.owner.privateKey)
+		opts.Context = ctx
+		// cash cheque in async, otherwise this blocks here until the TX is mined
+		go defaultCashCheque(s, otherSwap, opts, cheque)
+	}
 
 	return err
 }
