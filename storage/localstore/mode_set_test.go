@@ -65,42 +65,72 @@ func TestModeSetAccess(t *testing.T) {
 
 // TestModeSetSyncPull validates ModeSetSyncPull index values on the provided DB.
 func TestModeSetSyncPull(t *testing.T) {
-	for _, tc := range multiChunkTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db, cleanupFunc := newTestDB(t, nil)
-			defer cleanupFunc()
+	defer func(f func() uint32) {
+		chunk.TagUidFunc = f
+	}(chunk.TagUidFunc)
 
-			chunks := generateTestRandomChunks(tc.count)
+	chunk.TagUidFunc = func() uint32 { return 0 }
 
-			wantTimestamp := time.Now().UTC().UnixNano()
-			defer setNow(func() (t int64) {
-				return wantTimestamp
-			})()
+	for _, mtc := range []struct {
+		name      string
+		anonymous bool
+	}{
+		{
+			name:      "normal tag",
+			anonymous: false,
+		},
+		{
+			name:      "anonymous tag",
+			anonymous: true,
+		},
+	} {
+		t.Run(mtc.name, func(t *testing.T) {
+			for _, tc := range multiChunkTestCases {
+				t.Run(tc.name, func(t *testing.T) {
+					db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+					defer cleanupFunc()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
-			if err != nil {
-				t.Fatal(err)
+					tag, err := db.tags.Create(mtc.name, int64(tc.count), mtc.anonymous)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if tag.Uid != 0 {
+						t.Fatal("expected mock tag uid")
+					}
+
+					chunks := generateTestRandomChunks(tc.count)
+
+					wantTimestamp := time.Now().UTC().UnixNano()
+					defer setNow(func() (t int64) {
+						return wantTimestamp
+					})()
+
+					_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					err = db.Set(context.Background(), chunk.ModeSetSyncPull, chunkAddresses(chunks)...)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					binIDs := make(map[uint8]uint64)
+
+					for _, ch := range chunks {
+						po := db.po(ch.Address())
+						binIDs[po]++
+
+						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
+						newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
+						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+					}
+
+					t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+
+					t.Run("gc size", newIndexGCSizeTest(db))
+				})
 			}
-
-			err = db.Set(context.Background(), chunk.ModeSetSyncPull, chunkAddresses(chunks)...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			binIDs := make(map[uint8]uint64)
-
-			for _, ch := range chunks {
-				po := db.po(ch.Address())
-				binIDs[po]++
-
-				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-				newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
-				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
-			}
-
-			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
-
-			t.Run("gc size", newIndexGCSizeTest(db))
 		})
 	}
 }
