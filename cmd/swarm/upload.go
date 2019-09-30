@@ -48,7 +48,7 @@ var (
 		Name:               "up",
 		Usage:              "uploads a file or directory to swarm using the HTTP API",
 		ArgsUsage:          "<file>",
-		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmNoTrackUploadFlag},
+		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmNoTrackUploadFlag, SwarmVerboseFlag},
 		Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 	}
 
@@ -73,7 +73,7 @@ func upload(ctx *cli.Context) {
 		defaultPath     = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 		fromStdin       = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 		mimeType        = ctx.GlobalString(SwarmUploadMimeType.Name)
-		debug           = ctx.GlobalBool("debug")
+		verbose         = ctx.Bool(SwarmVerboseFlag.Name)
 		client          = swarm.NewClient(bzzapi)
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
 		toPin           = ctx.Bool(SwarmPinFlag.Name)
@@ -81,7 +81,7 @@ func upload(ctx *cli.Context) {
 		autoDefaultPath = false
 		file            string
 	)
-	if !debug {
+	if !verbose {
 		chunkStates = chunkStates[3:] // just poll Synced state
 	}
 	if autoDefaultPathString := os.Getenv(SwarmAutoDefaultPath); autoDefaultPathString != "" {
@@ -198,15 +198,15 @@ func upload(ctx *cli.Context) {
 	seen, total, err := tag.Status(chunk.StateSeen)
 	if total-seen > 0 {
 		fmt.Println("Upload status:")
-		bars := createTagBars(tag, debug)
-		pollTag(client, tag, bars, debug)
+		bars := createTagBars(tag, verbose)
+		pollTag(client, tag, bars)
 	}
 
 	fmt.Println("Done! took", time.Since(tag.StartedAt))
 	fmt.Println("Your Swarm hash should now be retrievable from other nodes!")
 }
 
-func pollTag(client *client.Client, tag *chunk.Tag, bars map[string]*mpb.Bar, debug bool) {
+func pollTag(client *client.Client, tag *chunk.Tag, bars map[string]*mpb.Bar) {
 	oldTag := *tag
 	lastTime := time.Now()
 
@@ -243,7 +243,7 @@ func pollTag(client *client.Client, tag *chunk.Tag, bars map[string]*mpb.Bar, de
 	}
 }
 
-func createTagBars(tag *chunk.Tag, debug bool) map[string]*mpb.Bar {
+func createTagBars(tag *chunk.Tag, verbose bool) map[string]*mpb.Bar {
 	p := mpb.New(mpb.WithWidth(64))
 	bars := make(map[string]*mpb.Bar)
 	for _, state := range chunkStates {
@@ -254,7 +254,7 @@ func createTagBars(tag *chunk.Tag, debug bool) map[string]*mpb.Bar {
 		title := state.name
 		var barElement *mpb.Bar
 		width := 10
-		if debug {
+		if verbose {
 			barElement = p.AddBar(total,
 				mpb.PrependDecorators(
 					// align the elements with a constant size (10 chars)

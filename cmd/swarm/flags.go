@@ -237,4 +237,8 @@ var (
 		Name:  "no-track",
 		Usage: "Use this flag to disable tracking of the upload progress through the CLI (gives back a machine-readable content addressed hash)",
 	}
+	SwarmVerboseFlag = cli.BoolFlag{
+		Name:  "verbose",
+		Usage: "Display more verbose output",
+	}
 )
