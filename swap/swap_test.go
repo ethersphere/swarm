@@ -177,6 +177,59 @@ func TestAllBalances(t *testing.T) {
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
+// SentCheque verifies that the cheques have been sent correctly to peer
+func TestSentCheque(t *testing.T) {
+	// create both test swap accounts
+	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
+	debitorSwap, clean2 := newTestSwap(t, ownerKey)
+	defer clean1()
+	defer clean2()
+
+	ctx := context.Background()
+	err := testDeploy(ctx, creditorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create Peer instances
+	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
+	// so creditor is the model of the remote mode for the debitor! (and vice versa)
+	cPeer := newDummyPeerWithSpec(Spec)
+	dPeer := newDummyPeerWithSpec(Spec)
+	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// set balances arbitrarily
+	testAmount := int64(DefaultPaymentThreshold + 42)
+	debitor.setBalance(testAmount)
+	creditor.setBalance(-testAmount)
+
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	// now simulate sending the cheque to the creditor from the debitor
+	creditor.sendCheque()
+
+	if lastCheque, _ := creditorSwap.SentCheque(dPeer.ID()); lastCheque != debitor.getLastReceivedCheque() || lastCheque == nil {
+		if lastCheque == nil {
+			t.Fatalf("Cheque Sent is empty")
+		}
+		t.Fatalf("Last cheque does not match, expected cheque for %v honey, got %v honey", lastCheque.Honey, debitor.getLastReceivedCheque().Honey)
+	}
+
+}
+
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
 	t.Helper()
 	balances, err := swap.Balances()
