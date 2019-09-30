@@ -1,4 +1,4 @@
-## v0.5.0 (September xx, 2019)
+## v0.5.0 (September 30, 2019)
 
  ### Notes
 
@@ -12,7 +12,7 @@
 The following features are **experimental** and are **not enabled by default on our public testnet**. If you want to test these features, make sure to use a separate network (e.g. create your own swarm cluster) and set the same feature flags on all nodes.
 
  - **Push sync:** Additionally to our previous syncing algorithm, pull sync, we now also have "push sync" as an option available to synchronise the content across nodes. If you want to try it out, you have to start you swarm node with `--sync-mode=all`.
- - **Progress bar via Tags:** [Tags](##put-link-to-tags-docs) allow you to track the progress on content uploads. When using `swarm up`, you can now use the `--track` flag to see the upload progress. This feature requires push sync to be enabled.
+ - **Progress bar via Tags:** [Tags](https://swarm-guide.readthedocs.io/en/latest/dapp_developer/index.html#tags) allow you to track the progress on content uploads. When using `swarm up`, you can now use the `--track` flag to see the upload progress. This feature requires push sync to be enabled.
  - **SWAP:** A first version of of the SWarm Accounting Protocol (SWAP) is implemented. SWAP is a tit-for-tat incentive system where nodes account how much data they request and serve to their peers. If a node consumes significantly more than it provides, it pays for the consumed data using a L2 payment system: the chequebook. You can try SWAP on a SWAP enabled network with the flags --swap --swap-backend-url=<evm_endpoint> or learn more in the [SW3 paper](https://www.overleaf.com/read/yszmsdqyqbvc) , [Swap, Swear, and Swindle Games video](https://www.youtube.com/watch?v=9Cgyhsjsfbg) or [this article](https://www.rifos.org/blog/rif-storage-the-first-chunks/). The economics of this system is still in a highly experimental state
 - **BzzEth:**
 
@@ -20,6 +20,8 @@ The following features are **experimental** and are **not enabled by default on 
 - <TODO>
 
  ### Commits
+* [#1814](https://github.com/ethersphere/swarm/pull/1814) cmd/swarm: add cli UI for tag progress on pushsync
+* [#1793](https://github.com/ethersphere/swarm/pull/1793) cmd/swarm-smoke: add flag to bail on error
 * [#1835](https://github.com/ethersphere/swarm/pull/1835) p2p: fix tests due to Drop signature change
 * [#1834](https://github.com/ethersphere/swarm/pull/1834) network: disable stream spec in bzz if pull sync is not enabled
 * [#1832](https://github.com/ethersphere/swarm/pull/1832) network/stream: skip longrunning simulation due to travis flakes
