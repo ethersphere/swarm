@@ -260,7 +260,7 @@ func (h *Hive) loadPeers() error {
 	err = h.Store.Get(connectionsKey, &conns)
 	if err != nil {
 		if err == state.ErrNotFound {
-			log.Info(fmt.Sprintf("hive %08x: no persisted peerc onnections found", h.BaseAddr()[:4]))
+			log.Info(fmt.Sprintf("hive %08x: no persisted peer connections found", h.BaseAddr()[:4]))
 		} else {
 			log.Warn(fmt.Sprintf("hive %08x: error loading connections: %v", h.BaseAddr()[:4], err))
 		}
@@ -300,10 +300,6 @@ func (h *Hive) savePeers() error {
 	})
 
 	h.Kademlia.EachConn(nil, 256, func(p *Peer, i int) bool {
-		if p == nil {
-			log.Warn(fmt.Sprintf("empty peer: %v", i))
-			return true
-		}
 		log.Trace("saving connected peer", "OAddr", hexutil.Encode(p.OAddr), "UAddr", p.UAddr)
 		conns = append(conns, p.BzzAddr)
 		return true
