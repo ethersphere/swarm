@@ -177,7 +177,11 @@ func TestAllBalances(t *testing.T) {
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
-// SentCheque verifies that the cheques have been sent correctly to peer
+// TestSentCheque verifies that sent cheques data is correctly obtained
+// The test deploys creates swap instances for each node,
+// deploys simulated contracts, sets the balance of each
+// other node to some arbitrary number above thresholds,
+// and then calls `sendCheque` and `SentCheque` to verify correctness
 func TestSentCheque(t *testing.T) {
 	// create both test swap accounts
 	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
@@ -234,7 +238,50 @@ func TestSentCheque(t *testing.T) {
 	if lastSentCheque != creditor.getLastSentCheque() {
 		t.Fatalf("Last cheque does not match, expected cheque for %v honey, got %v honey", lastSentCheque.Honey, debitor.getLastReceivedCheque().Honey)
 	}
+}
 
+// Test getting cheques for all known peers
+func TestAllCheques(t *testing.T) {
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+
+	sentCheques, err := swap.SentCheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sentCheques) != 0 {
+		t.Fatalf("Expected sent cheques to be empty, but are %v", sentCheques)
+	}
+
+	receivedCheques, err := swap.ReceivedCheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(receivedCheques) != 0 {
+		t.Fatalf("Expected received cheques to be empty, but are %v", receivedCheques)
+	}
+
+	// test balance addition for peer
+	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cheque := newRandomTestCheque()
+	testPeer.setLastReceivedCheque(cheque)
+	//testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): cheque})
+
+	// test successive balance addition for peer
+	// testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// testPeer2.setBalance(909)
+	// testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
+
+	// // test balance change for peer
+	// testPeer.setBalance(303)
+	// testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
 func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
@@ -974,6 +1021,22 @@ func newTestCheque() *Cheque {
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
+	}
+
+	return cheque
+}
+
+// creates a randomized cheque structure for testing
+func newRandomTestCheque() *Cheque {
+	amount := mrand.Intn(100)
+
+	cheque := &Cheque{
+		ChequeParams: ChequeParams{
+			Contract:         testChequeContract,
+			CumulativePayout: uint64(amount),
+			Beneficiary:      beneficiaryAddress,
+		},
+		Honey: uint64(amount),
 	}
 
 	return cheque
