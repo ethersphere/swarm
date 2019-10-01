@@ -29,6 +29,9 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
+const connectionsKey = "conns"
+const addressesKey = "peers"
+
 /*
 Hive is the logistic manager of the swarm
 
@@ -155,12 +158,12 @@ func (h *Hive) tickHive() {
 		underA := addr.Under()
 		s := string(underA)
 		under, err := enode.ParseV4(s)
-		if err == nil {
-			log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-			h.addPeer(under)
-		} else {
+		if err != nil {
 			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
+			return
 		}
+		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+		h.addPeer(under)
 	}
 }
 
@@ -235,7 +238,7 @@ func (h *Hive) Peer(id enode.ID) *BzzPeer {
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
 	var as []*BzzAddr
-	err := h.Store.Get("peers", &as)
+	err := h.Store.Get(addressesKey, &as)
 	if err != nil {
 		if err == state.ErrNotFound {
 			log.Info(fmt.Sprintf("hive %08x: no persisted peers found", h.BaseAddr()[:4]))
@@ -254,7 +257,7 @@ func (h *Hive) loadPeers() error {
 	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
 	errRegistering := h.Register(as...)
 	var conns []*BzzAddr
-	err = h.Store.Get("conns", &conns)
+	err = h.Store.Get(connectionsKey, &conns)
 	if err != nil {
 		if err == state.ErrNotFound {
 			log.Info(fmt.Sprintf("hive %08x: no persisted peerc onnections found", h.BaseAddr()[:4]))
@@ -263,22 +266,22 @@ func (h *Hive) loadPeers() error {
 		}
 
 	} else {
-		go h.suggestInitialPeers(conns)
+		go h.connectInitialPeers(conns)
 	}
 	return errRegistering
 }
 
-func (h *Hive) suggestInitialPeers(conns []*BzzAddr) {
-	log.Info(fmt.Sprintf("%08x hive suggestInitialPeers() With %v saved connections", h.BaseAddr()[:4], len(conns)))
+func (h *Hive) connectInitialPeers(conns []*BzzAddr) {
+	log.Info(fmt.Sprintf("%08x hive connectInitialPeers() With %v saved connections", h.BaseAddr()[:4], len(conns)))
 	for _, addr := range conns {
 		log.Trace(fmt.Sprintf("%08x hive connect() suggested initial %08x", h.BaseAddr()[:4], addr.Address()[:4]))
 		under, err := enode.ParseV4(string(addr.Under()))
-		if err == nil {
-			log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-			h.addPeer(under)
-		} else {
+		if err != nil {
 			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
+			continue
 		}
+		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+		h.addPeer(under)
 	}
 }
 
@@ -305,11 +308,11 @@ func (h *Hive) savePeers() error {
 		conns = append(conns, p.BzzAddr)
 		return true
 	})
-	if err := h.Store.Put("peers", peers); err != nil {
+	if err := h.Store.Put(addressesKey, peers); err != nil {
 		return fmt.Errorf("could not save peers: %v", err)
 	}
 
-	if err := h.Store.Put("conns", conns); err != nil {
+	if err := h.Store.Put(connectionsKey, conns); err != nil {
 		return fmt.Errorf("could not save peer connections: %v", err)
 	}
 	return nil
