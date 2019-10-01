@@ -1149,23 +1149,11 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	return swap, dir
 }
 
-<<<<<<< HEAD
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
 func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) (*Swap, string) {
 	params := newDefaultParams()
 	return newBaseTestSwapWithParams(t, key, params, backend)
-=======
-	// Dir for storing swap related logs
-	logdir, err := ioutil.TempDir("", "swap_test_log")
-	log.Debug("creating swap log dir")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	swap := new(logdir, stateStore, key, backend, DefaultDisconnectThreshold, DefaultPaymentThreshold)
-	return swap, dir, logdir
->>>>>>> swap: rebased to latest master
 }
 
 // create a test swap account with a backend
@@ -1733,7 +1721,6 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 }
 
 func TestSwapLogToFile(t *testing.T) {
-<<<<<<< HEAD
 	// create a log dir
 	logDirDebitor, err := ioutil.TempDir("", "swap_test_log")
 	log.Debug("creating swap log dir")
@@ -1752,14 +1739,6 @@ func TestSwapLogToFile(t *testing.T) {
 	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
 	// we are only checking one of the two nodes for logs
 	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params, testBackend)
-=======
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
-	// create both test swap accounts
-	creditorSwap, storeDirCreditor, logDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
-	debitorSwap, storeDirDebitor, logDirDebitor := newBaseTestSwap(t, ownerKey, testBackend)
->>>>>>> swap: rebased to latest master
 
 	clean := func() {
 		creditorSwap.Close()
