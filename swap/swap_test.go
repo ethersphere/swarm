@@ -344,24 +344,33 @@ func TestAllCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// generate a random cheque for testing
-	cheque := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(cheque)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): cheque})
+	// generate a random cheque as received
+	receivedCheque := newRandomTestCheque()
+	testPeer.setLastReceivedCheque(receivedCheque)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque})
+	// generate a random cheque as sent for the same peer
+	sentCheque := newRandomTestCheque()
+	testPeer.setLastSentCheque(sentCheque)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque})
 
-	//test successive balance addition for peer
+	// test successive cheque addition for peer
 	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cheque2 := newRandomTestCheque()
-	testPeer2.setLastReceivedCheque(cheque2)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): cheque, testPeer2.ID(): cheque2})
+	receivedCheque2 := newRandomTestCheque()
+	testPeer2.setLastReceivedCheque(receivedCheque2)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque, testPeer2.ID(): receivedCheque2})
 
-	// test balance change for peer
-	cheque3 := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(cheque3)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): cheque3, testPeer2.ID(): cheque2})
+	// test cheque change for peer
+	receivedCheque3 := newRandomTestCheque()
+	testPeer.setLastReceivedCheque(receivedCheque3)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
+
+	// test cheque change for peer
+	sentCheque2 := newRandomTestCheque()
+	testPeer.setLastSentCheque(sentCheque2)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
 }
 
 func testCheques(t *testing.T, swap *Swap, expectedSentCheques map[enode.ID]*Cheque, expectedReceivedCheques map[enode.ID]*Cheque) {
