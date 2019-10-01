@@ -177,6 +177,17 @@ func TestAllBalances(t *testing.T) {
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
+func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
+	t.Helper()
+	balances, err := swap.Balances()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(balances, expectedBalances) {
+		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
+	}
+}
+
 // TestSentCheque verifies that sent cheques data is correctly obtained
 // The test deploys creates swap instances for each node,
 // deploys simulated contracts, sets the balance of each
@@ -262,36 +273,46 @@ func TestAllCheques(t *testing.T) {
 		t.Fatalf("Expected received cheques to be empty, but are %v", receivedCheques)
 	}
 
-	// test balance addition for peer
+	// test cheque addition for peer
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// generate a random cheque for testing
 	cheque := newRandomTestCheque()
 	testPeer.setLastReceivedCheque(cheque)
-	//testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): cheque})
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): cheque})
 
-	// test successive balance addition for peer
-	// testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// testPeer2.setBalance(909)
-	// testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
-
-	// // test balance change for peer
-	// testPeer.setBalance(303)
-	// testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
-}
-
-func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
-	t.Helper()
-	balances, err := swap.Balances()
+	//test successive balance addition for peer
+	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(balances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
+	cheque2 := newRandomTestCheque()
+	testPeer2.setLastReceivedCheque(cheque2)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): cheque, testPeer2.ID(): cheque2})
+
+	// test balance change for peer
+	cheque3 := newRandomTestCheque()
+	testPeer.setLastReceivedCheque(cheque3)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): cheque3, testPeer2.ID(): cheque2})
+}
+
+func testCheques(t *testing.T, swap *Swap, expectedSentCheques map[enode.ID]*Cheque, expectedReceivedCheques map[enode.ID]*Cheque) {
+	t.Helper()
+	sentCheques, err := swap.SentCheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(sentCheques, expectedSentCheques) {
+		t.Fatalf("Expected node's sent cheques to be %v, but are %v", expectedSentCheques, sentCheques)
+	}
+	receivedCheques, err := swap.ReceivedCheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(receivedCheques, expectedReceivedCheques) {
+		t.Fatalf("Expected node's received cheques to be %v, but are %v", expectedReceivedCheques, receivedCheques)
 	}
 }
 
