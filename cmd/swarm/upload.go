@@ -28,23 +28,41 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/api/client"
 	swarm "github.com/ethersphere/swarm/api/client"
+	"github.com/ethersphere/swarm/chunk"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
-var upCommand = cli.Command{
-	Action:             upload,
-	CustomHelpTemplate: helpTemplate,
-	Name:               "up",
-	Usage:              "uploads a file or directory to swarm using the HTTP API",
-	ArgsUsage:          "<file>",
-	Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag},
-	Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
-}
+var (
+	upCommand = cli.Command{
+		Action:             upload,
+		CustomHelpTemplate: helpTemplate,
+		Name:               "up",
+		Usage:              "uploads a file or directory to swarm using the HTTP API",
+		ArgsUsage:          "<file>",
+		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmNoTrackUploadFlag, SwarmVerboseFlag},
+		Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
+	}
+
+	pollDelay   = 200 * time.Millisecond
+	chunkStates = []struct {
+		name  string
+		state chunk.State
+	}{
+		{"Split", chunk.StateSplit},
+		{"Stored", chunk.StateStored},
+		{"Sent", chunk.StateSent},
+		{"Synced", chunk.StateSynced},
+	}
+)
 
 func upload(ctx *cli.Context) {
 	args := ctx.Args()
@@ -55,12 +73,17 @@ func upload(ctx *cli.Context) {
 		defaultPath     = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 		fromStdin       = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 		mimeType        = ctx.GlobalString(SwarmUploadMimeType.Name)
+		verbose         = ctx.Bool(SwarmVerboseFlag.Name)
 		client          = swarm.NewClient(bzzapi)
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
 		toPin           = ctx.Bool(SwarmPinFlag.Name)
+		notrack         = ctx.Bool(SwarmNoTrackUploadFlag.Name)
 		autoDefaultPath = false
 		file            string
 	)
+	if !verbose {
+		chunkStates = chunkStates[3:] // just poll Synced state
+	}
 	if autoDefaultPathString := os.Getenv(SwarmAutoDefaultPath); autoDefaultPathString != "" {
 		b, err := strconv.ParseBool(autoDefaultPathString)
 		if err != nil {
@@ -155,7 +178,118 @@ func upload(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Upload failed: %s", err)
 	}
-	fmt.Println(hash)
+
+	// dont show the progress bar (machine readable output)
+	if notrack {
+		fmt.Println(hash)
+		return
+	}
+
+	// this section renders the cli UI for showing the progress bars
+	tag, err := client.TagByHash(hash)
+	if err != nil {
+		utils.Fatalf("failed to get tag data for hash: %v", err)
+	}
+	fmt.Println("Swarm Hash:", hash)
+	fmt.Println("Tag UID:", tag.Uid)
+	// check if the user uploaded something that was already completely stored
+	// in the local store (otherwise we hang forever because there's nothing to sync)
+	// as the chunks are already supposed to be synced
+	seen, total, err := tag.Status(chunk.StateSeen)
+	if total-seen > 0 {
+		fmt.Println("Upload status:")
+		bars := createTagBars(tag, verbose)
+		pollTag(client, tag, bars)
+	}
+
+	fmt.Println("Done! took", time.Since(tag.StartedAt))
+	fmt.Println("Your Swarm hash should now be retrievable from other nodes!")
+}
+
+func pollTag(client *client.Client, tag *chunk.Tag, bars map[string]*mpb.Bar) {
+	oldTag := *tag
+	lastTime := time.Now()
+
+	for {
+		time.Sleep(pollDelay)
+		newTag, err := client.TagByHash(tag.Address.String())
+		if err != nil {
+			utils.Fatalf("had an error polling the tag for address %s, err %v", tag.Address.String(), err)
+		}
+		done := true
+		for _, state := range chunkStates {
+			// calculate the difference that we need to increment for each bar
+			count, _, err := oldTag.Status(state.state)
+			if err != nil {
+				utils.Fatalf("error while getting tag status: %v", err)
+			}
+			newCount, total, err := newTag.Status(state.state)
+			if err != nil {
+				utils.Fatalf("error while getting tag status: %v", err)
+			}
+			d := int(newCount - count)
+			if newCount != total {
+				done = false
+			}
+			bars[state.name].SetTotal(total, done)
+			bars[state.name].IncrBy(d, time.Since(lastTime))
+		}
+		if done {
+			return
+		}
+
+		oldTag = *newTag
+		lastTime = time.Now()
+	}
+}
+
+func createTagBars(tag *chunk.Tag, verbose bool) map[string]*mpb.Bar {
+	p := mpb.New(mpb.WithWidth(64))
+	bars := make(map[string]*mpb.Bar)
+	for _, state := range chunkStates {
+		count, total, err := tag.Status(state.state)
+		if err != nil {
+			utils.Fatalf("could not get tag status: %v", err)
+		}
+		title := state.name
+		var barElement *mpb.Bar
+		width := 10
+		if verbose {
+			barElement = p.AddBar(total,
+				mpb.PrependDecorators(
+					// align the elements with a constant size (10 chars)
+					decor.Name(title, decor.WC{W: width, C: decor.DidentRight}),
+					// add unit counts
+					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace),
+					// replace ETA decorator with "done" message, OnComplete event
+					decor.OnComplete(
+						// ETA decorator with ewma age of 60, and width reservation of 4
+						decor.EwmaETA(decor.ET_STYLE_GO, 60, decor.WC{W: 6}), "done",
+					),
+				),
+				mpb.AppendDecorators(decor.Percentage()),
+			)
+		} else {
+			title = fmt.Sprintf("Syncing %d chunks", total)
+			width = len(title) + 3
+			barElement = p.AddBar(total,
+				mpb.PrependDecorators(
+					// align the elements with a constant size (10 chars)
+					decor.Name(title, decor.WC{W: width, C: decor.DidentRight}),
+					// replace ETA decorator with "done" message, OnComplete event
+					decor.OnComplete(
+						// ETA decorator with ewma age of 60, and width reservation of 4
+						decor.EwmaETA(decor.ET_STYLE_GO, 60, decor.WC{W: 6}), "done",
+					),
+				),
+				mpb.AppendDecorators(decor.Percentage()),
+			)
+		}
+		// increment the bar with the initial value from the tag
+		barElement.IncrBy(int(count))
+		bars[state.name] = barElement
+	}
+	return bars
 }
 
 // Expands a file path

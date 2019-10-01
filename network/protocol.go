@@ -115,6 +115,7 @@ type BzzConfig struct {
 	NetworkID    uint64
 	LightNode    bool // temporarily kept as we still only define light/full on operational level
 	BootnodeMode bool
+	SyncEnabled  bool
 }
 
 // Bzz is the swarm protocol bundle
@@ -152,6 +153,11 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 		bzz.streamerSpec = nil
 		bzz.retrievalRun = nil
 		bzz.retrievalSpec = nil
+	}
+
+	if !config.SyncEnabled {
+		bzz.streamerRun = nil
+		bzz.streamerSpec = nil
 	}
 
 	bzz.localAddr.Capabilities = kad.Capabilities

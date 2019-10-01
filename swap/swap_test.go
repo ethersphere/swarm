@@ -129,6 +129,17 @@ func TestPeerBalance(t *testing.T) {
 	if err != state.ErrNotFound {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
+
+	// test for unconnected node
+	testPeer2 := newDummyPeer().Peer
+	swap.saveBalance(testPeer2.ID(), 333)
+	b, err = swap.Balance(testPeer2.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b != 333 {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", 333, b)
+	}
 }
 
 // Test getting balances for all known peers

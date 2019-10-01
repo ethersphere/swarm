@@ -27,7 +27,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
-	stream "github.com/ethersphere/swarm/network/stream/v2"
+	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/storage"
 )
 
