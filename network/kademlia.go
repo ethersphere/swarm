@@ -639,21 +639,37 @@ func (k *Kademlia) eachConn(base []byte, db *pot.Pot, o int, f func(*Peer, int) 
 	})
 }
 
+//In order to clarify iterator functions, we have created several functions types to identify the purpose of each
+//param to those functions.
+
+//PeerConsumer consumes a peer entry in a PeerIterator. The function should return true if it wishes to continue iterating.
 type PeerConsumer func(entry *entry) bool
+
+//PeerIterator receives a PeerConsumer and iterates over peer entry until some of the executions of PeerConsumer returns
+//false or the entries run out. It returns the last value returned by the last PeerConsumer execution.
 type PeerIterator func(PeerConsumer) bool
+
+//PeerBin represents a bin in the Kademlia table. Contains a PeerIterator to traverse the peer entries inside it.
 type PeerBin struct {
 	ProximityOrder int
 	Size           int
 	PeerIterator   PeerIterator
 }
+
+//PeerBinConsumer consumes a peerBin. It should return true if it wishes to continue iterating bins.
 type PeerBinConsumer func(peerBin *PeerBin) bool
 
+//Traverse bins (PeerBin) in descending order of proximity (so closest first) with respect to a given address base.
+//It will stop iterating whenever the supplied consumer returns false, the bins run out or a bin is found with proximity
+//order less than minProximityOrder param.
 func (k *Kademlia) EachBinDesc(base []byte, minProximityOrder int, consumer PeerBinConsumer) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	k.eachBinDesc(k.defaultIndex, base, minProximityOrder, consumer)
 }
 
+//Traverse bins in descending order filtered by capabilities. Sane as EachBinDesc but taking into account only peers
+//with those capabilities.
 func (k *Kademlia) EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
@@ -677,13 +693,6 @@ func (k *Kademlia) eachBinDesc(index *capabilityIndex, base []byte, minProximity
 			Size:           bin.Size,
 		})
 	}, false)
-}
-
-type LBPeerConsumer func(peer *Peer, po int) (bool, bool)
-type LBPeerIterator func(consumer LBPeerConsumer) bool
-type LBLapStatus struct {
-	oneFound bool
-	anySkip  bool
 }
 
 // EachAddrFiltered performs the same action as EachAddr

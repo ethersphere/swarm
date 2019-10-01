@@ -6,14 +6,14 @@ import (
 	"sync"
 )
 
-//PubSubChannel represents a pubsub system where subscriber can .Subscribe() and publishers can .Publish() or .Close()
+//PubSubChannel represents a pubsub system where subscriber can .Subscribe() and publishers can .Publish() or .Close().
 type PubSubChannel struct {
 	subscriptions []*Subscription
 	subsMutex     sync.RWMutex
 	nextId        int
 }
 
-//Subscription is created in PubSubChannel using pubSub.Ubscribe(). Subscriptors can receive using .ReceiveChannel()
+//Subscription is created in PubSubChannel using pubSub.Subscribe(). Subscribers can receive using .ReceiveChannel().
 // or .Unsubscribe()
 type Subscription struct {
 	closed    bool
@@ -23,14 +23,14 @@ type Subscription struct {
 	id        string
 }
 
-//Creates a new PubSubChannel
+//New creates a new PubSubChannel.
 func New() *PubSubChannel {
 	return &PubSubChannel{
 		subscriptions: make([]*Subscription, 0),
 	}
 }
 
-//Subscribe to a channel, each subscriptor should keep its own Subscription instance
+//Subscribe creates a subscription to a channel, each subscriber should keep its own Subscription instance.
 func (psc *PubSubChannel) Subscribe() *Subscription {
 	psc.subsMutex.Lock()
 	defer psc.subsMutex.Unlock()
@@ -52,7 +52,8 @@ func (psc *PubSubChannel) Subscribe() *Subscription {
 	return &newSubscription
 }
 
-//Publish a message and broadcast asynchronously to each subscriptor
+//Publish broadcasts a message asynchronously to each subscriber.
+//If some of the subscriptions(channels) has been marked as closeable, it does it now.
 func (psc *PubSubChannel) Publish(msg interface{}) {
 	psc.subsMutex.RLock()
 	defer psc.subsMutex.RUnlock()
@@ -69,14 +70,15 @@ func (psc *PubSubChannel) Publish(msg interface{}) {
 	}
 }
 
-//NumSubscriptions tells how many subcriptions are currently active
+//NumSubscriptions returns how many subscriptions are currently active.
 func (psc *PubSubChannel) NumSubscriptions() int {
 	psc.subsMutex.RLock()
 	defer psc.subsMutex.RUnlock()
 	return len(psc.subscriptions)
 }
 
-// Close all subscriptions. Usually the publisher is in charge of closing it
+//Close cancels all subscriptions closing the channels associated with them.
+//Usually the publisher is in charge of calling Close().
 func (psc *PubSubChannel) Close() {
 	psc.subsMutex.Lock()
 	defer psc.subsMutex.Unlock()
@@ -86,23 +88,23 @@ func (psc *PubSubChannel) Close() {
 	}
 }
 
-//Unsubscribe from a subscription
+//Unsubscribe cancels subscription from the subscriber side. Channel is marked as closed but only writer should close it.
 func (sub *Subscription) Unsubscribe() {
 	sub.closed = true
 	sub.removeSub()
 }
 
-//ReveiveChannel returns the channel where the subscriptor will receive messages
+//ReceiveChannel returns the channel where the subscriber will receive messages.
 func (sub *Subscription) ReceiveChannel() <-chan interface{} {
 	return sub.signal
 }
 
-//IsClosed returns if the subscription is clossed via Unsubscribe() or Close() in the pubSub that creates it
+//IsClosed returns if the subscription is closed via Unsubscribe() or Close() in the pubSub that creates it.
 func (sub *Subscription) IsClosed() bool {
 	return sub.closed
 }
 
-//Returns the ID of the subscription. Useful for debugging
+//ID returns a unique id in the PubSubChannel of this subscription. Useful for debugging.
 func (sub *Subscription) ID() string {
 	return sub.id
 }
