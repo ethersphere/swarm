@@ -55,7 +55,6 @@ const swapLogLevel = 3
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api              API
 	store            state.Store        // store is needed in order to keep balances and cheques across sessions
 	peers            map[enode.ID]*Peer // map of all swap Peers
 	peersLock        sync.RWMutex       // lock for peers map
