@@ -249,7 +249,7 @@ func TestSentCheque(t *testing.T) {
 		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
 	}
 
-	// test sent cheques for invalid peer
+	// test sent cheque for invalid peer
 	randomID := adapters.RandomNodeConfig().ID
 	_, err = swap.SentCheque(randomID)
 	if err == nil {
@@ -259,14 +259,13 @@ func TestSentCheque(t *testing.T) {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
 
-	// test for unconnected node
+	// test sent cheque for unconnected node
 	testPeer3 := newDummyPeer().Peer
 	generatedCheque3 := newRandomTestCheque()
 	err = swap.saveLastSentCheque(testPeer3.ID(), generatedCheque3)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	sentCheque3, err := swap.SentCheque(testPeer3.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -274,7 +273,6 @@ func TestSentCheque(t *testing.T) {
 	if !reflect.DeepEqual(sentCheque3, generatedCheque3) {
 		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque3, sentCheque3)
 	}
-
 }
 
 // TestReceivedCheque verifies that received cheques data is correctly obtained
