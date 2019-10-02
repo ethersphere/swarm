@@ -187,16 +187,15 @@ func upload(ctx *cli.Context) {
 		return
 	}
 
-	fmt.Println("Swarm Hash:", hash)
-	if toEncrypt {
-		hash = hash[:32]
-	}
 	// this section renders the cli UI for showing the progress bars
 	tag, err := client.TagByHash(hash)
 	if err != nil {
 		utils.Fatalf("failed to get tag data for hash: %v", err)
 	}
+
+	fmt.Println("Swarm Hash:", hash)
 	fmt.Println("Tag UID:", tag.Uid)
+
 	// check if the user uploaded something that was already completely stored
 	// in the local store (otherwise we hang forever because there's nothing to sync)
 	// as the chunks are already supposed to be synced
@@ -204,20 +203,20 @@ func upload(ctx *cli.Context) {
 	if total-seen > 0 {
 		fmt.Println("Upload status:")
 		bars := createTagBars(tag, verbose)
-		pollTag(client, tag, bars)
+		pollTag(client, hash, tag, bars)
 	}
 
 	fmt.Println("Done! took", time.Since(start))
 	fmt.Println("Your Swarm hash should now be retrievable from other nodes!")
 }
 
-func pollTag(client *client.Client, tag *chunk.Tag, bars map[string]*mpb.Bar) {
+func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string]*mpb.Bar) {
 	oldTag := *tag
 	lastTime := time.Now()
 
 	for {
 		time.Sleep(pollDelay)
-		newTag, err := client.TagByHash(tag.Address.String())
+		newTag, err := client.TagByHash(hash)
 		if err != nil {
 			utils.Fatalf("had an error polling the tag for address %s, err %v", tag.Address.String(), err)
 		}
