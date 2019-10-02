@@ -148,7 +148,7 @@ func TestEmitCheque(t *testing.T) {
 	// cashCheque cashes a cheque when we get twice the transaction costs.
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
-	// cheque should be send if the accumulated uncashed cheques is worth more than 100000
+	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
 	balance := uint64(100001)
 	// set balance artificially
 	debitor.setBalance(int64(balance))
