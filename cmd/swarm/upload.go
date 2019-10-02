@@ -187,12 +187,15 @@ func upload(ctx *cli.Context) {
 		return
 	}
 
+	fmt.Println("Swarm Hash:", hash)
+	if toEncrypt {
+		hash = hash[:32]
+	}
 	// this section renders the cli UI for showing the progress bars
 	tag, err := client.TagByHash(hash)
 	if err != nil {
 		utils.Fatalf("failed to get tag data for hash: %v", err)
 	}
-	fmt.Println("Swarm Hash:", hash)
 	fmt.Println("Tag UID:", tag.Uid)
 	// check if the user uploaded something that was already completely stored
 	// in the local store (otherwise we hang forever because there's nothing to sync)
