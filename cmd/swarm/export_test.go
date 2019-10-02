@@ -64,7 +64,7 @@ func TestCLISwarmExportImport(t *testing.T) {
 	defer os.Remove(fileName)
 
 	// upload the file with 'swarm up' and expect a hash
-	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", "--no-track", fileName)
+	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", fileName)
 	_, matches := up.ExpectRegexp(`[a-f\d]{64}`)
 	up.ExpectExit()
 	hash := matches[0]
