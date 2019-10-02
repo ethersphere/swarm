@@ -310,7 +310,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	p.logger.Debug("received cheque, processed and verified")
+	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
