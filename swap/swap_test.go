@@ -429,7 +429,7 @@ func TestNewSwapFailure(t *testing.T) {
 			configure: func(config *testSwapConfig) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
-				params.PaymentThreshold = DefaultPaymentThreshold
+				params.PaymentThreshold = int64(DefaultPaymentThreshold)
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
@@ -609,7 +609,7 @@ func TestDisconnectThreshold(t *testing.T) {
 	testPeer := newDummyPeer()
 	testDeploy(context.Background(), swap)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
-	swap.Add(DefaultDisconnectThreshold, testPeer.Peer)
+	swap.Add(int64(DefaultDisconnectThreshold), testPeer.Peer)
 	err := swap.Add(1, testPeer.Peer)
 	if !strings.Contains(err.Error(), "disconnect threshold") {
 		t.Fatal(err)
@@ -623,7 +623,7 @@ func TestPaymentThreshold(t *testing.T) {
 	testDeploy(context.Background(), swap)
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
-	if err := swap.Add(-DefaultPaymentThreshold, testPeer.Peer); err != nil {
+	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
 		t.Fatal()
 	}
 
@@ -842,8 +842,8 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 func newDefaultParams() *Params {
 	return &Params{
 		LogPath:             "",
-		PaymentThreshold:    DefaultPaymentThreshold,
-		DisconnectThreshold: DefaultDisconnectThreshold,
+		PaymentThreshold:    int64(DefaultPaymentThreshold),
+		DisconnectThreshold: int64(DefaultDisconnectThreshold),
 	}
 }
 

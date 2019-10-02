@@ -204,7 +204,7 @@ func checkChainID(currentChainID uint64, s state.Store) (err error) {
 		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentChainID)
 	}
 	if err == state.ErrNotFound {
-		auditLog.Info("First time connected to SWAP. Storing chain ID", currentChainID)
+		auditLog.Info("First time connected to SWAP. Storing chain ID", "ID", currentChainID)
 		return s.Put(connectedBlockchainKey, currentChainID)
 	}
 	return nil
@@ -305,16 +305,27 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	opts := bind.NewKeyedTransactor(s.owner.privateKey)
-	opts.Context = ctx
-
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
 		return err
 	}
 
-	// cash cheque in async, otherwise this blocks here until the TX is mined
-	go defaultCashCheque(s, otherSwap, opts, cheque)
+	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
+	if err != nil {
+		return err
+	}
+	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
+	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
+	if err != nil {
+		return err
+	}
+	// do a payout transaction if we get 2 times the gas costs
+	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
+		opts := bind.NewKeyedTransactor(s.owner.privateKey)
+		opts.Context = ctx
+		// cash cheque in async, otherwise this blocks here until the TX is mined
+		go defaultCashCheque(s, otherSwap, opts, cheque)
+	}
 
 	return err
 }
