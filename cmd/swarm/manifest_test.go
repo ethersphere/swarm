@@ -100,7 +100,6 @@ func testManifestChange(t *testing.T, encrypt bool) {
 		"--defaultpath",
 		indexDataFilename,
 		"up",
-		"--no-track",
 	}
 	if encrypt {
 		args = append(args, "--encrypt")
@@ -126,7 +125,6 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
-			"--no-track",
 			humansDataFilename,
 		)
 
@@ -182,7 +180,6 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
-			"--no-track",
 			robotsDataFilename,
 		)
 
@@ -243,7 +240,6 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
-			"--no-track",
 			indexDataFilename,
 		)
 
@@ -302,7 +298,6 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"--bzzapi",
 			srv.URL,
 			"up",
-			"--no-track",
 			robotsDataFilename,
 		)
 
@@ -469,7 +464,6 @@ func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 		"--defaultpath",
 		indexDataFilename,
 		"up",
-		"--no-track",
 	}
 	if encrypt {
 		args = append(args, "--encrypt")
@@ -492,7 +486,6 @@ func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 		"--bzzapi",
 		srv.URL,
 		"up",
-		"--no-track",
 		newIndexDataFilename,
 	)
 
