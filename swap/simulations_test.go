@@ -1,18 +1,19 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package swap
 
 import (
@@ -39,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -144,20 +144,7 @@ func (tp *testPeer) handleMsg(ctx context.Context, msg interface{}) error {
 // which contains the shared objects needed to initialize the `SimulatedBackend`
 func newSimServiceMap(params *swapSimulationParams) map[string]simulation.ServiceFunc {
 	simServiceMap := map[string]simulation.ServiceFunc{
-		// we need the bzz service in order to build up a kademlia
-		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
-			addr := network.NewBzzAddrFromEnode(ctx.Config.Node())
-			hp := network.NewHiveParams()
-			hp.Discovery = false
-			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
-		},
-		// and we also use a swap service
+		// we use a swap service
 		"swap": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			// every simulation node has an instance of a `testService`
 			ts := newTestService()
@@ -217,8 +204,8 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 		if err != nil {
 			return nil, err
 		}
-		stateStore, err2 := state.NewDBStore(dir)
-		if err2 != nil {
+		stateStore, err := state.NewDBStore(dir)
+		if err != nil {
 			return nil, err
 		}
 		params.dirs[i] = dir
@@ -261,7 +248,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	params.backend.cashDone = make(chan struct{}, 1)
 	defer close(params.backend.cashDone)
 	// initialize the simulation
-	sim := simulation.NewInProc(newSimServiceMap(params))
+	sim := simulation.NewBzzInProc(newSimServiceMap(params), false)
 	defer sim.Close()
 
 	log.Info("Initializing")
@@ -379,7 +366,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	params.backend.cashDone = make(chan struct{}, 1)
 	defer close(params.backend.cashDone)
 	// initialize the simulation
-	sim := simulation.NewInProc(newSimServiceMap(params))
+	sim := simulation.NewBzzInProc(newSimServiceMap(params), false)
 	defer sim.Close()
 
 	log.Info("Initializing")
@@ -507,7 +494,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 	defer params.backend.Close()
 
 	// initialize the simulation
-	sim := simulation.NewInProc(newSimServiceMap(params))
+	sim := simulation.NewBzzInProc(newSimServiceMap(params), false)
 	defer sim.Close()
 
 	log.Info("Initializing")

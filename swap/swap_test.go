@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package swap
 
@@ -101,8 +101,6 @@ func newTestBackend() *swapTestBackend {
 
 // Test getting a peer's balance
 func TestPeerBalance(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
 	// create a test swap account
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
@@ -141,10 +139,8 @@ func TestPeerBalance(t *testing.T) {
 
 // Test getting balances for all known peers
 func TestAllBalances(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	balances, err := swap.Balances()
@@ -510,10 +506,8 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 
 // Test the correct storing of peer balances through the store after node balance updates
 func TestStoreBalances(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
 	// create a test swap account
-	s, clean := newTestSwap(t, ownerKey, testBackend)
+	s, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// modify balances both in memory and in store
@@ -559,10 +553,8 @@ func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalanc
 
 // Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	var bookings []booking
@@ -1072,11 +1064,8 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // Then we re-open the state store and check that
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	// create a test swap account
-	swap, testDir := newBaseTestSwap(t, ownerKey, testBackend)
+	swap, testDir := newBaseTestSwap(t, ownerKey, nil)
 	defer os.RemoveAll(testDir)
 
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
@@ -1323,8 +1312,6 @@ func TestValidateCode(t *testing.T) {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
-	testBackend.Commit()
-
 	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
@@ -1415,7 +1402,6 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("cash-in the cheque")
 
 	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
-	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1447,7 +1433,6 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("try to cash-in the bouncing cheque")
 	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
-	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -337,9 +337,6 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 // TestSwapRPC tests some basic things over RPC
 // We want this so that we can check the API works
 func TestSwapRPC(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
@@ -349,7 +346,7 @@ func TestSwapRPC(t *testing.T) {
 		err     error
 	)
 
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
