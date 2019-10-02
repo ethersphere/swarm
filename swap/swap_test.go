@@ -258,6 +258,23 @@ func TestSentCheque(t *testing.T) {
 	if err != state.ErrNotFound {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
+
+	// test for unconnected node
+	testPeer3 := newDummyPeer().Peer
+	generatedCheque3 := newRandomTestCheque()
+	err = swap.saveLastSentCheque(testPeer3.ID(), generatedCheque3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sentCheque3, err := swap.SentCheque(testPeer3.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(sentCheque3, generatedCheque3) {
+		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque3, sentCheque3)
+	}
+
 }
 
 // TestReceivedCheque verifies that received cheques data is correctly obtained

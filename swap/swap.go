@@ -413,7 +413,7 @@ func (s *Swap) SentCheque(peer enode.ID) (cheque *Cheque, err error) {
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
 		return swapPeer.getLastSentCheque(), nil
 	}
-	err = s.store.Get(sentChequeKey(peer), cheque)
+	err = s.store.Get(sentChequeKey(peer), &cheque)
 	return cheque, err
 }
 
@@ -454,7 +454,7 @@ func (s *Swap) ReceivedCheque(peer enode.ID) (cheque *Cheque, err error) {
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
 		return swapPeer.getLastReceivedCheque(), nil
 	}
-	err = s.store.Get(receivedChequeKey(peer), cheque)
+	err = s.store.Get(receivedChequeKey(peer), &cheque)
 	return cheque, err
 }
 
