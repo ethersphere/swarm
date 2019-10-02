@@ -189,65 +189,37 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 }
 
 // TestSentCheque verifies that sent cheques data is correctly obtained
-// The test deploys creates swap instances for each node,
-// deploys simulated contracts, sets the balance of each
-// other node to some arbitrary number above thresholds,
-// and then calls `sendCheque` and `SentCheque` to verify correctness
 func TestSentCheque(t *testing.T) {
-	// create both test swap accounts
-	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
-	debitorSwap, clean2 := newTestSwap(t, ownerKey)
-	defer clean1()
-	defer clean2()
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
 
-	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = testDeploy(ctx, debitorSwap)
+	// test cheque addition for peer
+	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// create Peer instances
-	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
-	// so creditor is the model of the remote mode for the debitor! (and vice versa)
-	cPeer := newDummyPeerWithSpec(Spec)
-	dPeer := newDummyPeerWithSpec(Spec)
-	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	sentCheque, err := swap.SentCheque(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if sentCheque != nil {
+		t.Fatalf("Expected sent cheques to be nil, but is %v", sentCheque)
+	}
+
+	// generate a random cheque as sent
+	cheque := newRandomTestCheque()
+	err = testPeer.setLastSentCheque(cheque)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// set balances arbitrarily
-	testAmount := int64(DefaultPaymentThreshold + 42)
-	debitor.setBalance(testAmount)
-	creditor.setBalance(-testAmount)
-
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
-
-	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
-
-	lastSentCheque, err := debitorSwap.SentCheque(cPeer.ID())
-
+	sentCheque, err = swap.SentCheque(testPeer.ID())
 	if err != nil {
-		t.Fatalf("Could not retrieve last cheque sent %v", err)
+		t.Fatal(err)
 	}
-
-	if lastSentCheque == nil {
-		t.Fatalf("Last cheque sent is empty")
-	}
-
-	if lastSentCheque != creditor.getLastSentCheque() {
-		t.Fatalf("Last cheque does not match, expected cheque for %v honey, got %v honey", lastSentCheque.Honey, debitor.getLastReceivedCheque().Honey)
+	if sentCheque != cheque {
+		t.Fatalf("Expected sent cheque to be %v, but is %v", cheque, sentCheque)
 	}
 }
 
