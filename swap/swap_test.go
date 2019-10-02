@@ -248,6 +248,16 @@ func TestSentCheque(t *testing.T) {
 	if sentCheque != generatedCheque {
 		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
 	}
+
+	// test sent cheques for invalid peer
+	randomID := adapters.RandomNodeConfig().ID
+	_, err = swap.SentCheque(randomID)
+	if err == nil {
+		t.Fatal("Expected call to fail, but it didn't!")
+	}
+	if err != state.ErrNotFound {
+		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
+	}
 }
 
 // TestReceivedCheque verifies that received cheques data is correctly obtained
