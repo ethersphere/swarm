@@ -48,7 +48,7 @@ var (
 		Name:               "up",
 		Usage:              "uploads a file or directory to swarm using the HTTP API",
 		ArgsUsage:          "<file>",
-		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmNoTrackUploadFlag, SwarmVerboseFlag},
+		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmProgressFlag, SwarmVerboseFlag},
 		Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 	}
 
@@ -77,7 +77,7 @@ func upload(ctx *cli.Context) {
 		client          = swarm.NewClient(bzzapi)
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
 		toPin           = ctx.Bool(SwarmPinFlag.Name)
-		notrack         = ctx.Bool(SwarmNoTrackUploadFlag.Name)
+		progress        = ctx.Bool(SwarmProgressFlag.Name)
 		autoDefaultPath = false
 		file            string
 	)
@@ -174,13 +174,15 @@ func upload(ctx *cli.Context) {
 			return client.Upload(f, "", toEncrypt, toPin)
 		}
 	}
+	start := time.Now()
+
 	hash, err := doUpload()
 	if err != nil {
 		utils.Fatalf("Upload failed: %s", err)
 	}
 
-	// dont show the progress bar (machine readable output)
-	if notrack {
+	// dont show the progress bar if `progress` flag is not set
+	if !progress {
 		fmt.Println(hash)
 		return
 	}
@@ -202,7 +204,7 @@ func upload(ctx *cli.Context) {
 		pollTag(client, tag, bars)
 	}
 
-	fmt.Println("Done! took", time.Since(tag.StartedAt))
+	fmt.Println("Done! took", time.Since(start))
 	fmt.Println("Your Swarm hash should now be retrievable from other nodes!")
 }
 

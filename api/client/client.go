@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
@@ -52,14 +53,19 @@ var (
 )
 
 func NewClient(gateway string) *Client {
+	jar, _ := cookiejar.New(nil) // New always returns nil error
 	return &Client{
 		Gateway: gateway,
+		httpClient: &http.Client{
+			Jar: jar,
+		},
 	}
 }
 
 // Client wraps interaction with a swarm HTTP gateway.
 type Client struct {
-	Gateway string
+	Gateway    string
+	httpClient *http.Client
 }
 
 // UploadRaw uploads raw data to swarm and returns the resulting hash. If toEncrypt is true it
@@ -84,7 +90,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool, toPin bool) 
 		req.Header.Set(swarmhttp.PinHeaderName, "true")
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +109,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool, toPin bool) 
 // content was encrypted
 func (c *Client) DownloadRaw(hash string) (io.ReadCloser, bool, error) {
 	uri := c.Gateway + "/bzz-raw:/" + hash
-	res, err := http.DefaultClient.Get(uri)
+	res, err := c.httpClient.Get(uri)
 	if err != nil {
 		return nil, false, err
 	}
@@ -168,7 +174,7 @@ func (c *Client) Upload(file *File, manifest string, toEncrypt bool, toPin bool)
 // the given hash (i.e. it gets bzz:/<hash>/<path>)
 func (c *Client) Download(hash, path string) (*File, error) {
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
-	res, err := http.DefaultClient.Get(uri)
+	res, err := c.httpClient.Get(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +234,7 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials string) erro
 		req.SetBasicAuth("", credentials)
 	}
 	req.Header.Set("Accept", "application/x-tar")
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -313,7 +319,7 @@ func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 	if credentials != "" {
 		req.SetBasicAuth("", credentials)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -412,7 +418,7 @@ func (c *Client) List(hash, prefix, credentials string) (*api.ManifestList, erro
 	if credentials != "" {
 		req.SetBasicAuth("", credentials)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +652,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader, toPin bool) (st
 		reqW.CloseWithError(err)
 	}()
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -669,7 +675,7 @@ func (c *Client) TagByHash(hash string) (*chunk.Tag, error) {
 		return nil, err
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -738,7 +744,7 @@ func (c *Client) updateFeed(request *feed.Request, createManifest bool) (io.Read
 		return nil, err
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -88,7 +88,6 @@ func testPassword(t *testing.T, cluster *testCluster) {
 		"--bzzapi",
 		cluster.Nodes[0].URL,
 		"up",
-		"--no-track",
 		"--encrypt",
 		dataFilename)
 	_, matches := up.ExpectRegexp(hashRegexp)
@@ -241,7 +240,6 @@ func testPK(t *testing.T, cluster *testCluster) {
 		"--bzzapi",
 		cluster.Nodes[0].URL,
 		"up",
-		"--no-track",
 		"--encrypt",
 		dataFilename)
 	_, matches := up.ExpectRegexp(hashRegexp)
@@ -394,7 +392,6 @@ func testACT(t *testing.T, cluster *testCluster, bogusEntries int) {
 		"--bzzapi",
 		cluster.Nodes[0].URL,
 		"up",
-		"--no-track",
 		"--encrypt",
 		dataFilename)
 	_, matches := up.ExpectRegexp(hashRegexp)
