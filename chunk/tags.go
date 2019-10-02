@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/ethersphere/swarm/sctx"
 )
@@ -71,14 +72,15 @@ func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	return t.(*Tag), nil
 }
 
-// GetByAddress returns the underlying tag for the address or an error if not found
+// GetByAddress returns the latest underlying tag for the address or an error if not found
 func (ts *Tags) GetByAddress(address Address) (*Tag, error) {
 	var t *Tag
+	var lastTime time.Time
 	ts.tags.Range(func(key interface{}, value interface{}) bool {
 		rcvdTag := value.(*Tag)
-		if bytes.Equal(rcvdTag.Address, address) {
+		if bytes.Equal(rcvdTag.Address, address) && rcvdTag.StartedAt.After(lastTime) {
 			t = rcvdTag
-			return false
+			lastTime = rcvdTag.StartedAt
 		}
 		return true
 	})

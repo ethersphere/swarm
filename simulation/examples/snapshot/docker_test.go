@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ethersphere/swarm/internal/build"
 	"github.com/ethersphere/swarm/simulation"
 )
 
 func TestDockerSnapshotFromFile(t *testing.T) {
+	if env := build.Env(); env.Name == "local" {
+		t.Skip("skip locally")
+	}
+
 	snap, err := simulation.LoadSnapshotFromFile("docker.json")
 	if err != nil {
 		t.Fatal(err)
