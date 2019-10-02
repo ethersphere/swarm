@@ -145,7 +145,7 @@ func TestEmitCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// cashCheque cashes a cheque when we get twice the transaction costs.
+	// cashCheque cashes a cheque when the reward of doing so is twice the transaction costs.
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
