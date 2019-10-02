@@ -82,6 +82,9 @@ func TestGetTagUsingHash(t *testing.T) {
 	req.Header.Add(AnonymousHeaderName, "true")
 	req.Header.Add("Content-Type", "text/plain")
 	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
