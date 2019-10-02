@@ -18,7 +18,6 @@ package bzzeth
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -58,6 +57,6 @@ type GetBlockHeaders struct {
 // BlockHeaders encapsulates actual header blobs sent as a response to GetBlockHeaders
 // multiple responses to the same request, whatever the node has it sends right away
 type BlockHeaders struct {
-	Rid     uint32         // request id
-	Headers []rlp.RawValue // list of rlp encoded block headers
+	Rid     uint32   // request id
+	Headers [][]byte // list of rlp encoded block headers
 }
