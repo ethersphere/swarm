@@ -429,7 +429,7 @@ func TestNewSwapFailure(t *testing.T) {
 			configure: func(config *testSwapConfig) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
-				params.PaymentThreshold = DefaultPaymentThreshold
+				params.PaymentThreshold = int64(DefaultPaymentThreshold)
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
@@ -842,8 +842,8 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 func newDefaultParams() *Params {
 	return &Params{
 		LogPath:             "",
-		PaymentThreshold:    DefaultPaymentThreshold,
-		DisconnectThreshold: DefaultDisconnectThreshold,
+		PaymentThreshold:    int64(DefaultPaymentThreshold),
+		DisconnectThreshold: int64(DefaultDisconnectThreshold),
 	}
 }
 
