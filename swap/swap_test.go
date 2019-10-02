@@ -209,8 +209,8 @@ func TestSentCheque(t *testing.T) {
 	}
 
 	// generate a random cheque as sent
-	cheque := newRandomTestCheque()
-	err = testPeer.setLastSentCheque(cheque)
+	generatedCheque := newRandomTestCheque()
+	err = testPeer.setLastSentCheque(generatedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,8 +218,35 @@ func TestSentCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sentCheque != cheque {
-		t.Fatalf("Expected sent cheque to be %v, but is %v", cheque, sentCheque)
+	if sentCheque != generatedCheque {
+		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
+	}
+
+	// test cheque addition for another peer
+	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	generatedCheque2 := newRandomTestCheque()
+	err = testPeer2.setLastSentCheque(generatedCheque2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentCheque2, err := swap.SentCheque(testPeer2.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sentCheque2 != generatedCheque2 {
+		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque2, sentCheque2)
+	}
+
+	// check previous cheque is still correct
+	sentCheque, err = swap.SentCheque(testPeer.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sentCheque != generatedCheque {
+		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
 	}
 }
 
