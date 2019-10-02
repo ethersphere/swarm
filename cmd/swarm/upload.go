@@ -174,6 +174,8 @@ func upload(ctx *cli.Context) {
 			return client.Upload(f, "", toEncrypt, toPin)
 		}
 	}
+	start := time.Now()
+
 	hash, err := doUpload()
 	if err != nil {
 		utils.Fatalf("Upload failed: %s", err)
@@ -202,7 +204,7 @@ func upload(ctx *cli.Context) {
 		pollTag(client, tag, bars)
 	}
 
-	fmt.Println("Done! took", time.Since(tag.StartedAt))
+	fmt.Println("Done! took", time.Since(start))
 	fmt.Println("Your Swarm hash should now be retrievable from other nodes!")
 }
 
