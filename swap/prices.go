@@ -37,7 +37,7 @@ allowing for a multi-currency design.
 // $67 / 190GB = $0.35 / GB
 // 0.35 / (1.073.741.824) = $3.259629e^-10 / byte
 // 3.259629e^-10/ (166 * 10^18) = 19636319 Wei / byte, where 166 is the current Ether price in Dollar
-// per byte of data transfered, we account for 1 chunkDelivery price (accounted per byte), and 1/4096 retrieveRequest (accounted per message)
+// per byte of data transferred, we account for 1 chunkDelivery price (accounted per byte), and 1/4096 retrieveRequest (accounted per message)
 // RetrieveRequestPrice = 0.1 * 19636319 * 4096 = 8043036262, where 0.1 is a bogus factor
 // ChunkDeliveryPrice = 0.9 * 19636319 = 17672687, where 0.9 is a bogus factor
 const (
