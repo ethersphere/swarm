@@ -261,93 +261,77 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Info("starting simulation...")
+	p1 := sim.UpNodeIDs()[0]
+	p2 := sim.UpNodeIDs()[1]
+	p1Item := sim.MustNodeItem(p1, bucketKeySwap)
+	ts1 := p1Item.(*testService)
 
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		log.Info("simulation running")
+	p2Item := sim.MustNodeItem(p2, bucketKeySwap)
+	ts2 := p2Item.(*testService)
 
-		p1 := sim.UpNodeIDs()[0]
-		p2 := sim.UpNodeIDs()[1]
-		p1Item, ok := sim.NodeItem(p1, bucketKeySwap)
-		if !ok {
-			return errors.New("no swap in simulation bucket")
+	for {
+		// let's always be nice and allow a time out to be catched
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for all swap peer connections to be established")
+		default:
 		}
-		ts1 := p1Item.(*testService)
-		p2Item, ok := sim.NodeItem(p2, bucketKeySwap)
-		if !ok {
-			return errors.New("no swap in simulation bucket")
+		// the node has all other peers in its peer list
+		if len(ts1.swap.peers) == 1 && len(ts2.swap.peers) == 1 {
+			break
 		}
-		ts2 := p2Item.(*testService)
+		// don't overheat the CPU...
+		time.Sleep(5 * time.Millisecond)
+	}
 
-		for {
-			// let's always be nice and allow a time out to be catched
-			select {
-			case <-ctx.Done():
-				return errors.New("Timed out waiting for all swap peer connections to be established")
-			default:
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	maxCheques := 42
+
+	p2Peer := ts1.peers[p2]
+	p1Peer := ts2.peers[p1]
+
+	for i := 0; i < maxCheques; i++ {
+		if i%2 == 0 {
+			p2Peer.Send(ctx, &testMsgBigPrice{})
+			err := waitForChequeProcessed(ts2)
+			if err != nil {
+				t.Fatal(err)
 			}
-			// the node has all other peers in its peer list
-			if len(ts1.swap.peers) == 1 && len(ts2.swap.peers) == 1 {
-				break
-			}
-			// don't overheat the CPU...
-			time.Sleep(5 * time.Millisecond)
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		maxCheques := 42
-
-		p2Peer := ts1.peers[p2]
-		p1Peer := ts2.peers[p1]
-
-		for i := 0; i < maxCheques; i++ {
-			if i%2 == 0 {
-				p2Peer.Send(ctx, &testMsgBigPrice{})
-				err := waitForChequeProcessed(ts2)
-				if err != nil {
-					return err
-				}
-			} else {
-				p1Peer.Send(ctx, &testMsgBigPrice{})
-				err := waitForChequeProcessed(ts1)
-				if err != nil {
-					return err
-				}
+		} else {
+			p1Peer.Send(ctx, &testMsgBigPrice{})
+			err := waitForChequeProcessed(ts1)
+			if err != nil {
+				t.Fatal(err)
 			}
 		}
+	}
 
-		ch1, err := ts2.swap.loadLastReceivedCheque(p1)
-		if err != nil {
-			return err
-		}
-		ch2, err := ts1.swap.loadLastReceivedCheque(p2)
-		if err != nil {
-			return err
-		}
+	ch1, err := ts2.swap.loadLastReceivedCheque(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch2, err := ts1.swap.loadLastReceivedCheque(p2)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		expected := uint64(maxCheques / 2 * (DefaultPaymentThreshold + 1))
-		if ch1.CumulativePayout != expected {
-			return fmt.Errorf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
-		}
-		if ch2.CumulativePayout != expected {
-			return fmt.Errorf("expected cumulative payout to be %d, but is %d", expected, ch2.CumulativePayout)
-		}
-
-		return nil
-
-	})
-
-	if result.Error != nil {
-		t.Fatal(result.Error)
+	expected := uint64(maxCheques / 2 * (DefaultPaymentThreshold + 1))
+	if ch1.CumulativePayout != expected {
+		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
+	}
+	if ch2.CumulativePayout != expected {
+		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch2.CumulativePayout)
 	}
 
 	log.Info("Simulation ended")
 }
 
-// TestMultiChequeSimulation just launches two nodes, and sends multiple cheques
-// to the same node; checks that accounting still works properly afterwards and that
+// TestMultiChequeSimulation just launches two nodes, a creditor and a debitor.
+// The debitor is the one owing to the creditor, so the debitor is the one sending cheques
+// It sends multiple cheques in a sequence to the same node.
+// The test checks that accounting still works properly afterwards and that
 // cheque cumulation values add up correctly
 func TestMultiChequeSimulation(t *testing.T) {
 	nodeCount := 2
@@ -379,102 +363,83 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Info("starting simulation...")
+	// define the nodes
+	debitor := sim.UpNodeIDs()[0]
+	creditor := sim.UpNodeIDs()[1]
+	// get the testService for the debitor
+	item := sim.MustNodeItem(debitor, bucketKeySwap)
+	debitorSvc := item.(*testService)
 
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		log.Info("simulation running")
+	// get the testService for the creditor
+	peerItem := sim.MustNodeItem(creditor, bucketKeySwap)
+	creditorSvc := peerItem.(*testService)
 
-		// define the nodes
-		debitor := sim.UpNodeIDs()[0]
-		creditor := sim.UpNodeIDs()[1]
-		// get the testService for the debitor
-		item, ok := sim.NodeItem(debitor, bucketKeySwap)
-		if !ok {
-			return errors.New("no swap in simulation bucket")
+	for {
+		// let's always be nice and allow a time out to be catched
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for all swap peer connections to be established")
+		default:
 		}
-		debitorSvc := item.(*testService)
-
-		// get the testService for the creditor
-		peerItem, ok := sim.NodeItem(creditor, bucketKeySwap)
-		if !ok {
-			return errors.New("no swap in simulation bucket")
+		// the node has all other peers in its peer list
+		if len(debitorSvc.swap.peers) == 1 && len(creditorSvc.swap.peers) == 1 {
+			break
 		}
-		creditorSvc := peerItem.(*testService)
+		// don't overheat the CPU...
+		time.Sleep(5 * time.Millisecond)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-		for {
-			// let's always be nice and allow a time out to be catched
-			select {
-			case <-ctx.Done():
-				return errors.New("Timed out waiting for all swap peer connections to be established")
-			default:
-			}
-			// the node has all other peers in its peer list
-			if len(debitorSvc.swap.peers) == 1 && len(creditorSvc.swap.peers) == 1 {
-				break
-			}
-			// don't overheat the CPU...
-			time.Sleep(5 * time.Millisecond)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
+	// we will send just maxCheques number of cheques
+	maxCheques := 10
 
-		// we will send just maxCheques number of cheques
-		maxCheques := 10
+	// the peer object used for sending
+	creditorPeer := debitorSvc.peers[creditor]
 
-		// the peer object used for sending
-		creditorPeer := debitorSvc.peers[creditor]
-
-		// send maxCheques number of cheques
-		for i := 0; i < maxCheques; i++ {
-			// use a price which will trigger a cheque each time
-			creditorPeer.Send(ctx, &testMsgBigPrice{})
-			// we need to wait a bit in order to give time for the cheque to be processed
-			err = waitForChequeProcessed(creditorSvc)
-			if err != nil {
-				return err
-			}
-		}
-
-		// check balances:
-		b1, err := debitorSvc.swap.loadBalance(creditor)
+	// send maxCheques number of cheques
+	for i := 0; i < maxCheques; i++ {
+		// use a price which will trigger a cheque each time
+		creditorPeer.Send(ctx, &testMsgBigPrice{})
+		// we need to wait a bit in order to give time for the cheque to be processed
+		err = waitForChequeProcessed(creditorSvc)
 		if err != nil {
-			return err
+			t.Fatal(err)
 		}
-		b2, err := creditorSvc.swap.loadBalance(debitor)
-		if err != nil {
-			return err
-		}
+	}
 
-		if b1 != -b2 {
-			return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
-		}
-		// check cheques
-		var cheque1, cheque2 *Cheque
-		if cheque1, err = debitorSvc.swap.loadLastSentCheque(creditor); err != nil {
-			return errors.New("expected cheques with creditor, but none found")
-		}
-		if cheque2, err = creditorSvc.swap.loadLastReceivedCheque(debitor); err != nil {
-			return errors.New("expected cheques with debitor, but none found")
-		}
+	// check balances:
+	b1, err := debitorSvc.swap.loadBalance(creditor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := creditorSvc.swap.loadBalance(debitor)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		// both cheques (at issuer and beneficiary) should have same cumulative value
-		if cheque1.CumulativePayout != cheque2.CumulativePayout {
-			return fmt.Errorf("Expected symmetric cheques payout, but they are not: %d vs %d", cheque1.CumulativePayout, cheque2.CumulativePayout)
-		}
+	if b1 != -b2 {
+		t.Fatalf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
+	}
+	// check cheques
+	var cheque1, cheque2 *Cheque
+	if cheque1, err = debitorSvc.swap.loadLastSentCheque(creditor); err != nil {
+		t.Fatalf("expected cheques with creditor, but none found")
+	}
+	if cheque2, err = creditorSvc.swap.loadLastReceivedCheque(debitor); err != nil {
+		t.Fatalf("expected cheques with debitor, but none found")
+	}
 
-		// check also the actual expected amount
-		expectedPayout := uint64(maxCheques * (DefaultPaymentThreshold + 1))
+	// both cheques (at issuer and beneficiary) should have same cumulative value
+	if cheque1.CumulativePayout != cheque2.CumulativePayout {
+		t.Fatalf("Expected symmetric cheques payout, but they are not: %d vs %d", cheque1.CumulativePayout, cheque2.CumulativePayout)
+	}
 
-		if cheque2.CumulativePayout != expectedPayout {
-			return fmt.Errorf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
-		}
+	// check also the actual expected amount
+	expectedPayout := uint64(maxCheques * (DefaultPaymentThreshold + 1))
 
-		return nil
-
-	})
-
-	if result.Error != nil {
-		t.Fatal(result.Error)
+	if cheque2.CumulativePayout != expectedPayout {
+		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
 	}
 
 	log.Info("Simulation ended")
@@ -566,10 +531,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 					return errors.New("Timed out waiting for all swap peer connections to be established")
 				default:
 				}
-				item, ok := sim.NodeItem(node, bucketKeySwap)
-				if !ok {
-					return errors.New("no swap in simulation bucket")
-				}
+				item := sim.MustNodeItem(node, bucketKeySwap)
 				ts := item.(*testService)
 				// the node has all other peers in its peer list
 				if len(ts.swap.peers) == nodeCount-1 {
@@ -585,10 +547,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 	ITER:
 		for {
 			for _, node := range nodes {
-				item, ok := sim.NodeItem(node, bucketKeySwap)
-				if !ok {
-					return errors.New("no swap in simulation bucket")
-				}
+				item := sim.MustNodeItem(node, bucketKeySwap)
 				ts := item.(*testService)
 				for k, p := range nodes {
 					// don't send to self
@@ -630,10 +589,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 		//balance with a peer as that peer with the same node,
 		//but in inverted signs
 		for _, node := range nodes {
-			item, ok := sim.NodeItem(node, bucketKeySwap)
-			if !ok {
-				return errors.New("no swap in simulation bucket")
-			}
+			item := sim.MustNodeItem(node, bucketKeySwap)
 			ts := item.(*testService)
 			// for each node look up the peers
 			for _, p := range nodes {
@@ -642,10 +598,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 					continue
 				}
 
-				peerItem, ok := sim.NodeItem(p, bucketKeySwap)
-				if !ok {
-					return errors.New("no swap in simulation bucket")
-				}
+				peerItem := sim.MustNodeItem(p, bucketKeySwap)
 				peerTs := peerItem.(*testService)
 
 				// balance of the node with peer p
