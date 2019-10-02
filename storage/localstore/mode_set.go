@@ -230,7 +230,6 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 					if tag.Anonymous {
 						// this will not get called twice because we remove the item once after the !moveToGc check
 						tag.Inc(chunk.StateSent)
-						tag.Inc(chunk.StateSynced)
 					} else {
 						moveToGc = false
 					}
@@ -245,6 +244,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		}
 	}
 	if !moveToGc {
+		//panic(1)
 		return 0, nil
 	}
 	db.pushIndex.DeleteInBatch(batch, item)

@@ -319,7 +319,7 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 }
 
 // newGCIndexTest returns a test function that validates if the right
-// chunk values are in the push index.
+// chunk values are in the GC index.
 func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64, binID uint64) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()

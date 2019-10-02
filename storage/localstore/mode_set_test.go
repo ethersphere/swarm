@@ -74,14 +74,17 @@ func TestModeSetSyncPull(t *testing.T) {
 	for _, mtc := range []struct {
 		name      string
 		anonymous bool
+		expErr    error
 	}{
 		{
 			name:      "normal tag",
 			anonymous: false,
+			expErr:    nil,
 		},
 		{
 			name:      "anonymous tag",
 			anonymous: true,
+			expErr:    leveldb.ErrNotFound,
 		},
 	} {
 		t.Run(mtc.name, func(t *testing.T) {
@@ -122,11 +125,14 @@ func TestModeSetSyncPull(t *testing.T) {
 						binIDs[po]++
 
 						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-						newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
-						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
-					}
+						newPushIndexTest(db, ch, wantTimestamp, mtc.expErr)(t)
 
-					t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+						// if the upload is anonymous then we expect to see some values in the gc index
+						if mtc.anonymous {
+							newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+							t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+						}
+					}
 
 					t.Run("gc size", newIndexGCSizeTest(db))
 				})
