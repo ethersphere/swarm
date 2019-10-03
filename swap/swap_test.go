@@ -187,7 +187,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 // TestSentCheque verifies that sent cheques data is correctly obtained
 func TestSentCheque(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// test cheque addition for peer
@@ -274,7 +274,7 @@ func TestSentCheque(t *testing.T) {
 // TestReceivedCheque verifies that received cheques data is correctly obtained
 func TestReceivedCheque(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// test cheque addition for peer
@@ -361,7 +361,7 @@ func TestReceivedCheque(t *testing.T) {
 // Test getting cheques for all known peers
 func TestAllCheques(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	sentCheques, err := swap.SentCheques()

@@ -322,7 +322,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := uint64(maxCheques / 2 * (DefaultPaymentThreshold + 1))
+	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
 	if ch1.CumulativePayout != expected {
 		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
 	}
@@ -446,7 +446,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// check also the actual expected amount
-	expectedPayout := uint64(maxCheques * (DefaultPaymentThreshold + 1))
+	expectedPayout := uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
 	if cheque2.CumulativePayout != expectedPayout {
 		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
@@ -487,8 +487,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 
 	// we don't want any cheques to be issued for this test, we only want to test accounting across nodes
 	// for this we define a "global" maximum amount of messages to be sent;
-	// this formula should ensure that we trigger enough messages but not enough to trigger cheques
-	maxMsgs := (DefaultPaymentThreshold / params.maxMsgPrice) * (nodeCount - 1)
+	maxMsgs := 1500
 
 	// need some synchronization to make sure we wait enough before checking all balances:
 	// all messages should have been received, otherwise there may be some imbalances!
@@ -562,7 +561,6 @@ func TestBasicSwapSimulation(t *testing.T) {
 						continue
 					}
 					if msgCount < maxMsgs {
-
 						ts.lock.Lock()
 						tp := ts.peers[p]
 						ts.lock.Unlock()
