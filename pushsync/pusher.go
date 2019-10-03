@@ -129,6 +129,11 @@ func (p *Pusher) chunksHandler() {
 	var batchStartTime time.Time
 	ctx := context.Background()
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	sem := make(chan struct{}, 100)
+
 	for {
 		select {
 		// handle incoming chunks
@@ -153,12 +158,17 @@ func (p *Pusher) chunksHandler() {
 
 			metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
 			// send the chunk and ignore the error
-			//go func(ch chunk.Chunk) {
-			if err := p.sendChunkMsg(ch); err != nil {
-				p.logger.Error("error sending chunk", "addr", ch.Address().Hex(), "err", err)
-			}
-
-			//}(ch)
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(ch chunk.Chunk) {
+				defer func() {
+					wg.Done()
+					<-sem
+				}()
+				if err := p.sendChunkMsg(ch); err != nil {
+					p.logger.Error("error sending chunk", "addr", ch.Address().Hex(), "err", err)
+				}
+			}(ch)
 
 			// retry interval timer triggers starting from new
 		case <-timer.C:
