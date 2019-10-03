@@ -485,11 +485,11 @@ func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{})
 		pssmsg, ok := msg.(*message.Message)
 		if !ok {
 			log.Error("invalid message type", "msg", msg)
-			peer.Drop()
+			peer.Drop("invalid message type")
 		}
 		if err := p.handlePssMsg(ctx, pssmsg); err != nil {
 			log.Warn("handler error", "err", err)
-			peer.Drop()
+			peer.Drop(fmt.Sprintf("handler error %s", err))
 		}
 	}()
 	return nil

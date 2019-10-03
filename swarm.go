@@ -48,7 +48,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
-	"github.com/ethersphere/swarm/network/stream/v2"
+	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	pssmessage "github.com/ethersphere/swarm/pss/message"
@@ -155,6 +155,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,
+		SyncEnabled:  config.SyncEnabled,
 	}
 
 	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -559,7 +560,12 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-	apis = append(apis, s.streamer.APIs()...)
+
+	// this is a workaround disabling syncing altogether from a node but
+	// must be changed when multiple stream implementations are at hand
+	if s.config.SyncEnabled {
+		apis = append(apis, s.streamer.APIs()...)
+	}
 	apis = append(apis, s.bzzEth.APIs()...)
 
 	if s.ps != nil {

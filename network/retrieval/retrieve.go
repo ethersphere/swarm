@@ -375,7 +375,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	if err != nil {
 		p.logger.Error("netstore error putting chunk to localstore", "err", err)
 		if err == storage.ErrChunkInvalid {
-			p.Drop()
+			p.Drop("invalid chunk in netstore put")
 		}
 	}
 }

@@ -233,4 +233,12 @@ var (
 		Name:  "enable-pinning",
 		Usage: "Use this flag to enable the pinning feature",
 	}
+	SwarmProgressFlag = cli.BoolFlag{
+		Name:  "progress",
+		Usage: "Use this flag to enable tracking of the upload progress through the CLI",
+	}
+	SwarmVerboseFlag = cli.BoolFlag{
+		Name:  "verbose",
+		Usage: "Display more verbose output",
+	}
 )

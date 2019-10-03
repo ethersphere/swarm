@@ -239,8 +239,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.Itoa(swap.DefaultPaymentThreshold + 1),
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.Itoa(swap.DefaultDisconnectThreshold + 1),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.FormatUint(swap.DefaultPaymentThreshold+1, 10),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.FormatUint(swap.DefaultDisconnectThreshold+1, 10),
 		fmt.Sprintf("--%s", SwarmEnablePinningFlag.Name),
 	}
 
