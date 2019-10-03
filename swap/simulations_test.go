@@ -56,8 +56,6 @@ For integration tests, run test cluster deployments with all integration moduele
 (blockchains, oracles, etc.)
 */
 
-var bucketKeySwap = simulation.BucketKey("swap")
-
 // swapSimulationParams allows to avoid global variables for the test
 type swapSimulationParams struct {
 	swaps       map[int]*Swap
@@ -162,8 +160,6 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			if err != nil {
 				return nil, nil, err
 			}
-			// store the testService into the bucket
-			bucket.Store(bucketKeySwap, ts)
 
 			cleanup = func() {
 				ts.swap.store.Close()
@@ -253,9 +249,6 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	log.Info("Initializing")
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancelSimRun()
-
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
@@ -263,46 +256,58 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	p1 := sim.UpNodeIDs()[0]
 	p2 := sim.UpNodeIDs()[1]
-	p1Item := sim.MustNodeItem(p1, bucketKeySwap)
-	ts1 := p1Item.(*testService)
+	ts1 := sim.Service("swap", p1).(*testService)
+	ts2 := sim.Service("swap", p2).(*testService)
 
-	p2Item := sim.MustNodeItem(p2, bucketKeySwap)
-	ts2 := p2Item.(*testService)
+	var ts1Len, ts2Len int
+	timeout := time.After(10 * time.Second)
 
 	for {
 		// let's always be nice and allow a time out to be catched
 		select {
-		case <-ctx.Done():
+		case <-timeout:
 			t.Fatal("Timed out waiting for all swap peer connections to be established")
 		default:
 		}
 		// the node has all other peers in its peer list
-		if len(ts1.swap.peers) == 1 && len(ts2.swap.peers) == 1 {
+		ts1.swap.peersLock.Lock()
+		ts1Len = len(ts1.swap.peers)
+		ts1.swap.peersLock.Unlock()
+
+		ts2.swap.peersLock.Lock()
+		ts2Len = len(ts2.swap.peers)
+		ts2.swap.peersLock.Unlock()
+
+		if ts1Len == 1 && ts2Len == 1 {
 			break
 		}
 		// don't overheat the CPU...
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
 	maxCheques := 42
 
+	ts1.lock.Lock()
 	p2Peer := ts1.peers[p2]
+	ts1.lock.Unlock()
+
+	ts2.lock.Lock()
 	p1Peer := ts2.peers[p1]
+	ts2.lock.Unlock()
 
 	for i := 0; i < maxCheques; i++ {
 		if i%2 == 0 {
-			p2Peer.Send(ctx, &testMsgBigPrice{})
-			err := waitForChequeProcessed(ts2)
-			if err != nil {
+			if err := p2Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := waitForChequeProcessed(t, ts2); err != nil {
 				t.Fatal(err)
 			}
 		} else {
-			p1Peer.Send(ctx, &testMsgBigPrice{})
-			err := waitForChequeProcessed(ts1)
-			if err != nil {
+			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := waitForChequeProcessed(t, ts1); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -355,9 +360,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 
 	log.Info("Initializing")
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancelSimRun()
-
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
@@ -367,43 +369,51 @@ func TestMultiChequeSimulation(t *testing.T) {
 	debitor := sim.UpNodeIDs()[0]
 	creditor := sim.UpNodeIDs()[1]
 	// get the testService for the debitor
-	item := sim.MustNodeItem(debitor, bucketKeySwap)
-	debitorSvc := item.(*testService)
-
+	debitorSvc := sim.Service("swap", debitor).(*testService)
 	// get the testService for the creditor
-	peerItem := sim.MustNodeItem(creditor, bucketKeySwap)
-	creditorSvc := peerItem.(*testService)
+	creditorSvc := sim.Service("swap", creditor).(*testService)
 
+	var debLen, credLen int
+	timeout := time.After(10 * time.Second)
 	for {
 		// let's always be nice and allow a time out to be catched
 		select {
-		case <-ctx.Done():
+		case <-timeout:
 			t.Fatal("Timed out waiting for all swap peer connections to be established")
 		default:
 		}
 		// the node has all other peers in its peer list
-		if len(debitorSvc.swap.peers) == 1 && len(creditorSvc.swap.peers) == 1 {
+		debitorSvc.swap.peersLock.Lock()
+		debLen = len(debitorSvc.swap.peers)
+		debitorSvc.swap.peersLock.Unlock()
+
+		creditorSvc.swap.peersLock.Lock()
+		credLen = len(creditorSvc.swap.peers)
+		creditorSvc.swap.peersLock.Unlock()
+
+		if debLen == 1 && credLen == 1 {
 			break
 		}
 		// don't overheat the CPU...
 		time.Sleep(5 * time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 
 	// we will send just maxCheques number of cheques
 	maxCheques := 10
 
 	// the peer object used for sending
+	debitorSvc.lock.Lock()
 	creditorPeer := debitorSvc.peers[creditor]
+	debitorSvc.lock.Unlock()
 
 	// send maxCheques number of cheques
 	for i := 0; i < maxCheques; i++ {
 		// use a price which will trigger a cheque each time
-		creditorPeer.Send(ctx, &testMsgBigPrice{})
+		if err := creditorPeer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+			t.Fatal(err)
+		}
 		// we need to wait a bit in order to give time for the cheque to be processed
-		err = waitForChequeProcessed(creditorSvc)
-		if err != nil {
+		if err := waitForChequeProcessed(t, creditorSvc); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -464,9 +474,6 @@ func TestBasicSwapSimulation(t *testing.T) {
 
 	log.Info("Initializing")
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancelSimRun()
-
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
@@ -492,6 +499,9 @@ func TestBasicSwapSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	go func() {
 		for {
 			maxMsgsInt64 := int64(maxMsgs)
@@ -512,12 +522,8 @@ func TestBasicSwapSimulation(t *testing.T) {
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		log.Info("simulation running")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
 		nodes := sim.UpNodeIDs()
 		msgCount := 0
-
 		// unfortunately, before running the actual simulation, we need an additional check (...).
 		// If we start sending right away, it can happen that devp2p did **not yet finish connecting swap peers**
 		// (verified through multiple runs). This would then fail the test because on Swap.Add the peer is not (yet) found...
@@ -531,10 +537,12 @@ func TestBasicSwapSimulation(t *testing.T) {
 					return errors.New("Timed out waiting for all swap peer connections to be established")
 				default:
 				}
-				item := sim.MustNodeItem(node, bucketKeySwap)
-				ts := item.(*testService)
+				ts := sim.Service("swap", node).(*testService)
 				// the node has all other peers in its peer list
-				if len(ts.swap.peers) == nodeCount-1 {
+				ts.swap.peersLock.Lock()
+				tsLen := len(ts.swap.peers)
+				ts.swap.peersLock.Unlock()
+				if tsLen == nodeCount-1 {
 					// so let's take the next node
 					continue ALL_SWAP_PEERS
 				}
@@ -547,8 +555,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 	ITER:
 		for {
 			for _, node := range nodes {
-				item := sim.MustNodeItem(node, bucketKeySwap)
-				ts := item.(*testService)
+				ts := sim.Service("swap", node).(*testService)
 				for k, p := range nodes {
 					// don't send to self
 					if node == p {
@@ -564,9 +571,15 @@ func TestBasicSwapSimulation(t *testing.T) {
 						}
 						// also alternate between Sender paid and Receiver paid messages
 						if k%2 == 0 {
-							tp.Send(ctx, &testMsgByReceiver{})
+							err := tp.Send(context.Background(), &testMsgByReceiver{})
+							if err != nil {
+								return err
+							}
 						} else {
-							tp.Send(ctx, &testMsgBySender{})
+							err := tp.Send(context.Background(), &testMsgBySender{})
+							if err != nil {
+								return err
+							}
 						}
 						msgCount++
 					} else {
@@ -589,8 +602,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 		//balance with a peer as that peer with the same node,
 		//but in inverted signs
 		for _, node := range nodes {
-			item := sim.MustNodeItem(node, bucketKeySwap)
-			ts := item.(*testService)
+			nodeTs := sim.Service("swap", node).(*testService)
 			// for each node look up the peers
 			for _, p := range nodes {
 				// no need to check self
@@ -598,11 +610,10 @@ func TestBasicSwapSimulation(t *testing.T) {
 					continue
 				}
 
-				peerItem := sim.MustNodeItem(p, bucketKeySwap)
-				peerTs := peerItem.(*testService)
+				peerTs := sim.Service("swap", p).(*testService)
 
 				// balance of the node with peer p
-				nodeBalanceWithP, err := ts.swap.loadBalance(p)
+				nodeBalanceWithP, err := nodeTs.swap.loadBalance(p)
 				if err != nil {
 					return fmt.Errorf("expected balance for peer %v to be found, but not found", p)
 				}
@@ -628,7 +639,8 @@ func TestBasicSwapSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-func waitForChequeProcessed(ts *testService) error {
+func waitForChequeProcessed(t *testing.T, ts *testService) error {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
@@ -636,10 +648,10 @@ func waitForChequeProcessed(ts *testService) error {
 
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("timed out waiting for cheque to be processed")
+		t.Fatal("timed out waiting for cheque to be processed")
 	case <-backend.cashDone:
-		return nil
 	}
+	return nil
 }
 
 func (ts *testService) Protocols() []p2p.Protocol {

@@ -85,6 +85,7 @@ type swapTestBackend struct {
 func init() {
 	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
+	auditLog = log.Root()
 }
 
 // newTestBackend creates a new test backend instance
