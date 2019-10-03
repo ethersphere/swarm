@@ -502,16 +502,16 @@ func (s *Swap) ReceivedCheques() (map[enode.ID]*Cheque, error) {
 }
 
 // PeerCheques returns the last sent and received cheques for a given peer
-func (s *Swap) PeerCheques(peer enode.ID) (sentCheque *Cheque, receivedCheque *Cheque, err error) {
-	sentCheque, err = s.SentCheque(peer)
+func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
+	sentCheque, err := s.SentCheque(peer)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	receivedCheque, err = s.ReceivedCheque(peer)
+	receivedCheque, err := s.ReceivedCheque(peer)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return sentCheque, receivedCheque, nil
+	return map[string]*Cheque{"lastSentCheque": sentCheque, "lastReceivedCheque": receivedCheque}, nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
