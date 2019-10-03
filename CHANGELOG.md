@@ -1,13 +1,32 @@
-## v0.5.1 (Unreleased)
+## v0.5.2 (Unknown)
+
+## v0.5.1 (October 03, 2019)
+
+### Notes
+
+- This release just includes some minor bugfixes.
+- If you have a push sync enabled cluster, you now need to provide the `--progress` flag to `swarm up` if you want to see the progress bar.
+
+### Commits
+
+* [#1853](https://github.com/ethersphere/swarm/pull/1853) cmd/swarm: fix progress bars for encrypted upload
+* [#1842](https://github.com/ethersphere/swarm/pull/1842) swap: query cheque information through RPC call
+* [#1827](https://github.com/ethersphere/swarm/pull/1827) swap: message price
+* [#1850](https://github.com/ethersphere/swarm/pull/1850) cmd/swarm: remove --no-track, add --progress flag
+* [#1851](https://github.com/ethersphere/swarm/pull/1851) api/client: use a separate http client with cookie jar for *sticky session
+* [#1852](https://github.com/ethersphere/swarm/pull/1852) chunk, cmd/swarm: return last tag
+* [#1846](https://github.com/ethersphere/swarm/pull/1846) network: fix hive autoconnect param that was added and caused regression in test
+* [#1841](https://github.com/ethersphere/swarm/pull/1841) network/stream: move from v2
+
 
 ## v0.5.0 (September 30, 2019)
 
- ### Notes
+### Notes
 
  - This release is not backward compatible with the previous versions of Swarm. Please update your nodes.
  - Ubuntu PPA support has been removed. We will add support for multiple software distribution platforms at a later stage. In the meanwhile you can still find the Swarm binaries at the [official download page](https://swarm-gateways.net/bzz:/swarm.eth/downloads/).
 
- ### Features
+### Features
 
  - **Content Pinning:** You can now pin content to your local swarm node. This way you can guarantee that certain content stays on your node. You can enable pinning by setting the `--enable-pinning` flag. For more information, read the [documentation](https://swarm-guide.readthedocs.io/en/latest/dapp_developer/index.html#pinning-content).
 
@@ -18,7 +37,7 @@ The following features are **experimental** and are **not enabled by default on 
  - **SWAP:** A first version of of the SWarm Accounting Protocol (SWAP) is implemented. SWAP is a tit-for-tat incentive system where nodes account how much data they request and serve to their peers. If a node consumes significantly more than it provides, it pays for the consumed data using a L2 payment system: the chequebook. You can try SWAP on a SWAP enabled network with the flags `--swap --swap-backend-url=<evm_endpoint>` or learn more in the [SW3 paper](https://www.overleaf.com/read/yszmsdqyqbvc) , [Swap, Swear, and Swindle Games video](https://www.youtube.com/watch?v=9Cgyhsjsfbg) or [this article](https://www.rifos.org/blog/rif-storage-the-first-chunks/). The economics of this system is still in a highly experimental state.
 - **BzzEth:** This is a new protocol that enables Ethereum and Swarm nodes to communicate with each other and help Ethereum nodes distribute blockchain data and state data over Swarm, enabling various functionalities like state syncing via Swarm and light client support. This release includes the preliminary phase of supporting blockchain on Swarm. This is experimental work that can be trialled with a dedicated version of the Ethereum Trinity client. For more information check out [Ethereum header chain over Swarm](https://github.com/ethersphere/user-stories/issues/9).
 
- ### Commits
+### Commits
 * [#1814](https://github.com/ethersphere/swarm/pull/1814) cmd/swarm: add cli UI for tag progress on pushsync
 * [#1793](https://github.com/ethersphere/swarm/pull/1793) cmd/swarm-smoke: add flag to bail on error
 * [#1835](https://github.com/ethersphere/swarm/pull/1835) p2p: fix tests due to Drop signature change
