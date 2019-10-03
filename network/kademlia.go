@@ -420,17 +420,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 					return false
 				}
 			}
-			// curPO found
-			// find a callable peer out of the addresses in the unsaturated bin
-			// stop if found
-			bin.ValIterator(func(val pot.Val) bool {
-				e := val.(*entry)
-				if k.callable(e) {
-					suggestedPeer = e.BzzAddr
-					return false
-				}
-				return true
-			})
+			suggestedPeer = k.suggestPeerInBin(bin)
 			return cur < len(bins) && suggestedPeer == nil
 		}, true)
 	}
@@ -440,6 +430,65 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 		return suggestedPeer, saturationDepth, true
 	}
 	return suggestedPeer, 0, false
+}
+
+func (k *Kademlia) suggestPeerInBin(bin *pot.Bin) *BzzAddr {
+	var foundPeer *BzzAddr
+	// curPO found
+	// find a callable peer out of the addresses in the unsaturated bin
+	// stop if found
+	bin.ValIterator(func(val pot.Val) bool {
+		e := val.(*entry)
+		if k.callable(e) {
+			foundPeer = e.BzzAddr
+			return false
+		}
+		return true
+	})
+	return foundPeer
+}
+
+//suggestPeerInBinByGap tries to find the best peer to connect in a particular bin looking for the biggest
+//address gap in the current connections bin of same proximity order instead of using the first address that is
+//callable. In case there is no current bin of po = bin.ProximityOrder, or is empty, the usual suggestPeerInBin algorithm
+//will take place.
+//bin parameter is the bin in the addresses in which to select a BzzAddr
+//return value is the BzzAddr selected
+func (k *Kademlia) suggestPeerInBinByGap(bin *pot.Bin) *BzzAddr {
+	connBin := k.defaultIndex.conns.PotWithPo(k.base, bin.ProximityOrder, Pof)
+	if connBin == nil {
+		return k.suggestPeerInBin(bin)
+	}
+	gapPo, gapVal := connBin.BiggestAddressGap()
+	// I need an address in the missing gapPo space with respect to gapVal
+	// the lower gapPo the biggest the address space gap
+	var foundPeer *BzzAddr
+	var candidatePeer *BzzAddr
+	furthestPo := 256
+	// find a callable peer out of the addresses in the unsaturated bin
+	// stop if found
+	bin.ValIterator(func(val pot.Val) bool {
+		e := val.(*entry)
+		addrPo, _ := Pof(gapVal, e.BzzAddr, bin.ProximityOrder)
+		if k.callable(e) {
+			if addrPo == gapPo {
+				foundPeer = e.BzzAddr
+				return false
+			}
+			if addrPo < furthestPo {
+				furthestPo = addrPo
+				candidatePeer = e.BzzAddr
+			}
+			return true
+		}
+		return true
+	})
+	if foundPeer != nil {
+		return foundPeer
+	} else {
+		// Peer with an address po away from pin not found, so we return the farthest
+		return candidatePeer
+	}
 }
 
 // On inserts the peer as a kademlia peer into the live peers

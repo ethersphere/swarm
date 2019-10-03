@@ -919,3 +919,86 @@ func (t *Pot) sstring(indent string) string {
 	}
 	return s
 }
+
+//PotWithPo returns a Pot with all elements with proximity order desiredPo w.r.t. pivotVal.
+//is similar to obtain a bin but in a tree structure that helps in some calculations
+func (t *Pot) PotWithPo(pivotVal Val, desiredPo int, pof Pof) *Pot {
+	if t == nil || t.size == 0 {
+		return nil
+	}
+	pivotProximityOrder, _ := pof(t.pin, pivotVal, 0)
+	pivotPot, pivotBinIndex := t.getPos(pivotProximityOrder)
+	if pivotProximityOrder < desiredPo {
+		if pivotPot != nil && pivotPot.po == pivotProximityOrder {
+			return pivotPot.PotWithPo(pivotVal, desiredPo, pof)
+		} else { //There is no bin with the desired po
+			return nil
+		}
+	}
+	if pivotProximityOrder == desiredPo {
+		prunedPot := t.clone()
+		prunedPot.po = desiredPo
+		actualPivotPlace := pivotBinIndex
+		if pivotPot == nil {
+			actualPivotPlace--
+		}
+		var removedBinsSize int
+		for i := 0; i < len(prunedPot.bins) && i <= actualPivotPlace; i++ {
+			removedBinsSize += prunedPot.bins[i].size
+		}
+		prunedPot.size = prunedPot.size - removedBinsSize
+		if prunedPot.bins != nil {
+			prunedPot.bins = prunedPot.bins[actualPivotPlace+1:]
+		}
+		return prunedPot
+	}
+	// if pivotProximityOrder > desiredPo
+	for i := 0; i < len(t.bins); i++ {
+		n := t.bins[i]
+		if n.po == desiredPo {
+			return n
+		}
+	}
+	return nil
+}
+
+//BiggestAddressGap tries to find the biggest address not covered by an element in the address space.
+//Biggest gaps tend to be top left of the tree (if the pot is rendered root top and bins with po = 0 left).
+//As the bins progress to the right or down (higher proximity order) the address space gap left is smaller.
+//An address gap is defined as a missing proximity order without any value. So for example, a root value with two
+//bins, one with po 0 and one with po 2 has a gap in po=1. Of course it also has a gap in po>=3 but that gap is smaller
+//in number of addresses contained. If the total space area is 1, the space covered by a bin of proximity order n can
+//be defined as 1/2^n. So po=0 will occupy half of the area, po=5 1/32 of the area and so on.
+//When a gap is found there is no need to go further on that level because advancing (horizontally or vertically) will
+//decrease the maximum gap space by half.
+//The function returns the proximity order of the gap and the reference value where the gap has been found (so the
+//exact address set can be calculated)
+func (t *Pot) BiggestAddressGap() (po int, val Val) {
+	if t == nil || t.size == 0 {
+		return 0, nil
+	}
+
+	if len(t.bins) == 0 {
+		return t.po + 1, t.pin
+	}
+
+	wrt := t.pin
+	biggest := 256
+	last := t.po
+	for _, subPot := range t.bins {
+		if subPot.po > last+1 && last+1 <= biggest {
+			wrt = t.pin
+			biggest = last + 1
+			break
+		} else {
+			last = subPot.po
+			subBiggest, aVal := subPot.BiggestAddressGap()
+			if subBiggest < biggest {
+				biggest = subBiggest
+				wrt = aVal
+			}
+		}
+	}
+
+	return biggest, wrt
+}

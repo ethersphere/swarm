@@ -597,24 +597,24 @@ func TestEachBinDesc(t *testing.T) {
 	pot := NewPot(baseAddr, 0)
 	pot, _, _ = testAdd(pot, pof, 1, "01111111", "01000000", "10111111", "11011111", "11101111")
 	binConsumer := func(bin *Bin) bool {
-		fmt.Println("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
+		log.Debug("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
 		bin.ValIterator(func(val Val) bool {
 			addr := val.(*testAddr)
-			fmt.Println("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
+			log.Debug("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
 			return true
 		})
 		return true
 	}
-	fmt.Println("****************Forward order****************")
+	log.Debug("****************Forward order****************")
 	pot.eachBin(pot.pin, pof, 0, binConsumer)
-	fmt.Println("****************Reverse order****************")
+	log.Debug("****************Reverse order****************")
 	pot.eachBinDesc(pot.pin, pof, 0, binConsumer)
 
 	//Test eachBinDesc for a given address. For example one address with po 2 with respect to t.pin
 	pivotAddr := newTestAddr("11010000", 6)
-	fmt.Println("****************Forward order with pivot 11010000****************")
+	log.Debug("****************Forward order with pivot 11010000****************")
 	pot.eachBin(pivotAddr, pof, 0, binConsumer)
-	fmt.Println("****************Reverse order with pivot 11010000****************")
+	log.Debug("****************Reverse order with pivot 11010000****************")
 	pot.eachBinDesc(pivotAddr, pof, 0, binConsumer)
 }
 
@@ -624,10 +624,10 @@ func TestEachBinDescPivotInAMissingBin(t *testing.T) {
 	pot := NewPot(baseAddr, 0)
 	pot, _, _ = testAdd(pot, pof, 1, "01111111", "01000000", "10111111", "11101111", "11101011", "11111110")
 	binConsumer := func(bin *Bin) bool {
-		fmt.Println("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
+		log.Debug("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
 		bin.ValIterator(func(val Val) bool {
 			addr := val.(*testAddr)
-			fmt.Println("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
+			log.Debug("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
 			return true
 		})
 		return true
@@ -635,9 +635,9 @@ func TestEachBinDescPivotInAMissingBin(t *testing.T) {
 
 	//Test eachBinDesc for an address with a po that we don't have a bin for
 	pivotAddr := newTestAddr("11010000", 7)
-	fmt.Println("****************Forward order with pivot 11010000****************")
+	log.Debug("****************Forward order with pivot 11010000****************")
 	pot.eachBin(pivotAddr, pof, 0, binConsumer)
-	fmt.Println("****************Reverse order with pivot 11010000****************")
+	log.Debug("****************Reverse order with pivot 11010000****************")
 	pot.eachBinDesc(pivotAddr, pof, 0, binConsumer)
 }
 
@@ -649,6 +649,161 @@ func toBinaryByte(addr *testAddr) string {
 		}
 	}
 	return formatted
+}
+
+// TestPotWithPoEmptyPots checks PotWithPo in a flat pot with just one level
+func TestPotWithPo1(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	aPot := NewPot(newTestAddr("11000000", 0), 0)
+	aPot, _, _ = testAdd(aPot, pof, 1, "00000000", "10000000", "11100000", "11010000")
+	pot0 := aPot.PotWithPo(baseAddr, 0, pof) // I
+	log.Debug("I")
+	log.Debug(pot0.String())
+	if pot0.pin.(*testAddr).i != 1 {
+		t.Errorf("Expected pot with pin 00000000 but got %v", pot0.pin.(*testAddr).String()[:8])
+	}
+	if pot0.size != 1 {
+		t.Errorf("Expected pot with size 1 but got %v", pot0.size)
+	}
+	checkEach(pot0, 0, baseAddr, t)
+	pot3 := aPot.PotWithPo(baseAddr, 3, pof) // II
+	log.Debug("II")
+	log.Debug(pot3.String())
+	if pot3.pin.(*testAddr).i != 3 {
+		t.Errorf("Expected pot with pin 11100000 but got %v", pot3.pin.(*testAddr).String()[:8])
+	}
+	if pot3.size != 1 {
+		t.Errorf("Expected pot with size 1 but got %v", pot3.size)
+	}
+	checkEach(pot3, 3, baseAddr, t)
+	pot2 := aPot.PotWithPo(baseAddr, 2, pof) // III
+	log.Debug("III")
+	log.Debug(pot2.String())
+	if pot2.pin.(*testAddr).i != 0 {
+		t.Errorf("Expected pot with pin 11000000 but got %v", pot2.pin.(*testAddr).String()[:8])
+	}
+	if pot2.size != 2 {
+		t.Errorf("Expected pot with size 1 but got %v", pot2.size)
+	}
+	checkEach(pot2, 2, baseAddr, t)
+}
+
+// TestPotWithPoEmptyPots checks PotWithPo in a pot of several levels
+func TestPotWithPo2(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	aPot := NewPot(newTestAddr("00000000", 0), 0)
+	aPot, _, _ = testAdd(aPot, pof, 1, "10000000", "11000000", "10010000", "00001000", "11001000")
+	pot0 := aPot.PotWithPo(baseAddr, 0, pof) // IV
+	log.Debug("IV")
+	log.Debug(pot0.String())
+	if pot0.pin.(*testAddr).i != 0 {
+		t.Errorf("Expected pot with pin 00000000 but got %v", pot0.pin.(*testAddr).String()[:8])
+	}
+	if pot0.size != 2 {
+		t.Errorf("Expected pot with size 2 but got %v", pot0.size)
+	}
+	checkEach(pot0, 0, baseAddr, t)
+	pot1 := aPot.PotWithPo(baseAddr, 1, pof) // V
+	log.Debug("V")
+	log.Debug(pot1.String())
+	if pot1.pin.(*testAddr).i != 1 {
+		t.Errorf("Expected pot with pin 10000000 but got %v", pot1.pin.(*testAddr).String()[:8])
+	}
+	if pot1.size != 2 {
+		t.Errorf("Expected pot with size 2 but got %v", pot1.size)
+	}
+	checkEach(pot1, 1, baseAddr, t)
+	pot2 := aPot.PotWithPo(baseAddr, 2, pof) // VI
+	log.Debug("VI")
+	log.Debug(pot2.String())
+	if pot2.pin.(*testAddr).i != 2 {
+		t.Errorf("Expected pot with pin 11000000 but got %v", pot2.pin.(*testAddr).String()[:8])
+	}
+	if pot2.size != 2 {
+		t.Errorf("Expected pot with size 2 but got %v", pot2.size)
+	}
+	checkEach(pot2, 2, baseAddr, t)
+}
+
+// TestPotWithPoEmptyPots checks several special cases when there is no pot of the desired po
+func TestPotWithPoEmptyPots(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	aPot := NewPot(newTestAddr("00000000", 0), 0)
+	emptyPot := aPot.PotWithPo(baseAddr, 1, pof)
+	log.Debug("Empty?")
+	log.Debug(emptyPot.String())
+	if emptyPot != nil {
+		t.Errorf("Expected nil pot for po 1 but got %v", emptyPot)
+	}
+
+	aPot = NewPot(nil, 0)
+	emptyPot = aPot.PotWithPo(baseAddr, 1, pof)
+	if emptyPot != nil {
+		t.Errorf("Expected nil pot for empty input pot but got %v", emptyPot)
+	}
+
+	aPot = nil
+	emptyPot = aPot.PotWithPo(baseAddr, 1, pof)
+	if emptyPot != nil {
+		t.Errorf("Expected nil pot for nil input pot but got %v", emptyPot)
+	}
+
+	aPot = NewPot(newTestAddr("11110000", 0), 0)
+	emptyPot = aPot.PotWithPo(baseAddr, 1, pof)
+	if emptyPot != nil {
+		t.Errorf("Expected nil pot for empty input pot but got %v", emptyPot)
+	}
+
+	aPot = NewPot(newTestAddr("11110000", 0), 0)
+	aPot, _, _ = testAdd(aPot, pof, 1, "11000000")
+	emptyPot = aPot.PotWithPo(baseAddr, 1, pof)
+	if emptyPot != nil {
+		t.Errorf("Expected nil pot for pot without desired po but got %v", emptyPot)
+	}
+}
+
+func checkEach(pot *Pot, po int, base *testAddr, t *testing.T) {
+	pof := DefaultPof(8)
+	errors := make([]Val, 0)
+	pot.Each(func(val Val) bool {
+		if aPo, _ := pof(base, val, 0); aPo != po {
+			errors = append(errors, val)
+		}
+		return true
+	})
+	if len(errors) != 0 {
+		t.Errorf("Expected all addresses in pot to have po %v with base(%v). Errors: %v", po, base.String()[:8], errors)
+	}
+}
+
+func TestBiggestAddressGap(t *testing.T) {
+	pof := DefaultPof(8)
+	aPot := NewPot(newTestAddr("00000000", 0), 0)
+	aPot, _, _ = testAdd(aPot, pof, 1, "01000000", "01010000", "01010100", "00010000")
+	log.Debug("POT bin 0")
+	log.Debug(aPot.String())
+	po, val := aPot.BiggestAddressGap()
+	if po != 2 {
+		entry := val.(*testAddr)
+		t.Errorf("Expected biggest gap in po 2 of address 1 or po2 of address 0. But got po: %v, address idx:%v", po, entry.i)
+	}
+
+	// An empty pot will always return po 0 (and nil value)
+	aPot = NewPot(nil, 0)
+	po, _ = aPot.BiggestAddressGap()
+	if po != 0 {
+		t.Errorf("Expected biggest gap in po 0 when pot is empty, but got %v", po)
+	}
+
+	// A pot with just one element should return po = t.po + 1 and t.pin as val
+	aPot = NewPot(newTestAddr("00000000", 0), 0)
+	po, _ = aPot.BiggestAddressGap()
+	if po != aPot.po+1 {
+		t.Errorf("Expected biggest gap in po 1 when pot is a single address of po 0 but got %v", po)
+	}
 }
 
 func benchmarkEachNeighbourSync(t *testing.B, max, count int, d time.Duration) {

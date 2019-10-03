@@ -1003,3 +1003,78 @@ func TestCapabilityNeighbourhoodDepth(t *testing.T) {
 		t.Fatalf("cap 'one' expected depth 2, was %d", depth)
 	}
 }
+
+//TestSuggestPeerInBinByGap will check that when several addresses are available for register in the same bin, the
+//one suggested is the one that fills the biggest gap of address in that bin.
+func TestSuggestPeerInBinByGap(t *testing.T) {
+	tk := newTestKademlia(t, "11111111")
+	tk.Register("00000000", "00000001")
+	bin0 := tk.getAddressBin(0)
+	if bin0 == nil {
+		t.Errorf("Expected bin 0 in addresses to be found but is nil")
+	}
+
+	// Adding 00000000 for example, doesn't really mater among the first two
+	tk.On("00000000")
+	tk.Register("01000000")
+	suggestedByGapPeer := tk.suggestPeerInBinByGap(tk.getAddressBin(0))
+	binaryString := bzzAddrToBinary(suggestedByGapPeer)
+	// Expected suggestion is 01000000 because it covers bigger part of the address space in bin 0.
+	if binaryString != "01000000" {
+		t.Errorf("Expected suggestion by gap to be 01000000 because is in po=1 gap, but got %v", binaryString)
+	}
+	// Adding 01000000
+	tk.On(binaryString)
+	//Now wi will try to fill in po 1
+	tk.Register("10000000", "11110000")
+	bin1 := tk.getAddressBin(1)
+	//Among the two peers in first one (10000000) covers more gap than the other one in our kademlia table (is farther from
+	// our base 11111111)
+	suggestedByGapPeer = tk.suggestPeerInBinByGap(bin1)
+	binaryString = bzzAddrToBinary(suggestedByGapPeer)
+	if binaryString != "10000000" {
+		t.Errorf("Expected suggestion by gap to be 10000000 because is in po=1 gap, but got %v", binaryString)
+	}
+}
+
+//TestSuggestPeerInBinByGapCandidate checks than when suggesting addresses, if an address in the desired gap can't be
+//found, the furthest away from the reference peer will be chosen (the one with lower po so it will fill up a bigger
+//part of the gap)
+func TestSuggestPeerInBinByGapCandidate(t *testing.T) {
+	tk := newTestKademlia(t, "11111111")
+	tk.On("00000000", "10000000")
+	//Registering address (10000100) po=5 from 1000000 to leave a big gap [2..4]
+	tk.On("10000100")
+	//Now we are going to suggest a biggest gap that doesn't match with any of the available addresses. The algorithm
+	//should take the furthest from the reference address (parent of the gap, so 10000000)
+	//Now we have a gap po=2 under 10000000 in bin1. We are not going to register an address po=2 (f.ex. 10100000) but
+	//two addresses at po=3 and po=4 from it. Algorithm should return the farthest candidate(po=3).
+	//10010000 => po=3 from 10000000
+	//10001000 => po=4 from 10000000
+	tk.Register("10010000", "10001000")
+	suggestedCandidate := tk.suggestPeerInBinByGap(tk.getAddressBin(1))
+	binaryString := bzzAddrToBinary(suggestedCandidate)
+	if binaryString != "10010000" {
+		t.Errorf("Expected furthest candidate to be 10010000 at po=3, but got %v", binaryString)
+	}
+}
+
+//getAddressBin is an utility function to obtain a Bin by po
+func (tk *testKademlia) getAddressBin(po int) *pot.Bin {
+	var theBin *pot.Bin
+	tk.defaultIndex.addrs.EachBin(tk.base, Pof, po, func(bin *pot.Bin) bool {
+		if bin.ProximityOrder == po {
+			theBin = bin
+			return false
+		} else if bin.ProximityOrder > po {
+			return false
+		} else {
+			return true
+		}
+	}, true)
+	return theBin
+}
+
+func bzzAddrToBinary(bzzAddress *BzzAddr) string {
+	return byteToBinary(bzzAddress.OAddr[0])
+}
