@@ -218,7 +218,7 @@ func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string
 		time.Sleep(pollDelay)
 		newTag, err := client.TagByHash(hash)
 		if err != nil {
-			utils.Fatalf("had an error polling the tag for address %s, err %v", tag.Address.String(), err)
+			utils.Fatalf("had an error polling the tag for hash %s, err %v", hash, err)
 		}
 		done := true
 		for _, state := range chunkStates {
