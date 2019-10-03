@@ -49,7 +49,7 @@ const (
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 100000
+	defaultOutboxCapacity      = 100
 	protocolName               = "pss"
 	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
@@ -154,9 +154,10 @@ func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
 		case <-o.quitC:
 		}
 		return nil
-	default:
-		metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-		return errors.New("outbox full")
+		// Lets block instead to drop if outbox is full.
+		// default:
+		// 	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
+		// 	return errors.New("outbox full")
 	}
 }
 

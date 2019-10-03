@@ -160,9 +160,9 @@ func (lb *loopBack) Register(topic string, _ bool, handler func(msg []byte, p *p
 // Send publishes a msg with a topic and directly calls registered handlers with
 // that topic
 func (lb *loopBack) Send(to []byte, topic string, msg []byte) error {
-	if !delayResponse() {
-		return nil
-	}
+	// if !delayResponse() {
+	// 	return nil
+	// }
 	return lb.send(to, topic, msg)
 }
 
@@ -172,7 +172,6 @@ func (lb *loopBack) send(to []byte, topic string, msg []byte) error {
 		log.Debug("handling message", "topic", topic, "to", hex.EncodeToString(to))
 		if err := handler(msg, p); err != nil {
 			log.Error("error handling message", "topic", topic, "to", hex.EncodeToString(to))
-			return err
 		}
 	}
 	return nil

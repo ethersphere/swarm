@@ -71,7 +71,7 @@ func TestProtocol(t *testing.T) {
 			n := synced[idx]
 			synced[idx] = n + 1
 		case <-time.After(timeout):
-			t.Fatalf("timeout waiting for all chunks to be synced")
+			t.Fatalf("timeout waiting for all chunks to be synced: %v, %v", len(synced), chunkCnt)
 		}
 		// all chunks set as synced
 		if len(synced) == chunkCnt {
