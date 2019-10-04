@@ -78,6 +78,7 @@ func TestModeSetSyncPull(t *testing.T) {
 		runGcIndexTest  bool
 		expErrPushIndex error
 		expErrGCIndex   error
+		expErrPinIndex  error
 	}{
 		{
 			name:            "set pull sync, normal tag",
@@ -86,6 +87,7 @@ func TestModeSetSyncPull(t *testing.T) {
 			runGcIndexTest:  true,
 			expErrPushIndex: nil,
 			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 		{
 			name:            "set pull sync, anonymous tag",
@@ -94,6 +96,7 @@ func TestModeSetSyncPull(t *testing.T) {
 			runGcIndexTest:  false,
 			expErrPushIndex: leveldb.ErrNotFound,
 			expErrGCIndex:   nil,
+			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 		{
 			name:            "set push sync, normal tag",
@@ -102,6 +105,7 @@ func TestModeSetSyncPull(t *testing.T) {
 			runGcIndexTest:  true,
 			expErrPushIndex: nil,
 			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 		{
 			name:            "set push sync, anonymous tag",
@@ -110,6 +114,7 @@ func TestModeSetSyncPull(t *testing.T) {
 			runGcIndexTest:  true,
 			expErrPushIndex: leveldb.ErrNotFound,
 			expErrGCIndex:   nil,
+			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 	} {
 		t.Run(mtc.name, func(t *testing.T) {
@@ -153,6 +158,7 @@ func TestModeSetSyncPull(t *testing.T) {
 						newPullIndexTest(db, ch, binIDs[po], nil)(t)
 						newPushIndexTest(db, ch, wantTimestamp, mtc.expErrPushIndex)(t)
 						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], mtc.expErrGCIndex)(t)
+						newPinIndexTest(db, ch, mtc.expErrPinIndex)(t)
 
 						// if the upload is anonymous then we expect to see some values in the gc index
 						if mtc.anonymous {
