@@ -87,8 +87,8 @@ func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 		ps:             ps,
 		logger:         log.New("self", label(ps.BaseAddr())),
 	}
-	go p.chunksHandler()
-	go p.receiptsHandler()
+	go p.chunksWorker()
+	go p.receiptsWorker()
 	return p
 }
 
@@ -116,7 +116,7 @@ func (p *Pusher) Close() {
 // the routine also updates counts of states on a tag in order
 // to monitor the proportion of saved, sent and synced chunks of
 // a file or collection
-func (p *Pusher) chunksHandler() {
+func (p *Pusher) chunksWorker() {
 	var chunks <-chan chunk.Chunk
 	var unsubscribe func()
 	defer close(p.closedChunks)
@@ -226,7 +226,7 @@ func (p *Pusher) chunksHandler() {
 	}
 }
 
-func (p *Pusher) receiptsHandler() {
+func (p *Pusher) receiptsWorker() {
 	defer close(p.closedReceipts)
 
 	// register handler for pssReceiptTopic on pss pubsub
