@@ -423,18 +423,16 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 func (s *Swap) Cheques() (cheques map[enode.ID]map[string]*Cheque, err error) {
 	cheques = make(map[enode.ID]map[string]*Cheque)
 
-	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
 		peerCheques, err := s.PeerCheques(peer)
+		swapPeer.lock.Unlock()
 		if err == nil {
 			cheques[peer] = peerCheques
 		} else {
 			break
 		}
-		swapPeer.lock.Unlock()
 	}
-	s.peersLock.Unlock()
 
 	if err != nil {
 		return nil, err
