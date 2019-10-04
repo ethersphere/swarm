@@ -176,7 +176,10 @@ func TestAddressMatchProx(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	//Forwarding will fail. Since in this test we are not relying on forwarding, but just handling, the test is valid
+	//Forwarding will fail if we don't set a forward function
+	ps.outbox.SetForward(func(msg *message.Message) error {
+		return nil
+	})
 	ps.outbox.Start()
 	defer ps.outbox.Stop()
 

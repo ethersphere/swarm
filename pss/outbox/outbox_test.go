@@ -2,6 +2,8 @@ package outbox_test
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,6 +73,71 @@ func TestOutbox(t *testing.T) {
 	case <-successC:
 	case <-time.After(timeout):
 		t.Fatalf("timeout waiting for successC")
+	}
+}
+
+//TestOutboxWorkers checks that the number of goroutines for processing have a maximum and that there is no
+//deadlock operating
+func TestOutboxWorkers(t *testing.T) {
+	outboxCapacity := 100
+	workers := 3
+	endProcess := make(chan struct{}, outboxCapacity)
+
+	var parallel int32
+	var maxParallel int32
+
+	var wg sync.WaitGroup
+	mockForwardFunction := func(msg *message.Message) error {
+		atomic.AddInt32(&parallel, 1)
+		if parallel > maxParallel {
+			atomic.StoreInt32(&maxParallel, parallel)
+			maxParallel = parallel
+		}
+		<-endProcess
+		atomic.AddInt32(&parallel, -1)
+		wg.Done()
+		return nil
+	}
+
+	testOutbox := outbox.NewMock(&outbox.Config{
+		NumberSlots: outboxCapacity,
+		Forward:     mockForwardFunction,
+		NumWorkers:  workers,
+	})
+
+	testOutbox.Start()
+	defer testOutbox.Stop()
+
+	numMessages := 100
+
+	// Enqueuing numMessages messages in parallel
+	wg.Add(numMessages)
+	for i := 0; i < numMessages; i++ {
+		go func(num byte) {
+			testOutbox.Enqueue(outbox.NewOutboxMessage(newTestMessage(num)))
+		}(byte(i))
+	}
+
+	time.Sleep(1 * time.Millisecond)
+	//Signaling 100 messages
+	for i := 0; i < numMessages; i++ {
+		endProcess <- struct{}{}
+	}
+
+	wg.Wait()
+
+	if int(maxParallel) > workers {
+		t.Errorf("Expected maximum %v worker(s) in parallel but got %v", workers, maxParallel)
+	}
+}
+
+func newTestMessage(num byte) *message.Message {
+	return &message.Message{
+		To:      nil,
+		Flags:   message.Flags{},
+		Expire:  0,
+		Topic:   message.Topic{},
+		Payload: []byte{num},
 	}
 }
 

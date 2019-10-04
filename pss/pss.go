@@ -50,6 +50,7 @@ const (
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
 	defaultOutboxCapacity      = 100000
+	defaultOutboxWorkers       = 100
 	protocolName               = "pss"
 	protocolVersion            = 2
 )
@@ -182,6 +183,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	})
 	ps.outbox = outbox.NewOutbox(&outbox.Config{
 		NumberSlots: defaultOutboxCapacity,
+		NumWorkers:  defaultOutboxWorkers,
 		Forward:     ps.forward,
 	})
 

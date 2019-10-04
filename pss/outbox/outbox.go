@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	NumberSlots int
+	NumWorkers  int
 	Forward     forwardFunction
 }
 
@@ -18,6 +19,7 @@ type Outbox struct {
 	queue       []*outboxMsg
 	slots       chan int
 	process     chan int
+	workers     chan int
 	stopC       chan struct{}
 }
 
@@ -25,12 +27,18 @@ type forwardFunction func(msg *message.Message) error
 
 var ErrOutboxFull = errors.New("outbox full")
 
+const defaultOutboxWorkers = 100
+
 func NewOutbox(config *Config) *Outbox {
+	if config.NumWorkers == 0 {
+		config.NumWorkers = defaultOutboxWorkers
+	}
 	outbox := &Outbox{
 		forwardFunc: config.Forward,
 		queue:       make([]*outboxMsg, config.NumberSlots),
 		slots:       make(chan int, config.NumberSlots),
 		process:     make(chan int),
+		workers:     make(chan int, config.NumWorkers),
 		stopC:       make(chan struct{}),
 	}
 	// fill up outbox slots
@@ -70,6 +78,10 @@ func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 	}
 }
 
+func (o *Outbox) SetForward(forwardFunc forwardFunction) {
+	o.forwardFunc = forwardFunc
+}
+
 //ProcessOutbox starts a routine that tries to forward messages present in the outbox queue
 func (o *Outbox) processOutbox() {
 	for {
@@ -77,6 +89,7 @@ func (o *Outbox) processOutbox() {
 		case <-o.stopC:
 			return
 		case slot := <-o.process:
+			o.workers <- slot
 			go func(slot int) {
 				msg := o.queue[slot]
 				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
@@ -90,6 +103,8 @@ func (o *Outbox) processOutbox() {
 				}
 				//message processed, free the outbox slot
 				o.free(slot)
+				//Free worker space
+				<-o.workers
 				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
 			}(slot)
 		}
