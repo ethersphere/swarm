@@ -17,10 +17,12 @@ package outbox
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss/message"
+	"github.com/tilinna/clock"
 )
 
 // Config contains the Outbox configuration.
@@ -28,16 +30,20 @@ type Config struct {
 	NumberSlots int             // number of slots for messages in Outbox.
 	NumWorkers  int             // number of parallel goroutines forwarding messages.
 	Forward     forwardFunction // function that executes the actual forwarding.
+	MaxRetryTime *time.Duration // max time a message will be retried in the outbox.
+	Clock        clock.Clock    // clock dependency to calculate elapsed time.
 }
 
 // Outbox will be in charge of forwarding messages. These will be enqueued and retry until successfully forwarded.
 type Outbox struct {
-	forwardFunc forwardFunction
-	queue       []*outboxMsg
-	slots       chan int
-	process     chan int
-	numWorkers  int
-	stopC       chan struct{}
+	forwardFunc  forwardFunction
+	queue        []*outboxMsg
+	slots        chan int
+	process      chan int
+	numWorkers   int
+	stopC        chan struct{}
+	maxRetryTime time.Duration
+	clock        clock.Clock
 }
 
 type forwardFunction func(msg *message.Message) error
@@ -46,6 +52,7 @@ type forwardFunction func(msg *message.Message) error
 var ErrOutboxFull = errors.New("outbox full")
 
 const defaultOutboxWorkers = 100
+const defaultMaxRetryTime = 10 * time.Minute
 
 // NewOutbox creates a new Outbox. Config must be provided. IF NumWorkers is not providers, default will be used.
 func NewOutbox(config *Config) *Outbox {
@@ -53,13 +60,21 @@ func NewOutbox(config *Config) *Outbox {
 		config.NumWorkers = defaultOutboxWorkers
 	}
 	outbox := &Outbox{
-		forwardFunc: config.Forward,
-		queue:       make([]*outboxMsg, config.NumberSlots),
-		slots:       make(chan int, config.NumberSlots),
-		process:     make(chan int),
-		numWorkers:  config.NumWorkers,
-		stopC:       make(chan struct{}),
+		forwardFunc:  config.Forward,
+		queue:        make([]*outboxMsg, config.NumberSlots),
+		slots:        make(chan int, config.NumberSlots),
+		process:      make(chan int),
+		numWorkers:   config.NumWorkers,
+		stopC:        make(chan struct{}),
+        maxRetryTime: defaultMaxRetryTime,
+        clock:        clock.Realtime(),
 	}
+    if config.MaxRetryTime != nil {
+        outbox.maxRetryTime = *config.MaxRetryTime
+    }
+    if config.Clock != nil {
+        outbox.clock = config.Clock
+    }
 	// fill up outbox slots
 	for i := 0; i < cap(outbox.slots); i++ {
 		outbox.slots <- i
@@ -119,6 +134,15 @@ func (o *Outbox) processOutbox() {
 				if err := o.forwardFunc(msg.msg); err != nil {
 					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
 					log.Debug(err.Error())
+					limit := msg.startedAt.Add(o.maxRetryTime)
+					now := o.clock.Now()
+					if now.After(limit) {
+						metrics.GetOrRegisterCounter("pss.forward.expired", nil).Inc(1)
+						log.Warn("Message expired, won't be requeued", "limit", limit, "now", now)
+						o.free(slot)
+						metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+						return
+					}
 					// requeue the message for processing
 					o.requeue(slot)
 					log.Debug("Message requeued", "slot", slot)
@@ -149,5 +173,9 @@ func (o *Outbox) requeue(slot int) {
 	}
 }
 func (o *Outbox) len() int {
+	return cap(o.slots) - len(o.slots)
+}
+
+func (o *Outbox) CurrentSize() int {
 	return cap(o.slots) - len(o.slots)
 }

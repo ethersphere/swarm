@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/pss/outbox"
+	"github.com/tilinna/clock"
 )
 
 const timeout = 2 * time.Second
@@ -155,6 +156,56 @@ func newTestMessage(num byte) *message.Message {
 		Expire:  0,
 		Topic:   message.Topic{},
 		Payload: []byte{num},
+	}
+}
+
+func TestMessageRetriesExpired(t *testing.T) {
+	failForwardFunction := func(msg *message.Message) error {
+		return errors.New("forward error")
+	}
+	msg := outbox.NewOutboxMessage(&message.Message{
+		To:      nil,
+		Flags:   message.Flags{},
+		Expire:  0,
+		Topic:   message.Topic{},
+		Payload: nil,
+	})
+	// We are going to simulate that 5 minutes has passed with a mock Clock
+	duration := 5 * time.Minute
+	now := time.Now()
+	mockClock := clock.NewMock(now)
+	testOutbox := outbox.NewMock(&outbox.Config{
+		NumberSlots:  1,
+		Forward:      failForwardFunction,
+		MaxRetryTime: &duration,
+		Clock:        mockClock,
+	})
+
+	testOutbox.Start()
+	defer testOutbox.Stop()
+
+	err := testOutbox.Enqueue(msg)
+	if err != nil {
+		t.Errorf("Expected no error enqueueing, instead got %v", err)
+	}
+
+	numMessages := testOutbox.CurrentSize()
+	if numMessages != 1 {
+		t.Errorf("Expected one message in outbox, instead got %v", numMessages)
+	}
+
+	mockClock.Set(now.Add(duration / 2))
+	numMessages = testOutbox.CurrentSize()
+	if numMessages != 1 {
+		t.Errorf("Expected one message in outbox after half maxRetryTime, instead got %v", numMessages)
+	}
+
+	mockClock.Set(now.Add(duration + 1*time.Nanosecond))
+	// Just sleep a moment to allow the process routine to retry and expire message
+	time.Sleep(10 * time.Millisecond)
+	numMessages = testOutbox.CurrentSize()
+	if numMessages != 0 {
+		t.Errorf("Expected 0 message in outbox after expired message, instead got %v", numMessages)
 	}
 }
 
