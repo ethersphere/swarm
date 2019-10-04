@@ -36,7 +36,13 @@ import (
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	colorable "github.com/mattn/go-colorable"
 )
+
+func init() {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
 
 /*
 TestHandshake creates two mock nodes and initiates an exchange;
@@ -139,9 +145,13 @@ func TestEmitCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	// cashCheque cashes a cheque when the reward of doing so is twice the transaction costs.
+	// gasPrice on testBackend == 1
+	// estimated gas costs == 50000
+	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
+	balance := uint64(100001)
 	// set balance artificially
-	debitor.setBalance(42)
+	debitor.setBalance(int64(balance))
 	log.Debug("balance", "balance", debitor.getBalance())
 	// a safe check: at this point no cheques should be in the swap
 	if debitor.getLastReceivedCheque() != nil {
@@ -153,9 +163,9 @@ func TestEmitCheque(t *testing.T) {
 		ChequeParams: ChequeParams{
 			Contract:         debitorSwap.GetParams().ContractAddress,
 			Beneficiary:      creditorSwap.owner.address,
-			CumulativePayout: 42,
+			CumulativePayout: balance,
 		},
-		Honey: 42,
+		Honey: balance,
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {
@@ -220,7 +230,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
-	creditor.setBalance(-DefaultPaymentThreshold)
+	creditor.setBalance(-int64(DefaultPaymentThreshold))
 
 	// we expect a cheque at the end of the test, but not yet
 	if creditor.getLastSentCheque() != nil {
@@ -249,7 +259,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	// do some accounting again to trigger a second cheque
-	if err = debitorSwap.Add(int64(-DefaultPaymentThreshold), creditor.Peer); err != nil {
+	if err = debitorSwap.Add(-int64(DefaultPaymentThreshold), creditor.Peer); err != nil {
 		t.Fatal(err)
 	}
 

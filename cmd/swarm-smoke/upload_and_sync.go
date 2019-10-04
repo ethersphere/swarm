@@ -37,7 +37,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 	"github.com/pborman/uuid"
 	"golang.org/x/sync/errgroup"
-
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -155,7 +154,11 @@ func trackChunks(testData []byte) error {
 
 	wg.Wait()
 
-	checkChunksVsMostProxHosts(addrs, allHostChunks, bzzAddrs)
+	err = checkChunksVsMostProxHosts(addrs, allHostChunks, bzzAddrs)
+	if err != nil {
+		return err
+	}
+
 	metrics.GetOrRegisterGauge("deployment.nodes", nil).Update(int64(len(hosts)))
 
 	if !hasErr {
@@ -179,7 +182,7 @@ func trackChunks(testData []byte) error {
 // addrs - a slice with all uploaded chunk refs
 // allHostChunks - host->bit vector, showing what chunks are present on what hosts
 // bzzAddrs - host->bzz address, used when determining the most proximate host for a given chunk
-func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[string]string, bzzAddrs map[string]string) {
+func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[string]string, bzzAddrs map[string]string) error {
 	for k, v := range bzzAddrs {
 		log.Trace("bzzAddr", "bzz", v, "host", k)
 	}
@@ -208,11 +211,17 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			}
 		}
 
+		log.Trace("sync mode", "sync mode", syncMode)
+
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {
 				if allHostChunks[maxProxHost][i] == '0' {
 					metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-not-max-prox", nil).Inc(1)
-					log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+					e := fmt.Errorf("chunk not found at max prox host\tref: %s\thost: %s\tbzzAddr: %s", addrs[i], maxProxHost, bzzAddrs[maxProxHost])
+					if bail {
+						return e
+					}
+					log.Error(e.Error())
 				} else {
 					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
 				}
@@ -221,7 +230,11 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			// if chunk found at less than 2 hosts, which is actually less that the min size of a NN
 			if foundAt < 2 {
 				metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-less-nn", nil).Inc(1)
-				log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
+				e := fmt.Errorf("chunk found at less than two hosts\tfoundAt: %d\tref: %s", foundAt, addrs[i])
+				if bail {
+					return e
+				}
+				log.Error(e.Error())
 			}
 		}
 
@@ -237,11 +250,16 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			if !found {
 				for _, maxProxHost := range maxProxHosts {
 					metrics.GetOrRegisterCounter("upload-and-sync.push-sync.chunk-not-max-prox", nil).Inc(1)
-					log.Error("chunk not found at any max prox host", "ref", addrs[i], "hosts", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+					e := fmt.Errorf("chunk not found at any max prox host\tref: %s\thosts: %s\tbzzAddr: %s", addrs[i], maxProxHost, bzzAddrs[maxProxHost])
+					if bail {
+						return e
+					}
+					log.Error(e.Error())
 				}
 			}
 		}
 	}
+	return nil
 }
 
 func getAllRefs(testData []byte) (storage.AddressCollection, error) {
@@ -291,13 +309,14 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	// wait to sync and log chunks before fetch attempt, only if syncDelay is set to true
 	if syncDelay {
 		waitToSync()
+	}
 
-		log.Debug("chunks before fetch attempt", "hash", hash)
-
-		if debug {
-			err = trackChunks(randomBytes)
-			if err != nil {
-				log.Error(err.Error())
+	if debug {
+		err = trackChunks(randomBytes)
+		if err != nil {
+			log.Error(err.Error())
+			if bail {
+				return err
 			}
 		}
 	}
@@ -330,27 +349,30 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 }
 
 func waitToPushSynced(tagname string) {
+	defer metrics.GetOrRegisterResettingTimer("upload-and-sync.wait-to-push-sync", nil).UpdateSince(time.Now())
+
 	for {
 		time.Sleep(200 * time.Millisecond)
 
-		rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
-		if rpcClient != nil {
-			defer rpcClient.Close()
-		}
-		if err != nil {
-			log.Error("error dialing host", "err", err)
-			continue
-		}
+		if func() (synced bool) {
+			rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
+			if rpcClient != nil {
+				defer rpcClient.Close()
+			}
+			if err != nil {
+				log.Error("error dialing host", "err", err)
+				return false
+			}
 
-		bzzClient := client.NewBzz(rpcClient)
+			bzzClient := client.NewBzz(rpcClient)
 
-		synced, err := bzzClient.IsPushSynced(tagname)
-		if err != nil {
-			log.Error(err.Error())
-			continue
-		}
-
-		if synced {
+			synced, err = bzzClient.IsPushSynced(tagname)
+			if err != nil {
+				log.Error(err.Error())
+				return false
+			}
+			return synced
+		}() {
 			return
 		}
 	}

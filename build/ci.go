@@ -28,7 +28,6 @@ Available commands are:
    lint                                                                                        -- runs certain pre-selected linters
    archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artifacts
    importkeys                                                                                  -- imports signing keys from env
-   debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
    xgo        [ -alltools ] [ options ]                                                        -- cross builds according to options
    purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
 
@@ -38,7 +37,6 @@ For all commands, -n prevents execution of external programs (dry run mode).
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -65,36 +63,8 @@ var (
 		executablePath("swarm"),
 	}
 
-	// A debian package is created for all executables listed here.
-	debSwarmExecutables = []debExecutable{
-		{
-			BinaryName:  "swarm",
-			PackageName: "ethereum-swarm",
-			Description: "Ethereum Swarm daemon and tools",
-		},
-	}
-
-	debSwarm = debPackage{
-		Name:        "ethereum-swarm",
-		Version:     sv.Version,
-		Executables: debSwarmExecutables,
-	}
-
-	// Debian meta packages to build and push to Ubuntu PPA
-	debPackages = []debPackage{
-		debSwarm,
-	}
-
 	// Packages to be cross-compiled by the xgo command
 	allCrossCompiledArchiveFiles = swarmArchiveFiles
-
-	// Distros for which packages are created.
-	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	// Note: wily is unsupported because it was officially deprecated on lanchpad.
-	// Note: yakkety is unsupported because it was officially deprecated on lanchpad.
-	// Note: zesty is unsupported because it was officially deprecated on lanchpad.
-	// Note: artful is unsupported because it was officially deprecated on lanchpad.
-	debDistros = []string{"trusty", "xenial", "bionic", "cosmic", "disco"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -132,8 +102,6 @@ func main() {
 		doLint(os.Args[2:])
 	case "archive":
 		doArchive(os.Args[2:])
-	case "debsrc":
-		doDebianSource(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
 	case "purge":
@@ -177,6 +145,7 @@ func doInstall(cmdline []string) {
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
 		goinstall.Args = append(goinstall.Args, "-v")
+		goinstall.Args = append(goinstall.Args, "-trimpath")
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
 		return
@@ -191,6 +160,7 @@ func doInstall(cmdline []string) {
 	// Seems we are cross compiling, work around forbidden GOBIN
 	goinstall := goToolArch(*arch, *cc, "install", buildFlags(env)...)
 	goinstall.Args = append(goinstall.Args, "-v")
+	goinstall.Args = append(goinstall.Args, "-trimpath")
 	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
 	goinstall.Args = append(goinstall.Args, packages...)
 	build.MustRun(goinstall)
@@ -205,6 +175,7 @@ func doInstall(cmdline []string) {
 				if name == "main" {
 					gobuild := goToolArch(*arch, *cc, "build", buildFlags(env)...)
 					gobuild.Args = append(gobuild.Args, "-v")
+					gobuild.Args = append(gobuild.Args, "-trimpath")
 					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(cmd.Name())}...)
 					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
 					build.MustRun(gobuild)
@@ -300,7 +271,7 @@ func doLint(cmdline []string) {
 	configs := []string{
 		"run",
 		"--tests",
-		"--deadline=2m",
+		"--deadline=5m",
 		"--disable-all",
 		"--enable=goimports",
 		"--enable=varcheck",
@@ -411,76 +382,6 @@ func maybeSkipArchive(env build.Environment) {
 	}
 }
 
-// Debian Packaging
-func doDebianSource(cmdline []string) {
-	var (
-		signer  = flag.String("signer", "", `Signing key name, also used as package author`)
-		upload  = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
-		sshUser = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
-		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
-		now     = time.Now()
-	)
-	flag.CommandLine.Parse(cmdline)
-	*workdir = makeWorkdir(*workdir)
-	env := build.Env()
-	maybeSkipArchive(env)
-
-	// Import the signing key.
-	if key := getenvBase64("PPA_SIGNING_KEY"); len(key) > 0 {
-		gpg := exec.Command("gpg", "--import")
-		gpg.Stdin = bytes.NewReader(key)
-		build.MustRun(gpg)
-	}
-
-	// Create Debian packages and upload them
-	for _, pkg := range debPackages {
-		for _, distro := range debDistros {
-			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
-			pkgdir := stageDebianSource(*workdir, meta)
-			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz")
-			debuild.Dir = pkgdir
-			build.MustRun(debuild)
-
-			var (
-				basename = fmt.Sprintf("%s_%s", meta.Name(), meta.VersionString())
-				source   = filepath.Join(*workdir, basename+".tar.xz")
-				dsc      = filepath.Join(*workdir, basename+".dsc")
-				changes  = filepath.Join(*workdir, basename+"_source.changes")
-			)
-			if *signer != "" {
-				build.MustRunCommand("debsign", changes)
-			}
-			if *upload != "" {
-				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes})
-			}
-		}
-	}
-}
-
-func ppaUpload(workdir, ppa, sshUser string, files []string) {
-	p := strings.Split(ppa, "/")
-	if len(p) != 2 {
-		log.Fatal("-upload PPA name must contain single /")
-	}
-	if sshUser == "" {
-		sshUser = p[0]
-	}
-	incomingDir := fmt.Sprintf("~%s/ubuntu/%s", p[0], p[1])
-	// Create the SSH identity file if it doesn't exist.
-	var idfile string
-	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
-		idfile = filepath.Join(workdir, "sshkey")
-		if _, err := os.Stat(idfile); os.IsNotExist(err) {
-			ioutil.WriteFile(idfile, sshkey, 0600)
-		}
-	}
-	// Upload
-	dest := sshUser + "@ppa.launchpad.net"
-	if err := build.UploadSFTP(idfile, dest, incomingDir, files); err != nil {
-		log.Fatal(err)
-	}
-}
-
 func getenvBase64(variable string) []byte {
 	dec, err := base64.StdEncoding.DecodeString(os.Getenv(variable))
 	if err != nil {
@@ -507,141 +408,6 @@ func isUnstableBuild(env build.Environment) bool {
 		return false
 	}
 	return true
-}
-
-type debPackage struct {
-	Name        string          // the name of the Debian package to produce, e.g. "ethereum", or "ethereum-swarm"
-	Version     string          // the clean version of the debPackage, e.g. 1.8.12 or 0.3.0, without any metadata
-	Executables []debExecutable // executables to be included in the package
-}
-
-type debMetadata struct {
-	Env build.Environment
-
-	PackageName string
-
-	// go-ethereum version being built. Note that this
-	// is not the debian package version. The package version
-	// is constructed by VersionString.
-	Version string
-
-	Author       string // "name <email>", also selects signing key
-	Distro, Time string
-	Executables  []debExecutable
-}
-
-type debExecutable struct {
-	PackageName string
-	BinaryName  string
-	Description string
-}
-
-// Package returns the name of the package if present, or
-// fallbacks to BinaryName
-func (d debExecutable) Package() string {
-	if d.PackageName != "" {
-		return d.PackageName
-	}
-	return d.BinaryName
-}
-
-func newDebMetadata(distro, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
-	if author == "" {
-		// No signing key, use default author.
-		author = "Ethereum Builds <fjl@ethereum.org>"
-	}
-	return debMetadata{
-		PackageName: name,
-		Env:         env,
-		Author:      author,
-		Distro:      distro,
-		Version:     version,
-		Time:        t.Format(time.RFC1123Z),
-		Executables: exes,
-	}
-}
-
-// Name returns the name of the metapackage that depends
-// on all executable packages.
-func (meta debMetadata) Name() string {
-	if isUnstableBuild(meta.Env) {
-		return meta.PackageName + "-unstable"
-	}
-	return meta.PackageName
-}
-
-// VersionString returns the debian version of the packages.
-func (meta debMetadata) VersionString() string {
-	vsn := meta.Version
-	if meta.Env.Buildnum != "" {
-		vsn += "+build" + meta.Env.Buildnum
-	}
-	if meta.Distro != "" {
-		vsn += "+" + meta.Distro
-	}
-	return vsn
-}
-
-// ExeList returns the list of all executable packages.
-func (meta debMetadata) ExeList() string {
-	names := make([]string, len(meta.Executables))
-	for i, e := range meta.Executables {
-		names[i] = meta.ExeName(e)
-	}
-	return strings.Join(names, ", ")
-}
-
-// ExeName returns the package name of an executable package.
-func (meta debMetadata) ExeName(exe debExecutable) string {
-	if isUnstableBuild(meta.Env) {
-		return exe.Package() + "-unstable"
-	}
-	return exe.Package()
-}
-
-// ExeConflicts returns the content of the Conflicts field
-// for executable packages.
-func (meta debMetadata) ExeConflicts(exe debExecutable) string {
-	if isUnstableBuild(meta.Env) {
-		// Set up the conflicts list so that the *-unstable packages
-		// cannot be installed alongside the regular version.
-		//
-		// https://www.debian.org/doc/debian-policy/ch-relationships.html
-		// is very explicit about Conflicts: and says that Breaks: should
-		// be preferred and the conflicting files should be handled via
-		// alternates. We might do this eventually but using a conflict is
-		// easier now.
-		return "ethereum, " + exe.Package()
-	}
-	return ""
-}
-
-func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
-	pkg := meta.Name() + "-" + meta.VersionString()
-	pkgdir = filepath.Join(tmpdir, pkg)
-	if err := os.Mkdir(pkgdir, 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	// Copy the source code.
-	build.MustRunCommand("git", "checkout-index", "-a", "--prefix", pkgdir+string(filepath.Separator))
-
-	// Put the debian build files in place.
-	debian := filepath.Join(pkgdir, "debian")
-	build.Render("build/deb/"+meta.PackageName+"/deb.rules", filepath.Join(debian, "rules"), 0755, meta)
-	build.Render("build/deb/"+meta.PackageName+"/deb.changelog", filepath.Join(debian, "changelog"), 0644, meta)
-	build.Render("build/deb/"+meta.PackageName+"/deb.control", filepath.Join(debian, "control"), 0644, meta)
-	build.Render("build/deb/"+meta.PackageName+"/deb.copyright", filepath.Join(debian, "copyright"), 0644, meta)
-	build.RenderString("8\n", filepath.Join(debian, "compat"), 0644, meta)
-	build.RenderString("3.0 (native)\n", filepath.Join(debian, "source/format"), 0644, meta)
-	for _, exe := range meta.Executables {
-		install := filepath.Join(debian, meta.ExeName(exe)+".install")
-		docs := filepath.Join(debian, meta.ExeName(exe)+".docs")
-		build.Render("build/deb/"+meta.PackageName+"/deb.install", install, 0644, exe)
-		build.Render("build/deb/"+meta.PackageName+"/deb.docs", docs, 0644, exe)
-	}
-
-	return pkgdir
 }
 
 // Cross compilation

@@ -67,7 +67,7 @@ func TestChunkDelivery(t *testing.T) {
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
-	})
+	}, true)
 	defer sim.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -183,7 +183,7 @@ func TestDeliveryForwarding(t *testing.T) {
 func setupTestDeliveryForwardingSimulation(t *testing.T) (sim *simulation.Simulation, uploader, forwarder, fetching enode.ID) {
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-retrieve": newBzzRetrieveWithLocalstore,
-	})
+	}, true)
 
 	fetching, err := sim.AddNode()
 	if err != nil {
@@ -254,27 +254,15 @@ func TestRequestFromPeers(t *testing.T) {
 	}
 }
 
-//TestHasPriceImplementation is to check that Retrieval implements protocols.Prices
+//TestHasPriceImplementation is to check that Retrieval provides priced messages
 func TestHasPriceImplementation(t *testing.T) {
-	addr := network.RandomBzzAddr()
-	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
-	r := New(to, nil, to.BaseAddr(), nil)
-
-	if r.prices == nil {
-		t.Fatal("No prices implementation available for retrieve protocol")
-	}
-
-	pricesInstance, ok := r.prices.(*RetrievalPrices)
-	if !ok {
-		t.Fatal("Retrieval does not have the expected Prices instance")
-	}
-	price := pricesInstance.Price(&ChunkDelivery{})
-	if price == nil || price.Value == 0 || price.Value != pricesInstance.chunkDeliveryPrice() {
+	price := (&ChunkDelivery{}).Price()
+	if price == nil || price.Value == 0 {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
 
-	price = pricesInstance.Price(&RetrieveRequest{})
-	if price == nil || price.Value == 0 || price.Value != pricesInstance.retrieveRequestPrice() {
+	price = (&RetrieveRequest{}).Price()
+	if price == nil || price.Value == 0 {
 		t.Fatal("No prices set for retrieve requests")
 	}
 }

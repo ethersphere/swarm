@@ -23,12 +23,11 @@ import (
 )
 
 // CheckTag checks the first tag in the api struct to be in a certain state
-func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int64) {
+func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, sent, synced, total int64) {
 	t.Helper()
 	if tag == nil {
 		t.Fatal("no tag found")
 	}
-
 	tSplit := tag.Get(chunk.StateSplit)
 	if tSplit != split {
 		t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
@@ -42,6 +41,16 @@ func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int64) {
 	tStored := tag.Get(chunk.StateStored)
 	if tStored != stored {
 		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
+	}
+
+	tSent := tag.Get(chunk.StateSent)
+	if tStored != stored {
+		t.Fatalf("mismatch sent chunks, got %d want %d", tSent, sent)
+	}
+
+	tSynced := tag.Get(chunk.StateSynced)
+	if tSynced != synced {
+		t.Fatalf("mismatch synced chunks, got %d want %d", tSynced, synced)
 	}
 
 	tTotal := tag.TotalCounter()

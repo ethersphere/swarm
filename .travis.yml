@@ -21,32 +21,6 @@ jobs:
       script:
         - go run build/ci.go lint
 
-    # Go 1.12.x is needed because of the Ubuntu PPA builds
-    - stage: build
-      os: linux
-      dist: trusty
-      sudo: required
-      go: 1.12.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # Go 1.11.x is needed because of the Ubuntu PPA builds
-    - stage: build
-      os: linux
-      dist: trusty
-      sudo: required
-      go: 1.11.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
     # These are the latest Go versions.
     - stage: build
       os: linux
@@ -75,27 +49,6 @@ jobs:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # This builder does the Ubuntu PPA upload
-    - stage: deploy
-      if: type = push
-      os: linux
-      dist: trusty
-      go: 1.13.x
-      env:
-        - ubuntu-ppa
-      addons:
-        apt:
-          packages:
-            - devscripts
-            - debhelper
-            - dput
-            - fakeroot
-            - python-bzrlib
-            - python-paramiko
-      script:
-        - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user ethswarm -signer "Ethereum Swarm Linux Builder <swarm@ethereum.org>"
 
     # This builder does the Linux Azure uploads
     - stage: deploy

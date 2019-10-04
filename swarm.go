@@ -48,10 +48,11 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
-	"github.com/ethersphere/swarm/network/stream/v2"
+	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	pssmessage "github.com/ethersphere/swarm/pss/message"
+	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -83,6 +84,8 @@ type Swarm struct {
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
+	pushSync          *pushsync.Pusher
+	storer            *pushsync.Storer
 	swap              *swap.Swap
 	stateStore        *state.DBStore
 	tags              *chunk.Tags
@@ -118,13 +121,20 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if self.config.NetworkID != swap.AllowedNetworkID {
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
+		swapParams := &swap.Params{
+			LogPath:             self.config.SwapLogPath,
+			DisconnectThreshold: int64(self.config.SwapDisconnectThreshold),
+			PaymentThreshold:    int64(self.config.SwapPaymentThreshold),
+		}
+
 		// create the accounting objects
 		self.swap, err = swap.New(
 			self.config.Path,
 			self.privateKey,
 			self.config.SwapBackendURL,
-			self.config.SwapDisconnectThreshold,
-			self.config.SwapPaymentThreshold,
+			swapParams,
+			self.config.Contract,
+			self.config.SwapInitialDeposit,
 		)
 		if err != nil {
 			return nil, err
@@ -145,6 +155,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,
+		SyncEnabled:  config.SyncEnabled,
 	}
 
 	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -220,10 +231,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.fileStore = storage.NewFileStore(lnetStore, localStore, self.config.FileStoreParams, self.tags)
 
 	log.Debug("Setup local storage")
-
 	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, stream.Spec, self.retrieval.Spec(), self.streamer.Run, self.retrieval.Run)
-
-	self.bzzEth = bzzeth.New()
+	self.bzzEth = bzzeth.New(self.netStore, to)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.New(to, config.Pss)
@@ -234,11 +243,18 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
+	if config.PushSyncEnabled {
+		pubsub := pss.NewPubSub(self.ps)
+		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
+		self.storer = pushsync.NewStorer(self.netStore, pubsub)
+	}
+
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
 
-	// Instantiate the pinAPI object with the already opened localstore
-	self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, self.tags, self.api)
-
+	if config.EnablePinning {
+		// Instantiate the pinAPI object with the already opened localstore
+		self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, self.tags, self.api)
+	}
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
 
@@ -363,14 +379,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().URLv4()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 
-	if s.config.SwapEnabled {
-		if err := s.swap.StartChequebook(s.config.Contract); err != nil {
-			return err
-		}
-	} else {
-		log.Info("SWAP disabled: no chequebook set")
-	}
-
 	log.Info("Starting bzz service")
 
 	err := s.bzz.Start(srv)
@@ -468,6 +476,13 @@ func (s *Swarm) Stop() error {
 		log.Error("retrieval stop", "err", err)
 	}
 
+	if s.pushSync != nil {
+		s.pushSync.Close()
+	}
+	if s.storer != nil {
+		s.storer.Close()
+	}
+
 	if s.netStore != nil {
 		s.netStore.Close()
 	}
@@ -519,14 +534,14 @@ func (s *Swarm) APIs() []rpc.API {
 		// public APIs
 		{
 			Namespace: "bzz",
-			Version:   "3.0",
+			Version:   "4.0",
 			Service:   &Info{s.config},
 			Public:    true,
 		},
 		// admin APIs
 		{
 			Namespace: "bzz",
-			Version:   "3.0",
+			Version:   "4.0",
 			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.streamer),
 			Public:    false,
 		},
@@ -545,7 +560,12 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-	apis = append(apis, s.streamer.APIs()...)
+
+	// this is a workaround disabling syncing altogether from a node but
+	// must be changed when multiple stream implementations are at hand
+	if s.config.SyncEnabled {
+		apis = append(apis, s.streamer.APIs()...)
+	}
 	apis = append(apis, s.bzzEth.APIs()...)
 
 	if s.ps != nil {

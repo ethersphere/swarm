@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/pss/crypto"
@@ -52,6 +53,12 @@ const (
 	defaultOutboxCapacity      = 100000
 	protocolName               = "pss"
 	protocolVersion            = 2
+	CapabilityID               = capability.CapabilityID(1)
+	capabilitiesSend           = 0 // node sends pss messages
+	capabilitiesReceive        = 1 // node processes pss messages
+	capabilitiesForward        = 4 // node forwards pss messages on behalf of network
+	capabilitiesPartial        = 5 // node accepts partially addressed messages
+	capabilitiesEmpty          = 6 // node accepts messages with empty address
 )
 
 var (
@@ -90,6 +97,7 @@ type Params struct {
 	privateKey          *ecdsa.PrivateKey
 	SymKeyCacheCapacity int
 	AllowRaw            bool // If true, enables sending and receiving messages without builtin pss encryption
+	AllowForward        bool
 }
 
 // Sane defaults for Pss
@@ -185,6 +193,16 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		Forward:     ps.forward,
 	})
 
+	cp := capability.NewCapability(CapabilityID, 8)
+	cp.Set(capabilitiesSend)
+	cp.Set(capabilitiesReceive)
+	cp.Set(capabilitiesPartial)
+	cp.Set(capabilitiesEmpty)
+	if params.AllowForward {
+		cp.Set(capabilitiesForward)
+	}
+	k.Capabilities.Add(cp)
+
 	return ps, nil
 }
 
@@ -239,7 +257,10 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, spec)
 	p.addPeer(pp)
 	defer p.removePeer(pp)
-	return pp.Run(p.handle)
+	handle := func(ctx context.Context, msg interface{}) error {
+		return p.handle(ctx, pp, msg)
+	}
+	return pp.Run(handle)
 }
 
 func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
@@ -368,17 +389,30 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 	delete(handlers, hndlr)
 }
 
+// generic peer-specific handler for incoming messages
+// calls pss msg handler asyncronously
+func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
+	go func() {
+		pssmsg, ok := msg.(*message.Message)
+		if !ok {
+			log.Error("invalid message type", "msg", msg)
+			peer.Drop("invalid message type")
+		}
+		if err := p.handlePssMsg(ctx, pssmsg); err != nil {
+			log.Warn("handler error", "err", err)
+			peer.Drop(fmt.Sprintf("handler error %s", err))
+		}
+	}()
+	return nil
+}
+
 // Filters incoming messages for processing or forwarding.
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handle(ctx context.Context, msg interface{}) error {
+func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
-	pssmsg, ok := msg.(*message.Message)
-	if !ok {
-		return fmt.Errorf("invalid message type. Expected *message.Message, got %T", msg)
-	}
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
@@ -398,7 +432,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	if pssmsg.Flags.Raw {
 		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
 			if !capabilities.raw {
-				log.Debug("No handler for raw message", "topic", psstopic)
+				log.Warn("No handler for raw message", "topic", label(psstopic[:]))
 				return nil
 			}
 		}
@@ -481,7 +515,7 @@ func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddre
 	defer metrics.GetOrRegisterResettingTimer("pss.execute-handlers", nil).UpdateSince(time.Now())
 
 	handlers := p.getHandlers(topic)
-	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
+	peer := p2p.NewPeer(enode.ID{}, hex.EncodeToString(from), []p2p.Cap{})
 	for _, h := range handlers {
 		if !h.caps.raw && raw {
 			log.Warn("norawhandler")
@@ -516,7 +550,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 		return false
 	}
 
-	depth := p.Kademlia.NeighbourhoodDepth()
+	depth := p.NeighbourhoodDepth()
 	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
@@ -645,7 +679,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 		}
 	}
 	if !isPssEnabled {
-		log.Error("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
+		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", label(sp.BzzAddr.Address()))
 		return false
 	}
 
@@ -680,7 +714,7 @@ func (p *Pss) forward(msg *message.Message) error {
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
-	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
+	neighbourhoodDepth := p.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
 	// but the luminosity is less. here luminosity equals the number of bits given in the destination address.
@@ -705,7 +739,7 @@ func (p *Pss) forward(msg *message.Message) error {
 		onlySendOnce = true
 	}
 
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
+	p.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
 		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
@@ -732,7 +766,14 @@ func (p *Pss) forward(msg *message.Message) error {
 	}
 }
 func label(b []byte) string {
-	return fmt.Sprintf("%04x", b[:2])
+	if len(b) == 0 {
+		return "-"
+	}
+	l := 2
+	if len(b) == 1 {
+		l = 1
+	}
+	return fmt.Sprintf("%04x", b[:l])
 }
 
 // add a message to the cache

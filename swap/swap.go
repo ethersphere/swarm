@@ -24,18 +24,20 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
@@ -43,22 +45,24 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
+var auditLog log.Logger // logger for Swap related messages and audit trail
+
+// swapLogLevel indicates filter level of log messages
+const swapLogLevel = 3
+
 // Swap represents the Swarm Accounting Protocol
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	api                 API
-	store               state.Store        // store is needed in order to keep balances and cheques across sessions
-	peers               map[enode.ID]*Peer // map of all swap Peers
-	peersLock           sync.RWMutex       // lock for peers map
-	backend             contract.Backend   // the backend (blockchain) used
-	owner               *Owner             // contract access
-	params              *Params            // economic and operational parameters
-	contract            swap.Contract      // reference to the smart contract
-	honeyPriceOracle    HoneyOracle        // oracle which resolves the price of honey (in Wei)
-	paymentThreshold    int64              // honey amount at which a payment is triggered
-	disconnectThreshold int64              // honey amount at which a peer disconnects
+	store            state.Store        // store is needed in order to keep balances and cheques across sessions
+	peers            map[enode.ID]*Peer // map of all swap Peers
+	peersLock        sync.RWMutex       // lock for peers map
+	backend          contract.Backend   // the backend (blockchain) used
+	owner            *Owner             // contract access
+	params           *Params            // economic and operational parameters
+	contract         swap.Contract      // reference to the smart contract
+	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -70,62 +74,140 @@ type Owner struct {
 
 // Params encapsulates param
 type Params struct {
-	InitialDepositAmount uint64
+	LogPath             string // optional audit log path
+	PaymentThreshold    int64  // honey amount at which a payment is triggered
+	DisconnectThreshold int64  // honey amount at which a peer disconnects
 }
 
-// NewParams returns a Params struct filled with default values
-func NewParams() *Params {
-	return &Params{
-		InitialDepositAmount: DefaultInitialDepositAmount,
+// newLogger returns a new logger
+func newLogger(logpath string) log.Logger {
+	swapLogger := log.New("swaplog", "*")
+	lh := log.Root().GetHandler()
+
+	if logpath == "" {
+		swapLogger.SetHandler(lh)
+		return swapLogger
 	}
+
+	rfh, err := swapRotatingFileHandler(logpath)
+
+	if err != nil {
+		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
+		//sets a fallback logger, it will use the swarm logger.
+		swapLogger.SetHandler(lh)
+		return swapLogger
+	}
+
+	//Filters messages with the correct logLevel for swap
+	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
+
+	//Dispatches the logs to the default swarm log and also the filtered swap file logger.
+	swapLogger.SetHandler(log.MultiHandler(lh, rfh))
+
+	return swapLogger
+}
+
+// swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
+// the files are split based on the limit parameter expressed in bytes
+func swapRotatingFileHandler(logdir string) (log.Handler, error) {
+	return log.RotatingFileHandler(
+		logdir,
+		262144,
+		log.JSONFormatOrderedEx(false, true),
+	)
 }
 
 // new - swap constructor without integrity check
-func new(stateStore state.Store, prvkey *ecdsa.PrivateKey, backend contract.Backend, disconnectThreshold uint64, paymentThreshold uint64) *Swap {
+func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params) *Swap {
 	return &Swap{
-		store:               stateStore,
-		peers:               make(map[enode.ID]*Peer),
-		backend:             backend,
-		owner:               createOwner(prvkey),
-		params:              NewParams(),
-		disconnectThreshold: int64(disconnectThreshold),
-		paymentThreshold:    int64(paymentThreshold),
-		honeyPriceOracle:    NewHoneyPriceOracle(),
+		store:            stateStore,
+		peers:            make(map[enode.ID]*Peer),
+		backend:          backend,
+		owner:            owner,
+		params:           params,
+		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
 }
 
-// New - swap constructor with integrity checks
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, disconnectThreshold uint64, paymentThreshold uint64) (*Swap, error) {
-	// we MUST have a backend
+// New prepares and creates all fields to create a swap instance:
+// - sets up a SWAP database;
+// - verifies whether the disconnect threshold is higher than the payment threshold;
+// - connects to the blockchain backend;
+// - verifies that we have not connected SWAP before on a different blockchain backend;
+// - starts the chequebook; creates the swap instance
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (swap *Swap, err error) {
+	// auditLog for swap-logging purposes
+	auditLog = newLogger(params.LogPath)
+	// verify that backendURL is not empty
 	if backendURL == "" {
-		return nil, errors.New("swap init error: no backend URL given")
+		return nil, errors.New("no backend URL given")
 	}
-	log.Info("connecting to SWAP API", "url", backendURL)
+	auditLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
-	stateStore, err := state.NewDBStore(filepath.Join(dbPath, "swap.db"))
-	if err != nil {
-		return nil, fmt.Errorf("swap init error: %s", err)
+	var stateStore state.Store
+	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
+		return nil, fmt.Errorf("error while initializing statestore: %v", err)
 	}
-	if disconnectThreshold <= paymentThreshold {
-		return nil, fmt.Errorf("swap init error: disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", disconnectThreshold, paymentThreshold)
+	if params.DisconnectThreshold <= params.PaymentThreshold {
+		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
 	}
+	// connect to the backend
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {
-		return nil, fmt.Errorf("swap init error: error connecting to Ethereum API %s: %s", backendURL, err)
+		return nil, fmt.Errorf("error connecting to Ethereum API %s: %v", backendURL, err)
 	}
-	return new(
+	// get the chainID of the backend
+	var chainID *big.Int
+	if chainID, err = backend.ChainID(context.TODO()); err != nil {
+		return nil, fmt.Errorf("error retrieving chainID from backendURL: %v", err)
+	}
+	// verify that we have not used SWAP before on a different chainID
+	if err := checkChainID(chainID.Uint64(), stateStore); err != nil {
+		return nil, err
+	}
+	auditLog.Info("Using backend network ID", "ID", chainID.Uint64())
+	// create the owner of SWAP
+	owner := createOwner(prvkey)
+	// create the swap instance
+	swap = new(
 		stateStore,
-		prvkey,
+		owner,
 		backend,
-		disconnectThreshold,
-		paymentThreshold), nil
+		params,
+	)
+	// start the chequebook
+	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
+		return nil, err
+	}
+	return swap, nil
 }
 
 const (
-	balancePrefix        = "balance_"
-	sentChequePrefix     = "sent_cheque_"
-	receivedChequePrefix = "received_cheque_"
+	balancePrefix          = "balance_"
+	sentChequePrefix       = "sent_cheque_"
+	receivedChequePrefix   = "received_cheque_"
+	connectedChequebookKey = "connected_chequebook"
+	connectedBlockchainKey = "connected_blockchain"
 )
+
+// checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
+func checkChainID(currentChainID uint64, s state.Store) (err error) {
+	var connectedBlockchain uint64
+	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
+	// error reading from database
+	if err != nil && err != state.ErrNotFound {
+		return fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
+	}
+	// initialized before, but on a different chainID
+	if err != state.ErrNotFound && connectedBlockchain != currentChainID {
+		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentChainID)
+	}
+	if err == state.ErrNotFound {
+		auditLog.Info("First time connected to SWAP. Storing chain ID", "ID", currentChainID)
+		return s.Put(connectedBlockchainKey, currentChainID)
+	}
+	return nil
+}
 
 // returns the store key for retrieving a peer's balance
 func balanceKey(peer enode.ID) string {
@@ -156,11 +238,6 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	}
 }
 
-// DeploySuccess is for convenience log output
-func (s *Swap) DeploySuccess() string {
-	return fmt.Sprintf("contract: %s, owner: %s, deposit: %v, signer: %x", s.GetParams().ContractAddress.Hex(), s.owner.address.Hex(), s.params.InitialDepositAmount, s.owner.publicKey)
-}
-
 // Add is the (sole) accounting function
 // Swap implements the protocols.Balance interface
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
@@ -173,8 +250,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 	// Check if balance with peer is over the disconnect threshold
 	balance := swapPeer.getBalance()
-	if balance >= s.disconnectThreshold {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.disconnectThreshold)
+	if balance >= s.params.DisconnectThreshold {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
 	}
 
 	if err = swapPeer.updateBalance(amount); err != nil {
@@ -184,8 +261,8 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// Check if balance with peer crosses the payment threshold
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
-	if swapPeer.getBalance() <= -s.paymentThreshold {
-		log.Warn("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.paymentThreshold)
+	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
+		auditLog.Info("balance for peer went over the payment threshold, sending cheque", "peer", peer.ID().String(), "payment threshold", s.params.PaymentThreshold)
 		return swapPeer.sendCheque()
 	}
 
@@ -212,13 +289,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
-	log.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
+	auditLog.Info("received cheque from peer", "peer", p.ID().String(), "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return err
 	}
 
-	log.Debug("received cheque processed and verified", "peer", p.ID().String())
+	auditLog.Debug("received cheque processed and verified", "peer", p.ID().String())
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -227,16 +304,27 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	opts := bind.NewKeyedTransactor(s.owner.privateKey)
-	opts.Context = ctx
-
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
 		return err
 	}
 
-	// cash cheque in async, otherwise this blocks here until the TX is mined
-	go defaultCashCheque(s, otherSwap, opts, cheque)
+	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
+	if err != nil {
+		return err
+	}
+	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
+	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
+	if err != nil {
+		return err
+	}
+	// do a payout transaction if we get 2 times the gas costs
+	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
+		opts := bind.NewKeyedTransactor(s.owner.privateKey)
+		opts.Context = ctx
+		// cash cheque in async, otherwise this blocks here until the TX is mined
+		go defaultCashCheque(s, otherSwap, opts, cheque)
+	}
 
 	return err
 }
@@ -249,17 +337,17 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		log.Error("error cashing cheque", "err", err)
+		auditLog.Error("error cashing cheque", "err", err)
 		return
 	}
 
 	if result.Bounced {
-		log.Error("cheque bounced", "tx", receipt.TxHash)
+		auditLog.Warn("cheque bounced", "tx", receipt.TxHash)
 		return
 		// TODO: do something here
 	}
 
-	log.Debug("cash tx mined", "receipt", receipt)
+	auditLog.Debug("cash tx mined", "receipt", receipt)
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -283,7 +371,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		log.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
+		auditLog.Error("error while saving last received cheque", "peer", p.ID().String(), "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -291,12 +379,12 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 }
 
 // Balance returns the balance for a given peer
-func (s *Swap) Balance(peer enode.ID) (int64, error) {
-	swapPeer := s.getPeer(peer)
-	if swapPeer == nil {
-		return 0, state.ErrNotFound
+func (s *Swap) Balance(peer enode.ID) (balance int64, err error) {
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		return swapPeer.getBalance(), nil
 	}
-	return swapPeer.getBalance(), nil
+	err = s.store.Get(balanceKey(peer), &balance)
+	return balance, err
 }
 
 // Balances returns the balances for all known SWAP peers
@@ -329,6 +417,88 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	}
 
 	return balances, nil
+}
+
+// SentCheque returns the last sent cheque for a given peer
+func (s *Swap) SentCheque(peer enode.ID) (cheque *Cheque, err error) {
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		return swapPeer.getLastSentCheque(), nil
+	}
+	err = s.store.Get(sentChequeKey(peer), &cheque)
+	return cheque, err
+}
+
+// SentCheques returns the last sent cheques for all known SWAP peers
+func (s *Swap) SentCheques() (map[enode.ID]*Cheque, error) {
+	cheques := make(map[enode.ID]*Cheque)
+
+	s.peersLock.Lock()
+	for peer, swapPeer := range s.peers {
+		swapPeer.lock.Lock()
+		cheques[peer] = swapPeer.getLastSentCheque()
+		swapPeer.lock.Unlock()
+	}
+	s.peersLock.Unlock()
+
+	// add store cheques, if peer was not already added
+	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peer := keyToID(string(key), sentChequePrefix)
+		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
+			var peerCheque Cheque
+			err = json.Unmarshal(value, &peerCheque)
+			if err == nil {
+				cheques[peer] = &peerCheque
+			}
+		}
+		return stop, err
+	}
+	err := s.store.Iterate(sentChequePrefix, chequesIterFunction)
+	if err != nil {
+		return nil, err
+	}
+
+	return cheques, nil
+}
+
+// ReceivedCheque returns the last received cheque for a given peer
+func (s *Swap) ReceivedCheque(peer enode.ID) (cheque *Cheque, err error) {
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		return swapPeer.getLastReceivedCheque(), nil
+	}
+	err = s.store.Get(receivedChequeKey(peer), &cheque)
+	return cheque, err
+}
+
+// ReceivedCheques returns the last received cheques for all known SWAP peers
+func (s *Swap) ReceivedCheques() (map[enode.ID]*Cheque, error) {
+	cheques := make(map[enode.ID]*Cheque)
+
+	s.peersLock.Lock()
+	for peer, swapPeer := range s.peers {
+		swapPeer.lock.Lock()
+		cheques[peer] = swapPeer.getLastReceivedCheque()
+		swapPeer.lock.Unlock()
+	}
+	s.peersLock.Unlock()
+
+	// add store cheques, if peer was not already added
+	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peer := keyToID(string(key), receivedChequePrefix)
+		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
+			var peerCheque Cheque
+			err = json.Unmarshal(value, &peerCheque)
+			if err == nil {
+				cheques[peer] = &peerCheque
+			}
+		}
+		return stop, err
+	}
+	err := s.store.Iterate(receivedChequePrefix, chequesIterFunction)
+	if err != nil {
+		return nil, err
+	}
+
+	return cheques, nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
@@ -396,70 +566,110 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-// StartChequebook deploys a new instance of a chequebook if chequebookAddr is empty, otherwise it wil bind to an existing instance
-func (s *Swap) StartChequebook(chequebookAddr common.Address) error {
-	if chequebookAddr != (common.Address{}) {
-		if err := s.BindToContractAt(chequebookAddr); err != nil {
-			return err
-		}
-		log.Info("Using the provided chequebook", "chequebookAddr", chequebookAddr)
-	} else {
-		if err := s.Deploy(context.Background()); err != nil {
-			return err
-		}
-		log.Info("New SWAP contract deployed", "contract info", s.DeploySuccess())
-	}
-	return nil
-}
+func promptInitialDepositAmount() (uint64, error) {
+	// need to prompt user for initial deposit amount
+	// if 0, can not cash in cheques
+	prompter := console.Stdin
 
-// BindToContractAt binds an instance of an already existing chequebook contract at address and sets chequebookAddr
-func (s *Swap) BindToContractAt(address common.Address) (err error) {
-
-	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
-		return fmt.Errorf("contract validation for %v failed: %v", address, err)
-	}
-	s.contract, err = contract.InstanceAt(address, s.backend)
+	// ask user for input
+	input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	// check input
+	val, err := strconv.ParseInt(input, 10, 64)
+	if err != nil {
+		// maybe we should provide a fallback here? A bad input results in stopping the boot
+		return 0, fmt.Errorf("Conversion error while reading user input: %v", err)
+	}
+	return uint64(val), nil
 }
 
-// Deploy deploys the Swap contract and sets the contract address
-func (s *Swap) Deploy(ctx context.Context) error {
+// StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
+func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) (contract contract.Contract, err error) {
+	previouslyUsedChequebook, err := s.loadChequebook()
+	// error reading from disk
+	if err != nil && err != state.ErrNotFound {
+		return nil, fmt.Errorf("Error reading previously used chequebook: %s", err)
+	}
+	// read from state, but provided flag is not the same
+	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
+		return nil, fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
+	}
+	// nothing written to state disk before, no flag provided: deploying new chequebook
+	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
+		var toDeposit = initialDepositAmount
+		if toDeposit == 0 {
+			toDeposit, err = promptInitialDepositAmount()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if contract, err = s.Deploy(context.TODO(), toDeposit); err != nil {
+			return nil, err
+		}
+		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
+			return nil, err
+		}
+		auditLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address)
+		// first time connecting by deploying a new chequebook
+		return contract, nil
+	}
+	// first time connecting with a chequebookAddress passed in
+	if chequebookAddrFlag != (common.Address{}) {
+		return bindToContractAt(chequebookAddrFlag, s.backend)
+	}
+	// reconnecting with contract read from statestore
+	return bindToContractAt(previouslyUsedChequebook, s.backend)
+}
+
+// BindToContractAt binds to an instance of an already existing chequebook contract at address
+func bindToContractAt(address common.Address, backend contract.Backend) (contract.Contract, error) {
+	// validate whether address is a chequebook
+	if err := contract.ValidateCode(context.Background(), backend, address); err != nil {
+		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
+	}
+	auditLog.Info("bound to chequebook", "chequebookAddr", address)
+	// get the instance
+	return contract.InstanceAt(address, backend)
+}
+
+// Deploy deploys the Swap contract
+func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
-	opts.Value = big.NewInt(int64(s.params.InitialDepositAmount))
+	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
-
-	log.Info("deploying new swap", "owner", opts.From.Hex())
-	address, err := s.deployLoop(opts, s.owner.address, defaultHarddepositTimeoutDuration)
-	if err != nil {
-		log.Error("unable to deploy swap", "error", err)
-		return err
-	}
-	log.Info("swap deployed", "address", address.Hex(), "owner", opts.From.Hex())
-
-	return err
+	auditLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
+	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
-func (s *Swap) deployLoop(opts *bind.TransactOpts, owner common.Address, defaultHarddepositTimeoutDuration time.Duration) (addr common.Address, err error) {
+func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-
-		if s.contract, tx, err = contract.Deploy(opts, s.backend, owner, defaultHarddepositTimeoutDuration); err != nil {
-			log.Warn("can't send chequebook deploy tx", "try", try, "error", err)
+		if instance, tx, err = contract.Deploy(opts, s.backend, s.owner.address, defaultHarddepositTimeoutDuration); err != nil {
+			auditLog.Warn("can't send chequebook deploy tx", "try", try, "error", err)
 			continue
 		}
-		if addr, err = bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
-			log.Warn("chequebook deploy error", "try", try, "error", err)
+		if _, err := bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
+			auditLog.Warn("chequebook deploy error", "try", try, "error", err)
 			continue
 		}
-		return addr, nil
+		return instance, nil
 	}
-	return addr, err
+	return nil, err
+}
+
+func (s *Swap) loadChequebook() (common.Address, error) {
+	var chequebook common.Address
+	err := s.store.Get(connectedChequebookKey, &chequebook)
+	return chequebook, err
+}
+
+func (s *Swap) saveChequebook(chequebook common.Address) error {
+	return s.store.Put(connectedChequebookKey, chequebook)
 }
