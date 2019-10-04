@@ -50,7 +50,7 @@ const (
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 100000
+	defaultOutboxCapacity      = 10000
 	defaultOutboxWorkers       = 100
 	protocolName               = "pss"
 	protocolVersion            = 2
