@@ -51,7 +51,7 @@ func TestModeSetAccess(t *testing.T) {
 				binIDs[po]++
 
 				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], nil)(t)
 			}
 
 			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
@@ -72,19 +72,22 @@ func TestModeSetSyncPull(t *testing.T) {
 	chunk.TagUidFunc = func() uint32 { return 0 }
 
 	for _, mtc := range []struct {
-		name      string
-		anonymous bool
-		expErr    error
+		name            string
+		anonymous       bool
+		expErrPushIndex error
+		expErrGCIndex   error
 	}{
 		{
-			name:      "normal tag",
-			anonymous: false,
-			expErr:    nil,
+			name:            "normal tag",
+			anonymous:       false,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
 		},
 		{
-			name:      "anonymous tag",
-			anonymous: true,
-			expErr:    leveldb.ErrNotFound,
+			name:            "anonymous tag",
+			anonymous:       true,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
 		},
 	} {
 		t.Run(mtc.name, func(t *testing.T) {
@@ -126,11 +129,11 @@ func TestModeSetSyncPull(t *testing.T) {
 
 						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
 						newPullIndexTest(db, ch, binIDs[po], nil)(t)
-						newPushIndexTest(db, ch, wantTimestamp, mtc.expErr)(t)
+						newPushIndexTest(db, ch, wantTimestamp, mtc.expErrPushIndex)(t)
+						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], mtc.expErrGCIndex)(t)
 
 						// if the upload is anonymous then we expect to see some values in the gc index
 						if mtc.anonymous {
-							newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
 							t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
 						}
 					}
@@ -206,7 +209,7 @@ func TestModeSetSyncPush(t *testing.T) {
 						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
 						newPullIndexTest(db, ch, binIDs[po], nil)(t)
 						newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
-						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], nil)(t)
 					}
 
 					t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
