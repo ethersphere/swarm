@@ -75,32 +75,65 @@ func TestModeSetSyncPull(t *testing.T) {
 		name            string
 		mode            chunk.ModeSet
 		anonymous       bool
+		pin             bool
 		runGcIndexTest  bool
 		expErrPushIndex error
 		expErrGCIndex   error
 		expErrPinIndex  error
 	}{
 		{
-			name:            "set pull sync, normal tag",
+			name:            "set pull sync, normal tag, no pinning",
 			mode:            chunk.ModeSetSyncPull,
 			anonymous:       false,
+			pin:             false,
 			runGcIndexTest:  true,
 			expErrPushIndex: nil,
 			expErrGCIndex:   leveldb.ErrNotFound,
 			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 		{
-			name:            "set pull sync, anonymous tag",
+			name:            "set pull sync, normal tag, with pinning",
+			mode:            chunk.ModeSetSyncPull,
+			anonymous:       false,
+			pin:             true,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		},
+		{
+			name:            "set pull sync, anonymous tag, no pinning",
 			mode:            chunk.ModeSetSyncPull,
 			anonymous:       true,
+			pin:             false,
 			runGcIndexTest:  false,
 			expErrPushIndex: leveldb.ErrNotFound,
 			expErrGCIndex:   nil,
 			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 		{
-			name:            "set push sync, normal tag",
+			name:            "set pull sync, anonymous tag, with pinning",
+			mode:            chunk.ModeSetSyncPull,
+			anonymous:       true,
+			pin:             true,
+			runGcIndexTest:  false,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		},
+		{
+			name:            "set push sync, normal tag, no pinning",
 			anonymous:       false,
+			pin:             false,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		}, {
+			name:            "set push sync, normal tag, with pinning",
+			anonymous:       false,
+			pin:             true,
 			mode:            chunk.ModeSetSyncPush,
 			runGcIndexTest:  true,
 			expErrPushIndex: nil,
@@ -108,8 +141,19 @@ func TestModeSetSyncPull(t *testing.T) {
 			expErrPinIndex:  leveldb.ErrNotFound,
 		},
 		{
-			name:            "set push sync, anonymous tag",
+			name:            "set push sync, anonymous tag, no pinning",
 			anonymous:       true,
+			pin:             false,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		},
+		{
+			name:            "set push sync, anonymous tag, with pinning",
+			anonymous:       true,
+			pin:             true,
 			mode:            chunk.ModeSetSyncPush,
 			runGcIndexTest:  true,
 			expErrPushIndex: leveldb.ErrNotFound,
