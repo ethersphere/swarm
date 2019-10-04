@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/state"
 )
 
@@ -122,8 +123,7 @@ func (h *Hive) Stop() error {
 	}
 	log.Info(fmt.Sprintf("%08x hive stopped, dropping peers", h.BaseAddr()[:4]))
 	h.EachConn(nil, 255, func(p *Peer, _ int) bool {
-		log.Info(fmt.Sprintf("%08x dropping peer %08x", h.BaseAddr()[:4], p.Address()[:4]))
-		p.Drop()
+		p.Drop("hive stopping")
 		return true
 	})
 
@@ -239,6 +239,14 @@ func (h *Hive) loadPeers() error {
 			return nil
 		}
 		return err
+	}
+	// workaround for old node stores not containing capabilities
+	for i := range as {
+		if as[i].Capabilities == nil {
+			caps := capability.NewCapabilities()
+			caps.Add(fullCapability)
+			as[i] = as[i].WithCapabilities(caps)
+		}
 	}
 	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
 

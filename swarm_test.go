@@ -28,15 +28,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/testutil"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/swap"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 // TestNewSwarm validates Swarm fields in repsect to the provided configuration.
@@ -107,19 +105,6 @@ func TestNewSwarm(t *testing.T) {
 				}
 				if s.sfs == nil {
 					t.Error("swarm filesystem not initialized")
-				}
-			},
-		},
-		{
-			name: "with swap",
-			configure: func(config *api.Config) {
-				config.SwapBackendURL = ipcEndpoint
-				config.SwapEnabled = true
-				config.NetworkID = swap.AllowedNetworkID
-			},
-			check: func(t *testing.T, s *Swarm, _ *api.Config) {
-				if s.swap == nil {
-					t.Error("swap is nil")
 				}
 			},
 		},
@@ -426,12 +411,13 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 		rand.Seed(time.Now().UnixNano())
 		rand.Read(slice)
 	}
+	ctx := context.Background()
 	dataPut := string(slice)
 	tag, err := swarm.api.Tags.Create("test-local-store-and-retrieve", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := sctx.SetTag(context.Background(), tag.Uid)
+	ctx = sctx.SetTag(ctx, tag.Uid)
 	k, wait, err := swarm.api.Store(ctx, strings.NewReader(dataPut), int64(len(dataPut)), false)
 	if err != nil {
 		t.Fatal(err)

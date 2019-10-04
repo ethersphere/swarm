@@ -236,7 +236,6 @@ func testSortPeers(peers []*BzzAddr) []*BzzAddr {
 // we need to create the discovery peer objects for the additional kademlia
 // nodes manually
 func newDiscPeer(addr pot.Address) *Peer {
-
 	// deterministically create enode id
 	// Input to the non-random input buffer is 2xaddress since it munches 256 bits
 	addrSeed := append(addr.Bytes(), addr.Bytes()...)

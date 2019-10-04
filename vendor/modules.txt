@@ -16,6 +16,8 @@ github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/hcsshim/osversion
 # github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 github.com/StackExchange/wmi
+# github.com/VividCortex/ewma v1.1.1
+github.com/VividCortex/ewma
 # github.com/allegro/bigcache v0.0.0-20190218064605-e24eb225f156
 github.com/allegro/bigcache
 github.com/allegro/bigcache/queue
@@ -113,7 +115,6 @@ github.com/ethereum/go-ethereum/accounts/abi
 github.com/ethereum/go-ethereum/event
 github.com/ethereum/go-ethereum/metrics/exp
 github.com/ethereum/go-ethereum/p2p/enr
-github.com/ethereum/go-ethereum/whisper/whisperv6
 github.com/ethereum/go-ethereum/common/bitutil
 github.com/ethereum/go-ethereum/accounts/external
 github.com/ethereum/go-ethereum/common/mclock
@@ -142,6 +143,7 @@ github.com/ethereum/go-ethereum/ethstats
 github.com/ethereum/go-ethereum/graphql
 github.com/ethereum/go-ethereum/les
 github.com/ethereum/go-ethereum/miner
+github.com/ethereum/go-ethereum/whisper/whisperv6
 github.com/ethereum/go-ethereum/internal/jsre
 github.com/ethereum/go-ethereum/internal/web3ext
 github.com/ethereum/go-ethereum/p2p/simulations/pipes
@@ -352,6 +354,11 @@ github.com/uber/jaeger-client-go/thrift-gen/agent
 github.com/uber/jaeger-client-go/thrift-gen/baggage
 # github.com/uber/jaeger-lib v0.0.0-20180615202729-a51202d6f4a7
 github.com/uber/jaeger-lib/metrics
+# github.com/vbauerster/mpb v3.4.0+incompatible
+github.com/vbauerster/mpb
+github.com/vbauerster/mpb/decor
+github.com/vbauerster/mpb/cwriter
+github.com/vbauerster/mpb/internal
 # github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208
 github.com/wsddn/go-ecdh
 # golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4

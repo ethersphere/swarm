@@ -13,6 +13,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/spancontext"
+	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/pborman/uuid"
 )
 
@@ -28,6 +29,8 @@ func Adapt(h http.Handler, adapters ...Adapter) http.Handler {
 
 type Adapter func(http.Handler) http.Handler
 
+// SetRequestID is a middleware that sets a random UUID
+// as a unique identifier and injects it into the request context
 func SetRequestID(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(SetRUID(r.Context(), uuid.New()[:8]))
@@ -38,6 +41,8 @@ func SetRequestID(h http.Handler) http.Handler {
 	})
 }
 
+// SetRequestHost is a middleware that injects the
+// request Host into the request context
 func SetRequestHost(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(sctx.SetHost(r.Context(), r.Host))
@@ -47,6 +52,8 @@ func SetRequestHost(h http.Handler) http.Handler {
 	})
 }
 
+// ParseURI is a middleware that parses the request URI
+// to a Swarm URI object that dissects the content presented after the HTTP URI's first slash
 func ParseURI(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
@@ -73,6 +80,8 @@ func ParseURI(h http.Handler) http.Handler {
 	})
 }
 
+// InitLoggingResponseWriter is a wrapper around the WriteHeader call
+// that allows saving the response code for local context
 func InitLoggingResponseWriter(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tn := time.Now()
@@ -135,6 +144,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 	})
 }
 
+// InstrumentOpenTracing instruments an HTTP request with an OpenTracing span
 func InstrumentOpenTracing(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uri := GetURI(r.Context())
@@ -150,6 +160,31 @@ func InstrumentOpenTracing(h http.Handler) http.Handler {
 	})
 }
 
+// PinningEnabledPassthrough allows a request through the middleware in the following cases:
+// 1. checkHeader = true;		api != nil;	header PinHeaderName = true (x-swarm-pin: true) // header is set (hence api use is needed) and api not nil
+// 2. checkHeader = false;	api != nil																									// api not nil (don't care about header)
+func PinningEnabledPassthrough(h http.Handler, api *pin.API, checkHeader bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// if checkHeader is true, it means that the passthrough should happen if the header is set and the pinAPI is not nil
+		if checkHeader {
+			headerPin := r.Header.Get(PinHeaderName)
+			if strings.ToLower(headerPin) == "true" && api == nil {
+				respondError(w, r, "Pinning disabled on this node", http.StatusForbidden)
+				return
+			}
+		} else {
+			// the check assumes just pinAPI not nil
+			if api == nil {
+				respondError(w, r, "Pinning disabled on this node", http.StatusForbidden)
+				return
+			}
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// RecoverPanic is a middleware intended to catch possible panic in the call stack
+// and log them when they occur, failing gracefully to the client
 func RecoverPanic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

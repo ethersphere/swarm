@@ -30,9 +30,6 @@ type dummyBalance struct {
 	peer   *Peer
 }
 
-//dummy Prices implementation
-type dummyPrices struct{}
-
 //a dummy message which needs size based accounting
 //sender pays
 type perBytesMsgSenderPays struct {
@@ -58,47 +55,44 @@ type zeroPriceMsg struct{}
 //a dummy message which has no accounting
 type nilPriceMsg struct{}
 
-//return the price for the defined messages
-func (d *dummyPrices) Price(msg interface{}) *Price {
-	switch msg.(type) {
-	//size based message cost, receiver pays
-	case *perBytesMsgReceiverPays:
-		return &Price{
-			PerByte: true,
-			Value:   uint64(100),
-			Payer:   Receiver,
-		}
-	//size based message cost, sender pays
-	case *perBytesMsgSenderPays:
-		return &Price{
-			PerByte: true,
-			Value:   uint64(100),
-			Payer:   Sender,
-		}
-		//unitary cost, receiver pays
-	case *perUnitMsgReceiverPays:
-		return &Price{
-			PerByte: false,
-			Value:   uint64(99),
-			Payer:   Receiver,
-		}
-		//unitary cost, sender pays
-	case *perUnitMsgSenderPays:
-		return &Price{
-			PerByte: false,
-			Value:   uint64(99),
-			Payer:   Sender,
-		}
-	case *zeroPriceMsg:
-		return &Price{
-			PerByte: false,
-			Value:   uint64(0),
-			Payer:   Sender,
-		}
-	case *nilPriceMsg:
-		return nil
+func (m *perBytesMsgReceiverPays) Price() *Price {
+	return &Price{
+		PerByte: true,
+		Value:   uint64(100),
+		Payer:   Receiver,
 	}
-	return nil
+}
+
+func (m *perBytesMsgSenderPays) Price() *Price {
+	return &Price{
+		PerByte: true,
+		Value:   uint64(100),
+		Payer:   Sender,
+	}
+}
+
+func (m *perUnitMsgReceiverPays) Price() *Price {
+	return &Price{
+		PerByte: false,
+		Value:   uint64(99),
+		Payer:   Receiver,
+	}
+}
+
+func (m *perUnitMsgSenderPays) Price() *Price {
+	return &Price{
+		PerByte: false,
+		Value:   uint64(99),
+		Payer:   Sender,
+	}
+}
+
+func (m *zeroPriceMsg) Price() *Price {
+	return &Price{
+		PerByte: false,
+		Value:   uint64(0),
+		Payer:   Sender,
+	}
 }
 
 //dummy accounting implementation, only stores values for later check
@@ -119,11 +113,10 @@ type testCase struct {
 func TestBalance(t *testing.T) {
 	//create instances
 	balance := &dummyBalance{}
-	prices := &dummyPrices{}
 	//create the spec
 	spec := createTestSpec()
 	//create the accounting hook for the spec
-	acc := NewAccounting(balance, prices)
+	acc := NewAccounting(balance)
 	//create a peer
 	id := adapters.RandomNodeConfig().ID
 	p := p2p.NewPeer(id, "testPeer", nil)

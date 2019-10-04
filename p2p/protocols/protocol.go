@@ -245,7 +245,8 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 // Drop disconnects a peer.
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
-func (p *Peer) Drop() {
+func (p *Peer) Drop(reason string) {
+	log.Error("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 

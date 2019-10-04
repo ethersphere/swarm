@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -165,35 +166,10 @@ func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
 	return db, cleanupFunc
 }
 
-func init() {
-	// needed for generateTestRandomChunk
-	rand.Seed(time.Now().UnixNano())
-}
-
-// generateTestRandomChunk generates a Chunk that is not
-// valid, but it contains a random key and a random value.
-// This function is faster then storage.generateTestRandomChunk
-// which generates a valid chunk.
-// Some tests in this package do not need valid chunks, just
-// random data, and their execution time can be decreased
-// using this function.
-func generateTestRandomChunk() chunk.Chunk {
-	data := make([]byte, chunk.DefaultSize)
-	rand.Read(data)
-	key := make([]byte, 32)
-	rand.Read(key)
-	return chunk.NewChunk(key, data)
-}
-
-// generateTestRandomChunks generates a slice of random
-// Chunks by using generateTestRandomChunk function.
-func generateTestRandomChunks(count int) []chunk.Chunk {
-	chunks := make([]chunk.Chunk, count)
-	for i := 0; i < count; i++ {
-		chunks[i] = generateTestRandomChunk()
-	}
-	return chunks
-}
+var (
+	generateTestRandomChunk  = chunktesting.GenerateTestRandomChunk
+	generateTestRandomChunks = chunktesting.GenerateTestRandomChunks
+)
 
 // chunkAddresses return chunk addresses of provided chunks.
 func chunkAddresses(chunks []chunk.Chunk) []chunk.Address {

@@ -17,6 +17,8 @@
 package bzzeth
 
 import (
+	"context"
+	"encoding/hex"
 	"math/rand"
 	"sync"
 
@@ -90,7 +92,8 @@ type requests struct {
 
 type request struct {
 	hashes map[string]bool // remembers the block hashes that are requested in this connection
-	c      chan []byte     // channel in which the receoved block headers are passed on
+	lock   sync.RWMutex    // mutex to update the hashes received status
+	c      chan []byte     // channel in which the received block headers are passed on
 	cancel func()          // function to call in case of cancellation of the GetBlockHeaders event
 }
 
@@ -113,15 +116,18 @@ func newRequests() *requests {
 // create constructs a new request
 // registers it on the peer request pool
 // request.cancel() should be called to cleanup
-func (r *requests) create(c chan []byte) *request {
+func (r *requests) create(hashes [][]byte, c chan []byte) (*request, uint32) {
 	req := &request{
 		hashes: make(map[string]bool),
 		c:      c,
 	}
 	id := newRequestIDFunc()
+	for _, h := range hashes {
+		req.hashes[hex.EncodeToString(h)] = false
+	}
 	req.cancel = func() { r.remove(id) }
 	r.add(id, req)
-	return req
+	return req, id
 }
 
 func (r *requests) add(id uint32, req *request) {
@@ -141,6 +147,21 @@ func (r *requests) get(id uint32) (*request, bool) {
 	req, ok := r.r[id]
 	r.mtx.RUnlock()
 	return req, ok
+}
+
+// getBlockHeaders sends a GetBlockHeaders message to the remote peer requesting headers by their _hashes_
+// and delivers the actual block header responses to the deliveries channel
+func (p *Peer) getBlockHeaders(ctx context.Context, hashes [][]byte, deliveries chan []byte) (*request, error) {
+	req, id := p.requests.create(hashes, deliveries)
+	err := p.Send(ctx, &GetBlockHeaders{
+		Rid:    id,
+		Hashes: hashes,
+	})
+	if err != nil {
+		req.cancel()
+		return nil, err
+	}
+	return req, nil
 }
 
 // this function is called to check if the remote peer is another swarm node

@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -84,8 +83,8 @@ func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	return p.swap.saveLastSentCheque(p.ID(), cheque)
 }
 
-func (p *Peer) getLastCumulativePayout() uint64 {
-	lastCheque := p.getLastReceivedCheque()
+func (p *Peer) getLastSentCumulativePayout() uint64 {
+	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
@@ -109,7 +108,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	log.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	auditLog.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
 
@@ -133,7 +132,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
 
-	total := p.getLastCumulativePayout()
+	total := p.getLastSentCumulativePayout()
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
@@ -165,7 +164,7 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 
-	log.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	auditLog.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

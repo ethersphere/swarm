@@ -181,9 +181,11 @@ func init() {
 		SwarmSwapBackendURLFlag,
 		SwarmSwapDisconnectThresholdFlag,
 		SwarmSwapPaymentThresholdFlag,
+		SwarmSwapLogPathFlag,
 		SwarmSwapChequebookAddrFlag,
+		SwarmSwapInitialDepositFlag,
 		// end of swap flags
-		SwarmSyncDisabledFlag,
+		SwarmSyncModeFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,
 		SwarmLightNodeEnabled,
@@ -193,6 +195,7 @@ func init() {
 		SwarmAccountFlag,
 		SwarmBzzKeyHexFlag,
 		SwarmNetworkIdFlag,
+		SwarmEnablePinningFlag,
 		// upload flags
 		SwarmApiFlag,
 		SwarmRecursiveFlag,

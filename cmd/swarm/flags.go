@@ -17,14 +17,12 @@
 // Command feed allows the user to create and update signed Swarm feeds
 package main
 
-import cli "gopkg.in/urfave/cli.v1"
+import (
+	"github.com/ethersphere/swarm/network"
+	cli "gopkg.in/urfave/cli.v1"
+)
 
 var (
-	SwarmSwapChequebookAddrFlag = cli.StringFlag{
-		Name:   "chequebook",
-		Usage:  "chequebook contract address",
-		EnvVar: SwarmEnvChequebookAddr,
-	}
 	SwarmAccountFlag = cli.StringFlag{
 		Name:   "bzzaccount",
 		Usage:  "Swarm account key file",
@@ -52,8 +50,19 @@ var (
 	}
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:   "bzznetworkid",
-		Usage:  "Network identifier (integer, default 3=swarm testnet)",
+		Usage:  "Numerical network identifier. The default is the public swarm testnet",
+		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
+	}
+	SwarmSwapInitialDepositFlag = cli.StringFlag{
+		Name:   "swap-initial-deposit",
+		Usage:  "Initial deposit amount for swap chequebook",
+		EnvVar: SwarmEnvInitialDeposit,
+	}
+	SwarmSwapChequebookAddrFlag = cli.StringFlag{
+		Name:   "swap-chequebook",
+		Usage:  "SWAP chequebook contract address",
+		EnvVar: SwarmEnvChequebookAddr,
 	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
@@ -75,10 +84,16 @@ var (
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
-	SwarmSyncDisabledFlag = cli.BoolTFlag{
-		Name:   "nosync",
-		Usage:  "Disable swarm syncing",
-		EnvVar: SwarmEnvSyncDisable,
+	SwarmSyncModeFlag = cli.StringFlag{
+		Name:   "sync-mode",
+		Usage:  "Syncing mode (available modes: pull, push, all, none)",
+		EnvVar: SwarmSyncMode,
+		Value:  "pull",
+	}
+	SwarmSwapLogPathFlag = cli.StringFlag{
+		Name:   "swap-audit-logpath",
+		Usage:  "Write execution logs of swap audit to the given directory",
+		EnvVar: SwarmEnvSwapLogPath,
 	}
 	SwarmSyncUpdateDelay = cli.DurationFlag{
 		Name:   "sync-update-delay",
@@ -213,5 +228,17 @@ var (
 	SwarmPinFlag = cli.BoolFlag{
 		Name:  "pin",
 		Usage: "Use this flag to pin the file after upload is complete. This flag is used when uploading a file.",
+	}
+	SwarmEnablePinningFlag = cli.BoolFlag{
+		Name:  "enable-pinning",
+		Usage: "Use this flag to enable the pinning feature",
+	}
+	SwarmProgressFlag = cli.BoolFlag{
+		Name:  "progress",
+		Usage: "Use this flag to enable tracking of the upload progress through the CLI",
+	}
+	SwarmVerboseFlag = cli.BoolFlag{
+		Name:  "verbose",
+		Usage: "Display more verbose output",
 	}
 )
