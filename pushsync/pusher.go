@@ -132,7 +132,7 @@ func (p *Pusher) chunksHandler() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	sem := make(chan struct{}, 100)
+	sem := make(chan struct{}, 10)
 
 	for {
 		select {
