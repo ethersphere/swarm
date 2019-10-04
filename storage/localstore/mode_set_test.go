@@ -73,19 +73,41 @@ func TestModeSetSyncPull(t *testing.T) {
 
 	for _, mtc := range []struct {
 		name            string
+		mode            chunk.ModeSet
 		anonymous       bool
+		runGcIndexTest  bool
 		expErrPushIndex error
 		expErrGCIndex   error
 	}{
 		{
-			name:            "normal tag",
+			name:            "set pull sync, normal tag",
+			mode:            chunk.ModeSetSyncPull,
 			anonymous:       false,
+			runGcIndexTest:  true,
 			expErrPushIndex: nil,
 			expErrGCIndex:   leveldb.ErrNotFound,
 		},
 		{
-			name:            "anonymous tag",
+			name:            "set pull sync, anonymous tag",
+			mode:            chunk.ModeSetSyncPull,
 			anonymous:       true,
+			runGcIndexTest:  false,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+		},
+		{
+			name:            "set push sync, normal tag",
+			anonymous:       false,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+		},
+		{
+			name:            "set push sync, anonymous tag",
+			anonymous:       true,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
 			expErrPushIndex: leveldb.ErrNotFound,
 			expErrGCIndex:   nil,
 		},
@@ -137,82 +159,6 @@ func TestModeSetSyncPull(t *testing.T) {
 							t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
 						}
 					}
-
-					t.Run("gc size", newIndexGCSizeTest(db))
-				})
-			}
-		})
-	}
-}
-
-// TestModeSetSyncPush validates ModeSetSyncPush index values on the provided DB.
-func TestModeSetSyncPush(t *testing.T) {
-	defer func(f func() uint32) {
-		chunk.TagUidFunc = f
-	}(chunk.TagUidFunc)
-
-	chunk.TagUidFunc = func() uint32 { return 0 }
-
-	for _, mtc := range []struct {
-		name      string
-		anonymous bool
-		expErr    error
-	}{
-		{
-			name:      "normal tag",
-			anonymous: false,
-			expErr:    nil,
-		},
-		{
-			name:      "anonymous tag",
-			anonymous: true,
-			expErr:    leveldb.ErrNotFound,
-		},
-	} {
-		t.Run(mtc.name, func(t *testing.T) {
-			for _, tc := range multiChunkTestCases {
-				t.Run(tc.name, func(t *testing.T) {
-					db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
-					defer cleanupFunc()
-
-					tag, err := db.tags.Create(mtc.name, int64(tc.count), mtc.anonymous)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if tag.Uid != 0 {
-						t.Fatal("expected mock tag uid")
-					}
-
-					chunks := generateTestRandomChunks(tc.count)
-
-					wantTimestamp := time.Now().UTC().UnixNano()
-					defer setNow(func() (t int64) {
-						return wantTimestamp
-					})()
-
-					_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
-					if err != nil {
-						t.Fatal(err)
-					}
-
-					err = db.Set(context.Background(), chunk.ModeSetSyncPush, chunkAddresses(chunks)...)
-					if err != nil {
-						t.Fatal(err)
-					}
-
-					binIDs := make(map[uint8]uint64)
-
-					for _, ch := range chunks {
-						po := db.po(ch.Address())
-						binIDs[po]++
-
-						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-						newPullIndexTest(db, ch, binIDs[po], nil)(t)
-						newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
-						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], nil)(t)
-					}
-
-					t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
 
 					t.Run("gc size", newIndexGCSizeTest(db))
 				})
