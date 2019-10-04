@@ -118,7 +118,7 @@ func upload(ctx *cli.Context) {
 			utils.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
-		hash, err := client.UploadRaw(f, f.Size, toEncrypt, toPin)
+		hash, err := client.UploadRaw(f, f.Size, toEncrypt, toPin, true)
 		if err != nil {
 			utils.Fatalf("Upload failed: %s", err)
 		}
@@ -159,7 +159,7 @@ func upload(ctx *cli.Context) {
 					defaultPath = strings.TrimPrefix(absDefaultPath, absFile)
 				}
 			}
-			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin)
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin, true)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -171,7 +171,7 @@ func upload(ctx *cli.Context) {
 			if mimeType != "" {
 				f.ContentType = mimeType
 			}
-			return client.Upload(f, "", toEncrypt, toPin)
+			return client.Upload(f, "", toEncrypt, toPin, true)
 		}
 	}
 	hash, err := doUpload()
