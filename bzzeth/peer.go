@@ -73,10 +73,17 @@ func (p *peers) remove(peer *Peer) {
 }
 
 // getEthPeer finds a peer that serves headers and calls the function argument on this peer
-func (p *peers) getEth() *Peer {
+func (p *peers) getEth(rcvdPeer *Peer) *Peer {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
+
 	for _, peer := range p.peers {
+
+		// Dont ask from the same peer which sent the request
+		if rcvdPeer != nil && rcvdPeer == peer {
+			continue
+		}
+
 		if peer.serveHeaders {
 			return peer
 		}
@@ -91,10 +98,11 @@ type requests struct {
 }
 
 type request struct {
-	hashes map[string]bool // remembers the block hashes that are requested in this connection
-	lock   sync.RWMutex    // mutex to update the hashes received status
-	c      chan []byte     // channel in which the received block headers are passed on
-	cancel func()          // function to call in case of cancellation of the GetBlockHeaders event
+	hashes    map[string]bool // remembers the block hashes that are requested in this connection
+	lock      sync.RWMutex    // mutex to update the hashes received status
+	c         chan []byte     // channel in which the received block headers hash are passed on
+	giveBackC chan []byte     // channel in which channel in which the received block headers hash are passed onthe received block headers contents are passed back
+	cancel    func()          // function to call in case of cancellation of the GetBlockHeaders event
 }
 
 // newRequestIDFunc is used to generate unique ID for requests
@@ -116,10 +124,11 @@ func newRequests() *requests {
 // create constructs a new request
 // registers it on the peer request pool
 // request.cancel() should be called to cleanup
-func (r *requests) create(hashes [][]byte, c chan []byte) (*request, uint32) {
+func (r *requests) create(hashes [][]byte, c chan []byte, g chan []byte) (*request, uint32) {
 	req := &request{
-		hashes: make(map[string]bool),
-		c:      c,
+		hashes:    make(map[string]bool),
+		c:         c,
+		giveBackC: g,
 	}
 	id := newRequestIDFunc()
 	for _, h := range hashes {
@@ -151,10 +160,11 @@ func (r *requests) get(id uint32) (*request, bool) {
 
 // getBlockHeaders sends a GetBlockHeaders message to the remote peer requesting headers by their _hashes_
 // and delivers the actual block header responses to the deliveries channel
-func (p *Peer) getBlockHeaders(ctx context.Context, hashes [][]byte, deliveries chan []byte) (*request, error) {
-	req, id := p.requests.create(hashes, deliveries)
+func (p *Peer) getBlockHeaders(ctx context.Context, hashes [][]byte, deliveries chan []byte,
+	givebackC chan []byte) (*request, error) {
+	req, id := p.requests.create(hashes, deliveries, givebackC)
 	err := p.Send(ctx, &GetBlockHeaders{
-		Rid:    id,
+		Rid:    uint64(id),
 		Hashes: hashes,
 	})
 	if err != nil {

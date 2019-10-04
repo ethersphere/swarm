@@ -163,10 +163,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			n.logger.Error("localstore get error", "err", err)
 		}
 
-		fmt.Println("Trying header in netstore ", hex.EncodeToString(ref))
-
 		n.logger.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
-
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
 			// has already been created by a syncer for that particular chunk.
