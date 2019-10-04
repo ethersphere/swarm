@@ -262,14 +262,14 @@ func uploadManifests(ctx *cli.Context, rootAccessManifest, actManifest *api.Mani
 		err error
 	)
 	if actManifest != nil {
-		key, err = client.UploadManifest(actManifest, false, toPin)
+		key, err = client.UploadManifest(actManifest, false, toPin, true)
 		if err != nil {
 			return err
 		}
 
 		rootAccessManifest.Entries[0].Access.Act = key
 	}
-	key, err = client.UploadManifest(rootAccessManifest, false, toPin)
+	key, err = client.UploadManifest(rootAccessManifest, false, toPin, true)
 	if err != nil {
 		return err
 	}
