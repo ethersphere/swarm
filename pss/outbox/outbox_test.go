@@ -118,7 +118,9 @@ func TestOutboxWorkers(t *testing.T) {
 		}(byte(i))
 	}
 
-	time.Sleep(1 * time.Millisecond)
+	//We need this sleep to allow workers to be launched and accumulated before starting signaling the channel.
+	// If not, there never will be workers in parallel and the test will be useless.
+	time.Sleep(10 * time.Millisecond)
 	//Signaling 100 messages
 	for i := 0; i < numMessages; i++ {
 		endProcess <- struct{}{}
