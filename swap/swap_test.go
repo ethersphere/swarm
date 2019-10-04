@@ -734,6 +734,7 @@ func TestStartChequebookFailure(t *testing.T) {
 	type chequebookConfig struct {
 		passIn        common.Address
 		expectedError error
+		testBackend   *swapTestBackend
 	}
 
 	var config chequebookConfig
@@ -751,9 +752,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
-				testBackend := newTestBackend()
-				defer testBackend.Close()
-				swap, clean := newTestSwap(t, ownerKey, testBackend)
+				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
 				err := testDeploy(context.TODO(), swap)
@@ -780,9 +779,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
-				testBackend := newTestBackend()
-				defer testBackend.Close()
-				swap, clean := newTestSwap(t, ownerKey, testBackend)
+				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// try to connect with an address not containing a chequebook instance
 				_, err := swap.StartChequebook(config.passIn, 0)
@@ -793,7 +790,10 @@ func TestStartChequebookFailure(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			testBackend := newTestBackend()
+			defer testBackend.Close()
 			tc.configure(&config)
+			config.testBackend = testBackend
 			if tc.check != nil {
 				tc.check(t, &config)
 			}
@@ -804,14 +804,12 @@ func TestStartChequebookFailure(t *testing.T) {
 func TestStartChequebookSuccess(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
-		check func(*testing.T)
+		check func(*testing.T, *swapTestBackend)
 	}{
 		{
 			name: "with same pass in as previously used",
-			check: func(t *testing.T) {
+			check: func(t *testing.T, testBackend *swapTestBackend) {
 				// create SWAP
-				testBackend := newTestBackend()
-				defer testBackend.Close()
 				swap, clean := newTestSwap(t, ownerKey, testBackend)
 				defer clean()
 
@@ -836,10 +834,8 @@ func TestStartChequebookSuccess(t *testing.T) {
 		},
 		{
 			name: "with correct pass in",
-			check: func(t *testing.T) {
+			check: func(t *testing.T, testBackend *swapTestBackend) {
 				// create SWAP
-				testBackend := newTestBackend()
-				defer testBackend.Close()
 				swap, clean := newTestSwap(t, ownerKey, testBackend)
 				defer clean()
 
@@ -863,8 +859,10 @@ func TestStartChequebookSuccess(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			testBackend := newTestBackend()
+			defer testBackend.Close()
 			if tc.check != nil {
-				tc.check(t)
+				tc.check(t, testBackend)
 			}
 		})
 	}
