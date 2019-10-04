@@ -164,7 +164,7 @@ func testPassword(t *testing.T, cluster *testCluster) {
 
 	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
-	hash, err := client.UploadManifest(&m, false, false)
+	hash, err := client.UploadManifest(&m, false, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +341,7 @@ func testPK(t *testing.T, cluster *testCluster) {
 	}
 	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
-	hash, err := client.UploadManifest(&m, false, false)
+	hash, err := client.UploadManifest(&m, false, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
