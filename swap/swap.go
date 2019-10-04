@@ -419,6 +419,42 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
+// Cheques returns all known sent and received cheques, grouped by peer
+func (s *Swap) Cheques() (cheques map[enode.ID]map[string]*Cheque, err error) {
+	cheques = make(map[enode.ID]map[string]*Cheque)
+
+	s.peersLock.Lock()
+	for peer, swapPeer := range s.peers {
+		swapPeer.lock.Lock()
+		peerCheques, err := s.PeerCheques(peer)
+		if err == nil {
+			cheques[peer] = peerCheques
+		} else {
+			break
+		}
+		swapPeer.lock.Unlock()
+	}
+	s.peersLock.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+	return cheques, nil
+}
+
+// PeerCheques returns the last sent and received cheques for a given peer
+func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
+	sentCheque, err := s.SentCheque(peer)
+	if err != nil {
+		return nil, err
+	}
+	receivedCheque, err := s.ReceivedCheque(peer)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]*Cheque{"lastSentCheque": sentCheque, "lastReceivedCheque": receivedCheque}, nil
+}
+
 // SentCheque returns the last sent cheque for a given peer
 func (s *Swap) SentCheque(peer enode.ID) (cheque *Cheque, err error) {
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
@@ -499,19 +535,6 @@ func (s *Swap) ReceivedCheques() (map[enode.ID]*Cheque, error) {
 	}
 
 	return cheques, nil
-}
-
-// PeerCheques returns the last sent and received cheques for a given peer
-func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
-	sentCheque, err := s.SentCheque(peer)
-	if err != nil {
-		return nil, err
-	}
-	receivedCheque, err := s.ReceivedCheque(peer)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]*Cheque{"lastSentCheque": sentCheque, "lastReceivedCheque": receivedCheque}, nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
