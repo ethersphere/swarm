@@ -1,3 +1,18 @@
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 package outbox
 
 import (
@@ -19,7 +34,7 @@ type Outbox struct {
 	queue       []*outboxMsg
 	slots       chan int
 	process     chan int
-	workers     chan int
+	numWorkers  int
 	stopC       chan struct{}
 }
 
@@ -38,7 +53,7 @@ func NewOutbox(config *Config) *Outbox {
 		queue:       make([]*outboxMsg, config.NumberSlots),
 		slots:       make(chan int, config.NumberSlots),
 		process:     make(chan int),
-		workers:     make(chan int, config.NumWorkers),
+		numWorkers:  config.NumWorkers,
 		stopC:       make(chan struct{}),
 	}
 	// fill up outbox slots
@@ -48,18 +63,20 @@ func NewOutbox(config *Config) *Outbox {
 	return outbox
 }
 
+//Start launches the processing of messages in the outbox
 func (o *Outbox) Start() {
 	log.Info("Starting outbox")
 	go o.processOutbox()
 }
 
+//Stop stops the processing of messages in the outbox
 func (o *Outbox) Stop() {
 	log.Info("Stopping outbox")
 	close(o.stopC)
 }
 
 // Enqueue a new element in the outbox if there is any slot available.
-// Then send it to process. This method is blocking in the process channel!
+// Then send it to process. This method is blocking if there is no workers available.
 func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 	// first we try to obtain a slot in the outbox
 	select {
@@ -78,18 +95,20 @@ func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 	}
 }
 
+//SetForward set the forward function that will be executed on each message
 func (o *Outbox) SetForward(forwardFunc forwardFunction) {
 	o.forwardFunc = forwardFunc
 }
 
 //ProcessOutbox starts a routine that tries to forward messages present in the outbox queue
 func (o *Outbox) processOutbox() {
+	workerLimitC := make(chan struct{}, o.numWorkers)
 	for {
 		select {
 		case <-o.stopC:
 			return
 		case slot := <-o.process:
-			o.workers <- slot
+			workerLimitC <- struct{}{}
 			go func(slot int) {
 				msg := o.queue[slot]
 				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
@@ -104,7 +123,7 @@ func (o *Outbox) processOutbox() {
 				//message processed, free the outbox slot
 				o.free(slot)
 				//Free worker space
-				<-o.workers
+				<-workerLimitC
 				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
 			}(slot)
 		}
