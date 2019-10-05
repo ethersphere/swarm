@@ -286,7 +286,8 @@ const landing = `{{ define "content" }}
 			</div>
 		</div>
 		<input type="text" id="uploadLinkInput" class="invisible"/>
-		<input type="text" id="uploadHashInput" class="invisible"/>{{ end }}`
+		<input type="text" id="uploadHashInput" class="invisible"/>
+{{ end }}`
 
 const baseTemplate = `
 <!DOCTYPE html>
@@ -408,7 +409,7 @@ const baseTemplate = `
 				Censorship resistant storage and communication infrastructure for a sovereign digital society.
 			</div>
 		</div>
-			{{ template "content" . }}
+		{{ template "content" . }}
 		<div class="footer">
 			<div class="footerItems">
 				<div class="footerItem">
@@ -782,7 +783,7 @@ a{
 .controlMain button.uploadCancelButton:hover:after {
 	border: 1px solid #8c8c8c;
 	opacity: 0.5;
-	transition: opacity 1s;    
+	transition: opacity 1s;
 }
 
 #uploadForm{
@@ -795,10 +796,10 @@ a{
 
 #uploadForm input[type="file"]{
 	position: absolute;
-  left: 0;
-  height: 38px;
-  width: 484px;
-  opacity: 0;
+	left: 0;
+	height: 38px;
+	width: 484px;
+	opacity: 0;
 }
 
 
@@ -826,9 +827,9 @@ a{
 }
 
 #uploadSwarmhash {
-    font-weight: bold;
-    font-size: 12px;
-    cursor: pointer;
+	font-weight: bold;
+	font-size: 12px;
+	cursor: pointer;
 }
 
 #uploadSwarmhash i{
@@ -1026,7 +1027,7 @@ class SwarmProgressBar {
 
 		return this.sendUploadRequest(uploadURL, 'POST', 'text', formData, formData.get('file').size).then((response) => {
 			let swarmHash = response.responseText;
-			this.setStatus({swarmHash: swarmHash});      
+			this.setStatus({swarmHash: swarmHash});  
 			this.setStatus({gatewayLink: url + swarmHash + "/" + formData.get('file').name});
 			this.tagId = response.getResponseHeader('x-swarm-tag');
 			this.onUploadedCallback(response);
@@ -1088,9 +1089,9 @@ class SwarmProgressBar {
 				}
 			};
 
-			xhr.onreadystatechange = function(){           
+			xhr.onreadystatechange = function(){   
 				if(xhr.readyState === 4 && xhr.status === 200){
-					resolve(xhr);              
+					resolve(xhr);  
 				}
 			}
 
@@ -1121,9 +1122,9 @@ class SwarmProgressBar {
 		return new Promise((resolve,reject) => {
 			let xhr = new XMLHttpRequest();
 
-			xhr.onreadystatechange = function(){         
+			xhr.onreadystatechange = function(){ 
 				if(xhr.readyState === 4 && xhr.status === 200){
-					resolve(xhr);              
+					resolve(xhr);  
 				}
 			}
 
@@ -1138,7 +1139,7 @@ class SwarmProgressBar {
 			xhr.send(data);
 		});
 
-	}    
+	}
 
 	onProgress(fn){
 		this.onProgressCallback = fn;
@@ -1146,7 +1147,7 @@ class SwarmProgressBar {
 
 	onStart(fn){
 		this.onStartCallback = fn;
-	}    
+	}
 
 	onError(fn){
 		this.onErrorCallback = fn;
@@ -1169,12 +1170,12 @@ let humanFileSize = (size) => {
 
 
 let fadeAndReplace = (selector, content, time=600) => {
-	let element = document.querySelector(selector);    
+	let element = document.querySelector(selector);
 	element.classList.add("fades");
 	element.classList.add("fadeOut");
 	setTimeout(()=>{
 		element.innerHTML = content;
-		element.classList.remove("fadeOut");        
+		element.classList.remove("fadeOut");
 	}, time);
 };
 
@@ -1197,8 +1198,8 @@ let components = [
 ];
 
 let fadeInComponent = (headerSelectorIn, selectorIn, time=600) => {
-	let elementIn = document.querySelector(selectorIn);    
-	let headerIn = document.querySelector(headerSelectorIn);    
+	let elementIn = document.querySelector(selectorIn);
+	let headerIn = document.querySelector(headerSelectorIn);
 
 	if(headerSelectorIn){
 		headerIn.classList.add("active");
@@ -1221,8 +1222,8 @@ let fadeInComponent = (headerSelectorIn, selectorIn, time=600) => {
 		}
 
 
-		elementIn.classList.add("fadeOut");     
-		elementIn.classList.remove("hidden");            
+		elementIn.classList.add("fadeOut"); 
+		elementIn.classList.remove("hidden");
 		setTimeout(()=>{   
 			elementIn.classList.remove("fadeOut");
 		},200);
@@ -1257,7 +1258,7 @@ let copyLinkAction = (e) => {
 	copyText.select();
 	copyText.setSelectionRange(0, 99999); /*For mobile devices*/
 	document.execCommand("copy");
-	alert("Copied link to clipboard!");             
+	alert("Copied link to clipboard!"); 
 };
 
 let isUploading = false;
@@ -1323,14 +1324,14 @@ document.addEventListener('DOMContentLoaded', function(){
 				console.log('error', event);
 			})
 			swb.onUploaded((response)=>{
-				document.querySelector('#uploadStatusMessage').innerHTML = "Uploaded";                    
+				document.querySelector('#uploadStatusMessage').innerHTML = "Uploaded";
 				fadeAndReplace(
 					'#uploadSwarmhash', 
 					swb.status.swarmHash !== false ? swb.status.swarmHash : ""
 				);
 				document.querySelector('#uploadButtonLink').classList.remove("fadeOut");
 				document.querySelector('#uploadLinkInput').value = swb.status.gatewayLink;
-				document.querySelector('#uploadButtonHash').classList.remove("fadeOut");                
+				document.querySelector('#uploadButtonHash').classList.remove("fadeOut");
 				document.querySelector('#uploadHashInput').value = swb.status.swarmHash;
 			})
 			swb.upload(formData);
@@ -1358,18 +1359,18 @@ document.addEventListener('DOMContentLoaded', function(){
 	document.querySelector('#uploadButtonHash').addEventListener('click', copyHashAction);
 
 	document.querySelector('#controlHeaderDownload').addEventListener('click', (e) => {
-		fadeInComponent('#controlHeaderDownload', '#downloadComponent')        
+		fadeInComponent('#controlHeaderDownload', '#downloadComponent')
 	});
 
 
 	document.querySelector('#controlHeaderUpload').addEventListener('click', (e) => {
 		resetUpload();
-		fadeInComponent('#controlHeaderUpload', '#uploadComponent');     
+		fadeInComponent('#controlHeaderUpload', '#uploadComponent'); 
 	});
 
 	document.querySelector('#uploadCancelButton').addEventListener('click', (e) => {
 		resetUpload();
-		fadeInComponent('#controlHeaderUpload', '#uploadComponent');     
+		fadeInComponent('#controlHeaderUpload', '#uploadComponent'); 
 	});
 
 	document.querySelector('#downloadForm button').addEventListener('click', (e) => {
