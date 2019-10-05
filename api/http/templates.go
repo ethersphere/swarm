@@ -266,9 +266,10 @@ const landing = `{{ define "content" }}
 						<div id="uploadFeedbackBars">
 							<div class="uploadFeedbackBar uploadFeedbackColor1" id="uploadReceivedBar"></div>
 							<div class="uploadFeedbackBar uploadFeedbackColorx hidden" id="uploadSeenBar"></div>							
-							<div class="uploadFeedbackBar uploadFeedbackColor2" id="uploadSplitBar"></div>
-							<div class="uploadFeedbackBar uploadFeedbackColor3" id="uploadStoredBar"></div>
-							<div class="uploadFeedbackBar uploadFeedbackColor4" id="uploadSentBar"></div>							
+							<div class="uploadFeedbackBar uploadFeedbackColor2 hidden" id="uploadSplitBar"></div>
+							<div class="uploadFeedbackBar uploadFeedbackColor3 hidden" id="uploadStoredBar"></div>
+							<div class="uploadFeedbackBar uploadFeedbackColor4 hidden" id="uploadSentBar"></div>
+							<div class="uploadFeedbackBar uploadFeedbackColor4" id="uploadSyncedBar"></div>
 						</div>
 						<div class="incrementLine incrementLine1"></div>
 						<div class="incrementLine incrementLine2"></div>
@@ -276,10 +277,11 @@ const landing = `{{ define "content" }}
 					</div>
 					<div class="uploadFeedbackCounts">
 						<div class="uploadFeedbackCount uploadFeedbackCountColor1">Uploaded <span class="uploadFeedbackCountNumbers" id="uploadReceivedCount"></span></div>
-						<div class="uploadFeedbackCount uploadFeedbackCountColor2">Stored <span class="uploadFeedbackCountNumbers" id="uploadStoredCount"></span></div>
+						<div class="uploadFeedbackCount uploadFeedbackCountColor2 hidden">Stored <span class="uploadFeedbackCountNumbers" id="uploadStoredCount"></span></div>
 						<div class="uploadFeedbackCount uploadFeedbackCountColor3 hidden">Seen <span class="uploadFeedbackCountNumbers" id="uploadSeenCount"></span></div>						
-						<div class="uploadFeedbackCount uploadFeedbackCountColor3">Split <span class="uploadFeedbackCountNumbers" id="uploadSplitCount"></span></div>
-						<div class="uploadFeedbackCount uploadFeedbackCountColor5">Sent <span class="uploadFeedbackCountNumbers" id="uploadSentCount"></span></div>
+						<div class="uploadFeedbackCount uploadFeedbackCountColor3 hidden">Split <span class="uploadFeedbackCountNumbers" id="uploadSplitCount"></span></div>
+						<div class="uploadFeedbackCount uploadFeedbackCountColor5 hidden">Sent <span class="uploadFeedbackCountNumbers" id="uploadSentCount"></span></div>
+						<div class="uploadFeedbackCount uploadFeedbackCountColor5" id="uploadSyncedCount"></div>
 					</div>
 					<div class="clearBoth"></div>
 				</div>
@@ -875,8 +877,8 @@ a{
 	position: absolute;
 	content: "";
 	width: 0px;
-	height: 40px;
-	top: 0;
+	height: 30px;
+	top: -2px;
 	border-width: 0px 1px 0px 0px ;
 	border-color: lightgray;
 	border-style: solid;
@@ -1318,18 +1320,35 @@ document.addEventListener('DOMContentLoaded', function(){
 			currentProgressBar = swb;
 			swb.onProgress((status)=>{
 				let totalLength = status.Total.toString().length;
-				document.querySelector('#uploadReceivedCount').innerHTML = status.Received !== false ? padNumber(status.Received, 3) + "/100%" : "";
-				document.querySelector('#uploadSentCount').innerHTML = status.Sent !== false ? padNumber(status.Sent, totalLength) + "/" + status.Total : "";
-				document.querySelector('#uploadSplitCount').innerHTML = status.Split !== false ? padNumber(status.Split, totalLength) + "/" + status.Total : "";
-				document.querySelector('#uploadSeenCount').innerHTML = status.Seen !== false ? padNumber(status.Seen, totalLength) + "/" + status.Total : "";
-				document.querySelector('#uploadStoredCount').innerHTML = status.Stored !== false ? padNumber(status.Stored, totalLength) + "/" + status.Total : "";
+				let syncedString = "";
+				let syncedPercent = 0;
+
+				if(
+					status.Synced !== false &&
+					status.Total !== false && 
+					status.Seen !== false
+				){
+
+					if(status.Total - status.Seen > 0){
+						syncedPercent = Math.ceil((status.Synced/(status.Total - status.Seen)) * 100, 2);				
+					}else{
+						syncedPercent = 100;
+					}
+
+					if(
+						status.Total - ( status.Synced + status.Seen ) > 0
+					){
+						syncedString = 'Syncing <span class="uploadFeedbackCountNumbers">'+syncedPercent+'%</span>';
+					}else{
+						syncedString = 'Synced <span class="uploadFeedbackCountNumbers">'+syncedPercent+'%</span>';
+					}
+				}
+
+				document.querySelector('#uploadReceivedCount').innerHTML = status.Received !== false ? padNumber(status.Received, 3) + "%" : "";
+				document.querySelector('#uploadSyncedCount').innerHTML = syncedString;
 
 				document.querySelector('#uploadReceivedBar').setAttribute('style', status.Received !== false ? "width: "+ status.Received + "%" : "");
-				document.querySelector('#uploadSentBar').setAttribute('style', status.Sent !== false ? "width: "+ Math.floor((status.Sent/status.Total) * 100, 2) + "%" : "");
-				document.querySelector('#uploadSplitBar').setAttribute('style', status.Split !== false ? "width: "+ Math.floor((status.Split/status.Total) * 100, 2) + "%" : "");
-				document.querySelector('#uploadSeenBar').setAttribute('style', status.Seen !== false ? "width: "+ Math.floor((status.Seen/status.Total) * 100, 2) + "%" : "");
-				document.querySelector('#uploadStoredBar').setAttribute('style', status.Stored !== false ? "width: "+ Math.floor((status.Stored/status.Total) * 100, 2) + "%" : "");
-
+				document.querySelector('#uploadSyncedBar').setAttribute('style', status.Synced !== false ? "width: "+ syncedPercent + "%" : "");
 			});
 			swb.onStart((event)=>{
 				fadeInComponent(false, '#uploadFeedbackComponent')
