@@ -1242,7 +1242,7 @@ let fadeInComponent = (headerSelectorIn, selectorIn, time=600) => {
 let goToPage = () => {
   var page = document.getElementById('downloadHashField').value;
   if (page == "") {
-	var page = "theswarm.eth"
+	return false;
   }
   var address = "/bzz:/" + page;
   location.href = address;
