@@ -552,13 +552,13 @@ const css = `{{ define "css" }}
 
 .fades{
 	opacity: 1;	
-	transition: opacity 1s;
+	transition: opacity 0.5s;
 }
 
 .fadeOut{
 	pointer-events: none;
 	opacity: 0;
-	transition: opacity 1s;
+	transition: opacity 0.5s;
 }
 
 
@@ -645,6 +645,7 @@ a{
 }
 
 .controlHeaderItem a{
+	cursor: pointer;
 	font-family: urw_gothic_ldemi;
 	font-size: 20px;
 
@@ -750,6 +751,12 @@ a{
 
 }
 
+.controlMain button.orangeButton.fadeOut {
+	opacity: 0.2;
+	transition: opacity 1s;
+}
+
+
 .controlMain button.orangeButton svg {
 	fill: #ffffff;
 }
@@ -850,6 +857,7 @@ a{
 	height: 11px;
 	margin-bottom: 2px;
 	font-weight: bold;
+	line-height: 12px;	
 }
 
 .uploadFeedbackCountNumbers{
@@ -906,7 +914,7 @@ a{
 	height: 11px;
 	margin-bottom: 2px;
 	z-index: 1;
-	transition: width 2s;
+	transition: width 0.1s;
 	width: 0;
 }
 
@@ -1303,7 +1311,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
 		let formData = new FormData(form);
 
-		document.querySelector('#uploadFilename').innerHTML = truncateEnd(formData.get('file').name, 40);
+		document.querySelector('#uploadFilename').innerHTML = truncateEnd(formData.get('file').name, 45);
 
 		if(formData.get('file')){
 			swb = new SwarmProgressBar(gatewayHost);
