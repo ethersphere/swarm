@@ -118,7 +118,7 @@ const errorResponse = `{{ define "content" }}
 const landing = `{{ define "content" }}
 <div class="control">
 			<div class="controlHeader">
-				<div id="controlHeaderDownload" class="controlHeaderItem">
+				<div id="controlHeaderDownload" class="controlHeaderItem active">
 					<a>
 						<span>Browse</span>
 						<span class="controlHeaderItemIcon">
@@ -138,7 +138,7 @@ const landing = `{{ define "content" }}
 						</span>
 					</a>
 				</div>
-				<div id="controlHeaderUpload" class="controlHeaderItem active">
+				<div id="controlHeaderUpload" class="controlHeaderItem">
 					<a>
 						<span>Upload</span>
 						<span class="controlHeaderItemIcon">
@@ -168,7 +168,7 @@ const landing = `{{ define "content" }}
 				</div>
 			</div>
 			<div class="controlMain">
-				<div class="controlComponent hidden fades" id="downloadComponent">
+				<div class="controlComponent fades" id="downloadComponent">
 					<div class="controlComponentMessage">
 						Enter a hash or ENS name.
 					</div>
@@ -192,7 +192,7 @@ const landing = `{{ define "content" }}
 						</button>
 					</form>				
 				</div>
-				<div class="controlComponent fades" id="uploadComponent">
+				<div class="controlComponent fades hidden" id="uploadComponent">
 					<div class="controlComponentMessage">
 						Select a file to upload it to the Swarm network.
 					</div>				
