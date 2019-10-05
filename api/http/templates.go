@@ -1392,7 +1392,6 @@ document.addEventListener('DOMContentLoaded', function(){
 	});
 
 }, false);
-
 {{ end }}`
 
 const logo = `{{ define "logo" }}
