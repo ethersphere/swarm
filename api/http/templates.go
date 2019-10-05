@@ -119,8 +119,8 @@ const landing = `{{ define "content" }}
 <div class="control">
 			<div class="controlHeader">
 				<div id="controlHeaderDownload" class="controlHeaderItem">
-						<span class="controlHeaderItemTitle">Browse</span>
 					<a>
+						<span>Browse</span>
 						<span class="controlHeaderItemIcon">
 							<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 								 viewBox="0 0 20 20" style="enable-background:new 0 0 16 20;" xml:space="preserve">
@@ -139,8 +139,8 @@ const landing = `{{ define "content" }}
 					</a>
 				</div>
 				<div id="controlHeaderUpload" class="controlHeaderItem active">
-						<span class="controlHeaderItemTitle">Upload</span>
 					<a>
+						<span>Upload</span>
 						<span class="controlHeaderItemIcon">
 							<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 								 viewBox="0 0 16 20" style="enable-background:new 0 0 16 20;" xml:space="preserve">
@@ -154,7 +154,7 @@ const landing = `{{ define "content" }}
 				</div>
 				<div id="controlHeaderInfo" class="controlHeaderItem hidden">
 					<a href="#">
-						<span class="controlHeaderItemTitle">Info</span>
+						<span>Info</span>
 						<span class="controlHeaderItemIcon">
 							<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 								 viewBox="0 0 20 20" style="enable-background:new 0 0 20 20;" xml:space="preserve">
