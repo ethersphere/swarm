@@ -487,8 +487,6 @@ func TestNewBlockHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-
-
 	// Wait for the storage and delivery checks to complete
 	// only after that the cleanup functions should be allowed
 	wg.Wait()
