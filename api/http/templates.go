@@ -1272,7 +1272,11 @@ document.addEventListener('DOMContentLoaded', function(){
 	let resetUpload = () => {
 		document.querySelector('#uploadSelectFile').value = "";
 		document.querySelector('#uploadSelectedFile').value = "";
+		document.querySelector('#uploadSwarmhash').innerHTML = "Waiting for hash...";
 		document.querySelector('#uploadHashInput').classList.remove('hidden');
+		document.querySelector('#uploadButtonHash').classList.add('fadeOut');
+		document.querySelector('#uploadButtonLink').classList.add('fadeOut');
+
 		document.querySelector('#uploadComponent .controlComponentMessage').innerHTML = "Select your file to upload it to the Swarm network.";
 		isUploading = false;
 		if(currentProgressBar !== null){
