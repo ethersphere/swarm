@@ -569,86 +569,86 @@ func TestGetAvailableBlockHeaders(t *testing.T) {
 	}
 }
 
-func TestGetLocallyNotAvailableBlockHeaders(t *testing.T) {
-	// Swarm fill wth node which has the header
-	prvKeyFullNode, netstoreFUllNode, cleanupFullNode := newTestNetworkStore(t)
-	defer cleanupFullNode()
-
-	// bzz pivot - full eth node peer
-	testerFullNode, _, teardownFullNode, err := newBzzEthTester(t, prvKeyFullNode, netstoreFUllNode)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownFullNode()
-
-	// Spawna light eth node that does not have header
-	prvKeyLightNode, netstoreLightNode, cleanupLoghtNode := newTestNetworkStore(t)
-	defer cleanupLoghtNode()
-
-	// bzz pivot - light eth node peer
-	testerLightNode, _, teardownLightNode, err := newBzzEthTester(t, prvKeyLightNode, netstoreLightNode)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownLightNode()
-
-	nodeFullNode := testerFullNode.Nodes[0]
-	err = handshakeExchange(testerFullNode, nodeFullNode.ID(), true, true)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	nodeLightNode := testerLightNode.Nodes[0]
-	err = handshakeExchange(testerLightNode, nodeLightNode.ID(), true, true)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	//  repare a header to store in full node's localstore
-	hdr := types.Header{Number: new(big.Int).SetUint64(uint64(666))}
-	res, err := rlp.EncodeToBytes(hdr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	wantedHeaderHashe := hdr.Hash().Bytes()
-	offeredHeader := res
-
-	// store the headers in fullnode's localstore so that they are offered in response
-	chunkToStore := newChunk(res)
-	yes, err := netstoreFUllNode.Store.Put(context.Background(), chunk.ModePutUpload, chunkToStore)
-	if err != nil {
-		t.Fatalf("could not store chunk")
-	}
-	if yes[0] {
-		t.Fatalf("chunk already found")
-	}
-
-	// This is to simulate all headers as not available in Swarm
-	// This triggers a GetBlockHeaders from another Full node and then deliver that to the requesting node
-	skipHeaderFromSwarm = true
-
-	//   - light node asks Swarm for the header
-	//   - Swarm hasks the full node for the header
-	//   -- Full node gibves back and that intuen gives back to light node
-
-	//Now trigger the get header request
-	wantedHeaderHashes := make([][]byte, 1)
-	wantedHeaderHashes[0] = wantedHeaderHashe
-	offeredHeaders := make([]rlp.RawValue, 1)
-	offeredHeaders[0] = offeredHeader
-	err = getBlockHeaderExchange(testerLightNode, nodeLightNode.ID(), newRequestIDFunc(), wantedHeaderHashes, offeredHeaders)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	/////Now trigger the get header from full node
-	//err = getBlockHeaderExchange(testerFullNode, nodeFullNode.ID(), newRequestIDFunc(), wantedHeaderHashes, offeredHeaders)
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-
-}
+//func TestGetLocallyNotAvailableBlockHeaders(t *testing.T) {
+//	// Swarm fill wth node which has the header
+//	prvKeyFullNode, netstoreFUllNode, cleanupFullNode := newTestNetworkStore(t)
+//	defer cleanupFullNode()
+//
+//	// bzz pivot - full eth node peer
+//	testerFullNode, _, teardownFullNode, err := newBzzEthTester(t, prvKeyFullNode, netstoreFUllNode)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	defer teardownFullNode()
+//
+//	// Spawna light eth node that does not have header
+//	prvKeyLightNode, netstoreLightNode, cleanupLoghtNode := newTestNetworkStore(t)
+//	defer cleanupLoghtNode()
+//
+//	// bzz pivot - light eth node peer
+//	testerLightNode, _, teardownLightNode, err := newBzzEthTester(t, prvKeyLightNode, netstoreLightNode)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	defer teardownLightNode()
+//
+//	nodeFullNode := testerFullNode.Nodes[0]
+//	err = handshakeExchange(testerFullNode, nodeFullNode.ID(), true, true)
+//	if err != nil {
+//		t.Fatalf("expected no error, got %v", err)
+//	}
+//
+//	nodeLightNode := testerLightNode.Nodes[0]
+//	err = handshakeExchange(testerLightNode, nodeLightNode.ID(), true, true)
+//	if err != nil {
+//		t.Fatalf("expected no error, got %v", err)
+//	}
+//
+//	//  repare a header to store in full node's localstore
+//	hdr := types.Header{Number: new(big.Int).SetUint64(uint64(666))}
+//	res, err := rlp.EncodeToBytes(hdr)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	wantedHeaderHashe := hdr.Hash().Bytes()
+//	offeredHeader := res
+//
+//	// store the headers in fullnode's localstore so that they are offered in response
+//	chunkToStore := newChunk(res)
+//	yes, err := netstoreFUllNode.Store.Put(context.Background(), chunk.ModePutUpload, chunkToStore)
+//	if err != nil {
+//		t.Fatalf("could not store chunk")
+//	}
+//	if yes[0] {
+//		t.Fatalf("chunk already found")
+//	}
+//
+//	// This is to simulate all headers as not available in Swarm
+//	// This triggers a GetBlockHeaders from another Full node and then deliver that to the requesting node
+//	skipHeaderFromSwarm = true
+//
+//	//   - light node asks Swarm for the header
+//	//   - Swarm hasks the full node for the header
+//	//   -- Full node gibves back and that intuen gives back to light node
+//
+//	//Now trigger the get header request
+//	wantedHeaderHashes := make([][]byte, 1)
+//	wantedHeaderHashes[0] = wantedHeaderHashe
+//	offeredHeaders := make([]rlp.RawValue, 1)
+//	offeredHeaders[0] = offeredHeader
+//	err = getBlockHeaderExchange(testerLightNode, nodeLightNode.ID(), newRequestIDFunc(), wantedHeaderHashes, offeredHeaders)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	///Now trigger the get header from full node
+//	err = getBlockHeaderExchange(testerFullNode, nodeFullNode.ID(), newRequestIDFunc(), wantedHeaderHashes, offeredHeaders)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//
+//}
 
 func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
 	// Check if requested headers arrived and are stored in localstore
