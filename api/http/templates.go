@@ -1275,7 +1275,9 @@ document.addEventListener('DOMContentLoaded', function(){
 		document.querySelector('#uploadHashInput').classList.remove('hidden');
 		document.querySelector('#uploadComponent .controlComponentMessage').innerHTML = "Select your file to upload it to the Swarm network.";
 		isUploading = false;
-		currentProgressBar.cancel();	
+		if(currentProgressBar !== null){
+			currentProgressBar.cancel();			
+		}
 	}
 
 	form.addEventListener("submit", (e)=>{
