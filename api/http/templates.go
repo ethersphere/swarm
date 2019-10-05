@@ -1355,7 +1355,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
 	document.querySelector('#uploadButtonLink').addEventListener('click', copyLinkAction)   ; 
 
-	document.querySelector('#uploadSwarmhash').addEventListener('click', copyHashAction);
 	document.querySelector('#uploadButtonHash').addEventListener('click', copyHashAction);
 
 	document.querySelector('#controlHeaderDownload').addEventListener('click', (e) => {
