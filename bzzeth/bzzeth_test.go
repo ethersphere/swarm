@@ -510,7 +510,7 @@ func TestGetAvailableBlockHeaders(t *testing.T) {
 	// Dont use more than 2 as there is a risk of getting multiple batches which is not testcase friendly
 	wantedHeaderHashes := make([][]byte, 20)
 	offeredHeaders := make([]rlp.RawValue, 20)
-	for i, _ := range wantedHeaderHashes {
+	for i := range wantedHeaderHashes {
 		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(i))}
 		res, err := rlp.EncodeToBytes(hdr)
 		if err != nil {
