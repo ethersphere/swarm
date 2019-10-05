@@ -205,7 +205,6 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 		return c, nil
 	}
 
-
 	n.logger.Trace("netstore.get returned", "ref", ref.String())
 
 	ctx, ssp := spancontext.StartSpan(
