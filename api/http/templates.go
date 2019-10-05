@@ -1070,7 +1070,7 @@ class SwarmProgressBar {
 				if(this.onProgressCallback){
 					this.onProgressCallback(this.status);
 				}
-				if(responseData.Total === responseData.Sent){
+				if(responseData.Total === (responseData.Synced - responseData.Seen)){
 					this.isCompleted = true;
 					clearInterval(this.checkProgressInterval);
 				}
