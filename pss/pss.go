@@ -49,7 +49,7 @@ const (
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 100000
+	defaultOutboxCapacity      = 100
 	protocolName               = "pss"
 	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
@@ -143,21 +143,18 @@ func (o outbox) len() int {
 // enqueue a new element in the outbox if there is any slot available.
 // Then send it to process. This method is blocking in the process channel!
 func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
-	// first we try to obtain a slot in the outbox
+	// we try to obtain a slot in the outbox
+	slot := <-o.slots
+
+	o.queue[slot] = outboxmsg
+	metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+	// we send this message slot to process
 	select {
-	case slot := <-o.slots:
-		o.queue[slot] = outboxmsg
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-		// we send this message slot to process
-		select {
-		case o.process <- slot:
-		case <-o.quitC:
-		}
-		return nil
-	default:
-		metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-		return errors.New("outbox full")
+	case o.process <- slot:
+	case <-o.quitC:
 	}
+
+	return nil
 }
 
 func (o *outbox) processOutbox() {
