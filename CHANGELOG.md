@@ -6,6 +6,7 @@
 
 ### Commits
 
+* [#1865](https://github.com/ethersphere/swarm/pull/1865) cmd/swarm: nullify bootnodes before check for network id
 * [#1862](https://github.com/ethersphere/swarm/pull/1862) cmd/swarm: only use the default bootnodes on the default network id
 
 ## v0.5.1 (October 03, 2019)
