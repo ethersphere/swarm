@@ -127,17 +127,18 @@ func TestModeSetSyncPull(t *testing.T) {
 			pin:             false,
 			mode:            chunk.ModeSetSyncPush,
 			runGcIndexTest:  true,
-			expErrPushIndex: nil,
-			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
 			expErrPinIndex:  leveldb.ErrNotFound,
-		}, {
+		},
+		{
 			name:            "set push sync, normal tag, with pinning",
 			anonymous:       false,
 			pin:             true,
 			mode:            chunk.ModeSetSyncPush,
 			runGcIndexTest:  true,
-			expErrPushIndex: nil,
-			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
 			expErrPinIndex:  nil,
 		},
 		{
@@ -187,11 +188,14 @@ func TestModeSetSyncPull(t *testing.T) {
 						t.Fatal(err)
 					}
 
-					err = db.Set(context.Background(), chunk.ModeSetSyncPull, chunkAddresses(chunks)...)
+					tag.Total = int64(tc.count)
+					tag.Stored = int64(tc.count)
+
+					err = db.Set(context.Background(), mtc.mode, chunkAddresses(chunks)...)
 					if err != nil {
 						t.Fatal(err)
 					}
-
+					tagCounterTest(t, tc.count, mtc.mode, tag)
 					if mtc.pin {
 						err = db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...)
 						if err != nil {

@@ -400,6 +400,30 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	}
 }
 
+func tagCounterTest(t *testing.T, count int, mode chunk.ModeSet, tag *chunk.Tag) { // func(t *testing.T) {
+	c, _, err := tag.Status(chunk.StateSynced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doCheck := func(c int) {
+		if int(c) != count {
+			t.Fatalf("synced count mismatch. got %d want %d", c, count)
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// this should not be invoked always
+	if mode == chunk.ModeSetSyncPull && tag.Anonymous {
+		doCheck(int(c))
+	}
+
+	if mode == chunk.ModeSetSyncPush && !tag.Anonymous {
+		doCheck(int(c))
+	}
+}
+
 // testIndexChunk embeds storageChunk with additional data that is stored
 // in database. It is used for index values validations.
 type testIndexChunk struct {
