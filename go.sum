@@ -228,6 +228,8 @@ github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00 h1:8DPul/X0IT/1TNMIxoKLwde
 github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521 h1:3hxavr+IHMsQBrYUPQM5v0CgENFktkkbg1sfpgM3h20=
 github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521/go.mod h1:RvLn4FgxWubrpZHtQLnOf6EwhN2hEMusxZOhcW9H3UQ=
+github.com/rsksmart/rds-swarm v0.0.0-20190701203119-a553ab7dc3f8 h1:yl0A7ymLJZUjllzSWQgz+68yDDljclq4VOwIR9HPO6g=
+github.com/rsksmart/rds-swarm v0.0.0-20190701203119-a553ab7dc3f8/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.1 h1:GL2rEmy6nsikmW0r8opw9JIRScdMF5hA8cOYLH7In1k=
 github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMBDgk/93Q=
