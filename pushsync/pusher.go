@@ -191,12 +191,24 @@ func (p *Pusher) chunksWorker() {
 				p.pushedMu.Lock()
 				// delete from pushed items
 				for i := 0; i < len(syncedAddrs); i++ {
+					addr := syncedAddrs[i]
+					item := p.pushed[addr.Hex()]
+					// increment synced count for the tag if exists
+					tag := item.tag
+					if tag != nil {
+						if tag.Done(chunk.StateSynced) {
+							p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
+							tag.FinishRootSpan()
+						}
+						// finish span for pushsync roundtrip, only have this span if we have a tag
+						item.span.Finish()
+					}
 					delete(p.pushed, syncedAddrs[i].Hex())
 				}
 				p.pushedMu.Unlock()
 
 				// set chunk status to synced, insert to db GC index
-				if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
 					log.Error("pushsync: error setting chunks to synced", "err", err)
 				}
 
@@ -255,17 +267,6 @@ func (p *Pusher) receiptsWorker() {
 				metrics.GetOrRegisterCounter("pusher.receipts.already-synced", nil).Inc(1)
 				p.logger.Trace("just synced... ignore", "addr", hexaddr)
 				break
-			}
-			// increment synced count for the tag if exists
-			tag := item.tag
-			if tag != nil {
-				tag.Inc(chunk.StateSynced)
-				if tag.Done(chunk.StateSynced) {
-					p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
-					tag.FinishRootSpan()
-				}
-				// finish span for pushsync roundtrip, only have this span if we have a tag
-				item.span.Finish()
 			}
 
 			totalDuration := time.Since(item.sentAt)
@@ -358,6 +359,11 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 
 		// increment SENT count on tag  if it exists
 		if tag != nil {
+			// skip anonymous tags
+			if tag.Anonymous {
+				return false
+			}
+
 			tag.Inc(chunk.StateSent)
 			// opentracing for chunk roundtrip
 			_, span := spancontext.StartSpan(tag.Context(), "chunk.sent")

@@ -51,7 +51,7 @@ func TestModeSetAccess(t *testing.T) {
 				binIDs[po]++
 
 				newPullIndexTest(db, ch, binIDs[po], nil)(t)
-				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
+				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], nil)(t)
 			}
 
 			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
@@ -63,44 +63,163 @@ func TestModeSetAccess(t *testing.T) {
 	}
 }
 
-// TestModeSetSync validates ModeSetSync index values on the provided DB.
-func TestModeSetSync(t *testing.T) {
-	for _, tc := range multiChunkTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db, cleanupFunc := newTestDB(t, nil)
-			defer cleanupFunc()
+// TestModeSetSyncPull validates ModeSetSyncPull index values on the provided DB.
+func TestModeSetSyncPull(t *testing.T) {
+	defer func(f func() uint32) {
+		chunk.TagUidFunc = f
+	}(chunk.TagUidFunc)
 
-			chunks := generateTestRandomChunks(tc.count)
+	chunk.TagUidFunc = func() uint32 { return 0 }
 
-			wantTimestamp := time.Now().UTC().UnixNano()
-			defer setNow(func() (t int64) {
-				return wantTimestamp
-			})()
+	for _, mtc := range []struct {
+		name            string
+		mode            chunk.ModeSet
+		anonymous       bool
+		pin             bool
+		runGcIndexTest  bool
+		expErrPushIndex error
+		expErrGCIndex   error
+		expErrPinIndex  error
+	}{
+		{
+			name:            "set pull sync, normal tag, no pinning",
+			mode:            chunk.ModeSetSyncPull,
+			anonymous:       false,
+			pin:             false,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		},
+		{
+			name:            "set pull sync, normal tag, with pinning",
+			mode:            chunk.ModeSetSyncPull,
+			anonymous:       false,
+			pin:             true,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  nil,
+		},
+		{
+			name:            "set pull sync, anonymous tag, no pinning",
+			mode:            chunk.ModeSetSyncPull,
+			anonymous:       true,
+			pin:             false,
+			runGcIndexTest:  false,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		},
+		{
+			name:            "set pull sync, anonymous tag, with pinning",
+			mode:            chunk.ModeSetSyncPull,
+			anonymous:       true,
+			pin:             true,
+			runGcIndexTest:  false,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+			expErrPinIndex:  nil,
+		},
+		{
+			name:            "set push sync, normal tag, no pinning",
+			anonymous:       false,
+			pin:             false,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		}, {
+			name:            "set push sync, normal tag, with pinning",
+			anonymous:       false,
+			pin:             true,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: nil,
+			expErrGCIndex:   leveldb.ErrNotFound,
+			expErrPinIndex:  nil,
+		},
+		{
+			name:            "set push sync, anonymous tag, no pinning",
+			anonymous:       true,
+			pin:             false,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+			expErrPinIndex:  leveldb.ErrNotFound,
+		},
+		{
+			name:            "set push sync, anonymous tag, with pinning",
+			anonymous:       true,
+			pin:             true,
+			mode:            chunk.ModeSetSyncPush,
+			runGcIndexTest:  true,
+			expErrPushIndex: leveldb.ErrNotFound,
+			expErrGCIndex:   nil,
+			expErrPinIndex:  nil,
+		},
+	} {
+		t.Run(mtc.name, func(t *testing.T) {
+			for _, tc := range multiChunkTestCases {
+				t.Run(tc.name, func(t *testing.T) {
+					db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+					defer cleanupFunc()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...)
-			if err != nil {
-				t.Fatal(err)
+					tag, err := db.tags.Create(mtc.name, int64(tc.count), mtc.anonymous)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if tag.Uid != 0 {
+						t.Fatal("expected mock tag uid")
+					}
+
+					chunks := generateTestRandomChunks(tc.count)
+
+					wantTimestamp := time.Now().UTC().UnixNano()
+					defer setNow(func() (t int64) {
+						return wantTimestamp
+					})()
+
+					_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					err = db.Set(context.Background(), chunk.ModeSetSyncPull, chunkAddresses(chunks)...)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					if mtc.pin {
+						err = db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...)
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+
+					binIDs := make(map[uint8]uint64)
+
+					for _, ch := range chunks {
+						po := db.po(ch.Address())
+						binIDs[po]++
+
+						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
+						newPullIndexTest(db, ch, binIDs[po], nil)(t)
+						newPushIndexTest(db, ch, wantTimestamp, mtc.expErrPushIndex)(t)
+						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], mtc.expErrGCIndex)(t)
+						newPinIndexTest(db, ch, mtc.expErrPinIndex)(t)
+
+						// if the upload is anonymous then we expect to see some values in the gc index
+						if mtc.anonymous {
+							t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+						}
+					}
+
+					t.Run("gc size", newIndexGCSizeTest(db))
+				})
 			}
-
-			err = db.Set(context.Background(), chunk.ModeSetSync, chunkAddresses(chunks)...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			binIDs := make(map[uint8]uint64)
-
-			for _, ch := range chunks {
-				po := db.po(ch.Address())
-				binIDs[po]++
-
-				newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-				newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound)(t)
-				newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po])(t)
-			}
-
-			t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
-
-			t.Run("gc size", newIndexGCSizeTest(db))
 		})
 	}
 }

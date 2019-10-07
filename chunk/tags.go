@@ -27,6 +27,8 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 )
 
+var TagUidFunc = rand.Uint32
+
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
 	tags *sync.Map
@@ -41,8 +43,8 @@ func NewTags() *Tags {
 
 // Create creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *Tags) Create(s string, total int64) (*Tag, error) {
-	t := NewTag(rand.Uint32(), s, total)
+func (ts *Tags) Create(s string, total int64, anon bool) (*Tag, error) {
+	t := NewTag(TagUidFunc(), s, total, anon)
 
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
