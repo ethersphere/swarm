@@ -218,7 +218,6 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	// moveToGc toggles the deletion of the item from pushsync index
 	// it will be false in the case pull sync was called but push sync was meant on that chunk (!tag.Anonymous)
 	moveToGc := true
-
 	if db.tags != nil {
 		i, err = db.pushIndex.Get(item)
 		switch err {
@@ -230,6 +229,9 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 					if tag.Anonymous {
 						// this will not get called twice because we remove the item once after the !moveToGc check
 						tag.Inc(chunk.StateSent)
+						// this is needed since pushsync is checking if `tag.Done(chunk.StateSynced)` and when overlapping
+						// chunks are synced by both push and pull sync we have a problem. as an interim solution we increment this too
+						tag.Inc(chunk.StateSynced)
 					} else {
 						moveToGc = false
 					}
@@ -244,7 +246,6 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		}
 	}
 	if !moveToGc {
-		//panic(1)
 		return 0, nil
 	}
 	db.pushIndex.DeleteInBatch(batch, item)
