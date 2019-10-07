@@ -130,8 +130,8 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 	)
 }
 
-// new - swap constructor without integrity check
-func new(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, logger log.Logger) *Swap {
+// newSwapInstance is a swap constructor function without integrity checks
+func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, logger log.Logger) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
@@ -183,7 +183,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// create the swap instance
-	swap = new(
+	swap = newSwapInstance(
 		stateStore,
 		owner,
 		backend,
