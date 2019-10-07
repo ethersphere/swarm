@@ -528,12 +528,12 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		return
 	}
 
+	cfg.P2P.BootstrapNodes = []*enode.Node{}
+
 	networkid := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	if networkid != network.DefaultNetworkID {
 		return
 	}
-
-	cfg.P2P.BootstrapNodes = []*enode.Node{}
 
 	for _, url := range SwarmBootnodes {
 		node, err := enode.ParseV4(url)
@@ -542,7 +542,6 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		}
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
-
 }
 
 func setSwarmNATFromInterface(ctx *cli.Context, cfg *node.Config) {
