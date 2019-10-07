@@ -51,7 +51,7 @@ swarm:
     storesize: "500000" # 500000 * 4KB = 2GB
     extraFlags:
       - --ws
-      - --sync-mode=push
+      - --sync-mode=all
       - --ens-api=test:112234455c3a32fd11230c42e7bccd4a84e02010@http://ropsten-geth-geth.geth:8545
       - --wsaddr=0.0.0.0
       - --wsorigins=*

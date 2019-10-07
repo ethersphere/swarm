@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
       - name: smoke
-        image: ethersphere/swarm:edge-alltools
+        image: nonsens3/swarm:anton
         imagePullPolicy: "Always"
         command: ["/run-smoke.sh"]
         resources:
@@ -21,12 +21,12 @@ spec:
         - --metrics.influxdb.password=swarm
         - --metrics.influxdb.database=metrics
         - --metrics.influxdb.tags=host=upload-sync-a
-        - --filesize=100000
+        - --filesize=50000
         - --timeout=1600
         - --pushsync-delay
         - --sync-mode=pushsync
         - --debug
         - --http-port=8500
-        - --verbosity=5
+        - --verbosity=3
         - upload_and_sync
       restartPolicy: Never

@@ -1,14 +1,14 @@
 smoke:
   image:
-    repository: ethersphere/swarm
-    tag: edge-alltools
+    repository: nonsens3/swarm
+    tag: anton
 
 swarm:
   image:
-    repository: ethersphere/swarm
-    tag: edge-alltools
+    repository: nonsens3/swarm
+    tag: anton
 
 bootnode:
   image:
-    repository: ethersphere/swarm
-    tag: edge-alltools
+    repository: nonsens3/swarm
+    tag: anton
