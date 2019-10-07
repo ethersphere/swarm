@@ -24,7 +24,7 @@ import (
 
 const timeout = 2 * time.Second
 
-//Tests that a slot in the outbox is not freed until a message is successfully forwarded
+// Tests that a slot in the outbox is not freed until a message is successfully forwarded.
 func TestFullOutbox(t *testing.T) {
 
 	outboxCapacity := 2
@@ -50,14 +50,14 @@ func TestFullOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing, %v", err)
 	}
-	//As we haven't signaled processC, the messages are still in the outbox
+	// As we haven't signaled processC, the messages are still in the outbox.
 	err = testOutbox.Enqueue(testOutboxMessage)
 	if err != ErrOutboxFull {
 		t.Fatalf("unexpected error type, got %v, wanted %v", err, ErrOutboxFull)
 	}
 	processC <- struct{}{}
 
-	//There should be a slot in the outbox to enqueue
+	// There should be a slot in the outbox to enqueue.
 	select {
 	case <-testOutbox.slots:
 	case <-time.After(timeout):

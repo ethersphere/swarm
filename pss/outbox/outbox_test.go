@@ -28,7 +28,7 @@ import (
 
 const timeout = 2 * time.Second
 
-//Tests successful and failed forwarding. Failure to forward should requeue the failed message
+// Tests successful and failed forwarding. Failure to forward should requeue the failed message.
 func TestOutbox(t *testing.T) {
 
 	outboxCapacity := 2
@@ -62,7 +62,7 @@ func TestOutbox(t *testing.T) {
 		t.Fatalf("unexpected error enqueueing, %v", err)
 	}
 
-	//We wait for the forward function to success
+	// We wait for the forward function to success.
 	<-successC
 
 	forwardFail = true
@@ -71,7 +71,7 @@ func TestOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing, %v", err)
 	}
-	//We wait for the forward function to fail
+	// We wait for the forward function to fail
 	select {
 	case <-failedC:
 	case <-time.After(timeout):
@@ -79,11 +79,11 @@ func TestOutbox(t *testing.T) {
 
 	}
 
-	// The message will be retried once we send to continueC, so first, we change the forward function
+	// The message will be retried once we send to continueC, so first, we change the forward function.
 	forwardFail = false
 	continueC <- struct{}{}
 
-	//We wait for the retry and success
+	// We wait for the retry and success.
 	select {
 	case <-successC:
 	case <-time.After(timeout):
@@ -91,8 +91,8 @@ func TestOutbox(t *testing.T) {
 	}
 }
 
-//TestOutboxWorkers checks that the number of goroutines for processing have a maximum and that there is no
-//deadlock operating
+// TestOutboxWorkers checks that the number of goroutines for processing have a maximum and that there is no
+// deadlock operating.
 func TestOutboxWorkers(t *testing.T) {
 	outboxCapacity := 100
 	workers := 3
@@ -125,7 +125,7 @@ func TestOutboxWorkers(t *testing.T) {
 
 	numMessages := 100
 
-	// Enqueuing numMessages messages in parallel
+	// Enqueuing numMessages messages in parallel.
 	wg.Add(numMessages)
 	for i := 0; i < numMessages; i++ {
 		go func(num byte) {
@@ -133,10 +133,10 @@ func TestOutboxWorkers(t *testing.T) {
 		}(byte(i))
 	}
 
-	//We need this sleep to allow workers to be launched and accumulated before starting signaling the channel.
+	// We need this sleep to allow workers to be launched and accumulated before starting signaling the channel.
 	// If not, there never will be workers in parallel and the test will be useless.
 	time.Sleep(10 * time.Millisecond)
-	//Signaling 100 messages
+	// Signaling 100 messages.
 	for i := 0; i < numMessages; i++ {
 		endProcess <- struct{}{}
 	}

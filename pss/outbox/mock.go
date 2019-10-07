@@ -31,7 +31,7 @@ var mockForwardFunction = func(msg *message.Message) error {
 	return nil
 }
 
-//NewMock creates an Outbox mock. Config can be nil, in that case default values will be set
+// NewMock creates an Outbox mock. Config can be nil, in that case default values will be set.
 func NewMock(config *Config) (outboxMock *Outbox) {
 	if config == nil {
 		config = &Config{
