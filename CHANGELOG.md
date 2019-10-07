@@ -1,4 +1,13 @@
-## v0.5.2 (Unknown)
+## v0.5.2 (October 07, 2019)
+
+### Notes
+
+- This release includes a small fix to avoid connections to the default bootnodes when not using the default testnet.
+
+### Commits
+
+* [#1865](https://github.com/ethersphere/swarm/pull/1865) cmd/swarm: nullify bootnodes before check for network id
+* [#1862](https://github.com/ethersphere/swarm/pull/1862) cmd/swarm: only use the default bootnodes on the default network id
 
 ## v0.5.1 (October 03, 2019)
 
