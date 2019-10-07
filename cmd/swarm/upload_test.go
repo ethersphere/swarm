@@ -311,11 +311,11 @@ func testDefaultPath(t *testing.T, cluster *testCluster, toEncrypt bool, absDefa
 		"--defaultpath",
 		defaultPath,
 		"up",
-		tmp,
 	}
 	if toEncrypt {
 		args = append(args, "--encrypt")
 	}
+	args = append(args, tmp)
 
 	up := runSwarm(t, args...)
 	hashRegexp := `[a-f\d]{64,128}`

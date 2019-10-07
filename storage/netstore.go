@@ -27,12 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
-
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
@@ -236,7 +234,9 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
 
-		n.logger.Trace("remote.fetch", "ref", ref)
+		ctx = context.WithValue(ctx, "remote.fetch", osp)
+
+		log.Trace("remote.fetch", "ref", ref)
 
 		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
 		if err != nil {
@@ -264,7 +264,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			osp.Finish()
 			break
 		case <-ctx.Done(): // global fetcher timeout
-			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref)
+			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref, "err", ctx.Err())
 			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
 
 			osp.LogFields(olog.Bool("fail", true))

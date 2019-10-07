@@ -161,23 +161,27 @@ func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
 }
 
 func (o *outbox) processOutbox() {
-	for slot := range o.process {
-		go func(slot int) {
-			msg := o.msg(slot)
-			metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
-			if err := o.forward(msg.msg); err != nil {
-				metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
-				// if we failed to forward, re-insert message in the queue
-				log.Debug(err.Error())
-				// reenqueue the message for processing
-				o.reenqueue(slot)
-				log.Debug("Message re-enqued", "slot", slot)
-				return
-			}
-			// free the outbox slot
-			o.free(slot)
-			metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-		}(slot)
+	for {
+		select {
+		case slot := <-o.process:
+			go func(slot int) {
+				msg := o.msg(slot)
+				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+				if err := o.forward(msg.msg); err != nil {
+					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+					// if we failed to forward, re-insert message in the queue
+					log.Warn(err.Error())
+					// reenqueue the message for processing
+					o.reenqueue(slot)
+					return
+				}
+				// free the outbox slot
+				o.free(slot)
+				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+			}(slot)
+		case <-o.quitC:
+			return
+		}
 	}
 }
 
@@ -186,7 +190,10 @@ func (o outbox) msg(slot int) *outboxMsg {
 }
 
 func (o outbox) free(slot int) {
-	o.slots <- slot
+	select {
+	case o.slots <- slot:
+	case <-o.quitC:
+	}
 }
 
 func (o outbox) reenqueue(slot int) {
@@ -336,7 +343,10 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, spec)
 	p.addPeer(pp)
 	defer p.removePeer(pp)
-	return pp.Run(p.handle)
+	handle := func(ctx context.Context, msg interface{}) error {
+		return p.handle(ctx, pp, msg)
+	}
+	return pp.Run(handle)
 }
 
 func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
@@ -465,17 +475,30 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 	delete(handlers, hndlr)
 }
 
+// generic peer-specific handler for incoming messages
+// calls pss msg handler asyncronously
+func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
+	go func() {
+		pssmsg, ok := msg.(*message.Message)
+		if !ok {
+			log.Error("invalid message type", "msg", msg)
+			peer.Drop("invalid message type")
+		}
+		if err := p.handlePssMsg(ctx, pssmsg); err != nil {
+			log.Warn("handler error", "err", err)
+			peer.Drop(fmt.Sprintf("handler error %s", err))
+		}
+	}()
+	return nil
+}
+
 // Filters incoming messages for processing or forwarding.
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handle(ctx context.Context, msg interface{}) error {
+func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
-	pssmsg, ok := msg.(*message.Message)
-	if !ok {
-		return fmt.Errorf("invalid message type. Expected *message.Message, got %T", msg)
-	}
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
@@ -495,7 +518,7 @@ func (p *Pss) handle(ctx context.Context, msg interface{}) error {
 	if pssmsg.Flags.Raw {
 		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
 			if !capabilities.raw {
-				log.Debug("No handler for raw message", "topic", psstopic)
+				log.Warn("No handler for raw message", "topic", label(psstopic[:]))
 				return nil
 			}
 		}
@@ -578,7 +601,7 @@ func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddre
 	defer metrics.GetOrRegisterResettingTimer("pss.execute-handlers", nil).UpdateSince(time.Now())
 
 	handlers := p.getHandlers(topic)
-	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
+	peer := p2p.NewPeer(enode.ID{}, hex.EncodeToString(from), []p2p.Cap{})
 	for _, h := range handlers {
 		if !h.caps.raw && raw {
 			log.Warn("norawhandler")
@@ -613,7 +636,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 		return false
 	}
 
-	depth := p.Kademlia.NeighbourhoodDepth()
+	depth := p.NeighbourhoodDepth()
 	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
@@ -743,7 +766,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 		}
 	}
 	if !isPssEnabled {
-		log.Error("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
+		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", label(sp.BzzAddr.Address()))
 		return false
 	}
 
@@ -778,7 +801,7 @@ func (p *Pss) forward(msg *message.Message) error {
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
-	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
+	neighbourhoodDepth := p.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
 	// but the luminosity is less. here luminosity equals the number of bits given in the destination address.
@@ -803,7 +826,7 @@ func (p *Pss) forward(msg *message.Message) error {
 		onlySendOnce = true
 	}
 
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
+	p.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
 		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
@@ -830,7 +853,14 @@ func (p *Pss) forward(msg *message.Message) error {
 	}
 }
 func label(b []byte) string {
-	return fmt.Sprintf("%04x", b[:2])
+	if len(b) == 0 {
+		return "-"
+	}
+	l := 2
+	if len(b) == 1 {
+		l = 1
+	}
+	return fmt.Sprintf("%04x", b[:l])
 }
 
 // add a message to the cache

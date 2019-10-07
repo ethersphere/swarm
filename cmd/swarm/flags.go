@@ -23,11 +23,6 @@ import (
 )
 
 var (
-	SwarmSwapChequebookAddrFlag = cli.StringFlag{
-		Name:   "chequebook",
-		Usage:  "chequebook contract address",
-		EnvVar: SwarmEnvChequebookAddr,
-	}
 	SwarmAccountFlag = cli.StringFlag{
 		Name:   "bzzaccount",
 		Usage:  "Swarm account key file",
@@ -59,6 +54,16 @@ var (
 		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
 	}
+	SwarmSwapInitialDepositFlag = cli.StringFlag{
+		Name:   "swap-initial-deposit",
+		Usage:  "Initial deposit amount for swap chequebook",
+		EnvVar: SwarmEnvInitialDeposit,
+	}
+	SwarmSwapChequebookAddrFlag = cli.StringFlag{
+		Name:   "swap-chequebook",
+		Usage:  "SWAP chequebook contract address",
+		EnvVar: SwarmEnvChequebookAddr,
+	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
 		Usage:  "Swarm SWAP enabled (default false)",
@@ -79,15 +84,16 @@ var (
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
+	SwarmSyncModeFlag = cli.StringFlag{
+		Name:   "sync-mode",
+		Usage:  "Syncing mode (available modes: pull, push, all, none)",
+		EnvVar: SwarmSyncMode,
+		Value:  "pull",
+	}
 	SwarmSwapLogPathFlag = cli.StringFlag{
 		Name:   "swap-audit-logpath",
 		Usage:  "Write execution logs of swap audit to the given directory",
 		EnvVar: SwarmEnvSwapLogPath,
-	}
-	SwarmSyncDisabledFlag = cli.BoolTFlag{
-		Name:   "nosync",
-		Usage:  "Disable swarm syncing",
-		EnvVar: SwarmEnvSyncDisable,
 	}
 	SwarmSyncUpdateDelay = cli.DurationFlag{
 		Name:   "sync-update-delay",
@@ -226,5 +232,13 @@ var (
 	SwarmEnablePinningFlag = cli.BoolFlag{
 		Name:  "enable-pinning",
 		Usage: "Use this flag to enable the pinning feature",
+	}
+	SwarmProgressFlag = cli.BoolFlag{
+		Name:  "progress",
+		Usage: "Use this flag to enable tracking of the upload progress through the CLI",
+	}
+	SwarmVerboseFlag = cli.BoolFlag{
+		Name:  "verbose",
+		Usage: "Display more verbose output",
 	}
 )

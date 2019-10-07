@@ -18,13 +18,26 @@ package bzzeth
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"sync"
 
+	"golang.org/x/sync/errgroup"
+
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/storage"
+)
+
+var (
+	errUnsolicitedHeader = errors.New("unsolicited header received")
+	errDuplicateHeader   = errors.New("duplicate header received")
 )
 
 var (
@@ -36,15 +49,19 @@ var _ node.Service = &BzzEth{}
 
 // BzzEth is a global module handling ethereum state on swarm
 type BzzEth struct {
-	peers *peers        // bzzeth peer pool
-	quit  chan struct{} // quit channel to close go routines
+	peers    *peers            // bzzeth peer pool
+	netStore *storage.NetStore // netstore to retrieve and store
+	kad      *network.Kademlia // kademlia to determine if a header chunk belongs to us
+	quit     chan struct{}     // quit channel to close go routines
 }
 
 // New constructs the BzzEth node service
-func New() *BzzEth {
+func New(netStore *storage.NetStore, kad *network.Kademlia) *BzzEth {
 	return &BzzEth{
-		peers: newPeers(),
-		quit:  make(chan struct{}),
+		peers:    newPeers(),
+		netStore: netStore,
+		kad:      kad,
+		quit:     make(chan struct{}),
 	}
 }
 
@@ -82,9 +99,12 @@ func (b *BzzEth) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 // handlers are called asynchronously so handler calls do not block incoming msg processing
 func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		p.logger.Debug("bzzeth.handleMsg")
-		switch msg.(type) {
-		default:
+		p.logger.Trace("bzzeth.handleMsg")
+		switch msg := msg.(type) {
+		case *NewBlockHeaders:
+			go b.handleNewBlockHeaders(ctx, p, msg)
+		case *BlockHeaders:
+			go b.handleBlockHeaders(ctx, p, msg)
 		}
 		return nil
 	}
@@ -97,6 +117,213 @@ func (b *BzzEth) handleMsgFromSwarmNode(p *Peer) func(context.Context, interface
 		p.logger.Warn("bzzeth.handleMsgFromSwarmNode")
 		return errRcvdMsgFromSwarmNode
 	}
+}
+
+// handleNewBlockHeaders handles new header hashes
+// only request headers that are in Kad Nearest Neighbourhood
+func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlockHeaders) {
+	p.logger.Trace("bzzeth.handleNewBlockHeaders")
+
+	// collect the addresses of blocks that are not in our localstore
+	addresses := make([]chunk.Address, len(*msg))
+	for i, h := range *msg {
+		addresses[i] = h.Hash.Bytes()
+		log.Trace("Received hashes ", "Header", hex.EncodeToString(h.Hash.Bytes()))
+	}
+	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
+	if err != nil {
+		log.Error("Error checking hashesh in store", "Reason", err)
+		return
+	}
+
+	// collect the hashes of block headers we want
+	var hashes [][]byte
+	for i, y := range yes {
+		// ignore hashes already present in localstore
+		if y {
+			continue
+		}
+
+		// collect hash based on proximity
+		vhash := addresses[i]
+		if wantHeaderFunc(vhash, b.kad) {
+			hashes = append(hashes, vhash)
+		} else {
+			p.logger.Trace("ignoring header. Not in proximity ", "Address", hex.EncodeToString(addresses[i]))
+		}
+	}
+
+	// request them from the offering peer and deliver in a channel
+	deliveries := make(chan []byte)
+	req, err := p.getBlockHeaders(ctx, hashes, deliveries)
+	if err != nil {
+		p.logger.Error("Error sending GetBlockHeader message", "Reason", err)
+		return
+	}
+	defer req.cancel()
+
+	// this loop blocks until all delivered or context done
+	// only needed to log results
+	deliveredCnt := 0
+	for {
+		select {
+		case hash, ok := <-deliveries:
+			if !ok {
+				p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt)
+				return
+			}
+			deliveredCnt++
+			p.logger.Trace("bzzeth.handleNewBlockHeaders", "hash", hex.EncodeToString(hash), "delivered", deliveredCnt)
+			if deliveredCnt == len(req.hashes) {
+				p.logger.Debug("Delivered all headers", "count", deliveredCnt)
+				finishDeliveryFunc(req.hashes)
+				return
+			}
+		case <-ctx.Done():
+			p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt, "err", err)
+			return
+		}
+	}
+}
+
+// wantHeaderFunc is used to determine if we need a particular header offered as latest
+// by an eth fullnode
+// tests reassign this to control
+var wantHeaderFunc = wantHeader
+
+// wantHeader returns true iff the hash argument falls in the NN of kademlia
+func wantHeader(hash []byte, kad *network.Kademlia) bool {
+	return chunk.Proximity(kad.BaseAddr(), hash) >= kad.NeighbourhoodDepth()
+}
+
+// finishStorageFunc is used to determine if all the requested headers are stored
+// this is used in testing if the headers are indeed stored in the localstore
+var finishStorageFunc = finishStorage
+
+func finishStorage(chunks []chunk.Chunk) {
+	for _, c := range chunks {
+		log.Trace("Header stored", "Address", c.Address().Hex())
+	}
+}
+
+// finishDeliveryFunc is used to determine if all the requested headers are delivered
+// this is used in testing .. otherwise it just logs trace
+var finishDeliveryFunc = finishDelivery
+
+func finishDelivery(hashes map[string]bool) {
+	for addr := range hashes {
+		log.Trace("Header delivered", "Address", addr)
+	}
+}
+
+// handleBlockHeaders handles block headers message
+func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHeaders) {
+	p.logger.Debug("bzzeth.handleBlockHeaders", "id", msg.Rid)
+
+	// retrieve the request for this id
+	req, ok := p.requests.get(msg.Rid)
+	if !ok {
+		p.logger.Warn("bzzeth.handleBlockHeaders: nonexisting request id", "id", msg.Rid)
+		p.Drop("nonexisting request id")
+		return
+	}
+
+	// convert rlp.RawValue to bytes
+	headers := make([][]byte, len(msg.Headers))
+	for i, h := range msg.Headers {
+		headers[i] = h
+	}
+
+	err := b.deliverAndStoreAll(ctx, req, headers)
+	if err != nil {
+		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.Rid, "err", err)
+		p.Drop("error on deliverAndStoreAll")
+	}
+}
+
+// Validates and headers asynchronously and stores the valid chunks in one go
+func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [][]byte) error {
+	chunks := make([]chunk.Chunk, 0)
+	var chunkL sync.RWMutex
+	var wg errgroup.Group
+	for _, h := range headers {
+		hdr := make([]byte, len(h))
+		copy(hdr, h)
+		wg.Go(func() error {
+			ch, err := b.validateHeader(ctx, hdr, req)
+			if err != nil {
+				return err
+			}
+			chunkL.Lock()
+			defer chunkL.Unlock()
+			chunks = append(chunks, ch)
+			return nil
+		})
+	}
+	// finish storage is used mostly in testing
+	// in normal scenario.. it just logs Trace
+	defer finishStorageFunc(chunks)
+
+	// wait for all validations to get over and close the channels
+	err := wg.Wait()
+	if err != nil {
+		return err
+	}
+
+	// Store all the valid header chunks in one shot
+	results, err := b.netStore.Put(ctx, chunk.ModePutUpload, chunks...)
+	if err != nil {
+		for i := range results {
+			log.Error("bzzeth.store", "hash", chunks[i].Address().Hex(), "err", err)
+			// ignore all other errors, but invalid chunk incurs peer drop
+			if err == chunk.ErrChunkInvalid {
+				return err
+			}
+		}
+	}
+	log.Debug("Stored all headers ", "count", len(chunks))
+	return nil
+}
+
+// validateHeader check for correctness and validity of the header
+// this also informs the delivery channel about the received header
+func (b *BzzEth) validateHeader(ctx context.Context, header []byte, req *request) (chunk.Chunk, error) {
+	ch := newChunk(header)
+	headerAlreadyReceived, expected := isHeaderExpected(req, ch.Address().Hex())
+	if expected {
+		if headerAlreadyReceived {
+			// header already received
+			return nil, errDuplicateHeader
+		} else {
+			setHeaderAsReceived(req, ch.Address().Hex())
+			req.c <- ch.Address()
+			return ch, nil
+		}
+	} else {
+		// header is not present in the request hash.
+		return nil, errUnsolicitedHeader
+	}
+}
+
+// Checks if the given hash is expected in this request
+func isHeaderExpected(req *request, addr string) (rcvdFlag bool, ok bool) {
+	req.lock.RLock()
+	defer req.lock.RUnlock()
+	rcvdFlag, ok = req.hashes[addr]
+	return rcvdFlag, ok
+}
+
+// Set the given hash as received in the request
+func setHeaderAsReceived(req *request, addr string) {
+	req.lock.Lock()
+	defer req.lock.Unlock()
+	req.hashes[addr] = true
+}
+
+// newChunk creates a new content addressed chunk from data using Keccak256  SHA3 hash
+func newChunk(data []byte) chunk.Chunk {
+	hash := crypto.Keccak256(data)
+	return chunk.NewChunk(hash, data)
 }
 
 // Protocols returns the p2p protocol

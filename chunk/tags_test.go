@@ -16,11 +16,12 @@
 
 package chunk
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestAll(t *testing.T) {
 	ts := NewTags()
-
 	ts.Create("1", 1)
 	ts.Create("2", 1)
 
@@ -44,5 +45,4 @@ func TestAll(t *testing.T) {
 	if len(all) != 3 {
 		t.Fatalf("expected length to be 3 got %d", len(all))
 	}
-
 }
