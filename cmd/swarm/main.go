@@ -45,6 +45,7 @@ import (
 	bzzapi "github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/internal/debug"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage/mock"
 	mockrpc "github.com/ethersphere/swarm/storage/mock/rpc"
 	"github.com/ethersphere/swarm/tracing"
@@ -524,6 +525,11 @@ func addDefaultHelpSubcommands(commands []cli.Command) {
 
 func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) || ctx.GlobalIsSet(utils.BootnodesV4Flag.Name) {
+		return
+	}
+
+	networkid := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
+	if networkid != network.DefaultNetworkID {
 		return
 	}
 
