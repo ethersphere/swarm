@@ -23,12 +23,14 @@ import (
 	"github.com/ethersphere/swarm/pss/message"
 )
 
+//Config contains the Outbox configuration
 type Config struct {
-	NumberSlots int
-	NumWorkers  int
-	Forward     forwardFunction
+	NumberSlots int             //Number of slots for messages in Outbox.
+	NumWorkers  int             //Number of parallel goroutines forwarding messages.
+	Forward     forwardFunction //Function that executes the actual forwarding
 }
 
+//Outbox type
 type Outbox struct {
 	forwardFunc forwardFunction
 	queue       []*outboxMsg
@@ -40,10 +42,12 @@ type Outbox struct {
 
 type forwardFunction func(msg *message.Message) error
 
+//ErrOutboxFull is returned when a caller tries to enqueue a message and all slots are busy
 var ErrOutboxFull = errors.New("outbox full")
 
 const defaultOutboxWorkers = 100
 
+//NewOutbox creates a new Outbox. Config must be provided. IF NumWorkers is not providers, default will be used.
 func NewOutbox(config *Config) *Outbox {
 	if config.NumWorkers == 0 {
 		config.NumWorkers = defaultOutboxWorkers
