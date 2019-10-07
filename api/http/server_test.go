@@ -1222,7 +1222,7 @@ func TestGet(t *testing.T) {
 			method:             "GET",
 			headers:            map[string]string{"Accept": "text/html"},
 			expectedStatusCode: http.StatusOK,
-			assertResponseBody: "Swarm provides censorship resistant storage and communication infrastructure for a sovereign digital society",
+			assertResponseBody: "Censorship resistant storage and communication infrastructure for a sovereign digital society.",
 			verbose:            false,
 		},
 		{
