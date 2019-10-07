@@ -1104,6 +1104,7 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 
 // newDefaultParams creates a set of default params for tests
 func newDefaultParams(t *testing.T) *Params {
+	t.Helper()
 	baseKey := make([]byte, 32)
 	_, err := rand.Read(baseKey)
 	if err != nil {
