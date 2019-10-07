@@ -309,7 +309,7 @@ func TestRNSResolver(t *testing.T) {
 	ctx := context.TODO()
 
 	rnsDomain := "marcelosdomain.rsk"
-	rnsAddress := "0xfF33bC3B7324C2A808A9D415935f8D991E6C406c"
+	rnsAddress := "000000000000000000000000ff33bc3b7324c2a808a9d415935f8d991e6c406c"
 
 	tests := []struct {
 		desc   string
@@ -330,22 +330,14 @@ func TestRNSResolver(t *testing.T) {
 	}
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			res, err := x.api.Resolve(x.ctx, x.addr)
-			if err == nil {
-				if x.err != nil {
-					t.Fatalf("expected error %q, got result %q", x.err, res.Hex())
-				}
-				if res.Hex() != x.result {
-					t.Fatalf("expected result %q, got %q", x.result, res.Hex())
-				}
-			} else {
-				if x.err == nil {
-					t.Fatalf("expected no error, got %q", err)
-				}
-				if err.Error() != x.err.Error() {
-					t.Fatalf("expected error %q, got %q", x.err, err)
-				}
+			res, err := x.api.Resolve(x.ctx, x.domain)
+			if err != nil {
+				t.Fatalf(err.Error())
 			}
+			if res.Hex() != x.addr {
+				t.Fatalf("expected result %q, got %q", x.addr, res.Hex())
+			}
+
 		})
 	}
 }
