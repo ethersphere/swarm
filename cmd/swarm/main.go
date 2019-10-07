@@ -45,6 +45,7 @@ import (
 	bzzapi "github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/internal/debug"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage/mock"
 	mockrpc "github.com/ethersphere/swarm/storage/mock/rpc"
 	"github.com/ethersphere/swarm/tracing"
@@ -529,6 +530,11 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 
 	cfg.P2P.BootstrapNodes = []*enode.Node{}
 
+	networkid := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
+	if networkid != network.DefaultNetworkID {
+		return
+	}
+
 	for _, url := range SwarmBootnodes {
 		node, err := enode.ParseV4(url)
 		if err != nil {
@@ -536,7 +542,6 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		}
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
-
 }
 
 func setSwarmNATFromInterface(ctx *cli.Context, cfg *node.Config) {
