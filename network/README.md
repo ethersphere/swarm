@@ -190,17 +190,46 @@ from the nearest peer as opposed to `10000001` that is only po 7 away. The best 
 One additional benefit in considering `gaps` is load balancing. If the target addresses are distributed randomly 
 (although address popularity is another problem that can also be studied from the `gap` perspective), the request will
 be automatically load balanced if we try to connect to peers covering the bigger `gaps`. Continuing with our example,
-if in bin 0 we have peers `10000000` and `10000001`, almost all addresses in space `1xxxxxxx`, that is, half of the 
-addresses will have the same distance from both peers. If we need to send to some of those address we will need to take
+if in bin 0 we have peers `10000000` and `10000001` (Fig. 1), almost all addresses in space `1xxxxxxx`, that is, half of the 
+addresses will have the same distance from both peers. If we need to send to some of those address we will need to use
 one of those peers. This could be done randomly, always the first or with some load balancing accounting to use the least
-used one. This last method will still be useful, but if the `gap` filling strategy is used, most probably both peers will
-separated enough that they never compete for an address and a natural load balancing will be made among them (for example,
-`10000000` and `11000000` will be used each for half the addresses in bin 0).
+used one. 
 ![Fig. 1](https://raw.githubusercontent.com/kortatu/swarm_doc/master/address_space_gaps-lb-1.png)
 Fig.1 - Closer peers needs an external Load Balancing mechanism
+
+This last method will still be useful, but if the `gap` filling strategy is used, most probably both peers will
+be separated enough that they never compete for an address and a natural load balancing will be made among them (for example,
+`10000000` and `11000000` will be used each for half the addresses in bin 0 (Fig. 2)).
 ![Fig. 2](https://raw.githubusercontent.com/kortatu/swarm_doc/master/address_space_gaps-lb-2.png)
 Fig.2 - Peers chosen by space address gap have a natural load balancing
 ### Implementation
 The search for gaps can be done easily using a proximity order tree or `pot`. Traversing the bins of a node, a `gap` is
-found if there is some of the po's missing starting from 0 (left). In each level the starting po to search for is the
-parent po (not 0, because in the second level, under a node of po=0, the minimum po that could be found is 1)
+found if there is some of the po's missing starting from furthest (left). In each level the starting po to search for is the
+parent po (not 0, because in the second level, under a node of po=0, the minimum po that could be found is 1).
+
+Implementation of the function that looks for the bigger Gap in a `pot` can be seen in
+`pot.BiggestAddressGap`. That function returns the biggest gap in the form of a po and
+a node under the gap can be found.
+
+This function is used in `kademlia.suggestPeerInBinByGap`, which it returns a BzzAddress in a particular bin which fills
+ up the biggest address gap. This function is not used in `SuggestPeer`, but it will be enough to replace the call to 
+ `suggestPeerInBin` with the new one.
+ 
+ ### Further improvements
+ Instead of the size of a gap, maybe it could be more interesting to see the ration between size and number of current 
+ peers serving that gap. If we have `n` current peers that are equidistant to a particular gap of size `s`,
+the load of each of these peers will be on average `s/n`. 
+We can define a gap's `temperature` as that number `s/n`. When looking for new peers to connect, instead of looking for
+bigger gaps we could look for `hotter` gaps.
+For example, if in our first example, we can't find a peer in `11xxxxxx` and we instead, used the best peer, we could end
+with the configuration in Fig. 3.
+![Fig. 3](https://raw.githubusercontent.com/kortatu/swarm_doc/master/address_space_gaps-lb-3.png)
+Fig. 3 - Comparing gaps temperature
+
+Here we still have `11xxxxxx` as the biggest gap (po=1, size 1/4), same size as `01xxxxxx`. But if consider temperature,
+`01xxxxxx` is hotter because is served only by our node `00000000`, being its temperature is `(1/4)/ 1 = 1/4`. However,
+`11xxxxxx` is now served by two peers, so its temperature is `(1/4) / 2 = 1/8`, and that will mean that we will select
+`01xxxxxx` as the hotter one.
+
+There is a way of implementing temperature calculation so its cost it is the same as looking for biggest gap. Temperature
+can be calculated on the fly as the gap is found using a `pot`.
