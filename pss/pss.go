@@ -143,22 +143,18 @@ func (o outbox) len() int {
 // enqueue a new element in the outbox if there is any slot available.
 // Then send it to process. This method is blocking in the process channel!
 func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
-	// first we try to obtain a slot in the outbox
+	// we try to obtain a slot in the outbox
+	slot := <-o.slots
+
+	o.queue[slot] = outboxmsg
+	metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+	// we send this message slot to process
 	select {
-	case slot := <-o.slots:
-		o.queue[slot] = outboxmsg
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-		// we send this message slot to process
-		select {
-		case o.process <- slot:
-		case <-o.quitC:
-		}
-		return nil
-		// Lets block instead to drop if outbox is full.
-		// default:
-		// 	metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-		// 	return errors.New("outbox full")
+	case o.process <- slot:
+	case <-o.quitC:
 	}
+
+	return nil
 }
 
 func (o *outbox) processOutbox() {
