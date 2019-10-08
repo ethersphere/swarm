@@ -243,6 +243,30 @@ func TestPeerCheques(t *testing.T) {
 	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque, "lastReceivedCheque": generatedReceivedCheque}, peerCheques)
 
 	// generate random cheques as sent and received for a second peer
+	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	generatedSentCheque2 := newRandomTestCheque()
+	err = testPeer2.setLastSentCheque(generatedSentCheque2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerCheques, err = swap.PeerCheques(testPeer2.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque2, "lastReceivedCheque": nil}, peerCheques)
+	generatedReceivedCheque2 := newRandomTestCheque()
+	err = testPeer2.setLastReceivedCheque(generatedReceivedCheque2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerCheques, err = swap.PeerCheques(testPeer2.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque2, "lastReceivedCheque": generatedReceivedCheque2}, peerCheques)
 
 	// check previous cheques are still correct
 }
