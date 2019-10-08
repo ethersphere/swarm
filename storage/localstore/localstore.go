@@ -54,6 +54,7 @@ var (
 // database related objects.
 type DB struct {
 	shed *shed.DB
+	tags *chunk.Tags
 
 	// schema name of loaded data
 	schemaName shed.StringField
@@ -131,6 +132,7 @@ type Options struct {
 	Capacity uint64
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
+	Tags          *chunk.Tags
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -146,6 +148,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	db = &DB{
 		capacity: o.Capacity,
 		baseKey:  baseKey,
+		tags:     o.Tags,
 		// channel collectGarbageTrigger
 		// needs to be buffered with the size of 1
 		// to signal another event if it

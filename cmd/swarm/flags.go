@@ -237,6 +237,10 @@ var (
 		Name:  "progress",
 		Usage: "Use this flag to enable tracking of the upload progress through the CLI",
 	}
+	SwarmAnonymousUploadFlag = cli.BoolFlag{
+		Name:  "anonymous",
+		Usage: "use this flag to upload anonymously",
+	}
 	SwarmVerboseFlag = cli.BoolFlag{
 		Name:  "verbose",
 		Usage: "Display more verbose output",

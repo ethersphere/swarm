@@ -22,8 +22,8 @@ import (
 
 func TestAll(t *testing.T) {
 	ts := NewTags()
-	ts.Create("1", 1)
-	ts.Create("2", 1)
+	ts.Create("1", 1, false)
+	ts.Create("2", 1, false)
 
 	all := ts.All()
 
@@ -39,7 +39,7 @@ func TestAll(t *testing.T) {
 		t.Fatalf("expected tag 1 Total to be 1 got %d", n)
 	}
 
-	ts.Create("3", 1)
+	ts.Create("3", 1, false)
 	all = ts.All()
 
 	if len(all) != 3 {

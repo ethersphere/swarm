@@ -193,9 +193,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	feedsHandler = feed.NewHandler(fhParams)
 
+	self.tags = chunk.NewTags() //todo load from state store
+
 	localStore, err := localstore.New(config.ChunkDbPath, config.BaseKey, &localstore.Options{
 		MockStore: mockStore,
 		Capacity:  config.DbCapacity,
+		Tags:      self.tags,
 	})
 	if err != nil {
 		return nil, err
@@ -225,7 +228,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	syncProvider := stream.NewSyncProvider(self.netStore, to, syncing, false)
 	self.streamer = stream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
-	self.tags = chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
