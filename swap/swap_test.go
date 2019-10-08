@@ -498,7 +498,10 @@ func TestReceivedCheques(t *testing.T) {
 	}
 	// generate a random cheque as received
 	receivedCheque := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(receivedCheque)
+	err = testPeer.setLastReceivedCheque(receivedCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
 	receivedCheques, err = swap.ReceivedCheques()
 	if err != nil {
 		t.Fatal(err)
@@ -511,7 +514,10 @@ func TestReceivedCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 	receivedCheque2 := newRandomTestCheque()
-	testPeer2.setLastReceivedCheque(receivedCheque2)
+	err = testPeer2.setLastReceivedCheque(receivedCheque2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	receivedCheques, err = swap.ReceivedCheques()
 	if err != nil {
 		t.Fatal(err)
@@ -520,7 +526,10 @@ func TestReceivedCheques(t *testing.T) {
 
 	// test cheque change for peer
 	receivedCheque3 := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(receivedCheque3)
+	err = testPeer.setLastReceivedCheque(receivedCheque3)
+	if err != nil {
+		t.Fatal(err)
+	}
 	receivedCheques, err = swap.ReceivedCheques()
 	if err != nil {
 		t.Fatal(err)
