@@ -376,62 +376,38 @@ func TestSentCheques(t *testing.T) {
 		t.Fatalf("Expected sent cheques to be empty, but are %v", sentCheques)
 	}
 
-	receivedCheques, err := swap.ReceivedCheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(receivedCheques) != 0 {
-		t.Fatalf("Expected received cheques to be empty, but are %v", receivedCheques)
-	}
-
 	// test cheque addition for peer
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// generate a random cheque as received
-	receivedCheque := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(receivedCheque)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque})
-	// generate a random cheque as sent for the same peer
+	// generate a random cheque as sent
 	sentCheque := newRandomTestCheque()
 	testPeer.setLastSentCheque(sentCheque)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque})
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque}, map[enode.ID]*Cheque{testPeer.ID(): nil})
 
 	// test successive cheque addition for peer
 	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	receivedCheque2 := newRandomTestCheque()
-	testPeer2.setLastReceivedCheque(receivedCheque2)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque, testPeer2.ID(): receivedCheque2})
-
-	// test cheque change for peer
-	receivedCheque3 := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(receivedCheque3)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
-
-	// test cheque change for peer
 	sentCheque2 := newRandomTestCheque()
-	testPeer.setLastSentCheque(sentCheque2)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
+	testPeer2.setLastSentCheque(sentCheque2)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): sentCheque2}, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil})
+
+	// test cheque change for peer
+	sentCheque3 := newRandomTestCheque()
+	testPeer.setLastSentCheque(sentCheque3)
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque3, testPeer2.ID(): sentCheque2}, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil})
 
 	// test cheques for disconnected peers
 	testPeer3 := newDummyPeer().Peer
-	sentCheque3 := newRandomTestCheque()
-	err = swap.saveLastSentCheque(testPeer3.ID(), sentCheque3)
+	sentCheque4 := newRandomTestCheque()
+	err = swap.saveLastSentCheque(testPeer3.ID(), sentCheque4)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil, testPeer3.ID(): sentCheque3}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
-
-	receivedCheque4 := newRandomTestCheque()
-	err = swap.saveLastReceivedCheque(testPeer3.ID(), receivedCheque4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil, testPeer3.ID(): sentCheque3}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2, testPeer3.ID(): receivedCheque4})
+	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque3, testPeer2.ID(): sentCheque2, testPeer3.ID(): sentCheque4}, map[enode.ID]*Cheque{testPeer.ID(): nil, testPeer2.ID(): nil})
 }
 
 // Test getting received cheques for all known peers
