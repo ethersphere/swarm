@@ -167,7 +167,10 @@ func TestBalances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testPeer.setBalance(808)
+	err = testPeer.setBalance(808)
+	if err != nil {
+		t.Fatal(err)
+	}
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
 	// test successive balance addition for peer
@@ -175,11 +178,17 @@ func TestBalances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testPeer2.setBalance(909)
+	err = testPeer2.setBalance(909)
+	if err != nil {
+		t.Fatal(err)
+	}
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
 
 	// test balance change for peer
-	testPeer.setBalance(303)
+	err = testPeer.setBalance(303)
+	if err != nil {
+		t.Fatal(err)
+	}
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
