@@ -196,6 +196,9 @@ func TestModeSetSyncPull(t *testing.T) {
 						t.Fatal(err)
 					}
 
+					// these values are injected due to the fact that tag.Status will return an error
+					// if Total == 0 and if Total != Stored. The fact that they are equal signifies
+					// that the splitting and storing stage is done
 					tag.Total = int64(tc.count)
 					tag.Stored = int64(tc.count)
 
@@ -203,7 +206,7 @@ func TestModeSetSyncPull(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					tagCounterTest(t, tc.count, mtc.mode, tag)
+					tagSyncedCounterTest(t, tc.count, mtc.mode, tag)
 					if mtc.pin {
 						err = db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...)
 						if err != nil {
@@ -225,7 +228,8 @@ func TestModeSetSyncPull(t *testing.T) {
 
 						// if the upload is anonymous then we expect to see some values in the gc index
 						if mtc.anonymous && mtc.mode != chunk.ModeSetSyncPush {
-							t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
+							// run gc index count test
+							newItemsCountTest(db.gcIndex, tc.count)
 						}
 					}
 

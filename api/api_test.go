@@ -550,6 +550,9 @@ func TestDetectContentType(t *testing.T) {
 func putString(ctx context.Context, a *API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	r := strings.NewReader(content)
 	tag, err := a.Tags.Create("unnamed-tag", 0, false)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	log.Trace("created new tag", "id", tag.Uid)
 

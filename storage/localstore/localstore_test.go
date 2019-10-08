@@ -209,7 +209,7 @@ var multiChunkTestCases = []struct {
 
 // TestGenerateTestRandomChunk validates that
 // generateTestRandomChunk returns random data by comparing
-// two generated chunks
+// two generated chunks.
 func TestGenerateTestRandomChunk(t *testing.T) {
 	c1 := generateTestRandomChunk()
 	c2 := generateTestRandomChunk()
@@ -281,7 +281,7 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, ac
 }
 
 // newPullIndexTest returns a test function that validates if the right
-// chunk values are in the pull index
+// chunk values are in the pull index.
 func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
@@ -300,7 +300,7 @@ func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) fun
 }
 
 // newPinIndexTest returns a test function that validates if the right
-// chunk values are in the pin index
+// chunk values are in the pin index.
 func newPinIndexTest(db *DB, ch chunk.Chunk, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
@@ -337,7 +337,7 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 }
 
 // newGCIndexTest returns a test function that validates if the right
-// chunk values are in the GC index
+// chunk values are in the GC index.
 func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
@@ -357,7 +357,7 @@ func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp i
 }
 
 // newItemsCountTest returns a test function that validates if
-// an index contains expected number of key/value pairs
+// an index contains expected number of key/value pairs.
 func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
@@ -377,7 +377,7 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 }
 
 // newIndexGCSizeTest retruns a test function that validates if DB.gcSize
-// value is the same as the number of items in DB.gcIndex
+// value is the same as the number of items in DB.gcIndex.
 func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
@@ -400,18 +400,15 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	}
 }
 
-func tagCounterTest(t *testing.T, count int, mode chunk.ModeSet, tag *chunk.Tag) { // func(t *testing.T) {
+func tagSyncedCounterTest(t *testing.T, count int, mode chunk.ModeSet, tag *chunk.Tag) {
 	c, _, err := tag.Status(chunk.StateSynced)
 	if err != nil {
 		t.Fatal(err)
 	}
 	doCheck := func(c int) {
-		if int(c) != count {
+		if c != count {
 			t.Fatalf("synced count mismatch. got %d want %d", c, count)
 		}
-	}
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	// this should not be invoked always
