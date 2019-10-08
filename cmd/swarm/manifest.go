@@ -214,7 +214,7 @@ func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.Mani
 		mroot.Entries = append(mroot.Entries, entry)
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot, isEncrypted, toPin)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted, toPin, true)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -297,7 +297,7 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 		mroot = newMRoot
 	}
 
-	newManifestHash, err = client.UploadManifest(mroot, isEncrypted, toPin)
+	newManifestHash, err = client.UploadManifest(mroot, isEncrypted, toPin, true)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -360,7 +360,7 @@ func removeEntryFromManifest(client *swarm.Client, mhash, path string, toPin boo
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot, isEncrypted, toPin)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted, toPin, true)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}

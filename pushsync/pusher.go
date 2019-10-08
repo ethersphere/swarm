@@ -169,6 +169,7 @@ func (p *Pusher) sync() {
 				p.logger.Trace("just synced... ignore", "addr", hexaddr)
 				break
 			}
+
 			// increment synced count for the tag if exists
 			tag := item.tag
 			if tag != nil {
@@ -207,7 +208,7 @@ func (p *Pusher) sync() {
 				}
 
 				// set chunk status to synced, insert to db GC index
-				if err := p.store.Set(ctx, chunk.ModeSetSync, syncedAddrs...); err != nil {
+				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
 					log.Error("pushsync: error setting chunks to synced", "err", err)
 				}
 
@@ -311,6 +312,11 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 
 		// increment SENT count on tag  if it exists
 		if tag != nil {
+			// skip anonymous tags
+			if tag.Anonymous {
+				return false
+			}
+
 			tag.Inc(chunk.StateSent)
 			// opentracing for chunk roundtrip
 			_, span := spancontext.StartSpan(tag.Context(), "chunk.sent")

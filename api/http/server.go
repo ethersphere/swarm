@@ -75,8 +75,10 @@ var (
 )
 
 const (
-	TagHeaderName  = "x-swarm-tag" // Presence of this in header indicates the tag
-	PinHeaderName  = "x-swarm-pin" // Presence of this in header indicates pinning required
+	TagHeaderName       = "x-swarm-tag"       // Presence of this in header indicates the tag
+	AnonymousHeaderName = "x-swarm-anonymous" // Presence of this in header indicates only pull sync should be used for upload
+	PinHeaderName       = "x-swarm-pin"       // Presence of this in header indicates pinning required
+
 	encryptAddr    = "encrypt"
 	tarContentType = "application/x-tar"
 )
@@ -341,7 +343,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
+
 	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
+	w.Header().Set("Access-Control-Expose-Headers", TagHeaderName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -446,6 +451,8 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
+	w.Header().Set("Access-Control-Expose-Headers", TagHeaderName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }

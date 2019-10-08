@@ -76,7 +76,7 @@ func testDBCollectGarbageWorker(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +166,7 @@ func TestPinGC(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,14 +264,14 @@ func TestGCAfterPin(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Pin before adding to GC in ModeSetSync
+		// Pin before adding to GC in ModeSetSyncPull
 		err = db.Set(context.Background(), chunk.ModeSetPin, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
 		pinAddrs = append(pinAddrs, ch.Address())
 
-		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -316,7 +316,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -358,7 +358,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestDB_gcSize(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
