@@ -114,7 +114,7 @@ func TestModeSetSyncPull(t *testing.T) {
 			expErrGCIndex:   nil,                 // GCd
 			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
 		},
-		// tag IS anonymous, set pull synced will cause it to go
+		// tag IS anonymous, set pull synced WILL cause it to go
 		// into gc index, it SHOULD be in the pin index
 		{
 			name:            "set pull sync, anonymous tag, with pinning",
@@ -125,7 +125,7 @@ func TestModeSetSyncPull(t *testing.T) {
 			expErrGCIndex:   nil,                 // GCd
 			expErrPinIndex:  nil,                 // is pinned
 		},
-		// tag is not anonymous, set push synced will cause it to go
+		// tag IS NOT anonymous, set push synced WILL cause it to go
 		// into gc index, it SHOULD NOT be in the pin index
 		{
 			name:            "set push sync, normal tag, no pinning",
@@ -136,8 +136,8 @@ func TestModeSetSyncPull(t *testing.T) {
 			expErrGCIndex:   nil,                 // GCd
 			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
 		},
-		// tag is not anonymous, set push synced will cause it to go
-		// into gc index, it should be in the pin index
+		// tag IS NOT anonymous, set push synced WILL cause it to go
+		// into gc index, it SHOULD be in the pin index
 		{
 			name:            "set push sync, normal tag, with pinning",
 			anonymous:       false,
@@ -147,26 +147,26 @@ func TestModeSetSyncPull(t *testing.T) {
 			expErrGCIndex:   nil,                 // GCd
 			expErrPinIndex:  nil,                 // is pinned
 		},
-		// tag is anonymous, set push synced will cause it to go
-		// into gc index, it should not be in the pin index
+		// tag IS anonymous, set push synced WILL cause it to go
+		// into gc index, it SHOULD NOT be in the pin index
 		{
 			name:            "set push sync, anonymous tag, no pinning",
 			anonymous:       true,
 			pin:             false,
 			mode:            chunk.ModeSetSyncPush,
-			expErrPushIndex: leveldb.ErrNotFound, // not in push index
-			expErrGCIndex:   nil,                 // GCd
+			expErrPushIndex: nil,                 // not in push index
+			expErrGCIndex:   leveldb.ErrNotFound, // not GCd
 			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
 		},
-		// tag is anonymous, set push synced will not cause it to go
-		// into gc index, it should be in the pin index
+		// tag IS anonymous, set push synced WILL NOT cause it to go
+		// into gc index, it SHOULD be in the pin index
 		{
 			name:            "set push sync, anonymous tag, with pinning",
 			anonymous:       true,
 			pin:             true,
 			mode:            chunk.ModeSetSyncPush,
-			expErrPushIndex: leveldb.ErrNotFound, // is not in push index
-			expErrGCIndex:   nil,                 // GCd
+			expErrPushIndex: nil,                 // is in push index
+			expErrGCIndex:   leveldb.ErrNotFound, // not GCd
 			expErrPinIndex:  nil,                 // is pinned
 		},
 	} {
@@ -224,7 +224,7 @@ func TestModeSetSyncPull(t *testing.T) {
 						newPinIndexTest(db, ch, mtc.expErrPinIndex)(t)
 
 						// if the upload is anonymous then we expect to see some values in the gc index
-						if mtc.anonymous {
+						if mtc.anonymous && mtc.mode != chunk.ModeSetSyncPush {
 							t.Run("gc index count", newItemsCountTest(db.gcIndex, tc.count))
 						}
 					}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -224,21 +225,31 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		case nil:
 			tag, _ := db.tags.Get(i.Tag)
 			if tag != nil {
-				switch mode {
-				case chunk.ModeSetSyncPull:
-					if tag.Anonymous {
+				if tag.Anonymous {
+					// anonymous - only pull sync
+					switch mode {
+					case chunk.ModeSetSyncPull:
 						// this will not get called twice because we remove the item once after the !moveToGc check
 						tag.Inc(chunk.StateSent)
 						// this is needed since pushsync is checking if `tag.Done(chunk.StateSynced)` and when overlapping
 						// chunks are synced by both push and pull sync we have a problem. as an interim solution we increment this too
 						tag.Inc(chunk.StateSynced)
-					} else {
+					case chunk.ModeSetSyncPush:
+						// do nothing - this should not be possible. just log and return
+						log.Warn("chunk marked as push-synced but should be anonymous!", "tag.Uid", tag.Uid)
 						moveToGc = false
 					}
-				case chunk.ModeSetSyncPush:
-					tag.Inc(chunk.StateSynced)
+				} else {
+					// not anonymous - push and pull should be used
+					switch mode {
+					case chunk.ModeSetSyncPull:
+						moveToGc = false
+					case chunk.ModeSetSyncPush:
+						tag.Inc(chunk.StateSynced)
+					}
 				}
 			}
+
 		case leveldb.ErrNotFound:
 			// the chunk is not accessed before
 		default:
