@@ -440,11 +440,11 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 // PeerCheques returns the last sent and received cheques for a given peer
 func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
 	sentCheque, err := s.SentCheque(peer)
-	if err != nil {
+	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
 	receivedCheque, err := s.ReceivedCheque(peer)
-	if err != nil {
+	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
 	return map[string]*Cheque{"lastSentCheque": sentCheque, "lastReceivedCheque": receivedCheque}, nil

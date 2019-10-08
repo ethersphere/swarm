@@ -257,6 +257,37 @@ func TestPeerCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque2, "lastReceivedCheque": generatedReceivedCheque2}, peerCheques)
+
+	// test cheques for invalid peer
+	randomID := adapters.RandomNodeConfig().ID
+	peerCheques, err = swap.PeerCheques(randomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": nil, "lastReceivedCheque": nil}, peerCheques)
+
+	// test cheques for disconnected node
+	testPeer3 := newDummyPeer().Peer
+	generatedSentCheque4 := newRandomTestCheque()
+	err = swap.saveLastSentCheque(testPeer3.ID(), generatedSentCheque4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerCheques, err = swap.PeerCheques(testPeer3.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque4, "lastReceivedCheque": nil}, peerCheques)
+	generatedReceivedCheque3 := newRandomTestCheque()
+	err = swap.saveLastReceivedCheque(testPeer3.ID(), generatedReceivedCheque3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerCheques, err = swap.PeerCheques(testPeer3.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque4, "lastReceivedCheque": generatedReceivedCheque3}, peerCheques)
 }
 
 func testPeerCheques(t *testing.T, swap *Swap, peer *Peer) (generatedSentCheque *Cheque, generatedReceivedCheque *Cheque) {
