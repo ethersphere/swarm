@@ -434,6 +434,38 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	}
 	s.peersLock.Unlock()
 
+	// add disk cheques for peers not already present
+	sentChequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peer := keyToID(string(key), sentChequePrefix)
+		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
+			var peerCheque Cheque
+			err = json.Unmarshal(value, &peerCheque)
+			if err == nil {
+				cheques[peer]["lastSentCheque"] = &peerCheque
+			}
+		}
+		return stop, err
+	}
+	err := s.store.Iterate(sentChequePrefix, sentChequesIterFunction)
+	if err != nil {
+		return nil, err
+	}
+	receivedChequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peer := keyToID(string(key), receivedChequePrefix)
+		if _, peerHasCheque := cheques[peer]; !peerHasCheque {
+			var peerCheque Cheque
+			err = json.Unmarshal(value, &peerCheque)
+			if err == nil {
+				cheques[peer]["lastReceivedCheque"] = &peerCheque
+			}
+		}
+		return stop, err
+	}
+	err = s.store.Iterate(receivedChequePrefix, receivedChequesIterFunction)
+	if err != nil {
+		return nil, err
+	}
+
 	return cheques, nil
 }
 
