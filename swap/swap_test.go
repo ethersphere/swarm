@@ -105,7 +105,7 @@ func newTestBackend() *swapTestBackend {
 }
 
 // Test getting a peer's balance
-func TestPeerBalance(t *testing.T) {
+func TestBalance(t *testing.T) {
 	// create a test swap account
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
@@ -143,7 +143,7 @@ func TestPeerBalance(t *testing.T) {
 }
 
 // Test getting balances for all known peers
-func TestAllBalances(t *testing.T) {
+func TestBalances(t *testing.T) {
 	// create a test swap account
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
@@ -363,7 +363,7 @@ func TestReceivedCheque(t *testing.T) {
 }
 
 // Test getting cheques for all known peers
-func TestAllCheques(t *testing.T) {
+func TestSentAndReceivedCheques(t *testing.T) {
 	// create a test swap account
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()

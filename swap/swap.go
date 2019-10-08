@@ -420,7 +420,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
-// Cheques returns all known sent and received cheques, grouped by peer
+// Cheques returns all known last sent and received cheques, grouped by peer
 func (s *Swap) Cheques() (allCheques map[enode.ID]map[string]*Cheque, err error) {
 	allCheques = make(map[enode.ID]map[string]*Cheque)
 	peerCheques := make(map[string]*Cheque)
