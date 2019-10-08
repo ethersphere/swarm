@@ -83,7 +83,7 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	b.StartTimer()
 
 	for i := 0; i < count; i++ {
-		err := db.Set(context.Background(), chunk.ModeSetSync, addrs[i])
+		err := db.Set(context.Background(), chunk.ModeSetSyncPull, addrs[i])
 		if err != nil {
 			b.Fatal(err)
 		}

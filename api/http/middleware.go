@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,6 +110,7 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 			estimatedTotal int64 = 0
 			contentType          = r.Header.Get("Content-Type")
 			headerTag            = r.Header.Get(TagHeaderName)
+			anonTag              = r.Header.Get(AnonymousHeaderName)
 		)
 		if headerTag != "" {
 			tagName = headerTag
@@ -131,8 +133,8 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 		}
 
 		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
-
-		t, err := tags.Create(tagName, estimatedTotal)
+		anon, _ := strconv.ParseBool(anonTag)
+		t, err := tags.Create(tagName, estimatedTotal, anon)
 		if err != nil {
 			log.Error("error creating tag", "err", err, "tagName", tagName)
 		}
@@ -168,7 +170,7 @@ func PinningEnabledPassthrough(h http.Handler, api *pin.API, checkHeader bool) h
 		// if checkHeader is true, it means that the passthrough should happen if the header is set and the pinAPI is not nil
 		if checkHeader {
 			headerPin := r.Header.Get(PinHeaderName)
-			if strings.ToLower(headerPin) == "true" && api == nil {
+			if shouldPin, _ := strconv.ParseBool(headerPin); shouldPin && api == nil {
 				respondError(w, r, "Pinning disabled on this node", http.StatusForbidden)
 				return
 			}

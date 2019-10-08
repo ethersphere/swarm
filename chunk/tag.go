@@ -48,6 +48,7 @@ const (
 // Tag represents info on the status of new chunks
 type Tag struct {
 	Uid       uint32    // a unique identifier for this tag
+	Anonymous bool      // indicates if the tag is anonymous (i.e. if only pull sync should be used)
 	Name      string    // a name tag for this tag
 	Address   Address   // the associated swarm hash for this tag
 	Total     int64     // total chunks belonging to a tag
@@ -64,9 +65,10 @@ type Tag struct {
 }
 
 // NewTag creates a new tag, and returns it
-func NewTag(uid uint32, s string, total int64) *Tag {
+func NewTag(uid uint32, s string, total int64, anon bool) *Tag {
 	t := &Tag{
 		Uid:       uid,
+		Anonymous: anon,
 		Name:      s,
 		StartedAt: time.Now(),
 		Total:     total,
