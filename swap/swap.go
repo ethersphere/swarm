@@ -188,6 +188,8 @@ const (
 	receivedChequePrefix   = "received_cheque_"
 	connectedChequebookKey = "connected_chequebook"
 	connectedBlockchainKey = "connected_blockchain"
+	lastSentChequeKey      = "last_sent_cheque"
+	lastReceivedChequeKey  = "last_received_cheque"
 )
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
@@ -428,8 +430,8 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
-		cheques[peer]["lastSentCheque"] = swapPeer.getLastSentCheque()
-		cheques[peer]["lastReceivedCheque"] = swapPeer.getLastSentCheque()
+		cheques[peer][lastSentChequeKey] = swapPeer.getLastSentCheque()
+		cheques[peer][lastReceivedChequeKey] = swapPeer.getLastSentCheque()
 		swapPeer.lock.Unlock()
 	}
 	s.peersLock.Unlock()
@@ -441,7 +443,7 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
 			if err == nil {
-				cheques[peer]["lastSentCheque"] = &peerCheque
+				cheques[peer][lastSentChequeKey] = &peerCheque
 			}
 		}
 		return stop, err
@@ -456,7 +458,7 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
 			if err == nil {
-				cheques[peer]["lastReceivedCheque"] = &peerCheque
+				cheques[peer][lastReceivedChequeKey] = &peerCheque
 			}
 		}
 		return stop, err
@@ -479,7 +481,7 @@ func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
 	if err != nil && err != state.ErrNotFound {
 		return nil, err
 	}
-	return map[string]*Cheque{"lastSentCheque": sentCheque, "lastReceivedCheque": receivedCheque}, nil
+	return map[string]*Cheque{lastSentChequeKey: sentCheque, lastReceivedChequeKey: receivedCheque}, nil
 }
 
 // SentCheque returns the last sent cheque for a given peer

@@ -218,7 +218,7 @@ func TestPeerCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": nil, "lastReceivedCheque": nil}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: nil, lastReceivedChequeKey: nil}, peerCheques)
 
 	// test sent and received cheques for peer
 	generatedSentCheque, generatedReceivedCheque := testPeerCheques(t, swap, testPeer)
@@ -237,7 +237,7 @@ func TestPeerCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque, "lastReceivedCheque": generatedReceivedCheque}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque, lastReceivedChequeKey: generatedReceivedCheque}, peerCheques)
 
 	// check change in cheques for peer
 	generatedSentCheque3 := newRandomTestCheque()
@@ -249,14 +249,14 @@ func TestPeerCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque3, "lastReceivedCheque": generatedReceivedCheque}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque3, lastReceivedChequeKey: generatedReceivedCheque}, peerCheques)
 
 	// check previous cheques are still correct
 	peerCheques, err = swap.PeerCheques(testPeer2.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque2, "lastReceivedCheque": generatedReceivedCheque2}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque2, lastReceivedChequeKey: generatedReceivedCheque2}, peerCheques)
 
 	// test cheques for invalid peer
 	randomID := adapters.RandomNodeConfig().ID
@@ -264,7 +264,7 @@ func TestPeerCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": nil, "lastReceivedCheque": nil}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: nil, lastReceivedChequeKey: nil}, peerCheques)
 
 	// test cheques for disconnected node
 	testPeer3 := newDummyPeer().Peer
@@ -277,7 +277,7 @@ func TestPeerCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque4, "lastReceivedCheque": nil}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque4, lastReceivedChequeKey: nil}, peerCheques)
 	generatedReceivedCheque3 := newRandomTestCheque()
 	err = swap.saveLastReceivedCheque(testPeer3.ID(), generatedReceivedCheque3)
 	if err != nil {
@@ -287,7 +287,7 @@ func TestPeerCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque4, "lastReceivedCheque": generatedReceivedCheque3}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque4, lastReceivedChequeKey: generatedReceivedCheque3}, peerCheques)
 }
 
 func testPeerCheques(t *testing.T, swap *Swap, peer *Peer) (generatedSentCheque *Cheque, generatedReceivedCheque *Cheque) {
@@ -303,7 +303,7 @@ func testPeerCheques(t *testing.T, swap *Swap, peer *Peer) (generatedSentCheque 
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque, "lastReceivedCheque": nil}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque, lastReceivedChequeKey: nil}, peerCheques)
 
 	// received cheque
 	generatedReceivedCheque = newRandomTestCheque()
@@ -315,7 +315,7 @@ func testPeerCheques(t *testing.T, swap *Swap, peer *Peer) (generatedSentCheque 
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesForPeer(t, map[string]*Cheque{"lastSentCheque": generatedSentCheque, "lastReceivedCheque": generatedReceivedCheque}, peerCheques)
+	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque, lastReceivedChequeKey: generatedReceivedCheque}, peerCheques)
 
 	return generatedSentCheque, generatedReceivedCheque
 }
