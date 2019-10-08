@@ -130,7 +130,6 @@ func TestGetTagUsingHash(t *testing.T) {
 
 	if tag.Anonymous != true {
 		t.Fatalf("expected tag anonymous field to be %t but got %t", true, tag.Anonymous)
-
 	}
 
 	if !strings.HasPrefix(tag.Name, "unnamed_tag_") {

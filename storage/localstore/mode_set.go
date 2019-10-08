@@ -80,7 +80,6 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 
 	case chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
 		for _, addr := range addrs {
-
 			c, err := db.setSync(batch, addr, mode)
 			if err != nil {
 				return err
