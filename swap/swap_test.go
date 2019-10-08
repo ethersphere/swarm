@@ -188,6 +188,32 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 	}
 }
 
+// TestPeerCheque verifies that sent and received cheques data for a given peer is correct
+func TestPeerCheques(t *testing.T) {
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey)
+	defer clean()
+
+	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerID := testPeer.ID()
+
+	peerCheques, err := swap.PeerCheques(peerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testLastCheques(t, map[string]*Cheque{"lastSentCheque": nil, "lastReceivedCheque": nil}, peerCheques)
+}
+
+func testLastCheques(t *testing.T, expectedCheques map[string]*Cheque, actualCheques map[string]*Cheque) {
+	t.Helper()
+	if !reflect.DeepEqual(expectedCheques, actualCheques) {
+		t.Fatalf("Expected last sent and received cheques to be %v, but are %v", expectedCheques, actualCheques)
+	}
+}
+
 // TestSentCheque verifies that sent cheques data is correctly obtained
 func TestSentCheque(t *testing.T) {
 	// create a test swap account
