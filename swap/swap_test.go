@@ -210,22 +210,17 @@ func TestCheques(t *testing.T) {
 	defer clean()
 
 	// check received checkes are empty
-	cheques, err := swap.Cheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cheques) != 0 {
-		t.Fatalf("Expected cheques to be empty, but are %v", cheques)
-	}
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{})
 
 	// add peer
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeerID := testPeer.ID()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// test no cheques are present
-	getChequesAndVerify(t, swap, testPeer, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: nil, lastSentChequeKey: nil}})
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: nil}})
 
 	// generate and set sent and received cheques for peer
 	generatedSentCheque := newRandomTestCheque()
@@ -233,16 +228,17 @@ func TestCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	getChequesAndVerify(t, swap, testPeer, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque}})
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque}})
 	generatedReceivedCheque := newRandomTestCheque()
 	err = testPeer.setLastReceivedCheque(generatedReceivedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
-	getChequesAndVerify(t, swap, testPeer, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}})
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}})
 
 	// add second peer
 	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer2ID := testPeer2.ID()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,17 +248,17 @@ func TestCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	getChequesAndVerify(t, swap, testPeer, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2.ID(): {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque2}})
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque2}})
 	generatedReceivedCheque2 := newRandomTestCheque()
 	err = testPeer2.setLastReceivedCheque(generatedReceivedCheque2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	getChequesAndVerify(t, swap, testPeer, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2.ID(): {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}})
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}})
 }
 
 // calls the Cheques function and verifies that the result matches the expected parameter
-func getChequesAndVerify(t *testing.T, s *Swap, p *Peer, expectedCheques map[enode.ID]map[string]*Cheque) {
+func getChequesAndVerify(t *testing.T, s *Swap, expectedCheques map[enode.ID]map[string]*Cheque) {
 	t.Helper()
 	cheques, err := s.Cheques()
 	if err != nil {
