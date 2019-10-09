@@ -224,10 +224,12 @@ func TestCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	peerCheques, err := swap.Cheques()
+	// test no cheques are present
+	cheques, err = swap.Cheques()
 	if err != nil {
 		t.Fatal(err)
 	}
+	testChequesByPeerAndType(t, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: nil, lastSentChequeKey: nil}}, cheques)
 
 	// generate and set sent and received cheques for peer
 	generatedSentCheque := newRandomTestCheque()
@@ -235,17 +237,48 @@ func TestCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cheques, err = swap.Cheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesByPeerAndType(t, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque}}, cheques)
 	generatedReceivedCheque := newRandomTestCheque()
 	err = testPeer.setLastReceivedCheque(generatedReceivedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	peerCheques, err = swap.Cheques()
+	cheques, err = swap.Cheques()
 	if err != nil {
 		t.Fatal(err)
 	}
-	testChequesByPeerAndType(t, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}}, peerCheques)
+	testChequesByPeerAndType(t, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}}, cheques)
+
+	// add second peer
+	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// generate and set sent and received cheques for second peer
+	generatedSentCheque2 := newRandomTestCheque()
+	err = testPeer2.setLastSentCheque(generatedSentCheque2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cheques, err = swap.Cheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesByPeerAndType(t, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2.ID(): {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque2}}, cheques)
+	generatedReceivedCheque2 := newRandomTestCheque()
+	err = testPeer2.setLastReceivedCheque(generatedReceivedCheque2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cheques, err = swap.Cheques()
+	if err != nil {
+		t.Fatal(err)
+	}
+	testChequesByPeerAndType(t, map[enode.ID]map[string]*Cheque{testPeer.ID(): {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2.ID(): {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}}, cheques)
 }
 
 // tests that a nested map of peerID:{typeOfCheque:cheque} is as expected
