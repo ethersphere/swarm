@@ -42,10 +42,23 @@ import (
 
 const (
 	hashRegexp = `[a-f\d]{128}`
-	data       = "notsorandomdata"
+	//"notsorandomdata"
 
 	goosWindows = "windows"
 )
+
+var data = func() string {
+	size := 100 * 1024 * 1024
+	buf := make([]byte, size)
+	n, err := rand.Read(buf)
+	if err != nil {
+		panic(err)
+	}
+	if n != size {
+		panic("wrooong")
+	}
+	return string(buf)
+}()
 
 var DefaultCurve = crypto.S256()
 
