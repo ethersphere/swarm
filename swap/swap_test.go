@@ -220,31 +220,35 @@ func TestCheques(t *testing.T) {
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: nil}})
 
 	// generate and set sent and received cheques for peer
-	generatedSentCheque := setNewSentCheque(t, testPeer)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque}})
-	generatedReceivedCheque := setNewReceivedCheque(t, testPeer)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}})
+	sentCheque := setNewSentCheque(t, testPeer)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: sentCheque}})
+	receivedCheque := setNewReceivedCheque(t, testPeer)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}})
 
 	// add second peer
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
 	// generate and set sent and received cheques for second peer
-	generatedSentCheque2 := setNewSentCheque(t, testPeer2)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque2}})
-	generatedReceivedCheque2 := setNewReceivedCheque(t, testPeer2)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}})
+	sentCheque2 := setNewSentCheque(t, testPeer2)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: nil, lastSentChequeKey: sentCheque2}})
+	receivedCheque2 := setNewReceivedCheque(t, testPeer2)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: receivedCheque2, lastSentChequeKey: sentCheque2}})
+
+	// test cheque change
+	receivedCheque3 := setNewReceivedCheque(t, testPeer2)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: receivedCheque3, lastSentChequeKey: sentCheque2}})
 
 	// test cheques for disconnected node
 	testPeer3ID := newDummyPeer().Peer.ID()
 
-	generatedSentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque3, lastReceivedChequeKey: nil}})
-	generatedReceivedCheque3 := saveNewReceivedCheque(t, swap, testPeer3ID)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque3, lastReceivedChequeKey: generatedReceivedCheque3}})
+	sentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: receivedCheque3, lastSentChequeKey: sentCheque2}, testPeer3ID: {lastSentChequeKey: sentCheque3, lastReceivedChequeKey: nil}})
+	receivedCheque4 := saveNewReceivedCheque(t, swap, testPeer3ID)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: receivedCheque3, lastSentChequeKey: sentCheque2}, testPeer3ID: {lastSentChequeKey: sentCheque3, lastReceivedChequeKey: receivedCheque4}})
 	// test cheque change for disconnected node
-	generatedSentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
-	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque4, lastReceivedChequeKey: generatedReceivedCheque3}})
+	sentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: receivedCheque3, lastSentChequeKey: sentCheque2}, testPeer3ID: {lastSentChequeKey: sentCheque4, lastReceivedChequeKey: receivedCheque4}})
 }
 
 // adds a peer to the given Swap structs, fails if there are errors and returns peer otherwise
