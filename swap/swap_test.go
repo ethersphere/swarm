@@ -259,7 +259,7 @@ func TestCheques(t *testing.T) {
 	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: receivedCheque, lastSentChequeKey: sentCheque}, testPeer2ID: {lastReceivedChequeKey: receivedCheque3, lastSentChequeKey: sentCheque2}, testPeer3ID: {lastSentChequeKey: sentCheque4, lastReceivedChequeKey: receivedCheque4}})
 }
 
-// adds a peer to the given Swap structs, fails if there are errors and returns peer otherwise
+// adds a peer to the given Swap struct, fails if there are errors and returns peer otherwise
 func addPeer(t *testing.T, s *Swap) *Peer {
 	t.Helper()
 	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
@@ -294,19 +294,19 @@ func setNewCheque(t *testing.T, setChequeFunction func(*Cheque) error) *Cheque {
 // generates a cheque and saves it as the last sent cheque for a peer in the given swap struct, fails if there are errors
 func saveNewSentCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
 	t.Helper()
-	generatedCheque := newRandomTestCheque()
-	err := s.saveLastSentCheque(id, generatedCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return generatedCheque
+	return saveNewCheque(t, id, s.saveLastSentCheque)
 }
 
 // generates a cheque and saves it as the last received cheque for a peer in the given swap struct, fails if there are errors
 func saveNewReceivedCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
 	t.Helper()
+	return saveNewCheque(t, id, s.saveLastReceivedCheque)
+}
+
+func saveNewCheque(t *testing.T, id enode.ID, saveChequeFunction func(enode.ID, *Cheque) error) *Cheque {
+	t.Helper()
 	generatedCheque := newRandomTestCheque()
-	err := s.saveLastReceivedCheque(id, generatedCheque)
+	err := saveChequeFunction(id, generatedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,13 +408,11 @@ func TestSentCheque(t *testing.T) {
 	defer clean()
 
 	// add peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testPeer := addPeer(t, swap)
+	testPeerID := testPeer.ID()
 
 	// check last sent cheque is empty for peer
-	sentCheque, err := swap.SentCheque(testPeer.ID())
+	sentCheque, err := swap.SentCheque(testPeerID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +426,7 @@ func TestSentCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sentCheque, err = swap.SentCheque(testPeer.ID())
+	sentCheque, err = swap.SentCheque(testPeerID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,17 +434,16 @@ func TestSentCheque(t *testing.T) {
 		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
 	}
 
-	// add a second peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// add second peer
+	testPeer2 := addPeer(t, swap)
+	testPeer2ID := testPeer2.ID()
+
 	generatedCheque2 := newRandomTestCheque()
 	err = testPeer2.setLastSentCheque(generatedCheque2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sentCheque2, err := swap.SentCheque(testPeer2.ID())
+	sentCheque2, err := swap.SentCheque(testPeer2ID)
 	if err != nil {
 		t.Fatal(err)
 	}
