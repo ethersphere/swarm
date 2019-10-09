@@ -237,9 +237,14 @@ func TestCheques(t *testing.T) {
 
 	// test cheques for disconnected node
 	testPeer3ID := newDummyPeer().Peer.ID()
-	generatedSentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
 
+	generatedSentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque3, lastReceivedChequeKey: nil}})
+	generatedReceivedCheque3 := saveNewReceivedCheque(t, swap, testPeer3ID)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque3, lastReceivedChequeKey: generatedReceivedCheque3}})
+	// test cheque change for disconnected node
+	generatedSentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
+	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque4, lastReceivedChequeKey: generatedReceivedCheque3}})
 }
 
 // adds a peer to the given Swap structs, fails if there are errors and returns peer otherwise
@@ -279,6 +284,17 @@ func saveNewSentCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
 	t.Helper()
 	generatedCheque := newRandomTestCheque()
 	err := s.saveLastSentCheque(id, generatedCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return generatedCheque
+}
+
+// generates a cheque and saves it as the last received cheque for a peer in the given swap struct, fails if there are errors
+func saveNewReceivedCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
+	t.Helper()
+	generatedCheque := newRandomTestCheque()
+	err := s.saveLastReceivedCheque(id, generatedCheque)
 	if err != nil {
 		t.Fatal(err)
 	}

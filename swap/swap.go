@@ -445,7 +445,7 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 			cheques[peer] = make(map[string]*Cheque)
 		}
 		// add sent cheque from store
-		if _, peerHasSentCheque := cheques[peer][lastSentChequeKey]; !peerHasSentCheque {
+		if peerSentCheque := cheques[peer][lastSentChequeKey]; peerSentCheque == nil {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
 			if err == nil {
@@ -469,7 +469,7 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 			cheques[peer] = make(map[string]*Cheque)
 		}
 		// add received cheque from store
-		if _, peerHasReceivedCheque := cheques[peer]; !peerHasReceivedCheque {
+		if peerReceivedCheque := cheques[peer][lastReceivedChequeKey]; peerReceivedCheque == nil {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
 			if err == nil {
