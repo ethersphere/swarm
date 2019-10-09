@@ -413,16 +413,10 @@ func TestSentCheque(t *testing.T) {
 	testPeerID := testPeer.ID()
 
 	// check last sent cheque is empty for peer
-	sentCheque, err := swap.SentCheque(testPeerID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sentCheque != nil {
-		t.Fatalf("Expected sent cheque to be nil, but is %v", sentCheque)
-	}
+	testSentCheque(t, swap, testPeerID, nil)
 
 	// test random sent cheque for peer
-	sentCheque = setNewSentCheque(t, testPeer)
+	sentCheque := setNewSentCheque(t, testPeer)
 	testSentCheque(t, swap, testPeerID, sentCheque)
 
 	// add second peer
@@ -438,7 +432,7 @@ func TestSentCheque(t *testing.T) {
 
 	// test sent cheque for invalid peer
 	invalidPeerID := adapters.RandomNodeConfig().ID
-	_, err = swap.SentCheque(invalidPeerID)
+	_, err := swap.SentCheque(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
@@ -449,13 +443,13 @@ func TestSentCheque(t *testing.T) {
 	// test sent cheque for disconnected node
 	testPeer3ID := newDummyPeer().Peer.ID()
 
-	expectedSentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
-	sentCheque3, err := swap.SentCheque(testPeer3ID)
+	expectedSentCheque := saveNewSentCheque(t, swap, testPeer3ID)
+	actualSentCheque, err := swap.SentCheque(testPeer3ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(sentCheque3, expectedSentCheque3) {
-		t.Fatalf("Expected sent cheque to be %v, but is %v", expectedSentCheque3, sentCheque3)
+	if !reflect.DeepEqual(actualSentCheque, expectedSentCheque) {
+		t.Fatalf("Expected sent cheque to be %v, but is %v", expectedSentCheque, actualSentCheque)
 	}
 }
 
