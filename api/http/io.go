@@ -65,7 +65,7 @@ const (
 	Peeker
 )
 
-var Mode = Baseline
+var Mode = Peeker
 
 func newDownloader(s io.ReadSeeker) io.ReadSeeker {
 	switch Mode {

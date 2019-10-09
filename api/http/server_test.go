@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -1017,6 +1018,72 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		if !passed {
 			t.Fatalf("file %s did not pass content assertion", hdr.Name)
 		}
+	}
+
+	// now check the tags endpoint
+}
+
+var largeData = func() []byte {
+	size := 100 * 1024 * 1024
+	buf := make([]byte, size)
+	n, err := rand.Read(buf)
+	if err != nil {
+		panic(err)
+	}
+	if n != size {
+		panic("wrooong")
+	}
+	return buf
+}()
+
+func TestBzzGetFile(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	defer srv.Close()
+
+	url := srv.URL + "/bzz:/"
+	req, err := http.NewRequest("POST", url, bytes.NewReader(largeData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "text/plain")
+	client := &http.Client{}
+	resp1, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp1.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp1.Status)
+	}
+
+	swarmHash, err := ioutil.ReadAll(resp1.Body)
+	resp1.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// now do a GET to get a tarball back
+	req, err = http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s", string(swarmHash)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Accept", "text/plain")
+	resp2, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+
+	if h := resp2.Header.Get("Content-Type"); h != "text/plain" {
+		t.Fatalf("Content-Type header expected: text/plain, got: %s", h)
+	}
+
+	data, err := ioutil.ReadAll(resp2.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(data, largeData) {
+		t.Fatal("no", len(data), len(largeData))
 	}
 
 	// now check the tags endpoint
