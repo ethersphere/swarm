@@ -220,34 +220,19 @@ func TestCheques(t *testing.T) {
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: nil}})
 
 	// generate and set sent and received cheques for peer
-	generatedSentCheque := newRandomTestCheque()
-	err := testPeer.setLastSentCheque(generatedSentCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
+	generatedSentCheque := addSentCheque(t, testPeer)
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque}})
-	generatedReceivedCheque := newRandomTestCheque()
-	err = testPeer.setLastReceivedCheque(generatedReceivedCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
+	generatedReceivedCheque := addReceivedCheque(t, testPeer)
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}})
 
 	// add second peer
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
+
 	// generate and set sent and received cheques for second peer
-	generatedSentCheque2 := newRandomTestCheque()
-	err = testPeer2.setLastSentCheque(generatedSentCheque2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	generatedSentCheque2 := addSentCheque(t, testPeer2)
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: nil, lastSentChequeKey: generatedSentCheque2}})
-	generatedReceivedCheque2 := newRandomTestCheque()
-	err = testPeer2.setLastReceivedCheque(generatedReceivedCheque2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	generatedReceivedCheque2 := addReceivedCheque(t, testPeer2)
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}})
 }
 
@@ -259,6 +244,28 @@ func addPeer(t *testing.T, s *Swap) *Peer {
 		t.Fatal(err)
 	}
 	return peer
+}
+
+// generates a cheque and adds it as the last sent cheque for the given peer, fails if there are errors
+func addSentCheque(t *testing.T, p *Peer) *Cheque {
+	t.Helper()
+	return setAndReturnCheque(t, p.setLastSentCheque)
+}
+
+// generates a cheque and adds it as the last received cheque for the given peer, fails if there are errors
+func addReceivedCheque(t *testing.T, p *Peer) *Cheque {
+	t.Helper()
+	return setAndReturnCheque(t, p.setLastReceivedCheque)
+}
+
+func setAndReturnCheque(t *testing.T, setChequeFunction func(*Cheque) error) *Cheque {
+	t.Helper()
+	generatedCheque := newRandomTestCheque()
+	err := setChequeFunction(generatedCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return generatedCheque
 }
 
 // calls the Cheques function and verifies that the result matches the expected parameter
