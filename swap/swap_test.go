@@ -335,6 +335,7 @@ func TestPeerCheques(t *testing.T) {
 	testPeer := addPeer(t, swap)
 	testPeerID := testPeer.ID()
 
+	// test peer cheques are nil
 	testChequesByType(t, swap, testPeerID, map[string]*Cheque{lastSentChequeKey: nil, lastReceivedChequeKey: nil})
 
 	// test sent cheque for peer
@@ -364,12 +365,12 @@ func TestPeerCheques(t *testing.T) {
 	sentCheque3 := setNewSentCheque(t, testPeer)
 	testChequesByType(t, swap, testPeerID, map[string]*Cheque{lastSentChequeKey: sentCheque3, lastReceivedChequeKey: receivedCheque})
 
-	// check previous cheques are still correct
+	// check previous cheques for second peer are still correct
 	testChequesByType(t, swap, testPeer2ID, map[string]*Cheque{lastSentChequeKey: sentCheque2, lastReceivedChequeKey: receivedCheque2})
 
 	// test cheques for invalid peer
-	randomID := adapters.RandomNodeConfig().ID
-	_, err := swap.PeerCheques(randomID)
+	invalidPeerID := adapters.RandomNodeConfig().ID
+	_, err := swap.PeerCheques(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
