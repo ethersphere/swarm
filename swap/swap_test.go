@@ -240,18 +240,6 @@ func TestCheques(t *testing.T) {
 	generatedSentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
 
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}, testPeer3ID: {lastSentChequeKey: generatedSentCheque3, lastReceivedChequeKey: nil}})
-	/*
-		generatedReceivedCheque3 := newRandomTestCheque()
-		err = swap.saveLastReceivedCheque(testPeer3.ID(), generatedReceivedCheque3)
-		if err != nil {
-			t.Fatal(err)
-		}
-		peerCheques, err = swap.PeerCheques(testPeer3.ID())
-		if err != nil {
-			t.Fatal(err)
-		}
-		testChequesByType(t, map[string]*Cheque{lastSentChequeKey: generatedSentCheque4, lastReceivedChequeKey: generatedReceivedCheque3}, peerCheques)
-	*/
 }
 
 // adds a peer to the given Swap structs, fails if there are errors and returns peer otherwise

@@ -440,9 +440,11 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	// add disk cheques for peers not already present
 	sentChequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peer := keyToID(string(key), sentChequePrefix)
+		// make map if peer has no cheques entry yet
 		if _, peerHasCheques := cheques[peer]; !peerHasCheques {
 			cheques[peer] = make(map[string]*Cheque)
 		}
+		// add sent cheque from store
 		if _, peerHasSentCheque := cheques[peer][lastSentChequeKey]; !peerHasSentCheque {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
@@ -450,6 +452,7 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 				cheques[peer][lastSentChequeKey] = &peerCheque
 			}
 		}
+		// add nil as received cheque if not present
 		if _, peerHasReceivedCheque := cheques[peer][lastReceivedChequeKey]; !peerHasReceivedCheque {
 			cheques[peer][lastReceivedChequeKey] = nil
 		}
@@ -461,9 +464,11 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	}
 	receivedChequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peer := keyToID(string(key), receivedChequePrefix)
+		// make map if peer has no cheques entry yet
 		if _, peerHasCheques := cheques[peer]; !peerHasCheques {
 			cheques[peer] = make(map[string]*Cheque)
 		}
+		// add received cheque from store
 		if _, peerHasReceivedCheque := cheques[peer]; !peerHasReceivedCheque {
 			var peerCheque Cheque
 			err = json.Unmarshal(value, &peerCheque)
@@ -471,6 +476,7 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 				cheques[peer][lastReceivedChequeKey] = &peerCheque
 			}
 		}
+		// add nil as sent cheque if not present
 		if _, peerHasSentCheque := cheques[peer][lastSentChequeKey]; !peerHasSentCheque {
 			cheques[peer][lastSentChequeKey] = nil
 		}
