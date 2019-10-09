@@ -213,18 +213,15 @@ func TestCheques(t *testing.T) {
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{})
 
 	// add peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer := addPeer(t, swap)
 	testPeerID := testPeer.ID()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// test no cheques are present
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: nil, lastSentChequeKey: nil}})
 
 	// generate and set sent and received cheques for peer
 	generatedSentCheque := newRandomTestCheque()
-	err = testPeer.setLastSentCheque(generatedSentCheque)
+	err := testPeer.setLastSentCheque(generatedSentCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,11 +234,8 @@ func TestCheques(t *testing.T) {
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}})
 
 	// add second peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
-	if err != nil {
-		t.Fatal(err)
-	}
 	// generate and set sent and received cheques for second peer
 	generatedSentCheque2 := newRandomTestCheque()
 	err = testPeer2.setLastSentCheque(generatedSentCheque2)
@@ -255,6 +249,16 @@ func TestCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 	getChequesAndVerify(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {lastReceivedChequeKey: generatedReceivedCheque, lastSentChequeKey: generatedSentCheque}, testPeer2ID: {lastReceivedChequeKey: generatedReceivedCheque2, lastSentChequeKey: generatedSentCheque2}})
+}
+
+// adds a peer to the given Swap structs, fails if there are errors and returns peer otherwise
+func addPeer(t *testing.T, s *Swap) *Peer {
+	t.Helper()
+	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return peer
 }
 
 // calls the Cheques function and verifies that the result matches the expected parameter
