@@ -430,8 +430,9 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
+		cheques[peer] = make(map[string]*Cheque)
 		cheques[peer][lastSentChequeKey] = swapPeer.getLastSentCheque()
-		cheques[peer][lastReceivedChequeKey] = swapPeer.getLastSentCheque()
+		cheques[peer][lastReceivedChequeKey] = swapPeer.getLastReceivedCheque()
 		swapPeer.lock.Unlock()
 	}
 	s.peersLock.Unlock()
