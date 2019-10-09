@@ -473,14 +473,30 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 
 // PeerCheques returns the last sent and received cheques for a given peer
 func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
-	sentCheque, err := s.SentCheque(peer)
-	if err != nil && err != state.ErrNotFound {
-		return nil, err
+	//peerCheques := make(map[string]*Cheque)
+	var sentCheque, receivedCheque *Cheque
+
+	swapPeer := s.getPeer(peer)
+	if swapPeer != nil {
+		sentCheque = swapPeer.getLastSentCheque()
+		receivedCheque = swapPeer.getLastReceivedCheque()
+	} else {
+		errSentCheque := s.store.Get(sentChequeKey(peer), &sentCheque)
+		// peer might have only received cheque
+		if errSentCheque != nil && errSentCheque != state.ErrNotFound {
+			return nil, errSentCheque
+		}
+		// peer might have only sent cheque
+		errReceivedCheque := s.store.Get(receivedChequeKey(peer), &receivedCheque)
+		if errReceivedCheque != nil && errReceivedCheque != state.ErrNotFound {
+			return nil, errReceivedCheque
+		}
+		// if no cheques, return not found
+		if errSentCheque == state.ErrNotFound && errReceivedCheque == state.ErrNotFound {
+			return nil, state.ErrNotFound
+		}
 	}
-	receivedCheque, err := s.ReceivedCheque(peer)
-	if err != nil && err != state.ErrNotFound {
-		return nil, err
-	}
+
 	return map[string]*Cheque{lastSentChequeKey: sentCheque, lastReceivedChequeKey: receivedCheque}, nil
 }
 

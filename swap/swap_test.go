@@ -261,10 +261,10 @@ func TestPeerCheques(t *testing.T) {
 	// test cheques for invalid peer
 	randomID := adapters.RandomNodeConfig().ID
 	peerCheques, err = swap.PeerCheques(randomID)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("Expected call to fail, but it didn't!")
 	}
-	testChequesForPeer(t, map[string]*Cheque{lastSentChequeKey: nil, lastReceivedChequeKey: nil}, peerCheques)
+	testChequesForPeer(t, nil, peerCheques)
 
 	// test cheques for disconnected node
 	testPeer3 := newDummyPeer().Peer
