@@ -419,17 +419,7 @@ func TestSentCheque(t *testing.T) {
 	testSentCheque(t, swap, testPeerID, sentCheque)
 
 	// test sent cheque for invalid peer
-	invalidPeerID := adapters.RandomNodeConfig().ID
-	sentCheque3, err := swap.SentCheque(invalidPeerID)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-	if sentCheque3 != nil {
-		t.Fatalf("Expected sent cheque for invalid call to be nil, but is %v", sentCheque3)
-	}
+	testChequeFailure(t, swap.SentCheque)
 
 	// test sent cheque for disconnected node
 	testPeer3ID := newDummyPeer().Peer.ID()
@@ -452,6 +442,21 @@ func testSentCheque(t *testing.T, s *Swap, id enode.ID, expectedSentCheque *Cheq
 	}
 	if sentCheque != expectedSentCheque {
 		t.Fatalf("Expected sent cheque to be %v, but is %v", expectedSentCheque, sentCheque)
+	}
+}
+
+// generate an invalid peer id, call a cheque function for it and test that it fails
+func testChequeFailure(t *testing.T, chequeFunction func(enode.ID) (*Cheque, error)) {
+	invalidPeerID := adapters.RandomNodeConfig().ID
+	cheque, err := chequeFunction(invalidPeerID)
+	if err == nil {
+		t.Fatal("Expected call to fail, but it didn't!")
+	}
+	if err != state.ErrNotFound {
+		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
+	}
+	if cheque != nil {
+		t.Fatalf("Expected cheque for invalid call to be nil, but is %v", cheque)
 	}
 }
 
@@ -519,17 +524,7 @@ func TestReceivedCheque(t *testing.T) {
 	testReceivedCheque(t, swap, testPeerID, receivedCheque)
 
 	// test received cheque for invalid peer
-	invalidPeerID := adapters.RandomNodeConfig().ID
-	receivedCheque3, err := swap.ReceivedCheque(invalidPeerID)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-	if receivedCheque3 != nil {
-		t.Fatalf("Expected received cheque for invalid call to be nil, but is %v", receivedCheque3)
-	}
+	testChequeFailure(t, swap.ReceivedCheque)
 
 	// test received cheque for disconnected node
 	testPeer3ID := newDummyPeer().Peer.ID()
