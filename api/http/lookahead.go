@@ -19,8 +19,7 @@ var bufferSize = segmentSize // in the future could be 5 * segmentSize
 // so, it could be that a lookahead read might need to wait for a previous read to finish
 // due to resource pooling
 type langos struct {
-	s            reader
-	size         int64
+	r            reader
 	buf          []byte
 	lastSegment  int
 	lastReadSize int
@@ -30,19 +29,19 @@ type langos struct {
 
 func newLangos(r reader) *langos {
 	l := &langos{
-		s:        r,
+		r:        r,
 		buf:      make([]byte, segmentSize),
-		peekDone: make(chan struct{}, 1),
+		peekDone: make(chan struct{}),
 	}
 	return l
 }
 
 func (l *langos) Read(p []byte) (n int, err error) {
 	log.Debug("l.Read", "last", l.lastSegment)
-	l.lastSegment++
-	if l.lastSegment == 1 {
+	if l.lastSegment == 0 {
+		l.lastSegment++
 		log.Debug("firstRead")
-		n, err := l.s.Read(p)
+		n, err := l.r.Read(p)
 		if err != nil {
 			return n, err
 		}
@@ -55,22 +54,22 @@ func (l *langos) Read(p []byte) (n int, err error) {
 			log.Debug("copying")
 			copy(p, l.buf[:l.lastReadSize])
 		}
-		if l.lastErr != nil || !ok {
-			break
+		if l.lastErr == nil && ok {
+			go l.peek()
 		}
-		go l.peek()
 	}
 
 	return l.lastReadSize, l.lastErr
 }
 
 func (l *langos) Seek(offset int64, whence int) (int64, error) {
-	panic("not implemented")
+	// todo: handle peek buffer invalidation
+	return l.r.Seek(offset, whence)
 }
 
 func (l *langos) peek() {
 	log.Debug("l.peek", "last", l.lastSegment, "lastN", l.lastReadSize, "lastErr", l.lastErr)
-	n, err := l.s.ReadAt(l.buf, int64(l.lastSegment*segmentSize))
+	n, err := l.r.ReadAt(l.buf, int64(l.lastSegment*segmentSize))
 	l.lastReadSize = n
 	l.lastErr = err
 	log.Debug("peek readat returned", "lastSegment", l.lastSegment, "err", l.lastErr)
@@ -80,6 +79,7 @@ func (l *langos) peek() {
 		return
 	}
 	l.peekDone <- struct{}{}
+	l.lastSegment++
 }
 
 type reader interface {

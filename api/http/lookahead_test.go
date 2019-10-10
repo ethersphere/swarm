@@ -8,8 +8,6 @@ import (
 )
 
 func TestLangosCallsPeekOnlyTwice(t *testing.T) {
-	// data length is 12 bytes
-	rdr := strings.NewReader("sometestdata")
 	defer func(c int) {
 		segmentSize = c
 	}(segmentSize)
@@ -25,7 +23,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 			name:        "2 seq reads, no error",
 			segmentSize: 6,
 			numReads:    2,
-			expReads:    2,
+			expReads:    3, // additional read detects EOF
 			expErr:      nil,
 		},
 		{
@@ -47,36 +45,30 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 			segmentSize = tc.segmentSize
 
 			tl := &testLangos{
-				reader: &nopSeeker{
-					rdr,
-					rdr,
-				},
+				reader: strings.NewReader("sometestdata"), // len 12
 			}
 			l := newLangos(tl)
 
 			b := make([]byte, segmentSize)
 			var err error
-			for i := 1; i < tc.numReads; i++ {
+			for i := 1; i <= tc.numReads; i++ {
+				var wantErr error
+				if i == tc.numReads {
+					wantErr = tc.expErr
+				}
 				_, err = l.Read(b)
-				time.Sleep(5 * time.Millisecond)
+				if err != wantErr {
+					t.Fatalf("got read #%v error %v, want %v", i, err, wantErr)
+				}
 			}
-
-			if err != tc.expErr {
-				t.Fatal(err)
+			if tc.numReads != tc.expReads {
+				// wait for peek to finish
+				// so that it can be counted
+				time.Sleep(10 * time.Millisecond)
 			}
-			time.Sleep(5 * time.Millisecond)
 			if tl.readCount != tc.expReads {
 				t.Fatalf("expected %d call to read func, got %d", tc.expReads, tl.readCount)
 			}
-			//_, err = l.Read(b)
-			//if err != nil {
-			//t.Fatal(err)
-			//}
-
-			//time.Sleep(5 * time.Millisecond)
-			//if tl.readCount != exp {
-			//t.Fatalf("expected %d call to peek func, got %d", exp, tl.readCount)
-			//}
 		})
 	}
 }
@@ -84,10 +76,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 func TestLangosCallsPeek(t *testing.T) {
 	rdr := strings.NewReader("sometestdata")
 	tl := &testLangos{
-		reader: &nopSeeker{
-			rdr,
-			rdr,
-		},
+		reader: rdr,
 	}
 	l := newLangos(tl)
 
@@ -102,14 +91,6 @@ func TestLangosCallsPeek(t *testing.T) {
 		t.Fatalf("expected %d call to peek func, got %d", exp, tl.readCount)
 	}
 }
-
-type nopSeeker struct {
-	io.Reader
-	//io.Seeker
-	io.ReaderAt
-}
-
-func (nopSeeker) Seek(offset int64, whence int) (int64, error) { return 0, nil }
 
 type testLangos struct {
 	reader
