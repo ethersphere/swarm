@@ -393,6 +393,7 @@ func (s *Swap) Balance(peer enode.ID) (balance int64, err error) {
 func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balances := make(map[enode.ID]int64)
 
+	// get balances from memory
 	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
@@ -401,7 +402,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	}
 	s.peersLock.Unlock()
 
-	// add store balances, if peer was not already added
+	// add disk balances for peers not already present
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peer := keyToID(string(key), balancePrefix)
 		if _, peerHasBalance := balances[peer]; !peerHasBalance {
