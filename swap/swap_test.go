@@ -390,7 +390,7 @@ func testChequesByType(t *testing.T, s *Swap, id enode.ID, expectedCheques map[s
 	}
 }
 
-// TestSentCheque verifies that sent cheques data is correctly obtained
+// TestSentCheque verifies that sent cheque data is correctly obtained
 func TestSentCheque(t *testing.T) {
 	// create a test swap account
 	swap, clean := newTestSwap(t, ownerKey)
