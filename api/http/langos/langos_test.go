@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package langos
+package langos_test
 
 import (
 	"io"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethersphere/swarm/api/http/langos"
 )
 
 func TestLangosCallsPeekOnlyTwice(t *testing.T) {
@@ -56,10 +58,8 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tl := &testLangos{
-				reader: strings.NewReader(testData),
-			}
-			l := newLangos(tl, tc.peekSize)
+			tl := newCounterReader(strings.NewReader(testData))
+			l := langos.New(tl, tc.peekSize)
 			defer l.Close()
 
 			b := make([]byte, tc.peekSize)
@@ -101,11 +101,8 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 
 func TestLangosCallsPeek(t *testing.T) {
 	peekSize := 128
-	rdr := strings.NewReader("sometestdata")
-	tl := &testLangos{
-		reader: rdr,
-	}
-	l := newLangos(tl, peekSize)
+	tl := newCounterReader(strings.NewReader("sometestdata"))
+	l := langos.New(tl, peekSize)
 
 	b := make([]byte, peekSize)
 	_, err := l.Read(b)
@@ -113,23 +110,31 @@ func TestLangosCallsPeek(t *testing.T) {
 		t.Fatal(err)
 	}
 	exp := 2
+	// wait for the peek goroutine to finish
 	time.Sleep(5 * time.Millisecond)
 	if tl.readCount != exp {
 		t.Fatalf("expected %d call to peek func, got %d", exp, tl.readCount)
 	}
 }
 
-type testLangos struct {
-	reader
+// counterReader counts the number of Read or ReadAt calls.
+type counterReader struct {
+	langos.Reader
 	readCount int
 }
 
-func (l *testLangos) Read(p []byte) (n int, err error) {
-	l.readCount++
-	return l.reader.Read(p)
+func newCounterReader(r langos.Reader) (c *counterReader) {
+	return &counterReader{
+		Reader: r,
+	}
 }
 
-func (l *testLangos) ReadAt(p []byte, off int64) (int, error) {
+func (l *counterReader) Read(p []byte) (n int, err error) {
 	l.readCount++
-	return l.reader.ReadAt(p, off)
+	return l.Reader.Read(p)
+}
+
+func (l *counterReader) ReadAt(p []byte, off int64) (int, error) {
+	l.readCount++
+	return l.Reader.ReadAt(p, off)
 }

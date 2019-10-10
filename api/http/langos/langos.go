@@ -23,7 +23,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 )
 
-// langos is a reader with a lookahead peekBuffer
+// Langos is a reader with a lookahead peekBuffer
 // this is the most naive implementation of a lookahead peekBuffer
 // it should issue a lookahead Read when a Read is called, hence
 // the name - langos
@@ -37,8 +37,8 @@ import (
 //  - Read and Seek methods are not concurrent safe and must be called synchronously.
 //  - After io.EOF error is returned by the Read method, no more calls on Read or Seek are allowed.
 //  - Close method can be called only once.
-type langos struct {
-	r            reader        // reader needs to implement io.ReadSeeker and io.ReaderAt interfaces
+type Langos struct {
+	r            Reader        // reader needs to implement io.ReadSeeker and io.ReaderAt interfaces
 	cursor       int64         // current read position
 	cursorMu     sync.Mutex    // cursorMu protects cursor on concurrent peek goroutne
 	peekBuf      []byte        // peeked data
@@ -48,18 +48,18 @@ type langos struct {
 	closed       chan struct{} // terminates peek goroutine and unblocks Read method
 }
 
-// newLangos bakes a new yummy langos that peeks
+// New bakes a new yummy langos that peeks
 // on provider reader when its Read or Seek methods are called.
 // Argument peekSize sets the length of peeks.
-func newLangos(r reader, peekSize int) *langos {
-	return &langos{
+func New(r Reader, peekSize int) *Langos {
+	return &Langos{
 		r:       r,
 		peekBuf: make([]byte, peekSize),
 		closed:  make(chan struct{}),
 	}
 }
 
-func (l *langos) Read(p []byte) (n int, err error) {
+func (l *Langos) Read(p []byte) (n int, err error) {
 	log.Debug("l.Read", "cursor", l.cursor)
 
 	// first read, no peeking happened before
@@ -96,7 +96,7 @@ func (l *langos) Read(p []byte) (n int, err error) {
 	}
 }
 
-func (l *langos) Seek(offset int64, whence int) (int64, error) {
+func (l *Langos) Seek(offset int64, whence int) (int64, error) {
 	n, err := l.r.Seek(offset, whence)
 	if err != nil {
 		return n, err
@@ -112,7 +112,7 @@ func (l *langos) Seek(offset int64, whence int) (int64, error) {
 	return n, err
 }
 
-func (l *langos) peek(offset int64) {
+func (l *Langos) peek(offset int64) {
 	log.Debug("l.peek", "offset", offset, "lastN", l.peekReadSize, "peekErr", l.peekErr)
 	n, err := l.r.ReadAt(l.peekBuf, offset)
 
@@ -143,12 +143,12 @@ func (l *langos) peek(offset int64) {
 	}
 }
 
-func (l *langos) Close() (err error) {
+func (l *Langos) Close() (err error) {
 	close(l.closed)
 	return nil
 }
 
-type reader interface {
+type Reader interface {
 	io.ReadSeeker
 	io.ReaderAt
 }
