@@ -8,6 +8,8 @@ import (
 )
 
 func TestLangosCallsPeekOnlyTwice(t *testing.T) {
+	testData := "sometestdata" // len 12
+
 	defer func(c int) {
 		segmentSize = c
 	}(segmentSize)
@@ -45,9 +47,10 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 			segmentSize = tc.segmentSize
 
 			tl := &testLangos{
-				reader: strings.NewReader("sometestdata"), // len 12
+				reader: strings.NewReader(testData),
 			}
 			l := newLangos(tl)
+			defer l.Close()
 
 			b := make([]byte, segmentSize)
 			var err error
@@ -56,9 +59,22 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 				if i == tc.numReads {
 					wantErr = tc.expErr
 				}
-				_, err = l.Read(b)
+				var n int
+				n, err = l.Read(b)
 				if err != wantErr {
 					t.Fatalf("got read #%v error %v, want %v", i, err, wantErr)
+				}
+				end := i * segmentSize
+				if end > len(testData) {
+					end = len(testData)
+				}
+				want := testData[(i-1)*segmentSize : end]
+				if l := len(want); l != n {
+					t.Fatalf("got read count #%v %v, want %v", i, n, l)
+				}
+				got := string(b[:n])
+				if got != want {
+					t.Fatalf("got read data #%v %q, want %q", i, got, want)
 				}
 			}
 			if tc.numReads != tc.expReads {

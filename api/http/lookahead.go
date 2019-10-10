@@ -21,10 +21,11 @@ var bufferSize = segmentSize // in the future could be 5 * segmentSize
 type langos struct {
 	r            reader
 	buf          []byte
-	lastSegment  int
-	lastReadSize int
-	lastErr      error
+	cursor       int64
 	peekDone     chan struct{}
+	peekReadSize int
+	peekErr      error
+	closed       chan struct{}
 }
 
 func newLangos(r reader) *langos {
@@ -32,34 +33,36 @@ func newLangos(r reader) *langos {
 		r:        r,
 		buf:      make([]byte, segmentSize),
 		peekDone: make(chan struct{}),
+		closed:   make(chan struct{}),
 	}
 	return l
 }
 
 func (l *langos) Read(p []byte) (n int, err error) {
-	log.Debug("l.Read", "last", l.lastSegment)
-	if l.lastSegment == 0 {
-		l.lastSegment++
+	log.Debug("l.Read", "cursor", l.cursor)
+	if l.cursor == 0 {
 		log.Debug("firstRead")
 		n, err := l.r.Read(p)
 		if err != nil {
 			return n, err
 		}
+		l.cursor = int64(n)
 		go l.peek()
 		return n, err
 	}
 	select {
 	case _, ok := <-l.peekDone:
-		if l.lastErr == nil || l.lastErr == io.EOF {
+		if (l.peekErr == nil || l.peekErr == io.EOF) && l.peekReadSize > 0 {
 			log.Debug("copying")
-			copy(p, l.buf[:l.lastReadSize])
+			copy(p, l.buf[:l.peekReadSize])
 		}
-		if l.lastErr == nil && ok {
+		if l.peekErr == nil && ok {
 			go l.peek()
 		}
+	case <-l.closed:
 	}
 
-	return l.lastReadSize, l.lastErr
+	return l.peekReadSize, l.peekErr
 }
 
 func (l *langos) Seek(offset int64, whence int) (int64, error) {
@@ -68,18 +71,26 @@ func (l *langos) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (l *langos) peek() {
-	log.Debug("l.peek", "last", l.lastSegment, "lastN", l.lastReadSize, "lastErr", l.lastErr)
-	n, err := l.r.ReadAt(l.buf, int64(l.lastSegment*segmentSize))
-	l.lastReadSize = n
-	l.lastErr = err
-	log.Debug("peek readat returned", "lastSegment", l.lastSegment, "err", l.lastErr)
+	log.Debug("l.peek", "cursor", l.cursor, "lastN", l.peekReadSize, "peekErr", l.peekErr)
+	n, err := l.r.ReadAt(l.buf, l.cursor)
+	l.peekReadSize = n
+	l.peekErr = err
+	log.Debug("peek readat returned", "cursor", l.cursor, "err", l.peekErr)
 	if err == io.EOF {
 		log.Debug("peek EOF")
 		close(l.peekDone)
 		return
 	}
-	l.peekDone <- struct{}{}
-	l.lastSegment++
+	l.cursor += int64(n)
+	select {
+	case l.peekDone <- struct{}{}:
+	case <-l.closed:
+	}
+}
+
+func (l *langos) Close() (err error) {
+	close(l.closed)
+	return nil
 }
 
 type reader interface {
