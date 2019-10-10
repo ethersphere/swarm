@@ -105,16 +105,13 @@ func newTestBackend() *swapTestBackend {
 }
 
 // Test getting a peer's balance
-func TestBalance(t *testing.T) {
+func TestPeerBalance(t *testing.T) {
 	// create a test swap account
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
 	// test for correct value
-	err := testPeer.setBalance(888)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testPeer.setBalance(888)
 	b, err := swap.Balance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -135,10 +132,7 @@ func TestBalance(t *testing.T) {
 
 	// test for disconnected node
 	testPeer2 := newDummyPeer().Peer
-	err = swap.saveBalance(testPeer2.ID(), 333)
-	if err != nil {
-		t.Fatal(err)
-	}
+	swap.saveBalance(testPeer2.ID(), 333)
 	b, err = swap.Balance(testPeer2.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +143,7 @@ func TestBalance(t *testing.T) {
 }
 
 // Test getting balances for all known peers
-func TestBalances(t *testing.T) {
+func TestAllBalances(t *testing.T) {
 	// create a test swap account
 	swap, clean := newTestSwap(t, ownerKey)
 	defer clean()
@@ -167,10 +161,7 @@ func TestBalances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testPeer.setBalance(808)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testPeer.setBalance(808)
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
 
 	// test successive balance addition for peer
@@ -178,17 +169,11 @@ func TestBalances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testPeer2.setBalance(909)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testPeer2.setBalance(909)
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
 
 	// test balance change for peer
-	err = testPeer.setBalance(303)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testPeer.setBalance(303)
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
