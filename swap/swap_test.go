@@ -192,14 +192,14 @@ func TestBalances(t *testing.T) {
 	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
-func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
+func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
 	t.Helper()
-	balances, err := swap.Balances()
+	actualBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(balances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
+	if !reflect.DeepEqual(actualBalances, expectedBalances) {
+		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, actualBalances)
 	}
 }
 
@@ -283,12 +283,12 @@ func setNewReceivedCheque(t *testing.T, p *Peer) *Cheque {
 
 func setNewCheque(t *testing.T, setChequeFunction func(*Cheque) error) *Cheque {
 	t.Helper()
-	generatedCheque := newRandomTestCheque()
-	err := setChequeFunction(generatedCheque)
+	newCheque := newRandomTestCheque()
+	err := setChequeFunction(newCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return generatedCheque
+	return newCheque
 }
 
 // generates a cheque and saves it as the last sent cheque for a peer in the given swap struct, fails if there are errors
@@ -305,12 +305,12 @@ func saveNewReceivedCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
 
 func saveNewCheque(t *testing.T, id enode.ID, saveChequeFunction func(enode.ID, *Cheque) error) *Cheque {
 	t.Helper()
-	generatedCheque := newRandomTestCheque()
-	err := saveChequeFunction(id, generatedCheque)
+	newCheque := newRandomTestCheque()
+	err := saveChequeFunction(id, newCheque)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return generatedCheque
+	return newCheque
 }
 
 // tests that a nested map of peerID:{typeOfCheque:cheque} matches the result of the Cheques function
@@ -1144,12 +1144,12 @@ func TestResetBalance(t *testing.T) {
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
 // append generated bookings to slice pointer
-func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+func testPeerBookings(t *testing.T, s *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
 	t.Helper()
 	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
 	*bookings = append(*bookings, peerBookings...)
-	addBookings(swap, peerBookings)
-	verifyBookings(t, swap, *bookings)
+	addBookings(s, peerBookings)
+	verifyBookings(t, s, *bookings)
 }
 
 // generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
@@ -1169,10 +1169,10 @@ func addBookings(swap *Swap, bookings []booking) {
 }
 
 // take a Swap struct and a list of bookings, and verify the resulting balances are as expected
-func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
+func verifyBookings(t *testing.T, s *Swap, bookings []booking) {
 	t.Helper()
-	expectedBalances := calculateExpectedBalances(swap, bookings)
-	realBalances, err := swap.Balances()
+	expectedBalances := calculateExpectedBalances(s, bookings)
+	realBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
