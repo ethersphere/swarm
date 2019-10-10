@@ -370,12 +370,15 @@ func TestPeerCheques(t *testing.T) {
 
 	// test cheques for invalid peer
 	invalidPeerID := adapters.RandomNodeConfig().ID
-	_, err := swap.PeerCheques(invalidPeerID)
+	peerCheques, err := swap.PeerCheques(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
 	if err != state.ErrNotFound {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
+	}
+	if peerCheques != nil {
+		t.Fatalf("Expected peer cheques for invalid call to be nil, but is %v", peerCheques)
 	}
 
 	// test cheques for disconnected node
@@ -432,12 +435,15 @@ func TestSentCheque(t *testing.T) {
 
 	// test sent cheque for invalid peer
 	invalidPeerID := adapters.RandomNodeConfig().ID
-	_, err := swap.SentCheque(invalidPeerID)
+	sentCheque3, err := swap.SentCheque(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
 	if err != state.ErrNotFound {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
+	}
+	if sentCheque3 != nil {
+		t.Fatalf("Expected sent cheque for invalid call to be nil, but is %v", sentCheque3)
 	}
 
 	// test sent cheque for disconnected node
@@ -529,12 +535,15 @@ func TestReceivedCheque(t *testing.T) {
 
 	// test received cheque for invalid peer
 	invalidPeerID := adapters.RandomNodeConfig().ID
-	_, err := swap.ReceivedCheque(invalidPeerID)
+	receivedCheque3, err := swap.ReceivedCheque(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
 	if err != state.ErrNotFound {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
+	}
+	if receivedCheque3 != nil {
+		t.Fatalf("Expected received cheque for invalid call to be nil, but is %v", receivedCheque3)
 	}
 
 	// test received cheque for disconnected node
