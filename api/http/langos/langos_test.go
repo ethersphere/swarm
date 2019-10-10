@@ -17,7 +17,10 @@
 package langos_test
 
 import (
+	"bytes"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -59,8 +62,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tl := newCounterReader(strings.NewReader(testData))
-			l := langos.New(tl, tc.peekSize)
-			defer l.Close()
+			l := langos.NewLangos(tl, tc.peekSize)
 
 			b := make([]byte, tc.peekSize)
 			var err error
@@ -102,7 +104,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 func TestLangosCallsPeek(t *testing.T) {
 	peekSize := 128
 	tl := newCounterReader(strings.NewReader("sometestdata"))
-	l := langos.New(tl, peekSize)
+	l := langos.NewLangos(tl, peekSize)
 
 	b := make([]byte, peekSize)
 	_, err := l.Read(b)
@@ -137,4 +139,109 @@ func (l *counterReader) Read(p []byte) (n int, err error) {
 func (l *counterReader) ReadAt(p []byte, off int64) (int, error) {
 	l.readCount++
 	return l.Reader.ReadAt(p, off)
+}
+
+// BenchmarkDelayedReaders performs benchmarks on reader with deterministic
+// delays on every Read method call. Function ioutil.ReadAll is used for reading.
+//
+//  - direct: a baseline on plain reader
+//  - buffered: reading through bufio.Reader
+//  - langos: reading through buffered langos
+//
+// goos: darwin
+// goarch: amd64
+// pkg: github.com/ethersphere/swarm/api/http/langos
+// BenchmarkDelayedReaders/direct-8         	      26	  42100337 ns/op	33552507 B/op	      15 allocs/op
+// BenchmarkDelayedReaders/buffered-8       	      42	  28179546 ns/op	33552422 B/op	      15 allocs/op
+// BenchmarkDelayedReaders/langos-8         	     135	   8683426 ns/op	33685612 B/op	    1380 allocs/op
+// PASS
+// ok  	github.com/ethersphere/swarm/api/http/langos	6.356s
+func BenchmarkDelayedReaders(b *testing.B) {
+	dataSize := 10 * 1024 * 1024
+	bufferSize := 4 * 32 * 1024
+
+	data := make([]byte, dataSize)
+	_, err := rand.Read(data)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	delays := []time.Duration{
+		2 * time.Millisecond,
+		0, 0, 0,
+		5 * time.Millisecond,
+		0, 0,
+		10 * time.Millisecond,
+		0, 0,
+	}
+
+	reader := newDelayedReaderStatic(bytes.NewReader(data), delays)
+
+	for _, bc := range []struct {
+		name   string
+		reader langos.Reader
+	}{
+		{
+			name:   "direct",
+			reader: reader,
+		},
+		{
+			name:   "buffered",
+			reader: langos.NewBufferedReader(reader, bufferSize),
+		},
+		{
+			name:   "langos",
+			reader: langos.NewBufferedLangos(reader, bufferSize),
+		},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				b.StartTimer()
+				got, err := ioutil.ReadAll(bc.reader)
+				b.StopTimer()
+
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = bc.reader.Seek(0, io.SeekStart)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if !bytes.Equal(got, data) {
+					b.Fatalf("got invalid data (lengths: got %v, want %v)", len(got), len(data))
+				}
+			}
+		})
+	}
+}
+
+type delayedReaderFunc func(i int) (delay time.Duration)
+
+type delayedReader struct {
+	langos.Reader
+	f delayedReaderFunc
+	i int
+}
+
+func newDelayedReader(r langos.Reader, f delayedReaderFunc) *delayedReader {
+	return &delayedReader{
+		Reader: r,
+		f:      f,
+	}
+}
+
+func newDelayedReaderStatic(r langos.Reader, delays []time.Duration) *delayedReader {
+	l := len(delays)
+	return &delayedReader{
+		Reader: r,
+		f: func(i int) (delay time.Duration) {
+			return delays[i%l]
+		},
+	}
+}
+
+func (d *delayedReader) Read(p []byte) (n int, err error) {
+	time.Sleep(d.f(d.i))
+	d.i++
+	return d.Reader.Read(p)
 }
