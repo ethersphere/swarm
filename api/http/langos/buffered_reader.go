@@ -16,30 +16,43 @@
 
 package langos
 
-import "bufio"
+import (
+	"bufio"
+	"io"
+)
 
-// BufferedReader wraps bufio.Reader to expose Seek method
-// from the provided Reader in NewBufferedReader.
-type BufferedReader struct {
-	Reader
-	r *bufio.Reader
+// BufferedReadSeeker wraps bufio.Reader to expose Seek method
+// from the provied io.ReadSeeker in NewBufferedReadSeeker.
+type BufferedReadSeeker struct {
+	r  *bufio.Reader
+	s  io.ReadSeeker
+	ra io.ReaderAt
 }
 
-// NewBufferedReader creates a new instance of BufferedReader,
-// out of Reader. Argument `size` is the size of the read buffer.
-func NewBufferedReader(reader Reader, size int) BufferedReader {
-	return BufferedReader{
-		Reader: reader,
-		r:      bufio.NewReaderSize(reader, size),
+// NewBufferedReadSeeker creates a new instance of BufferedReadSeeker,
+// out of io.ReadSeeker. Argument `size` is the size of the read buffer.
+func NewBufferedReadSeeker(readSeeker io.ReadSeeker, size int) BufferedReadSeeker {
+	ra, _ := readSeeker.(io.ReaderAt)
+	return BufferedReadSeeker{
+		r:  bufio.NewReaderSize(readSeeker, size),
+		s:  readSeeker,
+		ra: ra,
 	}
 }
 
-func (b BufferedReader) Read(p []byte) (n int, err error) {
+func (b BufferedReadSeeker) Read(p []byte) (n int, err error) {
 	return b.r.Read(p)
 }
 
-func (b BufferedReader) Seek(offset int64, whence int) (int64, error) {
-	n, err := b.Reader.Seek(offset, whence)
-	b.r.Reset(b.Reader)
+func (b BufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
+	n, err := b.s.Seek(offset, whence)
+	b.r.Reset(b.s)
 	return n, err
+}
+
+func (b BufferedReadSeeker) ReadAt(p []byte, off int64) (n int, err error) {
+	if b.ra == nil {
+		return 0, nil
+	}
+	return b.ra.ReadAt(p, off)
 }

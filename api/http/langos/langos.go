@@ -63,7 +63,7 @@ func NewLangos(r Reader, peekSize int) *Langos {
 }
 
 func NewBufferedLangos(r Reader, bufferSize int) Reader {
-	return NewBufferedReader(NewLangos(r, bufferSize), bufferSize)
+	return NewBufferedReadSeeker(NewLangos(r, bufferSize), bufferSize)
 }
 
 func (l *Langos) Read(p []byte) (n int, err error) {

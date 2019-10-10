@@ -187,7 +187,7 @@ func BenchmarkDelayedReaders(b *testing.B) {
 		},
 		{
 			name:   "buffered",
-			reader: langos.NewBufferedReader(reader, bufferSize),
+			reader: langos.NewBufferedReadSeeker(reader, bufferSize),
 		},
 		{
 			name:   "langos",
@@ -223,12 +223,12 @@ type delayedReader struct {
 	i int
 }
 
-func newDelayedReader(r langos.Reader, f delayedReaderFunc) *delayedReader {
-	return &delayedReader{
-		Reader: r,
-		f:      f,
-	}
-}
+// func newDelayedReader(r langos.Reader, f delayedReaderFunc) *delayedReader {
+// 	return &delayedReader{
+// 		Reader: r,
+// 		f:      f,
+// 	}
+// }
 
 func newDelayedReaderStatic(r langos.Reader, delays []time.Duration) *delayedReader {
 	l := len(delays)
