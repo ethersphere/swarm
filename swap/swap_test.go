@@ -453,6 +453,7 @@ func TestSentCheque(t *testing.T) {
 	}
 }
 
+// tests that the expected sent cheque matches the result of the Sent call for a given peer
 func testSentCheque(t *testing.T, s *Swap, id enode.ID, expectedSentCheque *Cheque) {
 	sentCheque, err := s.SentCheque(id)
 	if err != nil {
@@ -589,6 +590,7 @@ func TestReceivedCheque(t *testing.T) {
 	}
 }
 
+// tests that the expected received cheque matches the result of the ReceivedCheque call for a given peer
 func testReceivedCheque(t *testing.T, s *Swap, id enode.ID, expectedReceivedChequeKey *Cheque) {
 	receivedCheque, err := s.ReceivedCheque(id)
 	if err != nil {
