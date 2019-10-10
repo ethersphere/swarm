@@ -1126,15 +1126,22 @@ func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 // Recommended value is 4 times the io.Copy default buffer value which is 32kB.
 const getFileBufferSize = 4 * 32 * 1024
 
+var defaultDownloaderMode = "buffered"
+
 func newDownloader(s langos.Reader, r *http.Request) io.ReadSeeker {
-	switch r.URL.Query().Get("_downloader") {
+	mode := r.URL.Query().Get("_downloader")
+	if mode == "" {
+		mode = defaultDownloaderMode
+	}
+	switch mode {
 	case "baseline":
 		return s
+	case "buffered":
+		return langos.NewBufferedReadSeeker(s, getFileBufferSize)
 	case "langos":
 		return langos.NewBufferedLangos(s, getFileBufferSize)
-	default:
-		return langos.NewBufferedReadSeeker(s, getFileBufferSize)
 	}
+	return nil
 }
 
 type loggingResponseWriter struct {
