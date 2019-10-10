@@ -10,7 +10,6 @@ import (
 func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 	// data length is 12 bytes
 	rdr := strings.NewReader("sometestdata")
-	//dataLen := 12
 	defer func(c int) {
 		segmentSize = c
 	}(segmentSize)
@@ -59,6 +58,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 			var err error
 			for i := 1; i < tc.numReads; i++ {
 				_, err = l.Read(b)
+				time.Sleep(5 * time.Millisecond)
 			}
 
 			if err != tc.expErr {

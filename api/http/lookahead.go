@@ -1,6 +1,10 @@
 package http
 
-import "io"
+import (
+	"io"
+
+	"github.com/ethersphere/swarm/log"
+)
 
 var segmentSize = 4 * 32 * 1024
 var bufferSize = segmentSize // in the future could be 5 * segmentSize
@@ -34,8 +38,10 @@ func newLangos(r reader) *langos {
 }
 
 func (l *langos) Read(p []byte) (n int, err error) {
+	log.Debug("l.Read", "last", l.lastSegment)
 	l.lastSegment++
 	if l.lastSegment == 1 {
+		log.Debug("firstRead")
 		n, err := l.s.Read(p)
 		if err != nil {
 			return n, err
@@ -46,6 +52,7 @@ func (l *langos) Read(p []byte) (n int, err error) {
 	select {
 	case _, ok := <-l.peekDone:
 		if l.lastErr == nil || l.lastErr == io.EOF {
+			log.Debug("copying")
 			copy(p, l.buf[:l.lastReadSize])
 		}
 		if l.lastErr != nil || !ok {
@@ -62,10 +69,13 @@ func (l *langos) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (l *langos) peek() {
+	log.Debug("l.peek", "last", l.lastSegment, "lastN", l.lastReadSize, "lastErr", l.lastErr)
 	n, err := l.s.ReadAt(l.buf, int64(l.lastSegment*segmentSize))
 	l.lastReadSize = n
 	l.lastErr = err
+	log.Debug("peek readat returned", "lastSegment", l.lastSegment, "err", l.lastErr)
 	if err == io.EOF {
+		log.Debug("peek EOF")
 		close(l.peekDone)
 		return
 	}
