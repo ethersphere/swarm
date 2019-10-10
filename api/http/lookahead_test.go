@@ -10,49 +10,43 @@ import (
 func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 	testData := "sometestdata" // len 12
 
-	defer func(c int) {
-		segmentSize = c
-	}(segmentSize)
-
 	for _, tc := range []struct {
-		name        string
-		segmentSize int
-		numReads    int
-		expReads    int
-		expErr      error
+		name     string
+		peekSize int
+		numReads int
+		expReads int
+		expErr   error
 	}{
 		{
-			name:        "2 seq reads, no error",
-			segmentSize: 6,
-			numReads:    2,
-			expReads:    3, // additional read detects EOF
-			expErr:      nil,
+			name:     "2 seq reads, no error",
+			peekSize: 6,
+			numReads: 2,
+			expReads: 3, // additional read detects EOF
+			expErr:   nil,
 		},
 		{
-			name:        "3 seq reads, EOF",
-			segmentSize: 6,
-			numReads:    3,
-			expReads:    3,
-			expErr:      io.EOF,
+			name:     "3 seq reads, EOF",
+			peekSize: 6,
+			numReads: 3,
+			expReads: 3,
+			expErr:   io.EOF,
 		},
 		{
-			name:        "2 seq reads, EOF",
-			segmentSize: 7,
-			numReads:    2,
-			expReads:    2,
-			expErr:      io.EOF,
+			name:     "2 seq reads, EOF",
+			peekSize: 7,
+			numReads: 2,
+			expReads: 2,
+			expErr:   io.EOF,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			segmentSize = tc.segmentSize
-
 			tl := &testLangos{
 				reader: strings.NewReader(testData),
 			}
-			l := newLangos(tl)
+			l := newLangos(tl, tc.peekSize)
 			defer l.Close()
 
-			b := make([]byte, segmentSize)
+			b := make([]byte, tc.peekSize)
 			var err error
 			for i := 1; i <= tc.numReads; i++ {
 				var wantErr error
@@ -64,11 +58,11 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 				if err != wantErr {
 					t.Fatalf("got read #%v error %v, want %v", i, err, wantErr)
 				}
-				end := i * segmentSize
+				end := i * tc.peekSize
 				if end > len(testData) {
 					end = len(testData)
 				}
-				want := testData[(i-1)*segmentSize : end]
+				want := testData[(i-1)*tc.peekSize : end]
 				if l := len(want); l != n {
 					t.Fatalf("got read count #%v %v, want %v", i, n, l)
 				}
@@ -90,13 +84,14 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 }
 
 func TestLangosCallsPeek(t *testing.T) {
+	peekSize := 128
 	rdr := strings.NewReader("sometestdata")
 	tl := &testLangos{
 		reader: rdr,
 	}
-	l := newLangos(tl)
+	l := newLangos(tl, peekSize)
 
-	b := make([]byte, segmentSize)
+	b := make([]byte, peekSize)
 	_, err := l.Read(b)
 	if err != nil {
 		t.Fatal(err)
