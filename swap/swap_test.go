@@ -308,8 +308,10 @@ func testChequesByPeerAndType(t *testing.T, s *Swap, expectedCheques map[enode.I
 
 // TestPeerCheques verifies that sent and received cheques data for a given peer is correct
 func TestPeerCheques(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	// add peer
@@ -458,8 +460,10 @@ func testChequeFailure(t *testing.T, chequeFunction func(enode.ID) (*Cheque, err
 
 // Test getting sent cheques for all known peers
 func TestSentCheques(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	// check sent cheques are empty
@@ -548,8 +552,10 @@ func testReceivedCheque(t *testing.T, s *Swap, id enode.ID, expectedReceivedCheq
 
 // Test getting received cheques for all known peers
 func TestReceivedCheques(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	// check received cheques are empty
