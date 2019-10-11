@@ -140,8 +140,7 @@ func (l *Langos) ReadAt(p []byte, off int64) (int, error) {
 // and notifies the Read method that the peek is done.
 func (l *Langos) peek(offset int64) {
 	log.Debug("langos peek", "offset", offset, "peekReadSize", l.peekReadSize, "peekErr", l.peekErr)
-	buf := make([]byte, len(l.peekBuf))
-	n, err := l.r.ReadAt(buf, offset)
+	n, err := l.r.ReadAt(l.peekBuf, offset)
 	log.Debug("langos peek ReadAt returned", "offset", offset, "n", n, "err", l.peekErr)
 
 	l.mu.Lock()
@@ -149,7 +148,6 @@ func (l *Langos) peek(offset int64) {
 	// to disregard this peek result
 	if l.cursor == offset {
 		l.cursor += int64(n)
-		l.peekBuf = buf
 		l.peekReadSize = n
 		l.peekErr = err
 	} else {
