@@ -494,7 +494,6 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 
 // PeerCheques returns the last sent and received cheques for a given peer
 func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
-	//peerCheques := make(map[string]*Cheque)
 	var sentCheque, receivedCheque *Cheque
 
 	swapPeer := s.getPeer(peer)
