@@ -99,9 +99,9 @@ func TestHTTPRangeResponse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
 
 		got, err := ioutil.ReadAll(res.Body)
+		res.Body.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
