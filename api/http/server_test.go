@@ -74,10 +74,18 @@ func TestGetTagUsingHash(t *testing.T) {
 
 	// upload a file
 	data := testutil.RandomBytes(1, 10000)
-	resp, err := http.Post(fmt.Sprintf("%s/bzz-raw:/", srv.URL), "text/plain", bytes.NewReader(data))
+
+	req, err := http.NewRequest("POST", srv.URL+"/bzz-raw:/", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Add(AnonymousHeaderName, "true")
+	req.Header.Add("Content-Type", "text/plain")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
@@ -118,6 +126,10 @@ func TestGetTagUsingHash(t *testing.T) {
 
 	if tag.TotalCounter() != 4 {
 		t.Fatalf("retrieved total tag count mismatch, expected %x, got %x", 4, tag.TotalCounter())
+	}
+
+	if tag.Anonymous != true {
+		t.Fatalf("expected tag anonymous field to be %t but got %t", true, tag.Anonymous)
 	}
 
 	if !strings.HasPrefix(tag.Name, "unnamed_tag_") {
@@ -1222,7 +1234,7 @@ func TestGet(t *testing.T) {
 			method:             "GET",
 			headers:            map[string]string{"Accept": "text/html"},
 			expectedStatusCode: http.StatusOK,
-			assertResponseBody: "Swarm provides censorship resistant storage and communication infrastructure for a sovereign digital society",
+			assertResponseBody: "Censorship resistant storage and communication infrastructure for a sovereign digital society.",
 			verbose:            false,
 		},
 		{
@@ -1454,8 +1466,7 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("Content-Type", "application/x-tar")
-	client := &http.Client{}
-	serverResponse, err := client.Do(req)
+	serverResponse, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1496,7 +1507,7 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		serverResponse, err := client.Do(req)
+		serverResponse, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
