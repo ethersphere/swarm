@@ -53,8 +53,8 @@ type Langos struct {
 }
 
 // NewLangos bakes a new yummy langos that peeks
-// on provider reader when its Read or Seek methods are called.
-// Argument peekSize sets the length of peeks.
+// on provider reader when its Read method is called.
+// Argument peekSize defines the length of peeks.
 func NewLangos(r Reader, peekSize int) *Langos {
 	return &Langos{
 		reader:  r,
@@ -86,7 +86,7 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 			return n, err
 		}
 		l.cursor = int64(n)
-		l.peekDone = make(chan struct{})
+		l.peekDone = make(chan struct{}, 1)
 
 		// peek for the second read
 		go l.peek(l.cursor)
