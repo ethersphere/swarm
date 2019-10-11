@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
 	"time"
@@ -91,13 +92,14 @@ func (cd *ChunkDelivery) Price() *protocols.Price {
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
-	mtx      sync.RWMutex
-	netStore *storage.NetStore
-	kad      *network.Kademlia
-	peers    map[enode.ID]*Peer
-	spec     *protocols.Spec
-	logger   log.Logger
-	quit     chan struct{}
+	mtx      sync.RWMutex       // protect peer map
+	netStore *storage.NetStore  // netstore
+	kad      *network.Kademlia  // kademlia
+	peers    map[enode.ID]*Peer // compatible peers
+	spec     *protocols.Spec    // protocol spec
+	logger   log.Logger         // custom logger to append a basekey
+	baseKey  []byte             // this node's base address
+	quit     chan struct{}      // shutdown channel
 }
 
 // New returns a new instance of the retrieval protocol handler
@@ -409,6 +411,7 @@ FINDPEER:
 	}
 
 	ret := &RetrieveRequest{
+		Ruid: uint(rand.Uint32()),
 		Addr: req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID)
