@@ -83,16 +83,14 @@ type Params struct {
 // newSwapLogger returns a new logger for standard swap logs
 func newSwapLogger(logPath string, overlayAddr []byte) log.SwapLogger {
 	swapLogger := log.NewSwapLogger(hex.EncodeToString(overlayAddr)[:16])
-	//TODO: FIX THIS
-	//setLoggerHandler(logPath, swapLogger.GetLogger())
+	setLoggerHandler(logPath, swapLogger.GetLogger())
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) log.SwapLogger {
-	peerLogger := log.NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16]) //log.New("swaplog", "*", "base", hex.EncodeToString(s.params.OverlayAddr)[:16], "peer", peerID.String()[:16])
-	//TODO: FIX THIS
-	//setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
+	peerLogger := log.NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
+	setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
 	return peerLogger
 }
 
