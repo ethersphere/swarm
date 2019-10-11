@@ -23,6 +23,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 )
 
+// Reader contains all methods that Langos needs to read data from.
 type Reader interface {
 	io.ReadSeeker
 	io.ReaderAt
@@ -62,10 +63,16 @@ func NewLangos(r Reader, peekSize int) *Langos {
 	}
 }
 
+// NewBufferedLangos wraps a new Langos with BufferedReadSeeker
+// and returns it.
 func NewBufferedLangos(r Reader, bufferSize int) Reader {
 	return NewBufferedReadSeeker(NewLangos(r, bufferSize), bufferSize)
 }
 
+// Read copies the data to the provided byte slice starting from the
+// current read position. The first read will wait for the underlaying
+// Reader to return all the data and start a peek on the next data segment.
+// All sequential reads will wait for peek to finish reading the data.
 func (l *Langos) Read(p []byte) (n int, err error) {
 	log.Debug("langos Read", "cursor", l.cursor)
 
@@ -102,6 +109,9 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 	}
 }
 
+// Seek moves the Read cursor to a specific position
+// and it starts a new peek on that position assuming
+// that the Read method call will follow.
 func (l *Langos) Seek(offset int64, whence int) (int64, error) {
 	n, err := l.r.Seek(offset, whence)
 	if err != nil {
@@ -120,10 +130,13 @@ func (l *Langos) Seek(offset int64, whence int) (int64, error) {
 	return n, err
 }
 
+// ReadAt reads the data on offset and does not add any optimizations.
 func (l *Langos) ReadAt(p []byte, off int64) (int, error) {
 	return l.r.ReadAt(p, off)
 }
 
+// peek fills the peek buffer with data from offset by. It sets the current read position (cursor)
+// and notifies the Read method that the peek is done.
 func (l *Langos) peek(offset int64) {
 	log.Debug("langos peek", "offset", offset, "peekReadSize", l.peekReadSize, "peekErr", l.peekErr)
 	n, err := l.r.ReadAt(l.peekBuf, offset)
@@ -132,17 +145,18 @@ func (l *Langos) peek(offset int64) {
 	// protect cursor from Seek method call
 	// in different goroutine
 	l.cursorMu.Lock()
-	defer l.cursorMu.Unlock()
-
 	// check if seek has been called
 	// to disregard this peek result
 	if l.cursor != offset {
+		l.cursorMu.Unlock()
 		return
 	}
 
+	l.cursor += int64(n)
 	l.peekReadSize = n
 	l.peekErr = err
-	l.cursor += int64(n)
+
+	l.cursorMu.Unlock()
 
 	select {
 	// allow the Read method to return a copy of current peekBuf
@@ -151,6 +165,8 @@ func (l *Langos) peek(offset int64) {
 	}
 }
 
+// Close terminates any possible peek goroutines and unblocks Read method calls
+// that are waiting for peek to finish.
 func (l *Langos) Close() (err error) {
 	l.closeOnce.Do(func() {
 		close(l.closed)
