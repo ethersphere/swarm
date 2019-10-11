@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package swap
 
@@ -23,6 +23,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -63,8 +64,6 @@ var (
 	beneficiaryAddress = crypto.PubkeyToAddress(beneficiaryKey.PublicKey)
 	testChequeSig      = common.Hex2Bytes("a53e7308bb5590b45cabf44538508ccf1760b53eea721dd50bfdd044547e38b412142da9f3c690a940d6ee390d3f365a38df02b2688cea17f303f6de01268c2e1c")
 	testChequeContract = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8378dD3bcfEDD") // second contract created by ownerKey
-	gasLimit           = uint64(8000000)
-	testBackend        *swapTestBackend
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
@@ -86,15 +85,12 @@ type swapTestBackend struct {
 func init() {
 	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
-
-	// create a single backend for all tests
-	testBackend = newTestBackend()
-	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
-	testBackend.Commit()
+	swapLog = log.Root()
 }
 
 // newTestBackend creates a new test backend instance
 func newTestBackend() *swapTestBackend {
+	gasLimit := uint64(8000000)
 	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
 		ownerAddress:       {Balance: big.NewInt(1000000000000000000)},
 		beneficiaryAddress: {Balance: big.NewInt(1000000000000000000)},
@@ -145,7 +141,7 @@ func TestPeerBalance(t *testing.T) {
 // Test getting balances for all known peers
 func TestAllBalances(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	balances, err := swap.Balances()
@@ -191,7 +187,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 // TestSentCheque verifies that sent cheques data is correctly obtained
 func TestSentCheque(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// test cheque addition for peer
@@ -278,7 +274,7 @@ func TestSentCheque(t *testing.T) {
 // TestReceivedCheque verifies that received cheques data is correctly obtained
 func TestReceivedCheque(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// test cheque addition for peer
@@ -365,7 +361,7 @@ func TestReceivedCheque(t *testing.T) {
 // Test getting cheques for all known peers
 func TestAllCheques(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	sentCheques, err := swap.SentCheques()
@@ -512,7 +508,7 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 // Test the correct storing of peer balances through the store after node balance updates
 func TestStoreBalances(t *testing.T) {
 	// create a test swap account
-	s, clean := newTestSwap(t, ownerKey)
+	s, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// modify balances both in memory and in store
@@ -559,7 +555,7 @@ func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalanc
 // Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	var bookings []booking
@@ -738,6 +734,7 @@ func TestStartChequebookFailure(t *testing.T) {
 	type chequebookConfig struct {
 		passIn        common.Address
 		expectedError error
+		testBackend   *swapTestBackend
 	}
 
 	var config chequebookConfig
@@ -755,7 +752,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
-				swap, clean := newTestSwap(t, ownerKey)
+				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
 				err := testDeploy(context.TODO(), swap)
@@ -782,7 +779,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
-				swap, clean := newTestSwap(t, ownerKey)
+				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// try to connect with an address not containing a chequebook instance
 				_, err := swap.StartChequebook(config.passIn, 0)
@@ -793,7 +790,10 @@ func TestStartChequebookFailure(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			testBackend := newTestBackend()
+			defer testBackend.Close()
 			tc.configure(&config)
+			config.testBackend = testBackend
 			if tc.check != nil {
 				tc.check(t, &config)
 			}
@@ -804,13 +804,13 @@ func TestStartChequebookFailure(t *testing.T) {
 func TestStartChequebookSuccess(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
-		check func(*testing.T)
+		check func(*testing.T, *swapTestBackend)
 	}{
 		{
 			name: "with same pass in as previously used",
-			check: func(t *testing.T) {
+			check: func(t *testing.T, testBackend *swapTestBackend) {
 				// create SWAP
-				swap, clean := newTestSwap(t, ownerKey)
+				swap, clean := newTestSwap(t, ownerKey, testBackend)
 				defer clean()
 
 				// deploy a chequebook
@@ -834,9 +834,9 @@ func TestStartChequebookSuccess(t *testing.T) {
 		},
 		{
 			name: "with correct pass in",
-			check: func(t *testing.T) {
+			check: func(t *testing.T, testBackend *swapTestBackend) {
 				// create SWAP
-				swap, clean := newTestSwap(t, ownerKey)
+				swap, clean := newTestSwap(t, ownerKey, testBackend)
 				defer clean()
 
 				// deploy a chequebook
@@ -859,8 +859,10 @@ func TestStartChequebookSuccess(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			testBackend := newTestBackend()
+			defer testBackend.Close()
 			if tc.check != nil {
-				tc.check(t)
+				tc.check(t, testBackend)
 			}
 		})
 	}
@@ -868,7 +870,9 @@ func TestStartChequebookSuccess(t *testing.T) {
 
 //TestDisconnectThreshold tests that the disconnect threshold is reached when adding the DefaultDisconnectThreshold amount to the peers balance
 func TestDisconnectThreshold(t *testing.T) {
-	swap, clean := newTestSwap(t, ownerKey)
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 	testPeer := newDummyPeer()
 	testDeploy(context.Background(), swap)
@@ -882,7 +886,9 @@ func TestDisconnectThreshold(t *testing.T) {
 
 //TestPaymentThreshold tests that the payment threshold is reached when subtracting the DefaultPaymentThreshold amount from the peers balance
 func TestPaymentThreshold(t *testing.T) {
-	swap, clean := newTestSwap(t, ownerKey)
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 	testDeploy(context.Background(), swap)
 	testPeer := newDummyPeerWithSpec(Spec)
@@ -906,9 +912,11 @@ func TestPaymentThreshold(t *testing.T) {
 // `handleEmitChequeMsg` in order to simulate a roundtrip
 // and see that both have reset the balance correctly
 func TestResetBalance(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 	// create both test swap accounts
-	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey)
-	debitorSwap, clean2 := newTestSwap(t, ownerKey)
+	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey, testBackend)
+	debitorSwap, clean2 := newTestSwap(t, ownerKey, testBackend)
 	defer clean1()
 	defer clean2()
 
@@ -1056,7 +1064,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	// create a test swap account
-	swap, testDir := newBaseTestSwap(t, ownerKey)
+	swap, testDir := newBaseTestSwap(t, ownerKey, nil)
 	defer os.RemoveAll(testDir)
 
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
@@ -1094,10 +1102,10 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 // causing subsequent TX to possibly fail due to nonce mismatch
 func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	cashCheque(s, otherSwap, opts, cheque)
-	// close the channel, signals to clients that this function actually finished
+	// send to the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
 		if stb.cashDone != nil {
-			close(stb.cashDone)
+			stb.cashDone <- struct{}{}
 		}
 	}
 }
@@ -1119,7 +1127,7 @@ func newDefaultParams(t *testing.T) *Params {
 }
 
 // newBaseTestSwapWithParams creates a swap with the given params
-func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Params) (*Swap, string) {
+func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Params, backend *swapTestBackend) (*Swap, string) {
 	t.Helper()
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
@@ -1132,23 +1140,23 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
-	swap := newSwapInstance(stateStore, owner, testBackend, params)
+	swap := newSwapInstance(stateStore, owner, backend, params)
 	return swap, dir
 }
 
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
-func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, string) {
+func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) (*Swap, string) {
 	params := newDefaultParams(t)
-	return newBaseTestSwapWithParams(t, key, params)
+	return newBaseTestSwapWithParams(t, key, params, backend)
 }
 
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
 // returns a cleanup function
-func newTestSwap(t *testing.T, key *ecdsa.PrivateKey) (*Swap, func()) {
+func newTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) (*Swap, func()) {
 	t.Helper()
-	swap, dir := newBaseTestSwap(t, key)
+	swap, dir := newBaseTestSwap(t, key, backend)
 	clean := func() {
 		swap.Close()
 		os.RemoveAll(dir)
@@ -1235,7 +1243,7 @@ func TestChequeSigHash(t *testing.T) {
 // tests if signContent computes the correct signature
 func TestSignContent(t *testing.T) {
 	// setup test swap object
-	swap, clean := newTestSwap(t, ownerKey)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	expectedCheque := newTestCheque()
@@ -1299,7 +1307,9 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 
 // tests if TestValidateCode accepts an address with the correct bytecode
 func TestValidateCode(t *testing.T) {
-	swap, clean := newTestSwap(t, ownerKey)
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	// deploy a new swap contract
@@ -1308,8 +1318,6 @@ func TestValidateCode(t *testing.T) {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
-	testBackend.Commit()
-
 	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
@@ -1317,7 +1325,9 @@ func TestValidateCode(t *testing.T) {
 
 // tests if ValidateCode rejects an address with different bytecode
 func TestValidateWrongCode(t *testing.T) {
-	swap, clean := newTestSwap(t, ownerKey)
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	opts := bind.NewKeyedTransactor(ownerKey)
@@ -1358,10 +1368,12 @@ func setupContractTest() func() {
 // and immediately try to cash-in the cheque
 // afterwards it attempts to cash-in a bouncing cheque
 func TestContractIntegration(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 
 	log.Debug("creating test swap")
 
-	issuerSwap, clean := newTestSwap(t, ownerKey)
+	issuerSwap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 
 	issuerSwap.owner.address = ownerAddress
@@ -1396,7 +1408,6 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("cash-in the cheque")
 
 	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
-	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1428,7 +1439,6 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("try to cash-in the bouncing cheque")
 	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
-	testBackend.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1443,7 +1453,13 @@ func TestContractIntegration(t *testing.T) {
 // when testing, we don't need to wait for a transaction to be mined
 func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
 
-	testBackend.Commit()
+	var stb *swapTestBackend
+	var ok bool
+	if stb, ok = backend.(*swapTestBackend); !ok {
+		return nil, errors.New("not the expected test backend")
+	}
+	stb.Commit()
+
 	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
 	if err != nil {
 		return nil, err
@@ -1461,15 +1477,21 @@ func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	if err != nil {
 		return err
 	}
-	testBackend.Commit()
-	return nil
+	var stb *swapTestBackend
+	var ok bool
+	if stb, ok = swap.backend.(*swapTestBackend); !ok {
+		return errors.New("not the expected test backend")
+	}
+	stb.Commit()
+
+	return err
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
 // the owner of this swap is the beneficiaryAddress
 // hence the owner of this swap would sign cheques with beneficiaryKey and receive cheques from ownerKey (or another party) which is NOT the owner of this swap
 func newTestSwapAndPeer(t *testing.T, key *ecdsa.PrivateKey) (*Swap, *Peer, func()) {
-	swap, clean := newTestSwap(t, key)
+	swap, clean := newTestSwap(t, key, nil)
 	// owner address is the beneficiary (counterparty) for the peer
 	// that's because we expect cheques we receive to be signed by the address we would issue cheques to
 	peer, err := swap.addPeer(newDummyPeer().Peer, ownerAddress, testChequeContract)
@@ -1601,6 +1623,9 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 
 // TestPeerProcessAndVerifyCheque tests that processAndVerifyCheque accepts a valid cheque and also saves it
 func TestPeerProcessAndVerifyCheque(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
@@ -1643,6 +1668,9 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 // then it processes a valid cheque
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
@@ -1696,10 +1724,12 @@ func TestSwapLogToFile(t *testing.T) {
 	params := newDefaultParams(t)
 	params.LogPath = logDirDebitor
 
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 	// create both test swap accounts
-	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey)
+	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
 	// we are only checking one of the two nodes for logs
-	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params)
+	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params, testBackend)
 
 	clean := func() {
 		creditorSwap.Close()

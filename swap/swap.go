@@ -304,6 +304,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
+		log.Error("error processing and verifying cheque", "err", err)
 		return err
 	}
 
@@ -313,11 +314,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	if err := p.updateBalance(-int64(cheque.Honey)); err != nil {
+		log.Error("error updating balance", "err", err)
 		return err
 	}
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
+		log.Error("error getting contract", "err", err)
 		return err
 	}
 
