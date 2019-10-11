@@ -22,11 +22,16 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethersphere/swarm/api/http/langos"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 	testData := "sometestdata" // len 12
@@ -94,8 +99,8 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 				// so that it can be counted
 				time.Sleep(10 * time.Millisecond)
 			}
-			if tl.readCount != tc.expReads {
-				t.Fatalf("expected %d call to read func, got %d", tc.expReads, tl.readCount)
+			if readCount := tl.ReadCount(); readCount != tc.expReads {
+				t.Fatalf("expected %d call to read func, got %d", tc.expReads, readCount)
 			}
 		})
 	}
@@ -114,8 +119,8 @@ func TestLangosCallsPeek(t *testing.T) {
 	exp := 2
 	// wait for the peek goroutine to finish
 	time.Sleep(5 * time.Millisecond)
-	if tl.readCount != exp {
-		t.Fatalf("expected %d call to peek func, got %d", exp, tl.readCount)
+	if readCount := tl.ReadCount(); readCount != exp {
+		t.Fatalf("expected %d call to read func, got %d", exp, readCount)
 	}
 }
 
@@ -123,6 +128,7 @@ func TestLangosCallsPeek(t *testing.T) {
 type counterReader struct {
 	langos.Reader
 	readCount int
+	mu        sync.Mutex
 }
 
 func newCounterReader(r langos.Reader) (c *counterReader) {
@@ -132,13 +138,23 @@ func newCounterReader(r langos.Reader) (c *counterReader) {
 }
 
 func (l *counterReader) Read(p []byte) (n int, err error) {
+	l.mu.Lock()
 	l.readCount++
+	l.mu.Unlock()
 	return l.Reader.Read(p)
 }
 
 func (l *counterReader) ReadAt(p []byte, off int64) (int, error) {
+	l.mu.Lock()
 	l.readCount++
+	l.mu.Unlock()
 	return l.Reader.ReadAt(p, off)
+}
+
+func (l *counterReader) ReadCount() (c int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.readCount
 }
 
 // BenchmarkDelayedReaders performs benchmarks on reader with deterministic
@@ -151,9 +167,9 @@ func (l *counterReader) ReadAt(p []byte, off int64) (int, error) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkDelayedReaders/direct-8         	      26	  42100337 ns/op	33552507 B/op	      15 allocs/op
-// BenchmarkDelayedReaders/buffered-8       	      42	  28179546 ns/op	33552422 B/op	      15 allocs/op
-// BenchmarkDelayedReaders/langos-8         	     135	   8683426 ns/op	33685612 B/op	    1380 allocs/op
+// BenchmarkDelayedReaders/direct-8         	      28	  37567637 ns/op	33552546 B/op	      18 allocs/op
+// BenchmarkDelayedReaders/buffered-8       	      42	  29522968 ns/op	33683760 B/op	      21 allocs/op
+// BenchmarkDelayedReaders/langos-8         	     100	  14081131 ns/op	44393729 B/op	    1065 allocs/op
 // PASS
 // ok  	github.com/ethersphere/swarm/api/http/langos	6.356s
 func BenchmarkDelayedReaders(b *testing.B) {
@@ -175,35 +191,36 @@ func BenchmarkDelayedReaders(b *testing.B) {
 		0, 0,
 	}
 
-	reader := newDelayedReaderStatic(bytes.NewReader(data), delays)
-
 	for _, bc := range []struct {
-		name   string
-		reader langos.Reader
+		name      string
+		newReader func() langos.Reader
 	}{
 		{
-			name:   "direct",
-			reader: reader,
+			name: "direct",
+			newReader: func() langos.Reader {
+				return newDelayedReaderStatic(bytes.NewReader(data), delays)
+			},
 		},
 		{
-			name:   "buffered",
-			reader: langos.NewBufferedReadSeeker(reader, bufferSize),
+			name: "buffered",
+			newReader: func() langos.Reader {
+				return langos.NewBufferedReadSeeker(newDelayedReaderStatic(bytes.NewReader(data), delays), bufferSize)
+			},
 		},
 		{
-			name:   "langos",
-			reader: langos.NewBufferedLangos(reader, bufferSize),
+			name: "langos",
+			newReader: func() langos.Reader {
+				return langos.NewBufferedLangos(newDelayedReaderStatic(bytes.NewReader(data), delays), bufferSize)
+			},
 		},
 	} {
 		b.Run(bc.name, func(b *testing.B) {
+			b.StopTimer()
 			for i := 0; i < b.N; i++ {
 				b.StartTimer()
-				got, err := ioutil.ReadAll(bc.reader)
+				got, err := ioutil.ReadAll(bc.newReader())
 				b.StopTimer()
 
-				if err != nil {
-					b.Fatal(err)
-				}
-				_, err = bc.reader.Seek(0, io.SeekStart)
 				if err != nil {
 					b.Fatal(err)
 				}

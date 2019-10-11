@@ -43,11 +43,11 @@ type Reader interface {
 type Langos struct {
 	r            Reader        // reader needs to implement io.ReadSeeker and io.ReaderAt interfaces
 	cursor       int64         // current read position
-	cursorMu     sync.Mutex    // cursorMu protects cursor on concurrent peek goroutne
 	peekBuf      []byte        // peeked data
 	peekReadSize int           // peeked data length
 	peekErr      error         // error returned by ReadAt on peeking
 	peekDone     chan struct{} // signals that the peek is done so that Read can copy peekBuf data (set after the first Read)
+	mu           sync.Mutex    // mu protects cursor and peek fields on concurrent peek goroutne
 	closed       chan struct{} // terminates peek goroutine and unblocks Read method
 	closeOnce    sync.Once     // protects closed channel on multiple calls to Close method
 }
@@ -74,7 +74,7 @@ func NewBufferedLangos(r Reader, bufferSize int) Reader {
 // Reader to return all the data and start a peek on the next data segment.
 // All sequential reads will wait for peek to finish reading the data.
 func (l *Langos) Read(p []byte) (n int, err error) {
-	log.Debug("langos Read", "cursor", l.cursor)
+	//log.Debug("langos Read", "cursor", l.cursor)
 
 	// first read, no peeking happened before
 	if l.peekDone == nil {
@@ -86,7 +86,7 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 			return n, err
 		}
 		l.cursor = int64(n)
-		l.peekDone = make(chan struct{}, 1)
+		l.peekDone = make(chan struct{})
 
 		// peek for the second read
 		go l.peek(l.cursor)
@@ -96,14 +96,19 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 	// second and further Read calls are waiting for peeks to finish
 	select {
 	case <-l.peekDone:
+		l.mu.Lock()
 		if (l.peekErr == nil || l.peekErr == io.EOF) && l.peekReadSize > 0 {
 			copy(p, l.peekBuf[:l.peekReadSize])
 		}
+		n := l.peekReadSize
+		err := l.peekErr
+		l.mu.Unlock()
+
 		if l.peekErr != io.EOF {
 			// peek from the current cursor
 			go l.peek(l.cursor)
 		}
-		return l.peekReadSize, l.peekErr
+		return n, err
 	case <-l.closed:
 		return 0, io.EOF
 	}
@@ -120,13 +125,9 @@ func (l *Langos) Seek(offset int64, whence int) (int64, error) {
 
 	// protect cursor from peek method call
 	// in different goroutine
-	l.cursorMu.Lock()
+	l.mu.Lock()
 	l.cursor = n
-	l.cursorMu.Unlock()
-
-	// get the peek from the new cursor
-	// current peek result will be ignored
-	go l.peek(n)
+	l.mu.Unlock()
 	return n, err
 }
 
@@ -139,24 +140,23 @@ func (l *Langos) ReadAt(p []byte, off int64) (int, error) {
 // and notifies the Read method that the peek is done.
 func (l *Langos) peek(offset int64) {
 	log.Debug("langos peek", "offset", offset, "peekReadSize", l.peekReadSize, "peekErr", l.peekErr)
-	n, err := l.r.ReadAt(l.peekBuf, offset)
+	buf := make([]byte, len(l.peekBuf))
+	n, err := l.r.ReadAt(buf, offset)
 	log.Debug("langos peek ReadAt returned", "offset", offset, "n", n, "err", l.peekErr)
 
-	// protect cursor from Seek method call
-	// in different goroutine
-	l.cursorMu.Lock()
+	l.mu.Lock()
 	// check if seek has been called
 	// to disregard this peek result
-	if l.cursor != offset {
-		l.cursorMu.Unlock()
-		return
+	if l.cursor == offset {
+		l.cursor += int64(n)
+		l.peekBuf = buf
+		l.peekReadSize = n
+		l.peekErr = err
+	} else {
+		l.peekReadSize = 0
+		l.peekErr = nil
 	}
-
-	l.cursor += int64(n)
-	l.peekReadSize = n
-	l.peekErr = err
-
-	l.cursorMu.Unlock()
+	l.mu.Unlock()
 
 	select {
 	// allow the Read method to return a copy of current peekBuf
