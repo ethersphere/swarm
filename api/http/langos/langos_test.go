@@ -167,11 +167,9 @@ func (l *counterReader) ReadCount() (c int) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkDelayedReaders/direct-8         	      28	  37567637 ns/op	33552546 B/op	      18 allocs/op
-// BenchmarkDelayedReaders/buffered-8       	      42	  29522968 ns/op	33683760 B/op	      21 allocs/op
-// BenchmarkDelayedReaders/langos-8         	     100	  14081131 ns/op	44393729 B/op	    1065 allocs/op
-// PASS
-// ok  	github.com/ethersphere/swarm/api/http/langos	6.356s
+// BenchmarkDelayedReaders/direct-8         	      25	  40113969 ns/op	33552685 B/op	      18 allocs/op
+// BenchmarkDelayedReaders/buffered-8       	      40	  30294152 ns/op	33683763 B/op	      21 allocs/op
+// BenchmarkDelayedReaders/langos-8         	      86	  11935154 ns/op	33908081 B/op	     985 allocs/op
 func BenchmarkDelayedReaders(b *testing.B) {
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024

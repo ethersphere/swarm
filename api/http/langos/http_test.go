@@ -18,6 +18,7 @@ package langos_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +29,8 @@ import (
 	"github.com/ethersphere/swarm/api/http/langos"
 )
 
+// TestHTTPResponse validates that the langos returns correct data
+// over http test server and ServeContent function.
 func TestHTTPResponse(t *testing.T) {
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
@@ -55,14 +58,58 @@ func TestHTTPResponse(t *testing.T) {
 	}
 
 	if !bytes.Equal(got, data) {
-		diff := -1
-		for i, b := range got {
-			if data[i] != b {
-				diff = i
-				break
-			}
+		t.Fatalf("got invalid data (lengths: got %v, want %v)", len(got), len(data))
+	}
+}
+
+// TestHTTPResponse validates that the langos returns correct data
+// over http test server and ServeContent function for http range requests.
+func TestHTTPRangeResponse(t *testing.T) {
+	dataSize := 10 * 1024 * 1024
+	bufferSize := 4 * 32 * 1024
+
+	data := make([]byte, dataSize)
+	_, err := rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
+	}))
+	defer ts.Close()
+
+	for i := 0; i < 100; i++ {
+		req, err := http.NewRequest(http.MethodGet, ts.URL, nil)
+		if err != nil {
+			t.Fatal(err)
 		}
-		t.Fatalf("got invalid data (lengths: got %v, want %v) first diff byte %v", len(got), len(data), diff)
+
+		start := rand.Intn(dataSize)
+		end := rand.Intn(dataSize-start) + start
+		rangeHeader := fmt.Sprintf("bytes=%v-%v", start, end-1)
+		if i == 0 {
+			// test open ended range
+			end = dataSize
+			rangeHeader = fmt.Sprintf("bytes=%v-", start)
+		}
+		req.Header.Add("Range", rangeHeader)
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		got, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		want := data[start:end]
+		if !bytes.Equal(got, want) {
+			t.Fatalf("got invalid data for range %s (lengths: got %v, want %v)", rangeHeader, len(got), len(want))
+		}
 	}
 }
 
@@ -72,9 +119,9 @@ func TestHTTPResponse(t *testing.T) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkHTTPDelayedReaders/direct-8         	       8	 126111229 ns/op	 8390281 B/op	      26 allocs/op
-// BenchmarkHTTPDelayedReaders/buffered-8       	      38	  28728935 ns/op	 8389167 B/op	      22 allocs/op
-// BenchmarkHTTPDelayedReaders/langos-8         	     337	   3613795 ns/op	10359908 B/op	     213 allocs/op
+// BenchmarkHTTPDelayedReaders/direct-8         	       8	 127489432 ns/op	 8390421 B/op	      26 allocs/op
+// BenchmarkHTTPDelayedReaders/buffered-8       	      38	  28823581 ns/op	 8388504 B/op	      20 allocs/op
+// BenchmarkHTTPDelayedReaders/langos-8         	     397	   3409622 ns/op	 8406115 B/op	     201 allocs/op
 func BenchmarkHTTPDelayedReaders(b *testing.B) {
 	dataSize := 2 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
