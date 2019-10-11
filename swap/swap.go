@@ -35,10 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/log"
+	l "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	log "github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
@@ -62,7 +63,7 @@ type Swap struct {
 	params           *Params            // economic and operational parameters
 	contract         swap.Contract      // reference to the smart contract
 	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
-	logger           log.Logger         // logger for swap related messages and audit trail
+	logger           log.SwapLogger     // logger for swap related messages and audit trail
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -81,23 +82,23 @@ type Params struct {
 }
 
 // newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, overlayAddr []byte) log.Logger {
-	swapLogger := log.New("swaplog", "*", "base", hex.EncodeToString(overlayAddr)[:16])
-	setLoggerHandler(logPath, swapLogger)
+func newSwapLogger(logPath string, overlayAddr []byte) log.SwapLogger {
+	swapLogger := log.NewSwapLogger(hex.EncodeToString(overlayAddr)[:16])
+	setLoggerHandler(logPath, swapLogger.GetLogger())
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
-func newPeerLogger(s *Swap, peerID enode.ID) log.Logger {
-	peerLogger := log.New("swaplog", "*", "base", hex.EncodeToString(s.params.OverlayAddr)[:16], "peer", peerID.String()[:16])
-	setLoggerHandler(s.params.LogPath, peerLogger)
+func newPeerLogger(s *Swap, peerID enode.ID) log.SwapLogger {
+	peerLogger := log.NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16]) //log.New("swaplog", "*", "base", hex.EncodeToString(s.params.OverlayAddr)[:16], "peer", peerID.String()[:16])
+	setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
 	return peerLogger
 }
 
 // setLoggerHandler will set the logger handle to write logs to the specified path
 // or use the default swarm logger in case this isn't specified or an error occurs
-func setLoggerHandler(logpath string, logger log.Logger) {
-	lh := log.Root().GetHandler()
+func setLoggerHandler(logpath string, logger l.Logger) {
+	lh := l.Root().GetHandler()
 
 	if logpath == "" {
 		logger.SetHandler(lh)
@@ -114,24 +115,24 @@ func setLoggerHandler(logpath string, logger log.Logger) {
 	}
 
 	// filter messages with the correct log level for swap
-	rfh = log.LvlFilterHandler(log.Lvl(swapLogLevel), rfh)
+	rfh = l.LvlFilterHandler(l.Lvl(swapLogLevel), rfh)
 
 	// dispatch the logs to the default swarm log and also the filtered swap logger
-	logger.SetHandler(log.MultiHandler(lh, rfh))
+	logger.SetHandler(l.MultiHandler(lh, rfh))
 }
 
 // swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
 // the files are split based on the limit parameter expressed in bytes
-func swapRotatingFileHandler(logdir string) (log.Handler, error) {
-	return log.RotatingFileHandler(
+func swapRotatingFileHandler(logdir string) (l.Handler, error) {
+	return l.RotatingFileHandler(
 		logdir,
 		262144,
-		log.JSONFormatOrderedEx(false, true),
+		l.JSONFormatOrderedEx(false, true),
 	)
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, logger log.Logger) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, logger log.SwapLogger) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
@@ -156,6 +157,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
+	//swapLogger.SetLogAction(log.Action("connecting"))
 	swapLogger.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
@@ -206,7 +208,7 @@ const (
 )
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
-func checkChainID(currentChainID uint64, s state.Store, logger log.Logger) (err error) {
+func checkChainID(currentChainID uint64, s state.Store, logger log.SwapLogger) (err error) {
 	var connectedBlockchain uint64
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
