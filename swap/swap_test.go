@@ -925,7 +925,7 @@ func TestPaymentThreshold(t *testing.T) {
 	}
 
 	var cheque *Cheque
-	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
+	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
 	if cheque.CumulativePayout != DefaultPaymentThreshold {
 		t.Fatal()
 	}
@@ -982,6 +982,10 @@ func TestResetBalance(t *testing.T) {
 
 	// now simulate sending the cheque to the creditor from the debitor
 	creditor.sendCheque()
+
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
 	// the debitor should have already reset its balance
 	if creditor.getBalance() != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())

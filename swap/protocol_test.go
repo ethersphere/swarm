@@ -143,7 +143,7 @@ func TestEmitCheque(t *testing.T) {
 
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
-	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
+	dProtoPeer := protocols.NewPeer(dPtpPeer, &dummyMsgRW{}, Spec)
 	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
@@ -245,6 +245,10 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
+
 	// we should now have a cheque
 	if creditor.getLastSentCheque() == nil {
 		t.Fatal("Expected one cheque, but there is none")
@@ -265,6 +269,10 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	if err = debitorSwap.Add(-int64(DefaultPaymentThreshold), creditor.Peer); err != nil {
 		t.Fatal(err)
 	}
+
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
 
 	if creditor.getBalance() != 0 {
 		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())

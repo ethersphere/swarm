@@ -43,3 +43,7 @@ type HandshakeMsg struct {
 type EmitChequeMsg struct {
 	Cheque *Cheque
 }
+
+type ConfirmChequeMsg struct {
+	Cheque *Cheque
+}

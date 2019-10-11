@@ -40,6 +40,7 @@ type Peer struct {
 	contractAddress    common.Address
 	lastReceivedCheque *Cheque
 	lastSentCheque     *Cheque
+	pendingCheque      *Cheque
 	balance            int64
 	logger             log.Logger // logger for swap related messages and audit trail with peer identifier
 }
@@ -65,6 +66,11 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 	if peer.balance, err = s.loadBalance(p.ID()); err != nil {
 		return nil, err
 	}
+
+	if peer.pendingCheque, err = s.loadPendingCheque(p.ID()); err != nil {
+		return nil, err
+	}
+
 	return peer, nil
 }
 
@@ -76,6 +82,10 @@ func (p *Peer) getLastSentCheque() *Cheque {
 	return p.lastSentCheque
 }
 
+func (p *Peer) getPendingCheque() *Cheque {
+	return p.pendingCheque
+}
+
 func (p *Peer) setLastReceivedCheque(cheque *Cheque) error {
 	p.lastReceivedCheque = cheque
 	return p.swap.saveLastReceivedCheque(p.ID(), cheque)
@@ -84,6 +94,11 @@ func (p *Peer) setLastReceivedCheque(cheque *Cheque) error {
 func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	p.lastSentCheque = cheque
 	return p.swap.saveLastSentCheque(p.ID(), cheque)
+}
+
+func (p *Peer) setPendingCheque(cheque *Cheque) error {
+	p.pendingCheque = cheque
+	return p.swap.savePendingCheque(p.ID(), cheque)
 }
 
 func (p *Peer) getLastSentCumulativePayout() uint64 {
@@ -154,16 +169,18 @@ func (p *Peer) createCheque() (*Cheque, error) {
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
 func (p *Peer) sendCheque() error {
+	if p.getPendingCheque() != nil {
+		p.logger.Warn("old cheque still pending, resending cheque")
+		return p.Send(context.Background(), &EmitChequeMsg{
+			Cheque: p.getPendingCheque(),
+		})
+	}
 	cheque, err := p.createCheque()
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
-	if err := p.setLastSentCheque(cheque); err != nil {
-		return fmt.Errorf("error while storing the last cheque: %v", err)
-	}
-
-	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
+	if err = p.setPendingCheque(cheque); err != nil {
 		return err
 	}
 
