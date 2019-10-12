@@ -66,10 +66,9 @@ func (p *Peer) chunkReceived(ruid uint, addr storage.Address) error {
 	defer p.mtx.Unlock()
 	v, ok := p.openRetrievals[ruid]
 	if !ok {
-		return errors.New("unsolicited chunk delivery - cannot find ruid ruid")
+		return errors.New("unsolicited chunk delivery - cannot find ruid")
 	}
 	if !bytes.Equal(v.addr, addr) {
-		panic(2)
 		return errors.New("retrieve request found but address does not match")
 	}
 

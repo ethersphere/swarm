@@ -354,7 +354,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	if err != nil {
 		// log, measure then drop
 		unsolicitedChunkDelivery.Inc(1)
-		p.logger.Error("unsolicited chunk delivery from peer. dropping", "ruid", msg.Ruid, "addr", msg.Addr)
+		p.logger.Error("unsolicited chunk delivery from peer. dropping", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
 		p.Drop("unsolicited chunk delivery")
 		return
 	}
