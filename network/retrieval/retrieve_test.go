@@ -139,7 +139,6 @@ func TestChunkDelivery(t *testing.T) {
 
 // TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
 func TestUnsolicitedChunkDelivery(t *testing.T) {
-	t.Helper()
 	pk, ns, cleanup := newTestNetstore(t)
 	defer cleanup()
 	bzzAddr := network.PrivateKeyToBzzKey(pk)
@@ -154,9 +153,34 @@ func TestUnsolicitedChunkDelivery(t *testing.T) {
 
 	node := tester.Nodes[0]
 
-	// request a non existant chunk and expect disconnection
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("?123")})
-	if err == nil || err.Error() != "timed out waiting for peers to disconnect" {
+	// deliver with a RUID which cannot be found
+	tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "Non-existant RUID chunk delivery",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 0,
+					Msg: &ChunkDelivery{
+						Ruid:  1234,
+						Addr:  nil,
+						SData: nil,
+					},
+					Peer: node.ID(), //peerID,
+				},
+			},
+			//Expects: []p2ptest.Expect{
+			//{
+			//Code: 0,
+			//Msg: Handshake{
+			//ServeHeaders: serveHeadersPivot,
+			//},
+			//Peer: peerID,
+			//},
+			//},
+		})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+
+	if err != nil {
 		t.Fatal(err)
 	}
 }
