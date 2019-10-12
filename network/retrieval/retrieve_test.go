@@ -19,8 +19,10 @@ package retrieval
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -41,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
@@ -60,7 +64,7 @@ func init() {
 	testutil.Init()
 }
 
-// TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
+// TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them from the second node
 func TestChunkDelivery(t *testing.T) {
 	chunkCount := 10
 	filesize := chunkCount * 4096
@@ -130,6 +134,30 @@ func TestChunkDelivery(t *testing.T) {
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+}
+
+// TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
+func TestUnsolicitedChunkDelivery(t *testing.T) {
+	t.Helper()
+	pk, ns, cleanup := newTestNetstore(t)
+	defer cleanup()
+	bzzAddr := network.PrivateKeyToBzzKey(pk)
+
+	kad := network.NewKademlia(bzzAddr, network.NewKadParams())
+
+	tester, _, teardown, err := newRetrievalTester(t, pk, ns, kad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	node := tester.Nodes[0]
+
+	// request a non existant chunk and expect disconnection
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("?123")})
+	if err == nil || err.Error() != "timed out waiting for peers to disconnect" {
+		t.Fatal(err)
 	}
 }
 
@@ -401,3 +429,81 @@ func nodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig 
 
 	return conf
 }
+
+func newRetrievalTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, kad *network.Kademlia) (*p2ptest.ProtocolTester, *Retrieval, func(), error) {
+	t.Helper()
+
+	if prvkey == nil {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			t.Fatalf("Could not generate key")
+		}
+		prvkey = key
+	}
+
+	r := New(kad, netStore, kad.BaseAddr(), nil)
+	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, r.runProtocol)
+	teardown := func() {
+		protocolTester.Stop()
+	}
+
+	return protocolTester, r, teardown, nil
+}
+
+func newTestNetstore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, cleanup func()) {
+	prvkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("Could not generate key")
+	}
+
+	dir, err := ioutil.TempDir("", "localstore-")
+	if err != nil {
+		t.Fatalf("Could not create localStore temp dir")
+	}
+
+	bzzAddr := network.PrivateKeyToBzzKey(prvkey)
+	localStore, err := localstore.New(dir, bzzAddr, nil)
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatalf("Could not create localStore")
+	}
+
+	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
+
+	cleanup = func() {
+		err = netStore.Close()
+		if err != nil {
+			t.Fatalf("Could not close netStore")
+		}
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Fatalf("Could not remove localstore dir")
+		}
+	}
+	return prvkey, netStore, cleanup
+}
+
+//func handshakeExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, serveHeadersPeer, serveHeadersPivot bool) error {
+//return tester.TestExchanges(
+//p2ptest.Exchange{
+//Label: "Handshake",
+//Triggers: []p2ptest.Trigger{
+//{
+//Code: 0,
+//Msg: Handshake{
+//ServeHeaders: serveHeadersPeer,
+//},
+//Peer: peerID,
+//},
+//},
+//Expects: []p2ptest.Expect{
+//{
+//Code: 0,
+//Msg: Handshake{
+//ServeHeaders: serveHeadersPivot,
+//},
+//Peer: peerID,
+//},
+//},
+//})
+//}

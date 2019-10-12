@@ -44,14 +44,14 @@ type Peer struct {
 func NewPeer(peer *network.BzzPeer, baseKey []byte) *Peer {
 	return &Peer{
 		BzzPeer:        peer,
-		logger:         log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID()[:16]),
+		logger:         log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
 		openRetrievals: make(map[uint]retrieval),
 	}
 }
 
 // RetrievalRequested adds a new retrieval to the openRetrievals map
 // this is in order to block unsolicited chunk delivery attack
-func (p *Peer) RetrievalRequested(ruid uint, addr storage.Address) error {
+func (p *Peer) chunkRequested(ruid uint, addr storage.Address) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	ret := retrieval{
@@ -61,7 +61,7 @@ func (p *Peer) RetrievalRequested(ruid uint, addr storage.Address) error {
 	p.openRetrievals[ruid] = ret
 }
 
-func (p *Peer) RetrievalReceived(ruid uint, addr storage.Address) error {
+func (p *Peer) chunkReceived(ruid uint, addr storage.Address) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	v, ok := p.openRetrievals[ruid]

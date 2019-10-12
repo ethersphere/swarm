@@ -52,6 +52,7 @@ var (
 	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks_handled", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
 	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
+	unsolicitedChunkDelivery      = metrics.NewRegisteredCounter("network.retrieve.unsolicited_delivery", nil)
 
 	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
@@ -142,7 +143,7 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 
 // Run is being dispatched when 2 nodes connect
 func (r *Retrieval) Run(bp *network.BzzPeer) error {
-	sp := NewPeer(bp)
+	sp := NewPeer(bp, r.kad.BaseAddr())
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
@@ -330,6 +331,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	p.logger.Trace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
 
 	deliveryMsg := &ChunkDelivery{
+		Ruid:  msg.Ruid,
 		Addr:  chunk.Address(),
 		SData: chunk.Data(),
 	}
@@ -348,6 +350,14 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 // we treat the chunk as a chunk received in syncing
 func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
+	err := p.chunkReceived(msg.Ruid, msg.Addr)
+	if err != nil {
+		// log, measure then drop
+		unsolicitedChunkDelivery.Inc(1)
+		p.logger.Error("unsolicited chunk delivery from peer. dropping", "ruid", msg.Ruid, "addr", msg.Addr)
+		p.Drop("unsolicited chunk delivery")
+		return
+	}
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
@@ -373,7 +383,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	}
 	defer osp.Finish()
 
-	_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+	_, err = r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 	if err != nil {
 		p.logger.Error("netstore error putting chunk to localstore", "err", err)
 		if err == storage.ErrChunkInvalid {
@@ -420,6 +430,8 @@ FINDPEER:
 		protoPeer.logger.Error("error sending retrieve request to peer", "err", err)
 		return nil, err
 	}
+
+	protoPeer.chunkRequested(ret.Ruid, ret.Addr)
 
 	spID := protoPeer.ID()
 	return &spID, nil
