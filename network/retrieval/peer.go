@@ -27,30 +27,33 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
+// retrieval represents an open, ongoing retrieval sent to
+// a specific peer
 type retrieval struct {
 	ruid uint
 	addr storage.Address
 }
 
-// Peer wraps BzzPeer with a contextual logger for this peer
+// Peer wraps BzzPeer with a contextual logger and tracks open
+// retrievals for that peer
 type Peer struct {
-	mtx sync.Mutex
-	*network.BzzPeer
-	logger         log.Logger
-	openRetrievals map[uint]retrieval
+	mtx              sync.Mutex         // synchronize retrievals
+	*network.BzzPeer                    // bzzpeer
+	logger           log.Logger         // logger with base and peer address
+	retrievals       map[uint]retrieval // current ongoing retrievals
 }
 
 // NewPeer is the constructor for Peer
 func NewPeer(peer *network.BzzPeer, baseKey []byte) *Peer {
 	return &Peer{
-		BzzPeer:        peer,
-		logger:         log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
-		openRetrievals: make(map[uint]retrieval),
+		BzzPeer:    peer,
+		logger:     log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
+		retrievals: make(map[uint]retrieval),
 	}
 }
 
-// RetrievalRequested adds a new retrieval to the openRetrievals map
-// this is in order to block unsolicited chunk delivery attack
+// chunkRequested adds a new retrieval to the retrievals map
+// this is in order to identify unsolicited chunk deliveries
 func (p *Peer) chunkRequested(ruid uint, addr storage.Address) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -58,13 +61,15 @@ func (p *Peer) chunkRequested(ruid uint, addr storage.Address) {
 		ruid: ruid,
 		addr: addr,
 	}
-	p.openRetrievals[ruid] = ret
+	p.retrievals[ruid] = ret
 }
 
+// chunkReceived is called upon ChunkDelivery message reception
+// it is meant to idenfify unsolicited chunk deliveries
 func (p *Peer) chunkReceived(ruid uint, addr storage.Address) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	v, ok := p.openRetrievals[ruid]
+	v, ok := p.retrievals[ruid]
 	if !ok {
 		return errors.New("unsolicited chunk delivery - cannot find ruid")
 	}
@@ -72,7 +77,7 @@ func (p *Peer) chunkReceived(ruid uint, addr storage.Address) error {
 		return errors.New("retrieve request found but address does not match")
 	}
 
-	delete(p.openRetrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
+	delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
 
 	return nil
 }

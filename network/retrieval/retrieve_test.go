@@ -157,7 +157,7 @@ func TestUnsolicitedChunkDelivery(t *testing.T) {
 	// deliver with a RUID which cannot be found
 	tester.TestExchanges(
 		p2ptest.Exchange{
-			Label: "Non-existant RUID chunk delivery",
+			Label: "Non-existent RUID chunk delivery",
 			Triggers: []p2ptest.Trigger{
 				{
 					Code: 0,
@@ -171,6 +171,7 @@ func TestUnsolicitedChunkDelivery(t *testing.T) {
 			},
 		})
 
+	// expect peer disconnection
 	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
 
 	if err != nil {
@@ -652,28 +653,3 @@ func newTestNetstore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.
 	}
 	return prvkey, netStore, cleanup
 }
-
-//func handshakeExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, serveHeadersPeer, serveHeadersPivot bool) error {
-//return tester.TestExchanges(
-//p2ptest.Exchange{
-//Label: "Handshake",
-//Triggers: []p2ptest.Trigger{
-//{
-//Code: 0,
-//Msg: Handshake{
-//ServeHeaders: serveHeadersPeer,
-//},
-//Peer: peerID,
-//},
-//},
-//Expects: []p2ptest.Expect{
-//{
-//Code: 0,
-//Msg: Handshake{
-//ServeHeaders: serveHeadersPivot,
-//},
-//Peer: peerID,
-//},
-//},
-//})
-//}
