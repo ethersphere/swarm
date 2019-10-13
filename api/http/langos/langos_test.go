@@ -157,7 +157,7 @@ func (l *counterReader) ReadCount() (c int) {
 	return l.readCount
 }
 
-// BenchmarkDelayedReaders performs benchmarks on reader with deterministic
+// BenchmarkDelayedReaders performs benchmarks on reader with deterministic and random
 // delays on every Read method call. Function ioutil.ReadAll is used for reading.
 //
 //  - direct: a baseline on plain reader
@@ -167,48 +167,56 @@ func (l *counterReader) ReadCount() (c int) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkDelayedReaders/direct-8         	      25	  40113969 ns/op	33552685 B/op	      18 allocs/op
-// BenchmarkDelayedReaders/buffered-8       	      40	  30294152 ns/op	33683763 B/op	      21 allocs/op
-// BenchmarkDelayedReaders/langos-8         	      86	  11935154 ns/op	33908081 B/op	     985 allocs/op
+// BenchmarkDelayedReaders/static_direct-8         	      30	  38503210 ns/op	33552539 B/op	      18 allocs/op
+// BenchmarkDelayedReaders/static_buffered-8       	      39	  29507163 ns/op	33683761 B/op	      21 allocs/op
+// BenchmarkDelayedReaders/static_langos-8         	     100	  13844418 ns/op	33908072 B/op	     986 allocs/op
+// BenchmarkDelayedReaders/random_direct-8         	      10	 100159582 ns/op	33552472 B/op	      17 allocs/op
+// BenchmarkDelayedReaders/random_buffered-8       	      16	  63564268 ns/op	33683684 B/op	      20 allocs/op
+// BenchmarkDelayedReaders/random_langos-8         	      63	  16699836 ns/op	33907574 B/op	     983 allocs/op
 func BenchmarkDelayedReaders(b *testing.B) {
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
 
-	data := make([]byte, dataSize)
-	_, err := rand.Read(data)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	delays := []time.Duration{
-		2 * time.Millisecond,
-		0, 0, 0,
-		5 * time.Millisecond,
-		0, 0,
-		10 * time.Millisecond,
-		0, 0,
-	}
+	data := randomData(b, dataSize)
 
 	for _, bc := range []struct {
 		name      string
 		newReader func() langos.Reader
 	}{
 		{
-			name: "direct",
+			name: "static direct",
 			newReader: func() langos.Reader {
-				return newDelayedReaderStatic(bytes.NewReader(data), delays)
+				return newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays)
 			},
 		},
 		{
-			name: "buffered",
+			name: "static buffered",
 			newReader: func() langos.Reader {
-				return langos.NewBufferedReadSeeker(newDelayedReaderStatic(bytes.NewReader(data), delays), bufferSize)
+				return langos.NewBufferedReadSeeker(newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays), bufferSize)
 			},
 		},
 		{
-			name: "langos",
+			name: "static langos",
 			newReader: func() langos.Reader {
-				return langos.NewBufferedLangos(newDelayedReaderStatic(bytes.NewReader(data), delays), bufferSize)
+				return langos.NewBufferedLangos(newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays), bufferSize)
+			},
+		},
+		{
+			name: "random direct",
+			newReader: func() langos.Reader {
+				return newDelayedReader(bytes.NewReader(data), randomDelaysFunc)
+			},
+		},
+		{
+			name: "random buffered",
+			newReader: func() langos.Reader {
+				return langos.NewBufferedReadSeeker(newDelayedReader(bytes.NewReader(data), randomDelaysFunc), bufferSize)
+			},
+		},
+		{
+			name: "random langos",
+			newReader: func() langos.Reader {
+				return langos.NewBufferedLangos(newDelayedReader(bytes.NewReader(data), randomDelaysFunc), bufferSize)
 			},
 		},
 	} {
@@ -238,12 +246,12 @@ type delayedReader struct {
 	i int
 }
 
-// func newDelayedReader(r langos.Reader, f delayedReaderFunc) *delayedReader {
-// 	return &delayedReader{
-// 		Reader: r,
-// 		f:      f,
-// 	}
-// }
+func newDelayedReader(r langos.Reader, f delayedReaderFunc) *delayedReader {
+	return &delayedReader{
+		Reader: r,
+		f:      f,
+	}
+}
 
 func newDelayedReaderStatic(r langos.Reader, delays []time.Duration) *delayedReader {
 	l := len(delays)
@@ -259,4 +267,30 @@ func (d *delayedReader) Read(p []byte) (n int, err error) {
 	time.Sleep(d.f(d.i))
 	d.i++
 	return d.Reader.Read(p)
+}
+
+var (
+	defaultStaticDelays = []time.Duration{
+		2 * time.Millisecond,
+		0, 0, 0,
+		5 * time.Millisecond,
+		0, 0,
+		10 * time.Millisecond,
+		0, 0,
+	}
+	randomDelaysFunc = func(_ int) (delay time.Duration) {
+		// max delay 10ms
+		return time.Duration(rand.Intn(10 * int(time.Millisecond)))
+	}
+)
+
+func randomData(t testing.TB, size int) (data []byte) {
+	t.Helper()
+
+	data = make([]byte, size)
+	_, err := rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

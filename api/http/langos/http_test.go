@@ -35,11 +35,7 @@ func TestHTTPResponse(t *testing.T) {
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
 
-	data := make([]byte, dataSize)
-	_, err := rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := randomData(t, dataSize)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
@@ -119,48 +115,56 @@ func TestHTTPRangeResponse(t *testing.T) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkHTTPDelayedReaders/direct-8         	       8	 127489432 ns/op	 8390421 B/op	      26 allocs/op
-// BenchmarkHTTPDelayedReaders/buffered-8       	      38	  28823581 ns/op	 8388504 B/op	      20 allocs/op
-// BenchmarkHTTPDelayedReaders/langos-8         	     397	   3409622 ns/op	 8406115 B/op	     201 allocs/op
+// BenchmarkHTTPDelayedReaders/static_direct-8         	       8	 126790118 ns/op	 8390170 B/op	      25 allocs/op
+// BenchmarkHTTPDelayedReaders/static_buffered-8       	      46	  28732654 ns/op	 8388969 B/op	      21 allocs/op
+// BenchmarkHTTPDelayedReaders/static_langos-8         	     415	   2924194 ns/op	 8404185 B/op	     194 allocs/op
+// BenchmarkHTTPDelayedReaders/random_direct-8         	       3	 380645816 ns/op	 8389432 B/op	      24 allocs/op
+// BenchmarkHTTPDelayedReaders/random_buffered-8       	      12	  95311138 ns/op	 8389156 B/op	      22 allocs/op
+// BenchmarkHTTPDelayedReaders/random_langos-8         	     381	   3149494 ns/op	 8404111 B/op	     193 allocs/op
 func BenchmarkHTTPDelayedReaders(b *testing.B) {
 	dataSize := 2 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
 
-	data := make([]byte, dataSize)
-	_, err := rand.Read(data)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	delays := []time.Duration{
-		2 * time.Millisecond,
-		0, 0, 0,
-		5 * time.Millisecond,
-		0, 0,
-		10 * time.Millisecond,
-		0, 0,
-	}
+	data := randomData(b, dataSize)
 
 	for _, bc := range []struct {
 		name      string
 		newReader func() langos.Reader
 	}{
 		{
-			name: "direct",
+			name: "static direct",
 			newReader: func() langos.Reader {
-				return newDelayedReaderStatic(bytes.NewReader(data), delays)
+				return newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays)
 			},
 		},
 		{
-			name: "buffered",
+			name: "static buffered",
 			newReader: func() langos.Reader {
-				return langos.NewBufferedReadSeeker(newDelayedReaderStatic(bytes.NewReader(data), delays), bufferSize)
+				return langos.NewBufferedReadSeeker(newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays), bufferSize)
 			},
 		},
 		{
-			name: "langos",
+			name: "static langos",
 			newReader: func() langos.Reader {
-				return langos.NewBufferedLangos(newDelayedReaderStatic(bytes.NewReader(data), delays), bufferSize)
+				return langos.NewBufferedLangos(newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays), bufferSize)
+			},
+		},
+		{
+			name: "random direct",
+			newReader: func() langos.Reader {
+				return newDelayedReader(bytes.NewReader(data), randomDelaysFunc)
+			},
+		},
+		{
+			name: "random buffered",
+			newReader: func() langos.Reader {
+				return langos.NewBufferedReadSeeker(newDelayedReader(bytes.NewReader(data), randomDelaysFunc), bufferSize)
+			},
+		},
+		{
+			name: "random langos",
+			newReader: func() langos.Reader {
+				return langos.NewBufferedLangos(newDelayedReader(bytes.NewReader(data), randomDelaysFunc), bufferSize)
 			},
 		},
 	} {
