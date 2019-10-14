@@ -1718,7 +1718,7 @@ func TestSwapLogToFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//defer os.RemoveAll(logDirDebitor)
+	defer os.RemoveAll(logDirDebitor)
 
 	// set the log dir to the params
 	params := newDefaultParams(t)
