@@ -106,17 +106,24 @@ func TestBalance(t *testing.T) {
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	// test for correct value
-	err := testPeer.setBalance(888)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// test for correct balance
+	setBalance(t, testPeer, 888)
 	b, err := swap.Balance(testPeer.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if b != 888 {
 		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
+	}
+
+	// test for correct balance after change
+	setBalance(t, testPeer, 777)
+	b, err = swap.Balance(testPeer.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b != 777 {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", 777, b)
 	}
 
 	// test for inexistent node
@@ -144,6 +151,15 @@ func TestBalance(t *testing.T) {
 	}
 }
 
+// sets the given balance for the given peer, fails if there are errors
+func setBalance(t *testing.T, p *Peer, balance int64) {
+	t.Helper()
+	err := p.setBalance(balance)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Test getting balances for all known peers
 func TestBalances(t *testing.T) {
 	// create a test swap account
@@ -157,6 +173,7 @@ func TestBalances(t *testing.T) {
 	testPeer := addPeer(t, swap)
 	testPeerID := testPeer.ID()
 
+	// test balances with one peer
 	setBalance(t, testPeer, 808)
 	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808})
 
@@ -164,21 +181,13 @@ func TestBalances(t *testing.T) {
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
+	// test balances with second peer
 	setBalance(t, testPeer2, 123)
 	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 123})
 
-	// test balance change for peer
+	// test balances after balance change for peer
 	setBalance(t, testPeer, 303)
 	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 123})
-}
-
-// sets the given balance for the given peer, fails if there are errors
-func setBalance(t *testing.T, p *Peer, balance int64) {
-	t.Helper()
-	err := p.setBalance(balance)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 // tests that a map of peerID:balance matches the result of the Balances function
