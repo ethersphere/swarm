@@ -85,7 +85,7 @@ type swapTestBackend struct {
 func init() {
 	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
-	auditLog = log.Root()
+	swapLog = log.Root()
 }
 
 // newTestBackend creates a new test backend instance
@@ -617,7 +617,7 @@ func TestNewSwapFailure(t *testing.T) {
 		t.Error(err)
 	}
 
-	params := newDefaultParams()
+	params := newDefaultParams(t)
 	chequebookAddress := testChequeContract
 	InitialDeposit := uint64(1)
 
@@ -1111,8 +1111,15 @@ func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, 
 }
 
 // newDefaultParams creates a set of default params for tests
-func newDefaultParams() *Params {
+func newDefaultParams(t *testing.T) *Params {
+	t.Helper()
+	baseKey := make([]byte, 32)
+	_, err := rand.Read(baseKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &Params{
+		OverlayAddr:         baseKey,
 		LogPath:             "",
 		PaymentThreshold:    int64(DefaultPaymentThreshold),
 		DisconnectThreshold: int64(DefaultDisconnectThreshold),
@@ -1132,15 +1139,15 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	}
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
-	auditLog = newLogger(params.LogPath)
-	swap := new(stateStore, owner, backend, params)
+	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
+	swap := newSwapInstance(stateStore, owner, backend, params)
 	return swap, dir
 }
 
 // create a test swap account with a backend
 // creates a stateStore for persistence and a Swap account
 func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) (*Swap, string) {
-	params := newDefaultParams()
+	params := newDefaultParams(t)
 	return newBaseTestSwapWithParams(t, key, params, backend)
 }
 
@@ -1714,7 +1721,7 @@ func TestSwapLogToFile(t *testing.T) {
 	defer os.RemoveAll(logDirDebitor)
 
 	// set the log dir to the params
-	params := newDefaultParams()
+	params := newDefaultParams(t)
 	params.LogPath = logDirDebitor
 
 	testBackend := newTestBackend()
@@ -1773,8 +1780,11 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	files, err := ioutil.ReadDir(logDirDebitor)
-	if err != nil || len(files) == 0 {
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("expected at least 1 file in the log directory, found none")
 	}
 
 	logFile := path.Join(logDirDebitor, files[0].Name())

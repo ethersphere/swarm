@@ -174,7 +174,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 
 // newSharedBackendSwaps pre-loads each simulated node account with "funds"
 // so that later in the simulation all operations have sufficient gas
-func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
+func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, error) {
 	params := &swapSimulationParams{
 		swaps:       make(map[int]*Swap),
 		dirs:        make(map[int]string),
@@ -213,10 +213,10 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend}
 	// finally, create all Swap instances for each node, which share the same backend
 	var owner *Owner
-	defParams := newDefaultParams()
+	defParams := newDefaultParams(t)
 	for i := 0; i < nodeCount; i++ {
 		owner = createOwner(keys[i])
-		params.swaps[i] = new(stores[i], owner, testBackend, defParams)
+		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, defParams)
 	}
 
 	params.backend = testBackend
@@ -230,7 +230,7 @@ func newSharedBackendSwaps(nodeCount int) (*swapSimulationParams, error) {
 func TestPingPongChequeSimulation(t *testing.T) {
 	nodeCount := 2
 	// create the shared backend and params
-	params, err := newSharedBackendSwaps(nodeCount)
+	params, err := newSharedBackendSwaps(t, nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +341,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 func TestMultiChequeSimulation(t *testing.T) {
 	nodeCount := 2
 	// create the shared backend and params
-	params, err := newSharedBackendSwaps(nodeCount)
+	params, err := newSharedBackendSwaps(t, nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +461,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 func TestBasicSwapSimulation(t *testing.T) {
 	nodeCount := 16
 	// create the shared backend and params
-	params, err := newSharedBackendSwaps(nodeCount)
+	params, err := newSharedBackendSwaps(t, nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
