@@ -66,11 +66,7 @@ func TestHTTPRangeResponse(t *testing.T) {
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
 
-	data := make([]byte, dataSize)
-	_, err := rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := randomData(t, dataSize)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
@@ -99,16 +95,10 @@ func TestHTTPRangeResponse(t *testing.T) {
 // TestHTTPMultipleRangeResponse validates that the langos returns correct data
 // over http test server and ServeContent function for http requests with multiple ranges.
 func TestHTTPMultipleRangeResponse(t *testing.T) {
-	t.Skip("failing")
-
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
 
-	data := make([]byte, dataSize)
-	_, err := rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := randomData(t, dataSize)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
@@ -135,7 +125,7 @@ func TestHTTPMultipleRangeResponse(t *testing.T) {
 				end = rand.Intn(dataSize-1-start) + start
 			}
 			if start == end {
-				break
+				continue
 			}
 			ranges = append(ranges, [2]int{start, end})
 			wantParts = append(wantParts, data[start:end+1])
