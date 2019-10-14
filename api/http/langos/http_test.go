@@ -233,12 +233,14 @@ func httpRangeRequest(t *testing.T, url, rangeHeader string) (parts [][]byte) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkHTTPDelayedReaders/static_direct-8         	       8	 126790118 ns/op	 8390170 B/op	      25 allocs/op
-// BenchmarkHTTPDelayedReaders/static_buffered-8       	      46	  28732654 ns/op	 8388969 B/op	      21 allocs/op
-// BenchmarkHTTPDelayedReaders/static_langos-8         	     415	   2924194 ns/op	 8404185 B/op	     194 allocs/op
-// BenchmarkHTTPDelayedReaders/random_direct-8         	       3	 380645816 ns/op	 8389432 B/op	      24 allocs/op
-// BenchmarkHTTPDelayedReaders/random_buffered-8       	      12	  95311138 ns/op	 8389156 B/op	      22 allocs/op
-// BenchmarkHTTPDelayedReaders/random_langos-8         	     381	   3149494 ns/op	 8404111 B/op	     193 allocs/op
+// BenchmarkHTTPDelayedReaders/static_direct-8         	  	  			   9	 122474127 ns/op	 8389214 B/op	      23 allocs/op
+// BenchmarkHTTPDelayedReaders/static_buffered-8       				      44	  29146133 ns/op	 8388966 B/op	      21 allocs/op
+// BenchmarkHTTPDelayedReaders/static_langos-8         				     256	   4587446 ns/op	 8490508 B/op	    1077 allocs/op
+// BenchmarkHTTPDelayedReaders/static_buffered_langos-8         	     422	   2908763 ns/op	 8411453 B/op	     266 allocs/op
+// BenchmarkHTTPDelayedReaders/random_direct-8                  	       3	 384217898 ns/op	 8389432 B/op	      24 allocs/op
+// BenchmarkHTTPDelayedReaders/random_buffered-8                	      14	  88626815 ns/op	 8389318 B/op	      22 allocs/op
+// BenchmarkHTTPDelayedReaders/random_langos-8                  	     232	   5157244 ns/op	 8490236 B/op	    1074 allocs/op
+// BenchmarkHTTPDelayedReaders/random_buffered_langos-8         	     372	   3140773 ns/op	 8411366 B/op	     265 allocs/op
 func BenchmarkHTTPDelayedReaders(b *testing.B) {
 	dataSize := 2 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
@@ -264,6 +266,12 @@ func BenchmarkHTTPDelayedReaders(b *testing.B) {
 		{
 			name: "static langos",
 			newReader: func() langos.Reader {
+				return langos.NewLangos(newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays), bufferSize)
+			},
+		},
+		{
+			name: "static buffered langos",
+			newReader: func() langos.Reader {
 				return langos.NewBufferedLangos(newDelayedReaderStatic(bytes.NewReader(data), defaultStaticDelays), bufferSize)
 			},
 		},
@@ -281,6 +289,12 @@ func BenchmarkHTTPDelayedReaders(b *testing.B) {
 		},
 		{
 			name: "random langos",
+			newReader: func() langos.Reader {
+				return langos.NewLangos(newDelayedReader(bytes.NewReader(data), randomDelaysFunc), bufferSize)
+			},
+		},
+		{
+			name: "random buffered langos",
 			newReader: func() langos.Reader {
 				return langos.NewBufferedLangos(newDelayedReader(bytes.NewReader(data), randomDelaysFunc), bufferSize)
 			},
