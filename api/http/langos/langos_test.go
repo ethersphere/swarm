@@ -167,7 +167,8 @@ func testReadCount(t *testing.T, cr *counterReader, want int) {
 //
 //  - direct: a baseline on plain reader
 //  - buffered: reading through bufio.Reader
-//  - langos: reading through buffered langos
+//  - langos: reading through regular langos
+//  - bufferd langos: reading through buffered langos
 //
 // goos: darwin
 // goarch: amd64
