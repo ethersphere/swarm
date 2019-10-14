@@ -1079,6 +1079,9 @@ func (k *Kademlia) expectedMinBinSize(binNumber int) int {
 	if minBinSize < k.MinBinSize {
 		return k.MinBinSize
 	}
+	if minBinSize > k.MaxBinSize {
+		return k.MaxBinSize
+	}
 	return minBinSize
 }
 
