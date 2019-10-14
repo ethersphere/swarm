@@ -51,6 +51,7 @@ import (
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
+	l "github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
@@ -1717,16 +1718,18 @@ func TestSwapLogToFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(logDirDebitor)
+	//defer os.RemoveAll(logDirDebitor)
 
 	// set the log dir to the params
 	params := newDefaultParams(t)
+	params2 := newDefaultParams(t)
 	params.LogPath = logDirDebitor
+	params2.LogPath = logDirDebitor
 
 	testBackend := newTestBackend()
 	defer testBackend.Close()
 	// create both test swap accounts
-	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
+	creditorSwap, storeDirCreditor := newBaseTestSwapWithParams(t, beneficiaryKey, params2, testBackend)
 	// we are only checking one of the two nodes for logs
 	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params, testBackend)
 
@@ -1774,6 +1777,13 @@ func TestSwapLogToFile(t *testing.T) {
 	// now simulate sending the cheque to the creditor from the debitor
 	creditor.sendCheque()
 
+	swapLog.Info("Test")
+	swapLog.SetLogAction(l.Action("disconnecting"))
+	swapLog.Info("Test")
+	swapLog.Info("Test", "action", "emiting_cheque")
+	swapLog.SetLogAction(l.SentChequeAction)
+	swapLog.Info("Test")
+
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
 	}
@@ -1794,9 +1804,27 @@ func TestSwapLogToFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	logString := string(b)
+
 	if !strings.Contains(logString, "sending cheque") {
 		t.Fatalf("expected the log to contain \"sending cheque\"")
 	}
+
+	if !strings.Contains(logString, "*") {
+		t.Fatalf("expected the log to contain \"action *\"")
+	}
+
+	if !strings.Contains(logString, "disconnecting") {
+		t.Fatalf("expected the log to contain \"action disconnecting\"")
+	}
+
+	if !strings.Contains(logString, "emiting_cheque") {
+		t.Fatalf("expected the log to contain \"action emiting_cheque\"")
+	}
+
+	if !strings.Contains(logString, "SentCheque") {
+		t.Fatalf("expected the log to contain \"action SentCheque\"")
+	}
+
 }
 
 func TestPeerGetLastSentCumulativePayout(t *testing.T) {

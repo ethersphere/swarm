@@ -1,8 +1,6 @@
 package log
 
 import (
-	"fmt"
-
 	l "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
@@ -65,16 +63,9 @@ func Trace(msg string, ctx ...interface{}) {
 }
 
 func wrapCtx(sl SwapLogger, ctx ...interface{}) []interface{} {
-	for i, elem := range ctx {
-		if elem == "action" && i != len(ctx) {
-			str := fmt.Sprintf("%v", ctx[i+1])
-			sl.SetLogAction(Action(str))
-			//REMOVES FROM CTX, TO AVOID DUPLICATES
-			ctx[i] = ctx[len(ctx)-1] // Copy last element to index i.
-			ctx[len(ctx)-1] = ""     // Erase last element (write zero value).
-			ctx[len(ctx)-2] = ""     // Erase last element (write zero value).
-			ctx = ctx[:len(ctx)-2]   // Truncate slice.
-			break
+	for _, elem := range ctx {
+		if elem == "action" && len(ctx)%2 == 0 {
+			return ctx
 		}
 	}
 	ctx = addSwapAction(sl, ctx...)

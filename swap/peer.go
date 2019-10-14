@@ -167,7 +167,7 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 	//swapLogger.SetLogAction(log.Action("connecting"))
-	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract, "action", "testThis")
+	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})
