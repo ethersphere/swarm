@@ -1817,8 +1817,8 @@ func TestSwapLogToFile(t *testing.T) {
 		t.Fatalf("expected the log to contain \"action disconnecting\"")
 	}
 
-	if !strings.Contains(logString, "emiting_cheque") {
-		t.Fatalf("expected the log to contain \"action emiting_cheque\"")
+	if !strings.Contains(logString, "emitting_cheque") {
+		t.Fatalf("expected the log to contain \"action emitting_cheque\"")
 	}
 
 	if !strings.Contains(logString, "SentCheque") {
