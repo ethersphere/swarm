@@ -1071,11 +1071,11 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 
 //calculates the expected min size of a given bin (minBinSize)
 //binSize = k.MinBinSize * 2 ^ (depth - binNumber - 1)
-func (k *Kademlia) expectedMinBinSize(binNumber int) int {
-	//return 2
+func (k *Kademlia) expectedMinBinSize(proximityOrder int) int {
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 
-	minBinSize := k.MinBinSize * int(math.Pow(2, float64(depth-binNumber-1)))
+	minBinSize := k.MinBinSize * int(math.Pow(2, float64(depth-proximityOrder-1)))
+
 	if minBinSize < k.MinBinSize {
 		return k.MinBinSize
 	}
