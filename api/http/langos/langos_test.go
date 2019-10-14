@@ -66,8 +66,8 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tl := newCounterReader(strings.NewReader(testData))
-			l := langos.NewLangos(tl, tc.peekSize)
+			cr := newCounterReader(strings.NewReader(testData))
+			l := langos.NewLangos(cr, tc.peekSize)
 
 			b := make([]byte, tc.peekSize)
 			var err error
@@ -94,34 +94,24 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 					t.Fatalf("got read data #%v %q, want %q", i, got, want)
 				}
 			}
-			if tc.numReads != tc.expReads {
-				// wait for peek to finish
-				// so that it can be counted
-				time.Sleep(10 * time.Millisecond)
-			}
-			if readCount := tl.ReadCount(); readCount != tc.expReads {
-				t.Fatalf("expected %d call to read func, got %d", tc.expReads, readCount)
-			}
+
+			testReadCount(t, cr, tc.expReads)
 		})
 	}
 }
 
 func TestLangosCallsPeek(t *testing.T) {
 	peekSize := 128
-	tl := newCounterReader(strings.NewReader("sometestdata"))
-	l := langos.NewLangos(tl, peekSize)
+	cr := newCounterReader(strings.NewReader("sometestdata"))
+	l := langos.NewLangos(cr, peekSize)
 
 	b := make([]byte, peekSize)
 	_, err := l.Read(b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := 2
-	// wait for the peek goroutine to finish
-	time.Sleep(5 * time.Millisecond)
-	if readCount := tl.ReadCount(); readCount != exp {
-		t.Fatalf("expected %d call to read func, got %d", exp, readCount)
-	}
+
+	testReadCount(t, cr, 2)
 }
 
 // counterReader counts the number of Read or ReadAt calls.
@@ -131,30 +121,45 @@ type counterReader struct {
 	mu        sync.Mutex
 }
 
-func newCounterReader(r langos.Reader) (c *counterReader) {
+func newCounterReader(r langos.Reader) (cr *counterReader) {
 	return &counterReader{
 		Reader: r,
 	}
 }
 
-func (l *counterReader) Read(p []byte) (n int, err error) {
-	l.mu.Lock()
-	l.readCount++
-	l.mu.Unlock()
-	return l.Reader.Read(p)
+func (cr *counterReader) Read(p []byte) (n int, err error) {
+	cr.mu.Lock()
+	cr.readCount++
+	cr.mu.Unlock()
+	return cr.Reader.Read(p)
 }
 
-func (l *counterReader) ReadAt(p []byte, off int64) (int, error) {
-	l.mu.Lock()
-	l.readCount++
-	l.mu.Unlock()
-	return l.Reader.ReadAt(p, off)
+func (cr *counterReader) ReadAt(p []byte, off int64) (int, error) {
+	cr.mu.Lock()
+	cr.readCount++
+	cr.mu.Unlock()
+	return cr.Reader.ReadAt(p, off)
 }
 
-func (l *counterReader) ReadCount() (c int) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.readCount
+func (cr *counterReader) ReadCount() (c int) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.readCount
+}
+
+func testReadCount(t *testing.T, cr *counterReader, want int) {
+	t.Helper()
+
+	var got int
+	// retry for 2s to give the peek goroutine time to finish
+	for i := 0; i < 400; i++ {
+		got = cr.ReadCount()
+		if got == want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("got %d, want %d call to read func", got, want)
 }
 
 // BenchmarkDelayedReaders performs benchmarks on reader with deterministic and random
