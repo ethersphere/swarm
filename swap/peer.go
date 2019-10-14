@@ -111,6 +111,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
+	p.logger.SetLogAction(log.Action("update_balance"))
 	p.logger.Debug("updated balance", "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
@@ -166,6 +167,7 @@ func (p *Peer) sendCheque() error {
 	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
 		return err
 	}
+	p.logger.SetLogAction(log.Action("send_cheque"))
 	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,

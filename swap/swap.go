@@ -155,6 +155,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
+	swapLog.SetLogAction(log.Action("swap_init"))
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
@@ -275,7 +276,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
-		swapPeer.logger.Info("balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold)
+		swapPeer.logger.Info("balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold, "action", "swap_add")
 		return swapPeer.sendCheque()
 	}
 
@@ -302,6 +303,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
+	p.logger.SetLogAction("handle_cheque")
 	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
@@ -348,6 +350,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 // cashCheque should be called async as it blocks until the transaction(s) are mined
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+	swapLog.SetLogAction("cash_cheque")
 	// blocks here, as we are waiting for the transaction to be mined
 	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.backend, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
@@ -387,7 +390,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		p.logger.Error("error while saving last received cheque", "err", err.Error())
+		p.logger.Error("error while saving last received cheque", "err", err.Error(), "action", "process_verify_cheque")
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -627,7 +630,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDeposit
 		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
 			return nil, err
 		}
-		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address)
+		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address, "action", "start_chequebook")
 		// first time connecting by deploying a new chequebook
 		return contract, nil
 	}
@@ -645,7 +648,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 	if err := contract.ValidateCode(context.Background(), s.backend, address); err != nil {
 		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
-	swapLog.Info("bound to chequebook", "chequebookAddr", address)
+	swapLog.Info("bound to chequebook", "chequebookAddr", address, "action", "bind_contract")
 	// get the instance
 	return contract.InstanceAt(address, s.backend)
 }
@@ -656,12 +659,13 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contrac
 	// initial topup value
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
-	swapLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
+	swapLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value, "action", "deploy")
 	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
 func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
+	swapLog.SetLogAction(log.Action("swap_deploy_contract"))
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
