@@ -502,18 +502,12 @@ func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
 		receivedCheque = swapPeer.getLastReceivedCheque()
 	} else {
 		errSentCheque := s.store.Get(sentChequeKey(peer), &sentCheque)
-		// peer might have only received cheque
 		if errSentCheque != nil && errSentCheque != state.ErrNotFound {
 			return nil, errSentCheque
 		}
-		// peer might have only sent cheque
 		errReceivedCheque := s.store.Get(receivedChequeKey(peer), &receivedCheque)
 		if errReceivedCheque != nil && errReceivedCheque != state.ErrNotFound {
 			return nil, errReceivedCheque
-		}
-		// if no cheques, return not found
-		if errSentCheque == state.ErrNotFound && errReceivedCheque == state.ErrNotFound {
-			return nil, state.ErrNotFound
 		}
 	}
 

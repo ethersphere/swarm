@@ -352,17 +352,7 @@ func TestPeerCheques(t *testing.T) {
 	testChequesByType(t, swap, testPeer2ID, map[string]*Cheque{lastSentChequeKey: sentCheque2, lastReceivedChequeKey: receivedCheque2})
 
 	// test cheques for invalid peer
-	invalidPeerID := adapters.RandomNodeConfig().ID
-	peerCheques, err := swap.PeerCheques(invalidPeerID)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-	if peerCheques != nil {
-		t.Fatalf("Expected peer cheques for invalid call to be nil, but is %v", peerCheques)
-	}
+	testChequesByType(t, swap, adapters.RandomNodeConfig().ID, map[string]*Cheque{lastSentChequeKey: nil, lastReceivedChequeKey: nil})
 
 	// test cheques for disconnected node
 	testPeer3ID := newDummyPeer().Peer.ID()
