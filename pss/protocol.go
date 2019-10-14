@@ -126,7 +126,7 @@ type Protocol struct {
 	symKeyRWPool map[string]p2p.MsgReadWriter
 	Asymmetric   bool
 	Symmetric    bool
-	RWPoolMu     sync.Mutex
+	poolMu       sync.RWMutex
 }
 
 // Activates devp2p emulation over a specific pss topic
@@ -183,16 +183,23 @@ func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid str
 	if err != nil {
 		return fmt.Errorf("could not decode pssmsg")
 	}
+
 	if asymmetric {
-		if p.pubKeyRWPool[keyid] == nil {
+		p.poolMu.RLock()
+		v := p.pubKeyRWPool[keyid]
+		p.poolMu.RUnlock()
+		if v == nil {
 			return fmt.Errorf("handle called on nil MsgReadWriter for key " + keyid)
 		}
-		vrw = p.pubKeyRWPool[keyid].(*PssReadWriter)
+		vrw = v.(*PssReadWriter)
 	} else {
-		if p.symKeyRWPool[keyid] == nil {
+		p.poolMu.RLock()
+		v := p.symKeyRWPool[keyid]
+		p.poolMu.RUnlock()
+		if v == nil {
 			return fmt.Errorf("handle called on nil MsgReadWriter for key " + keyid)
 		}
-		vrw = p.symKeyRWPool[keyid].(*PssReadWriter)
+		vrw = v.(*PssReadWriter)
 	}
 	vrw.injectMsg(pmsg)
 	return nil
@@ -200,11 +207,15 @@ func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid str
 
 // check if (peer) symmetric key is currently registered with this topic
 func (p *Protocol) isActiveSymKey(key string, topic message.Topic) bool {
+	p.poolMu.RLock()
+	defer p.poolMu.RUnlock()
 	return p.symKeyRWPool[key] != nil
 }
 
 // check if (peer) asymmetric key is currently registered with this topic
 func (p *Protocol) isActiveAsymKey(key string, topic message.Topic) bool {
+	p.poolMu.RLock()
+	defer p.poolMu.RUnlock()
 	return p.pubKeyRWPool[key] != nil
 }
 
@@ -245,16 +256,16 @@ func (p *Protocol) AddPeer(peer *p2p.Peer, topic message.Topic, asymmetric bool,
 		if !p.Pss.isPubKeyStored(key) {
 			return nil, fmt.Errorf("asym key does not exist: %s", key)
 		}
-		p.RWPoolMu.Lock()
+		p.poolMu.Lock()
 		p.pubKeyRWPool[key] = rw
-		p.RWPoolMu.Unlock()
+		p.poolMu.Unlock()
 	} else {
 		if !p.Pss.isSymKeyStored(key) {
 			return nil, fmt.Errorf("symkey does not exist: %s", key)
 		}
-		p.RWPoolMu.Lock()
+		p.poolMu.Lock()
 		p.symKeyRWPool[key] = rw
-		p.RWPoolMu.Unlock()
+		p.poolMu.Unlock()
 	}
 	go func() {
 		err := p.proto.Run(peer, rw)
@@ -265,8 +276,8 @@ func (p *Protocol) AddPeer(peer *p2p.Peer, topic message.Topic, asymmetric bool,
 
 func (p *Protocol) RemovePeer(asymmetric bool, key string) {
 	log.Debug("closing pss peer", "asym", asymmetric, "key", key)
-	p.RWPoolMu.Lock()
-	defer p.RWPoolMu.Unlock()
+	p.poolMu.Lock()
+	defer p.poolMu.Unlock()
 	if asymmetric {
 		rw := p.pubKeyRWPool[key].(*PssReadWriter)
 		rw.closed = true
