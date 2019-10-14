@@ -54,12 +54,12 @@ type Langos struct {
 }
 
 // NewLangos bakes a new yummy langos that peeks
-// on provider reader when its Read method is called.
-// Argument peekSize defines the length of peeks.
-func NewLangos(r Reader, peekSize int) *Langos {
+// on provided reader when its Read method is called.
+// Argument maxPeekSize defines the length of peeks.
+func NewLangos(r Reader, maxPeekSize int) *Langos {
 	return &Langos{
 		reader:  r,
-		peekBuf: make([]byte, peekSize),
+		peekBuf: make([]byte, maxPeekSize),
 		closed:  make(chan struct{}),
 	}
 }
