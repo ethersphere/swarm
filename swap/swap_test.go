@@ -104,31 +104,20 @@ func newTestBackend() *swapTestBackend {
 func TestBalance(t *testing.T) {
 	// create a test swap account
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
+	testPeerID := testPeer.ID()
 	defer clean()
 
 	// test for correct balance
 	setBalance(t, testPeer, 888)
-	b, err := swap.Balance(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != 888 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
-	}
+	testBalance(t, swap, testPeerID, 888)
 
 	// test for correct balance after change
 	setBalance(t, testPeer, 777)
-	b, err = swap.Balance(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != 777 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 777, b)
-	}
+	testBalance(t, swap, testPeerID, 777)
 
-	// test for inexistent node
+	// test balance for inexistent node
 	id := adapters.RandomNodeConfig().ID
-	_, err = swap.Balance(id)
+	_, err := swap.Balance(id)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
@@ -136,19 +125,11 @@ func TestBalance(t *testing.T) {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
 
-	// test for disconnected node
+	// test balance for disconnected node
 	testPeer2 := newDummyPeer().Peer
-	err = swap.saveBalance(testPeer2.ID(), 333)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err = swap.Balance(testPeer2.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != 333 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 333, b)
-	}
+	testPeer2ID := testPeer2.ID()
+	err = swap.saveBalance(testPeer2ID, 333)
+	testBalance(t, swap, testPeer2ID, 333)
 }
 
 // sets the given balance for the given peer, fails if there are errors
@@ -157,6 +138,17 @@ func setBalance(t *testing.T, p *Peer, balance int64) {
 	err := p.setBalance(balance)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
+	t.Helper()
+	b, err := s.Balance(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b != expectedBalance {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
 	}
 }
 
