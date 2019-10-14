@@ -498,10 +498,8 @@ func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
 
 	swapPeer := s.getPeer(peer)
 	if swapPeer != nil {
-		swapPeer.lock.Lock()
 		sentCheque = swapPeer.getLastSentCheque()
 		receivedCheque = swapPeer.getLastReceivedCheque()
-		swapPeer.lock.Unlock()
 	} else {
 		errSentCheque := s.store.Get(sentChequeKey(peer), &sentCheque)
 		// peer might have only received cheque
