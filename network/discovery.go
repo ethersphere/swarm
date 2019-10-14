@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -37,6 +38,7 @@ type Peer struct {
 	mtx       sync.RWMutex    //
 	peers     map[string]bool // tracks node records sent to the peer
 	depth     uint8           // the proximity order advertised by remote as depth of saturation
+	key       string          // peer key. Hex form of Address()
 }
 
 // NewPeer constructs a discovery peer
@@ -45,6 +47,7 @@ func NewPeer(p *BzzPeer, kad *Kademlia) *Peer {
 		kad:     kad,
 		BzzPeer: p,
 		peers:   make(map[string]bool),
+		key:     hexutil.Encode(p.Address()),
 	}
 	// record remote as seen so we never send a peer its own record
 	d.seen(p.BzzAddr)
@@ -64,6 +67,11 @@ func (d *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
+}
+
+// Key returns a string representation of this peer to be used in maps.
+func (d *Peer) Key() string {
+	return d.key
 }
 
 // NotifyDepth sends a message to all connections if depth of saturation is changed

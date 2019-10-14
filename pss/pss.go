@@ -829,7 +829,7 @@ func (p *Pss) forward(msg *message.Message) error {
 		onlySendOnce = true
 	}
 
-	p.kademliaLB.EachBin(to, func(bin network.LBBin) bool {
+	p.kademliaLB.EachBinDesc(to, func(bin network.LBBin) bool {
 		if bin.ProximityOrder < broadcastThreshold && sent > 0 {
 			// This bin is at the same distance as the node to the message. If already sent, we stop sending
 			return false

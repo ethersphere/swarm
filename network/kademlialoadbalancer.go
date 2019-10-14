@@ -31,7 +31,7 @@ func NewKademliaLoadBalancer(kademlia KademliaBackend, useMostSimilarInit bool) 
 		quitC:            make(chan struct{}),
 	}
 	if useMostSimilarInit {
-		klb.initCountFunc = klb.mostSimilarPeerCount
+		klb.initCountFunc = klb.nearestNeighbourCount
 	} else {
 		klb.initCountFunc = klb.leastUsedCountInBin
 	}
@@ -56,7 +56,7 @@ type LBBin struct {
 	ProximityOrder int
 }
 
-// LBBinConsumer will be provided with a list of LBPeer's usually in LB criteria ordering
+// LBBinConsumer will be provided with a list of LBPeer's in LB criteria ordering (currently in least used ordering).
 type LBBinConsumer func(bin LBBin) bool
 
 // KademliaLoadBalancer struct and methods
@@ -82,9 +82,9 @@ func (klb KademliaLoadBalancer) Stop() {
 	close(klb.quitC)
 }
 
-// EachBinNodeAddress calls EachBin with the base address of kademlia (the node address)
+// EachBinNodeAddress calls EachBinDesc with the base address of kademlia (the node address)
 func (klb KademliaLoadBalancer) EachBinNodeAddress(consumeBin LBBinConsumer) {
-	klb.EachBin(klb.kademlia.BaseAddr(), consumeBin)
+	klb.EachBinDesc(klb.kademlia.BaseAddr(), consumeBin)
 }
 
 // EachBinFiltered returns all bins in descending order from the perspective of base address.
@@ -97,9 +97,9 @@ func (klb KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, cons
 	})
 }
 
-// EachBin returns all bins in descending order from the perspective of base address.
+// EachBinDesc returns all bins in descending order from the perspective of base address.
 // All peers in that bin will be provided to the LBBinConsumer sorted by least used first.
-func (klb KademliaLoadBalancer) EachBin(base []byte, consumeBin LBBinConsumer) {
+func (klb KademliaLoadBalancer) EachBinDesc(base []byte, consumeBin LBBinConsumer) {
 	klb.kademlia.EachBinDesc(base, 0, func(peerBin *PeerBin) bool {
 		peers := klb.peerBinToPeerList(peerBin)
 		return consumeBin(LBBin{LBPeers: peers, ProximityOrder: peerBin.ProximityOrder})
@@ -182,13 +182,13 @@ func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) 
 	return leastUsedCount
 }
 
-// mostSimilarPeerCount returns the use count for the closest peer count.
-func (klb *KademliaLoadBalancer) mostSimilarPeerCount(newPeer *Peer, _ int) int {
+// nearestNeighbourCount returns the use count for the closest peer count.
+func (klb *KademliaLoadBalancer) nearestNeighbourCount(newPeer *Peer, _ int) int {
 	var count int
 	klb.kademlia.EachConn(newPeer.Address(), 255, func(peer *Peer, po int) bool {
 		if peer != newPeer {
 			count = klb.resourceUseStats.getUses(peer)
-			log.Debug("Most similar peer is", "peer", peer.Key()[:4], "count", count)
+			log.Debug("Nearest neighbour is", "peer", peer.Key()[:4], "count", count)
 			return false
 		}
 		return true
@@ -240,11 +240,6 @@ type resourceUseStats struct {
 
 type Resource interface {
 	Key() string
-}
-
-// Adding Resource interface to Peer
-func (d *Peer) Key() string {
-	return hexutil.Encode(d.Address())
 }
 
 type ResourceCount struct {

@@ -91,8 +91,8 @@ func TestAddedNodesMostSimilar(t *testing.T) {
 
 }
 
-// TestEachBinBaseUses tests that EachBin returns first the least used peer in its bin
-// We will create 3 bins with two peers each. We will call EachBin 6 times twice with an address
+// TestEachBinBaseUses tests that EachBinDesc returns first the least used peer in its bin
+// We will create 3 bins with two peers each. We will call EachBinDesc 6 times twice with an address
 // on each bin, so at the end all peers should have 1 use (because the address in each bin is equidistant to
 // the peers in that bin).
 // Then wi will use an address in a bin that is nearer one of the peers and we will check that that peer is always
@@ -115,16 +115,16 @@ func TestEachBinBaseUses(t *testing.T) {
 		return false
 	}
 	// Use peer 1 and 2
-	klb.EachBin(pivotAddressBin0, countUse)
-	klb.EachBin(pivotAddressBin0, countUse)
+	klb.EachBinDesc(pivotAddressBin0, countUse)
+	klb.EachBinDesc(pivotAddressBin0, countUse)
 
 	// Use peers 3 and 4
-	klb.EachBin(pivotAddressBin1, countUse)
-	klb.EachBin(pivotAddressBin1, countUse)
+	klb.EachBinDesc(pivotAddressBin1, countUse)
+	klb.EachBinDesc(pivotAddressBin1, countUse)
 
 	// Use peers 5 and 6
-	klb.EachBin(pivotAddressBin2, countUse)
-	klb.EachBin(pivotAddressBin2, countUse)
+	klb.EachBinDesc(pivotAddressBin2, countUse)
+	klb.EachBinDesc(pivotAddressBin2, countUse)
 
 	resourceUses := klb.resourceUseStats.dumpAllUses()
 	if len(resourceUses) != 6 {
@@ -142,8 +142,8 @@ func TestEachBinBaseUses(t *testing.T) {
 	pivotAddressBin3 := pot.NewAddressFromString("10010011") // Nearer 4
 
 	//Both calls to 4
-	klb.EachBin(pivotAddressBin3, countUse)
-	klb.EachBin(pivotAddressBin3, countUse)
+	klb.EachBinDesc(pivotAddressBin3, countUse)
+	klb.EachBinDesc(pivotAddressBin3, countUse)
 
 	count := klb.resourceUseStats.getKeyUses(stringBinaryToHex("10010001"))
 	if count != 3 {
@@ -213,6 +213,7 @@ type testKademliaBackend struct {
 	maxPo          int
 }
 
+// EachConn iterates this test kademlia table bins in order from furthest to nearest.
 func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*Peer, int) bool) {
 	po, _ := Pof(base, tkb.baseAddr, 0)
 	bin := tkb.bins[po]
@@ -267,11 +268,14 @@ func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *gopubsub.Sub
 	return
 }
 
+// EachBinDescFiltered ignores capKey as in this test context it won't be used.
 func (tkb testKademliaBackend) EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error {
 	tkb.EachBinDesc(base, minProximityOrder, consumer)
 	return nil
 }
 
+// EachBinDesc iterates bin in the table in descending po order (from nearest to furthest). Base is always supposed to be
+// node address in this test context.
 func (tkb testKademliaBackend) EachBinDesc(_ []byte, minProximityOrder int, consumer PeerBinConsumer) {
 	type poPeers struct {
 		po    int
@@ -321,6 +325,8 @@ func (tkb *testKademliaBackend) addPeer(peer *Peer, po int) {
 			po:   po,
 		})
 	}
+	// As the subscribers to add peer are asynchronous, we will sleep here to allow them to execute.
+	// Because this will be used in tests several times, we wait here so the code is not polluted with Sleep calls.
 	time.Sleep(100 * time.Millisecond)
 }
 
