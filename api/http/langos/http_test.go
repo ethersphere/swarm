@@ -25,6 +25,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,120 +36,160 @@ import (
 // TestHTTPResponse validates that the langos returns correct data
 // over http test server and ServeContent function.
 func TestHTTPResponse(t *testing.T) {
-	dataSize := 10 * 1024 * 1024
-	bufferSize := 4 * 32 * 1024
+	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
+		data := randomData(t, dataSize)
 
-	data := randomData(t, dataSize)
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
+		}))
+		defer ts.Close()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
-	}))
-	defer ts.Close()
+		res, err := http.Get(ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
 
-	res, err := http.Get(ts.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
+		got, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	got, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(got, data) {
-		t.Fatalf("got invalid data (lengths: got %v, want %v)", len(got), len(data))
-	}
+		if !bytes.Equal(got, data) {
+			t.Fatalf("got invalid data (lengths: got %v, want %v)", len(got), len(data))
+		}
+	})
 }
 
 // TestHTTPResponse validates that the langos returns correct data
 // over http test server and ServeContent function for http range requests.
 func TestHTTPRangeResponse(t *testing.T) {
-	dataSize := 10 * 1024 * 1024
-	bufferSize := 4 * 32 * 1024
+	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
+		data := randomData(t, dataSize)
 
-	data := randomData(t, dataSize)
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
+		}))
+		defer ts.Close()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
-	}))
-	defer ts.Close()
-
-	for i := 0; i < 100; i++ {
-		start := rand.Intn(dataSize - 1)
-		end := rand.Intn(dataSize-1-start) + start
-		rangeHeader := fmt.Sprintf("bytes=%v-%v", start, end)
-		if i == 0 {
-			// test open ended range
-			end = dataSize - 1
-			rangeHeader = fmt.Sprintf("bytes=%v-", start)
-		}
-
-		gotRangs := httpRangeRequest(t, ts.URL, rangeHeader)
-		got := gotRangs[0]
-		want := data[start : end+1]
-		if !bytes.Equal(got, want) {
-			t.Fatalf("got invalid data for range %s (lengths: got %v, want %v)", rangeHeader, len(got), len(want))
-		}
-	}
-}
-
-// TestHTTPMultipleRangeResponse validates that the langos returns correct data
-// over http test server and ServeContent function for http requests with multiple ranges.
-func TestHTTPMultipleRangeResponse(t *testing.T) {
-	dataSize := 10 * 1024 * 1024
-	bufferSize := 4 * 32 * 1024
-
-	data := randomData(t, dataSize)
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
-	}))
-	defer ts.Close()
-
-	for i := 0; i < 100; i++ {
-		var ranges [][2]int
-
-		var wantParts [][]byte
-		for i := rand.Intn(5); i >= 0; i-- {
-			var beginning int
-			if l := len(ranges); l > 0 {
-				beginning = ranges[l-1][1]
-			}
-			if beginning >= dataSize {
-				break
-			}
-			start := rand.Intn(dataSize-beginning) + beginning
+		for i := 0; i < 12; i++ {
+			start := rand.Intn(dataSize)
 			var end int
 			if dataSize-1-start <= 0 {
 				end = dataSize - 1
 			} else {
 				end = rand.Intn(dataSize-1-start) + start
 			}
-			if start == end {
-				continue
+			rangeHeader := fmt.Sprintf("bytes=%v-%v", start, end)
+			if i == 0 {
+				// test open ended range
+				end = dataSize - 1
+				rangeHeader = fmt.Sprintf("bytes=%v-", start)
 			}
-			ranges = append(ranges, [2]int{start, end})
-			wantParts = append(wantParts, data[start:end+1])
-		}
 
-		rangeHeader := "bytes="
-		for i, r := range ranges {
-			if i > 0 {
-				rangeHeader += ", "
-			}
-			rangeHeader += fmt.Sprintf("%v-%v", r[0], r[1])
-		}
-
-		gotParts := httpRangeRequest(t, ts.URL, rangeHeader)
-
-		for i, want := range wantParts {
-			got := gotParts[i]
+			gotRangs := httpRangeRequest(t, ts.URL, rangeHeader)
+			got := gotRangs[0]
+			want := data[start : end+1]
 			if !bytes.Equal(got, want) {
-				t.Fatalf("got invalid data for range #%v %s (lengths: got %v, want %v)", i+1, rangeHeader, len(got), len(want))
+				t.Fatalf("got invalid data for range %s (lengths: got %v, want %v)", rangeHeader, len(got), len(want))
 			}
+		}
+	})
+}
+
+// TestHTTPMultipleRangeResponse validates that the langos returns correct data
+// over http test server and ServeContent function for http requests with multiple ranges.
+func TestHTTPMultipleRangeResponse(t *testing.T) {
+	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
+		data := randomData(t, dataSize)
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
+		}))
+		defer ts.Close()
+
+		for i := 0; i < 12; i++ {
+			var ranges [][2]int
+
+			var wantParts [][2]int
+			for i := rand.Intn(5); i >= 0; i-- {
+				var beginning int
+				if l := len(ranges); l > 0 {
+					beginning = ranges[l-1][1]
+				}
+				if beginning >= dataSize {
+					break
+				}
+				start := rand.Intn(dataSize-beginning) + beginning
+				var end int
+				if dataSize-1-start <= 0 {
+					end = dataSize - 1
+				} else {
+					end = rand.Intn(dataSize-1-start) + start
+				}
+				if l := len(wantParts); l > 0 && wantParts[l-1][0] == start && wantParts[l-1][1] == end {
+					continue
+				}
+				ranges = append(ranges, [2]int{start, end})
+				wantParts = append(wantParts, [2]int{start, end})
+			}
+
+			rangeHeader := "bytes="
+			for i, r := range ranges {
+				if i > 0 {
+					rangeHeader += ", "
+				}
+				rangeHeader += fmt.Sprintf("%v-%v", r[0], r[1])
+			}
+
+			gotParts := httpRangeRequest(t, ts.URL, rangeHeader)
+
+			if len(gotParts) != len(wantParts) {
+				t.Fatalf("got %v parts for range %q, want %v", len(gotParts), rangeHeader, len(wantParts))
+			}
+
+			for i, w := range wantParts {
+				got := gotParts[i]
+				want := data[w[0] : w[1]+1]
+				if !bytes.Equal(got, want) {
+					t.Fatalf("got invalid data for range #%v %s (lengths: got %v, want %v)", i+1, rangeHeader, len(got), len(want))
+				}
+			}
+		}
+	})
+}
+
+func multiSizeTester(t *testing.T, newTestFunc func(t *testing.T, dataSize, bufferSize int)) {
+	t.Helper()
+
+	for _, dataSize := range []string{"1", "100", "1k", "128k", "10M"} {
+		for _, bufferSize := range []string{"1k", "128k", "1M", "10M", "25M"} {
+			t.Run(fmt.Sprintf("data %s buffer %s", dataSize, bufferSize), func(t *testing.T) {
+				newTestFunc(t, parseDataSize(t, dataSize), parseDataSize(t, bufferSize))
+			})
 		}
 	}
+}
+
+func parseDataSize(t *testing.T, v string) (s int) {
+	t.Helper()
+
+	multiplier := 1
+	for suffix, value := range map[string]int{
+		"k": 1024,
+		"M": 1024 * 1024,
+	} {
+		if strings.HasSuffix(v, suffix) {
+			v = strings.TrimSuffix(v, suffix)
+			multiplier = value
+			break
+		}
+	}
+	s, err := strconv.Atoi(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s * multiplier
 }
 
 func httpRangeRequest(t *testing.T, url, rangeHeader string) (parts [][]byte) {
