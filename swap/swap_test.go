@@ -150,13 +150,8 @@ func TestBalances(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
-	balances, err := swap.Balances()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(balances) != 0 {
-		t.Fatalf("Expected balances to be empty, but are %v", balances)
-	}
+	// test balances are empty
+	testBalances(t, swap, map[enode.ID]int64{})
 
 	// add peer
 	testPeer := addPeer(t, swap)
@@ -169,14 +164,15 @@ func TestBalances(t *testing.T) {
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
-	setBalance(t, testPeer2, 909)
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 909})
+	setBalance(t, testPeer2, 123)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 123})
 
 	// test balance change for peer
 	setBalance(t, testPeer, 303)
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 909})
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 123})
 }
 
+// sets the given balance for the given peer, fails if there are errors
 func setBalance(t *testing.T, p *Peer, balance int64) {
 	t.Helper()
 	err := p.setBalance(balance)
@@ -185,6 +181,7 @@ func setBalance(t *testing.T, p *Peer, balance int64) {
 	}
 }
 
+// tests that a map of peerID:balance matches the result of the Balances function
 func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
 	t.Helper()
 	actualBalances, err := s.Balances()
