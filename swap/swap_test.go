@@ -111,13 +111,20 @@ func TestBalance(t *testing.T) {
 	setBalance(t, testPeer, 888)
 	testBalance(t, swap, testPeerID, 888)
 
-	// test for correct balance after change
-	setBalance(t, testPeer, 777)
-	testBalance(t, swap, testPeerID, 777)
+	// test balance after change
+	setBalance(t, testPeer, 17000)
+	testBalance(t, swap, testPeerID, 17000)
+
+	// test balance for second peer
+	testPeer2 := addPeer(t, swap)
+	testPeer2ID := testPeer2.ID()
+
+	setBalance(t, testPeer2, 4)
+	testBalance(t, swap, testPeer2ID, 4)
 
 	// test balance for inexistent node
-	id := adapters.RandomNodeConfig().ID
-	_, err := swap.Balance(id)
+	invalidPeerID := adapters.RandomNodeConfig().ID
+	_, err := swap.Balance(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
@@ -126,10 +133,14 @@ func TestBalance(t *testing.T) {
 	}
 
 	// test balance for disconnected node
-	testPeer2 := newDummyPeer().Peer
-	testPeer2ID := testPeer2.ID()
-	err = swap.saveBalance(testPeer2ID, 333)
-	testBalance(t, swap, testPeer2ID, 333)
+	testPeer3 := newDummyPeer().Peer
+	testPeer3ID := testPeer3.ID()
+	err = swap.saveBalance(testPeer3ID, 777)
+	testBalance(t, swap, testPeer3ID, 777)
+
+	// test previous results are still correct
+	testBalance(t, swap, testPeerID, 17000)
+	testBalance(t, swap, testPeer2ID, 4)
 }
 
 // sets the given balance for the given peer, fails if there are errors
@@ -141,6 +152,7 @@ func setBalance(t *testing.T, p *Peer, balance int64) {
 	}
 }
 
+// tests that expected balance for peer matches the result of the Balance function
 func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
 	t.Helper()
 	b, err := s.Balance(id)
