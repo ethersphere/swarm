@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,37 +78,121 @@ func TestHTTPRangeResponse(t *testing.T) {
 	defer ts.Close()
 
 	for i := 0; i < 100; i++ {
-		req, err := http.NewRequest(http.MethodGet, ts.URL, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		start := rand.Intn(dataSize)
-		end := rand.Intn(dataSize-start) + start
-		rangeHeader := fmt.Sprintf("bytes=%v-%v", start, end-1)
+		start := rand.Intn(dataSize - 1)
+		end := rand.Intn(dataSize-1-start) + start
+		rangeHeader := fmt.Sprintf("bytes=%v-%v", start, end)
 		if i == 0 {
 			// test open ended range
-			end = dataSize
+			end = dataSize - 1
 			rangeHeader = fmt.Sprintf("bytes=%v-", start)
 		}
-		req.Header.Add("Range", rangeHeader)
 
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := ioutil.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		want := data[start:end]
+		gotRangs := httpRangeRequest(t, ts.URL, rangeHeader)
+		got := gotRangs[0]
+		want := data[start : end+1]
 		if !bytes.Equal(got, want) {
 			t.Fatalf("got invalid data for range %s (lengths: got %v, want %v)", rangeHeader, len(got), len(want))
 		}
 	}
+}
+
+// TestHTTPMultipleRangeResponse validates that the langos returns correct data
+// over http test server and ServeContent function for http requests with multiple ranges.
+func TestHTTPMultipleRangeResponse(t *testing.T) {
+	t.Skip("failing")
+
+	dataSize := 10 * 1024 * 1024
+	bufferSize := 4 * 32 * 1024
+
+	data := make([]byte, dataSize)
+	_, err := rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "test", time.Now(), langos.NewBufferedLangos(bytes.NewReader(data), bufferSize))
+	}))
+	defer ts.Close()
+
+	for i := 0; i < 100; i++ {
+		var ranges [][2]int
+
+		var wantParts [][]byte
+		for i := rand.Intn(5); i >= 0; i-- {
+			var beginning int
+			if l := len(ranges); l > 0 {
+				beginning = ranges[l-1][1]
+			}
+			if beginning >= dataSize {
+				break
+			}
+			start := rand.Intn(dataSize-beginning) + beginning
+			var end int
+			if dataSize-1-start <= 0 {
+				end = dataSize - 1
+			} else {
+				end = rand.Intn(dataSize-1-start) + start
+			}
+			if start == end {
+				break
+			}
+			ranges = append(ranges, [2]int{start, end})
+			wantParts = append(wantParts, data[start:end+1])
+		}
+
+		rangeHeader := "bytes="
+		for i, r := range ranges {
+			if i > 0 {
+				rangeHeader += ", "
+			}
+			rangeHeader += fmt.Sprintf("%v-%v", r[0], r[1])
+		}
+
+		gotParts := httpRangeRequest(t, ts.URL, rangeHeader)
+
+		for i, want := range wantParts {
+			got := gotParts[i]
+			if !bytes.Equal(got, want) {
+				t.Fatalf("got invalid data for range #%v %s (lengths: got %v, want %v)", i+1, rangeHeader, len(got), len(want))
+			}
+		}
+	}
+}
+
+func httpRangeRequest(t *testing.T, url, rangeHeader string) (parts [][]byte) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Add("Range", rangeHeader)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	mimetype, params, _ := mime.ParseMediaType(res.Header.Get("Content-Type"))
+	if mimetype == "multipart/byteranges" {
+		mr := multipart.NewReader(res.Body, params["boundary"])
+		for part, err := mr.NextPart(); err == nil; part, err = mr.NextPart() {
+			value, err := ioutil.ReadAll(part)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parts = append(parts, value)
+		}
+	} else {
+		value, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts = append(parts, value)
+	}
+
+	return parts
 }
 
 // BenchmarkHTTPDelayedReaders measures time needed by test http server to serve the body

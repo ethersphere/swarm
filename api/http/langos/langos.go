@@ -96,15 +96,19 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 	// second and further Read calls are waiting for peeks to finish
 	select {
 	case <-l.peekDone:
+		var n int
 		if (l.peekErr == nil || l.peekErr == io.EOF) && l.peekReadSize > 0 {
-			copy(p, l.peekBuf[:l.peekReadSize])
+			n = copy(p, l.peekBuf[:l.peekReadSize])
 		}
 
 		// read peek read size and peek err
 		// before starting a new peek
 		// to avoid data race
-		n := l.peekReadSize
 		err := l.peekErr
+		if err == io.EOF && len(p) < n {
+			err = nil
+		}
+		l.cursor += int64(n)
 		if err != io.EOF {
 			// peek from the current cursor
 			go l.peek(l.cursor)
@@ -145,14 +149,13 @@ func (l *Langos) peek(offset int64) {
 	log.Trace("langos peek ReadAt returned", "offset", offset, "n", n, "err", l.peekErr)
 
 	l.cursorMu.Lock()
+	defer l.cursorMu.Unlock()
 	// check if seek has been called
 	// to disregard this peek result
 	if l.cursor != offset {
-		n = 0
-		err = nil
+		go l.peek(l.cursor)
+		return
 	}
-	l.cursor += int64(n)
-	l.cursorMu.Unlock()
 
 	l.peekReadSize = n
 	l.peekErr = err
