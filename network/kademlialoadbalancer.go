@@ -22,11 +22,11 @@ type KademliaBackend interface {
 
 // Creates a new KademliaLoadBalancer from a KademliaBackend
 func NewKademliaLoadBalancer(kademlia KademliaBackend, useMostSimilarInit bool) *KademliaLoadBalancer {
-	newPeerSub, offPeerSub := kademlia.SubscribeToPeerChanges()
+	onPeerSub, offPeerSub := kademlia.SubscribeToPeerChanges()
 	klb := &KademliaLoadBalancer{
 		kademlia:         kademlia,
 		resourceUseStats: newResourceLoadBalancer(),
-		newPeerSub:       newPeerSub,
+		onPeerSub:        onPeerSub,
 		offPeerSub:       offPeerSub,
 		quitC:            make(chan struct{}),
 	}
@@ -68,7 +68,7 @@ type LBBinConsumer func(bin LBBin) bool
 type KademliaLoadBalancer struct {
 	kademlia         KademliaBackend        //kademlia to obtain bins of peers
 	resourceUseStats *resourceUseStats      //a resourceUseStats to count uses
-	newPeerSub       *gopubsub.Subscription //a pubsub channel to be notified of new peers in kademlia
+	onPeerSub        *gopubsub.Subscription //a pubsub channel to be notified of new peers in kademlia
 	offPeerSub       *gopubsub.Subscription //a pubsub channel to be notified of removed peers in kademlia
 	quitC            chan struct{}
 
@@ -77,7 +77,7 @@ type KademliaLoadBalancer struct {
 
 // Stop unsubscribe from notifiers
 func (klb KademliaLoadBalancer) Stop() {
-	klb.newPeerSub.Unsubscribe()
+	klb.onPeerSub.Unsubscribe()
 	klb.offPeerSub.Unsubscribe()
 	close(klb.quitC)
 }
@@ -128,7 +128,7 @@ func (klb *KademliaLoadBalancer) listenNewPeers() {
 		select {
 		case <-klb.quitC:
 			return
-		case msg, ok := <-klb.newPeerSub.ReceiveChannel():
+		case msg, ok := <-klb.onPeerSub.ReceiveChannel():
 			if !ok {
 				return
 			}
