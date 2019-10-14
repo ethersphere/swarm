@@ -155,7 +155,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
-	//swapLog.SetLogAction(log.Action("connecting"))
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store

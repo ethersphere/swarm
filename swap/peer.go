@@ -166,7 +166,6 @@ func (p *Peer) sendCheque() error {
 	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
 		return err
 	}
-	//swapLogger.SetLogAction(log.Action("connecting"))
 	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
