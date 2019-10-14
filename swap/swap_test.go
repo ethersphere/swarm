@@ -1780,7 +1780,7 @@ func TestSwapLogToFile(t *testing.T) {
 	swapLog.Info("Test")
 	swapLog.SetLogAction(l.Action("disconnecting"))
 	swapLog.Info("Test")
-	swapLog.Info("Test", "action", "emiting_cheque")
+	swapLog.Info("Test", "action", "emitting cheque")
 	swapLog.SetLogAction(l.SentChequeAction)
 	swapLog.Info("Test")
 
