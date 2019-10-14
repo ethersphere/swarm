@@ -23,24 +23,18 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
 )
 
-// retrieval represents an open, ongoing retrieval sent to
-// a specific peer
-type retrieval struct {
-	ruid uint
-	addr storage.Address
-}
-
 // Peer wraps BzzPeer with a contextual logger and tracks open
 // retrievals for that peer
 type Peer struct {
-	mtx              sync.Mutex         // synchronize retrievals
-	*network.BzzPeer                    // bzzpeer
-	logger           log.Logger         // logger with base and peer address
-	retrievals       map[uint]retrieval // current ongoing retrievals
+	mtx              sync.Mutex             // synchronize retrievals
+	*network.BzzPeer                        // bzzpeer
+	logger           log.Logger             // logger with base and peer address
+	retrievals       map[uint]chunk.Address // current ongoing retrievals
 }
 
 // NewPeer is the constructor for Peer
@@ -48,36 +42,32 @@ func NewPeer(peer *network.BzzPeer, baseKey []byte) *Peer {
 	return &Peer{
 		BzzPeer:    peer,
 		logger:     log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
-		retrievals: make(map[uint]retrieval),
+		retrievals: make(map[uint]chunk.Address),
 	}
 }
 
 // chunkRequested adds a new retrieval to the retrievals map
 // this is in order to identify unsolicited chunk deliveries
-func (p *Peer) chunkRequested(ruid uint, addr storage.Address) {
+func (p *Peer) addRetrieval(ruid uint, addr storage.Address) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	ret := retrieval{
-		ruid: ruid,
-		addr: addr,
-	}
-	p.retrievals[ruid] = ret
+	p.retrievals[ruid] = addr
 }
 
 // chunkReceived is called upon ChunkDelivery message reception
 // it is meant to idenfify unsolicited chunk deliveries
-func (p *Peer) chunkReceived(ruid uint, addr storage.Address) error {
+func (p *Peer) checkRequest(ruid uint, addr storage.Address) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	v, ok := p.retrievals[ruid]
 	if !ok {
 		return errors.New("unsolicited chunk delivery - cannot find ruid")
 	}
-	if !bytes.Equal(v.addr, addr) {
+
+	defer delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
+	if !bytes.Equal(v, addr) {
 		return errors.New("retrieve request found but address does not match")
 	}
-
-	delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
 
 	return nil
 }

@@ -214,10 +214,14 @@ func TestUnsolicitedChunkDeliveryFaultyAddr(t *testing.T) {
 			},
 		},
 	)
-	time.Sleep(10 * time.Millisecond)
-
+	for i := 0; i < 1000; i++ {
+		if r.getPeer(node.ID()) != nil {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
 	// inject a supposed retrieve request that was sent to that peer
-	r.getPeer(node.ID()).chunkRequested(1234, []byte{0, 1, 2, 3})
+	r.getPeer(node.ID()).addRetrieval(1234, []byte{0, 1, 2, 3})
 
 	// respond with a chunk delivery with the same Ruid but with a different chunk address
 	err = tester.TestExchanges(
@@ -284,9 +288,14 @@ func TestUnsolicitedChunkDeliveryDouble(t *testing.T) {
 			},
 		},
 	)
-
+	for i := 0; i < 1000; i++ {
+		if r.getPeer(node.ID()) != nil {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
 	// inject a supposed retrieve request that was sent to that peer
-	r.getPeer(node.ID()).chunkRequested(1234, []byte{0, 1, 2, 3})
+	r.getPeer(node.ID()).addRetrieval(1234, []byte{0, 1, 2, 3})
 
 	// respond with a chunk delivery with the same Ruid and the matching chunk address
 	err = tester.TestExchanges(
@@ -614,14 +623,12 @@ func newRetrievalTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storag
 
 	r := New(kad, netStore, kad.BaseAddr(), nil)
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, r.runProtocol)
-	teardown := func() {
-		protocolTester.Stop()
-	}
 
-	return protocolTester, r, teardown, nil
+	return protocolTester, r, protocolTester.Stop, nil
 }
 
 func newTestNetstore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, cleanup func()) {
+	t.Helper()
 	prvkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("Could not generate key")

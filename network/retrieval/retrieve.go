@@ -350,7 +350,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 // we treat the chunk as a chunk received in syncing
 func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
-	err := p.chunkReceived(msg.Ruid, msg.Addr)
+	err := p.checkRequest(msg.Ruid, msg.Addr)
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
 		p.logger.Error("unsolicited chunk delivery from peer. dropping", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
@@ -430,7 +430,7 @@ FINDPEER:
 		return nil, err
 	}
 
-	protoPeer.chunkRequested(ret.Ruid, ret.Addr)
+	protoPeer.addRetrieval(ret.Ruid, ret.Addr)
 
 	spID := protoPeer.ID()
 	return &spID, nil
