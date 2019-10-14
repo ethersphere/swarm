@@ -158,34 +158,31 @@ func TestBalances(t *testing.T) {
 		t.Fatalf("Expected balances to be empty, but are %v", balances)
 	}
 
-	// test balance addition for peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = testPeer.setBalance(808)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
+	// add peer
+	testPeer := addPeer(t, swap)
+	testPeerID := testPeer.ID()
 
-	// test successive balance addition for peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = testPeer2.setBalance(909)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
+	setBalance(t, testPeer, 808)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808})
+
+	// add second peer
+	testPeer2 := addPeer(t, swap)
+	testPeer2ID := testPeer2.ID()
+
+	setBalance(t, testPeer2, 909)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 909})
 
 	// test balance change for peer
-	err = testPeer.setBalance(303)
+	setBalance(t, testPeer, 303)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 909})
+}
+
+func setBalance(t *testing.T, p *Peer, balance int64) {
+	t.Helper()
+	err := p.setBalance(balance)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
 }
 
 func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
