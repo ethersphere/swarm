@@ -1126,7 +1126,7 @@ func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 // Recommended value is 4 times the io.Copy default buffer value which is 32kB.
 const getFileBufferSize = 4 * 32 * 1024
 
-var defaultDownloaderMode = "buffered"
+var defaultDownloaderMode = "langos"
 
 func newDownloader(s langos.Reader, r *http.Request) io.ReadSeeker {
 	mode := r.URL.Query().Get("_downloader")
