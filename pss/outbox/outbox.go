@@ -27,11 +27,11 @@ import (
 
 // Config contains the Outbox configuration.
 type Config struct {
-	NumberSlots int             // number of slots for messages in Outbox.
-	NumWorkers  int             // number of parallel goroutines forwarding messages.
-	Forward     forwardFunction // function that executes the actual forwarding.
-	MaxRetryTime *time.Duration // max time a message will be retried in the outbox.
-	Clock        clock.Clock    // clock dependency to calculate elapsed time.
+	NumberSlots  int             // number of slots for messages in Outbox.
+	NumWorkers   int             // number of parallel goroutines forwarding messages.
+	Forward      forwardFunction // function that executes the actual forwarding.
+	MaxRetryTime *time.Duration  // max time a message will be retried in the outbox.
+	Clock        clock.Clock     // clock dependency to calculate elapsed time.
 }
 
 // Outbox will be in charge of forwarding messages. These will be enqueued and retry until successfully forwarded.
@@ -66,15 +66,15 @@ func NewOutbox(config *Config) *Outbox {
 		process:      make(chan int),
 		numWorkers:   config.NumWorkers,
 		stopC:        make(chan struct{}),
-        maxRetryTime: defaultMaxRetryTime,
-        clock:        clock.Realtime(),
+		maxRetryTime: defaultMaxRetryTime,
+		clock:        clock.Realtime(),
 	}
-    if config.MaxRetryTime != nil {
-        outbox.maxRetryTime = *config.MaxRetryTime
-    }
-    if config.Clock != nil {
-        outbox.clock = config.Clock
-    }
+	if config.MaxRetryTime != nil {
+		outbox.maxRetryTime = *config.MaxRetryTime
+	}
+	if config.Clock != nil {
+		outbox.clock = config.Clock
+	}
 	// fill up outbox slots
 	for i := 0; i < cap(outbox.slots); i++ {
 		outbox.slots <- i
@@ -119,6 +119,14 @@ func (o *Outbox) SetForward(forwardFunc forwardFunction) {
 	o.forwardFunc = forwardFunc
 }
 
+// NewOutboxMessage creates a new outbox message wrapping a pss message and set the startedTime using the clock
+func (o *Outbox) NewOutboxMessage(msg *message.Message) *outboxMsg {
+	return &outboxMsg{
+		msg:       msg,
+		startedAt: o.clock.Now(),
+	}
+}
+
 // ProcessOutbox starts a routine that tries to forward messages present in the outbox queue.
 func (o *Outbox) processOutbox() {
 	workerLimitC := make(chan struct{}, o.numWorkers)
@@ -127,8 +135,11 @@ func (o *Outbox) processOutbox() {
 		case <-o.stopC:
 			return
 		case slot := <-o.process:
+			log.Debug("Processing, taking worker", "workerLimit size", len(workerLimitC), "numWorkers", o.numWorkers)
 			workerLimitC <- struct{}{}
 			go func(slot int) {
+				//Free worker space
+				defer func() { <-workerLimitC }()
 				msg := o.queue[slot]
 				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
 				if err := o.forwardFunc(msg.msg); err != nil {
@@ -150,8 +161,6 @@ func (o *Outbox) processOutbox() {
 				}
 				//message processed, free the outbox slot
 				o.free(slot)
-				//Free worker space
-				<-workerLimitC
 				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
 			}(slot)
 		}
