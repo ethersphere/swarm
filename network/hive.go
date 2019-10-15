@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -180,7 +181,7 @@ func (h *Hive) Run(p *BzzPeer) error {
 		NotifyPeer(p.BzzAddr, h.Kademlia)
 	}
 	defer h.Off(dp)
-	return dp.Run(dp.HandleMsg)
+	return dp.Run(h.handleMsg(dp))
 }
 
 func (h *Hive) trackPeer(p *BzzPeer) {
@@ -268,5 +269,88 @@ func (h *Hive) savePeers() error {
 	if err := h.Store.Put("peers", peers); err != nil {
 		return fmt.Errorf("could not save peers: %v", err)
 	}
+	return nil
+}
+
+var sortPeers = noSortPeers
+
+// handleMsg is the message handler that delegates incoming messages
+func (h *Hive) handleMsg(p *Peer) func(context.Context, interface{}) error {
+	return func(ctx context.Context, msg interface{}) error {
+		switch msg := msg.(type) {
+		case *peersMsg:
+			return h.handlePeersMsg(p, msg)
+
+		case *subPeersMsg:
+			return h.handleSubPeersMsg(p, msg)
+
+		default:
+			return fmt.Errorf("unknown message type: %T", msg)
+		}
+	}
+}
+
+// NotifyDepth sends a message to all connections if depth of saturation is changed
+func NotifyDepth(depth uint8, kad *Kademlia) {
+	f := func(val *Peer, po int) bool {
+		val.NotifyDepth(depth)
+		return true
+	}
+	kad.EachConn(nil, 255, f)
+}
+
+// NotifyPeer informs all peers about a newly added node
+func NotifyPeer(p *BzzAddr, k *Kademlia) {
+	f := func(val *Peer, po int) bool {
+		val.NotifyPeer(p, uint8(po))
+		return true
+	}
+	k.EachConn(p.Address(), 255, f)
+}
+
+// handlePeersMsg called by the protocol when receiving peerset (for target address)
+// list of nodes ([]PeerAddr in peersMsg) is added to the overlay db using the
+// Register interface method
+func (h *Hive) handlePeersMsg(d *Peer, msg *peersMsg) error {
+	// register all addresses
+	if len(msg.Peers) == 0 {
+		return nil
+	}
+	for _, a := range msg.Peers {
+		d.seen(a)
+		NotifyPeer(a, h.Kademlia)
+	}
+	return h.Register(msg.Peers...)
+}
+
+// handleSubPeersMsg handles incoming subPeersMsg
+// this message represents the saturation depth of the remote peer
+// saturation depth is the radius within which the peer subscribes to peers
+// the first time this is received we send peer info on all
+// our connected peers that fall within peers saturation depth
+// otherwise this depth is just recorded on the peer, so that
+// subsequent new connections are sent iff they fall within the radius
+func (h *Hive) handleSubPeersMsg(d *Peer, msg *subPeersMsg) error {
+	d.setDepth(msg.Depth)
+	// only send peers after the initial subPeersMsg
+	if !d.sentPeers {
+		var peers []*BzzAddr
+		// iterate connection in ascending order of disctance from the remote address
+		h.EachConn(d.Over(), 255, func(p *Peer, po int) bool {
+			// terminate if we are beyond the radius
+			if uint8(po) < msg.Depth {
+				return false
+			}
+			if !d.seen(p.BzzAddr) { // here just records the peer sent
+				peers = append(peers, p.BzzAddr)
+			}
+			return true
+		})
+		// if useful  peers are found, send them over
+		if len(peers) > 0 {
+			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
+		}
+	}
+	d.sentPeers = true
 	return nil
 }
