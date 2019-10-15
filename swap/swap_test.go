@@ -1780,7 +1780,7 @@ func TestSwapLogToFile(t *testing.T) {
 	swapLog.SetLogAction(Action("disconnecting"))
 	swapLog.Info("Test")
 	swapLog.Info("Test", "action", "emitting_cheque")
-	swapLog.SetLogAction(SentChequeAction)
+	swapLog.SetLogAction("SentCheque")
 	swapLog.Info("Test")
 
 	if logDirDebitor == "" {
@@ -1808,8 +1808,8 @@ func TestSwapLogToFile(t *testing.T) {
 		t.Fatalf("expected the log to contain \"sending cheque\"")
 	}
 
-	if !strings.Contains(logString, "*") {
-		t.Fatalf("expected the log to contain \"action *\"")
+	if !strings.Contains(logString, "undefined") {
+		t.Fatalf("expected the log to contain \"action undefined\"")
 	}
 
 	if !strings.Contains(logString, "disconnecting") {

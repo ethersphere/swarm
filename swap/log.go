@@ -4,28 +4,23 @@ import (
 	l "github.com/ethereum/go-ethereum/log"
 )
 
-// Action Defines swap log actions
-type Action string
-
 const (
 	// CallDepth is set to 1 in order to influence to reported line number of
 	// the log message with 1 skipped stack frame of calling l.Output()
 	CallDepth = 1
 	//DefaultAction is the default action filter for SwapLogs
-	DefaultAction Action = "*"
-	//SentChequeAction is a filter for SwapLogs
-	SentChequeAction Action = "SentCheque"
+	DefaultAction string = "undefined"
 )
 
-// SwapLogger wraps the ethereum logger with specific information for swap logging
-type SwapLogger struct {
-	action      Action
+// Logger wraps the ethereum logger with specific information for swap logging
+type Logger struct {
+	action      string
 	overlayAddr string
 	peerID      string
 	logger      l.Logger
 }
 
-func wrapCtx(sl SwapLogger, ctx ...interface{}) []interface{} {
+func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
 	for _, elem := range ctx {
 		if elem == "action" && len(ctx)%2 == 0 {
 			return ctx
@@ -36,44 +31,44 @@ func wrapCtx(sl SwapLogger, ctx ...interface{}) []interface{} {
 }
 
 // Warn TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
-func (sl SwapLogger) Warn(msg string, ctx ...interface{}) {
+func (sl Logger) Warn(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Warn(msg, ctx...)
 }
 
 // Error TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
-func (sl SwapLogger) Error(msg string, ctx ...interface{}) {
+func (sl Logger) Error(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Error(msg, ctx...)
 }
 
 //Crit TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
-func (sl SwapLogger) Crit(msg string, ctx ...interface{}) {
+func (sl Logger) Crit(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Crit(msg, ctx...)
 }
 
 //Info TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
-func (sl SwapLogger) Info(msg string, ctx ...interface{}) {
+func (sl Logger) Info(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Info(msg, ctx...)
 }
 
 //Debug TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
-func (sl SwapLogger) Debug(msg string, ctx ...interface{}) {
+func (sl Logger) Debug(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Debug(msg, ctx...)
 }
 
 // Trace TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
-func (sl SwapLogger) Trace(msg string, ctx ...interface{}) {
+func (sl Logger) Trace(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Trace(msg, ctx...)
 }
 
 // SetLogAction set the current log action prefix
-func (sl *SwapLogger) SetLogAction(action Action) {
-	//Adds default action *
+func (sl *Logger) SetLogAction(action string) {
+	//Adds default action undefined
 	if action == "" {
 		sl.action = DefaultAction
 		return
@@ -83,8 +78,8 @@ func (sl *SwapLogger) SetLogAction(action Action) {
 }
 
 // NewSwapLogger is an alias for log.New
-func NewSwapLogger(overlayAddr string) (swapLogger SwapLogger) {
-	swapLogger = SwapLogger{
+func NewSwapLogger(overlayAddr string) (swapLogger Logger) {
+	swapLogger = Logger{
 		action:      DefaultAction,
 		overlayAddr: overlayAddr,
 	}
@@ -94,9 +89,9 @@ func NewSwapLogger(overlayAddr string) (swapLogger SwapLogger) {
 }
 
 // NewSwapPeerLogger is an alias for log.New
-func NewSwapPeerLogger(overlayAddr string, peerID string) (swapLogger SwapLogger) {
+func NewSwapPeerLogger(overlayAddr string, peerID string) (swapLogger Logger) {
 
-	swapLogger = SwapLogger{
+	swapLogger = Logger{
 		action:      DefaultAction,
 		overlayAddr: overlayAddr,
 		peerID:      peerID,
@@ -106,7 +101,7 @@ func NewSwapPeerLogger(overlayAddr string, peerID string) (swapLogger SwapLogger
 	return swapLogger
 }
 
-func addSwapCtx(sl SwapLogger, ctx ...interface{}) []interface{} {
+func addSwapCtx(sl Logger, ctx ...interface{}) []interface{} {
 	ctx = append([]interface{}{"base", sl.overlayAddr}, ctx...)
 	if sl.peerID != "" {
 		ctx = append(ctx, "peer", sl.peerID)
@@ -114,12 +109,12 @@ func addSwapCtx(sl SwapLogger, ctx ...interface{}) []interface{} {
 	return ctx
 }
 
-func addSwapAction(sl SwapLogger, ctx ...interface{}) []interface{} {
-	return append([]interface{}{"action", sl.action}, ctx...)
+func addSwapAction(sl Logger, ctx ...interface{}) []interface{} {
+	return append([]interface{}{"swap_action", sl.action}, ctx...)
 }
 
 // GetLogger return the underlining logger
-func (sl SwapLogger) GetLogger() (logger l.Logger) {
+func (sl Logger) GetLogger() (logger l.Logger) {
 	return sl.logger
 }
 

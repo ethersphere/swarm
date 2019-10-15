@@ -46,7 +46,7 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-var swapLog SwapLogger // logger for Swap related messages and audit trail
+var swapLog Logger     // logger for Swap related messages and audit trail
 const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
 
 // Swap represents the Swarm Accounting Protocol
@@ -80,14 +80,14 @@ type Params struct {
 }
 
 // newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, overlayAddr []byte) SwapLogger {
+func newSwapLogger(logPath string, overlayAddr []byte) Logger {
 	swapLogger := NewSwapLogger(hex.EncodeToString(overlayAddr)[:16])
 	setLoggerHandler(logPath, swapLogger.GetLogger())
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
-func newPeerLogger(s *Swap, peerID enode.ID) SwapLogger {
+func newPeerLogger(s *Swap, peerID enode.ID) Logger {
 	peerLogger := NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
 	setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
 	return peerLogger
@@ -154,7 +154,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
-	swapLog.SetLogAction(Action("swap_init"))
+	swapLog.SetLogAction("swap_init")
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
@@ -664,7 +664,7 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contrac
 
 // deployLoop repeatedly tries to deploy the swap contract .
 func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
-	swapLog.SetLogAction(Action("swap_deploy_contract"))
+	swapLog.SetLogAction("swap_deploy_contract")
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
