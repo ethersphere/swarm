@@ -54,7 +54,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 			name:     "3 seq reads, EOF",
 			peekSize: 6,
 			numReads: 3,
-			expReads: 3,
+			expReads: 4,
 			expErr:   io.EOF,
 		},
 		{
