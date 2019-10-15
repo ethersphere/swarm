@@ -33,8 +33,8 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	// encoded in BigEndian because EVM uses BigEndian encoding
 	binary.BigEndian.PutUint64(cumulativePayoutBytes[24:], cheque.CumulativePayout)
 	// construct the actual cheque
-	input := cheque.Contract.Bytes()
-	input = append(input, cheque.Beneficiary.Bytes()...)
+	input := cheque.ContractAddress.Bytes()
+	input = append(input, cheque.BeneficiaryAddress.Bytes()...)
 	input = append(input, cumulativePayoutBytes[:]...)
 	return input
 }
@@ -90,7 +90,7 @@ func (cheque *ChequeParams) Sign(prv *ecdsa.PrivateKey) ([]byte, error) {
 
 // Equal checks if other has the same fields
 func (cheque *Cheque) Equal(other *Cheque) bool {
-	if cheque.Beneficiary != other.Beneficiary {
+	if cheque.BeneficiaryAddress != other.BeneficiaryAddress {
 		return false
 	}
 
@@ -112,8 +112,8 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 // verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
 // it does not verify anything that requires knowing the previous cheque
 func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common.Address) error {
-	if cheque.Contract != p.contractAddress {
-		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.Contract)
+	if cheque.ContractAddress != p.contractAddress {
+		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.ContractAddress)
 	}
 
 	// the beneficiary is the owner of the counterparty swap contract
@@ -121,8 +121,8 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 		return err
 	}
 
-	if cheque.Beneficiary != expectedBeneficiary {
-		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", expectedBeneficiary, cheque.Beneficiary)
+	if cheque.BeneficiaryAddress != expectedBeneficiary {
+		return fmt.Errorf("wrong cheque parameters: expected beneficiary: %x, was: %x", expectedBeneficiary, cheque.BeneficiaryAddress)
 	}
 
 	return nil

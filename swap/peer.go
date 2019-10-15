@@ -139,9 +139,9 @@ func (p *Peer) createCheque() (*Cheque, error) {
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
-			CumulativePayout: total + amount,
-			Contract:         p.swap.GetParams().ContractAddress,
-			Beneficiary:      p.beneficiary,
+			CumulativePayout:   total + amount,
+			ContractAddress:    p.swap.GetParams().ContractAddress,
+			BeneficiaryAddress: p.beneficiary,
 		},
 		Honey: honey,
 	}
@@ -167,7 +167,7 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 
-	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.BeneficiaryAddress, "contract", cheque.ContractAddress)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

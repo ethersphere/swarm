@@ -50,7 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	"github.com/ethersphere/swarm/contracts/swap"
-	cswap "github.com/ethersphere/swarm/contracts/swap"
+	swapcontract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
@@ -1100,7 +1100,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 // During tests, because the cashing in of cheques is async, we should wait for the function to be returned
 // Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
 // causing subsequent TX to possibly fail due to nonce mismatch
-func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+func testCashCheque(s *Swap, otherSwap swapcontract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	cashCheque(s, otherSwap, opts, cheque)
 	// send to the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
@@ -1188,9 +1188,9 @@ func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:         testChequeContract,
-			CumulativePayout: uint64(42),
-			Beneficiary:      beneficiaryAddress,
+			ContractAddress:    testChequeContract,
+			CumulativePayout:   uint64(42),
+			BeneficiaryAddress: beneficiaryAddress,
 		},
 		Honey: uint64(42),
 	}
@@ -1204,9 +1204,9 @@ func newRandomTestCheque() *Cheque {
 
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			Contract:         testChequeContract,
-			CumulativePayout: uint64(amount),
-			Beneficiary:      beneficiaryAddress,
+			ContractAddress:    testChequeContract,
+			CumulativePayout:   uint64(amount),
+			BeneficiaryAddress: beneficiaryAddress,
 		},
 		Honey: uint64(amount),
 	}
@@ -1318,7 +1318,7 @@ func TestValidateCode(t *testing.T) {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
-	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
+	if err = swapcontract.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
@@ -1341,7 +1341,7 @@ func TestValidateWrongCode(t *testing.T) {
 	testBackend.Commit()
 
 	// since the bytecode is different this should throw an error
-	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != cswap.ErrNotASwapContract {
+	if err = swapcontract.ValidateCode(context.TODO(), swap.backend, addr); err != swapcontract.ErrNotASwapContract {
 		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }
@@ -1351,13 +1351,13 @@ func TestValidateWrongCode(t *testing.T) {
 func setupContractTest() func() {
 	// we overwrite the waitForTx function with one which the simulated backend
 	// immediately commits
-	currentWaitFunc := cswap.WaitFunc
+	currentWaitFunc := swapcontract.WaitFunc
 	defaultCashCheque = testCashCheque
 	// overwrite only for the duration of the test, so...
-	cswap.WaitFunc = testWaitForTx
+	swapcontract.WaitFunc = testWaitForTx
 	return func() {
 		// ...we need to set it back to original when done
-		cswap.WaitFunc = currentWaitFunc
+		swapcontract.WaitFunc = currentWaitFunc
 		defaultCashCheque = cashCheque
 	}
 }
@@ -1390,7 +1390,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("deployed. signing cheque")
 
 	cheque := newTestCheque()
-	cheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
+	cheque.ChequeParams.ContractAddress = issuerSwap.GetParams().ContractAddress
 	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -1430,7 +1430,7 @@ func TestContractIntegration(t *testing.T) {
 
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
-	bouncingCheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
+	bouncingCheque.ChequeParams.ContractAddress = issuerSwap.GetParams().ContractAddress
 	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10
 	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
@@ -1451,7 +1451,7 @@ func TestContractIntegration(t *testing.T) {
 }
 
 // when testing, we don't need to wait for a transaction to be mined
-func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
+func testWaitForTx(auth *bind.TransactOpts, backend swapcontract.Backend, tx *types.Transaction) (*types.Receipt, error) {
 
 	var stb *swapTestBackend
 	var ok bool
@@ -1473,7 +1473,7 @@ func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts.Value = big.NewInt(42)
 	opts.Context = ctx
 
-	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
+	swap.contract, _, err = swapcontract.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
 	if err != nil {
 		return err
 	}
@@ -1566,7 +1566,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 	// cheque with wrong contract
 	testCheque = newTestCheque()
-	testCheque.Contract = beneficiaryAddress
+	testCheque.ContractAddress = beneficiaryAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
 	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong contract")
@@ -1574,7 +1574,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 	// cheque with wrong beneficiary
 	testCheque = newTestCheque()
-	testCheque.Beneficiary = ownerAddress
+	testCheque.BeneficiaryAddress = ownerAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
 	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
@@ -1676,7 +1676,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// invalid cheque because wrong recipient
 	cheque := newTestCheque()
-	cheque.Beneficiary = ownerAddress
+	cheque.BeneficiaryAddress = ownerAddress
 	cheque.Signature, _ = cheque.Sign(ownerKey)
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err == nil {
