@@ -58,7 +58,7 @@ var (
 
 	spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
-		Version:    1,
+		Version:    2,
 		MaxMsgSize: 10 * 1024 * 1024,
 		Messages: []interface{}{
 			ChunkDelivery{},
