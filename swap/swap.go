@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/contracts/swap"
 	swapcontract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -54,14 +53,14 @@ const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	store            state.Store          // store is needed in order to keep balances and cheques across sessions
-	peers            map[enode.ID]*Peer   // map of all swap Peers
-	peersLock        sync.RWMutex         // lock for peers map
-	backend          swapcontract.Backend // the backend (blockchain) used
-	owner            *Owner               // contract access
-	params           *Params              // economic and operational parameters
-	contract         swap.Contract        // reference to the smart contract
-	honeyPriceOracle HoneyOracle          // oracle which resolves the price of honey (in Wei)
+	store            state.Store           // store is needed in order to keep balances and cheques across sessions
+	peers            map[enode.ID]*Peer    // map of all swap Peers
+	peersLock        sync.RWMutex          // lock for peers map
+	backend          swapcontract.Backend  // the backend (blockchain) used
+	owner            *Owner                // contract access
+	params           *Params               // economic and operational parameters
+	contract         swapcontract.Contract // reference to the smart contract
+	honeyPriceOracle HoneyOracle           // oracle which resolves the price of honey (in Wei)
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -567,7 +566,7 @@ func (s *Swap) Close() error {
 }
 
 // GetParams returns contract parameters (Bin, ABI, contractAddress) from the contract
-func (s *Swap) GetParams() *swap.Params {
+func (s *Swap) GetParams() *swapcontract.Params {
 	return s.contract.ContractParams()
 }
 
