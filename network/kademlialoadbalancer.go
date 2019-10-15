@@ -76,21 +76,21 @@ type KademliaLoadBalancer struct {
 }
 
 // Stop unsubscribe from notifiers
-func (klb KademliaLoadBalancer) Stop() {
+func (klb *KademliaLoadBalancer) Stop() {
 	klb.onPeerSub.Unsubscribe()
 	klb.offPeerSub.Unsubscribe()
 	close(klb.quitC)
 }
 
 // EachBinNodeAddress calls EachBinDesc with the base address of kademlia (the node address)
-func (klb KademliaLoadBalancer) EachBinNodeAddress(consumeBin LBBinConsumer) {
+func (klb *KademliaLoadBalancer) EachBinNodeAddress(consumeBin LBBinConsumer) {
 	klb.EachBinDesc(klb.kademlia.BaseAddr(), consumeBin)
 }
 
 // EachBinFiltered returns all bins in descending order from the perspective of base address.
 // Only peers with the provided capabilities capKey are considered.
 // All peers in that bin will be provided to the LBBinConsumer sorted by least used first.
-func (klb KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, consumeBin LBBinConsumer) {
+func (klb *KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, consumeBin LBBinConsumer) {
 	_ = klb.kademlia.EachBinDescFiltered(base, capKey, 0, func(peerBin *PeerBin) bool {
 		peers := klb.peerBinToPeerList(peerBin)
 		return consumeBin(LBBin{LBPeers: peers, ProximityOrder: peerBin.ProximityOrder})
@@ -99,7 +99,7 @@ func (klb KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, cons
 
 // EachBinDesc returns all bins in descending order from the perspective of base address.
 // All peers in that bin will be provided to the LBBinConsumer sorted by least used first.
-func (klb KademliaLoadBalancer) EachBinDesc(base []byte, consumeBin LBBinConsumer) {
+func (klb *KademliaLoadBalancer) EachBinDesc(base []byte, consumeBin LBBinConsumer) {
 	klb.kademlia.EachBinDesc(base, 0, func(peerBin *PeerBin) bool {
 		peers := klb.peerBinToPeerList(peerBin)
 		return consumeBin(LBBin{LBPeers: peers, ProximityOrder: peerBin.ProximityOrder})
@@ -314,12 +314,14 @@ func (lb *resourceUseStats) addUse(resource Resource) int {
 // to know that the initial uses has been initialized for a new peer
 func (lb *resourceUseStats) waitKey(key string) {
 	lb.lock.Lock()
-	defer lb.lock.Unlock()
 	if _, ok := lb.resourceUses[key]; ok {
+		lb.lock.Unlock()
 		return
 	}
-	lb.waiting[key] = make(chan struct{})
-	<-lb.waiting[key]
+	waitChan := make(chan struct{})
+	lb.waiting[key] = waitChan
+	lb.lock.Unlock()
+	<-waitChan
 	delete(lb.waiting, key)
 }
 
