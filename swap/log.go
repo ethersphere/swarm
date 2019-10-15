@@ -14,10 +14,8 @@ const (
 
 // Logger wraps the ethereum logger with specific information for swap logging
 type Logger struct {
-	action      string
-	overlayAddr string
-	peerID      string
-	logger      l.Logger
+	action string
+	logger l.Logger
 }
 
 func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
@@ -26,7 +24,7 @@ func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
 			return ctx
 		}
 	}
-	ctx = addSwapAction(sl, ctx...)
+	ctx = append([]interface{}{"swap_action", sl.action}, ctx...)
 	return ctx
 }
 
@@ -79,38 +77,30 @@ func (sl *Logger) SetLogAction(action string) {
 
 // NewSwapLogger is an alias for log.New
 func NewSwapLogger(overlayAddr string) (swapLogger Logger) {
-	swapLogger = Logger{
-		action:      DefaultAction,
-		overlayAddr: overlayAddr,
-	}
-	ctx := addSwapCtx(swapLogger)
-	swapLogger.logger = l.New(ctx...)
-	return swapLogger
+	return newLogger(overlayAddr, "")
 }
 
 // NewSwapPeerLogger is an alias for log.New
 func NewSwapPeerLogger(overlayAddr string, peerID string) (swapLogger Logger) {
+	return newLogger(overlayAddr, peerID)
+}
 
+// newLogger return a new SwapLogger Instance with ctx loaded for swap
+func newLogger(overlayAddr string, peerID string) (swapLogger Logger) {
 	swapLogger = Logger{
-		action:      DefaultAction,
-		overlayAddr: overlayAddr,
-		peerID:      peerID,
+		action: DefaultAction,
 	}
-	ctx := addSwapCtx(swapLogger)
+	ctx := addSwapCtx(swapLogger, overlayAddr, peerID)
 	swapLogger.logger = l.New(ctx...)
 	return swapLogger
 }
 
-func addSwapCtx(sl Logger, ctx ...interface{}) []interface{} {
-	ctx = append([]interface{}{"base", sl.overlayAddr}, ctx...)
-	if sl.peerID != "" {
-		ctx = append(ctx, "peer", sl.peerID)
+func addSwapCtx(sl Logger, overlayAddr string, peerID string) []interface{} {
+	ctx := []interface{}{"base", overlayAddr}
+	if peerID != "" {
+		ctx = append(ctx, "peer", peerID)
 	}
 	return ctx
-}
-
-func addSwapAction(sl Logger, ctx ...interface{}) []interface{} {
-	return append([]interface{}{"swap_action", sl.action}, ctx...)
 }
 
 // GetLogger return the underlining logger
