@@ -5,9 +5,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/log"
-
 	"github.com/ethersphere/swarm/network/gopubsub"
 )
 
@@ -160,7 +158,7 @@ func (klb *KademliaLoadBalancer) listenOffPeers() {
 // to calculate it again.
 func (klb *KademliaLoadBalancer) addedPeer(peer *Peer, po int) {
 	initCount := klb.initCountFunc(peer, 0)
-	log.Debug("Adding peer", "key", peer.Key()[:4], "initCount", initCount)
+	log.Debug("Adding peer", "key", peer.Label(), "initCount", initCount)
 	klb.resourceUseStats.initKey(peer.Key(), initCount)
 }
 
@@ -174,7 +172,7 @@ func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) 
 		leastUsed := peersInSamePo[idx]
 		if leastUsed.Peer.Key() != excludePeer.Key() {
 			leastUsedCount = klb.resourceUseStats.getUses(leastUsed.Peer)
-			log.Debug("Least used peer is", "peer", leastUsed.Peer.Key()[:4], "leastUsedCount", leastUsedCount)
+			log.Debug("Least used peer is", "peer", leastUsed.Peer.Label(), "leastUsedCount", leastUsedCount)
 			break
 		}
 		idx++
@@ -188,7 +186,7 @@ func (klb *KademliaLoadBalancer) nearestNeighbourCount(newPeer *Peer, _ int) int
 	klb.kademlia.EachConn(newPeer.Address(), 255, func(peer *Peer, po int) bool {
 		if peer != newPeer {
 			count = klb.resourceUseStats.getUses(peer)
-			log.Debug("Nearest neighbour is", "peer", peer.Key()[:4], "count", count)
+			log.Debug("Nearest neighbour is", "peer", peer.Label(), "count", count)
 			return false
 		}
 		return true
@@ -239,7 +237,8 @@ type resourceUseStats struct {
 }
 
 type Resource interface {
-	Key() string
+	Key() string   // unique id in string format of the resource.
+	Label() string // short string format of the key for debugging purposes.
 }
 
 type ResourceCount struct {
@@ -304,14 +303,14 @@ func (lb *resourceUseStats) getKeyUses(key string) int {
 func (lb *resourceUseStats) addUse(resource Resource) int {
 	lb.lock.Lock()
 	defer lb.lock.Unlock()
-	log.Debug("Adding use", "key", resource.Key()[:4])
+	log.Debug("Adding use", "key", resource.Label())
 	key := resource.Key()
 	lb.resourceUses[key] = lb.resourceUses[key] + 1
 	return lb.resourceUses[key]
 }
 
-// Used for testing. As peer resource initialization is asynchronous we need a way
-// to know that the initial uses has been initialized for a new peer
+// WaitKey blocks until some key is added to the load balancer stats.
+// As peer resource initialization is asynchronous we need a way to know that the initial uses has been initialized.
 func (lb *resourceUseStats) waitKey(key string) {
 	lb.lock.Lock()
 	if _, ok := lb.resourceUses[key]; ok {
@@ -332,26 +331,4 @@ func (lb *resourceUseStats) initKey(key string, count int) {
 	if kChan, ok := lb.waiting[key]; ok {
 		kChan <- struct{}{}
 	}
-}
-
-// Debug functions
-
-func stringBinaryToHex(binary string) string {
-	var byteSlice = make([]byte, 32)
-	i, _ := strconv.ParseInt(binary, 2, 0)
-	byteSlice[0] = byte(i)
-	return hexutil.Encode(byteSlice)
-}
-func peerToBinaryId(peer *Peer) string {
-	return byteToBinary(peer.Address()[0])
-}
-
-func byteToBinary(b byte) string {
-	binary := strconv.FormatUint(uint64(b), 2)
-	if len(binary) < 8 {
-		for i := 8 - len(binary); i > 0; i-- {
-			binary = "0" + binary
-		}
-	}
-	return binary
 }

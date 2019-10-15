@@ -2,14 +2,14 @@ package network
 
 import (
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/network/capability"
-	"github.com/ethersphere/swarm/pot"
-
 	"github.com/ethersphere/swarm/network/gopubsub"
+	"github.com/ethersphere/swarm/pot"
 )
 
 // TestAddedNodes checks that when adding a node it is assigned the correct number of uses.
@@ -133,7 +133,7 @@ func TestEachBinBaseUses(t *testing.T) {
 	for key, uses := range resourceUses {
 		if uses != 1 {
 			bytes, _ := hexutil.Decode(key)
-			binaryKey := byteToBinary(bytes[0]) + byteToBinary(bytes[1])
+			binaryKey := byteToBitString(bytes[0]) + byteToBitString(bytes[1])
 			t.Errorf("Expected only 1 use of %v but got %v", binaryKey, uses)
 		}
 	}
@@ -145,7 +145,7 @@ func TestEachBinBaseUses(t *testing.T) {
 	klb.EachBinDesc(pivotAddressBin3, countUse)
 	klb.EachBinDesc(pivotAddressBin3, countUse)
 
-	count := klb.resourceUseStats.getKeyUses(stringBinaryToHex("10010001"))
+	count := klb.resourceUseStats.getKeyUses(bitStringToHex("10010001"))
 	if count != 3 {
 		t.Errorf("Expected 3 uses of 10010001 but got %v", count)
 	}
@@ -167,22 +167,22 @@ func TestEachBinFiltered(t *testing.T) {
 	useStats := klb.resourceUseStats
 	useStats.waitKey(capPeer.Key())
 	tk.On("01010101") // bin 0 dec 85 hex 55
-	useStats.waitKey(stringBinaryToHex("01010101"))
+	useStats.waitKey(bitStringToHex("01010101"))
 	tk.On("01010100") // bin 0 dec 84 hex 54
-	useStats.waitKey(stringBinaryToHex("01010100"))
+	useStats.waitKey(bitStringToHex("01010100"))
 	tk.On("10010100") // bin 1 dec 148
-	useStats.waitKey(stringBinaryToHex("10010100"))
+	useStats.waitKey(bitStringToHex("10010100"))
 	tk.On("10010001") // bin 1 dec 145
-	useStats.waitKey(stringBinaryToHex("10010001"))
+	useStats.waitKey(bitStringToHex("10010001"))
 	tk.On("11010100") // bin 2 dec 212
-	useStats.waitKey(stringBinaryToHex("11010100"))
+	useStats.waitKey(bitStringToHex("11010100"))
 	tk.On("11010101") // bin 2 dec 213
-	useStats.waitKey(stringBinaryToHex("11010101"))
+	useStats.waitKey(bitStringToHex("11010101"))
 	stats := make(map[string]int)
 	countUse := func(bin LBBin) bool {
 		peer := bin.LBPeers[0].Peer
 		bin.LBPeers[0].Use()
-		key := peerToBinaryId(peer)
+		key := peerToBitString(peer)
 		stats[key] = stats[key] + 1
 		return false
 	}
@@ -367,4 +367,30 @@ func (tkb *testKademliaBackend) updateMaxPo() {
 
 func newTestKadPeer(s string) *Peer {
 	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, nil)
+}
+
+// Debug functions
+
+// bitStringToHex converts an address in bit format (11001100) to hex format. BitString format is used to create test
+// peers, hex format is used in the load balancer stats.
+func bitStringToHex(binary string) string {
+	var byteSlice = make([]byte, 32)
+	i, _ := strconv.ParseInt(binary, 2, 0)
+	byteSlice[0] = byte(i)
+	return hexutil.Encode(byteSlice)
+}
+
+// converts the peer address to bit string format
+func peerToBitString(peer *Peer) string {
+	return byteToBitString(peer.Address()[0])
+}
+
+func byteToBitString(b byte) string {
+	binary := strconv.FormatUint(uint64(b), 2)
+	if len(binary) < 8 {
+		for i := 8 - len(binary); i > 0; i-- {
+			binary = "0" + binary
+		}
+	}
+	return binary
 }

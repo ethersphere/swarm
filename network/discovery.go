@@ -74,6 +74,11 @@ func (d *Peer) Key() string {
 	return d.key
 }
 
+// Label returns a short string representation for debugging purposes
+func (d *Peer) Label() string {
+	return d.key[:4]
+}
+
 // NotifyDepth sends a message to all connections if depth of saturation is changed
 func NotifyDepth(depth uint8, kad *Kademlia) {
 	f := func(val *Peer, po int) bool {
