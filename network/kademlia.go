@@ -79,7 +79,7 @@ func NewKadParams() *KadParams {
 		MaxProxDisplay:    16,
 		NeighbourhoodSize: 2,
 		MinBinSize:        2,
-		MaxBinSize:        4,
+		MaxBinSize:        16,
 		RetryInterval:     4200000000, // 4.2 sec
 		MaxRetries:        42,
 		RetryExponent:     2,
@@ -1070,7 +1070,7 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 }
 
 //calculates the expected min size of a given bin (minBinSize)
-//binSize = k.MinBinSize * 2 ^ (depth - binNumber - 1)
+//binSize = k.MinBinSize * 2 ^ (depth - proximityOrder - 1)
 func (k *Kademlia) expectedMinBinSize(proximityOrder int) int {
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 

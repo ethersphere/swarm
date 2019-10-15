@@ -395,6 +395,8 @@ func TestSuggestPeersFindPeers(t *testing.T) {
 	base := "00000000"
 	tk := newTestKademlia(t, base)
 
+	tk.MaxBinSize = 7
+
 	//Add peers to bin 2 and 3 in order to be able to have depth 2
 	tk.On("00100000")
 	tk.On("00010000")
@@ -489,10 +491,15 @@ func TestSuggestPeersFindPeers(t *testing.T) {
 	tk.On("11111100")
 	tk.checkSuggestPeer("11001111", 0, false)
 	tk.On("11001111")
-	tk.checkSuggestPeer("11001100", 0, false)
-	tk.On("11001100")
+	//Since binSize is MaxBinSize (7), Bin0 is saturated now
+	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//Bin0 saturated now
+	//We change MaxBinSize
+	tk.MaxBinSize = 8
+
+	//Shouldn't be saturated anymore
+	tk.checkSuggestPeer("11001100", 0, true)
+	tk.On("11001100")
 	//One known peer left to add in bin0, but since is saturated shouldn't be suggested
 	tk.checkSuggestPeer("<nil>", 0, false)
 
