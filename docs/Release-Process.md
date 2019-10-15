@@ -23,7 +23,6 @@ git push origin v0.4.{x}
 5. Verify that the following places have the new release:
      1. [ ] [Website download page](https://ethswarm.org/downloads/)
      2. [ ] [Docker Hub](https://hub.docker.com/r/ethersphere/swarm/tags)
-     3. [ ] [Ubuntu PPA](https://launchpad.net/~ethereum/+archive/ubuntu/ethereum/+packages?field.name_filter=ethereum-swarm&field.status_filter=published&field.series_filter=)
 6. Create a PR to update `version.go` and `CHANGELOG.md`, this time setting it to `unstable` and increasing the version number:  [See example PR](https://github.com/ethersphere/swarm/pull/1470).
 7. Merge the PR after all tests passed.
 8. Close the [milestone](https://github.com/ethersphere/swarm/milestones).

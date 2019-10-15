@@ -100,11 +100,11 @@ func testManifestChange(t *testing.T, encrypt bool) {
 		"--defaultpath",
 		indexDataFilename,
 		"up",
-		origDir,
 	}
 	if encrypt {
 		args = append(args, "--encrypt")
 	}
+	args = append(args, origDir)
 
 	origManifestHash := runSwarmExpectHash(t, args...)
 
@@ -464,12 +464,11 @@ func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
 		"--defaultpath",
 		indexDataFilename,
 		"up",
-		origDir,
 	}
 	if encrypt {
 		args = append(args, "--encrypt")
 	}
-
+	args = append(args, origDir)
 	origManifestHash := runSwarmExpectHash(t, args...)
 
 	checkHashLength(t, origManifestHash, encrypt)

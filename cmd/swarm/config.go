@@ -59,18 +59,19 @@ var (
 
 //constants for environment variables
 const (
-	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvAccount                 = "SWARM_ACCOUNT"
 	SwarmEnvBzzKeyHex               = "SWARM_BZZ_KEY_HEX"
 	SwarmEnvListenAddr              = "SWARM_LISTEN_ADDR"
 	SwarmEnvPort                    = "SWARM_PORT"
 	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
+	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
+	SwarmEnvInitialDeposit          = "SWARM_INITIAL_DEPOSIT"
 	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
+	SwarmSyncMode                   = "SWARM_SYNC_MODE"
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
-	SwarmEnvSyncDisable             = "SWARM_SYNC_DISABLE"
 	SwarmEnvSyncUpdateDelay         = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SwarmEnvMaxStreamPeerServers    = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
@@ -208,14 +209,17 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
 		currentConfig.SwapLogPath = swapLogPath
 	}
+	if initialDepo := ctx.GlobalUint64(SwarmSwapInitialDepositFlag.Name); initialDepo != 0 {
+		currentConfig.SwapInitialDeposit = initialDepo
+	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
 	}
 	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
-	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
-		currentConfig.SyncEnabled = false
+	if ctx.GlobalIsSet(SwarmSyncModeFlag.Name) {
+		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = syncModeParse(ctx.GlobalString(SwarmSyncModeFlag.Name))
 	}
 	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
 		currentConfig.SyncUpdateDelay = d
@@ -264,6 +268,22 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.EnablePinning = true
 	}
 	return currentConfig
+}
+
+func syncModeParse(s string) (pullSync, pushSync bool) {
+	switch s {
+	case "pull":
+		return true, false
+	case "push":
+		return false, true
+	case "all":
+		return true, true
+	case "none":
+		return false, false
+	default:
+		utils.Fatalf("unknown cli flag %s value: %v", SwarmSyncModeFlag.Name, s)
+		return
+	}
 }
 
 // dumpConfig is the dumpconfig command.

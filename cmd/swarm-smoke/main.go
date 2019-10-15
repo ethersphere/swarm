@@ -36,115 +36,12 @@ var (
 	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
 )
 
-var (
-	allhosts      string
-	hosts         []string
-	filesize      int
-	syncDelay     bool
-	pushsyncDelay bool
-	syncMode      string
-	inputSeed     int
-	httpPort      int
-	wsPort        int
-	verbosity     int
-	timeout       int
-	single        bool
-	onlyUpload    bool
-	debug         bool
-)
-
 func main() {
 	app := cli.NewApp()
 	app.Name = "smoke-test"
 	app.Usage = ""
 
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "hosts",
-			Value:       "",
-			Usage:       "comma-separated list of swarm hosts",
-			Destination: &allhosts,
-		},
-		cli.IntFlag{
-			Name:        "http-port",
-			Value:       80,
-			Usage:       "http port",
-			Destination: &httpPort,
-		},
-		cli.IntFlag{
-			Name:        "ws-port",
-			Value:       8546,
-			Usage:       "ws port",
-			Destination: &wsPort,
-		},
-		cli.IntFlag{
-			Name:        "seed",
-			Value:       0,
-			Usage:       "input seed in case we need deterministic upload",
-			Destination: &inputSeed,
-		},
-		cli.IntFlag{
-			Name:        "filesize",
-			Value:       1024,
-			Usage:       "file size for generated random file in KB",
-			Destination: &filesize,
-		},
-		cli.StringFlag{
-			Name:        "sync-mode",
-			Value:       "pullsync",
-			Usage:       "sync mode - pushsync or pullsync or both",
-			Destination: &syncMode,
-		},
-		cli.BoolFlag{
-			Name:        "pushsync-delay",
-			Usage:       "wait for content to be push synced",
-			Destination: &pushsyncDelay,
-		},
-		cli.BoolFlag{
-			Name:        "sync-delay",
-			Usage:       "wait for content to be synced",
-			Destination: &syncDelay,
-		},
-		cli.IntFlag{
-			Name:        "verbosity",
-			Value:       1,
-			Usage:       "verbosity",
-			Destination: &verbosity,
-		},
-		cli.IntFlag{
-			Name:        "timeout",
-			Value:       180,
-			Usage:       "timeout in seconds after which kill the process",
-			Destination: &timeout,
-		},
-		cli.BoolFlag{
-			Name:        "single",
-			Usage:       "whether to fetch content from a single node or from all nodes",
-			Destination: &single,
-		},
-		cli.BoolFlag{
-			Name:        "only-upload",
-			Usage:       "whether to only upload content to a single node without fetching",
-			Destination: &onlyUpload,
-		},
-		cli.BoolFlag{
-			Name:        "debug",
-			Usage:       "whether to call debug APIs as part of the smoke test",
-			Destination: &debug,
-		},
-	}
-
-	app.Flags = append(app.Flags, []cli.Flag{
-		utils.MetricsEnabledFlag,
-		swarmmetrics.MetricsInfluxDBEndpointFlag,
-		swarmmetrics.MetricsInfluxDBDatabaseFlag,
-		swarmmetrics.MetricsInfluxDBUsernameFlag,
-		swarmmetrics.MetricsInfluxDBPasswordFlag,
-		swarmmetrics.MetricsInfluxDBTagsFlag,
-	}...)
-
-	app.Flags = append(app.Flags, tracing.Flags...)
-
+	app.Flags = flags
 	app.Commands = []cli.Command{
 		{
 			Name:    "upload_and_sync",

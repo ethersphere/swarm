@@ -42,6 +42,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/pin"
@@ -282,10 +283,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.post.raw", "ruid", ruid)
 
-	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.Tags.Get(tagUid)
+	tagUID := sctx.GetTag(r.Context())
+	tag, err := s.api.Tags.Get(tagUID)
 	if err != nil {
-		log.Error("handle post raw got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
+		log.Error("handle post raw got an error retrieving tag for DoneSplit", "tagUID", tagUID, "err", err)
 	}
 
 	postRawCount.Inc(1)
@@ -340,7 +341,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -354,6 +355,17 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
+
+	tagUID := sctx.GetTag(r.Context())
+	tag, err := s.api.Tags.Get(tagUID)
+	if err != nil {
+		log.Error("handle post raw got an error retrieving tag", "tagUID", tagUID, "err", err)
+	}
+
+	// start an http.post span to measure how long the HTTP POST request took, and link it with the tag.Context()
+	// N.B. this is independent context (used for tracing), to the HTTP request context - r.Context()
+	_, sp := spancontext.StartSpan(tag.Context(), "http.post")
+	defer sp.Finish()
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -411,10 +423,10 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.Tags.Get(tagUid)
+	tagUID = sctx.GetTag(r.Context())
+	tag, err = s.api.Tags.Get(tagUID)
 	if err != nil {
-		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
+		log.Error("got an error retrieving tag for DoneSplit", "tagUID", tagUID, "err", err)
 	}
 
 	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.TotalCounter())
@@ -433,7 +445,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }

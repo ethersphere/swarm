@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -97,7 +96,6 @@ func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
 	resp := &peersMsg{
 		Peers: []*BzzAddr{a},
 	}
-	log.Warn("notifypeer", "notify", resp)
 	go d.Send(context.TODO(), resp)
 }
 

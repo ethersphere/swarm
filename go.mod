@@ -10,6 +10,7 @@ require (
 	github.com/Microsoft/go-winio v0.4.13 // indirect
 	github.com/Microsoft/hcsshim v0.8.6 // indirect
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/VividCortex/ewma v1.1.1 // indirect
 	github.com/allegro/bigcache v0.0.0-20190218064605-e24eb225f156 // indirect
 	github.com/apilayer/freegeoip v0.0.0-20180702111401-3f942d1392f6 // indirect
 	github.com/aristanetworks/goarista v0.0.0-20170210015632-ea17b1a17847 // indirect
@@ -76,6 +77,7 @@ require (
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v0.0.0-20180607151842-f7e0d4744fa6
 	github.com/uber/jaeger-lib v0.0.0-20180615202729-a51202d6f4a7 // indirect
+	github.com/vbauerster/mpb v3.4.0+incompatible
 	github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208 // indirect
 	go.uber.org/atomic v1.4.0 // indirect
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4

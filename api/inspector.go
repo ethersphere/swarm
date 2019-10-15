@@ -24,9 +24,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
-	stream "github.com/ethersphere/swarm/network/stream/v2"
+	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -51,6 +52,20 @@ func (i *Inspector) Hive() string {
 // KademliaInfo returns structured output of the Kademlia state that we can check for equality
 func (i *Inspector) KademliaInfo() network.KademliaInfo {
 	return i.hive.KademliaInfo()
+}
+
+func (i *Inspector) IsPushSynced(tagname string) bool {
+	tags := i.api.Tags.All()
+
+	for _, t := range tags {
+		if t.Name == tagname {
+			ds := t.Done(chunk.StateSynced)
+			log.Trace("found tag", "tagname", tagname, "done-syncing", ds)
+			return ds
+		}
+	}
+
+	return false
 }
 
 func (i *Inspector) IsPullSyncing() bool {

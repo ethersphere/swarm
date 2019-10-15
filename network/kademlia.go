@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
@@ -728,6 +729,33 @@ func (k *Kademlia) callable(e *entry) bool {
 	log.Trace(fmt.Sprintf("%08x: peer %v is callable", k.BaseAddr()[:4], e))
 
 	return true
+}
+
+// IsClosestTo returns true if self is the closest peer to addr among filtered peers
+// ie. return false iff there is a peer that
+// - filter(bzzpeer) == true AND
+// - pot.DistanceCmp(addr, peeraddress, selfaddress) == 1
+func (k *Kademlia) IsClosestTo(addr []byte, filter func(*BzzPeer) bool) (closest bool) {
+	myPo := chunk.Proximity(addr, k.BaseAddr())
+	// iterate connection in kademlia
+	closest = true
+	k.EachConn(addr, 255, func(p *Peer, po int) bool {
+		if !filter(p.BzzPeer) {
+			return true
+		}
+		if po != myPo {
+			closest = po < myPo
+			return false
+		}
+		// if proximity order of closest PO nodes equal our own,
+		// then use XOR-based DistanceCmp and return if self is not closest
+		if d, _ := pot.DistanceCmp(addr, p.Over(), k.BaseAddr()); d == 1 {
+			closest = false
+			return false
+		}
+		return true
+	})
+	return closest
 }
 
 // BaseAddr return the kademlia base address

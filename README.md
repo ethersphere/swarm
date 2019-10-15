@@ -9,29 +9,29 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 ## Table of Contents  <!-- omit in toc -->
 
-- [Building the source](#Building-the-source)
-- [Running Swarm](#Running-Swarm)
-  - [Verifying that your local Swarm node is running](#Verifying-that-your-local-Swarm-node-is-running)
-  - [Ethereum Name Service resolution](#Ethereum-Name-Service-resolution)
-- [Documentation](#Documentation)
-- [Docker](#Docker)
-  - [Docker tags](#Docker-tags)
-  - [Swarm command line arguments](#Swarm-command-line-arguments)
-- [Developers Guide](#Developers-Guide)
-  - [Go Environment](#Go-Environment)
-  - [Vendored Dependencies](#Vendored-Dependencies)
-  - [Testing](#Testing)
-  - [Profiling Swarm](#Profiling-Swarm)
-  - [Metrics and Instrumentation in Swarm](#Metrics-and-Instrumentation-in-Swarm)
-    - [Visualizing metrics](#Visualizing-metrics)
-- [Public Gateways](#Public-Gateways)
-- [Swarm Dapps](#Swarm-Dapps)
-- [Contributing](#Contributing)
-- [License](#License)
+- [Building the source](#building-the-source)
+- [Running Swarm](#running-swarm)
+  - [Verifying that your local Swarm node is running](#verifying-that-your-local-swarm-node-is-running)
+  - [Ethereum Name Service resolution](#ethereum-name-service-resolution)
+- [Documentation](#documentation)
+- [Docker](#docker)
+  - [Docker tags](#docker-tags)
+  - [Swarm command line arguments](#swarm-command-line-arguments)
+- [Developers Guide](#developers-guide)
+  - [Go Environment](#go-environment)
+  - [Vendored Dependencies](#vendored-dependencies)
+  - [Testing](#testing)
+  - [Profiling Swarm](#profiling-swarm)
+  - [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
+    - [Visualizing metrics](#visualizing-metrics)
+- [Public Gateways](#public-gateways)
+- [Swarm Dapps](#swarm-dapps)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Building the source
 
-Building Swarm requires Go (version 1.11 or later).
+It's recommended to use Go 1.13 to build Swarm.
 
 To simply compile the `swarm` binary without a `GOPATH`:
 
