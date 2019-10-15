@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	log "github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
@@ -47,8 +46,8 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-var swapLog log.SwapLogger // logger for Swap related messages and audit trail
-const swapLogLevel = 3     // swapLogLevel indicates filter level of log messages
+var swapLog SwapLogger // logger for Swap related messages and audit trail
+const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
 
 // Swap represents the Swarm Accounting Protocol
 // a peer to peer micropayment system
@@ -81,15 +80,15 @@ type Params struct {
 }
 
 // newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, overlayAddr []byte) log.SwapLogger {
-	swapLogger := log.NewSwapLogger(hex.EncodeToString(overlayAddr)[:16])
+func newSwapLogger(logPath string, overlayAddr []byte) SwapLogger {
+	swapLogger := NewSwapLogger(hex.EncodeToString(overlayAddr)[:16])
 	setLoggerHandler(logPath, swapLogger.GetLogger())
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
-func newPeerLogger(s *Swap, peerID enode.ID) log.SwapLogger {
-	peerLogger := log.NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
+func newPeerLogger(s *Swap, peerID enode.ID) SwapLogger {
+	peerLogger := NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
 	setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
 	return peerLogger
 }
@@ -107,7 +106,7 @@ func setLoggerHandler(logpath string, logger l.Logger) {
 	rfh, err := swapRotatingFileHandler(logpath)
 
 	if err != nil {
-		log.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
+		l.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
 		// use the default swarm logger as a fallback
 		logger.SetHandler(lh)
 		return
@@ -155,7 +154,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
-	swapLog.SetLogAction(log.Action("swap_init"))
+	swapLog.SetLogAction(Action("swap_init"))
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
@@ -307,7 +306,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		log.Error("error processing and verifying cheque", "err", err)
+		l.Error("error processing and verifying cheque", "err", err)
 		return err
 	}
 
@@ -317,13 +316,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	if err := p.updateBalance(-int64(cheque.Honey)); err != nil {
-		log.Error("error updating balance", "err", err)
+		l.Error("error updating balance", "err", err)
 		return err
 	}
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
-		log.Error("error getting contract", "err", err)
+		l.Error("error getting contract", "err", err)
 		return err
 	}
 
@@ -665,7 +664,7 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contrac
 
 // deployLoop repeatedly tries to deploy the swap contract .
 func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
-	swapLog.SetLogAction(log.Action("swap_deploy_contract"))
+	swapLog.SetLogAction(Action("swap_deploy_contract"))
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {

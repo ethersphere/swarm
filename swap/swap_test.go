@@ -51,7 +51,6 @@ import (
 	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
 	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
-	l "github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
@@ -1778,10 +1777,10 @@ func TestSwapLogToFile(t *testing.T) {
 	creditor.sendCheque()
 
 	swapLog.Info("Test")
-	swapLog.SetLogAction(l.Action("disconnecting"))
+	swapLog.SetLogAction(Action("disconnecting"))
 	swapLog.Info("Test")
 	swapLog.Info("Test", "action", "emitting_cheque")
-	swapLog.SetLogAction(l.SentChequeAction)
+	swapLog.SetLogAction(SentChequeAction)
 	swapLog.Info("Test")
 
 	if logDirDebitor == "" {
