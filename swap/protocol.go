@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	contract "github.com/ethersphere/swarm/contracts/swap"
+	swapcontract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -97,7 +97,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	return contract.ValidateCode(context.Background(), s.backend, handshake.ContractAddress)
+	return swapcontract.ValidateCode(context.Background(), s.backend, handshake.ContractAddress)
 }
 
 // run is the actual swap protocol run method
@@ -166,7 +166,7 @@ type swapAPI interface {
 // API would be the API accessor for protocol methods
 type API struct {
 	swapAPI
-	*contract.Params
+	*swapcontract.Params
 }
 
 // NewAPI creates a new API instance

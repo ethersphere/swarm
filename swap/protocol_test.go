@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	contract "github.com/ethersphere/swarm/contracts/swap"
+	sc "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	colorable "github.com/mattn/go-colorable"
@@ -350,7 +350,7 @@ func TestSwapRPC(t *testing.T) {
 	defer clean()
 
 	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
-	swap.contract, err = contract.InstanceAt(common.Address{}, swap.backend)
+	swap.contract, err = sc.InstanceAt(common.Address{}, swap.backend)
 	if err != nil {
 		t.Fatal(err)
 	}
