@@ -30,37 +30,37 @@ func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
 	return ctx
 }
 
-// Warn TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
+// Warn is a convenient alias for log.Warn with a defined action context
 func (sl Logger) Warn(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Warn(msg, ctx...)
 }
 
-// Error TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
+// Error is a convenient alias for log.Error with a defined action context
 func (sl Logger) Error(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Error(msg, ctx...)
 }
 
-//Crit TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
+//Crit is a convenient alias for log.Crit with a defined action context
 func (sl Logger) Crit(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Crit(msg, ctx...)
 }
 
-//Info TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
+//Info is a convenient alias for log.Info with a defined action context
 func (sl Logger) Info(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Info(msg, ctx...)
 }
 
-//Debug TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
+//Debug is a convenient alias for log.Debug with a defined action context
 func (sl Logger) Debug(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Debug(msg, ctx...)
 }
 
-// Trace TODO REVIEW THIS COMMENT is a convenient alias for log.Warn with stats
+// Trace is a convenient alias for log.Trace with a defined action context
 func (sl Logger) Trace(msg string, ctx ...interface{}) {
 	ctx = wrapCtx(sl, ctx...)
 	sl.logger.Trace(msg, ctx...)
