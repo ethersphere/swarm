@@ -280,7 +280,7 @@ func setupTags(chunkCnt, tagCnt int) (tags *chunk.Tags, tagIDs []uint32) {
 	tags = chunk.NewTags()
 	// all but one tag is created
 	for i := 0; i < tagCnt-1; i++ {
-		tags.Create("", int64(chunkCnt/tagCnt))
+		tags.Create("", int64(chunkCnt/tagCnt), false)
 	}
 	// extract tag ids
 	tags.Range(func(k, _ interface{}) bool {

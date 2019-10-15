@@ -413,7 +413,7 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 	}
 	ctx := context.Background()
 	dataPut := string(slice)
-	tag, err := swarm.api.Tags.Create("test-local-store-and-retrieve", 0)
+	tag, err := swarm.api.Tags.Create("test-local-store-and-retrieve", 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}

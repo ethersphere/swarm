@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethersphere/swarm/internal/build"
 	"github.com/ethersphere/swarm/simulation"
 	"github.com/ethersphere/swarm/testutil"
 )
@@ -50,6 +51,10 @@ func TestCluster(t *testing.T) {
 
 	// Test docker adapter
 	t.Run("docker", func(t *testing.T) {
+		if env := build.Env(); env.Name == "local" {
+			t.Skip("skip locally")
+		}
+
 		config := simulation.DefaultDockerAdapterConfig()
 		if !simulation.IsDockerAvailable(config.DaemonAddr) {
 			t.Skip("docker is not available, skipping test")
