@@ -101,7 +101,7 @@ func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 	select {
 	case slot := <-o.slots:
 		o.queue[slot] = outboxMsg
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
 		// we send this message slot to process.
 		select {
 		case <-o.stopC:
@@ -151,7 +151,7 @@ func (o *Outbox) processOutbox() {
 						metrics.GetOrRegisterCounter("pss.forward.expired", nil).Inc(1)
 						log.Warn("Message expired, won't be requeued", "limit", limit, "now", now)
 						o.free(slot)
-						metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+						metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
 						return
 					}
 					// requeue the message for processing
@@ -161,7 +161,7 @@ func (o *Outbox) processOutbox() {
 				}
 				//message processed, free the outbox slot
 				o.free(slot)
-				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
+				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
 			}(slot)
 		}
 	}
@@ -181,10 +181,6 @@ func (o *Outbox) requeue(slot int) {
 	case o.process <- slot:
 	}
 }
-func (o *Outbox) len() int {
-	return cap(o.slots) - len(o.slots)
-}
-
-func (o *Outbox) CurrentSize() int {
+func (o *Outbox) Len() int {
 	return cap(o.slots) - len(o.slots)
 }

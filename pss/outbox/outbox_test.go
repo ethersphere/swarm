@@ -200,19 +200,19 @@ func TestMessageRetriesExpired(t *testing.T) {
 		t.Errorf("Expected no error enqueueing, instead got %v", err)
 	}
 
-	numMessages := testOutbox.CurrentSize()
+	numMessages := testOutbox.Len()
 	if numMessages != 1 {
 		t.Errorf("Expected one message in outbox, instead got %v", numMessages)
 	}
 
 	mockClock.Set(now.Add(duration / 2))
-	numMessages = testOutbox.CurrentSize()
+	numMessages = testOutbox.Len()
 	if numMessages != 1 {
 		t.Errorf("Expected one message in outbox after half maxRetryTime, instead got %v", numMessages)
 	}
 
 	mockClock.Set(now.Add(duration + 1*time.Millisecond))
-	numMessages = testOutbox.CurrentSize()
+	numMessages = testOutbox.Len()
 	// Now we wait for the process routine to retry and expire message at least 10 iterations
 	iterations := 0
 	for numMessages != 0 && iterations < 10 {
@@ -220,7 +220,7 @@ func TestMessageRetriesExpired(t *testing.T) {
 		log.Debug("Still not there, waiting another iteration", numMessages, iterations)
 		time.Sleep(10 * time.Millisecond)
 		iterations++
-		numMessages = testOutbox.CurrentSize()
+		numMessages = testOutbox.Len()
 	}
 	if numMessages != 0 {
 		t.Errorf("Expected 0 message in outbox after expired message, instead got %v", numMessages)
