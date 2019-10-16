@@ -170,14 +170,8 @@ func (p *Pusher) sync() {
 				break
 			}
 
-			// increment synced count for the tag if exists
 			tag := item.tag
 			if tag != nil {
-				tag.Inc(chunk.StateSynced)
-				if tag.Done(chunk.StateSynced) {
-					p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
-					tag.FinishRootSpan()
-				}
 				// finish span for pushsync roundtrip, only have this span if we have a tag
 				item.span.Finish()
 			}
@@ -202,14 +196,26 @@ func (p *Pusher) sync() {
 					unsubscribe()
 				}
 
-				// delete from pushed items
-				for i := 0; i < len(syncedAddrs); i++ {
-					delete(p.pushed, syncedAddrs[i].Hex())
-				}
-
 				// set chunk status to synced, insert to db GC index
 				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
 					log.Error("pushsync: error setting chunks to synced", "err", err)
+				}
+
+				// delete from pushed items
+				for i := 0; i < len(syncedAddrs); i++ {
+					hexaddr := syncedAddrs[i].Hex()
+					item, found := p.pushed[hexaddr]
+					if found {
+						tag := item.tag
+						if tag != nil {
+							if tag.Done(chunk.StateSynced) {
+								p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
+								tag.FinishRootSpan()
+							}
+						}
+					}
+
+					delete(p.pushed, hexaddr)
 				}
 
 				// reset synced list
