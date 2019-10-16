@@ -41,6 +41,14 @@ func TestFullOutbox(t *testing.T) {
 	testOutbox.Start()
 	defer testOutbox.Stop()
 
+	testOutboxMessage := testOutbox.NewOutboxMessage(&message.Message{
+		To:      nil,
+		Flags:   message.Flags{},
+		Expire:  0,
+		Topic:   message.Topic{},
+		Payload: nil,
+	})
+
 	err := testOutbox.Enqueue(testOutboxMessage)
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing, %v", err)
@@ -64,11 +72,3 @@ func TestFullOutbox(t *testing.T) {
 		t.Fatalf("timeout waiting for a free slot")
 	}
 }
-
-var testOutboxMessage = NewOutboxMessage(&message.Message{
-	To:      nil,
-	Flags:   message.Flags{},
-	Expire:  0,
-	Topic:   message.Topic{},
-	Payload: nil,
-})

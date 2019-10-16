@@ -566,7 +566,8 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 func (p *Pss) enqueue(msg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
-	outboxMsg := outbox.NewOutboxMessage(msg)
+	// TODO: create and enqueue in one outbox method
+	outboxMsg := p.outbox.NewOutboxMessage(msg)
 	return p.outbox.Enqueue(outboxMsg)
 }
 
