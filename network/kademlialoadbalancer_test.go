@@ -13,7 +13,7 @@ import (
 )
 
 // TestAddedNodes checks that when adding a node it is assigned the correct number of uses.
-// This number of uses will be the least number of uses of a peer in its bin
+// This number of uses will be the least number of uses of a peer in its bin.
 func TestAddedNodes(t *testing.T) {
 	kademlia := newTestKademliaBackend("11110000")
 	first := newTestKadPeer("010101010")
@@ -95,8 +95,8 @@ func TestAddedNodesMostSimilar(t *testing.T) {
 // We will create 3 bins with two peers each. We will call EachBinDesc 6 times twice with an address
 // on each bin, so at the end all peers should have 1 use (because the address in each bin is equidistant to
 // the peers in that bin).
-// Then we will use an address in a bin that is nearer one of the peers and we will check that that peer is always
-// returned first
+// Then we will use an address in a bin that is nearer to one of the peers and we will check that that peer is always
+// returned first.
 func TestEachBinBaseUses(t *testing.T) {
 	tk := newTestKademlia(t, "11111111")
 	klb := NewKademliaLoadBalancer(tk, false)
@@ -151,6 +151,7 @@ func TestEachBinBaseUses(t *testing.T) {
 	}
 }
 
+// TestEachBinFiltered checks that when load balancing peers, only those with the provided capabilities are chosen.
 func TestEachBinFiltered(t *testing.T) {
 	tk := newTestKademlia(t, "11111111")
 	klb := NewKademliaLoadBalancer(tk, false)
@@ -221,7 +222,16 @@ type testKademliaBackend struct {
 	maxPo          int
 }
 
-// EachConn iterates this test kademlia table bins in order from furthest to nearest.
+// EachConn iterates this test kademlia table peers in order po from nearest to furthest with respect to the base address.
+// - First it takes the po of the base address provided. With this po it takes the corresponding bin B (peers with same po
+// as this base) copy the list and sort them using sort.Slice from furthest to lowest. Then it calls the provided consume
+// function with those peers and its corresponding po (peerPo).
+// - Then, it iterates all bins with higher po than B, and iterates all peers. All of these peers will have the
+// same po as the base address with respect to the pin of the kademlia, that's why we don't need to sort them out and
+// we can iterate them in any order. For each peer the consume function is called with the same po.
+// - Finally, the bins furthest than B are iterated from highest po (nearest) to lowest (furthest). For each bin, all
+// peers are iterated and called the consume function with the peer and the bin po.
+// After any of the calls to the consume function, if that function returns false, the iteration stops.
 func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*Peer, int) bool) {
 	po, _ := Pof(base, tkb.baseAddr, 0)
 	bin := tkb.bins[po]
@@ -233,7 +243,8 @@ func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*P
 		return peerIPo > peerJPo
 	})
 	for _, peer := range peersInBin {
-		if !consume(peer, po) {
+		peerPo, _ := Pof(base, peer, 0)
+		if !consume(peer, peerPo) {
 			return
 		}
 	}
@@ -265,10 +276,14 @@ func newTestKademliaBackend(address string) *testKademliaBackend {
 	}
 }
 
+// BaseAddr returns the node address of the kademlia table. This base address is the pivot address to which other addresses
+// are sorted with respect to the proximity order function.
 func (tkb testKademliaBackend) BaseAddr() []byte {
 	return tkb.baseAddr
 }
 
+// SubscribeToPeerChanges returns a subscription to changes in the kademlia peers. It contains channels to notify about
+// peers added/removed from this kademlia.
 func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *gopubsub.Subscription, removedPeerSub *gopubsub.Subscription) {
 	addedSub = tkb.addedChannel.Subscribe()
 	removedPeerSub = tkb.removedChannel.Subscribe()
@@ -276,14 +291,14 @@ func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *gopubsub.Sub
 	return
 }
 
-// EachBinDescFiltered ignores capKey as in this test context it won't be used.
+// EachBinDescFiltered ignores capKey as in this test context it won't be used. It ignores base as EachBinDesc ignores it.
 func (tkb testKademliaBackend) EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error {
 	tkb.EachBinDesc(base, minProximityOrder, consumer)
 	return nil
 }
 
 // EachBinDesc iterates bin in the table in descending po order (from nearest to furthest). Base is always supposed to be
-// node address in this test context.
+// node address in this test context. For each bin found, the provided PeerBinConsumer function is called.
 func (tkb testKademliaBackend) EachBinDesc(_ []byte, minProximityOrder int, consumer PeerBinConsumer) {
 	type poPeers struct {
 		po    int

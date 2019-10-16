@@ -309,7 +309,7 @@ func (lb *resourceUseStats) addUse(resource Resource) int {
 	return lb.resourceUses[key]
 }
 
-// WaitKey blocks until some key is added to the load balancer stats.
+// waitKey blocks until some key is added to the load balancer stats.
 // As peer resource initialization is asynchronous we need a way to know that the initial uses has been initialized.
 func (lb *resourceUseStats) waitKey(key string) {
 	lb.lock.Lock()

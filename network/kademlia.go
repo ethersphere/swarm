@@ -486,7 +486,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	return k.depth, changed
 }
 
-func (k *Kademlia) findPeerPo(peer *Peer) (po int, found bool) {
+func (k *Kademlia) peerPo(peer *Peer) (po int, found bool) {
 	po, found = Pof(k.defaultIndex.conns.Pin(), peer, 0)
 	return po, found
 }
