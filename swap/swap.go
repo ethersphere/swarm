@@ -195,13 +195,13 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 }
 
 const (
-	balancePrefix          = "balance_"
-	sentChequePrefix       = "sent_cheque_"
-	receivedChequePrefix   = "received_cheque_"
-	connectedChequebookKey = "connected_chequebook"
-	connectedBlockchainKey = "connected_blockchain"
-	lastSentChequeKey      = "last_sent_cheque"
-	lastReceivedChequeKey  = "last_received_cheque"
+	balancePrefix             = "balance_"
+	sentChequePrefix          = "sent_cheque_"
+	receivedChequePrefix      = "received_cheque_"
+	connectedChequebookKey    = "connected_chequebook"
+	connectedBlockchainKey    = "connected_blockchain"
+	sentChequeResponseKey     = "last_sent_cheque"
+	receivedChequeResponseKey = "last_received_cheque"
 )
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
@@ -445,18 +445,18 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
 		cheques[peer] = make(map[string]*Cheque)
-		cheques[peer][lastSentChequeKey] = swapPeer.getLastSentCheque()
-		cheques[peer][lastReceivedChequeKey] = swapPeer.getLastReceivedCheque()
+		cheques[peer][sentChequeResponseKey] = swapPeer.getLastSentCheque()
+		cheques[peer][receivedChequeResponseKey] = swapPeer.getLastReceivedCheque()
 		swapPeer.lock.Unlock()
 	}
 	s.peersLock.Unlock()
 
 	// get peer cheques from store
-	err := s.addStoreCheques(sentChequePrefix, lastSentChequeKey, cheques)
+	err := s.addStoreCheques(sentChequePrefix, sentChequeResponseKey, cheques)
 	if err != nil {
 		return nil, err
 	}
-	err = s.addStoreCheques(receivedChequePrefix, lastReceivedChequeKey, cheques)
+	err = s.addStoreCheques(receivedChequePrefix, receivedChequeResponseKey, cheques)
 	if err != nil {
 		return nil, err
 	}
@@ -464,11 +464,11 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	// fill in result with missing cheques
 	for _, peerCheques := range cheques {
 		// add nil as type of cheque if not present
-		if _, peerHasReceivedCheque := peerCheques[lastReceivedChequeKey]; !peerHasReceivedCheque {
-			peerCheques[lastReceivedChequeKey] = nil
+		if _, peerHasReceivedCheque := peerCheques[receivedChequeResponseKey]; !peerHasReceivedCheque {
+			peerCheques[receivedChequeResponseKey] = nil
 		}
-		if _, peerHasSentCheque := peerCheques[lastSentChequeKey]; !peerHasSentCheque {
-			peerCheques[lastSentChequeKey] = nil
+		if _, peerHasSentCheque := peerCheques[sentChequeResponseKey]; !peerHasSentCheque {
+			peerCheques[sentChequeResponseKey] = nil
 		}
 	}
 
@@ -515,7 +515,7 @@ func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
 		}
 	}
 
-	return map[string]*Cheque{lastSentChequeKey: sentCheque, lastReceivedChequeKey: receivedCheque}, nil
+	return map[string]*Cheque{sentChequeResponseKey: sentCheque, receivedChequeResponseKey: receivedCheque}, nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
