@@ -280,13 +280,11 @@ func (h *Hive) handleMsg(p *Peer) func(context.Context, interface{}) error {
 		switch msg := msg.(type) {
 		case *peersMsg:
 			return h.handlePeersMsg(p, msg)
-
 		case *subPeersMsg:
-			return h.handleSubPeersMsg(p, msg)
-
-		default:
-			return fmt.Errorf("unknown message type: %T", msg)
+			return h.handleSubPeersMsg(ctx, p, msg)
 		}
+
+		return fmt.Errorf("unknown message type: %T", msg)
 	}
 }
 
@@ -330,7 +328,7 @@ func (h *Hive) handlePeersMsg(d *Peer, msg *peersMsg) error {
 // our connected peers that fall within peers saturation depth
 // otherwise this depth is just recorded on the peer, so that
 // subsequent new connections are sent iff they fall within the radius
-func (h *Hive) handleSubPeersMsg(d *Peer, msg *subPeersMsg) error {
+func (h *Hive) handleSubPeersMsg(ctx context.Context, d *Peer, msg *subPeersMsg) error {
 	d.setDepth(msg.Depth)
 	// only send peers after the initial subPeersMsg
 	if !d.sentPeers {
@@ -348,7 +346,7 @@ func (h *Hive) handleSubPeersMsg(d *Peer, msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
+			go d.Send(ctx, &peersMsg{Peers: sortPeers(peers)})
 		}
 	}
 	d.sentPeers = true
