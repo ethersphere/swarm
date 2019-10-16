@@ -199,7 +199,7 @@ func TestForwardBasic(t *testing.T) {
 		expected:  all[indexAtPo8:],
 		exclusive: false,
 	}
-	//testCases = append(testCases, c)
+	testCases = append(testCases, c)
 
 	// luminous radius of 256 bits, proximity order 8
 	a4 := pot.Address{}
@@ -211,7 +211,7 @@ func TestForwardBasic(t *testing.T) {
 		expected:  []int{indexAtPo8, indexAtPo8 + 1},
 		exclusive: true,
 	}
-	//testCases = append(testCases, c)
+	testCases = append(testCases, c)
 
 	// check correct behaviour in case send fails
 	for i := 2; i < firstNearest-3; i += 2 {

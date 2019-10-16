@@ -751,7 +751,7 @@ func (p *Pss) forward(msg *message.Message) error {
 		}
 		for _, lbPeer := range bin.LBPeers {
 			if sendFunc(p, lbPeer.Peer, msg) {
-				lbPeer.Use()
+				lbPeer.AddUseCount()
 				sent++
 				if onlySendOnce {
 					return false

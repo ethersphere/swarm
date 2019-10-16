@@ -92,14 +92,14 @@ func NewKadParams() *KadParams {
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
 	lock            sync.RWMutex
-	capabilityIndex map[string]*capabilityIndex
-	defaultIndex    *capabilityIndex // Index with pots
-	*KadParams                       // Kademlia configuration parameters
-	base            []byte           // immutable baseaddress of the table
-	depth           uint8            // stores the last current depth of saturation
-	nDepth          int              // stores the last neighbourhood depth
-	nDepthMu        sync.RWMutex     // protects neighbourhood depth nDepth
-	nDepthSig       []chan struct{}  // signals when neighbourhood depth nDepth is changed
+	capabilityIndex map[string]*capabilityIndex // index with pots for peers with a capability
+	defaultIndex    *capabilityIndex            // index with pots for all peers (no capability)
+	*KadParams                                  // Kademlia configuration parameters
+	base            []byte                      // immutable baseaddress of the table
+	depth           uint8                       // stores the last current depth of saturation
+	nDepth          int                         // stores the last neighbourhood depth
+	nDepthMu        sync.RWMutex                // protects neighbourhood depth nDepth
+	nDepthSig       []chan struct{}             // signals when neighbourhood depth nDepth is changed
 
 	newPeerPubSub     *gopubsub.PubSubChannel
 	removedPeerPubSub *gopubsub.PubSubChannel

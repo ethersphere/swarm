@@ -1,10 +1,21 @@
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 package network
 
 import (
-	"sort"
-	"strconv"
-	"sync"
-
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/gopubsub"
 )
@@ -18,18 +29,22 @@ type KademliaBackend interface {
 	EachConn(base []byte, o int, f func(*Peer, int) bool)
 }
 
-// Creates a new KademliaLoadBalancer from a KademliaBackend
-func NewKademliaLoadBalancer(kademlia KademliaBackend, useMostSimilarInit bool) *KademliaLoadBalancer {
+// Creates a new KademliaLoadBalancer from a KademliaBackend.
+// If useNearestNeighbourInit is true the nearest neighbour peer use count will be used when a peer is initialized.
+// If not, least used peer use count in same bin as new peer will be used. It is not clear which one is better, when
+// this load balancer would be used in several use cases we could do take some decision.
+func NewKademliaLoadBalancer(kademlia KademliaBackend, useNearestNeighbourInit bool) *KademliaLoadBalancer {
 	onPeerSub, offPeerSub := kademlia.SubscribeToPeerChanges()
+	quitC := make(chan struct{})
 	klb := &KademliaLoadBalancer{
 		kademlia:         kademlia,
-		resourceUseStats: newResourceLoadBalancer(),
+		resourceUseStats: newResourceUseStats(quitC),
 		onPeerSub:        onPeerSub,
 		offPeerSub:       offPeerSub,
-		quitC:            make(chan struct{}),
+		quitC:            quitC,
 	}
-	if useMostSimilarInit {
-		klb.initCountFunc = klb.nearestNeighbourCount
+	if useNearestNeighbourInit {
+		klb.initCountFunc = klb.nearestNeighbourUseCount
 	} else {
 		klb.initCountFunc = klb.leastUsedCountInBin
 	}
@@ -39,13 +54,15 @@ func NewKademliaLoadBalancer(kademlia KademliaBackend, useMostSimilarInit bool) 
 	return klb
 }
 
-// Consumer functions
+// Consumer functions. A consumer is a function that uses an element returned by an iterator. It usually also returns
+// a boolean signaling if it wants to iterate more or not. We created an alias for consumer function (LBBinConsumer)
+// for code clarity.
 
-// An LBPeer represents a peer with a Use() function to signal that the peer has been used in order
-// to account it for LB sorting criteria
+// An LBPeer represents a peer with a AddUseCount() function to signal that the peer has been used in order
+// to account it for LB sorting criteria.
 type LBPeer struct {
-	Peer *Peer
-	Use  func()
+	Peer        *Peer
+	AddUseCount func() // called to account a use for these peer. Should be called if the peer is actually used.
 }
 
 // LBBin represents a Bin of LBPeer's
@@ -55,19 +72,18 @@ type LBBin struct {
 }
 
 // LBBinConsumer will be provided with a list of LBPeer's in LB criteria ordering (currently in least used ordering).
+// Should return true if it must continue iterating LBBin's or stops if false.
 type LBBinConsumer func(bin LBBin) bool
-
-// KademliaLoadBalancer struct and methods
 
 // KademliaLoadBalancer tries to balance request to the peers in Kademlia returning the peers sorted
 // by least recent used whenever several will be returned with the same po to a particular address.
 // The user of KademliaLoadBalancer should signal if the returned element (LBPeer) has been used with the
-// function lbPeer.Use()
+// function lbPeer.AddUseCount()
 type KademliaLoadBalancer struct {
-	kademlia         KademliaBackend        //kademlia to obtain bins of peers
-	resourceUseStats *resourceUseStats      //a resourceUseStats to count uses
-	onPeerSub        *gopubsub.Subscription //a pubsub channel to be notified of new peers in kademlia
-	offPeerSub       *gopubsub.Subscription //a pubsub channel to be notified of removed peers in kademlia
+	kademlia         KademliaBackend        // kademlia to obtain bins of peers
+	resourceUseStats *resourceUseStats      // a resourceUseStats to count uses
+	onPeerSub        *gopubsub.Subscription // a pubsub channel to be notified of new peers in kademlia
+	offPeerSub       *gopubsub.Subscription // a pubsub channel to be notified of removed peers in kademlia
 	quitC            chan struct{}
 
 	initCountFunc func(peer *Peer, po int) int //Function to use for initializing a new peer count
@@ -180,8 +196,8 @@ func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) 
 	return leastUsedCount
 }
 
-// nearestNeighbourCount returns the use count for the closest peer count.
-func (klb *KademliaLoadBalancer) nearestNeighbourCount(newPeer *Peer, _ int) int {
+// nearestNeighbourUseCount returns the use count for the closest peer count.
+func (klb *KademliaLoadBalancer) nearestNeighbourUseCount(newPeer *Peer, _ int) int {
 	var count int
 	klb.kademlia.EachConn(newPeer.Address(), 255, func(peer *Peer, po int) bool {
 		if peer != newPeer {
@@ -196,7 +212,7 @@ func (klb *KademliaLoadBalancer) nearestNeighbourCount(newPeer *Peer, _ int) int
 
 func (klb *KademliaLoadBalancer) removedPeer(peer *Peer) {
 	klb.resourceUseStats.lock.Lock()
-	defer klb.resourceUseStats.lock.Lock()
+	defer klb.resourceUseStats.lock.Unlock()
 	delete(klb.resourceUseStats.resourceUses, peer.Key())
 }
 
@@ -205,7 +221,7 @@ func (klb *KademliaLoadBalancer) toLBPeers(resources []Resource) []LBPeer {
 	for i, res := range resources {
 		peer := res.(*Peer)
 		peers[i].Peer = peer
-		peers[i].Use = func() {
+		peers[i].AddUseCount = func() {
 			klb.resourceUseStats.addUse(peer)
 		}
 	}
@@ -225,110 +241,4 @@ func (klb *KademliaLoadBalancer) getPeersForPo(base []byte, po int) []LBPeer {
 		}
 	})
 	return klb.resourcesToLbPeers(resources)
-}
-
-// Resource Use Stats
-
-// resourceUseStats can be used to count uses of resources. A Resource is anything with a Key()
-type resourceUseStats struct {
-	resourceUses map[string]int
-	waiting      map[string]chan struct{}
-	lock         sync.RWMutex
-}
-
-type Resource interface {
-	Key() string   // unique id in string format of the resource.
-	Label() string // short string format of the key for debugging purposes.
-}
-
-type ResourceCount struct {
-	resource Resource
-	count    int
-}
-
-func newResourceLoadBalancer() *resourceUseStats {
-	return &resourceUseStats{
-		resourceUses: make(map[string]int),
-		waiting:      make(map[string]chan struct{}),
-	}
-}
-
-func (lb *resourceUseStats) sortResources(resources []Resource) []Resource {
-	sorted := make([]Resource, len(resources))
-	resourceCounts := lb.getAllUses(resources)
-	sort.Slice(resourceCounts, func(i, j int) bool {
-		return resourceCounts[i].count < resourceCounts[j].count
-	})
-	for i, resourceCount := range resourceCounts {
-		sorted[i] = resourceCount.resource
-	}
-	return sorted
-}
-
-func (lbp ResourceCount) String() string {
-	return lbp.resource.Key() + ":" + strconv.Itoa(lbp.count)
-}
-
-func (lb *resourceUseStats) dumpAllUses() map[string]int {
-	lb.lock.RLock()
-	defer lb.lock.RUnlock()
-	dump := make(map[string]int)
-	for k, v := range lb.resourceUses {
-		dump[k] = v
-	}
-	return dump
-}
-
-func (lb *resourceUseStats) getAllUses(resources []Resource) []ResourceCount {
-	peerUses := make([]ResourceCount, len(resources))
-	for i, resource := range resources {
-		peerUses[i] = ResourceCount{
-			resource: resource,
-			count:    lb.getUses(resource),
-		}
-	}
-	return peerUses
-}
-
-func (lb *resourceUseStats) getUses(keyed Resource) int {
-	return lb.getKeyUses(keyed.Key())
-}
-
-func (lb *resourceUseStats) getKeyUses(key string) int {
-	lb.lock.RLock()
-	defer lb.lock.RUnlock()
-	return lb.resourceUses[key]
-}
-
-func (lb *resourceUseStats) addUse(resource Resource) int {
-	lb.lock.Lock()
-	defer lb.lock.Unlock()
-	log.Debug("Adding use", "key", resource.Label())
-	key := resource.Key()
-	lb.resourceUses[key] = lb.resourceUses[key] + 1
-	return lb.resourceUses[key]
-}
-
-// waitKey blocks until some key is added to the load balancer stats.
-// As peer resource initialization is asynchronous we need a way to know that the initial uses has been initialized.
-func (lb *resourceUseStats) waitKey(key string) {
-	lb.lock.Lock()
-	if _, ok := lb.resourceUses[key]; ok {
-		lb.lock.Unlock()
-		return
-	}
-	waitChan := make(chan struct{})
-	lb.waiting[key] = waitChan
-	lb.lock.Unlock()
-	<-waitChan
-	delete(lb.waiting, key)
-}
-
-func (lb *resourceUseStats) initKey(key string, count int) {
-	lb.lock.Lock()
-	defer lb.lock.Unlock()
-	lb.resourceUses[key] = count
-	if kChan, ok := lb.waiting[key]; ok {
-		kChan <- struct{}{}
-	}
 }
