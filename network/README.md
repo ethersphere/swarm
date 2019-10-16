@@ -216,7 +216,7 @@ This function is used in `kademlia.suggestPeerInBinByGap`, which it returns a Bz
  `suggestPeerInBin` with the new one.
  
  ### Further improvements
- Instead of the size of a gap, maybe it could be more interesting to see the ration between size and number of current 
+ Instead of the size of a gap, maybe it could be more interesting to see the ratio between size and number of current 
  peers serving that gap. If we have `n` current peers that are equidistant to a particular gap of size `s`,
 the load of each of these peers will be on average `s/n`. 
 We can define a gap's `temperature` as that number `s/n`. When looking for new peers to connect, instead of looking for
@@ -233,3 +233,6 @@ Here we still have `11xxxxxx` as the biggest gap (po=1, size 1/4), same size as 
 
 There is a way of implementing temperature calculation so its cost it is the same as looking for biggest gap. Temperature
 can be calculated on the fly as the gap is found using a `pot`.
+
+Other metrics could be considered in the temperature, as recently number of requests per address space, performance of
+current peers...
