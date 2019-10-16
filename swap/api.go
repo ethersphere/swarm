@@ -9,6 +9,11 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
+const (
+	sentChequeResponseKey     = "last_sent_cheque"
+	receivedChequeResponseKey = "last_received_cheque"
+)
+
 // APIs is a node.Service interface method
 func (s *Swap) APIs() []rpc.API {
 	return []rpc.API{

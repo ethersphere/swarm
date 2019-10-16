@@ -194,13 +194,11 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 }
 
 const (
-	balancePrefix             = "balance_"
-	sentChequePrefix          = "sent_cheque_"
-	receivedChequePrefix      = "received_cheque_"
-	connectedChequebookKey    = "connected_chequebook"
-	connectedBlockchainKey    = "connected_blockchain"
-	sentChequeResponseKey     = "last_sent_cheque"
-	receivedChequeResponseKey = "last_received_cheque"
+	balancePrefix          = "balance_"
+	sentChequePrefix       = "sent_cheque_"
+	receivedChequePrefix   = "received_cheque_"
+	connectedChequebookKey = "connected_chequebook"
+	connectedBlockchainKey = "connected_blockchain"
 )
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
