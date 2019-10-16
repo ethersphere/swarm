@@ -378,21 +378,6 @@ func testChequesByType(t *testing.T, s *Swap, id enode.ID, expectedCheques map[s
 	}
 }
 
-// generate an invalid peer id, call a cheque function for it and test that it fails
-func testChequeFailure(t *testing.T, chequeFunction func(enode.ID) (*Cheque, error)) {
-	invalidPeerID := adapters.RandomNodeConfig().ID
-	cheque, err := chequeFunction(invalidPeerID)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-	if cheque != nil {
-		t.Fatalf("Expected cheque for invalid call to be nil, but is %v", cheque)
-	}
-}
-
 type storeKeysTestCases struct {
 	nodeID                    enode.ID
 	expectedBalanceKey        string
