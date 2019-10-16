@@ -393,18 +393,6 @@ func testChequeFailure(t *testing.T, chequeFunction func(enode.ID) (*Cheque, err
 	}
 }
 
-// tests that a map of peerID:cheque is as expected according to the given chequesFunction
-func testChequesByPeer(t *testing.T, expectedCheques map[enode.ID]*Cheque, chequesFunction func() (map[enode.ID]*Cheque, error)) {
-	t.Helper()
-	actualCheques, err := chequesFunction()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(expectedCheques, actualCheques) {
-		t.Fatalf("Expected cheques to be %v, but are %v", expectedCheques, actualCheques)
-	}
-}
-
 type storeKeysTestCases struct {
 	nodeID                    enode.ID
 	expectedBalanceKey        string
