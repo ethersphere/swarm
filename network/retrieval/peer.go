@@ -31,10 +31,10 @@ import (
 // Peer wraps BzzPeer with a contextual logger and tracks open
 // retrievals for that peer
 type Peer struct {
-	mtx              sync.Mutex             // synchronize retrievals
-	*network.BzzPeer                        // bzzpeer
-	logger           log.Logger             // logger with base and peer address
-	retrievals       map[uint]chunk.Address // current ongoing retrievals
+	*network.BzzPeer
+	logger     log.Logger             // logger with base and peer address
+	mtx        sync.Mutex             // synchronize retrievals
+	retrievals map[uint]chunk.Address // current ongoing retrievals
 }
 
 // NewPeer is the constructor for Peer
@@ -61,10 +61,9 @@ func (p *Peer) checkRequest(ruid uint, addr storage.Address) error {
 	defer p.mtx.Unlock()
 	v, ok := p.retrievals[ruid]
 	if !ok {
-		return errors.New("unsolicited chunk delivery - cannot find ruid")
+		return errors.New("cannot find ruid")
 	}
-
-	defer delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
+	delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
 	if !bytes.Equal(v, addr) {
 		return errors.New("retrieve request found but address does not match")
 	}

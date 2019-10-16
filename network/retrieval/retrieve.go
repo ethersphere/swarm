@@ -93,9 +93,9 @@ func (cd *ChunkDelivery) Price() *protocols.Price {
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
+	netStore *storage.NetStore
+	kad      *network.Kademlia
 	mtx      sync.RWMutex       // protect peer map
-	netStore *storage.NetStore  // netstore
-	kad      *network.Kademlia  // kademlia
 	peers    map[enode.ID]*Peer // compatible peers
 	spec     *protocols.Spec    // protocol spec
 	logger   log.Logger         // custom logger to append a basekey
@@ -106,10 +106,10 @@ type Retrieval struct {
 // New returns a new instance of the retrieval protocol handler
 func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance) *Retrieval {
 	r := &Retrieval{
+		netStore: ns,
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
 		spec:     spec,
-		netStore: ns,
 		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
 	}
