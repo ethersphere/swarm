@@ -81,14 +81,14 @@ type Params struct {
 
 // newSwapLogger returns a new logger for standard swap logs
 func newSwapLogger(logPath string, overlayAddr []byte) Logger {
-	swapLogger := NewSwapLogger(hex.EncodeToString(overlayAddr)[:16])
+	swapLogger := newLogger(hex.EncodeToString(overlayAddr)[:16], "")
 	setLoggerHandler(logPath, swapLogger.GetLogger())
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) Logger {
-	peerLogger := NewSwapPeerLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
+	peerLogger := newLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
 	setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
 	return peerLogger
 }
@@ -154,7 +154,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
 	}
-	swapLog.SetLogAction("swap_init")
+	swapLog.SetLogAction("init")
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store

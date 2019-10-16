@@ -1,7 +1,7 @@
 package swap
 
 import (
-	l "github.com/ethereum/go-ethereum/log"
+	log "github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 // Logger wraps the ethereum logger with specific information for swap logging
 type Logger struct {
 	action string
-	logger l.Logger
+	logger log.Logger
 }
 
 func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
@@ -75,23 +75,13 @@ func (sl *Logger) SetLogAction(action string) {
 	sl.action = action
 }
 
-// NewSwapLogger is an alias for log.New
-func NewSwapLogger(overlayAddr string) (swapLogger Logger) {
-	return newLogger(overlayAddr, "")
-}
-
-// NewSwapPeerLogger is an alias for log.New
-func NewSwapPeerLogger(overlayAddr string, peerID string) (swapLogger Logger) {
-	return newLogger(overlayAddr, peerID)
-}
-
 // newLogger return a new SwapLogger Instance with ctx loaded for swap
 func newLogger(overlayAddr string, peerID string) (swapLogger Logger) {
 	swapLogger = Logger{
 		action: DefaultAction,
 	}
 	ctx := addSwapCtx(swapLogger, overlayAddr, peerID)
-	swapLogger.logger = l.New(ctx...)
+	swapLogger.logger = log.New(ctx...)
 	return swapLogger
 }
 
@@ -104,11 +94,11 @@ func addSwapCtx(sl Logger, overlayAddr string, peerID string) []interface{} {
 }
 
 // GetLogger return the underlining logger
-func (sl Logger) GetLogger() (logger l.Logger) {
+func (sl Logger) GetLogger() (logger log.Logger) {
 	return sl.logger
 }
 
 // GetHandler return the Handler assigned to root
-func GetHandler() l.Handler {
-	return l.Root().GetHandler()
+func GetHandler() log.Handler {
+	return log.Root().GetHandler()
 }
