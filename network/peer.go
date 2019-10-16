@@ -25,14 +25,12 @@ import (
 	"github.com/ethersphere/swarm/pot"
 )
 
-// discovery bzz extension for requesting and relaying node address records
-
 // Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
 type Peer struct {
 	*BzzPeer
 	kad       *Kademlia
 	sentPeers bool            // whether we already sent peer closer to this address
-	mtx       sync.RWMutex    //
+	mtx       sync.RWMutex    // protect peers map
 	peers     map[string]bool // tracks node records sent to the peer
 	depth     uint8           // the proximity order advertised by remote as depth of saturation
 }

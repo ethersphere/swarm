@@ -142,7 +142,7 @@ loop:
 		case <-h.ticker.C:
 			addr, depth, changed := h.SuggestPeer()
 			if h.Discovery && changed {
-				NotifyDepth(uint8(depth), h.Kademlia)
+				h.NotifyDepth(uint8(depth))
 			}
 			if addr == nil {
 				continue loop
@@ -173,12 +173,12 @@ func (h *Hive) Run(p *BzzPeer) error {
 	if h.Discovery {
 		if changed {
 			// if depth changed, send to all peers
-			NotifyDepth(depth, h.Kademlia)
+			h.NotifyDepth(depth)
 		} else {
 			// otherwise just send depth to new peer
 			dp.NotifyDepth(depth)
 		}
-		NotifyPeer(p.BzzAddr, h.Kademlia)
+		h.NotifyPeer(p.BzzAddr)
 	}
 	defer h.Off(dp)
 	return dp.Run(h.handleMsg(dp))
@@ -289,21 +289,21 @@ func (h *Hive) handleMsg(p *Peer) func(context.Context, interface{}) error {
 }
 
 // NotifyDepth sends a message to all connections if depth of saturation is changed
-func NotifyDepth(depth uint8, kad *Kademlia) {
+func (h *Hive) NotifyDepth(depth uint8) {
 	f := func(val *Peer, po int) bool {
 		val.NotifyDepth(depth)
 		return true
 	}
-	kad.EachConn(nil, 255, f)
+	h.EachConn(nil, 255, f)
 }
 
 // NotifyPeer informs all peers about a newly added node
-func NotifyPeer(p *BzzAddr, k *Kademlia) {
+func (h *Hive) NotifyPeer(p *BzzAddr) {
 	f := func(val *Peer, po int) bool {
 		val.NotifyPeer(p, uint8(po))
 		return true
 	}
-	k.EachConn(p.Address(), 255, f)
+	h.EachConn(p.Address(), 255, f)
 }
 
 // handlePeersMsg called by the protocol when receiving peerset (for target address)
@@ -316,7 +316,7 @@ func (h *Hive) handlePeersMsg(d *Peer, msg *peersMsg) error {
 	}
 	for _, a := range msg.Peers {
 		d.seen(a)
-		NotifyPeer(a, h.Kademlia)
+		h.NotifyPeer(a)
 	}
 	return h.Register(msg.Peers...)
 }
