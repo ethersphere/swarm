@@ -28,7 +28,6 @@ import (
 // Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
 type Peer struct {
 	*BzzPeer
-	kad       *Kademlia
 	sentPeers bool            // whether we already sent peer closer to this address
 	mtx       sync.RWMutex    // protect peers map
 	peers     map[string]bool // tracks node records sent to the peer
@@ -36,9 +35,8 @@ type Peer struct {
 }
 
 // NewPeer constructs a discovery peer
-func NewPeer(p *BzzPeer, kad *Kademlia) *Peer {
+func NewPeer(p *BzzPeer) *Peer {
 	d := &Peer{
-		kad:     kad,
 		BzzPeer: p,
 		peers:   make(map[string]bool),
 	}
