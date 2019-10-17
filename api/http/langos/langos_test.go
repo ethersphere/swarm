@@ -18,6 +18,7 @@ package langos_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -304,13 +305,36 @@ var (
 	}
 )
 
-func randomData(t testing.TB, size int) (data []byte) {
+var randomDataCache []byte
+
+func randomData(t testing.TB, size int) []byte {
 	t.Helper()
 
-	data = make([]byte, size)
-	_, err := rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
+	if cacheSize := len(randomDataCache); cacheSize < size {
+		data := make([]byte, size-cacheSize)
+		_, err := rand.Read(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		randomDataCache = append(randomDataCache, data...)
 	}
-	return data
+
+	return randomDataCache[:size]
+}
+
+var (
+	testDataSizes   = []string{"100", "749", "1k", "128k", "749k", "1M", "10M"}
+	testBufferSizes = []string{"1k", "128k", "753k", "1M", "10M", "25M"}
+)
+
+func multiSizeTester(t *testing.T, newTestFunc func(t *testing.T, dataSize, bufferSize int)) {
+	t.Helper()
+
+	for _, dataSize := range testDataSizes {
+		for _, bufferSize := range testBufferSizes {
+			t.Run(fmt.Sprintf("data %s buffer %s", dataSize, bufferSize), func(t *testing.T) {
+				newTestFunc(t, parseDataSize(t, dataSize), parseDataSize(t, bufferSize))
+			})
+		}
+	}
 }

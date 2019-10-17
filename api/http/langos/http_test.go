@@ -159,18 +159,6 @@ func TestHTTPMultipleRangeResponse(t *testing.T) {
 	})
 }
 
-func multiSizeTester(t *testing.T, newTestFunc func(t *testing.T, dataSize, bufferSize int)) {
-	t.Helper()
-
-	for _, dataSize := range []string{"1", "100", "1k", "128k", "10M"} {
-		for _, bufferSize := range []string{"1k", "128k", "1M", "10M", "25M"} {
-			t.Run(fmt.Sprintf("data %s buffer %s", dataSize, bufferSize), func(t *testing.T) {
-				newTestFunc(t, parseDataSize(t, dataSize), parseDataSize(t, bufferSize))
-			})
-		}
-	}
-}
-
 func parseDataSize(t *testing.T, v string) (s int) {
 	t.Helper()
 
