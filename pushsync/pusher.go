@@ -205,14 +205,9 @@ func (p *Pusher) sync() {
 				for i := 0; i < len(syncedAddrs); i++ {
 					hexaddr := syncedAddrs[i].Hex()
 					item, found := p.pushed[hexaddr]
-					if found {
-						tag := item.tag
-						if tag != nil {
-							if tag.Done(chunk.StateSynced) {
-								p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
-								tag.FinishRootSpan()
-							}
-						}
+					if found && item.tag != nil && item.tag.Done(chunk.StateSynced) {
+						p.logger.Debug("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
+						item.tag.FinishRootSpan()
 					}
 
 					delete(p.pushed, hexaddr)
