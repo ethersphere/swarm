@@ -305,8 +305,12 @@ var (
 	}
 )
 
+// randomDataCache keeps random data in memory between tests
+// to avoid regenerating random data for every test or subtest.
 var randomDataCache []byte
 
+// randomData returns a byte slice with random data.
+// This function is not safe for concurrent use.
 func randomData(t testing.TB, size int) []byte {
 	t.Helper()
 
@@ -327,6 +331,7 @@ var (
 	testBufferSizes = []string{"1k", "128k", "753k", "1M", "10M", "25M"}
 )
 
+// multiSizeTester performs a series of subtests with different data and buffer sizes.
 func multiSizeTester(t *testing.T, newTestFunc func(t *testing.T, dataSize, bufferSize int)) {
 	t.Helper()
 

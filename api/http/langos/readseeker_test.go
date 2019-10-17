@@ -24,6 +24,8 @@ import (
 	"github.com/ethersphere/swarm/api/http/langos"
 )
 
+// TestLangosReadSeeker runs a series of reads and seeks on
+// BufferedReadSeeker instances with various buffer sizes.
 func TestBufferedReadSeeker(t *testing.T) {
 	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
 		data := randomData(t, dataSize)
@@ -31,6 +33,8 @@ func TestBufferedReadSeeker(t *testing.T) {
 	})
 }
 
+// TestLangosReadSeeker runs a series of reads and seeks on
+// Langos instances with various buffer sizes.
 func TestLangosReadSeeker(t *testing.T) {
 	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
 		data := randomData(t, dataSize)
@@ -38,6 +42,8 @@ func TestLangosReadSeeker(t *testing.T) {
 	})
 }
 
+// TestBufferedLangosReadSeeker runs a series of reads and seeks on
+// buffered Langos instances with various buffer sizes.
 func TestBufferedLangosReadSeeker(t *testing.T) {
 	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
 		data := randomData(t, dataSize)
@@ -45,6 +51,8 @@ func TestBufferedLangosReadSeeker(t *testing.T) {
 	})
 }
 
+// TestReadSeekerTester tests newReadSeekerTester steps against the stdlib's
+// bytes.Reader which is used as the reference implementation.
 func TestReadSeekerTester(t *testing.T) {
 	for _, size := range testDataSizes {
 		data := randomData(t, parseDataSize(t, size))
@@ -52,6 +60,11 @@ func TestReadSeekerTester(t *testing.T) {
 	}
 }
 
+// newReadSeekerTester returns a new test function that performs a series of
+// Read and Seek method calls to validate that provided io.ReadSeeker
+// provide the expected functionality while reading data and seeking on it.
+// Argument data must be the same as used in io.ReadSeeker as it is used
+// in validations.
 func newReadSeekerTester(rs io.ReadSeeker, data []byte) func(t *testing.T) {
 	return func(t *testing.T) {
 		read := func(t *testing.T, size int, want []byte, wantErr error) {
@@ -114,5 +127,13 @@ func newReadSeekerTester(rs io.ReadSeeker, data []byte) func(t *testing.T) {
 		seekOffset := 1 / 10
 		seek(t, seekOffset, io.SeekEnd, l-seekOffset, nil)
 		read(t, seekOffset, data[l-seekOffset:], io.EOF)
+
+		// Test seek from current with reads
+		seek(t, 0, io.SeekStart, 0, nil)
+		seekSize1 = l / 3
+		seek(t, seekSize1, io.SeekCurrent, seekSize1, nil)
+		readSize1 = l / 8
+		read(t, readSize1, data[seekSize1:seekSize1+readSize1], nil)
+
 	}
 }
