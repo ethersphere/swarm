@@ -27,8 +27,8 @@ func (s *Swap) APIs() []rpc.API {
 }
 
 type swapAPI interface {
-	Balance(peer enode.ID) (int64, error)
 	Balances() (map[enode.ID]int64, error)
+	PeerBalance(peer enode.ID) (int64, error)
 	Cheques() (map[enode.ID]map[string]*Cheque, error)
 	PeerCheques(peer enode.ID) (map[string]*Cheque, error)
 }
@@ -45,15 +45,6 @@ func NewAPI(s *Swap) *API {
 		swapAPI: s,
 		Params:  s.GetParams(),
 	}
-}
-
-// Balance returns the balance for a given peer
-func (s *Swap) Balance(peer enode.ID) (balance int64, err error) {
-	if swapPeer := s.getPeer(peer); swapPeer != nil {
-		return swapPeer.getBalance(), nil
-	}
-	err = s.store.Get(balanceKey(peer), &balance)
-	return balance, err
 }
 
 // Balances returns the balances for all known SWAP peers
@@ -86,6 +77,15 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	}
 
 	return balances, nil
+}
+
+// PeerBalance returns the balance for a given peer
+func (s *Swap) PeerBalance(peer enode.ID) (balance int64, err error) {
+	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		return swapPeer.getBalance(), nil
+	}
+	err = s.store.Get(balanceKey(peer), &balance)
+	return balance, err
 }
 
 // Cheques returns all known last sent and received cheques, grouped by peer

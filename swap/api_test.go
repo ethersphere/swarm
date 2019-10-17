@@ -10,7 +10,7 @@ import (
 )
 
 // Test getting a peer's balance
-func TestBalance(t *testing.T) {
+func TestPeerBalance(t *testing.T) {
 	// create a test swap account
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
 	testPeerID := testPeer.ID()
@@ -33,7 +33,7 @@ func TestBalance(t *testing.T) {
 
 	// test balance for inexistent node
 	invalidPeerID := adapters.RandomNodeConfig().ID
-	_, err := swap.Balance(invalidPeerID)
+	_, err := swap.PeerBalance(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
@@ -61,10 +61,10 @@ func setBalance(t *testing.T, p *Peer, balance int64) {
 	}
 }
 
-// tests that expected balance for peer matches the result of the Balance function
+// tests that expected balance for peer matches the result of the PeerBalance function
 func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
 	t.Helper()
-	b, err := s.Balance(id)
+	b, err := s.PeerBalance(id)
 	if err != nil {
 		t.Fatal(err)
 	}
