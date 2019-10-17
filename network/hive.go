@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
+	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/state"
 )
 
@@ -300,7 +301,20 @@ func (h *Hive) NotifyDepth(depth uint8) {
 // NotifyPeer informs all peers about a newly added node
 func (h *Hive) NotifyPeer(p *BzzAddr) {
 	f := func(val *Peer, po int) bool {
-		val.NotifyPeer(p, uint8(po))
+		// notify the remote node (recipient) about a peer if
+		// the peer's PO is within the recipients advertised depth
+		// OR the peer is closer to the recipient than self
+		// unless already notified during the connection session
+
+		// immediately return
+		if (uint8(po) < val.getDepth() && pot.ProxCmp(h.BaseAddr(), val.Address(), p.Address()) != 1) || val.seen(p) {
+			return true
+		}
+		resp := &peersMsg{
+			Peers: []*BzzAddr{p},
+		}
+		val.Send(context.TODO(), resp)
+
 		return true
 	}
 	h.EachConn(p.Address(), 255, f)

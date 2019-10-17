@@ -248,7 +248,7 @@ func newDiscPeer(addr pot.Address) *Peer {
 	return NewPeer(&BzzPeer{
 		Peer:    protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
 		BzzAddr: bzzAddr,
-	}, nil)
+	})
 }
 
 type dummyMsgRW struct{}

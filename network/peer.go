@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/pot"
 )
 
 // Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
@@ -43,21 +42,6 @@ func NewPeer(p *BzzPeer) *Peer {
 	// record remote as seen so we never send a peer its own record
 	d.seen(p.BzzAddr)
 	return d
-}
-
-// NotifyPeer notifies the remote node (recipient) about a peer if
-// the peer's PO is within the recipients advertised depth
-// OR the peer is closer to the recipient than self
-// unless already notified during the connection session
-func (d *Peer) NotifyPeer(a *BzzAddr, po uint8) {
-	// immediately return
-	if (po < d.getDepth() && pot.ProxCmp(d.kad.BaseAddr(), d.Address(), a.Address()) != 1) || d.seen(a) {
-		return
-	}
-	resp := &peersMsg{
-		Peers: []*BzzAddr{a},
-	}
-	go d.Send(context.TODO(), resp)
 }
 
 // NotifyDepth sends a subPeers Msg to the receiver notifying them about

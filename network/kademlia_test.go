@@ -62,7 +62,7 @@ func newTestKademlia(t *testing.T, b string) *testKademlia {
 }
 
 func (tk *testKademlia) newTestKadPeer(s string) *Peer {
-	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, tk.Kademlia)
+	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)})
 }
 
 func (tk *testKademlia) On(ons ...string) {
@@ -531,7 +531,7 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 		Peer:    pp,
 		BzzAddr: NewBzzAddr(addr.Bytes(), []byte(fmt.Sprintf("%x", addr[:]))),
 	}
-	return NewPeer(bp, kad)
+	return NewPeer(bp)
 }
 
 // TestKademlia_SubscribeToNeighbourhoodDepthChange checks if correct
@@ -691,20 +691,20 @@ func testCapabilityIndexHelper() (*Kademlia, map[string]*Peer, map[string]*capab
 
 	bzzAddrs["42:101"] = RandomBzzAddr()
 	bzzAddrs["42:101"].Capabilities.Add(caps["42:101"])
-	discPeers["42:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:101"]}, k)
+	discPeers["42:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:101"]})
 
 	bzzAddrs["42:001"] = RandomBzzAddr()
 	bzzAddrs["42:001"].Capabilities.Add(caps["42:001"])
-	discPeers["42:001"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:001"]}, k)
+	discPeers["42:001"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:001"]})
 
 	bzzAddrs["666:101"] = RandomBzzAddr()
 	bzzAddrs["666:101"].Capabilities.Add(caps["666:101"])
-	discPeers["666:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["666:101"]}, k)
+	discPeers["666:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["666:101"]})
 
 	bzzAddrs["42:101,666:101"] = RandomBzzAddr()
 	bzzAddrs["42:101,666:101"].Capabilities.Add(caps["666:101"])
 	bzzAddrs["42:101,666:101"].Capabilities.Add(caps["42:101"])
-	discPeers["42:101,666:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:101,666:101"]}, k)
+	discPeers["42:101,666:101"] = NewPeer(&BzzPeer{BzzAddr: bzzAddrs["42:101,666:101"]})
 
 	k.Register(bzzAddrs["42:101"], bzzAddrs["42:001"], bzzAddrs["666:101"], bzzAddrs["42:101,666:101"])
 
