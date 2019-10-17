@@ -99,7 +99,6 @@ type Retrieval struct {
 	peers    map[enode.ID]*Peer // compatible peers
 	spec     *protocols.Spec    // protocol spec
 	logger   log.Logger         // custom logger to append a basekey
-	baseKey  []byte             // this node's base address
 	quit     chan struct{}      // shutdown channel
 }
 
@@ -353,7 +352,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	err := p.checkRequest(msg.Ruid, msg.Addr)
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
-		p.logger.Error("unsolicited chunk delivery from peer. dropping", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
+		p.logger.Error("unsolicited chunk delivery from peer", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
 		p.Drop("unsolicited chunk delivery")
 		return
 	}
@@ -423,10 +422,10 @@ FINDPEER:
 		Ruid: uint(rand.Uint32()),
 		Addr: req.Addr,
 	}
-	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID)
+	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
-		protoPeer.logger.Error("error sending retrieve request to peer", "err", err)
+		protoPeer.logger.Error("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
 		return nil, err
 	}
 
