@@ -37,6 +37,9 @@ import (
 
 var (
 	BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
+
+	// PropertyBootnode is a property string for NodeConfig, representing that a node is a bootnode
+	PropertyBootnode = "bootnode"
 )
 
 // NodeIDs returns NodeIDs for all nodes in the network.
@@ -83,10 +86,11 @@ func AddNodeWithMsgEvents(enable bool) AddNodeOption {
 	}
 }
 
-// AddNodeAsBootNode toggles whether the node will be configured as a bootnode
-func AddNodeAsBootNode(enable bool) AddNodeOption {
+// AddNodeWithProperty specifies a property that this node should hold
+// in the running services. (e.g. "bootnode", etc)
+func AddNodeWithProperty(propertyName string) AddNodeOption {
 	return func(o *adapters.NodeConfig) {
-		o.BootNode = enable
+		o.Properties = append(o.Properties, propertyName)
 	}
 }
 
@@ -122,7 +126,13 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 
 	enodeParams := &network.EnodeParams{
 		PrivateKey: bzzPrivateKey,
-		Bootnode:   conf.BootNode,
+	}
+
+	// Check for any properties relevant to the creation of the Enode Record
+	for _, property := range conf.Properties {
+		if property == PropertyBootnode {
+			enodeParams.Bootnode = true
+		}
 	}
 
 	record, err := network.NewEnodeRecord(enodeParams)
@@ -153,9 +163,9 @@ func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []enode.ID,
 	return ids, nil
 }
 
-// AddBootNode creates a bootnode using AddNode(opts) and appends it to Simulation.bootNodes
-func (s *Simulation) AddBootNode(opts ...AddNodeOption) (id enode.ID, err error) {
-	opts = append(opts, AddNodeAsBootNode(true))
+// AddBootnode creates a bootnode using AddNode(opts) and appends it to Simulation.bootNodes
+func (s *Simulation) AddBootnode(opts ...AddNodeOption) (id enode.ID, err error) {
+	opts = append(opts, AddNodeWithProperty(PropertyBootnode))
 	id, err = s.AddNode(opts...)
 	if err != nil {
 		return id, err
@@ -164,19 +174,7 @@ func (s *Simulation) AddBootNode(opts ...AddNodeOption) (id enode.ID, err error)
 	return id, nil
 }
 
-// AddBootNodes creates count number of bootnodes using AddNodes(count, opts)
-// and appends them to Simulation.bootNodes
-func (s *Simulation) AddBootNodes(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
-	opts = append(opts, AddNodeAsBootNode(true))
-	ids, err = s.AddNodes(count, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	return ids, err
-}
-
-// AddNodesAndConnectFull is a helpper method that combines
+// AddNodesAndConnectFull is a helper method that combines
 // AddNodes and ConnectNodesFull. Only new nodes will be connected.
 func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	if count < 2 {
@@ -237,7 +235,7 @@ func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (i
 	return ids, nil
 }
 
-// AddNodesAndConnectStar is a helpper method that combines
+// AddNodesAndConnectStar is a helper method that combines
 // AddNodes and ConnectNodesStar.
 func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	if count < 2 {
@@ -254,11 +252,11 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	return ids, nil
 }
 
-// AddNodesAndConnectToBootNode is a helper method that combines
-// AddNodes, AddBootNode and ConnectNodesStar, where the center node is a new bootnode.
+// AddNodesAndConnectToBootnode is a helper method that combines
+// AddNodes, AddBootnode and ConnectNodesStar, where the center node is a new bootnode.
 // The count parameter excludes the bootnode.
-func (s *Simulation) AddNodesAndConnectToBootNode(count int, opts ...AddNodeOption) (ids []enode.ID, bootNodeID enode.ID, err error) {
-	bootNodeID, err = s.AddBootNode(opts...)
+func (s *Simulation) AddNodesAndConnectToBootnode(count int, opts ...AddNodeOption) (ids []enode.ID, bootNodeID enode.ID, err error) {
+	bootNodeID, err = s.AddBootnode(opts...)
 	if err != nil {
 		return nil, bootNodeID, err
 	}

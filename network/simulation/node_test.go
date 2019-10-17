@@ -219,62 +219,42 @@ func TestAddNodes(t *testing.T) {
 	}
 }
 
-func TestAddBootNode(t *testing.T) {
+// TestAddBootnode adds a bootnode to a simulation network
+//  and checks that the bootnode is returned by GetNodeIDsByProperty with PropertyBootnode
+// If other nodes are returned, or the bootnode ID is incorrect, the test fails
+func TestAddBootnode(t *testing.T) {
 	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
-	id, err := sim.AddBootNode()
+	// Add some normal nodes for the sake of the bootnode not being the only node
+	_, err := sim.AddNodes(4)
+
+	bootnodeID, err := sim.AddBootnode()
 	if err != nil {
 		t.Fatalf("Failed to add bootnode: %s", err)
 	}
 
-	bootNode := sim.Net.GetNode(id)
-	if !bootNode.Config.BootNode {
-		t.Fatalf("Bootnode did not have the respective flag in its config")
+	gotBootnodeIDs := sim.Net.GetNodeIDsByProperty(PropertyBootnode)
+	if len(gotBootnodeIDs) != 1 {
+		t.Fatalf("Expected 1 bootnode, got %d", len(gotBootnodeIDs))
 	}
 
-	for _, node := range sim.Net.GetBootNodes() {
-		if !bytes.Equal(node.ID().Bytes(), bootNode.ID().Bytes()) {
-			t.Fatalf("Found an unexpected bootnode with ID: %s", node.ID().String())
-		}
+	if !bytes.Equal(gotBootnodeIDs[0].Bytes(), bootnodeID.Bytes()) {
+		t.Fatalf("Found an unexpected bootnode with ID: %s", gotBootnodeIDs[0].String())
 	}
 }
 
-func TestAddBootNodes(t *testing.T) {
-	bootNodeCount := 10
+// TestAddNodesAndConnectToBootnode adds nodeCount nodes, and a bootnode in a star topology
+// VerifyStar is then used to confirm that the nodes connected to the bootnode as expected
+func TestAddNodesAndConnectToBootnode(t *testing.T) {
+	nodeCount := 5
 
 	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
-	ids, err := sim.AddBootNodes(bootNodeCount)
+	ids, bootNodeID, err := sim.AddNodesAndConnectToBootnode(nodeCount)
 	if err != nil {
-		t.Fatalf("Failed to add bootnodes: %s", err)
-	}
-
-	bootNodes := sim.Net.GetBootNodes()
-	for _, id := range ids {
-		match := false
-		for _, node := range bootNodes {
-			if bytes.Equal(id.Bytes(), node.ID().Bytes()) {
-				match = true
-			}
-		}
-
-		if !match {
-			t.Fatalf("Added a bootnode with enode.ID, %s, but it was not found via GetBootNodes", id.String())
-		}
-	}
-}
-
-func TestAddNodesAndConnectToBootNode(t *testing.T) {
-	nodeCount := 20
-
-	sim := NewInProc(noopServiceFuncMap)
-	defer sim.Close()
-
-	ids, bootNodeID, err := sim.AddNodesAndConnectToBootNode(nodeCount)
-	if err != nil {
-		t.Fatalf("AddNodesAndConnectToBootNode Failed: %s", err)
+		t.Fatalf("AddNodesAndConnectToBootnode Failed: %s", err)
 	}
 
 	// VerifyStar takes a map and an index to the bootnode, so append it and use the index
