@@ -178,6 +178,10 @@ func (h *Hive) Run(p *BzzPeer) error {
 			h.NotifyDepth(depth)
 		} else {
 			// otherwise just send depth to new peer
+
+			//go func(dp *Peer, depth uint8) {
+			//dp.Send(context.TODO(), &subPeersMsg{Depth: depth})
+			//}(dp, depth)
 			dp.NotifyDepth(depth)
 		}
 		h.NotifyPeer(p.BzzAddr)
@@ -293,6 +297,9 @@ func (h *Hive) handleMsg(p *Peer) func(context.Context, interface{}) error {
 // NotifyDepth sends a message to all connections if depth of saturation is changed
 func (h *Hive) NotifyDepth(depth uint8) {
 	f := func(val *Peer, po int) bool {
+		//go func(val *Peer, po int) {
+		//val.Send(context.TODO(), &subPeersMsg{Depth: uint8(po)})
+		//}(val, po)
 		val.NotifyDepth(depth)
 		return true
 	}
