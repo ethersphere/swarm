@@ -639,6 +639,8 @@ func TestBasicSwapSimulation(t *testing.T) {
 
 func waitForChequeProcessed(t *testing.T, ts *testService) error {
 	t.Helper()
+	ts.lock.Lock()
+	defer ts.lock.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
