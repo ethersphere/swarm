@@ -55,6 +55,10 @@ type Contract interface {
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
+	//TotalDeposit returns the total amount ever deposited in the chequebook
+	TotalDeposit() (*big.Int, error)
+	//TotalWithdrawn returns the total amount ever withdrawn from the chequebook
+	TotalWithdrawn() (*big.Int, error)
 }
 
 // CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
@@ -150,6 +154,34 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 // PaidOut returns the total paid out amount for the given address
 func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
 	return s.instance.PaidOut(opts, addr)
+}
+
+// TotalDeposit iterates over all Deposit events and returns the total amount ever deposited
+func (s simpleContract) TotalDeposit() (totalDeposit *big.Int, err error) {
+	depositIterator, err := s.instance.FilterDeposit(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for depositIterator.Next() {
+		totalDeposit = totalDeposit.Add(totalDeposit, depositIterator.Event.Amount)
+	}
+
+	return totalDeposit, depositIterator.Error()
+}
+
+// TotalWithdrawn iterates over all Withdraw events and returns the total amount ever withdrawn
+func (s simpleContract) TotalWithdrawn() (totalWithdrawn *big.Int, err error) {
+	withdrawIterator, err := s.instance.FilterWithdraw(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for withdrawIterator.Next() {
+		totalWithdrawn = totalWithdrawn.Add(totalWithdrawn, withdrawIterator.Event.Amount)
+	}
+
+	return totalWithdrawn, withdrawIterator.Error()
 }
 
 // ValidateCode checks that the on-chain code at address matches the expected swap

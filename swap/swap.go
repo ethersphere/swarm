@@ -451,6 +451,19 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	return balances, nil
 }
 
+// AvailableBalance returns the total balance of the chequebook against which new cheques can be written
+func (s *Swap) AvailableBalance() (uint64, error) {
+	totalDeposit, err := s.contract.TotalDeposit()
+	if err != nil {
+		return 0, err
+	}
+	totalWithdrawn, err := s.contract.TotalWithdrawn()
+	if err != nil {
+		return 0, err
+	}
+	return totalDeposit.Uint64() - totalWithdrawn.Uint64() - s.paidOut, nil
+}
+
 // SentCheque returns the last sent cheque for a given peer
 func (s *Swap) SentCheque(peer enode.ID) (cheque *Cheque, err error) {
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
