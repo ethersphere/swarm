@@ -79,8 +79,6 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	// Use modules in subcommands.
-	os.Setenv("GO111MODULE", "on")
 	goflgs := "-mod=vendor"
 	if v := os.Getenv("GOFLAGS"); v != "" && v != "-mod=vendor" {
 		goflgs = v + " " + goflgs
