@@ -271,7 +271,6 @@ func doLint(cmdline []string) {
 	configs := []string{
 		"run",
 		"--tests",
-		"--deadline=5m",
 		"--disable-all",
 		"--enable=goimports",
 		"--enable=varcheck",
@@ -279,17 +278,10 @@ func doLint(cmdline []string) {
 		"--enable=gofmt",
 		"--enable=misspell",
 		"--enable=goconst",
+		"--enable=unconvert",
+		"--enable=gosimple",
 	}
 	build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
-
-	// Run slow linters one by one
-	for _, linter := range []string{
-		"unconvert",
-		"gosimple",
-	} {
-		configs = []string{"run", "--tests", "--deadline=10m", "--disable-all", "--enable=" + linter}
-		build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
-	}
 }
 
 // Release Packaging
