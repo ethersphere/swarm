@@ -456,6 +456,7 @@ type storeKeysTestCases struct {
 	expectedUsedChequebookKey string
 }
 
+//eknir TODO: add paidOutkey
 // Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
 func TestStoreKeys(t *testing.T) {
 	testCases := []storeKeysTestCases{
@@ -1816,6 +1817,58 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	if peer.getLastSentCumulativePayout() != cheque.CumulativePayout {
 		t.Fatalf("last cumulative payout should be the payout of the last sent cheque, was: %d, expected %d", peer.getLastSentCumulativePayout(), cheque.CumulativePayout)
 	}
+}
+
+func TestAvailableBalance(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
+
+	// deposit 100
+	depositAmount := big.NewInt(100)
+	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Context = context.TODO()
+	_, err := swap.contract.Deposit(opts, swap.backend, depositAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stb *swapTestBackend
+	var ok bool
+	if stb, ok = swap.backend.(*swapTestBackend); !ok {
+		t.Fatal(errors.New("not the expected test backend"))
+	}
+	stb.Commit()
+
+	// verify that available balance equals depositAmount
+	availableBalance, err := swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != depositAmount.Uint64() {
+		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount.Uint64())
+	}
+
+	// withdraw 50
+	withdrawAmount := big.NewInt(50)
+	_, err = swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stb.Commit()
+
+	// verify that available balance equals depositAmount - withdrawAmount
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != depositAmount.Uint64()-withdrawAmount.Uint64() {
+		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount.Uint64())
+	}
+
+	// run a test where we verify that availableBalance equals depositAmount-withdrawAmount-paidOut
+
+	defer clean()
+
 }
 
 // dummyMsgRW implements MessageReader and MessageWriter
