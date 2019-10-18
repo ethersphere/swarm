@@ -47,6 +47,10 @@ type Backend interface {
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
+	// Withdraw attempts to withdraw from the chequebook
+	Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
+	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
+	Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
 	// ContractParams returns contract info (e.g. deployed address)
