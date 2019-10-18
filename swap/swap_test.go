@@ -83,20 +83,32 @@ type swapTestBackend struct {
 	cashDone chan struct{}
 }
 
+func (b *swapTestBackend) Close() error {
+	// Do not close SimulatedBackend as it is a global instance.
+	return nil
+}
+
+func TestMain(m *testing.M) {
+	exitCode := m.Run()
+	// Close the global default backend
+	// when tests are done.
+	defaultBackend.Close()
+	os.Exit(exitCode)
+}
+
 func init() {
 	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
 	swapLog = log.Root()
 }
 
+var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
+	ownerAddress:       {Balance: big.NewInt(1000000000000000000)},
+	beneficiaryAddress: {Balance: big.NewInt(1000000000000000000)},
+}, 8000000)
+
 // newTestBackend creates a new test backend instance
 func newTestBackend() *swapTestBackend {
-	gasLimit := uint64(8000000)
-	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		ownerAddress:       {Balance: big.NewInt(1000000000000000000)},
-		beneficiaryAddress: {Balance: big.NewInt(1000000000000000000)},
-	}, gasLimit)
-
 	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	defaultBackend.Commit()
 
