@@ -103,6 +103,26 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 	return c, err
 }
 
+func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
+	tx, err := s.instance.Withdraw(auth, amount)
+	if err != nil {
+		return nil, err
+	}
+	receipt, err := WaitFunc(auth, backend, tx)
+	return receipt, err
+}
+
+func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
+	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
+	auth.Value = amount
+	tx, err := rawSimpleSwap.Transfer(auth)
+	if err != nil {
+		return nil, err
+	}
+	receipt, err := WaitFunc(auth, backend, tx)
+	return receipt, err
+}
+
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
 func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
 	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
