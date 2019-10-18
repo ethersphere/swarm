@@ -21,7 +21,6 @@ fi
 # Set up the environment to use the workspace.
 GOPATH="$workspace"
 export GOPATH
-export GO111MODULE=on
 export GOFLAGS=-mod=vendor
 
 # Run the command inside the workspace.
