@@ -18,9 +18,7 @@ package network
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -65,24 +63,6 @@ func newTestKademlia(t *testing.T, b string) *testKademlia {
 
 func (tk *testKademlia) newTestKadPeer(s string) *Peer {
 	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, tk.Kademlia)
-}
-
-func addressGenerator(numAddress int, base string) []string {
-	address := ""
-	var addresses []string
-	for n := 0; n < numAddress; n++ {
-		address = ""
-	inner:
-		for len(address) < 8 {
-			address = address + strconv.Itoa(rand.Intn(2))
-		}
-		if address == base {
-			address = ""
-			goto inner
-		}
-		addresses = append(addresses, address)
-	}
-	return addresses
 }
 
 func (tk *testKademlia) On(ons ...string) {
@@ -391,21 +371,22 @@ func binStr(a *BzzAddr) string {
 }
 
 //Tests peer suggestion. Depends on expectedMinBinSize implementation
-func TestSuggestPeersFindPeers(t *testing.T) {
+func TestSuggestPeers(t *testing.T) {
 	base := "00000000"
 	tk := newTestKademlia(t, base)
-
-	tk.MaxBinSize = 7
 
 	//Add peers to bin 2 and 3 in order to be able to have depth 2
 	tk.On("00100000")
 	tk.On("00010000")
+
 	//No unconnected peers
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 	//We add some addresses that fall in bin0 and bin1
-	tk.Register("10000000", "11000000", "11100000", "11110000", "11111000")
-	tk.Register("01000000", "01100000", "01110000")
+	//tk.Register("10000000", "11000000", "11100000", "11110000", "11111000")
+	tk.Register("11111000")
+	//tk.Register("01000000", "01100000", "01110000")
+	tk.Register("01110000")
 
 	//Bins should fill from  most empty to least empty and shallower to deeper
 	//first suggestion should be for bin 0
@@ -416,6 +397,9 @@ func TestSuggestPeersFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("01110000", 0, false)
 	tk.On("01110000")
 
+	tk.Register("11110000")
+	tk.Register("01100000")
+
 	//Both bins 0 and 1 have at least 1 peer, so next suggested peer should be for 0 (shallower)
 	tk.checkSuggestPeer("11110000", 0, false)
 	tk.On("11110000")
@@ -424,83 +408,59 @@ func TestSuggestPeersFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("01100000", 0, false)
 	tk.On("01100000")
 
+	tk.Register("11100000")
+	tk.Register("01100000")
+
 	//Bin1 should be saturated now (size == expectedSizeBin1)
-	//Next suggestions should all be bin0 peers
+	//Next suggestion should  be bin0 peers
 	tk.checkSuggestPeer("11100000", 0, false)
 	tk.On("11100000")
-	tk.checkSuggestPeer("11000000", 0, false)
-	tk.On("11000000")
 
-	//Bin0 should also  be saturated now (size == expectedSizeBin0)
+	//Bin0 should also  be saturated now (size == expectedBinSize)
 	//All bins saturated, shouldn't suggest more peers
-	tk.checkSuggestPeer("<nil>", 0, false)
-
-	//We check for change of saturationDepth
-	tk.Off("11000000")
-	tk.checkSuggestPeer("11000000", 0, true)
-	tk.On("11000000")
-
-	//We check again, this time unsaturating bin1
-	tk.Off("01110000")
-	//We don't connect to force  peer not callable
-	tk.checkSuggestPeer("01110000", 1, true)
-	tk.checkSuggestPeer("01000000", 0, false)
-	//Now no peers are callable
-	tk.checkSuggestPeer("<nil>", 0, false)
-
-	tk.On("01110000")
-	tk.Off("01110000")
-	//Peer should be callable again
-	tk.checkSuggestPeer("01110000", 1, true)
-	tk.On("01110000")
-
-	//Same with the other peer
-	tk.On("01000000")
-	tk.Off("01000000")
-	//Peer is callable again, but all bins  saturated. No peer suggested
+	tk.Register("11000000")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 	//Depth is 2
 	//Since depth is 2, bins >= 2 aren't considered saturated if peers left to connect
 	//We add addresses that fall in bin2 and bin3
-	tk.Register("00111000", "00110000")
+	tk.Register("00111000")
 	tk.Register("00011100")
 
-	//Again, should fill from shallow to deep
-	tk.checkSuggestPeer("00110000", 0, false)
-	tk.On("00110000")
+	//Again, should fill bins from shallow to deep
 	tk.checkSuggestPeer("00111000", 0, false)
-	tk.On("00111100")
+	tk.On("00110000")
 	tk.checkSuggestPeer("00011100", 0, false)
 	tk.On("00011100")
 
-	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2), and shallower bins aren't empty
+	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2)
 	//Bin0 and Bin1 not saturated, Bin2 saturated
+	tk.Register("11000000")
+	tk.Register("01000000")
+
 	tk.checkSuggestPeer("01000000", 0, false)
 	tk.On("01000000")
-	tk.checkSuggestPeer("10000000", 0, false)
-	tk.On("10000000")
+	tk.checkSuggestPeer("11000000", 0, false)
+	tk.On("11000000")
 
 	//All bins saturated again
-	//Bin0 is saturated (no peers left to add) but less than expectedSize
-	//Add some bin0 peers
-	tk.Register("11001100", "11111100", "11001111", "10100000")
-
-	//Bin0 is now  unsaturated
-	tk.checkSuggestPeer("11111100", 0, false)
-	tk.On("11111100")
-	tk.checkSuggestPeer("11001111", 0, false)
-	tk.On("11001111")
-	//Since binSize is MaxBinSize (7), Bin0 is saturated now
+	tk.Register("11111110")
+	tk.Register("01010100")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//We change MaxBinSize
-	tk.MaxBinSize = 8
+	//Should be healthy
+	tk.checkHealth(true)
 
-	//Shouldn't be saturated anymore
-	tk.checkSuggestPeer("11001100", 0, true)
-	tk.On("11001100")
-	//One known peer left to add in bin0, but since is saturated shouldn't be suggested
+	//If bin in neighbour (bin3), should keep adding peers even if size === expectedSize
+	tk.Register("00011111")
+	tk.checkSuggestPeer("00011111", 0, false)
+	tk.On("00011111")
+
+	tk.Register("00010001")
+	tk.checkSuggestPeer("00010001", 0, false)
+	tk.On("00010001")
+
+	//No more peers left in unsaturated bins
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 }

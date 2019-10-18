@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -409,6 +408,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 					suggestedPeer = e.BzzAddr
 					return false
 				}
+
 				return true
 			})
 			return cur < len(bins) && suggestedPeer == nil
@@ -1102,7 +1102,7 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 func (k *Kademlia) expectedMinBinSize(proximityOrder int) int {
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 
-	minBinSize := k.MinBinSize * int(math.Pow(2, float64(depth-proximityOrder-1)))
+	minBinSize := k.MinBinSize + (depth - proximityOrder - 1)
 
 	if minBinSize < k.MinBinSize {
 		return k.MinBinSize
