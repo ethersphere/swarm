@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -60,7 +59,8 @@ type Swap struct {
 	backend          contract.Backend   // the backend (blockchain) used
 	owner            *Owner             // contract access
 	params           *Params            // economic and operational parameters
-	contract         swap.Contract      // reference to the smart contract
+	contract         contract.Contract  // reference to the smart contract
+	paidOut          uint64             // amount in Wei ever paid out
 	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
 }
 
@@ -130,13 +130,14 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, paidOut uint64) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
 		backend:          backend,
 		owner:            owner,
 		params:           params,
+		paidOut:          paidOut,
 		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
 }
@@ -178,6 +179,13 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, err
 	}
 	swapLog.Info("Using backend network ID", "ID", chainID.Uint64())
+
+	var paidOut uint64
+	if paidOut, err = loadPaidout(stateStore); err != nil {
+		return nil, err
+	}
+	swapLog.Info("Total paidOut in Wei", "paidOut", paidOut)
+
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// create the swap instance
@@ -186,11 +194,13 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		owner,
 		backend,
 		params,
+		paidOut,
 	)
 	// start the chequebook
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
 		return nil, err
 	}
+
 	return swap, nil
 }
 
@@ -200,6 +210,7 @@ const (
 	receivedChequePrefix   = "received_cheque_"
 	connectedChequebookKey = "connected_chequebook"
 	connectedBlockchainKey = "connected_blockchain"
+	paidoutKey             = "paid_out"
 )
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
@@ -342,6 +353,12 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 
 	return err
+}
+
+// IncreasePaidout updates the paidout amount and stores the new amount on disk
+func (s *Swap) IncreasePaidout(amount uint64) error {
+	s.paidOut += amount
+	return s.store.Put(paidoutKey, s.paidOut)
 }
 
 // cashCheque should be called async as it blocks until the transaction(s) are mined
@@ -561,13 +578,21 @@ func (s *Swap) saveBalance(p enode.ID, balance int64) error {
 	return s.store.Put(balanceKey(p), balance)
 }
 
+func loadPaidout(s state.Store) (paidOut uint64, err error) {
+	err = s.Get(paidoutKey, &paidOut)
+	if err == state.ErrNotFound {
+		return 0, nil
+	}
+	return paidOut, err
+}
+
 // Close cleans up swap
 func (s *Swap) Close() error {
 	return s.store.Close()
 }
 
 // GetParams returns contract parameters (Bin, ABI, contractAddress) from the contract
-func (s *Swap) GetParams() *swap.Params {
+func (s *Swap) GetParams() *contract.Params {
 	return s.contract.ContractParams()
 }
 
