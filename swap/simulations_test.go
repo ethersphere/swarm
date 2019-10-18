@@ -216,7 +216,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	defParams := newDefaultParams(t)
 	for i := 0; i < nodeCount; i++ {
 		owner = createOwner(keys[i])
-		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, defParams)
+		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, defParams, 0)
 	}
 
 	params.backend = testBackend

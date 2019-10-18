@@ -1140,7 +1140,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
-	swap := newSwapInstance(stateStore, owner, backend, params)
+	swap := newSwapInstance(stateStore, owner, backend, params, 0)
 	return swap, dir
 }
 
