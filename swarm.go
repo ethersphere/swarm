@@ -193,8 +193,17 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	fhParams := &feed.HandlerParams{}
 
 	feedsHandler = feed.NewHandler(fhParams)
-
-	self.tags = chunk.NewTags() //todo load from state store
+	self.tags = chunk.NewTags()
+	err = self.stateStore.Get("tags", self.tags)
+	if err != nil {
+		if err == state.ErrNotFound {
+			self.tags = chunk.NewTags()
+		} else {
+			return nil, err
+		}
+	} else {
+		log.Info("loaded saved tags successfully from state store")
+	}
 
 	localStore, err := localstore.New(config.ChunkDbPath, config.BaseKey, &localstore.Options{
 		MockStore: mockStore,
@@ -483,6 +492,14 @@ func (s *Swarm) Stop() error {
 	if s.pushSync != nil {
 		s.pushSync.Close()
 	}
+
+	if s.tags != nil {
+		err := s.stateStore.Put("tags", s.tags)
+		if err != nil {
+			log.Error("had an error persisting tags", "err", err)
+		}
+	}
+
 	if s.storer != nil {
 		s.storer.Close()
 	}

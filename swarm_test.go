@@ -396,6 +396,65 @@ func TestLocalStoreAndRetrieve(t *testing.T) {
 	}
 }
 
+// TestTagPersistence tests that a tag is persisted then reloaded when the node is started again
+func TestTagPersistence(t *testing.T) {
+	config := api.NewConfig()
+
+	dir, err := ioutil.TempDir("", "swarm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	config.Path = dir
+
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodekey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config.Init(privkey, nodekey)
+
+	s, err := NewSwarm(config, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.tags.Create("w00t", 1, false)
+
+	err = s.stateStore.Put("tags", s.tags)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//close the stores to prevent resource not available error
+	s.stateStore.Close()
+	s.netStore.Close()
+
+	// create a new swarm with the other's config and datadir
+	s2, err := NewSwarm(config, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get the tags that should come from the persisted data store
+	tags := s2.tags.All()
+
+	if len(tags) != 1 {
+		t.Fatalf("expected %d tags got %d", 1, len(tags))
+	}
+
+	if tag[0].Name != "w00t" {
+		t.Fatal("tag name mismatch. expected %s got %s", "w00t", tag[0].Name)
+	}
+
+	s2.stateStore.Close()
+	s2.netStore.Close()
+}
+
 // testLocalStoreAndRetrieve is using a single Swarm instance, to upload
 // a file of length n with optional random data using API Store function,
 // and checks the output of API Retrieve function on the same instance.
