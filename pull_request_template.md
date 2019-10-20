@@ -6,8 +6,8 @@ Before opening a Pull Request or reviewing a Pull Request, please get yourself a
 1. Open PRs preemptively (i.e. whenever you start working on it), especially in the case of large tasks
 2. Create PRs with a healthy amount of description. A PR without a description will not be approved
 3. PR names should adhere to the following standard: "(affected package(s)): description".When many top-level packages are affected, use "all" instead of individual names. Eg: "storage: fix panic on hasherstore put", "network, storage, p2p: integrate capabilities api", "all: first swap version"
-4. Mark the PR with a `ready for review` label once it is. If a second(or more) round of reviews is required, remove the `ready for review` label and add a `ready for another review` label
-5. Never(!) force-push a PR once reviews have started! This has the unfortunate side-effect of resolving/outdating previous comments over the PR. Rebasing while the PR is under review is to be done only if requested to do so by reviewers
+4. Mark the PR with an `in-progress` label while you're working on it and with a `ready for review` label once it is ready for review. If a second(or more) round of reviews is required, use `ready for another review`
+5. Avoid(!) force-pushing a PR with squash once reviews have started! This has the unfortunate side-effect of resolving/outdating previous comments over the PR. Rebasing while the PR is under review is to be done only if requested to do so by reviewers or when conflicts with `master` are at hand.
 6. It is up to the reviewer to resolve a comment
 7. A comment does not account as a blocker to merging a PR unless explicitly mentioned in the comment: `BLOCKER: .....`
 8. When reviewing - please make the comment on a line that would constitute a change when addressed - this will resolve the comments automatically once addressed
