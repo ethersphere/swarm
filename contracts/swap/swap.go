@@ -190,8 +190,10 @@ func (s simpleContract) TotalDeposit() (totalDeposit *big.Int, err error) {
 	for depositIterator.Next() {
 		totalDeposit = totalDeposit.Add(totalDeposit, depositIterator.Event.Amount)
 	}
-
-	return totalDeposit, depositIterator.Error()
+	if depositIterator.Error() != nil {
+		return nil, depositIterator.Error()
+	}
+	return totalDeposit, nil
 }
 
 // TotalWithdrawn iterates over all Withdraw events and returns the total amount ever withdrawn
@@ -204,6 +206,9 @@ func (s simpleContract) TotalWithdrawn() (totalWithdrawn *big.Int, err error) {
 
 	for withdrawIterator.Next() {
 		totalWithdrawn = totalWithdrawn.Add(totalWithdrawn, withdrawIterator.Event.Amount)
+	}
+	if withdrawIterator.Error() != nil {
+		return nil, withdrawIterator.Error()
 	}
 
 	return totalWithdrawn, withdrawIterator.Error()
