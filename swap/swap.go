@@ -60,7 +60,7 @@ type Swap struct {
 	owner            *Owner             // contract access
 	params           *Params            // economic and operational parameters
 	contract         contract.Contract  // reference to the smart contract
-	paidOut          uint64             // amount in Wei ever paid out
+	availableBalance uint64             // amount in Wei against which new cheques can be safely written
 	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
 }
 
@@ -130,14 +130,13 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, paidOut uint64) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params) *Swap {
 	return &Swap{
 		store:            stateStore,
 		peers:            make(map[enode.ID]*Peer),
 		backend:          backend,
 		owner:            owner,
 		params:           params,
-		paidOut:          paidOut,
 		honeyPriceOracle: NewHoneyPriceOracle(),
 	}
 }
@@ -180,12 +179,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	}
 	swapLog.Info("Using backend network ID", "ID", chainID.Uint64())
 
-	var paidOut uint64
-	if paidOut, err = loadPaidout(stateStore); err != nil {
-		return nil, err
-	}
-	swapLog.Info("Total paidOut in Wei", "paidOut", paidOut)
-
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// create the swap instance
@@ -194,10 +187,14 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		owner,
 		backend,
 		params,
-		paidOut,
 	)
 	// start the chequebook
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
+		return nil, err
+	}
+
+	// set the available balance
+	if swap.availableBalance, err = swap.computeAvailableBalance(); err != nil {
 		return nil, err
 	}
 
@@ -210,7 +207,6 @@ const (
 	receivedChequePrefix   = "received_cheque_"
 	connectedChequebookKey = "connected_chequebook"
 	connectedBlockchainKey = "connected_blockchain"
-	paidoutKey             = "paid_out"
 )
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
@@ -355,10 +351,32 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	return err
 }
 
-// IncreasePaidout updates the paidout amount and stores the new amount on disk
-func (s *Swap) IncreasePaidout(amount uint64) error {
-	s.paidOut += amount
-	return s.store.Put(paidoutKey, s.paidOut)
+func (s *Swap) computeAvailableBalance() (uint64, error) {
+	// get the total amount (Wei) ever deposited
+	deposit, err := s.contract.TotalDeposit()
+	if err != nil {
+		return 0, err
+	}
+	// get the total amount (Wei) ever withdrawn
+	withdrawn, err := s.contract.TotalWithdrawn()
+	if err != nil {
+		return 0, err
+	}
+	// read the total value (Wei) of all cheques cheques sent
+	var totalPaidOut uint64
+	sentCheques, err := s.SentCheques()
+	if err != nil {
+		return 0, err
+	}
+	for _, v := range sentCheques {
+		totalPaidOut += v.ChequeParams.CumulativePayout
+	}
+	return deposit.Uint64() - withdrawn.Uint64() - totalPaidOut, nil
+}
+
+// updateAvailableBalance updates the available balance amount and stores the new amount on disk
+func (s *Swap) updateAvailableBalance(amount int64) {
+	s.availableBalance = uint64(int64(s.availableBalance) + amount)
 }
 
 // cashCheque should be called async as it blocks until the transaction(s) are mined
@@ -452,16 +470,8 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
-func (s *Swap) AvailableBalance() (uint64, error) {
-	totalDeposit, err := s.contract.TotalDeposit()
-	if err != nil {
-		return 0, err
-	}
-	totalWithdrawn, err := s.contract.TotalWithdrawn()
-	if err != nil {
-		return 0, err
-	}
-	return totalDeposit.Uint64() - totalWithdrawn.Uint64() - s.paidOut, nil
+func (s *Swap) AvailableBalance() uint64 {
+	return s.availableBalance
 }
 
 // SentCheque returns the last sent cheque for a given peer
@@ -591,14 +601,6 @@ func (s *Swap) saveBalance(p enode.ID, balance int64) error {
 	return s.store.Put(balanceKey(p), balance)
 }
 
-func loadPaidout(s state.Store) (paidOut uint64, err error) {
-	err = s.Get(paidoutKey, &paidOut)
-	if err == state.ErrNotFound {
-		return 0, nil
-	}
-	return paidOut, err
-}
-
 // Close cleans up swap
 func (s *Swap) Close() error {
 	return s.store.Close()
@@ -712,6 +714,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDura
 			swapLog.Warn("chequebook deploy error, retrying...", "try", try, "error", err)
 			continue
 		}
+		s.updateAvailableBalance(opts.Value.Int64())
 		return instance, nil
 	}
 	return nil, err

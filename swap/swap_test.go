@@ -1141,7 +1141,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
-	swap := newSwapInstance(stateStore, owner, backend, params, 0)
+	swap := newSwapInstance(stateStore, owner, backend, params)
 	return swap, dir
 }
 
@@ -1840,10 +1840,7 @@ func TestAvailableBalance(t *testing.T) {
 	stb.Commit()
 
 	// verify that available balance equals depositAmount
-	availableBalance, err := swap.AvailableBalance()
-	if err != nil {
-		t.Fatal(err)
-	}
+	availableBalance := swap.AvailableBalance()
 	if availableBalance != depositAmount.Uint64() {
 		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount.Uint64())
 	}
@@ -1857,10 +1854,7 @@ func TestAvailableBalance(t *testing.T) {
 	stb.Commit()
 
 	// verify that available balance equals depositAmount - withdrawAmount
-	availableBalance, err = swap.AvailableBalance()
-	if err != nil {
-		t.Fatal(err)
-	}
+	availableBalance = swap.AvailableBalance()
 	if availableBalance != depositAmount.Uint64()-withdrawAmount.Uint64() {
 		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount.Uint64())
 	}
