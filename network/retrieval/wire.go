@@ -20,11 +20,13 @@ import "github.com/ethersphere/swarm/storage"
 
 // RetrieveRequest is the protocol msg for chunk retrieve requests
 type RetrieveRequest struct {
+	Ruid uint
 	Addr storage.Address
 }
 
 // ChunkDelivery is the protocol msg for delivering a solicited chunk to a peer
 type ChunkDelivery struct {
+	Ruid  uint
 	Addr  storage.Address
 	SData []byte
 }
