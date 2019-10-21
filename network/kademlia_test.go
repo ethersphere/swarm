@@ -383,9 +383,7 @@ func TestSuggestPeers(t *testing.T) {
 	tk.checkSuggestPeer("<nil>", 0, false)
 
 	//We add some addresses that fall in bin0 and bin1
-	//tk.Register("10000000", "11000000", "11100000", "11110000", "11111000")
 	tk.Register("11111000")
-	//tk.Register("01000000", "01100000", "01110000")
 	tk.Register("01110000")
 
 	//Bins should fill from  most empty to least empty and shallower to deeper
