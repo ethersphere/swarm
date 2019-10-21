@@ -307,17 +307,17 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	// and from shallow to deep (ascending order of PO)
 	// insert them in a map of bin arrays, keyed with the number of connected peers
 	saturation := make(map[int][]int)
-	var lastPO int       // the last non-empty PO bin in the iteration
-	saturationDepth = -1 // the deepest PO such that all shallower bins have >= expectedMinBinSize peers
-	var pastDepth bool   // whether po of iteration >= depth
-	var currentMaxMinBinSize = k.MinBinSize
+	var lastPO int                       // the last non-empty PO bin in the iteration
+	saturationDepth = -1                 // the deepest PO such that all shallower bins have >= expectedMinBinSize peers
+	var pastDepth bool                   // whether po of iteration >= depth
+	var currentMaxBinSize = k.MinBinSize //Stores the current biggest MinBinSize
 
 	binConsumer := func(bin *pot.Bin) bool {
 		po := bin.ProximityOrder
 		size := bin.Size
 		expectedMinBinSize := k.expectedMinBinSize(po)
-		if currentMaxMinBinSize < expectedMinBinSize {
-			currentMaxMinBinSize = expectedMinBinSize
+		if currentMaxBinSize < expectedMinBinSize {
+			currentMaxBinSize = expectedMinBinSize
 		}
 		//process skipped empty bins
 		for ; lastPO < po; lastPO++ {
@@ -371,7 +371,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	// find the first callable peer in the address book
 	// starting from the bins with smallest size proceeding from shallow to deep
 	// for each bin (up until neighbourhood radius) we find callable candidate peers
-	for size := 0; size < currentMaxMinBinSize && suggestedPeer == nil; size++ {
+	for size := 0; size < currentMaxBinSize && suggestedPeer == nil; size++ {
 		bins, ok := saturation[size]
 		if !ok {
 			// no bin with this size
@@ -1097,8 +1097,7 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	return gots == len(peers), gots, culprits
 }
 
-//calculates the expected min size of a given bin (minBinSize)
-//binSize = k.MinBinSize * 2 ^ (depth - proximityOrder - 1)
+//Calculates the expected min size of a given bin (minBinSize)
 func (k *Kademlia) expectedMinBinSize(proximityOrder int) int {
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 
