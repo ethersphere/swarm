@@ -47,10 +47,10 @@ type Backend interface {
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
-	// Withdraw attempts to withdraw from the chequebook
+	// Withdraw attempts to withdraw Wei from the chequebook
 	Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
-	Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
+	Deposit(auth *bind.TransactOpts, backend Backend) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
 	// ContractParams returns contract info (e.g. deployed address)
@@ -59,9 +59,9 @@ type Contract interface {
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
-	//TotalDeposit returns the total amount ever deposited in the chequebook
+	//TotalDeposit returns the total amount in Wei ever deposited in the chequebook
 	TotalDeposit() (*big.Int, error)
-	//TotalWithdrawn returns the total amount ever withdrawn from the chequebook
+	//TotalWithdrawn returns the total amount in Wei ever withdrawn from the chequebook
 	TotalWithdrawn() (*big.Int, error)
 }
 
@@ -107,24 +107,23 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 	return c, err
 }
 
+// Withdraw withdraws amount from the chequebook and blocks until the transaction is mined
 func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
 	tx, err := s.instance.Withdraw(auth, amount)
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := WaitFunc(auth, backend, tx)
-	return receipt, err
+	return WaitFunc(auth, backend, tx)
 }
 
-func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
+// Deposit sends a transaction to the chequebook, which deposits the amount set in Auth.Value and blocks until the transaction is mined
+func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend) (*types.Receipt, error) {
 	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
-	auth.Value = amount
 	tx, err := rawSimpleSwap.Transfer(auth)
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := WaitFunc(auth, backend, tx)
-	return receipt, err
+	return WaitFunc(auth, backend, tx)
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.

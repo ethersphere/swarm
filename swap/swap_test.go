@@ -1840,10 +1840,14 @@ func TestAvailableBalance(t *testing.T) {
 	// deposit 100
 	depositAmount := big.NewInt(100)
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Value = depositAmount
 	opts.Context = context.TODO()
-	_, err = swap.contract.Deposit(opts, swap.backend, depositAmount)
+	rec, err := swap.contract.Deposit(opts, swap.backend)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if rec.Status != types.ReceiptStatusSuccessful {
+		t.Fatal("Transaction reverted")
 	}
 
 	// verify that available balance equals depositAmount
@@ -1858,9 +1862,12 @@ func TestAvailableBalance(t *testing.T) {
 	withdrawAmount := big.NewInt(50)
 	opts = bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
-	_, err = swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
+	rec, err = swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if rec.Status != types.ReceiptStatusSuccessful {
+		t.Fatal("Transaction reverted")
 	}
 
 	// verify available balance
