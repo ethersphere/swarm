@@ -60,7 +60,7 @@ func TestHandshake(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	err = testDeploy(ctx, swap)
+	err = testDeploy(ctx, swap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,11 +133,11 @@ func TestEmitCheque(t *testing.T) {
 	ctx := context.Background()
 
 	log.Debug("deploy to simulated backend")
-	err := testDeploy(ctx, creditorSwap)
+	err := testDeploy(ctx, creditorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	err := testDeploy(ctx, debitorSwap)
+	err := testDeploy(ctx, debitorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

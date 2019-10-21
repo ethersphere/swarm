@@ -197,6 +197,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if swap.availableBalance, err = swap.computeAvailableBalance(); err != nil {
 		return nil, err
 	}
+	swapLog.Info("availabale balance", "balance", swap.availableBalance)
 
 	return swap, nil
 }
@@ -371,10 +372,11 @@ func (s *Swap) computeAvailableBalance() (uint64, error) {
 	for _, v := range sentCheques {
 		totalPaidOut += v.ChequeParams.CumulativePayout
 	}
+	fmt.Println(deposit.Uint64(), withdrawn.Uint64(), totalPaidOut, deposit.Uint64()-withdrawn.Uint64()-totalPaidOut)
 	return deposit.Uint64() - withdrawn.Uint64() - totalPaidOut, nil
 }
 
-// updateAvailableBalance updates the available balance amount and stores the new amount on disk
+// updateAvailableBalance updates the available balance amount
 func (s *Swap) updateAvailableBalance(amount int64) {
 	s.availableBalance = uint64(int64(s.availableBalance) + amount)
 }

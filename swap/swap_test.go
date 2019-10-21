@@ -456,7 +456,6 @@ type storeKeysTestCases struct {
 	expectedUsedChequebookKey string
 }
 
-//eknir TODO: add paidOutkey
 // Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
 func TestStoreKeys(t *testing.T) {
 	testCases := []storeKeysTestCases{
@@ -756,7 +755,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -815,7 +814,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -841,7 +840,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -876,7 +875,7 @@ func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 	testPeer := newDummyPeer()
-	testDeploy(context.Background(), swap)
+	testDeploy(context.Background(), swap, 0)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	swap.Add(int64(DefaultDisconnectThreshold), testPeer.Peer)
 	err := swap.Add(1, testPeer.Peer)
@@ -891,7 +890,7 @@ func TestPaymentThreshold(t *testing.T) {
 	defer testBackend.Close()
 	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
-	testDeploy(context.Background(), swap)
+	testDeploy(context.Background(), swap, 0)
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
@@ -922,11 +921,11 @@ func TestResetBalance(t *testing.T) {
 	defer clean2()
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap)
+	err := testDeploy(ctx, creditorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1314,7 +1313,7 @@ func TestValidateCode(t *testing.T) {
 	defer clean()
 
 	// deploy a new swap contract
-	err := testDeploy(context.TODO(), swap)
+	err := testDeploy(context.TODO(), swap, 0)
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1383,7 +1382,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("deploy issuer swap")
 
 	ctx := context.TODO()
-	err := testDeploy(ctx, issuerSwap)
+	err := testDeploy(ctx, issuerSwap, 42)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1465,13 +1464,16 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 	if err != nil {
 		return nil, err
 	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, cswap.ErrTransactionReverted
+	}
 	return receipt, nil
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap) (err error) {
+func testDeploy(ctx context.Context, swap *Swap, initialDeposit int64) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(42)
+	opts.Value = big.NewInt(initialDeposit)
 	opts.Context = ctx
 
 	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
@@ -1741,11 +1743,11 @@ func TestSwapLogToFile(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap)
+	err = testDeploy(ctx, creditorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1823,45 +1825,69 @@ func TestAvailableBalance(t *testing.T) {
 	testBackend := newTestBackend()
 	defer testBackend.Close()
 	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	defer clean()
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	// deploy a chequebook
+	err := testDeploy(context.TODO(), swap, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// create a peer
+	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
 
 	// deposit 100
 	depositAmount := big.NewInt(100)
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
-	_, err := swap.contract.Deposit(opts, swap.backend, depositAmount)
+	_, err = swap.contract.Deposit(opts, swap.backend, depositAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var stb *swapTestBackend
-	var ok bool
-	if stb, ok = swap.backend.(*swapTestBackend); !ok {
-		t.Fatal(errors.New("not the expected test backend"))
-	}
-	stb.Commit()
 
 	// verify that available balance equals depositAmount
-	availableBalance := swap.AvailableBalance()
+	availableBalance, err := swap.computeAvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if availableBalance != depositAmount.Uint64() {
 		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount.Uint64())
 	}
-
 	// withdraw 50
 	withdrawAmount := big.NewInt(50)
+	opts = bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Context = context.TODO()
 	_, err = swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stb.Commit()
 
-	// verify that available balance equals depositAmount - withdrawAmount
-	availableBalance = swap.AvailableBalance()
-	if availableBalance != depositAmount.Uint64()-withdrawAmount.Uint64() {
-		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount.Uint64())
+	// verify available balance
+	availableBalance, err = swap.computeAvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != (depositAmount.Uint64() - withdrawAmount.Uint64()) {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
-	// run a test where we verify that availableBalance equals depositAmount-withdrawAmount-paidOut
+	// send a cheque worth 42
+	chequeAmount := int64(42)
+	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
+	peer.setBalance(-chequeAmount)
+	if err = peer.sendCheque(); err != nil {
+		t.Fatal(err)
+	}
 
-	defer clean()
+	availableBalance, err = swap.computeAvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// verify available balance
+	if availableBalance != (depositAmount.Uint64() - withdrawAmount.Uint64() - uint64(chequeAmount)) {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	}
 
 }
 

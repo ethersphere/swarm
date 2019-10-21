@@ -182,6 +182,7 @@ func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.
 
 // TotalDeposit iterates over all Deposit events and returns the total amount ever deposited
 func (s simpleContract) TotalDeposit() (totalDeposit *big.Int, err error) {
+	totalDeposit = big.NewInt(0)
 	depositIterator, err := s.instance.FilterDeposit(nil)
 	if err != nil {
 		return nil, err
@@ -196,6 +197,7 @@ func (s simpleContract) TotalDeposit() (totalDeposit *big.Int, err error) {
 
 // TotalWithdrawn iterates over all Withdraw events and returns the total amount ever withdrawn
 func (s simpleContract) TotalWithdrawn() (totalWithdrawn *big.Int, err error) {
+	totalWithdrawn = big.NewInt(0)
 	withdrawIterator, err := s.instance.FilterWithdraw(nil)
 	if err != nil {
 		return nil, err
