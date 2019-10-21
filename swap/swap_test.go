@@ -1723,7 +1723,6 @@ func TestSwapLogToFile(t *testing.T) {
 	params := newDefaultParams(t)
 	params2 := newDefaultParams(t)
 	params.LogPath = logDirDebitor
-	params2.LogPath = logDirDebitor
 
 	testBackend := newTestBackend()
 	defer testBackend.Close()
@@ -1776,6 +1775,62 @@ func TestSwapLogToFile(t *testing.T) {
 	// now simulate sending the cheque to the creditor from the debitor
 	creditor.sendCheque()
 
+	if logDirDebitor == "" {
+		t.Fatal("Swap Log Dir is not defined")
+	}
+
+	files, err := ioutil.ReadDir(logDirDebitor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("expected at least 1 file in the log directory, found none")
+	}
+
+	logFile := path.Join(logDirDebitor, files[0].Name())
+
+	var b []byte
+	b, err = ioutil.ReadFile(logFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logString := string(b)
+
+	if !strings.Contains(logString, "sending cheque") {
+		t.Fatalf("expected the log to contain \"sending cheque\"")
+	}
+
+}
+
+func TestSwapActions(t *testing.T) {
+	// create a log dir
+	logDirDebitor, err := ioutil.TempDir("", "swap_test_log")
+	log.Debug("creating swap log dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(logDirDebitor)
+
+	// set the log dir to the params
+	params := newDefaultParams(t)
+	params2 := newDefaultParams(t)
+	params.LogPath = logDirDebitor
+
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	// create both test swap accounts
+	creditorSwap, storeDirCreditor := newBaseTestSwapWithParams(t, beneficiaryKey, params2, testBackend)
+	// we are only checking one of the two nodes for logs
+	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params, testBackend)
+
+	clean := func() {
+		creditorSwap.Close()
+		debitorSwap.Close()
+		os.RemoveAll(storeDirCreditor)
+		os.RemoveAll(storeDirDebitor)
+	}
+	defer clean()
+
 	swapLog.Info("Test")
 	swapLog.SetLogAction("disconnecting")
 	swapLog.Info("Test")
@@ -1803,10 +1858,6 @@ func TestSwapLogToFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	logString := string(b)
-
-	if !strings.Contains(logString, "sending cheque") {
-		t.Fatalf("expected the log to contain \"sending cheque\"")
-	}
 
 	if !strings.Contains(logString, "undefined") {
 		t.Fatalf("expected the log to contain \"action undefined\"")

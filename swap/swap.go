@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	l "github.com/ethereum/go-ethereum/log"
+	swarmLog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
@@ -81,22 +81,20 @@ type Params struct {
 
 // newSwapLogger returns a new logger for standard swap logs
 func newSwapLogger(logPath string, overlayAddr []byte) Logger {
-	swapLogger := newLogger(hex.EncodeToString(overlayAddr)[:16], "")
-	setLoggerHandler(logPath, swapLogger.GetLogger())
-	return swapLogger
+	ctx := []interface{}{"base", hex.EncodeToString(overlayAddr)[:16]}
+	return newLogger(logPath, ctx)
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) Logger {
-	peerLogger := newLogger(hex.EncodeToString(s.params.OverlayAddr)[:16], peerID.String()[:16])
-	setLoggerHandler(s.params.LogPath, peerLogger.GetLogger())
-	return peerLogger
+	ctx := []interface{}{"base", hex.EncodeToString(s.params.OverlayAddr)[:16], "peer", peerID.String()[:16]}
+	return newLogger(s.params.LogPath, ctx)
 }
 
 // setLoggerHandler will set the logger handle to write logs to the specified path
 // or use the default swarm logger in case this isn't specified or an error occurs
-func setLoggerHandler(logpath string, logger l.Logger) {
-	lh := l.Root().GetHandler()
+func setLoggerHandler(logpath string, logger swarmLog.Logger) {
+	lh := swarmLog.Root().GetHandler()
 
 	if logpath == "" {
 		logger.SetHandler(lh)
@@ -106,26 +104,26 @@ func setLoggerHandler(logpath string, logger l.Logger) {
 	rfh, err := swapRotatingFileHandler(logpath)
 
 	if err != nil {
-		l.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
+		swarmLog.Warn("RotatingFileHandler was not initialized", "logdir", logpath, "err", err)
 		// use the default swarm logger as a fallback
 		logger.SetHandler(lh)
 		return
 	}
 
 	// filter messages with the correct log level for swap
-	rfh = l.LvlFilterHandler(l.Lvl(swapLogLevel), rfh)
+	rfh = swarmLog.LvlFilterHandler(swarmLog.Lvl(swapLogLevel), rfh)
 
 	// dispatch the logs to the default swarm log and also the filtered swap logger
-	logger.SetHandler(l.MultiHandler(lh, rfh))
+	logger.SetHandler(swarmLog.MultiHandler(lh, rfh))
 }
 
 // swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
 // the files are split based on the limit parameter expressed in bytes
-func swapRotatingFileHandler(logdir string) (l.Handler, error) {
-	return l.RotatingFileHandler(
+func swapRotatingFileHandler(logdir string) (swarmLog.Handler, error) {
+	return swarmLog.RotatingFileHandler(
 		logdir,
 		262144,
-		l.JSONFormatOrderedEx(false, true),
+		swarmLog.JSONFormatOrderedEx(false, true),
 	)
 }
 
@@ -306,7 +304,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		l.Error("error processing and verifying cheque", "err", err)
+		swarmLog.Error("error processing and verifying cheque", "err", err)
 		return err
 	}
 
@@ -316,13 +314,13 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	if err := p.updateBalance(-int64(cheque.Honey)); err != nil {
-		l.Error("error updating balance", "err", err)
+		swarmLog.Error("error updating balance", "err", err)
 		return err
 	}
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
-		l.Error("error getting contract", "err", err)
+		swarmLog.Error("error getting contract", "err", err)
 		return err
 	}
 
@@ -658,13 +656,13 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contrac
 	// initial topup value
 	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
-	swapLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value, "action", "deploy")
+	swapLog.SetLogAction("swap_deploy_contract")
+	swapLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
 	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
 }
 
 // deployLoop repeatedly tries to deploy the swap contract .
 func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
-	swapLog.SetLogAction("swap_deploy_contract")
 	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {

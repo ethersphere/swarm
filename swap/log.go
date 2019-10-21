@@ -13,6 +13,8 @@ const (
 )
 
 // Logger wraps the ethereum logger with specific information for swap logging
+// this struct contains an action string that is used for grouping similar logs together
+// each log contains a context this will be printed on each message
 type Logger struct {
 	action string
 	logger log.Logger
@@ -66,34 +68,21 @@ func (sl Logger) Trace(msg string, ctx ...interface{}) {
 
 // SetLogAction set the current log action prefix
 func (sl *Logger) SetLogAction(action string) {
-	//Adds default action undefined
-	if action == "" {
-		sl.action = DefaultAction
-		return
-	}
-	//Todo validate it's a specific action, if not default
+	//Adds action to logger context
 	sl.action = action
 }
 
 // newLogger return a new SwapLogger Instance with ctx loaded for swap
-func newLogger(overlayAddr string, peerID string) (swapLogger Logger) {
+func newLogger(logPath string, ctx []interface{}) (swapLogger Logger) {
 	swapLogger = Logger{
 		action: DefaultAction,
 	}
-	ctx := addSwapCtx(swapLogger, overlayAddr, peerID)
 	swapLogger.logger = log.New(ctx...)
+	setLoggerHandler(logPath, swapLogger.GetLogger())
 	return swapLogger
 }
 
-func addSwapCtx(sl Logger, overlayAddr string, peerID string) []interface{} {
-	ctx := []interface{}{"base", overlayAddr}
-	if peerID != "" {
-		ctx = append(ctx, "peer", peerID)
-	}
-	return ctx
-}
-
-// GetLogger return the underlining logger
+// GetLogger returns the underlying logger
 func (sl Logger) GetLogger() (logger log.Logger) {
 	return sl.logger
 }
