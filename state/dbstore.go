@@ -70,14 +70,12 @@ func NewInmemoryStore() *DBStore {
 // ErrNotFound is returned. The provided parameter should be either a byte slice or
 // a struct that implements the encoding.BinaryUnmarshaler interface
 func (s *DBStore) Get(key string, i interface{}) (err error) {
-	has, err := s.db.Has([]byte(key), nil)
-	if err != nil || !has {
-		return ErrNotFound
-	}
-
 	data, err := s.db.Get([]byte(key), nil)
-	if err == leveldb.ErrNotFound {
-		return ErrNotFound
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return ErrNotFound
+		}
+		return err
 	}
 
 	unmarshaler, ok := i.(encoding.BinaryUnmarshaler)

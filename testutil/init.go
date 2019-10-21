@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"flag"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-colorable"
@@ -34,13 +35,10 @@ var (
 // Init ensures that testing.Init is called before flag.Parse and sets common
 // logging options.
 func Init() {
-	testInit()
+	testing.Init()
 
 	flag.Parse()
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*Loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }
-
-// This function is set to testing.Init for go 1.13.
-var testInit = func() {}
