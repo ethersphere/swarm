@@ -1813,21 +1813,16 @@ func TestSwapActions(t *testing.T) {
 
 	// set the log dir to the params
 	params := newDefaultParams(t)
-	params2 := newDefaultParams(t)
 	params.LogPath = logDirDebitor
 
 	testBackend := newTestBackend()
 	defer testBackend.Close()
-	// create both test swap accounts
-	creditorSwap, storeDirCreditor := newBaseTestSwapWithParams(t, beneficiaryKey, params2, testBackend)
-	// we are only checking one of the two nodes for logs
-	debitorSwap, storeDirDebitor := newBaseTestSwapWithParams(t, ownerKey, params, testBackend)
+	// create test swap
+	testSwap, storeTestSwap := newBaseTestSwapWithParams(t, beneficiaryKey, params, testBackend)
 
 	clean := func() {
-		creditorSwap.Close()
-		debitorSwap.Close()
-		os.RemoveAll(storeDirCreditor)
-		os.RemoveAll(storeDirDebitor)
+		testSwap.Close()
+		os.RemoveAll(storeTestSwap)
 	}
 	defer clean()
 
