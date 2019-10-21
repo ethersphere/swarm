@@ -17,20 +17,56 @@
 package retrieval
 
 import (
+	"bytes"
+	"encoding/hex"
+	"errors"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/storage"
 )
 
-// Peer wraps BzzPeer with a contextual logger for this peer
+// Peer wraps BzzPeer with a contextual logger and tracks open
+// retrievals for that peer
 type Peer struct {
 	*network.BzzPeer
-	logger log.Logger
+	logger     log.Logger             // logger with base and peer address
+	mtx        sync.Mutex             // synchronize retrievals
+	retrievals map[uint]chunk.Address // current ongoing retrievals
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer) *Peer {
+func NewPeer(peer *network.BzzPeer, baseKey []byte) *Peer {
 	return &Peer{
-		BzzPeer: peer,
-		logger:  log.New("peer", peer.ID()),
+		BzzPeer:    peer,
+		logger:     log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
+		retrievals: make(map[uint]chunk.Address),
 	}
+}
+
+// chunkRequested adds a new retrieval to the retrievals map
+// this is in order to identify unsolicited chunk deliveries
+func (p *Peer) addRetrieval(ruid uint, addr storage.Address) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	p.retrievals[ruid] = addr
+}
+
+// chunkReceived is called upon ChunkDelivery message reception
+// it is meant to idenfify unsolicited chunk deliveries
+func (p *Peer) checkRequest(ruid uint, addr storage.Address) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	v, ok := p.retrievals[ruid]
+	if !ok {
+		return errors.New("cannot find ruid")
+	}
+	delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
+	if !bytes.Equal(v, addr) {
+		return errors.New("retrieve request found but address does not match")
+	}
+
+	return nil
 }
