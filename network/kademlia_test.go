@@ -425,7 +425,6 @@ func TestSuggestPeers(t *testing.T) {
 	tk.Register("00111000")
 	tk.Register("00011100")
 
-	//Again, should fill bins from shallow to deep
 	tk.checkSuggestPeer("00111000", 0, false)
 	tk.On("00110000")
 	tk.checkSuggestPeer("00011100", 0, false)
@@ -445,14 +444,10 @@ func TestSuggestPeers(t *testing.T) {
 	tk.Register("01010100")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//Should be healthy
-	tk.checkHealth(true)
-
 	//If bin in neighbour (bin3), should keep adding peers even if size >== expectedSize
 	tk.Register("00011111")
 	tk.checkSuggestPeer("00011111", 0, false)
 	tk.On("00011111")
-
 	tk.Register("00010001")
 	tk.checkSuggestPeer("00010001", 0, false)
 	tk.On("00010001")
@@ -461,6 +456,7 @@ func TestSuggestPeers(t *testing.T) {
 	tk.checkSuggestPeer("<nil>", 0, false)
 }
 
+//Tests change of saturationDepth returned by suggestPeers
 func TestSuggestPeersSaturationDepthChange(t *testing.T) {
 
 	base := "00000000"
@@ -468,16 +464,35 @@ func TestSuggestPeersSaturationDepthChange(t *testing.T) {
 	tk.On("00100000", "00010000", "10000000", "11000000", "11100000", "01000000", "01100000")
 
 	//Saturation depth is 2
+	if tk.saturationDepth != 2 {
+		t.Fatalf("Saturation depth should be 2, got %d", tk.saturationDepth)
+	}
 	tk.Off("01000000")
 	//Saturation depth should have fallen to 1
 	tk.checkSuggestPeer("01000000", 1, true)
 	tk.On("01000000")
 
 	//Saturation depth is 2 again
+	if tk.saturationDepth != 2 {
+		t.Fatalf("Saturation depth should be 2, got %d", tk.saturationDepth)
+	}
 	tk.Off("10000000")
 	//Saturation depth should have fallen to 0
 	tk.checkSuggestPeer("10000000", 0, true)
+	tk.On("10000000")
 
+	tk.On("10101010")
+	tk.On("01101010")
+	tk.On("00101010")
+	tk.On("00010001")
+
+	//Saturation depth is now 3
+	if tk.saturationDepth != 3 {
+		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
+	}
+	tk.Off("00010000")
+	//Saturation depth should have fallen to 2
+	tk.checkSuggestPeer("00010000", 2, true)
 }
 
 // a node should stay in the address book if it's removed from the kademlia
