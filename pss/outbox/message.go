@@ -13,15 +13,15 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+package outbox
 
-// +build go1.13
+import (
+	"time"
 
-package testutil
+	"github.com/ethersphere/swarm/pss/message"
+)
 
-import "testing"
-
-func init() {
-	// as of go1.13, testing.Init needs to be called before flag.Parse
-	// which is done in Init function of this package
-	testInit = testing.Init
+type outboxMsg struct {
+	msg       *message.Message
+	startedAt time.Time
 }

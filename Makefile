@@ -15,12 +15,11 @@ alltools:
 # Wrap go modules vendor command to copy forked cgo libraries
 # from go module cache and correct their file permissons.
 .PHONY: vendor
-vendor: export GO111MODULE=on
 vendor:
 	@go mod vendor
-	@cp -rf "$(shell GO111MODULE=on go list -f {{.Dir}} github.com/karalabe/usb)/hidapi" vendor/github.com/karalabe/usb/hidapi
+	@cp -rf "$(shell go list -f {{.Dir}} github.com/karalabe/usb)/hidapi" vendor/github.com/karalabe/usb/hidapi
 	@chmod -R u+w vendor/github.com/karalabe/usb/hidapi
-	@cp -rf "$(shell GO111MODULE=on go list -f {{.Dir}} github.com/karalabe/usb)/libusb" vendor/github.com/karalabe/usb/libusb
+	@cp -rf "$(shell go list -f {{.Dir}} github.com/karalabe/usb)/libusb" vendor/github.com/karalabe/usb/libusb
 	@chmod -R u+w vendor/github.com/karalabe/usb/libusb
-	@cp -rf "$(shell GO111MODULE=on go list -f {{.Dir}} github.com/ethereum/go-ethereum/crypto/secp256k1)/libsecp256k1" vendor/github.com/ethereum/go-ethereum/crypto/secp256k1/libsecp256k1
+	@cp -rf "$(shell go list -f {{.Dir}} github.com/ethereum/go-ethereum/crypto/secp256k1)/libsecp256k1" vendor/github.com/ethereum/go-ethereum/crypto/secp256k1/libsecp256k1
 	@chmod -R u+w vendor/github.com/ethereum/go-ethereum/crypto/secp256k1/libsecp256k1
