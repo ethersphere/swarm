@@ -402,6 +402,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 
 	if p.getPendingCheque() == nil {
 		p.logger.Warn("ignoring confirm msg, no pending cheque")
+		return
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {

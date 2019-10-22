@@ -74,33 +74,44 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 	return peer, nil
 }
 
+// getLastReceivedCheque returns the last cheque we received for this peer
+// To be called with mutex already held
 func (p *Peer) getLastReceivedCheque() *Cheque {
 	return p.lastReceivedCheque
 }
 
+// getLastSentCheque returns the last cheque we sent and got confirmed for this peer
+// To be called with mutex already held
 func (p *Peer) getLastSentCheque() *Cheque {
 	return p.lastSentCheque
 }
 
+// getPendingCheque returns the last cheque we sent but that is not yet confirmed for this peer
+// To be called with mutex already held
 func (p *Peer) getPendingCheque() *Cheque {
 	return p.pendingCheque
 }
 
+// To be called with mutex already held
 func (p *Peer) setLastReceivedCheque(cheque *Cheque) error {
 	p.lastReceivedCheque = cheque
 	return p.swap.saveLastReceivedCheque(p.ID(), cheque)
 }
 
+// To be called with mutex already held
 func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	p.lastSentCheque = cheque
 	return p.swap.saveLastSentCheque(p.ID(), cheque)
 }
 
+// To be called with mutex already held
 func (p *Peer) setPendingCheque(cheque *Cheque) error {
 	p.pendingCheque = cheque
 	return p.swap.savePendingCheque(p.ID(), cheque)
 }
 
+// getLastSentCumulativePayout returns the cumulative payout of the last sent cheque or 0 if there is none
+// To be called with mutex already held
 func (p *Peer) getLastSentCumulativePayout() uint64 {
 	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
@@ -109,11 +120,14 @@ func (p *Peer) getLastSentCumulativePayout() uint64 {
 	return 0
 }
 
+// To be called with mutex already held
 func (p *Peer) setBalance(balance int64) error {
 	p.balance = balance
 	return p.swap.saveBalance(p.ID(), balance)
 }
 
+// getBalance returns the current balance for this peer
+// To be called with mutex already held
 func (p *Peer) getBalance() int64 {
 	return p.balance
 }
