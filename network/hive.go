@@ -90,6 +90,8 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
 	log.Info("Starting hive", "baseaddr", fmt.Sprintf("%x", h.BaseAddr()[:4]))
+	// assigns the p2p.Server#AddPeer function to connect to peers
+	h.addPeer = server.AddPeer
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
 		log.Info("Detected an existing store. trying to load peers")
@@ -98,8 +100,6 @@ func (h *Hive) Start(server *p2p.Server) error {
 			return err
 		}
 	}
-	// assigns the p2p.Server#AddPeer function to connect to peers
-	h.addPeer = server.AddPeer
 	// ticker to keep the hive alive
 	h.ticker = time.NewTicker(h.KeepAliveInterval)
 	// done channel to signal the connect goroutine to return after Stop
