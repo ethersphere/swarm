@@ -475,8 +475,8 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	return cheques, nil
 }
 
-// add disk cheques for peers not already present in given cheques map
-func (s *Swap) addStoreCheques(chequePrefix string, chequeKey string, cheques map[enode.ID]map[string]*Cheque) error {
+// add cheques from store for peers not already present in given cheques map
+func (s *Swap) addStoreCheques(chequePrefix, chequeKey string, cheques map[enode.ID]map[string]*Cheque) error {
 	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peer := keyToID(string(key), chequePrefix)
 		// make map if peer has no cheques entry yet
