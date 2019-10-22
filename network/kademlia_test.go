@@ -461,7 +461,7 @@ func TestSuggestPeersSaturationDepthChange(t *testing.T) {
 
 	base := "00000000"
 	tk := newTestKademlia(t, base)
-	tk.On("00100000", "00010000", "10000000", "11000000", "11100000", "01000000", "01100000")
+	tk.On("10000000", "11000000", "11100000", "01000000", "01100000", "00100000", "00010000")
 
 	//Saturation depth is 2
 	if tk.saturationDepth != 2 {
@@ -481,18 +481,37 @@ func TestSuggestPeersSaturationDepthChange(t *testing.T) {
 	tk.checkSuggestPeer("10000000", 0, true)
 	tk.On("10000000")
 
-	tk.On("10101010")
-	tk.On("01101010")
-	tk.On("00101010")
-	tk.On("00010001")
-
+	tk.On("10101010", "01101010", "00101010", "00010001")
 	//Saturation depth is now 3
 	if tk.saturationDepth != 3 {
 		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
 	}
+	//We remove all connections from closest bin (PO=3)
 	tk.Off("00010000")
+	tk.Off("00010001")
 	//Saturation depth should have fallen to 2
-	tk.checkSuggestPeer("00010000", 2, true)
+	tk.checkSuggestPeer("00010001", 2, true)
+
+	//We bring saturation depth back to 3
+	tk.On("00010000")
+	tk.On("00010001")
+	if tk.saturationDepth != 3 {
+		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
+	}
+
+	//We add more connections to bin 3 (closest bin) so that BinSize > expectedMinBinSize
+	tk.On("00010011")
+	tk.On("00011011")
+	//Saturation depth shouldn't have changed
+	if tk.saturationDepth != 3 {
+		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
+	}
+
+	//We disconnect one peer from bin 3
+	tk.Off("00010011")
+	//Saturation depth shouldn't have changed
+	tk.checkSuggestPeer("00010011", 0, false)
+
 }
 
 // a node should stay in the address book if it's removed from the kademlia
