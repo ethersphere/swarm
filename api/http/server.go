@@ -1121,8 +1121,8 @@ const getFileBufferSize = 4 * 32 * 1024
 // bufferedReadSeeker wraps bufio.Reader to expose Seek method
 // from the provied io.ReadSeeker in newBufferedReadSeeker.
 type bufferedReadSeeker struct {
-	r io.Reader
-	s io.Seeker
+	r *bufio.Reader
+	s io.ReadSeeker
 }
 
 // newBufferedReadSeeker creates a new instance of bufferedReadSeeker,
@@ -1139,7 +1139,9 @@ func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
 }
 
 func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
-	return b.s.Seek(offset, whence)
+	n, err := b.s.Seek(offset, whence)
+	b.r.Reset(b.s)
+	return n, err
 }
 
 type loggingResponseWriter struct {
