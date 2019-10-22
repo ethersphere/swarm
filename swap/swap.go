@@ -358,14 +358,14 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	if err := p.updateBalance(-int64(cheque.Honey)); err != nil {
+	err = p.updateBalance(-int64(cheque.Honey))
+	if err != nil {
 		log.Error("error updating balance", "err", err)
 		return err
 	}
 
-	if err := p.Send(ctx, &ConfirmChequeMsg{
-		Cheque: cheque,
-	}); err != nil {
+	err = p.Send(ctx, &ConfirmChequeMsg{Cheque: cheque})
+	if err != nil {
 		return err
 	}
 
@@ -410,23 +410,27 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 		return
 	}
 
-	if err := p.setLastSentCheque(cheque); err != nil {
+	err := p.setLastSentCheque(cheque)
+	if err != nil {
 		p.Drop("persistence error")
 		return
 	}
 
-	if err := p.setPendingCheque(nil); err != nil {
+	err = p.setPendingCheque(nil)
+	if err != nil {
 		p.Drop("persistence error")
 		return
 	}
 
-	if err := p.updateBalance(int64(cheque.Honey)); err != nil {
+	err = p.updateBalance(int64(cheque.Honey))
+	if err != nil {
 		p.Drop("persistence error")
 		return
 	}
 
 	// since more swap traffic might have occurred since this cheque was already sent, we redo the payment threshold check
-	if err := s.checkPaymentThreshold(p); err != nil {
+	err = s.checkPaymentThreshold(p)
+	if err != nil {
 		p.logger.Warn("failed to send already due cheque", "error", err)
 		return
 	}
