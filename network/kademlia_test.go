@@ -386,19 +386,20 @@ func TestSuggestPeers(t *testing.T) {
 	tk.Register("11111000")
 	tk.Register("01110000")
 
-	//Bins should fill from  most empty to least empty and shallower to deeper
-	//first suggestion should be for bin 0
-	tk.checkSuggestPeer("11111000", 0, false)
-	tk.On("11111000")
-
-	//Since we now have 1 peer in bin0 and none in bin1, next suggested peer should be for bin1
+	//Bins should fill from  most empty to least empty and shallower to deeper, always prioritizing the closest peer
+	//first suggestion should be for bin 1
 	tk.checkSuggestPeer("01110000", 0, false)
 	tk.On("01110000")
 
+	//Since we now have 1 peer in bin0 and none in bin1, next suggested peer should be for bin1
+	tk.checkSuggestPeer("11111000", 0, false)
+	tk.On("11111000")
+
 	tk.Register("11110000")
 	tk.Register("01100000")
+	log.Warn(tk.String())
 
-	//Both bins 0 and 1 have at least 1 peer, so next suggested peer should be for 0 (shallower)
+	//Both bins 0 and 1 have at least 1 peer and are out of the neighborhood, so next suggested peer should be for 0 (shallower)
 	tk.checkSuggestPeer("11110000", 0, false)
 	tk.On("11110000")
 
@@ -425,10 +426,10 @@ func TestSuggestPeers(t *testing.T) {
 	tk.Register("00111000")
 	tk.Register("00011100")
 
-	tk.checkSuggestPeer("00111000", 0, false)
-	tk.On("00110000")
 	tk.checkSuggestPeer("00011100", 0, false)
 	tk.On("00011100")
+	tk.checkSuggestPeer("00111000", 0, false)
+	tk.On("00111000")
 
 	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2)
 	//Bin0 and Bin1 not saturated, Bin2 saturated
@@ -454,6 +455,26 @@ func TestSuggestPeers(t *testing.T) {
 
 	//No more peers left in unsaturated bins
 	tk.checkSuggestPeer("<nil>", 0, false)
+
+	tk.Off("11000000", "01100011", "00011111", "00010001", "00011100")
+	tk.On("00001011")
+	tk.Register("00001100")
+
+	tk.checkSuggestPeer("00001100", 0, false)
+	tk.On("00001100")
+	tk.checkSuggestPeer("00011111", 0, false)
+	tk.On("00011111")
+	tk.checkSuggestPeer("01010100", 0, false)
+	tk.On("01010100")
+	tk.checkSuggestPeer("11000000", 0, false)
+	tk.On("11000000")
+	tk.Register("00101110")
+
+	tk.checkSuggestPeer("00101110", 0, false)
+	tk.On("00101110")
+	tk.checkSuggestPeer("01100011", 0, false)
+	tk.On("01100011")
+
 }
 
 //Tests change of saturationDepth returned by suggestPeers
