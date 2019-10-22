@@ -24,7 +24,7 @@ import (
 	"github.com/ethersphere/swarm/api/http/langos"
 )
 
-// TestLangosReadSeeker runs a series of reads and seeks on
+// TestBufferedReadSeeker runs a series of reads and seeks on
 // BufferedReadSeeker instances with various buffer sizes.
 func TestBufferedReadSeeker(t *testing.T) {
 	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
