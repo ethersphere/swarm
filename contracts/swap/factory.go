@@ -37,8 +37,6 @@ type SimpleSwapFactory interface {
 	VerifyContract(address common.Address) error
 	// VerifySelf verifies that this is a valid factory on the network
 	VerifySelf() error
-	// Address gets the address of this contract instance
-	Address() common.Address
 }
 
 // FactoryAt creates a SimpleSwapFactory instance for the given address and backend
@@ -124,8 +122,4 @@ func (sf simpleSwapFactory) VerifyContract(address common.Address) error {
 		return ErrNotDeployedByFactory
 	}
 	return nil
-}
-
-func (sf simpleSwapFactory) Address() common.Address {
-	return sf.address
 }

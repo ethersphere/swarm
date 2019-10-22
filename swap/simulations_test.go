@@ -215,7 +215,10 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
 	defaultBackend.Commit()
 
-	factoryAddress, _, _, _ := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(keys[0]), defaultBackend)
+	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(keys[0]), defaultBackend)
+	if err != nil {
+		t.Fatalf("Error while deploying factory: %v", err)
+	}
 	defaultBackend.Commit()
 
 	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend, factoryAddress: factoryAddress}

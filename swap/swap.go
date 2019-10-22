@@ -60,7 +60,7 @@ type Swap struct {
 	owner             *Owner                 // contract access
 	params            *Params                // economic and operational parameters
 	contract          swap.Contract          // reference to the smart contract
-	chequebookFactory swap.SimpleSwapFactory // address of the chequebook factory
+	chequebookFactory swap.SimpleSwapFactory // the chequebook factory used
 	honeyPriceOracle  HoneyOracle            // oracle which resolves the price of honey (in Wei)
 }
 
@@ -181,19 +181,9 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	swapLog.Info("Using backend network ID", "ID", chainID.Uint64())
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
-	// determine the factory address and aborts boot if no factory address has been specified or is unknown for the network
-	if (factoryAddress == common.Address{}) {
-		if factoryAddress, err = contract.FactoryAddressForNetwork(chainID.Uint64()); err != nil {
-			return nil, err
-		}
-	}
-	swapLog.Info("Using chequebook factory", "address", factoryAddress)
-	// instantiate an object representing the factory and verify it's bytecode
-	factory, err := contract.FactoryAt(factoryAddress, backend)
+	// initialize the factory
+	factory, err := createFactory(factoryAddress, chainID, backend)
 	if err != nil {
-		return nil, err
-	}
-	if err := factory.VerifySelf(); err != nil {
 		return nil, err
 	}
 
@@ -219,6 +209,25 @@ const (
 	connectedChequebookKey = "connected_chequebook"
 	connectedBlockchainKey = "connected_blockchain"
 )
+
+// createFactory determines the factory address and returns and error if no factory address has been specified or is unknown for the network
+func createFactory(factoryAddress common.Address, chainID *big.Int, backend contract.Backend) (factory swap.SimpleSwapFactory, err error) {
+	if (factoryAddress == common.Address{}) {
+		if factoryAddress, err = contract.FactoryAddressForNetwork(chainID.Uint64()); err != nil {
+			return nil, err
+		}
+	}
+	swapLog.Info("Using chequebook factory", "address", factoryAddress)
+	// instantiate an object representing the factory and verify it's bytecode
+	factory, err = contract.FactoryAt(factoryAddress, backend)
+	if err != nil {
+		return nil, err
+	}
+	if err := factory.VerifySelf(); err != nil {
+		return nil, err
+	}
+	return factory, nil
+}
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
 func checkChainID(currentChainID uint64, s state.Store) (err error) {
@@ -692,7 +701,7 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDura
 
 		return chequebook, nil
 	}
-	return nil, errors.New("failed to deploy chequebook")
+	return nil, fmt.Errorf("failed to deploy chequebook: %v", err)
 }
 
 func (s *Swap) loadChequebook() (common.Address, error) {

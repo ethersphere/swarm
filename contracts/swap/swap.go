@@ -52,8 +52,6 @@ type Contract interface {
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
-	// Address gets the address of this contract instance
-	Address() common.Address
 }
 
 // CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
@@ -100,12 +98,12 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
-func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
-	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
+func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
+	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {
 		return nil, nil, err
 	}
-	receipt, err := WaitFunc(auth, s.backend, tx)
+	receipt, err := WaitFunc(opts, s.backend, tx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -150,10 +148,6 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 // PaidOut returns the total paid out amount for the given address
 func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
 	return s.instance.PaidOut(opts, addr)
-}
-
-func (s simpleContract) Address() common.Address {
-	return s.address
 }
 
 // WaitFunc is the default function to wait for transactions
