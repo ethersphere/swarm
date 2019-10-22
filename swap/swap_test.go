@@ -1836,7 +1836,9 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// create a peer
 	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	// deposit 100
 	depositAmount := big.NewInt(100)
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
@@ -1860,6 +1862,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// withdraw 50
 	withdrawAmount := big.NewInt(50)
+	netDeposit := depositAmount.Uint64() - withdrawAmount.Uint64()
 	opts = bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
 	rec, err = swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
@@ -1875,7 +1878,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance != (depositAmount.Uint64() - withdrawAmount.Uint64()) {
+	if availableBalance != netDeposit {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
@@ -1892,7 +1895,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// verify available balance
-	if availableBalance != (depositAmount.Uint64() - withdrawAmount.Uint64() - uint64(chequeAmount)) {
+	if availableBalance != (netDeposit - uint64(chequeAmount)) {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 

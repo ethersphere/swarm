@@ -211,7 +211,7 @@ func (s simpleContract) TotalWithdrawn() (totalWithdrawn *big.Int, err error) {
 		return nil, withdrawIterator.Error()
 	}
 
-	return totalWithdrawn, withdrawIterator.Error()
+	return totalWithdrawn, nil
 }
 
 // ValidateCode checks that the on-chain code at address matches the expected swap
