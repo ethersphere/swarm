@@ -447,8 +447,8 @@ func TestTagPersistence(t *testing.T) {
 		t.Fatalf("expected %d tags got %d", 1, len(tags))
 	}
 
-	if tag[0].Name != "w00t" {
-		t.Fatal("tag name mismatch. expected %s got %s", "w00t", tag[0].Name)
+	if tags[0].Name != "w00t" {
+		t.Fatalf("tag name mismatch. expected %s got %s", "w00t", tags[0].Name)
 	}
 
 	s2.stateStore.Close()
