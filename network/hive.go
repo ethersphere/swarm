@@ -89,9 +89,16 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 // server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
+	return h.start(server, server.AddPeer)
+}
+
+// start stars the hive, receives p2p.Server only at startup
+// server is used to connect to a peer based on its NodeID or enode URL
+// these are called on the p2p.Server which runs on the node
+func (h *Hive) start(server *p2p.Server, addPeerFunc func(*enode.Node)) error {
 	log.Info("Starting hive", "baseaddr", fmt.Sprintf("%x", h.BaseAddr()[:4]))
 	// assigns the p2p.Server#AddPeer function to connect to peers
-	h.addPeer = server.AddPeer
+	h.addPeer = addPeerFunc
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
 		log.Info("Detected an existing store. trying to load peers")

@@ -211,14 +211,9 @@ func TestHiveStateConnections(t *testing.T) {
 		h = NewHive(params, NewKademlia(PrivateKeyToBzzKey(prvkey), NewKadParams()), store)
 		s := p2ptest.NewProtocolTester(prvkey, 0, func(p *p2p.Peer, rw p2p.MsgReadWriter) error { return nil })
 
-		if err := h.Start(s.Server); err != nil {
-			t.Fatal(err)
-		}
-		//Close ticker to avoid interference with initial peer suggestion
-		h.ticker.Stop()
-		//Overwrite addPeer so the Node is added as a peer automatically.
+		// Overwrite addPeer so the Node is added as a peer automatically.
 		// The related Overlay address is retrieved from nodeIdToBzzAddr where it has been saved before
-		h.addPeer = func(node *enode.Node) {
+		if err := h.start(s.Server, func(node *enode.Node) {
 			bzzAddr := nodeIdToBzzAddr[encodeId(node.ID())]
 			if bzzAddr == nil {
 				t.Fatalf("Enode [%v] not found in saved peers!", encodeId(node.ID()))
@@ -226,7 +221,11 @@ func TestHiveStateConnections(t *testing.T) {
 			bzzPeer := newConnPeerLocal(bzzAddr.Address(), h.Kademlia)
 			h.On(bzzPeer)
 			addedChan <- struct{}{}
+		}); err != nil {
+			t.Fatal(err)
 		}
+		//Close ticker to avoid interference with initial peer suggestion
+		h.ticker.Stop()
 
 		cleanupFunc = func() {
 			err := h.Stop()
