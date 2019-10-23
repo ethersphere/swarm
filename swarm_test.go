@@ -423,15 +423,22 @@ func TestTagPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.tags.Create("w00t", 1, false)
-	s.Stop()
+
+	_, err = s.tags.Create("w00t", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.Stop()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// create a new swarm with the other's config and datadir
 	s2, err := NewSwarm(config, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Stop()
 
 	// get the tags that should come from the persisted data store
 	tags := s2.tags.All()
@@ -442,6 +449,11 @@ func TestTagPersistence(t *testing.T) {
 
 	if tags[0].Name != "w00t" {
 		t.Fatalf("tag name mismatch. expected %s got %s", "w00t", tags[0].Name)
+	}
+
+	err = s2.Stop()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
