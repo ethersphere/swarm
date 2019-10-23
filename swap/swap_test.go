@@ -1853,7 +1853,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 
 	// verify that available balance equals depositAmount
-	availableBalance, err := swap.computeAvailableBalance()
+	availableBalance, err := swap.AvailableBalance()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1874,7 +1874,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 
 	// verify available balance
-	availableBalance, err = swap.computeAvailableBalance()
+	availableBalance, err = swap.AvailableBalance()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1890,7 +1890,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	availableBalance, err = swap.computeAvailableBalance()
+	availableBalance, err = swap.AvailableBalance()
 	if err != nil {
 		t.Fatal(err)
 	}

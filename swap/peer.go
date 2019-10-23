@@ -167,8 +167,6 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 
-	p.swap.updateAvailableBalance(int64(p.getLastSentCumulativePayout() - cheque.CumulativePayout))
-
 	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,

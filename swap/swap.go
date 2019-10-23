@@ -60,7 +60,6 @@ type Swap struct {
 	owner            *Owner             // contract access
 	params           *Params            // economic and operational parameters
 	contract         contract.Contract  // reference to the smart contract
-	availableBalance uint64             // amount in Wei against which new cheques can be safely written
 	honeyPriceOracle HoneyOracle        // oracle which resolves the price of honey (in Wei)
 }
 
@@ -192,12 +191,12 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
 		return nil, err
 	}
-
-	// set the available balance
-	if swap.availableBalance, err = swap.computeAvailableBalance(); err != nil {
+	availableBalance, err := swap.AvailableBalance()
+	if err != nil {
 		return nil, err
 	}
-	swapLog.Info("available balance", "balance", swap.availableBalance)
+
+	swapLog.Info("available balance", "balance", availableBalance)
 
 	return swap, nil
 }
@@ -352,36 +351,6 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	return err
 }
 
-func (s *Swap) computeAvailableBalance() (uint64, error) {
-	// get the total amount (Wei) ever deposited
-	deposit, err := s.contract.TotalDeposit()
-	if err != nil {
-		return 0, err
-	}
-	// get the total amount (Wei) ever withdrawn
-	withdrawn, err := s.contract.TotalWithdrawn()
-	if err != nil {
-		return 0, err
-	}
-	// read the total value (Wei) of all cheques cheques sent
-	var totalPaidOut uint64
-	sentCheques, err := s.SentCheques()
-	if err != nil {
-		return 0, err
-	}
-	for _, v := range sentCheques {
-		if v != nil {
-			totalPaidOut += v.ChequeParams.CumulativePayout
-		}
-	}
-	return deposit.Uint64() - withdrawn.Uint64() - totalPaidOut, nil
-}
-
-// updateAvailableBalance updates the available balance amount
-func (s *Swap) updateAvailableBalance(amount int64) {
-	s.availableBalance = uint64(int64(s.availableBalance) + amount)
-}
-
 // cashCheque should be called async as it blocks until the transaction(s) are mined
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
@@ -473,8 +442,35 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
-func (s *Swap) AvailableBalance() uint64 {
-	return s.availableBalance
+func (s *Swap) AvailableBalance() (uint64, error) {
+	// get the LiquidBalance of the chequebook
+	liquidBalance, err := s.contract.LiquidBalance(nil)
+	if err != nil {
+		return 0, err
+	}
+
+	// get all sent Cheques
+	sentCheques, err := s.SentCheques()
+	if err != nil {
+		return 0, err
+	}
+
+	// Compute the total worth of cheques sent and how much of of this is cashed
+	var sentChequesWorth uint64
+	var cashedChequesWorth uint64
+	for _, ch := range sentCheques {
+		if ch == nil {
+			continue
+		}
+		sentChequesWorth += ch.ChequeParams.CumulativePayout
+		paidOut, err := s.contract.PaidOut(nil, ch.ChequeParams.Beneficiary)
+		if err != nil {
+			return 0, err
+		}
+		cashedChequesWorth += paidOut.Uint64()
+	}
+
+	return liquidBalance.Uint64() + cashedChequesWorth - sentChequesWorth, nil
 }
 
 // SentCheque returns the last sent cheque for a given peer
@@ -717,7 +713,6 @@ func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDura
 			swapLog.Warn("chequebook deploy error, retrying...", "try", try, "error", err)
 			continue
 		}
-		s.updateAvailableBalance(opts.Value.Int64())
 		return instance, nil
 	}
 	return nil, err

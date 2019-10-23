@@ -53,16 +53,14 @@ type Contract interface {
 	Deposit(auth *bind.TransactOpts, backend Backend) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
+	// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
-	//TotalDeposit returns the total amount in Wei ever deposited in the chequebook
-	TotalDeposit() (*big.Int, error)
-	//TotalWithdrawn returns the total amount in Wei ever withdrawn from the chequebook
-	TotalWithdrawn() (*big.Int, error)
 }
 
 // CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
@@ -160,6 +158,10 @@ func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend B
 	return result, receipt, nil
 }
 
+func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
+	return s.instance.LiquidBalance(opts)
+}
+
 // ContractParams returns contract information
 func (s simpleContract) ContractParams() *Params {
 	return &Params{
@@ -177,41 +179,6 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 // PaidOut returns the total paid out amount for the given address
 func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
 	return s.instance.PaidOut(opts, addr)
-}
-
-// TotalDeposit iterates over all Deposit events and returns the total amount ever deposited
-func (s simpleContract) TotalDeposit() (totalDeposit *big.Int, err error) {
-	totalDeposit = big.NewInt(0)
-	depositIterator, err := s.instance.FilterDeposit(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for depositIterator.Next() {
-		totalDeposit = totalDeposit.Add(totalDeposit, depositIterator.Event.Amount)
-	}
-	if depositIterator.Error() != nil {
-		return nil, depositIterator.Error()
-	}
-	return totalDeposit, nil
-}
-
-// TotalWithdrawn iterates over all Withdraw events and returns the total amount ever withdrawn
-func (s simpleContract) TotalWithdrawn() (totalWithdrawn *big.Int, err error) {
-	totalWithdrawn = big.NewInt(0)
-	withdrawIterator, err := s.instance.FilterWithdraw(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for withdrawIterator.Next() {
-		totalWithdrawn = totalWithdrawn.Add(totalWithdrawn, withdrawIterator.Event.Amount)
-	}
-	if withdrawIterator.Error() != nil {
-		return nil, withdrawIterator.Error()
-	}
-
-	return totalWithdrawn, nil
 }
 
 // ValidateCode checks that the on-chain code at address matches the expected swap
