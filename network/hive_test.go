@@ -253,7 +253,9 @@ func TestHiveStateConnections(t *testing.T) {
 		}
 
 	}
+	h1.Kademlia.lock.Lock()
 	numConns := h1.conns.Size()
+	h1.Kademlia.lock.Unlock()
 	connAddresses := make(map[string]string)
 	h1.EachConn(h1.base, 255, func(peer *Peer, i int) bool {
 		key := hexutil.Encode(peer.Address())
