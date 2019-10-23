@@ -260,13 +260,7 @@ func (p *Pusher) receiptsWorker() {
 				break
 			}
 
-			// increment synced count for the tag if exists
-			tag := item.tag
-			if tag != nil {
-				if tag.Done(chunk.StateSynced) {
-					p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
-					tag.FinishRootSpan()
-				}
+			if item.tag != nil {
 				// finish span for pushsync roundtrip, only have this span if we have a tag
 				item.span.Finish()
 			}
