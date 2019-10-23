@@ -20,7 +20,6 @@
 package swap
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/big"
@@ -29,12 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswap"
 )
 
 var (
-	// ErrNotASwapContract is given when an address is verified not to have a SWAP contract based on its bytecode
-	ErrNotASwapContract = errors.New("not a swap contract")
 	// ErrTransactionReverted is given when the transaction that cashes a cheque is reverted
 	ErrTransactionReverted = errors.New("Transaction reverted")
 )
@@ -52,7 +49,7 @@ type Contract interface {
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
 	Deposit(auth *bind.TransactOpts, backend Backend) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
-	CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
+	CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
 	// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
 	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
 	// ContractParams returns contract info (e.g. deployed address)
@@ -84,12 +81,13 @@ type Params struct {
 type simpleContract struct {
 	instance *contract.SimpleSwap
 	address  common.Address
+	backend  Backend
 }
 
 // Deploy deploys an instance of the underlying contract and returns its instance and the transaction identifier
-func Deploy(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
+func Deploy(auth *bind.TransactOpts, backend Backend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
 	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: instance, address: addr}
+	c := simpleContract{instance: instance, address: addr, backend: backend}
 	return c, tx, err
 }
 
@@ -101,7 +99,7 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := simpleContract{instance: instance, address: address}
+	c := simpleContract{instance: instance, address: address, backend: backend}
 	return c, err
 }
 
@@ -125,12 +123,12 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend) (*type
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
-func (s simpleContract) CashChequeBeneficiary(auth *bind.TransactOpts, backend Backend, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
-	tx, err := s.instance.CashChequeBeneficiary(auth, beneficiary, cumulativePayout, ownerSig)
+func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
+	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {
 		return nil, nil, err
 	}
-	receipt, err := WaitFunc(auth, backend, tx)
+	receipt, err := WaitFunc(opts, s.backend, tx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -179,20 +177,6 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 // PaidOut returns the total paid out amount for the given address
 func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
 	return s.instance.PaidOut(opts, addr)
-}
-
-// ValidateCode checks that the on-chain code at address matches the expected swap
-// contract code.
-func ValidateCode(ctx context.Context, b bind.ContractBackend, address common.Address) error {
-	codeReadFromAddress, err := b.CodeAt(ctx, address, nil)
-	if err != nil {
-		return err
-	}
-	referenceCode := common.FromHex(contract.SimpleSwapDeployedCode)
-	if !bytes.Equal(codeReadFromAddress, referenceCode) {
-		return ErrNotASwapContract
-	}
-	return nil
 }
 
 // WaitFunc is the default function to wait for transactions
