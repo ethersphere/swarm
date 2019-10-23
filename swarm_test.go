@@ -424,21 +424,14 @@ func TestTagPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.tags.Create("w00t", 1, false)
-
-	err = s.stateStore.Put("tags", s.tags)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	//close the stores to prevent resource not available error
-	s.stateStore.Close()
-	s.netStore.Close()
+	s.Stop()
 
 	// create a new swarm with the other's config and datadir
 	s2, err := NewSwarm(config, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s2.Stop()
 
 	// get the tags that should come from the persisted data store
 	tags := s2.tags.All()
@@ -450,9 +443,6 @@ func TestTagPersistence(t *testing.T) {
 	if tags[0].Name != "w00t" {
 		t.Fatalf("tag name mismatch. expected %s got %s", "w00t", tags[0].Name)
 	}
-
-	s2.stateStore.Close()
-	s2.netStore.Close()
 }
 
 // testLocalStoreAndRetrieve is using a single Swarm instance, to upload
