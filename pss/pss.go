@@ -325,10 +325,49 @@ func (p *Pss) getTopicHandlerCaps(topic message.Topic) (hc *handlerCaps, found b
 	return
 }
 
+func (p *Pss) isRawTopicHandlerCaps(topic message.Topic) (raw bool, found bool) {
+	p.topicHandlerCapsMu.RLock()
+	defer p.topicHandlerCapsMu.RUnlock()
+	hc, found := p.topicHandlerCaps[topic]
+	if !found {
+		return false, false
+	}
+	return hc.raw, true
+}
+
+func (p *Pss) isProxTopicHandlerCaps(topic message.Topic) (prox bool, found bool) {
+	p.topicHandlerCapsMu.RLock()
+	defer p.topicHandlerCapsMu.RUnlock()
+	hc, found := p.topicHandlerCaps[topic]
+	if !found {
+		return false, false
+	}
+	return hc.prox, true
+}
+
 func (p *Pss) setTopicHandlerCaps(topic message.Topic, hc *handlerCaps) {
 	p.topicHandlerCapsMu.Lock()
 	defer p.topicHandlerCapsMu.Unlock()
 	p.topicHandlerCaps[topic] = hc
+}
+
+func (p *Pss) getOrSetTopicHandlerCaps(topic message.Topic, raw, prox bool) (hc *handlerCaps) {
+	p.topicHandlerCapsMu.Lock()
+	defer p.topicHandlerCapsMu.Unlock()
+
+	hc, ok := p.topicHandlerCaps[topic]
+	if !ok {
+		hc = &handlerCaps{}
+		p.topicHandlerCaps[topic] = hc
+	}
+
+	if raw {
+		hc.raw = true
+	}
+	if prox {
+		hc.prox = true
+	}
+	return hc
 }
 
 // Links a handler function to a Topic
@@ -354,18 +393,7 @@ func (p *Pss) Register(topic *message.Topic, hndlr *handler) func() {
 	}
 	handlers[hndlr] = true
 
-	capabilities, ok := p.getTopicHandlerCaps(*topic)
-	if !ok {
-		capabilities = &handlerCaps{}
-		p.setTopicHandlerCaps(*topic, capabilities)
-	}
-
-	if hndlr.caps.raw {
-		capabilities.raw = true
-	}
-	if hndlr.caps.prox {
-		capabilities.prox = true
-	}
+	p.getOrSetTopicHandlerCaps(*topic, hndlr.caps.raw, hndlr.caps.prox)
 	return func() { p.deregister(topic, hndlr) }
 }
 
@@ -432,11 +460,9 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
 	if pssmsg.Flags.Raw {
-		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
-			if !capabilities.raw {
-				log.Warn("No handler for raw message", "topic", label(psstopic[:]))
-				return nil
-			}
+		if raw, ok := p.isRawTopicHandlerCaps(psstopic); ok && !raw {
+			log.Warn("No handler for raw message", "topic", label(psstopic[:]))
+			return nil
 		}
 		isRaw = true
 	}
@@ -446,8 +472,8 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
 	var isProx bool
-	if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
-		isProx = capabilities.prox
+	if prox, ok := p.isProxTopicHandlerCaps(psstopic); ok {
+		isProx = prox
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
