@@ -153,11 +153,10 @@ func (p *Pusher) chunksWorker() {
 
 			metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
 			// send the chunk and ignore the error
-			//go func(ch chunk.Chunk) {
+
 			if err := p.sendChunkMsg(ch); err != nil {
 				p.logger.Error("error sending chunk", "addr", ch.Address().Hex(), "err", err)
 			}
-			//}(ch)
 
 			// retry interval timer triggers starting from new
 		case <-timer.C:
@@ -184,10 +183,21 @@ func (p *Pusher) chunksWorker() {
 					delete(p.pushed, syncedAddrs[i].Hex())
 				}
 				p.pushedMu.Unlock()
-
 				// set chunk status to synced, insert to db GC index
 				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
 					log.Error("pushsync: error setting chunks to synced", "err", err)
+				}
+
+				// delete from pushed items
+				for i := 0; i < len(syncedAddrs); i++ {
+					hexaddr := syncedAddrs[i].Hex()
+					item, found := p.pushed[hexaddr]
+					if found && item.tag != nil && item.tag.Done(chunk.StateSynced) {
+						p.logger.Debug("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
+						item.tag.FinishRootSpan()
+					}
+
+					delete(p.pushed, hexaddr)
 				}
 
 				// reset synced list
@@ -253,7 +263,6 @@ func (p *Pusher) receiptsWorker() {
 			// increment synced count for the tag if exists
 			tag := item.tag
 			if tag != nil {
-				tag.Inc(chunk.StateSynced)
 				if tag.Done(chunk.StateSynced) {
 					p.logger.Debug("closing root span for tag", "taguid", tag.Uid, "tagname", tag.Name)
 					tag.FinishRootSpan()

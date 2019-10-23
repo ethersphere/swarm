@@ -29,6 +29,9 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
+const connectionsKey = "conns"
+const addressesKey = "peers"
+
 /*
 Hive is the logistic manager of the swarm
 
@@ -87,6 +90,8 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
 	log.Info("Starting hive", "baseaddr", fmt.Sprintf("%x", h.BaseAddr()[:4]))
+	// assigns the p2p.Server#AddPeer function to connect to peers
+	h.addPeer = server.AddPeer
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
 		log.Info("Detected an existing store. trying to load peers")
@@ -95,8 +100,6 @@ func (h *Hive) Start(server *p2p.Server) error {
 			return err
 		}
 	}
-	// assigns the p2p.Server#AddPeer function to connect to peers
-	h.addPeer = server.AddPeer
 	// ticker to keep the hive alive
 	h.ticker = time.NewTicker(h.KeepAliveInterval)
 	// done channel to signal the connect goroutine to return after Stop
@@ -135,29 +138,32 @@ func (h *Hive) Stop() error {
 // at each iteration, ask the overlay driver to suggest the most preferred peer to connect to
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
-loop:
 	for {
 		select {
 		case <-h.ticker.C:
-			addr, depth, changed := h.SuggestPeer()
-			if h.Discovery && changed {
-				NotifyDepth(uint8(depth), h.Kademlia)
-			}
-			if addr == nil {
-				continue loop
-			}
-
-			log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-			under, err := enode.ParseV4(string(addr.Under()))
-			if err != nil {
-				log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
-				continue loop
-			}
-			log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-			h.addPeer(under)
+			h.tickHive()
 		case <-h.done:
-			break loop
+			return
 		}
+	}
+}
+
+func (h *Hive) tickHive() {
+	addr, depth, changed := h.SuggestPeer()
+	if h.Discovery && changed {
+		NotifyDepth(uint8(depth), h.Kademlia)
+	}
+	if addr != nil {
+		log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+		underA := addr.Under()
+		s := string(underA)
+		under, err := enode.ParseV4(s)
+		if err != nil {
+			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
+			return
+		}
+		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+		h.addPeer(under)
 	}
 }
 
@@ -232,7 +238,7 @@ func (h *Hive) Peer(id enode.ID) *BzzPeer {
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
 	var as []*BzzAddr
-	err := h.Store.Get("peers", &as)
+	err := h.Store.Get(addressesKey, &as)
 	if err != nil {
 		if err == state.ErrNotFound {
 			log.Info(fmt.Sprintf("hive %08x: no persisted peers found", h.BaseAddr()[:4]))
@@ -249,13 +255,40 @@ func (h *Hive) loadPeers() error {
 		}
 	}
 	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
+	errRegistering := h.Register(as...)
+	var conns []*BzzAddr
+	err = h.Store.Get(connectionsKey, &conns)
+	if err != nil {
+		if err == state.ErrNotFound {
+			log.Info(fmt.Sprintf("hive %08x: no persisted peer connections found", h.BaseAddr()[:4]))
+		} else {
+			log.Warn(fmt.Sprintf("hive %08x: error loading connections: %v", h.BaseAddr()[:4], err))
+		}
 
-	return h.Register(as...)
+	} else {
+		go h.connectInitialPeers(conns)
+	}
+	return errRegistering
+}
+
+func (h *Hive) connectInitialPeers(conns []*BzzAddr) {
+	log.Info(fmt.Sprintf("%08x hive connectInitialPeers() With %v saved connections", h.BaseAddr()[:4], len(conns)))
+	for _, addr := range conns {
+		log.Trace(fmt.Sprintf("%08x hive connect() suggested initial %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+		under, err := enode.ParseV4(string(addr.Under()))
+		if err != nil {
+			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
+			continue
+		}
+		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+		h.addPeer(under)
+	}
 }
 
 // savePeers, savePeer implement persistence callback/
 func (h *Hive) savePeers() error {
 	var peers []*BzzAddr
+	var conns []*BzzAddr
 	h.Kademlia.EachAddr(nil, 256, func(pa *BzzAddr, i int) bool {
 		if pa == nil {
 			log.Warn(fmt.Sprintf("empty addr: %v", i))
@@ -265,8 +298,18 @@ func (h *Hive) savePeers() error {
 		peers = append(peers, pa)
 		return true
 	})
-	if err := h.Store.Put("peers", peers); err != nil {
+
+	h.Kademlia.EachConn(nil, 256, func(p *Peer, i int) bool {
+		log.Trace("saving connected peer", "OAddr", hexutil.Encode(p.OAddr), "UAddr", p.UAddr)
+		conns = append(conns, p.BzzAddr)
+		return true
+	})
+	if err := h.Store.Put(addressesKey, peers); err != nil {
 		return fmt.Errorf("could not save peers: %v", err)
+	}
+
+	if err := h.Store.Put(connectionsKey, conns); err != nil {
+		return fmt.Errorf("could not save peer connections: %v", err)
 	}
 	return nil
 }

@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
 	"time"
@@ -51,12 +52,13 @@ var (
 	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks_handled", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
 	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
+	unsolicitedChunkDelivery      = metrics.NewRegisteredCounter("network.retrieve.unsolicited_delivery", nil)
 
 	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
 
 	spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
-		Version:    1,
+		Version:    2,
 		MaxMsgSize: 10 * 1024 * 1024,
 		Messages: []interface{}{
 			ChunkDelivery{},
@@ -91,22 +93,22 @@ func (cd *ChunkDelivery) Price() *protocols.Price {
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
-	mtx      sync.RWMutex
 	netStore *storage.NetStore
 	kad      *network.Kademlia
-	peers    map[enode.ID]*Peer
-	spec     *protocols.Spec
-	logger   log.Logger
-	quit     chan struct{}
+	mtx      sync.RWMutex       // protect peer map
+	peers    map[enode.ID]*Peer // compatible peers
+	spec     *protocols.Spec    // protocol spec
+	logger   log.Logger         // custom logger to append a basekey
+	quit     chan struct{}      // shutdown channel
 }
 
 // New returns a new instance of the retrieval protocol handler
 func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance) *Retrieval {
 	r := &Retrieval{
+		netStore: ns,
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
 		spec:     spec,
-		netStore: ns,
 		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
 		quit:     make(chan struct{}),
 	}
@@ -140,7 +142,7 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 
 // Run is being dispatched when 2 nodes connect
 func (r *Retrieval) Run(bp *network.BzzPeer) error {
-	sp := NewPeer(bp)
+	sp := NewPeer(bp, r.kad.BaseAddr())
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
@@ -328,6 +330,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	p.logger.Trace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
 
 	deliveryMsg := &ChunkDelivery{
+		Ruid:  msg.Ruid,
 		Addr:  chunk.Address(),
 		SData: chunk.Data(),
 	}
@@ -346,6 +349,13 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 // we treat the chunk as a chunk received in syncing
 func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
+	err := p.checkRequest(msg.Ruid, msg.Addr)
+	if err != nil {
+		unsolicitedChunkDelivery.Inc(1)
+		p.logger.Error("unsolicited chunk delivery from peer", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
+		p.Drop("unsolicited chunk delivery")
+		return
+	}
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
@@ -371,7 +381,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	}
 	defer osp.Finish()
 
-	_, err := r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+	_, err = r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 	if err != nil {
 		p.logger.Error("netstore error putting chunk to localstore", "err", err)
 		if err == storage.ErrChunkInvalid {
@@ -409,12 +419,14 @@ FINDPEER:
 	}
 
 	ret := &RetrieveRequest{
+		Ruid: uint(rand.Uint32()),
 		Addr: req.Addr,
 	}
-	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID)
+	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)
+	protoPeer.addRetrieval(ret.Ruid, ret.Addr)
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
-		protoPeer.logger.Error("error sending retrieve request to peer", "err", err)
+		protoPeer.logger.Error("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
 		return nil, err
 	}
 
