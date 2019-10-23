@@ -101,7 +101,7 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 			return 0, nil
 		}
 
-		// peek detected EOF, store if there is none
+		// peek detected EOF, store the size if there is none
 		if l.size == 0 && l.peekErr == io.EOF {
 			l.size = l.peekOffset + int64(l.peekSize)
 		}
@@ -118,7 +118,7 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 		// peek from the current cursor
 		go l.peek(l.cursor)
 
-		// return EOF if fe reached it
+		// return EOF if it is reached
 		if l.size > 0 && l.cursor >= l.size {
 			return n, io.EOF
 		}
@@ -128,9 +128,7 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 	}
 }
 
-// Seek moves the Read cursor to a specific position
-// and it starts a new peek on that position assuming
-// that the Read method call will follow.
+// Seek moves the Read cursor to a specific position.
 func (l *Langos) Seek(offset int64, whence int) (int64, error) {
 	n, err := l.reader.Seek(offset, whence)
 	if err != nil {
