@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,8 +55,9 @@ type Tag struct {
 	StartedAt time.Time // tag started to calculate ETA
 
 	// end-to-end tag tracing
-	ctx  context.Context  // tracing context
-	span opentracing.Span // tracing root span
+	ctx      context.Context  // tracing context
+	span     opentracing.Span // tracing root span
+	spanOnce sync.Once        // make sure we close root span only once
 
 	Total  int64 // total chunks belonging to a tag
 	Split  int64 // number of chunks already processed by splitter for hashing
@@ -88,7 +90,9 @@ func (t *Tag) Context() context.Context {
 
 // FinishRootSpan closes the pushsync span of the tags
 func (t *Tag) FinishRootSpan() {
-	t.span.Finish()
+	t.spanOnce.Do(func() {
+		t.span.Finish()
+	})
 }
 
 // IncN increments the count for a state
