@@ -268,7 +268,9 @@ func TestHiveStateConnections(t *testing.T) {
 	// there should be at some point 5 conns
 	connsAfterLoading := 0
 	iterations := 0
+	h2.Kademlia.lock.Lock()
 	connsAfterLoading = h2.conns.Size()
+	h2.Kademlia.lock.Unlock()
 	for connsAfterLoading != numConns && iterations < 5 {
 		select {
 		case <-addedChan:
