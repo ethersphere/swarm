@@ -497,7 +497,6 @@ func (s *Swap) AvailableBalance() (uint64, error) {
 		}
 		cashedChequesWorth += paidOut.Uint64()
 	}
-
 	return liquidBalance.Uint64() + cashedChequesWorth - sentChequesWorth, nil
 }
 

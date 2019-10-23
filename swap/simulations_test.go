@@ -159,7 +159,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance, 0)
+			err = testDeploy(context.Background(), balance)
 			if err != nil {
 				return nil, nil, err
 			}
