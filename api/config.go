@@ -60,6 +60,7 @@ type Config struct {
 	SwapInitialDeposit      uint64         // initial deposit amount to the chequebook
 	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract
+	SwapChequebookFactory   common.Address // address of the chequebook factory contract
 	// end of Swap configs
 
 	*network.HiveParams

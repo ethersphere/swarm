@@ -423,13 +423,12 @@ FINDPEER:
 		Addr: req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)
+	protoPeer.addRetrieval(ret.Ruid, ret.Addr)
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
 		protoPeer.logger.Error("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
 		return nil, err
 	}
-
-	protoPeer.addRetrieval(ret.Ruid, ret.Addr)
 
 	spID := protoPeer.ID()
 	return &spID, nil
