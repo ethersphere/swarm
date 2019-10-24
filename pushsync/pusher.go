@@ -155,6 +155,7 @@ func (p *Pusher) chunksWorker() {
 			// send the chunk and ignore the error
 
 			if err := p.sendChunkMsg(ch); err != nil {
+				metrics.GetOrRegisterCounter("pusher.send-chunk-msg.err", nil).Inc(1)
 				p.logger.Error("error sending chunk", "addr", ch.Address().Hex(), "err", err)
 			}
 
@@ -177,18 +178,7 @@ func (p *Pusher) chunksWorker() {
 				p.syncedAddrsMu.Unlock()
 
 				p.pushedMu.Lock()
-
-				// delete from pushed items
-				for i := 0; i < len(syncedAddrs); i++ {
-					delete(p.pushed, syncedAddrs[i].Hex())
-				}
-				p.pushedMu.Unlock()
-				// set chunk status to synced, insert to db GC index
-				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
-					log.Error("pushsync: error setting chunks to synced", "err", err)
-				}
-
-				// delete from pushed items
+				// delete from pushed item
 				for i := 0; i < len(syncedAddrs); i++ {
 					hexaddr := syncedAddrs[i].Hex()
 					item, found := p.pushed[hexaddr]
@@ -198,6 +188,12 @@ func (p *Pusher) chunksWorker() {
 					}
 
 					delete(p.pushed, hexaddr)
+				}
+				p.pushedMu.Unlock()
+
+				// set chunk status to synced, insert to db GC index
+				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
+					log.Error("pushsync: error setting chunks to synced", "err", err)
 				}
 
 				// reset synced list
