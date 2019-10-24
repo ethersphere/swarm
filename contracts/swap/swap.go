@@ -22,6 +22,7 @@ package swap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -47,7 +48,7 @@ type Contract interface {
 	// Withdraw attempts to withdraw Wei from the chequebook
 	Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
-	Deposit(auth *bind.TransactOpts, backend Backend) (*types.Receipt, error)
+	Deposit(auth *bind.TransactOpts, backend Backend, amout *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
 	// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
@@ -113,8 +114,15 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amoun
 }
 
 // Deposit sends a transaction to the chequebook, which deposits the amount set in Auth.Value and blocks until the transaction is mined
-func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend) (*types.Receipt, error) {
+func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
 	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
+	if auth.Value != big.NewInt(0) && auth.Value != amount {
+		return nil, fmt.Errorf("Set value only via amount parameter")
+	}
+	if amount == big.NewInt(0) {
+		return nil, fmt.Errorf("Amount cannot be equal to zero")
+	}
+	auth.Value = amount
 	tx, err := rawSimpleSwap.Transfer(auth)
 	if err != nil {
 		return nil, err
