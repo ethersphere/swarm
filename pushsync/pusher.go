@@ -171,9 +171,9 @@ func (p *Pusher) chunksWorker() {
 					unsubscribe()
 				}
 
+				// reset synced list
 				p.syncedAddrsMu.Lock()
 				syncedAddrs := p.syncedAddrs
-				// reset synced list
 				p.syncedAddrs = nil
 				p.syncedAddrsMu.Unlock()
 
@@ -182,8 +182,8 @@ func (p *Pusher) chunksWorker() {
 					log.Error("pushsync: error setting chunks to synced", "err", err)
 				}
 
-				p.pushedMu.Lock()
 				// delete from pushed item
+				p.pushedMu.Lock()
 				for i := 0; i < len(syncedAddrs); i++ {
 					hexaddr := syncedAddrs[i].Hex()
 					item, found := p.pushed[hexaddr]
@@ -195,9 +195,6 @@ func (p *Pusher) chunksWorker() {
 					delete(p.pushed, hexaddr)
 				}
 				p.pushedMu.Unlock()
-
-				// reset synced list
-				syncedAddrs = nil
 
 				// we don't want to record the first iteration
 				if chunksInBatch != -1 {
