@@ -453,15 +453,15 @@ func TestCheques(t *testing.T) {
 	testPeer3ID := newDummyPeer().Peer.ID()
 
 	// test sent cheque for disconnected node
-	sentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
+	sentCheque3 := saveNewCheque(t, testPeer3ID, swap.saveLastSentCheque)
 	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque3}})
 
 	// test received cheque for disconnected node
-	receivedCheque4 := saveNewReceivedCheque(t, swap, testPeer3ID)
+	receivedCheque4 := saveNewCheque(t, testPeer3ID, swap.saveLastReceivedCheque)
 	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque3, receivedChequeResponseKey: receivedCheque4}})
 
 	// test cheque change for disconnected node
-	sentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
+	sentCheque4 := saveNewCheque(t, testPeer3ID, swap.saveLastSentCheque)
 	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque4, receivedChequeResponseKey: receivedCheque4}})
 }
 
@@ -486,18 +486,7 @@ func setNewCheque(t *testing.T, setChequeFunction func(*Cheque) error) *Cheque {
 	return generatedCheque
 }
 
-// generates a cheque and saves it as the last sent cheque for a peer in the given swap struct, fails if there are errors
-func saveNewSentCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
-	t.Helper()
-	return saveNewCheque(t, id, s.saveLastSentCheque)
-}
-
-// generates a cheque and saves it as the last received cheque for a peer in the given swap struct, fails if there are errors
-func saveNewReceivedCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
-	t.Helper()
-	return saveNewCheque(t, id, s.saveLastReceivedCheque)
-}
-
+// generates a cheque and saves it as the last sent or received cheque for a peer in the given swap struct, fails if there are errors
 func saveNewCheque(t *testing.T, id enode.ID, saveChequeFunction func(enode.ID, *Cheque) error) *Cheque {
 	t.Helper()
 	generatedCheque := newRandomTestCheque()
@@ -572,11 +561,11 @@ func TestPeerCheques(t *testing.T) {
 	testPeer3ID := newDummyPeer().Peer.ID()
 
 	// test sent cheque for disconnected node
-	sentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
+	sentCheque4 := saveNewCheque(t, testPeer3ID, swap.saveLastSentCheque)
 	testChequesByType(t, swap, testPeer3ID, map[string]*Cheque{sentChequeResponseKey: sentCheque4, receivedChequeResponseKey: nil})
 
 	// test received cheque for disconnected node
-	receivedCheque3 := saveNewReceivedCheque(t, swap, testPeer3ID)
+	receivedCheque3 := saveNewCheque(t, testPeer3ID, swap.saveLastReceivedCheque)
 	testChequesByType(t, swap, testPeer3ID, map[string]*Cheque{sentChequeResponseKey: sentCheque4, receivedChequeResponseKey: receivedCheque3})
 }
 
