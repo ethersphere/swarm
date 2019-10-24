@@ -48,6 +48,13 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
+	Total  int64 // total chunks belonging to a tag
+	Split  int64 // number of chunks already processed by splitter for hashing
+	Seen   int64 // number of chunks already seen
+	Stored int64 // number of chunks already stored locally
+	Sent   int64 // number of chunks sent for push syncing
+	Synced int64 // number of chunks synced with proof
+
 	Uid       uint32    // a unique identifier for this tag
 	Anonymous bool      // indicates if the tag is anonymous (i.e. if only pull sync should be used)
 	Name      string    // a name tag for this tag
@@ -58,13 +65,6 @@ type Tag struct {
 	ctx      context.Context  // tracing context
 	span     opentracing.Span // tracing root span
 	spanOnce sync.Once        // make sure we close root span only once
-
-	Total  int64 // total chunks belonging to a tag
-	Split  int64 // number of chunks already processed by splitter for hashing
-	Seen   int64 // number of chunks already seen
-	Stored int64 // number of chunks already stored locally
-	Sent   int64 // number of chunks sent for push syncing
-	Synced int64 // number of chunks synced with proof
 }
 
 // NewTag creates a new tag, and returns it
