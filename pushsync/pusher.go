@@ -177,6 +177,11 @@ func (p *Pusher) chunksWorker() {
 				p.syncedAddrs = nil
 				p.syncedAddrsMu.Unlock()
 
+				// set chunk status to synced, insert to db GC index
+				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
+					log.Error("pushsync: error setting chunks to synced", "err", err)
+				}
+
 				p.pushedMu.Lock()
 				// delete from pushed item
 				for i := 0; i < len(syncedAddrs); i++ {
@@ -190,11 +195,6 @@ func (p *Pusher) chunksWorker() {
 					delete(p.pushed, hexaddr)
 				}
 				p.pushedMu.Unlock()
-
-				// set chunk status to synced, insert to db GC index
-				if err := p.store.Set(ctx, chunk.ModeSetSyncPush, syncedAddrs...); err != nil {
-					log.Error("pushsync: error setting chunks to synced", "err", err)
-				}
 
 				// reset synced list
 				syncedAddrs = nil
