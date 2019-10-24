@@ -220,11 +220,11 @@ func TestCheques(t *testing.T) {
 	testPeerID := testPeer.ID()
 
 	// test no cheques are present
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: nil, sentChequeResponseKey: nil}})
+	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{})
 
 	// test sent cheque for peer
 	sentCheque := setNewSentCheque(t, testPeer)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: nil, sentChequeResponseKey: sentCheque}})
+	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {sentChequeResponseKey: sentCheque}})
 
 	// test received cheque for peer
 	receivedCheque := setNewReceivedCheque(t, testPeer)
@@ -236,7 +236,7 @@ func TestCheques(t *testing.T) {
 
 	// test sent cheque for second peer
 	sentCheque2 := setNewSentCheque(t, testPeer2)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: nil, sentChequeResponseKey: sentCheque2}})
+	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {sentChequeResponseKey: sentCheque2}})
 
 	// test received cheque for second peer
 	receivedCheque2 := setNewReceivedCheque(t, testPeer2)
@@ -251,7 +251,7 @@ func TestCheques(t *testing.T) {
 
 	// test sent cheque for disconnected node
 	sentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque3, receivedChequeResponseKey: nil}})
+	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque3}})
 
 	// test received cheque for disconnected node
 	receivedCheque4 := saveNewReceivedCheque(t, swap, testPeer3ID)

@@ -472,8 +472,16 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
 		cheques[peer] = make(map[string]*Cheque)
-		cheques[peer][sentChequeResponseKey] = swapPeer.getLastSentCheque()
-		cheques[peer][receivedChequeResponseKey] = swapPeer.getLastReceivedCheque()
+		if sentCheque := swapPeer.getLastSentCheque(); sentCheque != nil {
+			cheques[peer][sentChequeResponseKey] = sentCheque
+		}
+		if receivedCheque := swapPeer.getLastReceivedCheque(); receivedCheque != nil {
+			cheques[peer][receivedChequeResponseKey] = receivedCheque
+		}
+		// remove peer from result if there are no cheques
+		if len(cheques[peer]) == 0 {
+			delete(cheques, peer)
+		}
 		swapPeer.lock.Unlock()
 	}
 	s.peersLock.Unlock()
@@ -486,17 +494,6 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 	err = s.addStoreCheques(receivedChequePrefix, receivedChequeResponseKey, cheques)
 	if err != nil {
 		return nil, err
-	}
-
-	// fill in result with missing cheques
-	for _, peerCheques := range cheques {
-		// add nil as type of cheque if not present
-		if _, peerHasReceivedCheque := peerCheques[receivedChequeResponseKey]; !peerHasReceivedCheque {
-			peerCheques[receivedChequeResponseKey] = nil
-		}
-		if _, peerHasSentCheque := peerCheques[sentChequeResponseKey]; !peerHasSentCheque {
-			peerCheques[sentChequeResponseKey] = nil
-		}
 	}
 
 	return cheques, nil
