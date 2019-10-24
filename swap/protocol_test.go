@@ -233,6 +233,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
+	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
 	creditor.setBalance(-int64(DefaultPaymentThreshold))
 
 	// we expect a cheque at the end of the test, but not yet
@@ -245,6 +246,21 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// balance should only be adjusted by overDraft prior to confirm msg
+	if creditor.getBalance() != -int64(expectedAmount) {
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
+	}
+
+	// pending cheque should now be set
+	pending := creditor.getPendingCheque()
+	if pending == nil {
+		t.Fatal("Expected pending cheque")
+	}
+
+	if pending.CumulativePayout != expectedAmount {
+		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, pending.CumulativePayout)
+	}
+
 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
 		Cheque: creditor.getPendingCheque(),
 	})
@@ -255,7 +271,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	cheque := creditor.getLastSentCheque()
-	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
+
 	if cheque.CumulativePayout != expectedAmount {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
 	}
