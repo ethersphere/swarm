@@ -19,8 +19,6 @@ package langos
 import (
 	"io"
 	"sync"
-
-	"github.com/ethersphere/swarm/log"
 )
 
 // Reader contains all methods that Langos needs to read data from.
@@ -41,26 +39,24 @@ type Reader interface {
 //
 // All Read and Seek method call must be synchronous.
 type Langos struct {
-	reader     Reader // reader needs to implement io.ReadSeeker and io.ReaderAt interfaces
-	size       int64
-	cursor     int64         // current read position
-	peekBuf    []byte        // peeked data
-	peekOffset int64         // peek position
-	peekSize   int           // peeked data length
-	peekErr    error         // error returned by ReadAt on peeking
-	peekDone   chan struct{} // signals that the peek is done so that Read can copy peekBuf data (set after the first Read)
-	closed     chan struct{} // terminates peek goroutine and unblocks Read method
-	closeOnce  sync.Once     // protects closed channel on multiple calls to Close method
+	reader    Reader // reader needs to implement io.ReadSeeker and io.ReaderAt interfaces
+	size      int64
+	cursor    int64 // current read position
+	peeks     []*peek
+	peekSize  int
+	closed    chan struct{} // terminates peek goroutine and unblocks Read method
+	closeOnce sync.Once     // protects closed channel on multiple calls to Close method
 }
 
 // NewLangos bakes a new yummy langos that peeks
 // on provided reader when its Read method is called.
-// Argument maxPeekSize defines the length of peeks.
-func NewLangos(r Reader, maxPeekSize int) *Langos {
+// Argument peekSize defines the length of peeks.
+func NewLangos(r Reader, peekSize int) *Langos {
 	return &Langos{
-		reader:  r,
-		peekBuf: make([]byte, maxPeekSize),
-		closed:  make(chan struct{}),
+		reader:   r,
+		peeks:    make([]*peek, 0),
+		peekSize: peekSize,
+		closed:   make(chan struct{}),
 	}
 }
 
@@ -74,49 +70,52 @@ func NewBufferedLangos(r Reader, bufferSize int) Reader {
 // current read position. The first read will wait for the underlaying
 // Reader to return all the data and start a peek on the next data segment.
 // All sequential reads will wait for peek to finish reading the data.
+// If the current peek is not finished when Read is called, a second peek
+// will be started to apprehend the following Read call.
 func (l *Langos) Read(p []byte) (n int, err error) {
-	log.Trace("langos Read", "cursor", l.cursor)
+	pe := l.popPeek(l.cursor)
 
-	// first read, no peeking happened before
-	if l.peekDone == nil {
+	// no peek at current cursor
+	if pe == nil {
 		n, err := l.reader.Read(p)
 		if err != nil {
 			return n, err
 		}
-		l.cursor = int64(n)
-		l.peekDone = make(chan struct{}, 1)
-
-		// peek for the second read
-		go l.peek(l.cursor)
+		l.cursor += int64(n)
+		// start the peek for the next read
+		l.peek(l.cursor)
 		return n, err
 	}
 
-	// second and further Read calls are waiting for peeks to finish
 	select {
-	case <-l.peekDone:
-		// invalidate buffer after seek
-		if l.peekOffset != l.cursor {
-			go l.peek(l.cursor)
+	// peek is done, continue to read it
+	case <-pe.done:
+	case <-l.closed:
+		return 0, io.EOF
+	default:
+		// start the next peek while waiting for the current to finish
+		l.peek(l.cursor + int64(l.peekSize))
+	}
 
-			return 0, nil
-		}
-
+	select {
+	case <-pe.done:
 		// peek detected EOF, store the size if there is none
-		if l.size == 0 && l.peekErr == io.EOF {
-			l.size = l.peekOffset + int64(l.peekSize)
+		if l.size == 0 && pe.err == io.EOF {
+			l.size = pe.offset + int64(pe.size)
 		}
 
 		// peek got an error, return it, but do not pass EOF
-		if l.peekErr != nil && l.peekErr != io.EOF {
-			return 0, l.peekErr
+		if pe.err != nil && pe.err != io.EOF {
+			return 0, pe.err
 		}
 
 		// copy peeked data
-		n = copy(p, l.peekBuf[:l.peekSize])
+		n = copy(p, pe.buf[l.cursor-pe.offset:pe.size])
 		// set current cursor
 		l.cursor += int64(n)
+
 		// peek from the current cursor
-		go l.peek(l.cursor)
+		l.peek(l.cursor)
 
 		// return EOF if it is reached
 		if l.size > 0 && l.cursor >= l.size {
@@ -147,24 +146,6 @@ func (l *Langos) ReadAt(p []byte, off int64) (int, error) {
 	return l.reader.ReadAt(p, off)
 }
 
-// peek fills the peek buffer with data from offset by. It sets the current read position (cursor)
-// and notifies the Read method that the peek is done.
-func (l *Langos) peek(offset int64) {
-	log.Trace("langos peek", "offset", offset, "peekSize", l.peekSize, "peekErr", l.peekErr)
-	n, err := l.reader.ReadAt(l.peekBuf, offset)
-	log.Trace("langos peek ReadAt returned", "offset", offset, "n", n, "err", l.peekErr)
-
-	l.peekOffset = offset
-	l.peekSize = n
-	l.peekErr = err
-
-	select {
-	// allow the Read method to return a copy of current peekBuf
-	case l.peekDone <- struct{}{}:
-	case <-l.closed:
-	}
-}
-
 // Close terminates any possible peek goroutines and unblocks Read method calls
 // that are waiting for peek to finish.
 func (l *Langos) Close() (err error) {
@@ -172,4 +153,76 @@ func (l *Langos) Close() (err error) {
 		close(l.closed)
 	})
 	return nil
+}
+
+// peek starts a new peek ad offset with peekSize data length. The peek
+// can be retrieved by popPeek Langos method.
+func (l *Langos) peek(offset int64) {
+	// if here already is a peek that
+	// contains data at this offset,
+	// do not create another one
+	if l.hasPeek(offset) {
+		return
+	}
+
+	p := &peek{
+		offset: offset,
+		done:   make(chan struct{}),
+		buf:    make([]byte, l.peekSize),
+	}
+	l.peeks = append(l.peeks, p)
+
+	// start a goroutine to peek the data
+	go func() {
+		p.size, p.err = l.reader.ReadAt(p.buf, offset)
+		close(p.done)
+	}()
+}
+
+// popPeek returns a peek that includes the offset and removes it
+// from langos. Nil is returned if there is no peek.
+func (l *Langos) popPeek(offset int64) (p *peek) {
+	for i, p := range l.peeks {
+		if p.has(offset) {
+			l.peeks = append(l.peeks[:i], l.peeks[i+1:]...)
+			return p
+		}
+	}
+	return nil
+}
+
+// hasPeek returns true if there is a peek that includes the given offset.
+func (l *Langos) hasPeek(offset int64) (yes bool) {
+	for _, p := range l.peeks {
+		if p.has(offset) {
+			return true
+		}
+	}
+	return false
+}
+
+// peek holds the current state of a read at some offset. When the read is done,
+// done channel is closed and buffer is safe to read up to the size if error is not nil.
+type peek struct {
+	offset int64         // peek cursor position
+	buf    []byte        // peeked data
+	size   int           // peeked data length
+	err    error         // error returned by ReadAt on peeking
+	done   chan struct{} // closed when the peek is done so that Read can copy buf data
+}
+
+// has returns whether the peek has, or should have after it is done,
+// data starting from the offset.
+func (p *peek) has(offset int64) (yes bool) {
+	// peek offset does not start from required offset
+	if offset < p.offset {
+		return false
+	}
+	size := p.size // if the read is done
+	if p.size == 0 {
+		// if the read is not done,
+		// assume the best case where all data is read
+		size = len(p.buf)
+	}
+	return offset < p.offset+int64(size)
 }
