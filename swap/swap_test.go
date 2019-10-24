@@ -207,7 +207,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 }
 
 type chequesTestCases struct {
-	peers           []*protocols.Peer
+	protoPeers      []*protocols.Peer
 	sentCheques     map[*protocols.Peer]*Cheque
 	receivedCheques map[*protocols.Peer]*Cheque
 	expectedCheques map[enode.ID]map[string]*Cheque
@@ -237,7 +237,9 @@ func TestChequesNew(t *testing.T) {
 			[]*protocols.Peer{testPeer},
 			map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque},
 			map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque},
-			map[enode.ID]map[string]*Cheque{testPeer.ID(): {sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: testPeerReceivedCheque}},
+			map[enode.ID]map[string]*Cheque{
+				testPeer.ID(): {sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: testPeerReceivedCheque},
+			},
 		},
 		{
 			[]*protocols.Peer{testPeer, testPeer2},
@@ -249,45 +251,46 @@ func TestChequesNew(t *testing.T) {
 			},
 		},
 	}
+	// verify test cases
 	testCheques(t, testCases)
 }
 
 func testCheques(t *testing.T, testCases []chequesTestCases) {
-	for _, testCase := range testCases {
-		t.Run("", func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc.protoPeers), func(t *testing.T) {
 			// create a test swap account
 			swap, clean := newTestSwap(t, ownerKey, nil)
 			defer clean()
 
 			// add test case peers
 			peersMapping := make(map[*protocols.Peer]*Peer)
-			for _, protoPeer := range testCase.peers {
-				peer, err := swap.addPeer(protoPeer, common.Address{}, common.Address{})
+			for _, pp := range tc.protoPeers {
+				peer, err := swap.addPeer(pp, common.Address{}, common.Address{})
 				if err != nil {
 					t.Fatal(err)
 				}
-				peersMapping[protoPeer] = peer
+				peersMapping[pp] = peer
 			}
 
 			// add test case sent cheques
-			for protoPeer, sentCheque := range testCase.sentCheques {
-				peer, ok := peersMapping[protoPeer]
+			for pp, sc := range tc.sentCheques {
+				peer, ok := peersMapping[pp]
 				if !ok {
 					t.Fatalf("unexpected peer in test case sent cheques")
 				}
-				err := peer.setLastSentCheque(sentCheque)
+				err := peer.setLastSentCheque(sc)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
 			// add test case received cheques
-			for protoPeer, receivedCheque := range testCase.receivedCheques {
-				peer, ok := peersMapping[protoPeer]
+			for pp, rc := range tc.receivedCheques {
+				peer, ok := peersMapping[pp]
 				if !ok {
 					t.Fatalf("unexpected peer in test case received cheques")
 				}
-				err := peer.setLastReceivedCheque(receivedCheque)
+				err := peer.setLastReceivedCheque(rc)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -298,8 +301,8 @@ func testCheques(t *testing.T, testCases []chequesTestCases) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(testCase.expectedCheques, cheques) {
-				t.Fatalf("expected cheques to be %v, but are %v", testCase.expectedCheques, cheques)
+			if !reflect.DeepEqual(tc.expectedCheques, cheques) {
+				t.Fatalf("expected cheques to be %v, but are %v", tc.expectedCheques, cheques)
 			}
 		})
 	}
