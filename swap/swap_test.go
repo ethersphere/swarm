@@ -207,6 +207,7 @@ func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64)
 }
 
 type chequesTestCases struct {
+	name            string
 	protoPeers      []*protocols.Peer
 	sentCheques     map[*protocols.Peer]*Cheque
 	receivedCheques map[*protocols.Peer]*Cheque
@@ -228,12 +229,23 @@ func TestChequesNew(t *testing.T) {
 	// build test cases
 	testCases := []chequesTestCases{
 		{
+			"no peers",
 			[]*protocols.Peer{},
 			map[*protocols.Peer]*Cheque{},
 			map[*protocols.Peer]*Cheque{},
 			map[enode.ID]map[string]*Cheque{},
 		},
 		{
+			"one peer, one sent cheque",
+			[]*protocols.Peer{testPeer},
+			map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque},
+			map[*protocols.Peer]*Cheque{},
+			map[enode.ID]map[string]*Cheque{
+				testPeer.ID(): {sentChequeResponseKey: testPeerSentCheque},
+			},
+		},
+		{
+			"one peer, sent and received cheques",
 			[]*protocols.Peer{testPeer},
 			map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque},
 			map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque},
@@ -242,6 +254,7 @@ func TestChequesNew(t *testing.T) {
 			},
 		},
 		{
+			"two peers, sent and received cheques",
 			[]*protocols.Peer{testPeer, testPeer2},
 			map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque, testPeer2: testPeer2SentCheque},
 			map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque, testPeer2: testPeer2ReceivedCheque},
@@ -257,7 +270,7 @@ func TestChequesNew(t *testing.T) {
 
 func testCheques(t *testing.T, testCases []chequesTestCases) {
 	for _, tc := range testCases {
-		t.Run(fmt.Sprint(tc.protoPeers), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			// create a test swap account
 			swap, clean := newTestSwap(t, ownerKey, nil)
 			defer clean()
