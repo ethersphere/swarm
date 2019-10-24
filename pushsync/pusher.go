@@ -155,6 +155,7 @@ func (p *Pusher) chunksWorker() {
 			// send the chunk and ignore the error
 
 			if err := p.sendChunkMsg(ch); err != nil {
+				metrics.GetOrRegisterCounter("pusher.send-chunk-msg.err", nil).Inc(1)
 				p.logger.Error("error sending chunk", "addr", ch.Address().Hex(), "err", err)
 			}
 
