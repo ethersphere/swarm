@@ -98,20 +98,15 @@ func (o *Outbox) Stop() {
 // Then send it to process. This method is blocking if there is no workers available.
 func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 	// first we try to obtain a slot in the outbox.
+	slot := <-o.slots
+	o.queue[slot] = outboxMsg
+	metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
+	// we send this message slot to process.
 	select {
-	case slot := <-o.slots:
-		o.queue[slot] = outboxMsg
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
-		// we send this message slot to process.
-		select {
-		case <-o.stopC:
-		case o.process <- slot:
-		}
-		return nil
-	default:
-		metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-		return ErrOutboxFull
+	case <-o.stopC:
+	case o.process <- slot:
 	}
+	return nil
 }
 
 // SetForward set the forward function that will be executed on each message.
@@ -137,9 +132,13 @@ func (o *Outbox) processOutbox() {
 		case slot := <-o.process:
 			log.Debug("Processing, taking worker", "workerLimit size", len(workerLimitC), "numWorkers", o.numWorkers)
 			workerLimitC <- struct{}{}
+			metrics.GetOrRegisterGauge("pss.outbox.workers", nil).Update(int64(len(workerLimitC)))
 			go func(slot int) {
 				//Free worker space
-				defer func() { <-workerLimitC }()
+				defer func() {
+					<-workerLimitC
+					metrics.GetOrRegisterGauge("pss.outbox.workers", nil).Update(int64(len(workerLimitC)))
+				}()
 				msg := o.queue[slot]
 				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
 				if err := o.forwardFunc(msg.msg); err != nil {
@@ -154,6 +153,7 @@ func (o *Outbox) processOutbox() {
 						metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
 						return
 					}
+					metrics.GetOrRegisterGauge("pss.outbox.retries", nil).Update(int64(msg.retries))
 					// requeue the message for processing
 					o.requeue(slot)
 					log.Debug("Message requeued", "slot", slot)

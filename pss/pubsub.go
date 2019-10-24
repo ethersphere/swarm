@@ -17,9 +17,11 @@
 package pss
 
 import (
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss/message"
+	"time"
 )
 
 // PubSub implements the pushsync.PubSub interface using pss
@@ -65,6 +67,8 @@ func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p
 
 // Send sends a message using pss SendRaw
 func (p *PubSub) Send(to []byte, topic string, msg []byte) error {
+	metrics.GetOrRegisterCounter("pss.pubsub.send.num", nil).Inc(1)
+	defer metrics.GetOrRegisterResettingTimer("pss.pubsub.send", nil).UpdateSince(time.Now())
 	pt := message.NewTopic([]byte(topic))
-	return p.pss.SendRaw(PssAddress(to), pt, msg)
+	return p.pss.SendRaw(PssAddress(to), pt, msg, 20 * time.Second)
 }

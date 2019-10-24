@@ -46,12 +46,12 @@ import (
 
 const (
 	defaultMsgTTL              = time.Second * 120
-	defaultDigestCacheTTL      = time.Second * 10
+	defaultDigestCacheTTL      = time.Second * 30
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
-	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 10000
-	defaultOutboxWorkers       = 100
+	defaultCleanInterval       = time.Minute * 10
+	defaultOutboxCapacity      = 25
+	defaultOutboxWorkers       = 25
 	protocolName               = "pss"
 	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
@@ -420,7 +420,7 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 }
 
 // generic peer-specific handler for incoming messages
-// calls pss msg handler asyncronously
+// calls pss msg handler asynchronously
 func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
 	go func() {
 		pssmsg, ok := msg.(*message.Message)
@@ -441,6 +441,7 @@ func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{})
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
+	metrics.GetOrRegisterCounter("pss.handle.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
@@ -495,6 +496,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
 func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
+	metrics.GetOrRegisterCounter("pss.process.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
@@ -590,6 +592,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) enqueue(msg *message.Message) error {
+	metrics.GetOrRegisterCounter("pss.enqueue.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	// TODO: create and enqueue in one outbox method
@@ -600,7 +603,7 @@ func (p *Pss) enqueue(msg *message.Message) error {
 // Send a raw message (any encryption is responsibility of calling client)
 //
 // Will fail if raw messages are disallowed
-func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte) error {
+func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messageTtl time.Duration) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.send.raw", nil).UpdateSince(time.Now())
 
 	if err := validateAddress(address); err != nil {
@@ -724,7 +727,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
 		log.Error(err.Error())
 	}
-
+	metrics.GetOrRegisterCounter("pss.pp.send", nil).Inc(1)
 	return err == nil
 }
 
@@ -740,6 +743,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 //// successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *message.Message) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
+	defer metrics.GetOrRegisterResettingTimer("pss.forward.time", nil).UpdateSince(time.Now())
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
