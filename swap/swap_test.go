@@ -410,50 +410,6 @@ func testCheques(t *testing.T, testCases []chequesTestCase) {
 	}
 }
 
-// adds a peer to the given Swap struct, fails if there are errors and returns peer otherwise
-func addPeer(t *testing.T, s *Swap) *Peer {
-	t.Helper()
-	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return peer
-}
-
-// generates a cheque and adds it as the last sent or received cheque for the given peer, fails if there are errors
-func setNewCheque(t *testing.T, setChequeFunction func(*Cheque) error) *Cheque {
-	t.Helper()
-	generatedCheque := newRandomTestCheque()
-	err := setChequeFunction(generatedCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return generatedCheque
-}
-
-// generates a cheque and saves it as the last sent or received cheque for a peer in the given swap struct, fails if there are errors
-func saveNewCheque(t *testing.T, id enode.ID, saveChequeFunction func(enode.ID, *Cheque) error) *Cheque {
-	t.Helper()
-	generatedCheque := newRandomTestCheque()
-	err := saveChequeFunction(id, generatedCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return generatedCheque
-}
-
-// tests that a nested map of peerID:{typeOfCheque:cheque} matches the result of the Cheques function
-func testChequesByPeerAndType(t *testing.T, s *Swap, expectedCheques map[enode.ID]map[string]*Cheque) {
-	t.Helper()
-	cheques, err := s.Cheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(expectedCheques, cheques) {
-		t.Fatalf("Expected cheques to be %v, but are %v", expectedCheques, cheques)
-	}
-}
-
 type peerChequesTestCase struct {
 	name            string
 	peer            *protocols.Peer
@@ -514,7 +470,7 @@ func TestPeerCheques(t *testing.T) {
 	// verify cases for disconnected peers
 	testPeerChequesDisconnected(t, testPeer3ID, testPeer3SentCheque, testPeer3ReceivedCheque, testPeer3ExpectedCheques)
 
-	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, enode.ID{}}
+	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, {}}
 	// verify cases for invalid peers
 	testPeerChequesInvalid(t, invalidPeers)
 }
