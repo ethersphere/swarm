@@ -516,6 +516,10 @@ func TestPeerChequesNew(t *testing.T) {
 	}
 	// verify test cases
 	testPeerCheques(t, testCases)
+
+	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, enode.ID{}}
+	// verify cases for invalid peers
+	testPeerChequesInvalid(t, invalidPeers)
 }
 
 func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
@@ -573,6 +577,23 @@ func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
 				t.Fatalf("Expected peer %v cheques to be %v, but are %v", peer.ID(), tc.expectedCheques, peerCheques)
 			}
 		})
+	}
+}
+
+func testPeerChequesInvalid(t *testing.T, invalidPeerIDs []enode.ID) {
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
+	defer clean()
+
+	// verify results by calling PeerCheques function
+	for _, invalidPeerID := range invalidPeerIDs {
+		peerCheques, err := swap.PeerCheques(invalidPeerID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: nil}, peerCheques) {
+			t.Fatalf("Expected peer %v cheques to be %v, but are %v", invalidPeerID, nil, peerCheques)
+		}
 	}
 }
 
