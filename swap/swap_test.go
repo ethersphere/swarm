@@ -455,13 +455,11 @@ func testChequesByPeerAndType(t *testing.T, s *Swap, expectedCheques map[enode.I
 }
 
 type peerChequesTestCase struct {
-	name                string
-	peer                *protocols.Peer
-	sentCheque          *Cheque
-	receivedCheque      *Cheque
-	storeSentCheque     *Cheque
-	storeReceivedCheque *Cheque
-	expectedCheques     map[string]*Cheque
+	name            string
+	peer            *protocols.Peer
+	sentCheque      *Cheque
+	receivedCheque  *Cheque
+	expectedCheques map[string]*Cheque
 }
 
 // TestPeerCheques verifies that sent and received cheques data for a given peer is correct
@@ -478,44 +476,43 @@ func TestPeerChequesNew(t *testing.T) {
 	// build test cases
 	testCases := []peerChequesTestCase{
 		{
-			name:                "peer 1",
-			peer:                testPeer,
-			sentCheque:          nil,
-			receivedCheque:      nil,
-			storeSentCheque:     nil,
-			storeReceivedCheque: nil,
-			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: nil},
+			name:            "peer 1 with no cheques",
+			peer:            testPeer,
+			sentCheque:      nil,
+			receivedCheque:  nil,
+			expectedCheques: map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: nil},
 		},
 		{
-			name:                "peer 1 with sent cheque",
-			peer:                testPeer,
-			sentCheque:          testPeerSentCheque,
-			receivedCheque:      nil,
-			storeSentCheque:     nil,
-			storeReceivedCheque: nil,
-			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: nil},
+			name:            "peer 1 with sent cheque",
+			peer:            testPeer,
+			sentCheque:      testPeerSentCheque,
+			receivedCheque:  nil,
+			expectedCheques: map[string]*Cheque{sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: nil},
 		},
 		{
-			name:                "peer 1 with sent and received cheque",
-			peer:                testPeer,
-			sentCheque:          testPeerSentCheque,
-			receivedCheque:      testPeerReceivedCheque,
-			storeSentCheque:     nil,
-			storeReceivedCheque: nil,
-			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: testPeerReceivedCheque},
+			name:            "peer 1 with sent and received cheque",
+			peer:            testPeer,
+			sentCheque:      testPeerSentCheque,
+			receivedCheque:  testPeerReceivedCheque,
+			expectedCheques: map[string]*Cheque{sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: testPeerReceivedCheque},
 		},
 		{
-			name:                "peer 2 with received cheque",
-			peer:                testPeer2,
-			sentCheque:          nil,
-			receivedCheque:      testPeer2ReceivedCheque,
-			storeSentCheque:     nil,
-			storeReceivedCheque: nil,
-			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: testPeer2ReceivedCheque},
+			name:            "peer 2 with received cheque",
+			peer:            testPeer2,
+			sentCheque:      nil,
+			receivedCheque:  testPeer2ReceivedCheque,
+			expectedCheques: map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: testPeer2ReceivedCheque},
 		},
 	}
 	// verify test cases
 	testPeerCheques(t, testCases)
+
+	testPeer3ID := newDummyPeer().Peer.ID()
+	testPeer3SentCheque := newRandomTestCheque()
+	testPeer3ReceivedCheque := newRandomTestCheque()
+	testPeer3ExpectedCheques := map[string]*Cheque{sentChequeResponseKey: testPeer3SentCheque, receivedChequeResponseKey: testPeer3ReceivedCheque}
+	// verify cases for disconnected peers
+	testPeerChequesDisconnected(t, testPeer3ID, testPeer3SentCheque, testPeer3ReceivedCheque, testPeer3ExpectedCheques)
 
 	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, enode.ID{}}
 	// verify cases for invalid peers
@@ -544,25 +541,9 @@ func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
 				}
 			}
 
-			// add test case store sent cheque
-			if tc.storeSentCheque != nil {
-				err = swap.saveLastSentCheque(peer.ID(), tc.storeSentCheque)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-
 			// add test case peer received cheque
 			if tc.receivedCheque != nil {
 				err = peer.setLastReceivedCheque(tc.receivedCheque)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			// add test case store received cheque
-			if tc.storeReceivedCheque != nil {
-				err = swap.saveLastReceivedCheque(peer.ID(), tc.storeSentCheque)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -577,6 +558,34 @@ func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
 				t.Fatalf("Expected peer %v cheques to be %v, but are %v", peer.ID(), tc.expectedCheques, peerCheques)
 			}
 		})
+	}
+}
+
+func testPeerChequesDisconnected(t *testing.T, peerID enode.ID, sentCheque *Cheque, receivedCheque *Cheque, expectedCheques map[string]*Cheque) {
+	t.Helper()
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
+	defer clean()
+
+	// add store sent cheque
+	err := swap.saveLastSentCheque(peerID, sentCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// add store received cheque
+	err = swap.saveLastReceivedCheque(peerID, receivedCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify results by calling PeerCheques function
+	peerCheques, err := swap.PeerCheques(peerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expectedCheques, peerCheques) {
+		t.Fatalf("Expected peer %v cheques to be %v, but are %v", peerID, expectedCheques, peerCheques)
 	}
 }
 
