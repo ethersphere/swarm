@@ -533,27 +533,35 @@ func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
 			}
 
 			// add test case peer sent cheque
-			err = peer.setLastSentCheque(tc.sentCheque)
-			if err != nil {
-				t.Fatal(err)
+			if tc.sentCheque != nil {
+				err = peer.setLastSentCheque(tc.sentCheque)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			// add test case store sent cheque
-			err = swap.saveLastSentCheque(peer.ID(), tc.sentCheque)
-			if err != nil {
-				t.Fatal(err)
+			if tc.storeSentCheque != nil {
+				err = swap.saveLastSentCheque(peer.ID(), tc.storeSentCheque)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			// add test case peer received cheque
-			err = peer.setLastReceivedCheque(tc.receivedCheque)
-			if err != nil {
-				t.Fatal(err)
+			if tc.receivedCheque != nil {
+				err = peer.setLastReceivedCheque(tc.receivedCheque)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			// add test case store received cheque
-			err = swap.saveLastReceivedCheque(peer.ID(), tc.receivedCheque)
-			if err != nil {
-				t.Fatal(err)
+			if tc.storeReceivedCheque != nil {
+				err = swap.saveLastReceivedCheque(peer.ID(), tc.storeSentCheque)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			// verify results by calling PeerCheques function
