@@ -92,6 +92,7 @@ type Swarm struct {
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
 	pinAPI            *pin.API // API object implements all pinning related commands
+	inspector         *api.Inspector
 
 	tracerClose io.Closer
 }
@@ -261,6 +262,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
+	self.inspector = api.NewInspector(self.api, self.bzz.Hive, self.netStore, self.streamer, localStore)
 
 	return self, nil
 }
@@ -546,7 +548,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "4.0",
-			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.streamer),
+			Service:   s.inspector,
 			Public:    false,
 		},
 		{

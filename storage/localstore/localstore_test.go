@@ -530,3 +530,89 @@ func TestSetNow(t *testing.T) {
 		t.Errorf("got hook value %v, want %v", got, original)
 	}
 }
+
+func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int) {
+	t.Helper()
+	if indexInfo["pushIndex"] != pushIndex {
+		t.Fatalf("pushIndex count mismatch. got %d want %d", indexInfo["pushIndex"], pushIndex)
+	}
+
+	if indexInfo["pullIndex"] != pullIndex {
+		t.Fatalf("pullIndex count mismatch. got %d want %d", indexInfo["pullIndex"], pullIndex)
+	}
+
+	if indexInfo["gcIndex"] != gcIndex {
+		t.Fatalf("gcIndex count mismatch. got %d want %d", indexInfo["gcIndex"], gcIndex)
+	}
+
+	if indexInfo["gcExcludeIndex"] != gcExcludeIndex {
+		t.Fatalf("gcExcludeIndex count mismatch. got %d want %d", indexInfo["gcExcludeIndex"], gcExcludeIndex)
+	}
+
+	if indexInfo["pinIndex"] != pinIndex {
+		t.Fatalf("pinIndex count mismatch. got %d want %d", indexInfo["pinIndex"], pinIndex)
+	}
+
+	if indexInfo["retrievalDataIndex"] != retrievalDataIndex {
+		t.Fatalf("retrievalDataIndex count mismatch. got %d want %d", indexInfo["retrievalDataIndex"], retrievalDataIndex)
+	}
+
+	if indexInfo["retrievalAccessIndex"] != retrievalAccessIndex {
+		t.Fatalf("retrievalAccessIndex count mismatch. got %d want %d", indexInfo["retrievalAccessIndex"], retrievalAccessIndex)
+	}
+}
+
+// TestDBDebugIndexes tests that the index counts are correct for the
+// index debug function
+func TestDBDebugIndexes(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	uploadTimestamp := time.Now().UTC().UnixNano()
+	defer setNow(func() (t int64) {
+		return uploadTimestamp
+	})()
+
+	ch := generateTestRandomChunk()
+
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	indexCounts, err := db.DebugIndices()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// for reference: testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int)
+	testIndexCounts(t, 1, 1, 0, 0, 0, 1, 0, indexCounts)
+
+	// set the chunk for pinning and expect the index count to grow
+	err = db.Set(context.Background(), chunk.ModeSetPin, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	indexCounts, err = db.DebugIndices()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// assert that there's a pin and gc exclude entry now
+	testIndexCounts(t, 1, 1, 0, 1, 1, 1, 0, indexCounts)
+
+	// set the chunk as accessed and expect the access index to grow
+	err = db.Set(context.Background(), chunk.ModeSetAccess, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexCounts, err = db.DebugIndices()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// assert that there's a pin and gc exclude entry now
+	testIndexCounts(t, 1, 1, 1, 1, 1, 1, 1, indexCounts)
+
+}
