@@ -469,6 +469,11 @@ func TestPeerChequesNew(t *testing.T) {
 	// generate peers and cheques
 	// peer 1
 	testPeer := newDummyPeer().Peer
+	testPeerSentCheque := newRandomTestCheque()
+	testPeerReceivedCheque := newRandomTestCheque()
+	// peer 2
+	testPeer2 := newDummyPeer().Peer
+	testPeer2ReceivedCheque := newRandomTestCheque()
 
 	// build test cases
 	testCases := []peerChequesTestCase{
@@ -480,6 +485,33 @@ func TestPeerChequesNew(t *testing.T) {
 			storeSentCheque:     nil,
 			storeReceivedCheque: nil,
 			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: nil},
+		},
+		{
+			name:                "peer 1 with sent cheque",
+			peer:                testPeer,
+			sentCheque:          testPeerSentCheque,
+			receivedCheque:      nil,
+			storeSentCheque:     nil,
+			storeReceivedCheque: nil,
+			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: nil},
+		},
+		{
+			name:                "peer 1 with sent and received cheque",
+			peer:                testPeer,
+			sentCheque:          testPeerSentCheque,
+			receivedCheque:      testPeerReceivedCheque,
+			storeSentCheque:     nil,
+			storeReceivedCheque: nil,
+			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: testPeerSentCheque, receivedChequeResponseKey: testPeerReceivedCheque},
+		},
+		{
+			name:                "peer 2 with received cheque",
+			peer:                testPeer2,
+			sentCheque:          nil,
+			receivedCheque:      testPeer2ReceivedCheque,
+			storeSentCheque:     nil,
+			storeReceivedCheque: nil,
+			expectedCheques:     map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: testPeer2ReceivedCheque},
 		},
 	}
 	// verify test cases
