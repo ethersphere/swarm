@@ -66,10 +66,11 @@ type Hive struct {
 	Store       state.Store       // storage interface to save peers across sessions
 	addPeer     func(*enode.Node) // server callback to connect to a peer
 	// bookkeeping
-	lock   sync.Mutex
-	peers  map[enode.ID]*BzzPeer
-	ticker *time.Ticker
-	done   chan struct{}
+	lock    sync.Mutex
+	peers   map[enode.ID]*BzzPeer
+	ticker  *time.Ticker
+	done    chan struct{}
+	started bool
 }
 
 // NewHive constructs a new hive
@@ -108,13 +109,19 @@ func (h *Hive) Start(server *p2p.Server) error {
 	if !h.DisableAutoConnect {
 		go h.connect()
 	}
+	h.started = true
 	return nil
 }
 
 // Stop terminates the updateloop and saves the peers
 func (h *Hive) Stop() error {
 	log.Info(fmt.Sprintf("%08x hive stopping, saving peers", h.BaseAddr()[:4]))
-	h.ticker.Stop()
+	if !h.started {
+		return nil
+	}
+	if h.ticker != nil {
+		h.ticker.Stop()
+	}
 	close(h.done)
 	if h.Store != nil {
 		if err := h.savePeers(); err != nil {
@@ -131,6 +138,8 @@ func (h *Hive) Stop() error {
 	})
 
 	log.Info(fmt.Sprintf("%08x all peers dropped", h.BaseAddr()[:4]))
+
+	h.started = false
 	return nil
 }
 
