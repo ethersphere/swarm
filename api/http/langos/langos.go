@@ -90,8 +90,6 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 	select {
 	// peek is done, continue to read it
 	case <-pe.done:
-	case <-l.closed:
-		return 0, io.EOF
 	default:
 		// start the next peek while waiting for the current to finish
 		l.peek(l.cursor + int64(l.peekSize))
@@ -99,9 +97,10 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 
 	select {
 	case <-pe.done:
+		bufSize := int64(len(pe.buf))
 		// peek detected EOF, store the size if there is none
 		if l.size == 0 && pe.err == io.EOF {
-			l.size = pe.offset + int64(pe.size)
+			l.size = pe.offset + bufSize
 		}
 
 		// peek got an error, return it, but do not pass EOF
@@ -110,17 +109,26 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 		}
 
 		// copy peeked data
-		n = copy(p, pe.buf[l.cursor-pe.offset:pe.size])
+		start := l.cursor - pe.offset
+		n = copy(p, pe.buf[start:])
 		// set current cursor
-		l.cursor += int64(n)
-
-		// peek from the current cursor
-		l.peek(l.cursor)
+		n64 := int64(n)
+		l.cursor += n64
+		// preserve buffer tail as another peek
+		if l.cursor < pe.offset+bufSize {
+			pe.buf = pe.buf[start+n64:]
+			pe.offset = l.cursor
+			l.addPeek(pe)
+		}
 
 		// return EOF if it is reached
 		if l.size > 0 && l.cursor >= l.size {
 			return n, io.EOF
 		}
+
+		// peek from the current cursor
+		l.peek(l.cursor)
+
 		return n, nil
 	case <-l.closed:
 		return 0, io.EOF
@@ -146,8 +154,7 @@ func (l *Langos) ReadAt(p []byte, off int64) (int, error) {
 	return l.reader.ReadAt(p, off)
 }
 
-// Close terminates any possible peek goroutines and unblocks Read method calls
-// that are waiting for peek to finish.
+// Close unblocks Read method calls that are waiting for peek to finish.
 func (l *Langos) Close() (err error) {
 	l.closeOnce.Do(func() {
 		close(l.closed)
@@ -170,13 +177,24 @@ func (l *Langos) peek(offset int64) {
 		done:   make(chan struct{}),
 		buf:    make([]byte, l.peekSize),
 	}
-	l.peeks = append(l.peeks, p)
+	l.addPeek(p)
 
 	// start a goroutine to peek the data
 	go func() {
-		p.size, p.err = l.reader.ReadAt(p.buf, offset)
+		n, err := l.reader.ReadAt(p.buf, offset)
+
+		if n >= 0 && n < len(p.buf) { // protect from invalid n (from lazy chunk reader)
+			p.mu.Lock()
+			p.buf = p.buf[:n]
+			p.mu.Unlock()
+		}
+		p.err = err
 		close(p.done)
 	}()
+}
+
+func (l *Langos) addPeek(p *peek) {
+	l.peeks = append(l.peeks, p)
 }
 
 // popPeek returns a peek that includes the offset and removes it
@@ -206,7 +224,7 @@ func (l *Langos) hasPeek(offset int64) (yes bool) {
 type peek struct {
 	offset int64         // peek cursor position
 	buf    []byte        // peeked data
-	size   int           // peeked data length
+	mu     sync.RWMutex  // protects buf length change and len read in has method
 	err    error         // error returned by ReadAt on peeking
 	done   chan struct{} // closed when the peek is done so that Read can copy buf data
 }
@@ -218,11 +236,8 @@ func (p *peek) has(offset int64) (yes bool) {
 	if offset < p.offset {
 		return false
 	}
-	size := p.size // if the read is done
-	if p.size == 0 {
-		// if the read is not done,
-		// assume the best case where all data is read
-		size = len(p.buf)
-	}
-	return offset < p.offset+int64(size)
+	p.mu.RLock()
+	bufSize := int64(len(p.buf))
+	p.mu.RUnlock()
+	return offset < p.offset+bufSize
 }

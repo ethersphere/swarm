@@ -221,14 +221,14 @@ func httpRangeRequest(t *testing.T, url, rangeHeader string) (parts [][]byte) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkHTTPDelayedReaders/static_direct-8	         	    		   8	 126035716 ns/op	 8390371 B/op	      25 allocs/op
-// BenchmarkHTTPDelayedReaders/static_buffered-8	       			      45	  27473685 ns/op	 8389195 B/op	      22 allocs/op
-// BenchmarkHTTPDelayedReaders/static_langos-8     			    	     264	   4410719 ns/op	16333884 B/op	     208 allocs/op
-// BenchmarkHTTPDelayedReaders/static_buffered_langos-8         	     435	   2660045 ns/op	10246629 B/op	      60 allocs/op
-// BenchmarkHTTPDelayedReaders/random_direct-8                  	       3	 342028717 ns/op	 8389432 B/op	      24 allocs/op
-// BenchmarkHTTPDelayedReaders/random_buffered-8                	      16	  84589904 ns/op	 8389200 B/op	      22 allocs/op
-// BenchmarkHTTPDelayedReaders/random_langos-8                  	     236	   5132198 ns/op	16363731 B/op	     208 allocs/op
-// BenchmarkHTTPDelayedReaders/random_buffered_langos-8         	     424	   2837182 ns/op	10242590 B/op	      60 allocs/op
+// BenchmarkHTTPDelayedReaders/static_direct-8			         	       8	 128278515 ns/op	 8389878 B/op	      24 allocs/op
+// BenchmarkHTTPDelayedReaders/static_buffered-8			       	      43	  27465687 ns/op	 8389144 B/op	      22 allocs/op
+// BenchmarkHTTPDelayedReaders/static_langos-8			         	     441	   2578510 ns/op	10264076 B/op	      63 allocs/op
+// BenchmarkHTTPDelayedReaders/static_buffered_langos-8         	     493	   2591692 ns/op	10120822 B/op	      57 allocs/op
+// BenchmarkHTTPDelayedReaders/random_direct-8                  	       3	 351496566 ns/op	 8389416 B/op	      23 allocs/op
+// BenchmarkHTTPDelayedReaders/random_buffered-8                	      14	  90407289 ns/op	 8389294 B/op	      22 allocs/op
+// BenchmarkHTTPDelayedReaders/random_langos-8                  	     430	   2771827 ns/op	10256494 B/op	      62 allocs/op
+// BenchmarkHTTPDelayedReaders/random_buffered_langos-8         	     420	   2817784 ns/op	10115937 B/op	      57 allocs/op
 func BenchmarkHTTPDelayedReaders(b *testing.B) {
 	dataSize := 2 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024

@@ -62,7 +62,7 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 			name:     "2 seq reads, EOF",
 			peekSize: 7,
 			numReads: 2,
-			expReads: 4,
+			expReads: 3,
 			expErr:   io.EOF,
 		},
 	} {
@@ -174,14 +174,14 @@ func testReadCount(t *testing.T, cr *counterReader, want int) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethersphere/swarm/api/http/langos
-// BenchmarkDelayedReaders/static_direct-8                      	      31	  37348785 ns/op	33552514 B/op	      18 allocs/op
-// BenchmarkDelayedReaders/static_buffered-8                    	      45	  27052385 ns/op	33683729 B/op	      21 allocs/op
-// BenchmarkDelayedReaders/static_langos-8                      	      98	  11856567 ns/op	45259178 B/op	     289 allocs/op
-// BenchmarkDelayedReaders/static_buffered_langos-8             	     100	  11342204 ns/op	44337406 B/op	     268 allocs/op
-// BenchmarkDelayedReaders/random_direct-8                      	      13	  90378261 ns/op	33552468 B/op	      17 allocs/op
-// BenchmarkDelayedReaders/random_buffered-8                    	      25	  60534091 ns/op	33683682 B/op	      20 allocs/op
-// BenchmarkDelayedReaders/random_langos-8                      	      94	  16539444 ns/op	45267300 B/op	     289 allocs/op
-// BenchmarkDelayedReaders/random_buffered_langos-8             	     100	  15477018 ns/op	44346565 B/op	     267 allocs/op
+// BenchmarkDelayedReaders/static_direct-8                      	      30	  36824643 ns/op	33552520 B/op	      18 allocs/op
+// BenchmarkDelayedReaders/static_buffered-8                    	      45	  27717528 ns/op	33683733 B/op	      21 allocs/op
+// BenchmarkDelayedReaders/static_langos-8                      	      81	  14409938 ns/op	44108067 B/op	     264 allocs/op
+// BenchmarkDelayedReaders/static_buffered_langos-8             	      93	  12466593 ns/op	44405518 B/op	     270 allocs/op
+// BenchmarkDelayedReaders/random_direct-8                      	      12	  92957186 ns/op	33552464 B/op	      17 allocs/op
+// BenchmarkDelayedReaders/random_buffered-8                    	      18	  58062327 ns/op	33683683 B/op	      20 allocs/op
+// BenchmarkDelayedReaders/random_langos-8                      	     100	  15663876 ns/op	44098568 B/op	     262 allocs/op
+// BenchmarkDelayedReaders/random_buffered_langos-8             	      66	  16711523 ns/op	44407221 B/op	     269 allocs/op
 func BenchmarkDelayedReaders(b *testing.B) {
 	dataSize := 10 * 1024 * 1024
 	bufferSize := 4 * 32 * 1024
