@@ -32,17 +32,17 @@ apps:
       swarm.replicaCount: "$PUSHSYNC_PRIVATE_REPLICAS"
     wait: true
     timeout: 600
-  #private-smoke-a:
-    #tillerNamespace: "pushsync"
-    #namespace: "pushsync"
-    #name: "private-smoke-a"
-    #enabled: true
-    #chart: "ethersphere/smoke"
-    #version: "0.0.2"
-    #description: "(Private) Smoke test: Upload and sync"
-    #valuesFiles:
-      #- "deployment/private-smoke-a.yaml"
-      #- "deployment/version.yaml"
-    #set:
-      #smoke.config.swarmReplicas: "$PUSHSYNC_PRIVATE_REPLICAS"
-    #wait: false
+  private-smoke-a:
+    tillerNamespace: "pushsync"
+    namespace: "pushsync"
+    name: "private-smoke-a"
+    enabled: true
+    chart: "ethersphere/smoke"
+    version: "0.0.2"
+    description: "(Private) Smoke test: Upload and sync"
+    valuesFiles:
+      - "deployment/private-smoke-a.yaml"
+      - "deployment/version.yaml"
+    set:
+      smoke.config.swarmReplicas: "$PUSHSYNC_PRIVATE_REPLICAS"
+    wait: false

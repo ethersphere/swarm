@@ -9,10 +9,10 @@ smoke:
     operation: "upload_and_sync"
     influxdbEndpoint: "http://swarm-private-influxdb:8086"
     extraFlags:
-      - --filesize=100000
-      - --timeout=1600
+      - --filesize=300000
+      - --timeout=600
       - --pushsync-delay
       - --sync-mode=pushsync
       - --debug
       - --http-port=8500
-      - --verbosity=5
+      - --verbosity=3
