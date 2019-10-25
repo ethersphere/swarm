@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -84,7 +83,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	return contract.ValidateCode(context.Background(), s.backend, handshake.ContractAddress)
+	return s.chequebookFactory.VerifyContract(handshake.ContractAddress)
 }
 
 // run is the actual swap protocol run method

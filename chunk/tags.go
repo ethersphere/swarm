@@ -19,8 +19,11 @@ package chunk
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -110,4 +113,31 @@ func (ts *Tags) Range(fn func(k, v interface{}) bool) {
 
 func (ts *Tags) Delete(k interface{}) {
 	ts.tags.Delete(k)
+}
+
+func (ts *Tags) MarshalJSON() (out []byte, err error) {
+	m := make(map[string]*Tag)
+	ts.Range(func(k, v interface{}) bool {
+		key := fmt.Sprintf("%d", k)
+		m[key] = v.(*Tag)
+		return true
+	})
+	return json.Marshal(m)
+}
+
+func (ts *Tags) UnmarshalJSON(value []byte) error {
+	m := make(map[string]*Tag)
+	err := json.Unmarshal(value, &m)
+	if err != nil {
+		return err
+	}
+	for k, v := range m {
+		key, err := strconv.ParseUint(k, 10, 32)
+		if err != nil {
+			return err
+		}
+		ts.tags.Store(key, v)
+	}
+
+	return err
 }

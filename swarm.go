@@ -92,6 +92,7 @@ type Swarm struct {
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
 	pinAPI            *pin.API // API object implements all pinning related commands
+	inspector         *api.Inspector
 
 	tracerClose io.Closer
 }
@@ -136,6 +137,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			swapParams,
 			self.config.Contract,
 			self.config.SwapInitialDeposit,
+			self.config.SwapChequebookFactory,
 		)
 		if err != nil {
 			return nil, err
@@ -192,8 +194,17 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	fhParams := &feed.HandlerParams{}
 
 	feedsHandler = feed.NewHandler(fhParams)
-
-	self.tags = chunk.NewTags() //todo load from state store
+	self.tags = chunk.NewTags()
+	err = self.stateStore.Get("tags", self.tags)
+	if err != nil {
+		if err == state.ErrNotFound {
+			self.tags = chunk.NewTags()
+		} else {
+			return nil, err
+		}
+	} else {
+		log.Info("loaded saved tags successfully from state store")
+	}
 
 	localStore, err := localstore.New(config.ChunkDbPath, config.BaseKey, &localstore.Options{
 		MockStore: mockStore,
@@ -260,6 +271,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
+	self.inspector = api.NewInspector(self.api, self.bzz.Hive, self.netStore, self.streamer, localStore)
 
 	return self, nil
 }
@@ -482,6 +494,14 @@ func (s *Swarm) Stop() error {
 	if s.pushSync != nil {
 		s.pushSync.Close()
 	}
+
+	if s.tags != nil {
+		err := s.stateStore.Put("tags", s.tags)
+		if err != nil {
+			log.Error("had an error persisting tags", "err", err)
+		}
+	}
+
 	if s.storer != nil {
 		s.storer.Close()
 	}
@@ -545,7 +565,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "4.0",
-			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.streamer),
+			Service:   s.inspector,
 			Public:    false,
 		},
 		{

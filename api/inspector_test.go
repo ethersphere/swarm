@@ -42,7 +42,7 @@ func TestInspectorPeerStreams(t *testing.T) {
 	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
-	), false, false)))
+	), false, false)), localStore)
 
 	server := rpc.NewServer()
 	if err := server.RegisterName("inspector", i); err != nil {
@@ -61,6 +61,47 @@ func TestInspectorPeerStreams(t *testing.T) {
 	if !strings.Contains(peerInfo, `"base":"`+hex.EncodeToString(baseKey)[:16]+`"`) {
 		t.Error("missing base key in response")
 	}
+}
 
-	t.Log(peerInfo)
+// TestInspectorStorageIndices validates that response from RPC storageIndices functions correctly
+func TestInspectorStorageIndices(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swarm-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	baseKey := make([]byte, 32)
+	_, err = rand.Read(baseKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
+
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
+		baseKey,
+		network.NewKadParams(),
+	), false, false)), localStore)
+
+	server := rpc.NewServer()
+	if err := server.RegisterName("inspector", i); err != nil {
+		t.Fatal(err)
+	}
+
+	client := rpc.DialInProc(server)
+
+	var indiceInfo map[string]int
+
+	err = client.Call(&indiceInfo, "inspector_storageIndices")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if indiceInfo["gcSize"] != 0 {
+		t.Fatalf("expected gcSize to be %d but got %d", 0, indiceInfo["gcSize"])
+	}
 }
