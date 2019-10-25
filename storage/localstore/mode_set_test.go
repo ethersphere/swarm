@@ -220,7 +220,6 @@ func TestModeSetSyncPull(t *testing.T) {
 						po := db.po(ch.Address())
 						binIDs[po]++
 
-						newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
 						newPullIndexTest(db, ch, binIDs[po], nil)(t)
 						newPushIndexTest(db, ch, wantTimestamp, mtc.expErrPushIndex)(t)
 						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], mtc.expErrGCIndex)(t)
@@ -230,6 +229,7 @@ func TestModeSetSyncPull(t *testing.T) {
 						if mtc.anonymous && mtc.mode != chunk.ModeSetSyncPush {
 							// run gc index count test
 							newItemsCountTest(db.gcIndex, tc.count)
+							newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
 						}
 					}
 
