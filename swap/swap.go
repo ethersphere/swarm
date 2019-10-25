@@ -302,13 +302,14 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return err
 	}
 
-	return s.checkPaymentThreshold(swapPeer)
+	return s.checkPaymentThresholdAndSendCheque(swapPeer)
 }
 
-// Check if balance with peer crosses the payment threshold
+// checkPaymentThresholdAndSendCheque checks if balance with peer crosses the payment threshold and attempts to send a cheque if so
 // It is the peer with a negative balance who sends a cheque, thus we check
 // that the balance is *below* the threshold
-func (s *Swap) checkPaymentThreshold(swapPeer *Peer) error {
+// the caller is expected to hold swapPeer.lock
+func (s *Swap) checkPaymentThresholdAndSendCheque(swapPeer *Peer) error {
 	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
 		swapPeer.logger.Info("balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold)
 		return swapPeer.sendCheque()
@@ -401,7 +402,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	cheque := msg.Cheque
 
 	if p.getPendingCheque() == nil {
-		p.logger.Warn("ignoring confirm msg, no pending cheque")
+		p.logger.Warn("ignoring confirm msg, no pending cheque", "got", cheque)
 		return
 	}
 
@@ -429,7 +430,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	}
 
 	// since more swap traffic might have occurred since this cheque was already sent, we redo the payment threshold check
-	err = s.checkPaymentThreshold(p)
+	err = s.checkPaymentThresholdAndSendCheque(p)
 	if err != nil {
 		p.logger.Warn("failed to send already due cheque", "error", err)
 		return
