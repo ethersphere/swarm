@@ -304,11 +304,15 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	// wait to push sync sync
 	if pushsyncDelay {
 		waitToPushSynced(tag)
+
+		log.Info("push synced successfully", "hash", hash)
 	}
 
 	// wait to sync and log chunks before fetch attempt, only if syncDelay is set to true
 	if syncDelay {
 		waitToSync()
+
+		log.Info("pull synced successfully", "hash", hash)
 	}
 
 	if debug {

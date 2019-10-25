@@ -122,6 +122,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
 		swapParams := &swap.Params{
+			OverlayAddr:         common.FromHex(self.config.BzzKey),
 			LogPath:             self.config.SwapLogPath,
 			DisconnectThreshold: int64(self.config.SwapDisconnectThreshold),
 			PaymentThreshold:    int64(self.config.SwapPaymentThreshold),
@@ -135,6 +136,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			swapParams,
 			self.config.Contract,
 			self.config.SwapInitialDeposit,
+			self.config.SwapChequebookFactory,
 		)
 		if err != nil {
 			return nil, err
