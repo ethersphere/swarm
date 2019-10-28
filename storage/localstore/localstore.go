@@ -420,6 +420,34 @@ func (db *DB) po(addr chunk.Address) (bin uint8) {
 	return uint8(chunk.Proximity(db.baseKey, addr))
 }
 
+// DebugIndices returns the index sizes for all indexes in localstore
+// the returned map keys are the index name, values are the number of elements in the index
+func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
+	indexInfo = make(map[string]int)
+	for k, v := range map[string]shed.Index{
+		"retrievalDataIndex":   db.retrievalDataIndex,
+		"retrievalAccessIndex": db.retrievalAccessIndex,
+		"pushIndex":            db.pushIndex,
+		"pullIndex":            db.pullIndex,
+		"gcIndex":              db.gcIndex,
+		"gcExcludeIndex":       db.gcExcludeIndex,
+		"pinIndex":             db.pinIndex,
+	} {
+		indexSize, err := v.Count()
+		if err != nil {
+			return indexInfo, err
+		}
+		indexInfo[k] = indexSize
+	}
+	val, err := db.gcSize.Get()
+	if err != nil {
+		return indexInfo, err
+	}
+	indexInfo["gcSize"] = int(val)
+
+	return indexInfo, err
+}
+
 // chunkToItem creates new Item with data provided by the Chunk.
 func chunkToItem(ch chunk.Chunk) shed.Item {
 	return shed.Item{
