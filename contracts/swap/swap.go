@@ -116,11 +116,11 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amoun
 // Deposit sends a transaction to the chequebook, which deposits the amount set in Auth.Value and blocks until the transaction is mined
 func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
 	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
-	if auth.Value != big.NewInt(0) && auth.Value != amount {
-		return nil, fmt.Errorf("Set value only via amount parameter")
+	if auth.Value != big.NewInt(0) {
+		return nil, fmt.Errorf("Deposit value can only be set via amount parameter")
 	}
 	if amount == big.NewInt(0) {
-		return nil, fmt.Errorf("Amount cannot be equal to zero")
+		return nil, fmt.Errorf("Deposit amount cannot be equal to zero")
 	}
 	auth.Value = amount
 	tx, err := rawSimpleSwap.Transfer(auth)
