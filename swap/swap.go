@@ -203,13 +203,11 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 }
 
 const (
-	balancePrefix             = "balance_"
-	sentChequePrefix          = "sent_cheque_"
-	receivedChequePrefix      = "received_cheque_"
-	connectedChequebookKey    = "connected_chequebook"
-	connectedBlockchainKey    = "connected_blockchain"
-	sentChequeResponseKey     = "last_sent_cheque"
-	receivedChequeResponseKey = "last_received_cheque"
+	balancePrefix          = "balance_"
+	sentChequePrefix       = "sent_cheque_"
+	receivedChequePrefix   = "received_cheque_"
+	connectedChequebookKey = "connected_chequebook"
+	connectedBlockchainKey = "connected_blockchain"
 )
 
 // createFactory determines the factory address and returns and error if no factory address has been specified or is unknown for the network
@@ -464,34 +462,29 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 }
 
 // Cheques returns all known last sent and received cheques, grouped by peer
-func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
-	cheques := make(map[enode.ID]map[string]*Cheque)
+func (s *Swap) Cheques() (map[enode.ID]*PeerCheques, error) {
+	cheques := make(map[enode.ID]*PeerCheques)
 
 	// get peer cheques from memory
 	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
 		swapPeer.lock.Lock()
-		cheques[peer] = make(map[string]*Cheque)
-		if sentCheque := swapPeer.getLastSentCheque(); sentCheque != nil {
-			cheques[peer][sentChequeResponseKey] = sentCheque
-		}
-		if receivedCheque := swapPeer.getLastReceivedCheque(); receivedCheque != nil {
-			cheques[peer][receivedChequeResponseKey] = receivedCheque
-		}
-		// remove peer from result if there are no cheques
-		if len(cheques[peer]) == 0 {
-			delete(cheques, peer)
+		sentCheque := swapPeer.getLastSentCheque()
+		receivedCheque := swapPeer.getLastReceivedCheque()
+		// don't add peer to result if there are no cheques
+		if sentCheque != nil || receivedCheque != nil {
+			cheques[peer] = &PeerCheques{sentCheque, receivedCheque}
 		}
 		swapPeer.lock.Unlock()
 	}
 	s.peersLock.Unlock()
 
 	// get peer cheques from store
-	err := s.addStoreCheques(sentChequePrefix, sentChequeResponseKey, cheques)
+	err := s.addStoreCheques(sentChequePrefix, cheques)
 	if err != nil {
 		return nil, err
 	}
-	err = s.addStoreCheques(receivedChequePrefix, receivedChequeResponseKey, cheques)
+	err = s.addStoreCheques(receivedChequePrefix, cheques)
 	if err != nil {
 		return nil, err
 	}
@@ -500,19 +493,25 @@ func (s *Swap) Cheques() (map[enode.ID]map[string]*Cheque, error) {
 }
 
 // add cheques from store for peers not already present in given cheques map
-func (s *Swap) addStoreCheques(chequePrefix, chequeKey string, cheques map[enode.ID]map[string]*Cheque) error {
+func (s *Swap) addStoreCheques(chequePrefix string, cheques map[enode.ID]*PeerCheques) error {
 	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peer := keyToID(string(key), chequePrefix)
-		// make map if peer has no cheques entry yet
-		if _, peerHasCheques := cheques[peer]; !peerHasCheques {
-			cheques[peer] = make(map[string]*Cheque)
+		// create struct if peer has no cheques entry yet
+		if peerCheques := cheques[peer]; peerCheques == nil {
+			cheques[peer] = &PeerCheques{}
 		}
+
 		// add cheque from store if not already in result
-		if peerCheque := cheques[peer][chequeKey]; peerCheque == nil {
-			var peerCheque Cheque
-			err = json.Unmarshal(value, &peerCheque)
-			if err == nil {
-				cheques[peer][chequeKey] = &peerCheque
+		var peerCheque Cheque
+		err = json.Unmarshal(value, &peerCheque)
+		if err == nil {
+			switch chequePrefix {
+			case sentChequePrefix:
+				cheques[peer].LastSentCheque = &peerCheque
+			case receivedChequePrefix:
+				cheques[peer].LastReceivedCheque = &peerCheque
+			default:
+				err = fmt.Errorf("unknown type of cheque requested through prefix %s", chequePrefix)
 			}
 		}
 		return stop, err
