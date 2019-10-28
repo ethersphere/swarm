@@ -22,7 +22,7 @@ type Logger struct {
 
 func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
 	for _, elem := range ctx {
-		if elem == "action" && len(ctx)%2 == 0 {
+		if elem == "action" {
 			return ctx
 		}
 	}
@@ -78,16 +78,6 @@ func newLogger(logPath string, ctx []interface{}) (swapLogger Logger) {
 		action: DefaultAction,
 	}
 	swapLogger.logger = log.New(ctx...)
-	setLoggerHandler(logPath, swapLogger.GetLogger())
+	setLoggerHandler(logPath, swapLogger.logger)
 	return swapLogger
-}
-
-// GetLogger returns the underlying logger
-func (sl Logger) GetLogger() (logger log.Logger) {
-	return sl.logger
-}
-
-// GetHandler return the Handler assigned to root
-func GetHandler() log.Handler {
-	return log.Root().GetHandler()
 }

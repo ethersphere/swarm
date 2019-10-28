@@ -1895,25 +1895,16 @@ func TestSwapActions(t *testing.T) {
 	}
 	defer os.RemoveAll(logDirDebitor)
 
-	// set the log dir to the params
-	params := newDefaultParams(t)
-	params.LogPath = logDirDebitor
-
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-	// create test swap
-	testSwap, storeTestSwap := newBaseTestSwapWithParams(t, beneficiaryKey, params, testBackend)
-
-	clean := func() {
-		testSwap.Close()
-		os.RemoveAll(storeTestSwap)
-	}
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
+
+	swapLog = newSwapLogger(logDirDebitor, swap.params.OverlayAddr)
 
 	swapLog.Info("Test")
 	swapLog.SetLogAction("disconnecting")
 	swapLog.Info("Test")
-	swapLog.Info("Test", "action", "emitting_cheque")
+	swapLog.Info("Test", "swap_action", "emitting_cheque")
 	swapLog.SetLogAction("SentCheque")
 	swapLog.Info("Test")
 
@@ -1938,19 +1929,19 @@ func TestSwapActions(t *testing.T) {
 	}
 	logString := string(b)
 
-	if !strings.Contains(logString, "undefined") {
+	if !strings.Contains(logString, `"swap_action","undefined"`) {
 		t.Fatalf("expected the log to contain \"action undefined\"")
 	}
 
-	if !strings.Contains(logString, "disconnecting") {
+	if !strings.Contains(logString, `"swap_action","disconnecting"`) {
 		t.Fatalf("expected the log to contain \"action disconnecting\"")
 	}
 
-	if !strings.Contains(logString, "emitting_cheque") {
+	if !strings.Contains(logString, `"swap_action","emitting_cheque"`) {
 		t.Fatalf("expected the log to contain \"action emitting_cheque\"")
 	}
 
-	if !strings.Contains(logString, "SentCheque") {
+	if !strings.Contains(logString, `"swap_action","SentCheque"`) {
 		t.Fatalf("expected the log to contain \"action SentCheque\"")
 	}
 
