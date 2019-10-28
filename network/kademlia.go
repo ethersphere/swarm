@@ -377,10 +377,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 			// no bin with this size
 			continue
 		}
-		cur := 0
-		curPO := bins[0]
-
-		//If we have unsaturated bins in the neighborhood, try to connect them first
+		//If we have unsaturated bins in the neighborhood, try to connect the closest peer
 		if bins[len(bins)-1] >= k.nDepth {
 			currBinIndex := len(bins) - 1
 			valIterator := func(val pot.Val, po int) bool {
@@ -401,12 +398,14 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 			}
 			k.addrs.EachNeighbour(k.base, Pof, valIterator)
 		}
+
 		if suggestedPeer == nil {
+			cur := 0
+			curPO := bins[0]
 			k.addrs.EachBin(k.base, Pof, curPO, func(bin *pot.Bin) bool {
 				curPO = bins[cur]
 				// find the next bin that has size size
 				po := bin.ProximityOrder
-				log.Warn("po is", "val", po)
 				if curPO == po {
 					cur++
 				} else {
