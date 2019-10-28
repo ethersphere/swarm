@@ -520,8 +520,14 @@ func (s *Swap) addStoreCheques(chequePrefix, chequeKey string, cheques map[enode
 	return s.store.Iterate(chequePrefix, chequesIterFunction)
 }
 
+// PeerCheques contains the last cheque known to have been sent to a peer, as well as the last one received from the peer
+type PeerCheques struct {
+	LastSentCheque     *Cheque
+	LastReceivedCheque *Cheque
+}
+
 // PeerCheques returns the last sent and received cheques for a given peer
-func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
+func (s *Swap) PeerCheques(peer enode.ID) (PeerCheques, error) {
 	var sentCheque, receivedCheque *Cheque
 
 	swapPeer := s.getPeer(peer)
@@ -531,15 +537,14 @@ func (s *Swap) PeerCheques(peer enode.ID) (map[string]*Cheque, error) {
 	} else {
 		errSentCheque := s.store.Get(sentChequeKey(peer), &sentCheque)
 		if errSentCheque != nil && errSentCheque != state.ErrNotFound {
-			return nil, errSentCheque
+			return PeerCheques{}, errSentCheque
 		}
 		errReceivedCheque := s.store.Get(receivedChequeKey(peer), &receivedCheque)
 		if errReceivedCheque != nil && errReceivedCheque != state.ErrNotFound {
-			return nil, errReceivedCheque
+			return PeerCheques{}, errReceivedCheque
 		}
 	}
-
-	return map[string]*Cheque{sentChequeResponseKey: sentCheque, receivedChequeResponseKey: receivedCheque}, nil
+	return PeerCheques{sentCheque, receivedCheque}, nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
