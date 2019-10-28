@@ -212,7 +212,7 @@ func upload(ctx *cli.Context) {
 }
 
 func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string]*mpb.Bar) {
-	oldTag := *tag
+	oldTag := tag
 	lastTime := time.Now()
 
 	for {
@@ -243,7 +243,7 @@ func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string
 			return
 		}
 
-		oldTag = *newTag
+		oldTag = newTag
 		lastTime = time.Now()
 	}
 }
