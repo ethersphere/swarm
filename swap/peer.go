@@ -92,18 +92,21 @@ func (p *Peer) getPendingCheque() *Cheque {
 	return p.pendingCheque
 }
 
+// setLastReceivedCheque sets the given cheque as the last one received from this peer
 // the caller is expected to hold p.lock
 func (p *Peer) setLastReceivedCheque(cheque *Cheque) error {
 	p.lastReceivedCheque = cheque
 	return p.swap.saveLastReceivedCheque(p.ID(), cheque)
 }
 
+// setLastReceivedCheque sets the given cheque as the last sent cheque for this peer
 // the caller is expected to hold p.lock
 func (p *Peer) setLastSentCheque(cheque *Cheque) error {
 	p.lastSentCheque = cheque
 	return p.swap.saveLastSentCheque(p.ID(), cheque)
 }
 
+// setLastReceivedCheque sets the given cheque as the pending cheque for this peer
 // the caller is expected to hold p.lock
 func (p *Peer) setPendingCheque(cheque *Cheque) error {
 	p.pendingCheque = cheque
@@ -178,13 +181,13 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	return cheque, err
 }
 
-// sendCheque sends a cheque to peer
+// sendCheque creates and sends a cheque to peer
 // if there is already a pending cheque it will resend that one
 // otherwise it will create a new cheque and save it as the pending cheque
 // the caller is expected to hold p.lock
 func (p *Peer) sendCheque() error {
 	if p.getPendingCheque() != nil {
-		p.logger.Warn("old cheque still pending, resending cheque")
+		p.logger.Info("previous cheque still pending, resending cheque", "pending", p.getPendingCheque())
 		return p.Send(context.Background(), &EmitChequeMsg{
 			Cheque: p.getPendingCheque(),
 		})
@@ -194,8 +197,9 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
-	if err = p.setPendingCheque(cheque); err != nil {
-		return err
+	err = p.setPendingCheque(cheque)
+	if err != nil {
+		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
 	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)

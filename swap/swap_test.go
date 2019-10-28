@@ -509,7 +509,7 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 			}
 
 			if actualPendingChequeKey != testCase.expectedPendingChequeKey {
-				t.Fatalf("Expected received cheque key to be %s, but is %s instead.", testCase.expectedReceivedChequeKey, actualReceivedChequeKey)
+				t.Fatalf("Expected pending cheque key to be %s, but is %s instead.", testCase.expectedPendingChequeKey, actualPendingChequeKey)
 			}
 
 			if actualUsedChequebookKey != testCase.expectedUsedChequebookKey {

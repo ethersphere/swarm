@@ -365,7 +365,9 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	err = p.Send(ctx, &ConfirmChequeMsg{Cheque: cheque})
+	err = p.Send(ctx, &ConfirmChequeMsg{
+		Cheque: cheque,
+	})
 	if err != nil {
 		return err
 	}
