@@ -27,8 +27,7 @@ import (
 
 // Config contains the Outbox configuration.
 type Config struct {
-	NumberSlots  int             // number of slots for messages in Outbox.
-	NumWorkers   int             // number of parallel goroutines forwarding messages.
+	NumberSlots  int             // number of slots for messages in Outbox and number of workers.
 	Forward      forwardFunction // function that executes the actual forwarding.
 	MaxRetryTime *time.Duration  // max time a message will be retried in the outbox.
 	Clock        clock.Clock     // clock dependency to calculate elapsed time.
@@ -51,20 +50,16 @@ type forwardFunction func(msg *message.Message) error
 // ErrOutboxFull is returned when a caller tries to enqueue a message and all slots are busy.
 var ErrOutboxFull = errors.New("outbox full")
 
-const defaultOutboxWorkers = 100
 const defaultMaxRetryTime = 10 * time.Minute
 
 // NewOutbox creates a new Outbox. Config must be provided. IF NumWorkers is not providers, default will be used.
 func NewOutbox(config *Config) *Outbox {
-	if config.NumWorkers == 0 {
-		config.NumWorkers = defaultOutboxWorkers
-	}
 	outbox := &Outbox{
 		forwardFunc:  config.Forward,
 		queue:        make([]*outboxMsg, config.NumberSlots),
 		slots:        make(chan int, config.NumberSlots),
 		process:      make(chan int),
-		numWorkers:   config.NumWorkers,
+		numWorkers:   config.NumberSlots,
 		stopC:        make(chan struct{}),
 		maxRetryTime: defaultMaxRetryTime,
 		clock:        clock.Realtime(),
@@ -96,7 +91,7 @@ func (o *Outbox) Stop() {
 
 // Enqueue a new element in the outbox if there is any slot available.
 // Then send it to process. This method is blocking if there is no workers available.
-func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
+func (o *Outbox) Enqueue(outboxMsg *outboxMsg) {
 	// first we try to obtain a slot in the outbox.
 	slot := <-o.slots
 	o.queue[slot] = outboxMsg
@@ -106,7 +101,6 @@ func (o *Outbox) Enqueue(outboxMsg *outboxMsg) error {
 	case <-o.stopC:
 	case o.process <- slot:
 	}
-	return nil
 }
 
 // SetForward set the forward function that will be executed on each message.
@@ -153,7 +147,6 @@ func (o *Outbox) processOutbox() {
 						metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
 						return
 					}
-					metrics.GetOrRegisterGauge("pss.outbox.retries", nil).Update(int64(msg.retries))
 					// requeue the message for processing
 					o.requeue(slot)
 					log.Debug("Message requeued", "slot", slot)

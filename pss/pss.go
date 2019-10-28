@@ -50,8 +50,7 @@ const (
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Minute * 10
-	defaultOutboxCapacity      = 25
-	defaultOutboxWorkers       = 25
+	defaultOutboxCapacity      = 50
 	protocolName               = "pss"
 	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
@@ -191,7 +190,6 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 	})
 	ps.outbox = outbox.NewOutbox(&outbox.Config{
 		NumberSlots: defaultOutboxCapacity,
-		NumWorkers:  defaultOutboxWorkers,
 		Forward:     ps.forward,
 	})
 
@@ -479,15 +477,13 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
 		log.Trace("pss msg forwarding ===>", "pss", hex.EncodeToString(p.BaseAddr()), "prox", isProx)
-		return p.enqueue(pssmsg)
+		p.enqueue(pssmsg)
+		return nil
 	}
 
 	log.Trace("pss msg processing <===", "pss", hex.EncodeToString(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Topic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
-		qerr := p.enqueue(pssmsg)
-		if qerr != nil {
-			return fmt.Errorf("process fail: processerr %v, queueerr: %v", err, qerr)
-		}
+		p.enqueue(pssmsg)
 	}
 	return nil
 }
@@ -525,7 +521,7 @@ func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
 	}
 
 	if len(pssmsg.To) < addressLength || prox {
-		err = p.enqueue(pssmsg)
+		p.enqueue(pssmsg)
 	}
 	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
 	return err
@@ -591,13 +587,13 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
-func (p *Pss) enqueue(msg *message.Message) error {
+func (p *Pss) enqueue(msg *message.Message) {
 	metrics.GetOrRegisterCounter("pss.enqueue.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	// TODO: create and enqueue in one outbox method
 	outboxMsg := p.outbox.NewOutboxMessage(msg)
-	return p.outbox.Enqueue(outboxMsg)
+	p.outbox.Enqueue(outboxMsg)
 }
 
 // Send a raw message (any encryption is responsibility of calling client)
@@ -622,7 +618,8 @@ func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messa
 
 	p.addFwdCache(pssMsg)
 
-	return p.enqueue(pssMsg)
+	p.enqueue(pssMsg)
+	return nil
 }
 
 // Send a message using symmetric encryption
@@ -693,7 +690,8 @@ func (p *Pss) send(to []byte, topic message.Topic, msg []byte, asymmetric bool, 
 	pssMsg.Payload = envelope
 	pssMsg.Topic = topic
 
-	return p.enqueue(pssMsg)
+	p.enqueue(pssMsg)
+	return nil
 }
 
 // sendFunc is a helper function that tries to send a message and returns true on success.

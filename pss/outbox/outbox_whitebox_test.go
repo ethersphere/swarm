@@ -49,20 +49,27 @@ func TestFullOutbox(t *testing.T) {
 		Payload: nil,
 	})
 
-	err := testOutbox.Enqueue(testOutboxMessage)
-	if err != nil {
-		t.Fatalf("unexpected error enqueueing, %v", err)
-	}
+	completionC := make(chan struct{})
+	go func() {
+		testOutbox.Enqueue(testOutboxMessage)
+		completionC <- struct{}{}
+	}()
+	expectNotTimeout(completionC, t)
 
-	err = testOutbox.Enqueue(testOutboxMessage)
-	if err != nil {
-		t.Fatalf("unexpected error enqueueing, %v", err)
-	}
-	// As we haven't signaled processC, the messages are still in the outbox.
-	err = testOutbox.Enqueue(testOutboxMessage)
-	if err != ErrOutboxFull {
-		t.Fatalf("unexpected error type, got %v, wanted %v", err, ErrOutboxFull)
-	}
+	go func() {
+		testOutbox.Enqueue(testOutboxMessage)
+		completionC <- struct{}{}
+	}()
+	expectNotTimeout(completionC, t)
+
+	go func() {
+		testOutbox.Enqueue(testOutboxMessage)
+		completionC <- struct{}{}
+	}()
+	expectTimeout(completionC, t)
+
+	// Now we advance the messages stuck in the forward function. At least 2 of them to leave one space available.
+	processC <- struct{}{}
 	processC <- struct{}{}
 
 	// There should be a slot in the outbox to enqueue.
@@ -70,5 +77,23 @@ func TestFullOutbox(t *testing.T) {
 	case <-testOutbox.slots:
 	case <-time.After(timeout):
 		t.Fatalf("timeout waiting for a free slot")
+	}
+}
+
+const blockTimeout = 100 * time.Millisecond
+
+func expectNotTimeout(completionC chan struct{}, t *testing.T) {
+	select {
+	case <-completionC:
+	case <-time.After(blockTimeout):
+		t.Fatalf("timeout waiting for enqueue")
+	}
+}
+
+func expectTimeout(completionC chan struct{}, t *testing.T) {
+	select {
+	case <-completionC:
+		t.Fatalf("epxected blocking enqueue")
+	case <-time.After(blockTimeout):
 	}
 }
