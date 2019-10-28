@@ -32,11 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/contracts/swap"
 	swapcontract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -53,14 +53,15 @@ const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	store            state.Store           // store is needed in order to keep balances and cheques across sessions
-	peers            map[enode.ID]*Peer    // map of all swap Peers
-	peersLock        sync.RWMutex          // lock for peers map
-	backend          swapcontract.Backend  // the backend (blockchain) used
-	owner            *Owner                // contract access
-	params           *Params               // economic and operational parameters
-	contract         swapcontract.Contract // reference to the smart contract
-	honeyPriceOracle HoneyOracle           // oracle which resolves the price of honey (in Wei)
+	store             state.Store            // store is needed in order to keep balances and cheques across sessions
+	peers             map[enode.ID]*Peer     // map of all swap Peers
+	peersLock         sync.RWMutex           // lock for peers map
+	backend           swapcontract.Backend   // the backend (blockchain) used
+	owner             *Owner                 // contract access
+	params            *Params                // economic and operational parameters
+	contract          swap.Contract          // reference to the smart contract
+	chequebookFactory swap.SimpleSwapFactory // the chequebook factory used
+	honeyPriceOracle  HoneyOracle            // oracle which resolves the price of honey (in Wei)
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -129,14 +130,15 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend swapcontract.Backend, params *Params) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend swapcontract.Backend, params *Params, chequebookFactory swapcontract.SimpleSwapFactory) *Swap {
 	return &Swap{
-		store:            stateStore,
-		peers:            make(map[enode.ID]*Peer),
-		backend:          backend,
-		owner:            owner,
-		params:           params,
-		honeyPriceOracle: NewHoneyPriceOracle(),
+		store:             stateStore,
+		peers:             make(map[enode.ID]*Peer),
+		backend:           backend,
+		owner:             owner,
+		params:            params,
+		chequebookFactory: chequebookFactory,
+		honeyPriceOracle:  NewHoneyPriceOracle(),
 	}
 }
 
@@ -146,7 +148,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend swapcontract.
 // - connects to the blockchain backend;
 // - verifies that we have not connected SWAP before on a different blockchain backend;
 // - starts the chequebook; creates the swap instance
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64) (swap *Swap, err error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
 	// verify that backendURL is not empty
@@ -179,12 +181,19 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	swapLog.Info("Using backend network ID", "ID", chainID.Uint64())
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
+	// initialize the factory
+	factory, err := createFactory(factoryAddress, chainID, backend)
+	if err != nil {
+		return nil, err
+	}
+
 	// create the swap instance
 	swap = newSwapInstance(
 		stateStore,
 		owner,
 		backend,
 		params,
+		factory,
 	)
 	// start the chequebook
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
@@ -200,6 +209,25 @@ const (
 	connectedChequebookKey = "connected_chequebook"
 	connectedBlockchainKey = "connected_blockchain"
 )
+
+// createFactory determines the factory address and returns and error if no factory address has been specified or is unknown for the network
+func createFactory(factoryAddress common.Address, chainID *big.Int, backend swapcontract.Backend) (factory swap.SimpleSwapFactory, err error) {
+	if (factoryAddress == common.Address{}) {
+		if factoryAddress, err = swapcontract.FactoryAddressForNetwork(chainID.Uint64()); err != nil {
+			return nil, err
+		}
+	}
+	swapLog.Info("Using chequebook factory", "address", factoryAddress)
+	// instantiate an object representing the factory and verify it's bytecode
+	factory, err = swapcontract.FactoryAt(factoryAddress, backend)
+	if err != nil {
+		return nil, err
+	}
+	if err := factory.VerifySelf(); err != nil {
+		return nil, err
+	}
+	return factory, nil
+}
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
 func checkChainID(currentChainID uint64, s state.Store) (err error) {
@@ -345,9 +373,9 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 // cashCheque should be called async as it blocks until the transaction(s) are mined
 // The function cashes the cheque by sending it to the blockchain
-func cashCheque(s *Swap, contract swapcontract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+func cashCheque(s *Swap, chequebookContract swapcontract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	result, receipt, err := contract.CashChequeBeneficiary(opts, s.backend, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	result, receipt, err := chequebookContract.CashChequeBeneficiary(opts, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
@@ -640,7 +668,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDeposit
 // BindToContractAt binds to an instance of an already existing chequebook contract at address
 func (s *Swap) bindToContractAt(address common.Address) (swapcontract.Contract, error) {
 	// validate whether address is a chequebook
-	if err := swapcontract.ValidateCode(context.Background(), s.backend, address); err != nil {
+	if err := s.chequebookFactory.VerifyContract(address); err != nil {
 		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
 	swapLog.Info("bound to chequebook", "chequebookAddr", address)
@@ -660,22 +688,20 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (swapcon
 
 // deployLoop repeatedly tries to deploy the swap contract .
 func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance swapcontract.Contract, err error) {
-	var tx *types.Transaction
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
 			time.Sleep(deployDelay)
 		}
-		if instance, tx, err = swapcontract.Deploy(opts, s.backend, s.owner.address, defaultHarddepositTimeoutDuration); err != nil {
-			swapLog.Warn("can't send chequebook deploy tx, retrying...", "try", try, "error", err)
-			continue
-		}
-		if _, err := bind.WaitDeployed(opts.Context, s.backend, tx); err != nil {
+
+		chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
+		if err != nil {
 			swapLog.Warn("chequebook deploy error, retrying...", "try", try, "error", err)
 			continue
 		}
-		return instance, nil
+
+		return chequebook, nil
 	}
-	return nil, err
+	return nil, fmt.Errorf("failed to deploy chequebook: %v", err)
 }
 
 func (s *Swap) loadChequebook() (common.Address, error) {

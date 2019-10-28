@@ -172,7 +172,9 @@ github.com/ethereum/go-ethereum/crypto/bn256/cloudflare
 github.com/ethereum/go-ethereum/crypto/bn256/google
 github.com/ethereum/go-ethereum/eth/tracers/internal/tracers
 github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract
-# github.com/ethersphere/go-sw3 v0.1.0
+# github.com/ethersphere/go-sw3 v0.1.1
+github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswap
+github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory
 github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap
 # github.com/fatih/color v1.7.0
 github.com/fatih/color

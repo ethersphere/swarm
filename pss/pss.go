@@ -40,6 +40,7 @@ import (
 	"github.com/ethersphere/swarm/pss/internal/ticker"
 	"github.com/ethersphere/swarm/pss/internal/ttlset"
 	"github.com/ethersphere/swarm/pss/message"
+	"github.com/ethersphere/swarm/pss/outbox"
 	"github.com/tilinna/clock"
 )
 
@@ -49,7 +50,8 @@ const (
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 100000
+	defaultOutboxCapacity      = 10000
+	defaultOutboxWorkers       = 100
 	protocolName               = "pss"
 	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
@@ -113,97 +115,6 @@ func (params *Params) WithPrivateKey(privatekey *ecdsa.PrivateKey) *Params {
 	return params
 }
 
-type outbox struct {
-	queue   []*outboxMsg
-	slots   chan int
-	process chan int
-	quitC   chan struct{}
-	forward func(msg *message.Message) error
-}
-
-func newOutbox(capacity int, quitC chan struct{}, forward func(msg *message.Message) error) outbox {
-	outbox := outbox{
-		queue:   make([]*outboxMsg, capacity),
-		slots:   make(chan int, capacity),
-		process: make(chan int),
-		quitC:   quitC,
-		forward: forward,
-	}
-	// fill up outbox slots
-	for i := 0; i < cap(outbox.slots); i++ {
-		outbox.slots <- i
-	}
-	return outbox
-}
-
-func (o outbox) len() int {
-	return cap(o.slots) - len(o.slots)
-}
-
-// enqueue a new element in the outbox if there is any slot available.
-// Then send it to process. This method is blocking in the process channel!
-func (o *outbox) enqueue(outboxmsg *outboxMsg) error {
-	// first we try to obtain a slot in the outbox
-	select {
-	case slot := <-o.slots:
-		o.queue[slot] = outboxmsg
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-		// we send this message slot to process
-		select {
-		case o.process <- slot:
-		case <-o.quitC:
-		}
-		return nil
-	default:
-		metrics.GetOrRegisterCounter("pss.enqueue.outbox.full", nil).Inc(1)
-		return errors.New("outbox full")
-	}
-}
-
-func (o *outbox) processOutbox() {
-	for {
-		select {
-		case slot := <-o.process:
-			go func(slot int) {
-				msg := o.msg(slot)
-				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
-				if err := o.forward(msg.msg); err != nil {
-					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
-					// if we failed to forward, re-insert message in the queue
-					log.Warn(err.Error())
-					// reenqueue the message for processing
-					o.reenqueue(slot)
-					return
-				}
-				// free the outbox slot
-				o.free(slot)
-				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.len()))
-			}(slot)
-		case <-o.quitC:
-			return
-		}
-	}
-}
-
-func (o outbox) msg(slot int) *outboxMsg {
-	return o.queue[slot]
-}
-
-func (o outbox) free(slot int) {
-	select {
-	case o.slots <- slot:
-	case <-o.quitC:
-	}
-}
-
-func (o outbox) reenqueue(slot int) {
-	select {
-	case o.process <- slot:
-	case <-o.quitC:
-	}
-
-}
-
 // Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
 // and message forwarding. Implements node.Service
 type Pss struct {
@@ -221,7 +132,7 @@ type Pss struct {
 
 	msgTTL    time.Duration
 	capstring string
-	outbox    outbox
+	outbox    *outbox.Outbox
 
 	// message handling
 	handlers           map[message.Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -278,7 +189,11 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 			metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
 		},
 	})
-	ps.outbox = newOutbox(defaultOutboxCapacity, ps.quitC, ps.forward)
+	ps.outbox = outbox.NewOutbox(&outbox.Config{
+		NumberSlots: defaultOutboxCapacity,
+		NumWorkers:  defaultOutboxWorkers,
+		Forward:     ps.forward,
+	})
 
 	cp := capability.NewCapability(CapabilityID, 8)
 	cp.Set(capabilitiesSend)
@@ -312,7 +227,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 	}()
 
 	// Forward outbox messages
-	go p.outbox.processOutbox()
+	p.outbox.Start()
 
 	log.Info("Started Pss")
 	log.Info("Loaded EC keys", "pubkey", hex.EncodeToString(p.Crypto.SerializePublicKey(p.PublicKey())), "secp256", hex.EncodeToString(p.Crypto.CompressPublicKey(p.PublicKey())))
@@ -325,6 +240,7 @@ func (p *Pss) Stop() error {
 		return err
 	}
 	close(p.quitC)
+	p.outbox.Stop()
 	return nil
 }
 
@@ -409,10 +325,49 @@ func (p *Pss) getTopicHandlerCaps(topic message.Topic) (hc *handlerCaps, found b
 	return
 }
 
+func (p *Pss) isRawTopicHandlerCaps(topic message.Topic) (raw bool, found bool) {
+	p.topicHandlerCapsMu.RLock()
+	defer p.topicHandlerCapsMu.RUnlock()
+	hc, found := p.topicHandlerCaps[topic]
+	if !found {
+		return false, false
+	}
+	return hc.raw, true
+}
+
+func (p *Pss) isProxTopicHandlerCaps(topic message.Topic) (prox bool, found bool) {
+	p.topicHandlerCapsMu.RLock()
+	defer p.topicHandlerCapsMu.RUnlock()
+	hc, found := p.topicHandlerCaps[topic]
+	if !found {
+		return false, false
+	}
+	return hc.prox, true
+}
+
 func (p *Pss) setTopicHandlerCaps(topic message.Topic, hc *handlerCaps) {
 	p.topicHandlerCapsMu.Lock()
 	defer p.topicHandlerCapsMu.Unlock()
 	p.topicHandlerCaps[topic] = hc
+}
+
+func (p *Pss) getOrSetTopicHandlerCaps(topic message.Topic, raw, prox bool) (hc *handlerCaps) {
+	p.topicHandlerCapsMu.Lock()
+	defer p.topicHandlerCapsMu.Unlock()
+
+	hc, ok := p.topicHandlerCaps[topic]
+	if !ok {
+		hc = &handlerCaps{}
+		p.topicHandlerCaps[topic] = hc
+	}
+
+	if raw {
+		hc.raw = true
+	}
+	if prox {
+		hc.prox = true
+	}
+	return hc
 }
 
 // Links a handler function to a Topic
@@ -438,18 +393,7 @@ func (p *Pss) Register(topic *message.Topic, hndlr *handler) func() {
 	}
 	handlers[hndlr] = true
 
-	capabilities, ok := p.getTopicHandlerCaps(*topic)
-	if !ok {
-		capabilities = &handlerCaps{}
-		p.setTopicHandlerCaps(*topic, capabilities)
-	}
-
-	if hndlr.caps.raw {
-		capabilities.raw = true
-	}
-	if hndlr.caps.prox {
-		capabilities.prox = true
-	}
+	p.getOrSetTopicHandlerCaps(*topic, hndlr.caps.raw, hndlr.caps.prox)
 	return func() { p.deregister(topic, hndlr) }
 }
 
@@ -516,11 +460,9 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
 	if pssmsg.Flags.Raw {
-		if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
-			if !capabilities.raw {
-				log.Warn("No handler for raw message", "topic", label(psstopic[:]))
-				return nil
-			}
+		if raw, ok := p.isRawTopicHandlerCaps(psstopic); ok && !raw {
+			log.Warn("No handler for raw message", "topic", label(psstopic[:]))
+			return nil
 		}
 		isRaw = true
 	}
@@ -530,8 +472,8 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
 	var isProx bool
-	if capabilities, ok := p.getTopicHandlerCaps(psstopic); ok {
-		isProx = capabilities.prox
+	if prox, ok := p.isProxTopicHandlerCaps(psstopic); ok {
+		isProx = prox
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
@@ -650,9 +592,9 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 func (p *Pss) enqueue(msg *message.Message) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
-	outboxmsg := newOutboxMsg(msg)
-
-	return p.outbox.enqueue(outboxmsg)
+	// TODO: create and enqueue in one outbox method
+	outboxMsg := p.outbox.NewOutboxMessage(msg)
+	return p.outbox.Enqueue(outboxMsg)
 }
 
 // Send a raw message (any encryption is responsibility of calling client)

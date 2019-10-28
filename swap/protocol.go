@@ -97,7 +97,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	return swapcontract.ValidateCode(context.Background(), s.backend, handshake.ContractAddress)
+	return s.chequebookFactory.VerifyContract(handshake.ContractAddress)
 }
 
 // run is the actual swap protocol run method

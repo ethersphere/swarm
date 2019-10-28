@@ -52,11 +52,8 @@ it expects a handshake to take place between the two nodes
 func TestHandshake(t *testing.T) {
 	var err error
 
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	// setup test swap object
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	ctx := context.Background()
@@ -214,11 +211,8 @@ func TestEmitCheque(t *testing.T) {
 // when we reach the payment threshold
 // It is the debitor who triggers cheques
 func TestTriggerPaymentThreshold(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	log.Debug("create test swap")
-	debitorSwap, clean := newTestSwap(t, ownerKey, testBackend)
+	debitorSwap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	ctx := context.Background()
@@ -281,11 +275,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 // when we reach the disconnect threshold
 // It is the creditor who triggers the disconnect from a overdraft creditor
 func TestTriggerDisconnectThreshold(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	log.Debug("create test swap")
-	creditorSwap, clean := newTestSwap(t, beneficiaryKey, testBackend)
+	creditorSwap, clean := newTestSwap(t, beneficiaryKey, nil)
 	defer clean()
 
 	// create a dummy pper
