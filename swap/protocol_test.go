@@ -90,6 +90,7 @@ func TestHandshake(t *testing.T) {
 				Code: 0,
 				Msg: &HandshakeMsg{
 					ContractAddress: swap.GetParams().ContractAddress,
+					ChainID:         swap.chainID,
 				},
 				Peer: creditor.ID(),
 			},
@@ -99,6 +100,7 @@ func TestHandshake(t *testing.T) {
 				Code: 0,
 				Msg: &HandshakeMsg{
 					ContractAddress: swap.GetParams().ContractAddress,
+					ChainID:         swap.chainID,
 				},
 				Peer: debitor.ID(),
 			},

@@ -17,6 +17,8 @@
 package swap
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -36,6 +38,7 @@ type Cheque struct {
 
 // HandshakeMsg is exchanged on peer handshake
 type HandshakeMsg struct {
+	ChainID         *big.Int
 	ContractAddress common.Address
 }
 
