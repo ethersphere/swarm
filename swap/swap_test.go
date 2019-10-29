@@ -1908,7 +1908,7 @@ func TestSwapActions(t *testing.T) {
 	swapLog.SetLogAction("disconnecting")
 	swapLog.Info("Test")
 	swapLog.Info("Test", "swap_action", "emitting_cheque")
-	swapLog.SetLogAction("SentCheque")
+	swapLog.SetLogAction("sent_cheque")
 	swapLog.Info("Test")
 
 	if logDirDebitor == "" {
@@ -1933,19 +1933,19 @@ func TestSwapActions(t *testing.T) {
 	logString := string(b)
 
 	if !strings.Contains(logString, `"swap_action","undefined"`) {
-		t.Fatalf("expected the log to contain \"action undefined\"")
+		t.Fatalf("expected the log to contain action \"undefined\"")
 	}
 
 	if !strings.Contains(logString, `"swap_action","disconnecting"`) {
-		t.Fatalf("expected the log to contain \"action disconnecting\"")
+		t.Fatalf("expected the log to contain action \"disconnecting\"")
 	}
 
 	if !strings.Contains(logString, `"swap_action","emitting_cheque"`) {
-		t.Fatalf("expected the log to contain \"action emitting_cheque\"")
+		t.Fatalf("expected the log to contain action \"emitting_cheque\"")
 	}
 
-	if !strings.Contains(logString, `"swap_action","SentCheque"`) {
-		t.Fatalf("expected the log to contain \"action SentCheque\"")
+	if !strings.Contains(logString, `"swap_action","sent_cheque"`) {
+		t.Fatalf("expected the log to contain action \"sent_cheque\"")
 	}
 
 }
