@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -40,6 +41,7 @@ type Peer struct {
 	lastReceivedCheque *Cheque
 	lastSentCheque     *Cheque
 	balance            int64
+	logger             log.Logger // logger for swap related messages and audit trail with peer identifier
 }
 
 // NewPeer creates a new swap Peer instance
@@ -49,6 +51,7 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 		swap:            s,
 		beneficiary:     beneficiary,
 		contractAddress: contractAddress,
+		logger:          newPeerLogger(s, p.ID()),
 	}
 
 	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {
@@ -108,7 +111,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	auditLog.Debug("balance for peer after accounting", "peer", p.ID().String(), "balance", strconv.FormatInt(newBalance, 10))
+	p.logger.Debug("updated balance", "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
 
@@ -164,7 +167,7 @@ func (p *Peer) sendCheque() error {
 		return err
 	}
 
-	auditLog.Info("sending cheque", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
+	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

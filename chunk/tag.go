@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -47,26 +48,30 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
+	Total  int64 // total chunks belonging to a tag
+	Split  int64 // number of chunks already processed by splitter for hashing
+	Seen   int64 // number of chunks already seen
+	Stored int64 // number of chunks already stored locally
+	Sent   int64 // number of chunks sent for push syncing
+	Synced int64 // number of chunks synced with proof
+
 	Uid       uint32    // a unique identifier for this tag
+	Anonymous bool      // indicates if the tag is anonymous (i.e. if only pull sync should be used)
 	Name      string    // a name tag for this tag
 	Address   Address   // the associated swarm hash for this tag
-	Total     int64     // total chunks belonging to a tag
-	Split     int64     // number of chunks already processed by splitter for hashing
-	Seen      int64     // number of chunks already seen
-	Stored    int64     // number of chunks already stored locally
-	Sent      int64     // number of chunks sent for push syncing
-	Synced    int64     // number of chunks synced with proof
 	StartedAt time.Time // tag started to calculate ETA
 
 	// end-to-end tag tracing
-	ctx  context.Context  // tracing context
-	span opentracing.Span // tracing root span
+	ctx      context.Context  // tracing context
+	span     opentracing.Span // tracing root span
+	spanOnce sync.Once        // make sure we close root span only once
 }
 
 // NewTag creates a new tag, and returns it
-func NewTag(uid uint32, s string, total int64) *Tag {
+func NewTag(uid uint32, s string, total int64, anon bool) *Tag {
 	t := &Tag{
 		Uid:       uid,
+		Anonymous: anon,
 		Name:      s,
 		StartedAt: time.Now(),
 		Total:     total,
@@ -85,7 +90,9 @@ func (t *Tag) Context() context.Context {
 
 // FinishRootSpan closes the pushsync span of the tags
 func (t *Tag) FinishRootSpan() {
-	t.span.Finish()
+	t.spanOnce.Do(func() {
+		t.span.Finish()
+	})
 }
 
 // IncN increments the count for a state

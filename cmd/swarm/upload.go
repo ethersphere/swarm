@@ -78,6 +78,7 @@ func upload(ctx *cli.Context) {
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
 		toPin           = ctx.Bool(SwarmPinFlag.Name)
 		progress        = ctx.Bool(SwarmProgressFlag.Name)
+		anon            = ctx.Bool(SwarmAnonymousUploadFlag.Name)
 		autoDefaultPath = false
 		file            string
 	)
@@ -118,7 +119,7 @@ func upload(ctx *cli.Context) {
 			utils.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
-		hash, err := client.UploadRaw(f, f.Size, toEncrypt, toPin)
+		hash, err := client.UploadRaw(f, f.Size, toEncrypt, toPin, anon)
 		if err != nil {
 			utils.Fatalf("Upload failed: %s", err)
 		}
@@ -159,7 +160,7 @@ func upload(ctx *cli.Context) {
 					defaultPath = strings.TrimPrefix(absDefaultPath, absFile)
 				}
 			}
-			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin)
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin, anon)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -171,7 +172,7 @@ func upload(ctx *cli.Context) {
 			if mimeType != "" {
 				f.ContentType = mimeType
 			}
-			return client.Upload(f, "", toEncrypt, toPin)
+			return client.Upload(f, "", toEncrypt, toPin, anon)
 		}
 	}
 	start := time.Now()
@@ -211,7 +212,7 @@ func upload(ctx *cli.Context) {
 }
 
 func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string]*mpb.Bar) {
-	oldTag := *tag
+	oldTag := tag
 	lastTime := time.Now()
 
 	for {
@@ -242,7 +243,7 @@ func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string
 			return
 		}
 
-		oldTag = *newTag
+		oldTag = newTag
 		lastTime = time.Now()
 	}
 }

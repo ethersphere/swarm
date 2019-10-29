@@ -134,7 +134,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("sync one chunk", func(t *testing.T) {
 		ch := chunks[0]
 
-		err := db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
+		err := db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,7 +147,7 @@ func TestDB_gcIndex(t *testing.T) {
 
 	t.Run("sync all chunks", func(t *testing.T) {
 		for i := range chunks {
-			err := db.Set(context.Background(), chunk.ModeSetSync, chunks[i].Address())
+			err := db.Set(context.Background(), chunk.ModeSetSyncPull, chunks[i].Address())
 			if err != nil {
 				t.Fatal(err)
 			}

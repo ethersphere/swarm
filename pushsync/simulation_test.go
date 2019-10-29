@@ -99,7 +99,7 @@ func testPushsyncSimulation(nodeCnt, chunkCnt, testcases int, sf simulation.Serv
 	}
 
 	start := time.Now()
-	log.Error("Snapshot loaded. Simulation starting", "at", start)
+	log.Info("Snapshot loaded. Simulation starting", "at", start)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		var errg errgroup.Group
 		for j := 0; j < testcases; j++ {
@@ -117,7 +117,7 @@ func testPushsyncSimulation(nodeCnt, chunkCnt, testcases int, sf simulation.Serv
 	if result.Error != nil {
 		return fmt.Errorf("simulation error: %v", result.Error)
 	}
-	log.Error("simulation", "duration", time.Since(start))
+	log.Info("simulation", "duration", time.Since(start))
 	return nil
 }
 
@@ -175,7 +175,12 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	if err != nil {
 		return nil, nil, err
 	}
-	lstore, err := localstore.New(dir, addr.Over(), nil)
+
+	tags := chunk.NewTags()
+
+	lstore, err := localstore.New(dir, addr.Over(), &localstore.Options{
+		Tags: tags,
+	})
 	if err != nil {
 		os.RemoveAll(dir)
 		return nil, nil, err
@@ -201,7 +206,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 
 	pubSub := pss.NewPubSub(ps)
 	// setup pusher
-	p := NewPusher(lstore, pubSub, chunk.NewTags())
+	p := NewPusher(lstore, pubSub, tags)
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
@@ -248,7 +253,7 @@ func (s *RetrievalAndPss) Stop() error {
 }
 
 func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, n int) (tag *chunk.Tag, addrs []storage.Address, err error) {
-	tag, err = tags.Create(tagname, int64(n))
+	tag, err = tags.Create(tagname, int64(n), false)
 	if err != nil {
 		return nil, nil, err
 	}
