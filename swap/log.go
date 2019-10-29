@@ -8,13 +8,13 @@ const (
 	// CallDepth is set to 1 in order to influence to reported line number of
 	// the log message with 1 skipped stack frame of calling l.Output()
 	CallDepth = 1
-	//DefaultAction is the default action filter for SwapLogs
+	// DefaultAction is the default action filter for swap logs
 	DefaultAction string = "undefined"
 )
 
 // Logger wraps the ethereum logger with specific information for swap logging
 // this struct contains an action string that is used for grouping similar logs together
-// each log contains a context this will be printed on each message
+// each log contains a context which will be printed on each message
 type Logger struct {
 	action string
 	logger log.Logger
@@ -67,9 +67,8 @@ func (sl Logger) Trace(msg string, ctx ...interface{}) {
 	sl.logger.Trace(msg, ctx...)
 }
 
-// SetLogAction set the current log action prefix
+// SetLogAction sets the current log action prefix
 func (sl *Logger) SetLogAction(action string) {
-	//Adds action to logger context
 	sl.action = action
 }
 
