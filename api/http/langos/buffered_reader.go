@@ -22,7 +22,7 @@ import (
 )
 
 // BufferedReadSeeker wraps bufio.Reader to expose Seek method
-// from the provied io.ReadSeeker in NewBufferedReadSeeker.
+// from the provided io.ReadSeeker in NewBufferedReadSeeker.
 type BufferedReadSeeker struct {
 	r  *bufio.Reader
 	s  io.ReadSeeker
@@ -40,16 +40,20 @@ func NewBufferedReadSeeker(readSeeker io.ReadSeeker, size int) BufferedReadSeeke
 	}
 }
 
+// Read reads to the byte slice from from buffered reader.
 func (b BufferedReadSeeker) Read(p []byte) (n int, err error) {
 	return b.r.Read(p)
 }
 
+// Seek moves the read position of the underlying ReadSeeker and resets the buffer.
 func (b BufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	n, err := b.s.Seek(offset, whence)
 	b.r.Reset(b.s)
 	return n, err
 }
 
+// ReadAt implements io.ReaderAt if the provided ReadSeeker also implements it,
+// otherwise it returns no error and no bytes read.
 func (b BufferedReadSeeker) ReadAt(p []byte, off int64) (n int, err error) {
 	if b.ra == nil {
 		return 0, nil
