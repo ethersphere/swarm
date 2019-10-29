@@ -463,15 +463,15 @@ func TestPeerCheques(t *testing.T) {
 	// verify test cases
 	testPeerCheques(t, testCases)
 
+	// verify cases for disconnected peers
 	testPeer3ID := newDummyPeer().Peer.ID()
 	testPeer3SentCheque := newRandomTestCheque()
 	testPeer3ReceivedCheque := newRandomTestCheque()
 	testPeer3ExpectedCheques := PeerCheques{testPeer3SentCheque, testPeer3ReceivedCheque}
-	// verify cases for disconnected peers
 	testPeerChequesDisconnected(t, testPeer3ID, testPeer3SentCheque, testPeer3ReceivedCheque, testPeer3ExpectedCheques)
 
-	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, {}}
 	// verify cases for invalid peers
+	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, {}}
 	testPeerChequesInvalid(t, invalidPeers)
 }
 
@@ -505,14 +505,8 @@ func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
 				}
 			}
 
-			// verify results by calling PeerCheques function
-			peerCheques, err := swap.PeerCheques(peer.ID())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(tc.expectedCheques, peerCheques) {
-				t.Fatalf("Expected peer %v cheques to be %v, but are %v", peer.ID(), tc.expectedCheques, peerCheques)
-			}
+			// verify results
+			verifyCheques(t, swap, peer.ID(), tc.expectedCheques)
 		})
 	}
 }
@@ -535,14 +529,7 @@ func testPeerChequesDisconnected(t *testing.T, peerID enode.ID, sentCheque *Cheq
 		t.Fatal(err)
 	}
 
-	// verify results by calling PeerCheques function
-	peerCheques, err := swap.PeerCheques(peerID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(expectedCheques, peerCheques) {
-		t.Fatalf("Expected peer %v cheques to be %v, but are %v", peerID, expectedCheques, peerCheques)
-	}
+	verifyCheques(t, swap, peerID, expectedCheques)
 }
 
 func testPeerChequesInvalid(t *testing.T, invalidPeerIDs []enode.ID) {
@@ -552,13 +539,18 @@ func testPeerChequesInvalid(t *testing.T, invalidPeerIDs []enode.ID) {
 
 	// verify results by calling PeerCheques function
 	for _, invalidPeerID := range invalidPeerIDs {
-		peerCheques, err := swap.PeerCheques(invalidPeerID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(PeerCheques{nil, nil}, peerCheques) {
-			t.Fatalf("Expected peer %v cheques to be %v, but are %v", invalidPeerID, nil, peerCheques)
-		}
+		verifyCheques(t, swap, invalidPeerID, PeerCheques{nil, nil})
+	}
+}
+
+// compares the result of the PeerCheques function with the expected parameter
+func verifyCheques(t *testing.T, s *Swap, peer enode.ID, expectedCheques PeerCheques) {
+	peerCheques, err := s.PeerCheques(peer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expectedCheques, peerCheques) {
+		t.Fatalf("Expected peer %v cheques to be %v, but are %v", peer, expectedCheques, peerCheques)
 	}
 }
 
