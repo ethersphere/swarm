@@ -110,8 +110,8 @@ func (klb *KademliaLoadBalancer) EachBinNodeAddress(consumeBin LBBinConsumer) {
 // EachBinFiltered returns all bins in descending order from the perspective of base address.
 // Only peers with the provided capabilities capKey are considered.
 // All peers in that bin will be provided to the LBBinConsumer sorted by least used first.
-func (klb *KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, consumeBin LBBinConsumer) {
-	_ = klb.kademlia.EachBinDescFiltered(base, capKey, 0, func(peerBin *PeerBin) bool {
+func (klb *KademliaLoadBalancer) EachBinFiltered(base []byte, capKey string, consumeBin LBBinConsumer) error {
+	return klb.kademlia.EachBinDescFiltered(base, capKey, 0, func(peerBin *PeerBin) bool {
 		peers := klb.peerBinToPeerList(peerBin)
 		return consumeBin(LBBin{LBPeers: peers, ProximityOrder: peerBin.ProximityOrder})
 	})
@@ -187,11 +187,9 @@ func (klb *KademliaLoadBalancer) listenOffPeers() {
 // to the use count of the least used peer in its bin. The po of the new peer is passed to avoid having
 // to calculate it again.
 func (klb *KademliaLoadBalancer) addedPeer(peer *Peer, po int) {
-	//log.Warn("Adding peer", "key", peer.Label())
 	initCount := klb.initCountFunc(peer, 0)
 	log.Debug("Adding peer", "key", peer.Label(), "initCount", initCount)
 	klb.resourceUseStats.InitKey(peer.Key(), initCount)
-	//log.Warn("Peer added", "key", peer.Label())
 }
 
 // leastUsedCountInBin returns the use count for the least used peer in this bin excluding the excludePeer.

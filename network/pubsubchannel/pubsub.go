@@ -18,26 +18,23 @@ package pubsubchannel
 import (
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/ethersphere/swarm/log"
 )
-
-var subscriptionTimeout = 100 * time.Millisecond
 
 //PubSubChannel represents a pubsub system where subscriber can .Subscribe() and publishers can .Publish() or .Close().
 type PubSubChannel struct {
 	subscriptions []*Subscription
 	subsMutex     sync.RWMutex
 	nextId        int
+	quitC         chan struct{}
 }
 
 // Subscription is created in PubSubChannel using pubSub.Subscribe(). Subscribers can receive using .ReceiveChannel().
 // or .Unsubscribe()
 type Subscription struct {
-	closed  bool
-	pubSubC *PubSubChannel
-	//removeSub func()
+	closed    bool
+	pubSubC   *PubSubChannel
 	signal    chan interface{}
 	closeOnce sync.Once
 	id        string
@@ -48,6 +45,7 @@ type Subscription struct {
 func New() *PubSubChannel {
 	return &PubSubChannel{
 		subscriptions: make([]*Subscription, 0),
+		quitC:         make(chan struct{}, 1),
 	}
 }
 
@@ -91,8 +89,7 @@ func (psc *PubSubChannel) Publish(msg interface{}) {
 			go func(sub *Subscription) {
 				select {
 				case sub.signal <- msg:
-				case <-time.After(subscriptionTimeout):
-					log.Warn("Subscription unattended after timeout", "subId", sub.ID(), "timeout", subscriptionTimeout)
+				case <-psc.quitC:
 				}
 			}(sub)
 		}
@@ -118,6 +115,7 @@ func (psc *PubSubChannel) Close() {
 		sub.closeChannel()
 		sub.lock.Unlock()
 	}
+	psc.quitC <- struct{}{}
 }
 
 // Unsubscribe cancels subscription from the subscriber side. Channel is marked as closed but only writer should close it.
