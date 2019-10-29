@@ -22,6 +22,7 @@ package swap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -44,8 +45,14 @@ type Backend interface {
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
+	// Withdraw attempts to withdraw Wei from the chequebook
+	Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
+	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
+	Deposit(auth *bind.TransactOpts, backend Backend, amout *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
+	// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
@@ -97,6 +104,32 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 	return c, err
 }
 
+// Withdraw withdraws amount from the chequebook and blocks until the transaction is mined
+func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
+	tx, err := s.instance.Withdraw(auth, amount)
+	if err != nil {
+		return nil, err
+	}
+	return WaitFunc(auth, backend, tx)
+}
+
+// Deposit sends a transaction to the chequebook, which deposits the amount set in Auth.Value and blocks until the transaction is mined
+func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
+	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
+	if auth.Value != big.NewInt(0) {
+		return nil, fmt.Errorf("Deposit value can only be set via amount parameter")
+	}
+	if amount == big.NewInt(0) {
+		return nil, fmt.Errorf("Deposit amount cannot be equal to zero")
+	}
+	auth.Value = amount
+	tx, err := rawSimpleSwap.Transfer(auth)
+	if err != nil {
+		return nil, err
+	}
+	return WaitFunc(auth, backend, tx)
+}
+
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
 func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error) {
 	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, cumulativePayout, ownerSig)
@@ -129,6 +162,11 @@ func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficia
 	}
 
 	return result, receipt, nil
+}
+
+// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
+	return s.instance.LiquidBalance(opts)
 }
 
 // ContractParams returns contract information

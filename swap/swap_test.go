@@ -1542,6 +1542,9 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 	if err != nil {
 		return nil, err
 	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, cswap.ErrTransactionReverted
+	}
 	return receipt, nil
 }
 
@@ -1963,6 +1966,75 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	if peer.getLastSentCumulativePayout() != cheque.CumulativePayout {
 		t.Fatalf("last cumulative payout should be the payout of the last sent cheque, was: %d, expected %d", peer.getLastSentCumulativePayout(), cheque.CumulativePayout)
 	}
+}
+
+func TestAvailableBalance(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	defer clean()
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	// deploy a chequebook
+	err := testDeploy(context.TODO(), swap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// create a peer
+	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify that available balance equals depositAmount (we deposit during deployment)
+	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
+	availableBalance, err := swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != depositAmount.Uint64() {
+		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount)
+	}
+	// withdraw 50
+	withdrawAmount := big.NewInt(50)
+	netDeposit := depositAmount.Uint64() - withdrawAmount.Uint64()
+	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Context = context.TODO()
+	rec, err := swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != types.ReceiptStatusSuccessful {
+		t.Fatal("Transaction reverted")
+	}
+
+	// verify available balance
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != netDeposit {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	}
+
+	// send a cheque worth 42
+	chequeAmount := int64(42)
+	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
+	peer.setBalance(-chequeAmount)
+	if err = peer.sendCheque(); err != nil {
+		t.Fatal(err)
+	}
+
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// verify available balance
+	if availableBalance != (netDeposit - uint64(chequeAmount)) {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	}
+
 }
 
 // dummyMsgRW implements MessageReader and MessageWriter
