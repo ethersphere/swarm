@@ -350,7 +350,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		log.Error("error processing and verifying cheque", "err", err)
+		log.Error("error processing and verifying received cheque", "err", err)
 		return err
 	}
 
@@ -404,30 +404,30 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	cheque := msg.Cheque
 
 	if p.getPendingCheque() == nil {
-		p.logger.Warn("ignoring confirm msg, no pending cheque", "got", cheque)
+		p.logger.Warn("ignoring confirm msg, no pending cheque", "confirm message cheque", cheque)
 		return
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {
-		p.logger.Warn("ignoring confirm msg, wrong cheque", "got", cheque, "expected", p.getPendingCheque())
+		p.logger.Warn("ignoring confirm msg, unexpected cheque", "got", cheque, "expected", p.getPendingCheque())
 		return
 	}
 
 	err := p.setLastSentCheque(cheque)
 	if err != nil {
-		p.Drop("persistence error")
+		p.Drop(fmt.Sprintf("persistence error: %v", err))
 		return
 	}
 
 	err = p.setPendingCheque(nil)
 	if err != nil {
-		p.Drop("persistence error")
+		p.Drop(fmt.Sprintf("persistence error: %v", err))
 		return
 	}
 
 	err = p.updateBalance(int64(cheque.Honey))
 	if err != nil {
-		p.Drop("persistence error")
+		p.Drop(fmt.Sprintf("persistence error: %v", err))
 		return
 	}
 
