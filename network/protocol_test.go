@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	TestProtocolVersion = 13
+	TestProtocolVersion = 14
 )
 
 var TestProtocolNetworkID = DefaultTestNetworkID

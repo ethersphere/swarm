@@ -22,8 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/pss/outbox"
+	"github.com/tilinna/clock"
 )
 
 const timeout = 2 * time.Second
@@ -56,6 +58,14 @@ func TestOutbox(t *testing.T) {
 
 	testOutbox.Start()
 	defer testOutbox.Stop()
+
+	testOutboxMessage := testOutbox.NewOutboxMessage(&message.Message{
+		To:      nil,
+		Flags:   message.Flags{},
+		Expire:  0,
+		Topic:   message.Topic{},
+		Payload: nil,
+	})
 
 	err := testOutbox.Enqueue(testOutboxMessage)
 	if err != nil {
@@ -129,7 +139,7 @@ func TestOutboxWorkers(t *testing.T) {
 	wg.Add(numMessages)
 	for i := 0; i < numMessages; i++ {
 		go func(num byte) {
-			testOutbox.Enqueue(outbox.NewOutboxMessage(newTestMessage(num)))
+			testOutbox.Enqueue(testOutbox.NewOutboxMessage(newTestMessage(num)))
 		}(byte(i))
 	}
 
@@ -158,10 +168,70 @@ func newTestMessage(num byte) *message.Message {
 	}
 }
 
-var testOutboxMessage = outbox.NewOutboxMessage(&message.Message{
-	To:      nil,
-	Flags:   message.Flags{},
-	Expire:  0,
-	Topic:   message.Topic{},
-	Payload: nil,
-})
+func TestMessageRetriesExpired(t *testing.T) {
+	failForwardFunction := func(msg *message.Message) error {
+		return errors.New("forward error")
+	}
+
+	// We are going to simulate that 5 minutes has passed with a mock Clock
+	duration := 5 * time.Minute
+	now := time.Now()
+	mockClock := clock.NewMock(now)
+	testOutbox := outbox.NewMock(&outbox.Config{
+		NumberSlots:  1,
+		Forward:      failForwardFunction,
+		MaxRetryTime: &duration,
+		Clock:        mockClock,
+	})
+
+	testOutbox.Start()
+	defer testOutbox.Stop()
+
+	msg := testOutbox.NewOutboxMessage(&message.Message{
+		To:      nil,
+		Flags:   message.Flags{},
+		Expire:  0,
+		Topic:   message.Topic{},
+		Payload: nil,
+	})
+
+	err := testOutbox.Enqueue(msg)
+	if err != nil {
+		t.Errorf("Expected no error enqueueing, instead got %v", err)
+	}
+
+	numMessages := testOutbox.Len()
+	if numMessages != 1 {
+		t.Errorf("Expected one message in outbox, instead got %v", numMessages)
+	}
+
+	mockClock.Set(now.Add(duration / 2))
+	numMessages = testOutbox.Len()
+	// Now we wait a bit expecting that the number of messages doesn't change
+	iterations := 0
+	for numMessages == 1 && iterations < 2 {
+		// Wait a bit more to check that the message has not been expired.
+		time.Sleep(10 * time.Millisecond)
+		iterations++
+		numMessages = testOutbox.Len()
+	}
+	if numMessages != 1 {
+		t.Errorf("Expected one message in outbox after half maxRetryTime, instead got %v", numMessages)
+	}
+
+	mockClock.Set(now.Add(duration + 1*time.Millisecond))
+	numMessages = testOutbox.Len()
+	// Now we wait for the process routine to retry and expire message at least 10 iterations
+	iterations = 0
+	for numMessages != 0 && iterations < 10 {
+		// Still not expired, wait a bit more
+		log.Debug("Still not there, waiting another iteration", numMessages, iterations)
+		time.Sleep(10 * time.Millisecond)
+		iterations++
+		numMessages = testOutbox.Len()
+	}
+	if numMessages != 0 {
+		t.Errorf("Expected 0 message in outbox after expired message, instead got %v", numMessages)
+	}
+
+}

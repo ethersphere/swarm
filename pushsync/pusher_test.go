@@ -160,9 +160,6 @@ func (lb *loopBack) Register(topic string, _ bool, handler func(msg []byte, p *p
 // Send publishes a msg with a topic and directly calls registered handlers with
 // that topic
 func (lb *loopBack) Send(to []byte, topic string, msg []byte) error {
-	if !delayResponse() {
-		return nil
-	}
 	return lb.send(to, topic, msg)
 }
 
@@ -254,6 +251,12 @@ func (tp *testPushSyncIndex) Set(ctx context.Context, _ chunk.ModeSet, addrs ...
 	for _, addr := range addrs {
 		idx := int(binary.BigEndian.Uint64(addr[:8]))
 		tp.sent.Delete(idx)
+
+		tagID := tp.tagIDs[idx%len(tp.tagIDs)]
+		if tag, _ := tp.tags.Get(tagID); tag != nil {
+			tag.Inc(chunk.StateSynced)
+		}
+
 		tp.synced <- idx
 		log.Debug("set chunk synced", "idx", idx, "addr", addr)
 	}
