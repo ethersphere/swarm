@@ -33,7 +33,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
-	"github.com/ethersphere/swarm/network/gopubsub"
+	"github.com/ethersphere/swarm/network/pubsubchannel"
 	"github.com/ethersphere/swarm/pot"
 	sv "github.com/ethersphere/swarm/version"
 )
@@ -101,8 +101,8 @@ type Kademlia struct {
 	nDepthMu        sync.RWMutex                // protects neighbourhood depth nDepth
 	nDepthSig       []chan struct{}             // signals when neighbourhood depth nDepth is changed
 
-	newPeerPubSub     *gopubsub.PubSubChannel
-	removedPeerPubSub *gopubsub.PubSubChannel
+	newPeerPubSub     *pubsubchannel.PubSubChannel
+	removedPeerPubSub *pubsubchannel.PubSubChannel
 }
 
 type KademliaInfo struct {
@@ -129,8 +129,8 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		KadParams:         params,
 		capabilityIndex:   make(map[string]*capabilityIndex),
 		defaultIndex:      NewDefaultIndex(),
-		newPeerPubSub:     gopubsub.New(),
-		removedPeerPubSub: gopubsub.New(),
+		newPeerPubSub:     pubsubchannel.New(),
+		removedPeerPubSub: pubsubchannel.New(),
 	}
 	k.RegisterCapabilityIndex("full", *fullCapability)
 	k.RegisterCapabilityIndex("light", *lightCapability)
@@ -487,8 +487,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 }
 
 func (k *Kademlia) peerPo(peer *Peer) (po int, found bool) {
-	po, found = Pof(k.defaultIndex.conns.Pin(), peer, 0)
-	return po, found
+	return Pof(k.defaultIndex.conns.Pin(), peer, 0)
 }
 
 // setNeighbourhoodDepth calculates neighbourhood depth with depthForPot,
@@ -574,7 +573,7 @@ func (k *Kademlia) SubscribeToNeighbourhoodDepthChange() (c <-chan struct{}, uns
 // when a new Peer is added or removed from the table. Returned function unsubscribes
 // the channel from signaling and releases the resources. Returned function is safe
 // to be called multiple times.
-func (k *Kademlia) SubscribeToPeerChanges() (addedSub *gopubsub.Subscription, removedPeerSub *gopubsub.Subscription) {
+func (k *Kademlia) SubscribeToPeerChanges() (addedSub *pubsubchannel.Subscription, removedPeerSub *pubsubchannel.Subscription) {
 	addedSub = k.newPeerPubSub.Subscribe()
 	removedPeerSub = k.removedPeerPubSub.Subscribe()
 	return
@@ -675,7 +674,7 @@ func (k *Kademlia) EachBinDescFiltered(base []byte, capKey string, minProximityO
 	defer k.lock.RUnlock()
 	c, ok := k.capabilityIndex[capKey]
 	if !ok {
-		return fmt.Errorf("Unregistered capability index '%s'", capKey)
+		return fmt.Errorf("unregistered capability index '%s'", capKey)
 	}
 	k.eachBinDesc(c, base, minProximityOrder, consumer)
 	return nil

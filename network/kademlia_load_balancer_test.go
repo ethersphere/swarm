@@ -1,3 +1,18 @@
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 package network
 
 import (
@@ -7,8 +22,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
-	"github.com/ethersphere/swarm/network/gopubsub"
+	"github.com/ethersphere/swarm/network/pubsubchannel"
 	"github.com/ethersphere/swarm/pot"
 )
 
@@ -23,7 +39,7 @@ func TestAddedNodes(t *testing.T) {
 	klb := NewKademliaLoadBalancer(kademlia, false)
 
 	defer klb.Stop()
-	firstUses := klb.resourceUseStats.getUses(first)
+	firstUses := klb.resourceUseStats.GetUses(first)
 	if firstUses != 0 {
 		t.Errorf("Expected 0 uses for new peer at start")
 	}
@@ -32,8 +48,8 @@ func TestAddedNodes(t *testing.T) {
 	// Now new peers still should have 0 uses
 	third := newTestKadPeer("011101011")
 	kademlia.addPeer(third)
-	klb.resourceUseStats.waitKey(third.Key())
-	thirdUses := klb.resourceUseStats.getUses(third)
+	klb.resourceUseStats.WaitKey(third.Key())
+	thirdUses := klb.resourceUseStats.GetUses(third)
 	if thirdUses != 0 {
 		t.Errorf("Expected 0 uses for new peer because minimum in bin is 0. Instead %v", thirdUses)
 	}
@@ -43,8 +59,8 @@ func TestAddedNodes(t *testing.T) {
 	//New peers should start with 1 use
 	fourth := newTestKadPeer("011100011")
 	kademlia.addPeer(fourth)
-	klb.resourceUseStats.waitKey(fourth.Key())
-	fourthUses := klb.resourceUseStats.getUses(fourth)
+	klb.resourceUseStats.WaitKey(fourth.Key())
+	fourthUses := klb.resourceUseStats.GetUses(fourth)
 	if fourthUses != 1 {
 		t.Errorf("Expected 1 use for new peer because minimum in bin should be 1. Instead %v", fourthUses)
 	}
@@ -61,7 +77,7 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 	klb := NewKademliaLoadBalancer(kademlia, true)
 
 	defer klb.Stop()
-	firstUses := klb.resourceUseStats.getUses(first)
+	firstUses := klb.resourceUseStats.GetUses(first)
 	if firstUses != 0 {
 		t.Errorf("Expected 0 uses for new peer at start")
 	}
@@ -70,9 +86,9 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 	// Now third peer should have the same uses as second
 	third := newTestKadPeer("01110111") // most similar peer is second 01110101
 	kademlia.addPeer(third)
-	klb.resourceUseStats.waitKey(third.Key())
-	secondUses := klb.resourceUseStats.getUses(second)
-	thirdUses := klb.resourceUseStats.getUses(third)
+	klb.resourceUseStats.WaitKey(third.Key())
+	secondUses := klb.resourceUseStats.GetUses(second)
+	thirdUses := klb.resourceUseStats.GetUses(third)
 	if thirdUses != secondUses {
 		t.Errorf("Expected %v uses for new peer because is most similar to second. Instead %v", secondUses, thirdUses)
 	}
@@ -87,15 +103,17 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 
 	fourth := newTestKadPeer("01110110") // most similar peer is third 01110111
 	kademlia.addPeer(fourth)
-	klb.resourceUseStats.waitKey(fourth.Key())
+	klb.resourceUseStats.WaitKey(fourth.Key())
 	//We expect fourth to be initialized with third peer use count
-	fourthUses := klb.resourceUseStats.getUses(fourth)
-	thirdUses = klb.resourceUseStats.getUses(third)
+	fourthUses := klb.resourceUseStats.GetUses(fourth)
+	thirdUses = klb.resourceUseStats.GetUses(third)
 	if fourthUses != thirdUses {
 		t.Errorf("Expected %v use for new peer because most similar is peer 3. Instead %v", thirdUses, fourthUses)
 	}
 
 }
+
+var testCount = 0
 
 // TestEachBinBaseUses tests that EachBinDesc returns first the least used peer in its bin
 // We will create 3 bins with two peers each. We will call EachBinDesc 6 times twice with an address
@@ -104,56 +122,96 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 // Then we will use an address in a bin that is nearer to one of the peers and we will check that that peer is always
 // returned first.
 func TestEachBinBaseUses(t *testing.T) {
+	myCount := testCount
+	testCount++
 	tk := newTestKademlia(t, "11111111")
 	klb := NewKademliaLoadBalancer(tk, false)
-	tk.On("01010101") //Peer 1 dec 85
-	tk.On("01010100") // 2 dec 84
-	tk.On("10010100") // 3 dec 148
-	tk.On("10010001") // 4 dec 145
-	tk.On("11010100") // 5 dec 212
-	tk.On("11010101") // 6 dec 213
+	tk.On("01010101") //Peer 1 dec 85 hex 55
+	tk.On("01010100") // 2 dec 84 hex 54
+	tk.On("10010100") // 3 dec 148 hex 94
+	tk.On("10010001") // 4 dec 145 hex 91
+	tk.On("11010100") // 5 dec 212 hex d4
+	tk.On("11010101") // 6 dec 213 hex d5
 
-	pivotAddressBin0 := pot.NewAddressFromString("00000000") // Two nearest peers (1,2)
-	pivotAddressBin1 := pot.NewAddressFromString("10000000") // Two nearest peers (3,4)
-	pivotAddressBin2 := pot.NewAddressFromString("11000000") // Two nearest peers (5,6)
+	//Waiting for all peers to be registered
+	resources := klb.resourceUseStats.Len()
+	for resources != 6 {
+		time.Sleep(10 * time.Millisecond)
+		resources = klb.resourceUseStats.Len()
+	}
+
+	pivotAddressBin0 := pot.NewAddressFromString("00000000") // Two nearest peers (1,2) hex 00
+	pivotAddressBin1 := pot.NewAddressFromString("10000000") // Two nearest peers (3,4) hex 80
+	pivotAddressBin2 := pot.NewAddressFromString("11000000") // Two nearest peers (5,6) hex c0
 	countUse := func(bin LBBin) bool {
-		bin.LBPeers[0].AddUseCount()
+		peerLogLines := make([]string, 0)
+		for idx, lbPeer := range bin.LBPeers {
+			currentUses := klb.resourceUseStats.GetUses(lbPeer.Peer)
+			peerLogLine := "Peer " + peerToBitString(lbPeer.Peer) + " " + string(idx) + " currentUses " + strconv.FormatInt(int64(currentUses), 10)
+			peerLogLines = append(peerLogLines, peerLogLine)
+		}
+
+		log.Debug("peers for address in bin", "peers", peerLogLines, "po", bin.ProximityOrder, "count", myCount)
+		chosen := bin.LBPeers[0]
+		log.Debug("Chosen peer is", "chosen", chosen.Peer.Label(), "uses", klb.resourceUseStats.GetUses(chosen.Peer), "count", myCount)
+		chosen.AddUseCount()
 		return false
 	}
 	// Use peer 1 and 2
 	klb.EachBinDesc(pivotAddressBin0, countUse)
 	klb.EachBinDesc(pivotAddressBin0, countUse)
 
+	peer1Uses := klb.resourceUseStats.GetKeyUses(bitStringToHex("01010101"))
+	if peer1Uses != 1 {
+		t.Errorf("expected %v uses of %v but got %v", 1, "01010101", peer1Uses)
+	}
+	peer2Uses := klb.resourceUseStats.GetKeyUses(bitStringToHex("01010100"))
+	if peer2Uses != 1 {
+		t.Errorf("expected %v uses of %v but got %v", 1, "01010100", peer2Uses)
+	}
+
 	// Use peers 3 and 4
 	klb.EachBinDesc(pivotAddressBin1, countUse)
 	klb.EachBinDesc(pivotAddressBin1, countUse)
+
+	peer3Uses := klb.resourceUseStats.GetKeyUses(bitStringToHex("10010100"))
+	if peer3Uses != 1 {
+		t.Errorf("expected %v uses of %v but got %v", 1, "10010100", peer3Uses)
+	}
+	peer4Uses := klb.resourceUseStats.GetKeyUses(bitStringToHex("10010001"))
+	if peer4Uses != 1 {
+		t.Errorf("expected %v uses of %v but got %v", 1, "10010001", peer4Uses)
+	}
 
 	// Use peers 5 and 6
 	klb.EachBinDesc(pivotAddressBin2, countUse)
 	klb.EachBinDesc(pivotAddressBin2, countUse)
 
-	resourceUses := klb.resourceUseStats.dumpAllUses()
-	if len(resourceUses) != 6 {
-		t.Errorf("Expected all 6 peers to be used but got %v", len(resourceUses))
+	peer5Uses := klb.resourceUseStats.GetKeyUses(bitStringToHex("11010100"))
+	if peer5Uses != 1 {
+		t.Errorf("expected %v uses of %v but got %v", 1, "11010100", peer5Uses)
 	}
-	for key, uses := range resourceUses {
-		if uses != 1 {
-			bytes, _ := hexutil.Decode(key)
-			binaryKey := byteToBitString(bytes[0]) + byteToBitString(bytes[1])
-			t.Errorf("Expected only 1 use of %v but got %v", binaryKey, uses)
-		}
+	peer6Uses := klb.resourceUseStats.GetKeyUses(bitStringToHex("11010101"))
+	if peer6Uses != 1 {
+		t.Errorf("expected %v uses of %v but got %v", 1, "11010101", peer6Uses)
 	}
 
 	//Now a message that is nearer 10010001 than 10010100 in its bin. It will be taken always regardless of uses
-	pivotAddressBin3 := pot.NewAddressFromString("10010011") // Nearer 4
+	pivotAddressBin3 := pot.NewAddressFromString("10010011") // Nearer 4 hex 93
 
 	//Both calls to 4
 	klb.EachBinDesc(pivotAddressBin3, countUse)
 	klb.EachBinDesc(pivotAddressBin3, countUse)
 
-	count := klb.resourceUseStats.getKeyUses(bitStringToHex("10010001"))
+	count := klb.resourceUseStats.GetKeyUses(bitStringToHex("10010001"))
 	if count != 3 {
 		t.Errorf("Expected 3 uses of 10010001 but got %v", count)
+	}
+}
+
+func expectUses(actualUses int, expected int, peer string, t *testing.T) {
+	if actualUses != expected {
+		t.Errorf("expected %v uses of %v but got %v", expected, peer, actualUses)
 	}
 }
 
@@ -172,19 +230,19 @@ func TestEachBinFiltered(t *testing.T) {
 	capPeer := tk.newTestKadPeerWithCapabilities("10100000", caps[capKey])
 	tk.Kademlia.On(capPeer)
 	useStats := klb.resourceUseStats
-	useStats.waitKey(capPeer.Key())
+	useStats.WaitKey(capPeer.Key())
 	tk.On("01010101") // bin 0 dec 85 hex 55
-	useStats.waitKey(bitStringToHex("01010101"))
+	useStats.WaitKey(bitStringToHex("01010101"))
 	tk.On("01010100") // bin 0 dec 84 hex 54
-	useStats.waitKey(bitStringToHex("01010100"))
+	useStats.WaitKey(bitStringToHex("01010100"))
 	tk.On("10010100") // bin 1 dec 148
-	useStats.waitKey(bitStringToHex("10010100"))
+	useStats.WaitKey(bitStringToHex("10010100"))
 	tk.On("10010001") // bin 1 dec 145
-	useStats.waitKey(bitStringToHex("10010001"))
+	useStats.WaitKey(bitStringToHex("10010001"))
 	tk.On("11010100") // bin 2 dec 212
-	useStats.waitKey(bitStringToHex("11010100"))
+	useStats.WaitKey(bitStringToHex("11010100"))
 	tk.On("11010101") // bin 2 dec 213
-	useStats.waitKey(bitStringToHex("11010101"))
+	useStats.WaitKey(bitStringToHex("11010101"))
 	stats := make(map[string]int)
 	countUse := func(bin LBBin) bool {
 		peer := bin.LBPeers[0].Peer
@@ -200,19 +258,19 @@ func TestEachBinFiltered(t *testing.T) {
 	klb.EachBinFiltered(pivotAddressBin1, capKey, countUse)
 	klb.EachBinFiltered(pivotAddressBin1, capKey, countUse)
 
-	count := useStats.getUses(capPeer)
+	count := useStats.GetUses(capPeer)
 	if count != 3 || stats["10100000"] != 3 {
 		t.Errorf("Expected 3 uses of capability peer but got %v/%v", count, stats["10100000"])
 	}
 
 	secondCapPeer := tk.newTestKadPeerWithCapabilities("10100001", caps[capKey])
 	tk.Kademlia.On(secondCapPeer)
-	useStats.waitKey(secondCapPeer.Key())
-	secondCountStart := useStats.getUses(secondCapPeer)
-	count = useStats.getUses(capPeer)
+	useStats.WaitKey(secondCapPeer.Key())
+	secondCountStart := useStats.GetUses(secondCapPeer)
+	count = useStats.GetUses(capPeer)
 	klb.EachBinFiltered(pivotAddressBin1, capKey, countUse)
 	klb.EachBinFiltered(pivotAddressBin1, capKey, countUse)
-	secondCount := useStats.getUses(secondCapPeer)
+	secondCount := useStats.GetUses(secondCapPeer)
 	if secondCount-secondCountStart != 2 {
 		t.Errorf("Expected 2 uses of second capability peer but got %v", secondCount-secondCountStart)
 	}
@@ -221,8 +279,8 @@ func TestEachBinFiltered(t *testing.T) {
 
 type testKademliaBackend struct {
 	baseAddr       []byte
-	addedChannel   *gopubsub.PubSubChannel
-	removedChannel *gopubsub.PubSubChannel
+	addedChannel   *pubsubchannel.PubSubChannel
+	removedChannel *pubsubchannel.PubSubChannel
 	bins           map[int][]*Peer
 	maxPo          int
 }
@@ -275,8 +333,8 @@ func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*P
 func newTestKademliaBackend(address string) *testKademliaBackend {
 	return &testKademliaBackend{
 		baseAddr:       pot.NewAddressFromString(address),
-		addedChannel:   gopubsub.New(),
-		removedChannel: gopubsub.New(),
+		addedChannel:   pubsubchannel.New(),
+		removedChannel: pubsubchannel.New(),
 		bins:           make(map[int][]*Peer),
 	}
 }
@@ -289,7 +347,7 @@ func (tkb testKademliaBackend) BaseAddr() []byte {
 
 // SubscribeToPeerChanges returns a subscription to changes in the kademlia peers. It contains channels to notify about
 // peers added/removed from this kademlia.
-func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *gopubsub.Subscription, removedPeerSub *gopubsub.Subscription) {
+func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *pubsubchannel.Subscription, removedPeerSub *pubsubchannel.Subscription) {
 	addedSub = tkb.addedChannel.Subscribe()
 	removedPeerSub = tkb.removedChannel.Subscribe()
 	return

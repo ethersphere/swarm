@@ -129,7 +129,7 @@ func TestForwardBasic(t *testing.T) {
 	}
 	testCases = append(testCases, c)
 
-	//test with partial addresses
+	// test with partial addresses
 	const part = 12
 
 	for i := 0; i < firstNearest; i++ {
