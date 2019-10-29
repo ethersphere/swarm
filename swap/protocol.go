@@ -97,7 +97,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	return contract.ValidateCode(context.Background(), s.backend, handshake.ContractAddress)
+	return s.chequebookFactory.VerifyContract(handshake.ContractAddress)
 }
 
 // run is the actual swap protocol run method
@@ -161,6 +161,7 @@ type swapAPI interface {
 	SentCheques() (map[enode.ID]*Cheque, error)
 	ReceivedCheque(peer enode.ID) (cheque *Cheque, err error)
 	ReceivedCheques() (map[enode.ID]*Cheque, error)
+	AvailableBalance() (uint64, error)
 }
 
 // API would be the API accessor for protocol methods

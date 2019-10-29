@@ -185,7 +185,7 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 
 // Set the supplied addrs as synced in order to allow for garbage collection
 func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
-	err := s.netStore.Set(ctx, chunk.ModeSetSync, addrs...)
+	err := s.netStore.Set(ctx, chunk.ModeSetSyncPull, addrs...)
 	if err != nil {
 		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return err

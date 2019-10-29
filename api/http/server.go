@@ -75,8 +75,10 @@ var (
 )
 
 const (
-	TagHeaderName  = "x-swarm-tag" // Presence of this in header indicates the tag
-	PinHeaderName  = "x-swarm-pin" // Presence of this in header indicates pinning required
+	TagHeaderName       = "x-swarm-tag"       // Presence of this in header indicates the tag
+	AnonymousHeaderName = "x-swarm-anonymous" // Presence of this in header indicates only pull sync should be used for upload
+	PinHeaderName       = "x-swarm-pin"       // Presence of this in header indicates pinning required
+
 	encryptAddr    = "encrypt"
 	tarContentType = "application/x-tar"
 )
@@ -341,7 +343,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
+
 	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
+	w.Header().Set("Access-Control-Expose-Headers", TagHeaderName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -446,6 +451,8 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
+	w.Header().Set("Access-Control-Expose-Headers", TagHeaderName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }
@@ -1114,8 +1121,8 @@ const getFileBufferSize = 4 * 32 * 1024
 // bufferedReadSeeker wraps bufio.Reader to expose Seek method
 // from the provied io.ReadSeeker in newBufferedReadSeeker.
 type bufferedReadSeeker struct {
-	r io.Reader
-	s io.Seeker
+	r *bufio.Reader
+	s io.ReadSeeker
 }
 
 // newBufferedReadSeeker creates a new instance of bufferedReadSeeker,
@@ -1132,7 +1139,9 @@ func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
 }
 
 func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
-	return b.s.Seek(offset, whence)
+	n, err := b.s.Seek(offset, whence)
+	b.r.Reset(b.s)
+	return n, err
 }
 
 type loggingResponseWriter struct {

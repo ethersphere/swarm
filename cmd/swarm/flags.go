@@ -64,6 +64,11 @@ var (
 		Usage:  "SWAP chequebook contract address",
 		EnvVar: SwarmEnvChequebookAddr,
 	}
+	SwarmSwapChequebookFactoryFlag = cli.StringFlag{
+		Name:   "swap-chequebook-factory",
+		Usage:  "SWAP chequebook factory contract address",
+		EnvVar: SwarmEnvChequebookFactoryAddr,
+	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
 		Usage:  "Swarm SWAP enabled (default false)",
@@ -236,6 +241,10 @@ var (
 	SwarmProgressFlag = cli.BoolFlag{
 		Name:  "progress",
 		Usage: "Use this flag to enable tracking of the upload progress through the CLI",
+	}
+	SwarmAnonymousUploadFlag = cli.BoolFlag{
+		Name:  "anonymous",
+		Usage: "use this flag to upload anonymously",
 	}
 	SwarmVerboseFlag = cli.BoolFlag{
 		Name:  "verbose",

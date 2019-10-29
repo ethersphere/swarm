@@ -54,6 +54,7 @@ var (
 // database related objects.
 type DB struct {
 	shed *shed.DB
+	tags *chunk.Tags
 
 	// schema name of loaded data
 	schemaName shed.StringField
@@ -131,6 +132,7 @@ type Options struct {
 	Capacity uint64
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
+	Tags          *chunk.Tags
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -146,6 +148,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	db = &DB{
 		capacity: o.Capacity,
 		baseKey:  baseKey,
+		tags:     o.Tags,
 		// channel collectGarbageTrigger
 		// needs to be buffered with the size of 1
 		// to signal another event if it
@@ -415,6 +418,34 @@ func (db *DB) Close() (err error) {
 // and database base key.
 func (db *DB) po(addr chunk.Address) (bin uint8) {
 	return uint8(chunk.Proximity(db.baseKey, addr))
+}
+
+// DebugIndices returns the index sizes for all indexes in localstore
+// the returned map keys are the index name, values are the number of elements in the index
+func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
+	indexInfo = make(map[string]int)
+	for k, v := range map[string]shed.Index{
+		"retrievalDataIndex":   db.retrievalDataIndex,
+		"retrievalAccessIndex": db.retrievalAccessIndex,
+		"pushIndex":            db.pushIndex,
+		"pullIndex":            db.pullIndex,
+		"gcIndex":              db.gcIndex,
+		"gcExcludeIndex":       db.gcExcludeIndex,
+		"pinIndex":             db.pinIndex,
+	} {
+		indexSize, err := v.Count()
+		if err != nil {
+			return indexInfo, err
+		}
+		indexInfo[k] = indexSize
+	}
+	val, err := db.gcSize.Get()
+	if err != nil {
+		return indexInfo, err
+	}
+	indexInfo["gcSize"] = int(val)
+
+	return indexInfo, err
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.

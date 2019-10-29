@@ -19,13 +19,18 @@ package chunk
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/ethersphere/swarm/sctx"
 )
+
+var TagUidFunc = rand.Uint32
 
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
@@ -41,8 +46,8 @@ func NewTags() *Tags {
 
 // Create creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *Tags) Create(s string, total int64) (*Tag, error) {
-	t := NewTag(rand.Uint32(), s, total)
+func (ts *Tags) Create(s string, total int64, anon bool) (*Tag, error) {
+	t := NewTag(TagUidFunc(), s, total, anon)
 
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
@@ -108,4 +113,31 @@ func (ts *Tags) Range(fn func(k, v interface{}) bool) {
 
 func (ts *Tags) Delete(k interface{}) {
 	ts.tags.Delete(k)
+}
+
+func (ts *Tags) MarshalJSON() (out []byte, err error) {
+	m := make(map[string]*Tag)
+	ts.Range(func(k, v interface{}) bool {
+		key := fmt.Sprintf("%d", k)
+		m[key] = v.(*Tag)
+		return true
+	})
+	return json.Marshal(m)
+}
+
+func (ts *Tags) UnmarshalJSON(value []byte) error {
+	m := make(map[string]*Tag)
+	err := json.Unmarshal(value, &m)
+	if err != nil {
+		return err
+	}
+	for k, v := range m {
+		key, err := strconv.ParseUint(k, 10, 32)
+		if err != nil {
+			return err
+		}
+		ts.tags.Store(key, v)
+	}
+
+	return err
 }

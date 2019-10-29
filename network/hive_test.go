@@ -22,9 +22,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/log"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/state"
 )
 
@@ -174,4 +179,143 @@ func TestHiveStatePersistence(t *testing.T) {
 	if len(peers) != 0 {
 		t.Fatalf("%d peers left over: %v", len(peers), peers)
 	}
+}
+
+// TestHiveStateConnections connect the node to some peers and then after cleanup/save in store those peers
+// are retrieved and used as suggested peer initially.
+func TestHiveStateConnections(t *testing.T) {
+	dir, err := ioutil.TempDir("", "hive_test_store")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	const peersCount = 5
+
+	nodeIdToBzzAddr := make(map[string]*BzzAddr)
+	addedChan := make(chan struct{}, 5)
+	startHive := func(t *testing.T, dir string) (h *Hive, cleanupFunc func()) {
+		store, err := state.NewDBStore(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		params := NewHiveParams()
+		params.Discovery = false
+
+		prvkey, err := crypto.GenerateKey()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		h = NewHive(params, NewKademlia(PrivateKeyToBzzKey(prvkey), NewKadParams()), store)
+		s := p2ptest.NewProtocolTester(prvkey, 0, func(p *p2p.Peer, rw p2p.MsgReadWriter) error { return nil })
+
+		// Overwrite addPeer so the Node is added as a peer automatically.
+		// The related Overlay address is retrieved from nodeIdToBzzAddr where it has been saved before
+		if err := h.start(s.Server, func(node *enode.Node) {
+			bzzAddr := nodeIdToBzzAddr[encodeId(node.ID())]
+			if bzzAddr == nil {
+				t.Fatalf("Enode [%v] not found in saved peers!", encodeId(node.ID()))
+			}
+			bzzPeer := newConnPeerLocal(bzzAddr.Address(), h.Kademlia)
+			h.On(bzzPeer)
+			addedChan <- struct{}{}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		//Close ticker to avoid interference with initial peer suggestion
+		h.ticker.Stop()
+
+		cleanupFunc = func() {
+			err := h.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			s.Stop()
+		}
+		return h, cleanupFunc
+	}
+
+	h1, cleanup1 := startHive(t, dir)
+	peers := make(map[string]bool)
+	for i := 0; i < peersCount; i++ {
+		raddr := RandomBzzAddr()
+		h1.Register(raddr)
+		peers[raddr.String()] = true
+	}
+	const initialPeers = 5
+	for i := 0; i < initialPeers; i++ {
+		suggestedPeer, _, _ := h1.SuggestPeer()
+		if suggestedPeer != nil {
+			testAddPeer(suggestedPeer, h1, nodeIdToBzzAddr)
+		}
+
+	}
+	h1.Kademlia.lock.Lock()
+	numConns := h1.conns.Size()
+	h1.Kademlia.lock.Unlock()
+	connAddresses := make(map[string]string)
+	h1.EachConn(h1.base, 255, func(peer *Peer, i int) bool {
+		key := hexutil.Encode(peer.Address())
+		connAddresses[key] = key
+		return true
+	})
+	log.Warn("After 5 suggestions", "numConns", numConns)
+	cleanup1()
+
+	// start the hive and check that we suggest previous connected peers
+	h2, _ := startHive(t, dir)
+	// there should be at some point 5 conns
+	connsAfterLoading := 0
+	iterations := 0
+	h2.Kademlia.lock.Lock()
+	connsAfterLoading = h2.conns.Size()
+	h2.Kademlia.lock.Unlock()
+	for connsAfterLoading != numConns && iterations < 5 {
+		select {
+		case <-addedChan:
+			connsAfterLoading = h2.conns.Size()
+		case <-time.After(1 * time.Second):
+			iterations++
+		}
+		log.Trace("Iteration waiting for initial connections", "numConns", connsAfterLoading, "iterations", iterations)
+	}
+	if connsAfterLoading != numConns {
+		t.Errorf("Expected 5 peer connecteds from previous execution but got %v", connsAfterLoading)
+	}
+	h2.EachConn(h2.base, 255, func(peer *Peer, i int) bool {
+		key := hexutil.Encode(peer.Address())
+		if connAddresses[key] != key {
+			t.Errorf("Expected address %v to be in connections as it was a previous peer connected", key)
+		} else {
+			log.Warn("Previous peer connected again", "addr", key)
+		}
+		return true
+	})
+}
+
+// Create a Peer with the suggested address and store the relationshsip enode -> BzzAddr for later retrieval
+func testAddPeer(suggestedPeer *BzzAddr, h1 *Hive, nodeIdToBzzAddr map[string]*BzzAddr) {
+	byteAddresses := suggestedPeer.Address()
+	bzzPeer := newConnPeerLocal(byteAddresses, h1.Kademlia)
+	nodeIdToBzzAddr[encodeId(bzzPeer.ID())] = bzzPeer.BzzAddr
+	bzzPeer.kad = h1.Kademlia
+	h1.On(bzzPeer)
+}
+
+func encodeId(id enode.ID) string {
+	addr := id[:]
+	return hexutil.Encode(addr)
+}
+
+// We create a test Peer with underlay address to localhost and using overlay address provided
+func newConnPeerLocal(addr []byte, kademlia *Kademlia) *Peer {
+	hash := [common.HashLength]byte{}
+	copy(hash[:], addr)
+	potAddress := pot.Address(hash)
+	peer := newDiscPeer(potAddress)
+	peer.kad = kademlia
+	return peer
 }

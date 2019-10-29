@@ -19,8 +19,10 @@ package retrieval
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -41,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
@@ -60,7 +64,7 @@ func init() {
 	testutil.Init()
 }
 
-// TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them through the second node
+// TestChunkDelivery brings up two nodes, stores a few chunks on the first node, then tries to retrieve them from the second node
 func TestChunkDelivery(t *testing.T) {
 	chunkCount := 10
 	filesize := chunkCount * 4096
@@ -130,6 +134,210 @@ func TestChunkDelivery(t *testing.T) {
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+}
+
+// TestUnsolicitedChunkDelivery tests that a node is dropped in response to an unsolicited chunk delivery
+// this case covers a chunk Ruid that was not previously known to the downstream peer
+func TestUnsolicitedChunkDelivery(t *testing.T) {
+	pk, ns, cleanup := newTestNetstore(t)
+	defer cleanup()
+	bzzAddr := network.PrivateKeyToBzzKey(pk)
+
+	kad := network.NewKademlia(bzzAddr, network.NewKadParams())
+
+	tester, _, teardown, err := newRetrievalTester(t, pk, ns, kad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	node := tester.Nodes[0]
+
+	// deliver with a RUID which cannot be found
+	tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "Non-existent RUID chunk delivery",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 0,
+					Msg: &ChunkDelivery{
+						Ruid:  1234,
+						Addr:  nil,
+						SData: nil,
+					},
+					Peer: node.ID(),
+				},
+			},
+		})
+
+	// expect peer disconnection
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestUnsolicitedChunkDeliveryFaultyAddr tests that a misbehaving node cannot send a chunk delivery
+// over a known retrieve request Ruid with a chunk address that does not match the requested address
+func TestUnsolicitedChunkDeliveryFaultyAddr(t *testing.T) {
+	pk, ns, cleanup := newTestNetstore(t)
+	defer cleanup()
+	bzzAddr := network.PrivateKeyToBzzKey(pk)
+
+	kad := network.NewKademlia(bzzAddr, network.NewKadParams())
+
+	tester, r, teardown, err := newRetrievalTester(t, pk, ns, kad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+		return &enode.ID{}, nil
+	}
+	node := tester.Nodes[0]
+
+	// this exchange is needed so that the protocol peer gets created and that r.peers is not nil
+	err = tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "A bogus retrieve request",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 1,
+					Msg: &RetrieveRequest{
+						Ruid: 9876,
+						Addr: []byte{5, 4, 3, 2},
+					},
+					Peer: node.ID(),
+				},
+			},
+		},
+	)
+	for i := 0; i < 1000; i++ {
+		if r.getPeer(node.ID()) != nil {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	// inject a supposed retrieve request that was sent to that peer
+	r.getPeer(node.ID()).addRetrieval(1234, []byte{0, 1, 2, 3})
+
+	// respond with a chunk delivery with the same Ruid but with a different chunk address
+	err = tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "Ruid accepted but chunk address invalid",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 0,
+					Msg: &ChunkDelivery{
+						Ruid:  1234,
+						Addr:  []byte{0, 2, 1, 3},
+						SData: nil,
+					},
+					Peer: node.ID(),
+				},
+			},
+		},
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// expect disconnection
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestUnsolicitedChunkDeliveryDouble tests that a misbehaving node cannot send a chunk delivery
+// twice over a known retrieve request Ruid
+func TestUnsolicitedChunkDeliveryDouble(t *testing.T) {
+	pk, ns, cleanup := newTestNetstore(t)
+	defer cleanup()
+	bzzAddr := network.PrivateKeyToBzzKey(pk)
+
+	kad := network.NewKademlia(bzzAddr, network.NewKadParams())
+
+	tester, r, teardown, err := newRetrievalTester(t, pk, ns, kad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+		return &enode.ID{}, nil
+	}
+	node := tester.Nodes[0]
+
+	// this exchange is needed so that the protocol peer gets created and that r.peers is not nil
+	err = tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "A bogus retrieve request",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 1,
+					Msg: &RetrieveRequest{
+						Ruid: 9876,
+						Addr: []byte{5, 4, 3, 2},
+					},
+					Peer: node.ID(),
+				},
+			},
+		},
+	)
+	for i := 0; i < 1000; i++ {
+		if r.getPeer(node.ID()) != nil {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	// inject a supposed retrieve request that was sent to that peer
+	r.getPeer(node.ID()).addRetrieval(1234, []byte{0, 1, 2, 3})
+
+	// respond with a chunk delivery with the same Ruid and the matching chunk address
+	err = tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "Ruid & Chunk address correct",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 0,
+					Msg: &ChunkDelivery{
+						Ruid:  1234,
+						Addr:  []byte{0, 1, 2, 3},
+						SData: nil,
+					},
+					Peer: node.ID(),
+				},
+			},
+		},
+		p2ptest.Exchange{
+			Label: "Ruid seen, Chunk Address incorrect",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 0,
+					Msg: &ChunkDelivery{
+						Ruid:  1234,
+						Addr:  []byte{0, 2, 1, 3},
+						SData: nil,
+					},
+					Peer: node.ID(),
+				},
+			},
+		},
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// expect disconnection
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -400,4 +608,55 @@ func nodeConfigAtPo(t *testing.T, baseaddr []byte, po int) *adapters.NodeConfig 
 	}
 
 	return conf
+}
+
+func newRetrievalTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, kad *network.Kademlia) (*p2ptest.ProtocolTester, *Retrieval, func(), error) {
+	t.Helper()
+
+	if prvkey == nil {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			t.Fatalf("Could not generate key")
+		}
+		prvkey = key
+	}
+
+	r := New(kad, netStore, kad.BaseAddr(), nil)
+	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, r.runProtocol)
+
+	return protocolTester, r, protocolTester.Stop, nil
+}
+
+func newTestNetstore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, cleanup func()) {
+	t.Helper()
+	prvkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("Could not generate key")
+	}
+
+	dir, err := ioutil.TempDir("", "localstore-")
+	if err != nil {
+		t.Fatalf("Could not create localStore temp dir")
+	}
+
+	bzzAddr := network.PrivateKeyToBzzKey(prvkey)
+	localStore, err := localstore.New(dir, bzzAddr, nil)
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatalf("Could not create localStore")
+	}
+
+	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
+
+	cleanup = func() {
+		err = netStore.Close()
+		if err != nil {
+			t.Fatalf("Could not close netStore")
+		}
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Fatalf("Could not remove localstore dir")
+		}
+	}
+	return prvkey, netStore, cleanup
 }

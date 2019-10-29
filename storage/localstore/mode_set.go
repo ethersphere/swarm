@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -35,7 +36,6 @@ func (db *DB) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Addres
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
-
 	err = db.set(mode, addrs...)
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
@@ -78,9 +78,9 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 			db.binIDs.PutInBatch(batch, uint64(po), id)
 		}
 
-	case chunk.ModeSetSync:
+	case chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
 		for _, addr := range addrs {
-			c, err := db.setSync(batch, addr)
+			c, err := db.setSync(batch, addr, mode)
 			if err != nil {
 				return err
 			}
@@ -179,7 +179,7 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 // setSync adds the chunk to the garbage collection after syncing by updating indexes:
 //  - delete from push, insert to gc
 // Provided batch is updated.
-func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange int64, err error) {
+func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeSet) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
 
 	// need to get access timestamp here as it is not
@@ -200,6 +200,50 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange in
 	}
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
+
+	// moveToGc toggles the deletion of the item from pushsync index
+	// it will be false in the case pull sync was called but push sync was meant on that chunk (!tag.Anonymous)
+	moveToGc := true
+	if db.tags != nil {
+		i, err = db.pushIndex.Get(item)
+		switch err {
+		case nil:
+			tag, _ := db.tags.Get(i.Tag)
+			if tag != nil {
+				if tag.Anonymous {
+					// anonymous - only pull sync
+					switch mode {
+					case chunk.ModeSetSyncPull:
+						// this will not get called twice because we remove the item once after the !moveToGc check
+						tag.Inc(chunk.StateSent)
+						// this is needed since pushsync is checking if `tag.Done(chunk.StateSynced)` and when overlapping
+						// chunks are synced by both push and pull sync we have a problem. as an interim solution we increment this too
+						tag.Inc(chunk.StateSynced)
+					case chunk.ModeSetSyncPush:
+						// do nothing - this should not be possible. just log and return
+						log.Warn("chunk marked as push-synced but should be anonymous!", "tag.Uid", tag.Uid)
+						moveToGc = false
+					}
+				} else {
+					// not anonymous - push and pull should be used
+					switch mode {
+					case chunk.ModeSetSyncPull:
+						moveToGc = false
+					case chunk.ModeSetSyncPush:
+						tag.Inc(chunk.StateSynced)
+					}
+				}
+			}
+
+		case leveldb.ErrNotFound:
+			// the chunk is not accessed before
+		default:
+			return 0, err
+		}
+	}
+	if !moveToGc {
+		return 0, nil
+	}
 
 	i, err = db.retrievalAccessIndex.Get(item)
 	switch err {
