@@ -54,19 +54,19 @@ func TestFullOutbox(t *testing.T) {
 		testOutbox.Enqueue(testOutboxMessage)
 		completionC <- struct{}{}
 	}()
-	expectNotTimeout(completionC, t)
+	expectNotTimeout(t, completionC)
 
 	go func() {
 		testOutbox.Enqueue(testOutboxMessage)
 		completionC <- struct{}{}
 	}()
-	expectNotTimeout(completionC, t)
+	expectNotTimeout(t, completionC)
 
 	go func() {
 		testOutbox.Enqueue(testOutboxMessage)
 		completionC <- struct{}{}
 	}()
-	expectTimeout(completionC, t)
+	expectTimeout(t, completionC)
 
 	// Now we advance the messages stuck in the forward function. At least 2 of them to leave one space available.
 	processC <- struct{}{}
@@ -82,7 +82,7 @@ func TestFullOutbox(t *testing.T) {
 
 const blockTimeout = 100 * time.Millisecond
 
-func expectNotTimeout(completionC chan struct{}, t *testing.T) {
+func expectNotTimeout(t *testing.T, completionC chan struct{}) {
 	select {
 	case <-completionC:
 	case <-time.After(blockTimeout):
@@ -90,10 +90,10 @@ func expectNotTimeout(completionC chan struct{}, t *testing.T) {
 	}
 }
 
-func expectTimeout(completionC chan struct{}, t *testing.T) {
+func expectTimeout(t *testing.T, completionC chan struct{}) {
 	select {
 	case <-completionC:
-		t.Fatalf("epxected blocking enqueue")
+		t.Fatalf("expected blocking enqueue")
 	case <-time.After(blockTimeout):
 	}
 }

@@ -258,7 +258,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	if config.PushSyncEnabled {
-		pubsub := pss.NewPubSub(self.ps)
+		// expire time for push-sync messages should be lower than regular chat-like messages to avoid network flooding
+		pubsub := pss.NewPubSub(self.ps, 20*time.Second)
 		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}

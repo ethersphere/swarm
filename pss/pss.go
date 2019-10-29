@@ -439,7 +439,6 @@ func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{})
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
-	metrics.GetOrRegisterCounter("pss.handle.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
 
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
@@ -492,7 +491,6 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
 func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
-	metrics.GetOrRegisterCounter("pss.process.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
 	var err error
@@ -588,7 +586,6 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) enqueue(msg *message.Message) {
-	metrics.GetOrRegisterCounter("pss.enqueue.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
 	// TODO: create and enqueue in one outbox method
@@ -700,6 +697,7 @@ var sendFunc = sendMsg
 
 // tries to send a message, returns true if successful
 func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
+	defer metrics.GetOrRegisterResettingTimer("pss.pp.send", nil).UpdateSince(time.Now())
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
@@ -725,7 +723,6 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
 		log.Error(err.Error())
 	}
-	metrics.GetOrRegisterCounter("pss.pp.send", nil).Inc(1)
 	return err == nil
 }
 
@@ -740,7 +737,6 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 //// forwarding fails, the node should try to forward it to the next best peer, until the message is
 //// successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *message.Message) error {
-	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.forward.time", nil).UpdateSince(time.Now())
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)

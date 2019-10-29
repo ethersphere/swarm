@@ -27,13 +27,15 @@ import (
 
 // PubSub implements the pushsync.PubSub interface using pss
 type PubSub struct {
-	pss *Pss
+	pss        *Pss
+	messageTTL time.Duration  // expire duration of a pubsub message. Depends on the use case.
 }
 
 // NewPubSub creates a new PubSub
-func NewPubSub(p *Pss) *PubSub {
+func NewPubSub(p *Pss, messageTTL time.Duration) *PubSub {
 	return &PubSub{
-		pss: p,
+		pss:        p,
+		messageTTL: messageTTL,
 	}
 }
 
@@ -68,8 +70,7 @@ func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p
 
 // Send sends a message using pss SendRaw
 func (p *PubSub) Send(to []byte, topic string, msg []byte) error {
-	metrics.GetOrRegisterCounter("pss.pubsub.send.num", nil).Inc(1)
 	defer metrics.GetOrRegisterResettingTimer("pss.pubsub.send", nil).UpdateSince(time.Now())
 	pt := message.NewTopic([]byte(topic))
-	return p.pss.SendRaw(PssAddress(to), pt, msg, 20*time.Second)
+	return p.pss.SendRaw(PssAddress(to), pt, msg, p.messageTTL)
 }

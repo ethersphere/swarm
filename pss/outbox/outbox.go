@@ -39,7 +39,6 @@ type Outbox struct {
 	queue        []*outboxMsg
 	slots        chan int
 	process      chan int
-	numWorkers   int
 	stopC        chan struct{}
 	maxRetryTime time.Duration
 	clock        clock.Clock
@@ -59,7 +58,6 @@ func NewOutbox(config *Config) *Outbox {
 		queue:        make([]*outboxMsg, config.NumberSlots),
 		slots:        make(chan int, config.NumberSlots),
 		process:      make(chan int),
-		numWorkers:   config.NumberSlots,
 		stopC:        make(chan struct{}),
 		maxRetryTime: defaultMaxRetryTime,
 		clock:        clock.Realtime(),
@@ -118,13 +116,13 @@ func (o *Outbox) NewOutboxMessage(msg *message.Message) *outboxMsg {
 
 // ProcessOutbox starts a routine that tries to forward messages present in the outbox queue.
 func (o *Outbox) processOutbox() {
-	workerLimitC := make(chan struct{}, o.numWorkers)
+	workerLimitC := make(chan struct{}, cap(o.queue))
 	for {
 		select {
 		case <-o.stopC:
 			return
 		case slot := <-o.process:
-			log.Debug("Processing, taking worker", "workerLimit size", len(workerLimitC), "numWorkers", o.numWorkers)
+			log.Debug("Processing, taking worker", "workerLimit size", len(workerLimitC), "numWorkers", cap(o.queue))
 			workerLimitC <- struct{}{}
 			metrics.GetOrRegisterGauge("pss.outbox.workers", nil).Update(int64(len(workerLimitC)))
 			go func(slot int) {
