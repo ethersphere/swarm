@@ -28,7 +28,7 @@ import (
 // PubSub implements the pushsync.PubSub interface using pss
 type PubSub struct {
 	pss        *Pss
-	messageTTL time.Duration  // expire duration of a pubsub message. Depends on the use case.
+	messageTTL time.Duration // expire duration of a pubsub message. Depends on the use case.
 }
 
 // NewPubSub creates a new PubSub

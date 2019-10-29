@@ -91,13 +91,17 @@ func (o *Outbox) Stop() {
 // Then send it to process. This method is blocking if there is no workers available.
 func (o *Outbox) Enqueue(outboxMsg *outboxMsg) {
 	// first we try to obtain a slot in the outbox.
-	slot := <-o.slots
-	o.queue[slot] = outboxMsg
-	metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
-	// we send this message slot to process.
 	select {
 	case <-o.stopC:
-	case o.process <- slot:
+		return
+	case slot := <-o.slots:
+		o.queue[slot] = outboxMsg
+		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
+		// we send this message slot to process.
+		select {
+		case <-o.stopC:
+		case o.process <- slot:
+		}
 	}
 }
 
