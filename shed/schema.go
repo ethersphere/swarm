@@ -46,20 +46,20 @@ type fieldSpec struct {
 	Type string `json:"type"`
 }
 
-// indxSpec holds information about a particular index.
+// indexSpec holds information about a particular index.
 // It does not contain index type, as indexes do not have type.
 type indexSpec struct {
 	Name string `json:"name"`
 }
 
 // schemaFieldKey retrieves the complete LevelDB key for
-// a particular field form the schema definition.
+// a particular field from the schema definition.
 func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	if name == "" {
-		return nil, errors.New("field name can not be blank")
+		return nil, errors.New("field name cannot be blank")
 	}
 	if fieldType == "" {
-		return nil, errors.New("field type can not be blank")
+		return nil, errors.New("field type cannot be blank")
 	}
 	s, err := db.getSchema()
 	if err != nil {
@@ -86,11 +86,40 @@ func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	return append([]byte{keyPrefixFields}, []byte(name)...), nil
 }
 
+// RenameIndex changes the schema so that an existing index name is changed
+// while preserving its data by keeping the same internal key prefix.
+// Renaming indexes is useful when encoding functions can be backward compatible
+// to avoid data migrations.
+func (db *DB) RenameIndex(name, newName string) (renamed bool, err error) {
+	if name == "" {
+		return false, errors.New("index name cannot be blank")
+	}
+	if newName == "" {
+		return false, errors.New("new index name cannot be blank")
+	}
+	if newName == name {
+		return false, nil
+	}
+	s, err := db.getSchema()
+	if err != nil {
+		return false, err
+	}
+	for i, f := range s.Indexes {
+		if f.Name == name {
+			s.Indexes[i] = indexSpec{
+				Name: newName,
+			}
+			return true, db.putSchema(s)
+		}
+	}
+	return false, nil
+}
+
 // schemaIndexID retrieves the complete LevelDB prefix for
 // a particular index.
 func (db *DB) schemaIndexPrefix(name string) (id byte, err error) {
 	if name == "" {
-		return 0, errors.New("index name can not be blank")
+		return 0, errors.New("index name cannot be blank")
 	}
 	s, err := db.getSchema()
 	if err != nil {
