@@ -31,6 +31,8 @@ github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 h1:Eey/GGQ/E5Xp1P2Lyx1qj007hLZfbi0+CoVeJruGCtI=
 github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6/go.mod h1:Dmm/EzmjnCiweXmzRIAiUWCInVmPgjkzgv5k4tVyXiQ=
+github.com/caarlos0/env v3.5.0+incompatible h1:Yy0UN8o9Wtr/jGHZDpCBLpNrzcFLLM2yixi/rBrKyJs=
+github.com/caarlos0/env v3.5.0+incompatible/go.mod h1:tdCsowwCzMLdkqRYDlHpZCp2UooDD3MspDBjZ2AD02Y=
 github.com/cespare/cp v1.1.1 h1:nCb6ZLdB7NRaqsm91JtQTAme2SKJzXVsdPIPkyJr1MU=
 github.com/cespare/cp v1.1.1/go.mod h1:SOGHArjBr4JWaSDEVpWpo/hNg6RoKrls6Oh40hiwW+s=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
@@ -232,6 +234,10 @@ github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521 h1:3hxavr+IHMsQBrYUPQM
 github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521/go.mod h1:RvLn4FgxWubrpZHtQLnOf6EwhN2hEMusxZOhcW9H3UQ=
 github.com/rsksmart/rds-swarm v0.0.0-20190701203119-a553ab7dc3f8 h1:yl0A7ymLJZUjllzSWQgz+68yDDljclq4VOwIR9HPO6g=
 github.com/rsksmart/rds-swarm v0.0.0-20190701203119-a553ab7dc3f8/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
+github.com/rsksmart/rds-swarm v0.0.0-20191010175109-4fd7cae9e538 h1:SPSBFh4syBY8X16kkJe6SBMEZuO/oXQu2gv4XFfKmiY=
+github.com/rsksmart/rds-swarm v0.0.0-20191010175109-4fd7cae9e538/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
+github.com/rsksmart/rds-swarm v0.0.0-20191029192525-85b02e96e2ad h1:RPQtR6EeZtD4SGCeJwPde88ZNWa1FCRrkyRvoz05WV8=
+github.com/rsksmart/rds-swarm v0.0.0-20191029192525-85b02e96e2ad/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.1 h1:GL2rEmy6nsikmW0r8opw9JIRScdMF5hA8cOYLH7In1k=
 github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMBDgk/93Q=
