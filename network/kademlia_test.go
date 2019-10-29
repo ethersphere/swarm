@@ -375,7 +375,7 @@ func TestSuggestPeers(t *testing.T) {
 	base := "00000000"
 	tk := newTestKademlia(t, base)
 
-	//Add peers to bin 2 and 3 in order to be able to have depth 2
+	//Add peers to bin 2 and 3 in order to later be able to have depth 2
 	tk.On("00100000")
 	tk.On("00010000")
 	//No unconnected peers
@@ -388,13 +388,12 @@ func TestSuggestPeers(t *testing.T) {
 	//in the neighborhood, first suggestion should be for bin 1 (both bin 0 and 1 in neighbourhood)
 	tk.checkSuggestPeer("01110000", 0, false)
 	tk.On("01110000")
-	//Since we now have 1 peer in bin1 and none in bin0, next suggested peer should be for bin0
 	tk.checkSuggestPeer("11111000", 0, false)
 	tk.On("11111000")
 
 	tk.Register("11110000")
 	tk.Register("01100000")
-	//Both bins 0 and 1 have at least 1 peer and are out of the neighborhood, so next suggested peer should be for 0 (shallower)
+	//Both bins 0 and 1 have  1 peer and are out of the neighborhood, so next suggested peer should be for 0 (shallower)
 	tk.checkSuggestPeer("11110000", 0, false)
 	tk.On("11110000")
 	//Bin0 has 2 peers, bin1 has 1 peer, should recommend peer for bin 1
@@ -417,16 +416,15 @@ func TestSuggestPeers(t *testing.T) {
 	//We add addresses that fall in bin2 and bin3
 	tk.Register("00111000")
 	tk.Register("00011100")
-	//Since both in neighborhood, first should be closest peer
+	//Since both peers fall in bins in neighborhood, first should be for closest bin
 	tk.checkSuggestPeer("00011100", 0, false)
 	tk.On("00011100")
 	tk.checkSuggestPeer("00111000", 0, false)
 	tk.On("00111000")
 
-	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2)
-	//Bin0 and Bin1 not saturated, Bin2 saturated
-	tk.Register("11000000")
-	//Not in the neighborhood and same size, fill from shallower to deeper
+	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers(2)
+	//Bin0 and bin1 not saturated, bin2 saturated
+	//Since size of bin1 < bin0 , should first suggest for bin1
 	tk.checkSuggestPeer("01100011", 0, false)
 	tk.On("01100011")
 	tk.checkSuggestPeer("11000000", 0, false)
@@ -437,7 +435,7 @@ func TestSuggestPeers(t *testing.T) {
 	tk.Register("01010100")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//If bin (bin3) in neighbour, should keep adding peers even if size >== expectedMinBinSize
+	//If bin (bin3) in neighbour, should keep adding peers even if size >= expectedMinBinSize
 	tk.Register("00011111")
 	tk.Register("00010001")
 	tk.checkSuggestPeer("00010001", 0, false)
@@ -455,12 +453,12 @@ func TestSuggestPeers(t *testing.T) {
 	//Should suggest peer for bin4 first (since in neighbourhood, closest one)
 	tk.checkSuggestPeer("00001000", 0, false)
 	tk.On("00001000")
-	//Both bins still in neighbourhood, suggest closest peer (also bin4)
+	//Both bins still in neighbourhood, suggest peer for closest bin (also bin4)
 	tk.checkSuggestPeer("00001010", 0, false)
 	tk.On("00001010")
 	//Bin 4 has now  neighbourhood size peers, depth is now 4
 	//Since bin 3 not in neighbourhood anymore and connected peers > expectedMinBinSize(2), shouldn't suggest peer for it
-	//Bins 0 and 1 have peers unconnected and now are not saturated, should suggest for bin1 (smaller)
+	//Bins 0 and 1 have peers unconnected and are not saturated now, should suggest for bin1 (smaller)
 	tk.checkSuggestPeer("01010100", 0, false)
 	tk.On("01010100")
 	//Unconnected peer left in  unsaturated bin 0, should suggest it
