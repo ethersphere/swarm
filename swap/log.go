@@ -21,13 +21,14 @@ type Logger struct {
 }
 
 func wrapCtx(sl Logger, ctx ...interface{}) []interface{} {
+	// check for already-existing swap action in context
 	for _, elem := range ctx {
-		if elem == "action" {
+		if elem == "swap_action" {
 			return ctx
 		}
 	}
-	ctx = append([]interface{}{"swap_action", sl.action}, ctx...)
-	return ctx
+	// append otherwise
+	return append([]interface{}{"swap_action", sl.action}, ctx...)
 }
 
 // Warn is a convenient alias for log.Warn with a defined action context
