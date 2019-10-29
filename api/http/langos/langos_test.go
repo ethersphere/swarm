@@ -34,7 +34,9 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func TestLangosCallsPeekOnlyTwice(t *testing.T) {
+// TestLangosNumberOfReadCalls validates that Read calls on the passed
+// Reader is correct in respect to Langos peek calls.
+func TestLangosNumberOfReadCalls(t *testing.T) {
 	testData := "sometestdata" // len 12
 
 	for _, tc := range []struct {
@@ -101,6 +103,8 @@ func TestLangosCallsPeekOnlyTwice(t *testing.T) {
 	}
 }
 
+// TestLangosCallsPeek counts the number reads by Langos
+// for single read, validating that the peek is called.
 func TestLangosCallsPeek(t *testing.T) {
 	peekSize := 128
 	cr := newCounterReader(strings.NewReader("sometestdata"))
