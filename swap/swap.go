@@ -341,8 +341,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	cheque := msg.Cheque
 	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 
-	if cheque == p.getLastReceivedCheque() {
-		p.logger.Warn("received old cheque from peer", "cumulativePayout", cheque.CumulativePayout)
+	if p.getLastReceivedCheque() != nil && cheque.Equal(p.getLastReceivedCheque()) {
+		p.logger.Warn("cheque sent by peer has already been received in the past", "cumulativePayout", cheque.CumulativePayout)
 		return p.Send(ctx, &ConfirmChequeMsg{
 			Cheque: cheque,
 		})
