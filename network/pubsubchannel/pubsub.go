@@ -45,7 +45,7 @@ type Subscription struct {
 func New() *PubSubChannel {
 	return &PubSubChannel{
 		subscriptions: make([]*Subscription, 0),
-		quitC:         make(chan struct{}, 1),
+		quitC:         make(chan struct{}),
 	}
 }
 
@@ -115,7 +115,7 @@ func (psc *PubSubChannel) Close() {
 		sub.closeChannel()
 		sub.lock.Unlock()
 	}
-	psc.quitC <- struct{}{}
+	close(psc.quitC)
 }
 
 // Unsubscribe cancels subscription from the subscriber side. Channel is marked as closed but only writer should close it.
