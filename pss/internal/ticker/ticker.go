@@ -25,8 +25,9 @@ var ErrAlreadyStopped = errors.New("Already stopped")
 // New builds a ticker that will call the given callback function periodically
 func New(config *Config) *Ticker {
 
+	quitC := make(chan struct{})
 	tk := &Ticker{
-		quitC: make(chan struct{}),
+		quitC: quitC,
 	}
 	ticker := config.Clock.NewTicker(config.Interval)
 	go func() {
@@ -35,7 +36,7 @@ func New(config *Config) *Ticker {
 			select {
 			case <-ticker.C:
 				config.Callback()
-			case <-tk.quitC:
+			case <-quitC:
 				return
 			}
 		}

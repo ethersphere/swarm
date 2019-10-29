@@ -29,16 +29,16 @@ func TestDB_schemaFieldKey(t *testing.T) {
 	t.Run("empty name or type", func(t *testing.T) {
 		_, err := db.schemaFieldKey("", "")
 		if err == nil {
-			t.Errorf("error not returned, but expected")
+			t.Error("error not returned, but expected")
 		}
 		_, err = db.schemaFieldKey("", "type")
 		if err == nil {
-			t.Errorf("error not returned, but expected")
+			t.Error("error not returned, but expected")
 		}
 
 		_, err = db.schemaFieldKey("test", "")
 		if err == nil {
-			t.Errorf("error not returned, but expected")
+			t.Error("error not returned, but expected")
 		}
 	})
 
@@ -82,7 +82,7 @@ func TestDB_schemaFieldKey(t *testing.T) {
 
 		_, err = db.schemaFieldKey("the-field", "another-type")
 		if err == nil {
-			t.Errorf("error not returned, but expected")
+			t.Error("error not returned, but expected")
 		}
 	})
 }
@@ -121,6 +121,122 @@ func TestDB_schemaIndexPrefix(t *testing.T) {
 
 		if id1 == id2 {
 			t.Error("schema ids for the same index name are the same, but must not be")
+		}
+	})
+}
+
+// TestDB_RenameIndex checks if index name is correctly changed.
+func TestDB_RenameIndex(t *testing.T) {
+
+	t.Run("empty names", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t)
+		defer cleanupFunc()
+
+		// empty names
+		renamed, err := db.RenameIndex("", "")
+		if err == nil {
+			t.Error("error not returned, but expected")
+		}
+		if renamed {
+			t.Fatal("index should not be renamed")
+		}
+
+		// empty index name
+		renamed, err = db.RenameIndex("", "new")
+		if err == nil {
+			t.Error("error not returned, but expected")
+		}
+		if renamed {
+			t.Fatal("index should not be renamed")
+		}
+
+		// empty new index name
+		renamed, err = db.RenameIndex("current", "")
+		if err == nil {
+			t.Error("error not returned, but expected")
+		}
+		if renamed {
+			t.Fatal("index should not be renamed")
+		}
+	})
+
+	t.Run("same names", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t)
+		defer cleanupFunc()
+
+		renamed, err := db.RenameIndex("index1", "index1")
+		if err != nil {
+			t.Error(err)
+		}
+		if renamed {
+			t.Fatal("index should not be renamed")
+		}
+	})
+
+	t.Run("unknown name", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t)
+		defer cleanupFunc()
+
+		renamed, err := db.RenameIndex("index1", "index1new")
+		if err != nil {
+			t.Error(err)
+		}
+		if renamed {
+			t.Fatal("index should not be renamed")
+		}
+	})
+
+	t.Run("valid names", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t)
+		defer cleanupFunc()
+
+		// initial indexes
+		key1, err := db.schemaIndexPrefix("index1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		key2, err := db.schemaIndexPrefix("index2")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// name the first one
+		renamed, err := db.RenameIndex("index1", "index1new")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !renamed {
+			t.Fatal("index not renamed")
+		}
+
+		// validate that the index key stays the same
+		key1same, err := db.schemaIndexPrefix("index1new")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if key1 != key1same {
+			t.Fatal("indexes renamed, but keys are not the same")
+		}
+
+		// validate that the independent index is not changed
+		key2same, err := db.schemaIndexPrefix("index2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if key2 != key2same {
+			t.Fatal("independent index key has changed")
+		}
+
+		// validate that it is safe to create a new index with previous name
+		key1renew, err := db.schemaIndexPrefix("index1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if key1 == key1renew {
+			t.Fatal("renewed index and the original one have the same key")
+		}
+		if key2 == key1renew {
+			t.Fatal("renewed index and the independent one have the same key")
 		}
 	})
 }
