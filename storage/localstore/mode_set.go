@@ -201,20 +201,6 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
 
-	i, err = db.retrievalAccessIndex.Get(item)
-	switch err {
-	case nil:
-		item.AccessTimestamp = i.AccessTimestamp
-		db.gcIndex.DeleteInBatch(batch, item)
-		gcSizeChange--
-	case leveldb.ErrNotFound:
-		// the chunk is not accessed before
-	default:
-		return 0, err
-	}
-	item.AccessTimestamp = now()
-	db.retrievalAccessIndex.PutInBatch(batch, item)
-
 	// moveToGc toggles the deletion of the item from pushsync index
 	// it will be false in the case pull sync was called but push sync was meant on that chunk (!tag.Anonymous)
 	moveToGc := true
@@ -258,6 +244,20 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	if !moveToGc {
 		return 0, nil
 	}
+
+	i, err = db.retrievalAccessIndex.Get(item)
+	switch err {
+	case nil:
+		item.AccessTimestamp = i.AccessTimestamp
+		db.gcIndex.DeleteInBatch(batch, item)
+		gcSizeChange--
+	case leveldb.ErrNotFound:
+		// the chunk is not accessed before
+	default:
+		return 0, err
+	}
+	item.AccessTimestamp = now()
+	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pushIndex.DeleteInBatch(batch, item)
 
 	// Add in gcIndex only if this chunk is not pinned

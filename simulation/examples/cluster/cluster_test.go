@@ -69,6 +69,10 @@ func TestCluster(t *testing.T) {
 
 	// Test kubernetes adapter
 	t.Run("kubernetes", func(t *testing.T) {
+		if env := build.Env(); env.Name == "local" {
+			t.Skip("skip locally")
+		}
+
 		config := simulation.DefaultKubernetesAdapterConfig()
 		if !simulation.IsKubernetesAvailable(config.KubeConfigPath) {
 			t.Skip("kubernetes is not available, skipping test")

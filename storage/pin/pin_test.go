@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
@@ -505,42 +504,22 @@ func (p *API) collectPinnedChunks(t *testing.T, rootHash []byte, credentials str
 func (p *API) getAllChunksFromDB(t *testing.T) map[string]int {
 	t.Helper()
 
-	var addrLock sync.RWMutex
 	addrs := make(map[string]int)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-	var wg sync.WaitGroup
-
-	for bin := uint8(0); bin < uint8(chunk.MaxPO); bin++ {
-		ch, stop := p.db.SubscribePull(ctx, bin, 0, 0)
-		defer stop()
-
-		wg.Add(1)
-		go getChunks(t, bin, addrs, &addrLock, ch, &wg, ctx)
-	}
-
-	wg.Wait()
-	return addrs
-}
-
-func getChunks(t *testing.T, bin uint8, addrs map[string]int, addrLock *sync.RWMutex, ch <-chan chunk.Descriptor, wg *sync.WaitGroup, ctx context.Context) {
-	t.Helper()
-
-	defer wg.Done()
-	for {
-		select {
-		case got, ok := <-ch:
-			if !ok {
-				return
-			}
-			addrLock.Lock()
-			addrs[hex.EncodeToString(got.Address)] = 0
-			addrLock.Unlock()
-		case <-ctx.Done():
-			return
+	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
+		lastID, err := p.db.LastPullSubscriptionBinID(bin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lastID == 0 {
+			continue
+		}
+		sub, _ := p.db.SubscribePull(context.Background(), bin, 0, lastID)
+		for ch := range sub {
+			addrs[hex.EncodeToString(ch.Address)] = 0
 		}
 	}
+
+	return addrs
 }
 
 func getPinInfo(pinInfo []PinInfo, hash storage.Address) (PinInfo, error) {

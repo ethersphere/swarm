@@ -48,7 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	contract "github.com/ethersphere/go-sw3/contracts-v0-1-0/simpleswap"
+	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
 	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -78,8 +78,22 @@ type booking struct {
 // additional properties for the tests
 type swapTestBackend struct {
 	*backends.SimulatedBackend
+	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
+}
+
+func (b *swapTestBackend) Close() error {
+	// Do not close SimulatedBackend as it is a global instance.
+	return nil
+}
+
+func TestMain(m *testing.M) {
+	exitCode := m.Run()
+	// Close the global default backend
+	// when tests are done.
+	defaultBackend.Close()
+	os.Exit(exitCode)
 }
 
 func init() {
@@ -88,15 +102,23 @@ func init() {
 	swapLog = log.Root()
 }
 
+var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
+	ownerAddress:       {Balance: big.NewInt(1000000000000000000)},
+	beneficiaryAddress: {Balance: big.NewInt(1000000000000000000)},
+}, 8000000)
+
 // newTestBackend creates a new test backend instance
 func newTestBackend() *swapTestBackend {
-	gasLimit := uint64(8000000)
-	defaultBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		ownerAddress:       {Balance: big.NewInt(1000000000000000000)},
-		beneficiaryAddress: {Balance: big.NewInt(1000000000000000000)},
-	}, gasLimit)
+	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
+	defaultBackend.Commit()
+
+	// deploy a SimpleSwapFactoy
+	factoryAddress, _, _, _ := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend)
+	defaultBackend.Commit()
+
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
+		factoryAddress:   factoryAddress,
 	}
 }
 
@@ -590,6 +612,8 @@ func TestRepeatedBookings(t *testing.T) {
 
 //TestNewSwapFailure attempts to initialze SWAP with (a combination of) parameters which are not allowed. The test checks whether there are indeed failures
 func TestNewSwapFailure(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
 	dir, err := ioutil.TempDir("", "swarmSwap")
 	if err != nil {
 		t.Fatal(err)
@@ -628,6 +652,7 @@ func TestNewSwapFailure(t *testing.T) {
 		params            *Params
 		chequebookAddress common.Address
 		initialDeposit    uint64
+		factoryAddress    common.Address
 	}
 
 	var config testSwapConfig
@@ -646,6 +671,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.params = params
 				config.chequebookAddress = chequebookAddress
 				config.initialDeposit = InitialDeposit
+				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
@@ -656,6 +682,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.params,
 					config.chequebookAddress,
 					config.initialDeposit,
+					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "no backend URL given") {
 					t.Fatal("no backendURL, but created SWAP")
@@ -669,6 +696,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.prvkey = prvKey
 				config.backendURL = ipcEndpoint
 				params.PaymentThreshold = params.DisconnectThreshold + 1
+				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				_, err := New(
@@ -678,6 +706,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.params,
 					config.chequebookAddress,
 					config.initialDeposit,
+					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "disconnect threshold lower or at payment threshold") {
 					t.Fatal("disconnect threshold lower than payment threshold, but created SWAP", err.Error())
@@ -690,6 +719,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
 				params.PaymentThreshold = int64(DefaultPaymentThreshold)
+				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
 				defer os.RemoveAll(config.dbPath)
@@ -700,6 +730,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.params,
 					config.chequebookAddress,
 					config.initialDeposit,
+					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "error connecting to Ethereum API") {
 					t.Fatal("invalid backendURL, but created SWAP", err)
@@ -775,7 +806,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			name: "with wrong pass in",
 			configure: func(config *chequebookConfig) {
 				config.passIn = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8370000000000") // address without deployed chequebook
-				config.expectedError = fmt.Errorf("contract validation for %v failed: %v", config.passIn.Hex(), swap.ErrNotASwapContract)
+				config.expectedError = fmt.Errorf("contract validation for %v failed: %v", config.passIn.Hex(), swap.ErrNotDeployedByFactory)
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
@@ -870,9 +901,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 
 //TestDisconnectThreshold tests that the disconnect threshold is reached when adding the DefaultDisconnectThreshold amount to the peers balance
 func TestDisconnectThreshold(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 	testPeer := newDummyPeer()
 	testDeploy(context.Background(), swap)
@@ -886,9 +915,7 @@ func TestDisconnectThreshold(t *testing.T) {
 
 //TestPaymentThreshold tests that the payment threshold is reached when subtracting the DefaultPaymentThreshold amount from the peers balance
 func TestPaymentThreshold(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 	testDeploy(context.Background(), swap)
 	testPeer := newDummyPeerWithSpec(Spec)
@@ -1063,8 +1090,11 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // Then we re-open the state store and check that
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
 	// create a test swap account
-	swap, testDir := newBaseTestSwap(t, ownerKey, nil)
+	swap, testDir := newBaseTestSwap(t, ownerKey, testBackend)
 	defer os.RemoveAll(testDir)
 
 	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
@@ -1140,7 +1170,11 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
-	swap := newSwapInstance(stateStore, owner, backend, params)
+	factory, err := cswap.FactoryAt(backend.factoryAddress, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swap := newSwapInstance(stateStore, owner, backend, params, factory)
 	return swap, dir
 }
 
@@ -1156,9 +1190,17 @@ func newBaseTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBacke
 // returns a cleanup function
 func newTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) (*Swap, func()) {
 	t.Helper()
-	swap, dir := newBaseTestSwap(t, key, backend)
+	usedBackend := backend
+	if backend == nil {
+		usedBackend = newTestBackend()
+	}
+	swap, dir := newBaseTestSwap(t, key, usedBackend)
 	clean := func() {
 		swap.Close()
+		// only close if created by newTestSwap to avoid double close
+		if backend != nil {
+			backend.Close()
+		}
 		os.RemoveAll(dir)
 	}
 	return swap, clean
@@ -1306,10 +1348,8 @@ func TestVerifyChequeInvalidSignature(t *testing.T) {
 }
 
 // tests if TestValidateCode accepts an address with the correct bytecode
-func TestValidateCode(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+func TestVerifyContract(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	// deploy a new swap contract
@@ -1318,30 +1358,24 @@ func TestValidateCode(t *testing.T) {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
-	if err = cswap.ValidateCode(context.TODO(), testBackend, swap.GetParams().ContractAddress); err != nil {
+	if err = swap.chequebookFactory.VerifyContract(swap.GetParams().ContractAddress); err != nil {
 		t.Fatalf("Contract verification failed: %v", err)
 	}
 }
 
 // tests if ValidateCode rejects an address with different bytecode
-func TestValidateWrongCode(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
+func TestVerifyContractNotDeployedByFactory(t *testing.T) {
+	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	opts := bind.NewKeyedTransactor(ownerKey)
 
-	// we deploy the ECDSA library of OpenZeppelin which has a different bytecode than swap
-	addr, _, _, err := contract.DeployECDSA(opts, swap.backend)
+	addr, _, _, err := contractFactory.DeploySimpleSwap(opts, swap.backend, ownerAddress, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
 
-	testBackend.Commit()
-
-	// since the bytecode is different this should throw an error
-	if err = cswap.ValidateCode(context.TODO(), swap.backend, addr); err != cswap.ErrNotASwapContract {
+	if err = swap.chequebookFactory.VerifyContract(addr); err != cswap.ErrNotDeployedByFactory {
 		t.Fatalf("Contract verification verified wrong contract: %v", err)
 	}
 }
@@ -1352,13 +1386,60 @@ func setupContractTest() func() {
 	// we overwrite the waitForTx function with one which the simulated backend
 	// immediately commits
 	currentWaitFunc := cswap.WaitFunc
+	// we also need to store the previous cashCheque function in case this is called multiple times
+	currentCashCheque := defaultCashCheque
 	defaultCashCheque = testCashCheque
 	// overwrite only for the duration of the test, so...
 	cswap.WaitFunc = testWaitForTx
 	return func() {
 		// ...we need to set it back to original when done
 		cswap.WaitFunc = currentWaitFunc
-		defaultCashCheque = cashCheque
+		defaultCashCheque = currentCashCheque
+	}
+}
+
+// TestFactoryAddressForNetwork tests that an address is found for ropsten
+// and no address if for network 32145
+func TestFactoryAddressForNetwork(t *testing.T) {
+	address, err := cswap.FactoryAddressForNetwork(3)
+	if err != nil {
+		t.Fatal("didn't find address for ropsten")
+	}
+	if (address == common.Address{}) {
+		t.Fatal("address for ropsten is empty")
+	}
+	_, err = cswap.FactoryAddressForNetwork(32145)
+	if err == nil {
+		t.Fatal("got address for a not supported network")
+	}
+}
+
+// TestFactoryVerifySelf tests that it returns no error for a real factory
+// and expects errors for a different contract or no contract
+func TestFactoryVerifySelf(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+
+	factory, err := cswap.FactoryAt(testBackend.factoryAddress, testBackend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if factory.VerifySelf() != nil {
+		t.Fatal(err)
+	}
+
+	addr, _, _, err := contractFactory.DeployECDSA(bind.NewKeyedTransactor(ownerKey), testBackend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testBackend.Commit()
+
+	if _, err = cswap.FactoryAt(addr, testBackend); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err = cswap.FactoryAt(common.Address{}, testBackend); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1368,12 +1449,9 @@ func setupContractTest() func() {
 // and immediately try to cash-in the cheque
 // afterwards it attempts to cash-in a bouncing cheque
 func TestContractIntegration(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	log.Debug("creating test swap")
 
-	issuerSwap, clean := newTestSwap(t, ownerKey, testBackend)
+	issuerSwap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
 	issuerSwap.owner.address = ownerAddress
@@ -1407,7 +1485,8 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("cash-in the cheque")
 
-	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1431,14 +1510,14 @@ func TestContractIntegration(t *testing.T) {
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
 	bouncingCheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
-	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10
+	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10000*RetrieveRequestPrice
 	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	log.Debug("try to cash-in the bouncing cheque")
-	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, testBackend, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
+	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1464,24 +1543,38 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 	if err != nil {
 		return nil, err
 	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, cswap.ErrTransactionReverted
+	}
 	return receipt, nil
 }
 
 // deploy for testing (needs simulated backend commit)
 func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(42)
+	opts.Value = big.NewInt(9000 * int64(RetrieveRequestPrice))
 	opts.Context = ctx
 
-	swap.contract, _, err = cswap.Deploy(opts, swap.backend, swap.owner.address, defaultHarddepositTimeoutDuration)
-	if err != nil {
-		return err
-	}
 	var stb *swapTestBackend
 	var ok bool
 	if stb, ok = swap.backend.(*swapTestBackend); !ok {
 		return errors.New("not the expected test backend")
 	}
+
+	factory, err := cswap.FactoryAt(stb.factoryAddress, stb)
+	if err != nil {
+		return err
+	}
+
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	swap.contract, err = factory.DeploySimpleSwap(opts, swap.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
+	if err != nil {
+		return err
+	}
+
 	stb.Commit()
 
 	return err
@@ -1623,9 +1716,6 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 
 // TestPeerProcessAndVerifyCheque tests that processAndVerifyCheque accepts a valid cheque and also saves it
 func TestPeerProcessAndVerifyCheque(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
@@ -1668,9 +1758,6 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 // then it processes a valid cheque
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-
 	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
@@ -1816,6 +1903,75 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	if peer.getLastSentCumulativePayout() != cheque.CumulativePayout {
 		t.Fatalf("last cumulative payout should be the payout of the last sent cheque, was: %d, expected %d", peer.getLastSentCumulativePayout(), cheque.CumulativePayout)
 	}
+}
+
+func TestAvailableBalance(t *testing.T) {
+	testBackend := newTestBackend()
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	defer clean()
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	// deploy a chequebook
+	err := testDeploy(context.TODO(), swap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// create a peer
+	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify that available balance equals depositAmount (we deposit during deployment)
+	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
+	availableBalance, err := swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != depositAmount.Uint64() {
+		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount)
+	}
+	// withdraw 50
+	withdrawAmount := big.NewInt(50)
+	netDeposit := depositAmount.Uint64() - withdrawAmount.Uint64()
+	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Context = context.TODO()
+	rec, err := swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != types.ReceiptStatusSuccessful {
+		t.Fatal("Transaction reverted")
+	}
+
+	// verify available balance
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableBalance != netDeposit {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	}
+
+	// send a cheque worth 42
+	chequeAmount := int64(42)
+	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
+	peer.setBalance(-chequeAmount)
+	if err = peer.sendCheque(); err != nil {
+		t.Fatal(err)
+	}
+
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// verify available balance
+	if availableBalance != (netDeposit - uint64(chequeAmount)) {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	}
+
 }
 
 // dummyMsgRW implements MessageReader and MessageWriter
