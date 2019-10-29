@@ -308,7 +308,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	// It is the peer with a negative balance who sends a cheque, thus we check
 	// that the balance is *below* the threshold
 	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
-		swapPeer.logger.Info("balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold, "action", "add")
+		swapPeer.logger.Info("balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold, "swap_action", "add")
 		return swapPeer.sendCheque()
 	}
 
@@ -422,7 +422,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		p.logger.Error("error while saving last received cheque", "err", err.Error(), "action", "process_verify_cheque")
+		p.logger.Error("error while saving last received cheque", "err", err.Error(), "swap_action", "process_verify_cheque")
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -693,7 +693,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDeposit
 		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
 			return nil, err
 		}
-		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address, "action", "start_chequebook")
+		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address, "swap_action", "start_chequebook")
 		// first time connecting by deploying a new chequebook
 		return contract, nil
 	}
@@ -711,7 +711,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 	if err := s.chequebookFactory.VerifyContract(address); err != nil {
 		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
 	}
-	swapLog.Info("bound to chequebook", "chequebookAddr", address, "action", "bind_contract")
+	swapLog.Info("bound to chequebook", "chequebookAddr", address, "swap_action", "bind_contract")
 	// get the instance
 	return contract.InstanceAt(address, s.backend)
 }
