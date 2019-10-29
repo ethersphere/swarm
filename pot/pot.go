@@ -591,7 +591,12 @@ func (t *Pot) eachBin(pivotVal Val, pof Pof, minProximityOrder int, consumeBin B
 
 }
 
-// eachBinDesc traverse bins in descending po order (nearest to farthest). Returns if the user wants to continue iterating
+// eachBinDesc traverse bins in descending po order (nearest to farthest). Returns if the user wants to continue iterating.
+// Bins are iterated in the inverse order of eachBin:
+// 1 - Pin of the pot if pivotVal is closer than any other sub bin.
+// 2 - Then the bin (recursively) where the pivotVal belongs if any.
+// 3 - Then all the bins closer than the pivotVal bin will be joined into one big bin with the po of the base.
+// 4 - Then, the further bins to pivotVal in descending order.
 func (t *Pot) eachBinDesc(pivotVal Val, pof Pof, minProximityOrder int, consumeBin BinConsumer) bool {
 	if t == nil || t.size == 0 {
 		return false
@@ -601,7 +606,7 @@ func (t *Pot) eachBinDesc(pivotVal Val, pof Pof, minProximityOrder int, consumeB
 
 	var subPot *Pot
 	// If pivotBinIndex == len(t.bins), the pivotVal is the t.pin. We consume a virtual bin with max valProximityOrder
-	// and only one element.
+	// and only one element (Step 1 above).
 	if pivotBinIndex == len(t.bins) {
 		if valProximityOrder >= minProximityOrder {
 			bin := &Bin{
@@ -619,6 +624,7 @@ func (t *Pot) eachBinDesc(pivotVal Val, pof Pof, minProximityOrder int, consumeB
 	} else { // pivotVal is anywhere on the subtree
 		subPot = t.bins[pivotBinIndex]
 		// Consume bin where the pivotVal is, there we will have closest bins and t.pin that will have valProximityOrder
+		// (Step 2 above).
 		if subPot.po == valProximityOrder {
 			if !subPot.eachBinDesc(pivotVal, pof, minProximityOrder, consumeBin) {
 				return false
@@ -636,7 +642,7 @@ func (t *Pot) eachBinDesc(pivotVal Val, pof Pof, minProximityOrder int, consumeB
 			size += t.bins[i].size
 		}
 		// Consuming all bins after the bin where the pivotVal is
-		// (All bins will be provided to the user as one virtual bin with po = valProximityOrder)
+		// (All bins will be provided to the user as one virtual bin with po = valProximityOrder). (Step 3 above).
 		if valProximityOrder >= minProximityOrder {
 			bin := &Bin{
 				ProximityOrder: valProximityOrder,
@@ -652,7 +658,7 @@ func (t *Pot) eachBinDesc(pivotVal Val, pof Pof, minProximityOrder int, consumeB
 	}
 
 	// Finally we will consume all bins before the pivotVal bin (or all bins if the pivotVal is the t.pin)
-	// Always filtering bins with proximityOrder < minProximityOrder
+	// Always filtering bins with proximityOrder < minProximityOrder (Step 4 above).
 	for i := pivotBinIndex - 1; i >= 0; i-- {
 		subPot = t.bins[i]
 		if subPot.po < minProximityOrder {

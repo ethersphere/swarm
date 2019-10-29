@@ -1076,5 +1076,5 @@ func (tk *testKademlia) getAddressBin(po int) *pot.Bin {
 }
 
 func bzzAddrToBinary(bzzAddress *BzzAddr) string {
-	return byteToBinary(bzzAddress.OAddr[0])
+	return byteToBitString(bzzAddress.OAddr[0])
 }

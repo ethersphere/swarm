@@ -238,7 +238,7 @@ func TestGenerateTestRandomChunk(t *testing.T) {
 }
 
 // newRetrieveIndexesTest returns a test function that validates if the right
-// chunk values are in the retrieval indexes.
+// chunk values are in the retrieval indexes
 func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
@@ -299,6 +299,24 @@ func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) fun
 	}
 }
 
+// newPinIndexTest returns a test function that validates if the right
+// chunk values are in the pin index.
+func newPinIndexTest(db *DB, ch chunk.Chunk, wantError error) func(t *testing.T) {
+	return func(t *testing.T) {
+		t.Helper()
+
+		item, err := db.pinIndex.Get(shed.Item{
+			Address: ch.Address(),
+		})
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
+		}
+		if err == nil {
+			validateItem(t, item, ch.Address(), nil, 0, 0)
+		}
+	}
+}
+
 // newPushIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
 func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
@@ -319,8 +337,8 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 }
 
 // newGCIndexTest returns a test function that validates if the right
-// chunk values are in the push index.
-func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64, binID uint64) func(t *testing.T) {
+// chunk values are in the GC index.
+func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Helper()
 
@@ -329,10 +347,12 @@ func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp i
 			BinID:           binID,
 			AccessTimestamp: accessTimestamp,
 		})
-		if err != nil {
-			t.Fatal(err)
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
 		}
-		validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+		if err == nil {
+			validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+		}
 	}
 }
 
@@ -377,6 +397,27 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 		if got != want {
 			t.Errorf("got gc size %v, want %v", got, want)
 		}
+	}
+}
+
+func tagSyncedCounterTest(t *testing.T, count int, mode chunk.ModeSet, tag *chunk.Tag) {
+	c, _, err := tag.Status(chunk.StateSynced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doCheck := func(c int) {
+		if c != count {
+			t.Fatalf("synced count mismatch. got %d want %d", c, count)
+		}
+	}
+
+	// this should not be invoked always
+	if mode == chunk.ModeSetSyncPull && tag.Anonymous {
+		doCheck(int(c))
+	}
+
+	if mode == chunk.ModeSetSyncPush && !tag.Anonymous {
+		doCheck(int(c))
 	}
 }
 

@@ -78,6 +78,7 @@ func upload(ctx *cli.Context) {
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
 		toPin           = ctx.Bool(SwarmPinFlag.Name)
 		progress        = ctx.Bool(SwarmProgressFlag.Name)
+		anon            = ctx.Bool(SwarmAnonymousUploadFlag.Name)
 		autoDefaultPath = false
 		file            string
 	)
@@ -118,7 +119,7 @@ func upload(ctx *cli.Context) {
 			utils.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
-		hash, err := client.UploadRaw(f, f.Size, toEncrypt, toPin)
+		hash, err := client.UploadRaw(f, f.Size, toEncrypt, toPin, anon)
 		if err != nil {
 			utils.Fatalf("Upload failed: %s", err)
 		}
@@ -159,7 +160,7 @@ func upload(ctx *cli.Context) {
 					defaultPath = strings.TrimPrefix(absDefaultPath, absFile)
 				}
 			}
-			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin)
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin, anon)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -171,7 +172,7 @@ func upload(ctx *cli.Context) {
 			if mimeType != "" {
 				f.ContentType = mimeType
 			}
-			return client.Upload(f, "", toEncrypt, toPin)
+			return client.Upload(f, "", toEncrypt, toPin, anon)
 		}
 	}
 	start := time.Now()
@@ -192,8 +193,10 @@ func upload(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("failed to get tag data for hash: %v", err)
 	}
+
 	fmt.Println("Swarm Hash:", hash)
 	fmt.Println("Tag UID:", tag.Uid)
+
 	// check if the user uploaded something that was already completely stored
 	// in the local store (otherwise we hang forever because there's nothing to sync)
 	// as the chunks are already supposed to be synced
@@ -201,22 +204,22 @@ func upload(ctx *cli.Context) {
 	if total-seen > 0 {
 		fmt.Println("Upload status:")
 		bars := createTagBars(tag, verbose)
-		pollTag(client, tag, bars)
+		pollTag(client, hash, tag, bars)
 	}
 
 	fmt.Println("Done! took", time.Since(start))
 	fmt.Println("Your Swarm hash should now be retrievable from other nodes!")
 }
 
-func pollTag(client *client.Client, tag *chunk.Tag, bars map[string]*mpb.Bar) {
+func pollTag(client *client.Client, hash string, tag *chunk.Tag, bars map[string]*mpb.Bar) {
 	oldTag := *tag
 	lastTime := time.Now()
 
 	for {
 		time.Sleep(pollDelay)
-		newTag, err := client.TagByHash(tag.Address.String())
+		newTag, err := client.TagByHash(hash)
 		if err != nil {
-			utils.Fatalf("had an error polling the tag for address %s, err %v", tag.Address.String(), err)
+			utils.Fatalf("had an error polling the tag for hash %s, err %v", hash, err)
 		}
 		done := true
 		for _, state := range chunkStates {
