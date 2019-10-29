@@ -335,7 +335,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.BeneficiaryAddress, "cumulative payout", cheque.CumulativePayout)
+	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -345,7 +345,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	contract, err := swapcontract.InstanceAt(cheque.ContractAddress, s.backend)
+	otherChequebook, err := swapcontract.InstanceAt(cheque.ChequebookContract, s.backend)
 	if err != nil {
 		log.Error("error getting contract", "err", err)
 		return err
@@ -356,7 +356,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
-	paidOut, err := contract.PaidOut(nil, cheque.BeneficiaryAddress)
+	paidOut, err := otherChequebook.PaidOut(nil, cheque.Beneficiary)
 	if err != nil {
 		return err
 	}
@@ -365,7 +365,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		opts := bind.NewKeyedTransactor(s.owner.privateKey)
 		opts.Context = ctx
 		// cash cheque in async, otherwise this blocks here until the TX is mined
-		go defaultCashCheque(s, contract, opts, cheque)
+		go defaultCashCheque(s, otherChequebook, opts, cheque)
 	}
 
 	return err
@@ -373,9 +373,9 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 // cashCheque should be called async as it blocks until the transaction(s) are mined
 // The function cashes the cheque by sending it to the blockchain
-func cashCheque(s *Swap, chequebookContract swapcontract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
+func cashCheque(s *Swap, otherChequebook swapcontract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	result, receipt, err := chequebookContract.CashChequeBeneficiary(opts, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	result, receipt, err := otherChequebook.CashChequeBeneficiary(opts, s.GetParams().ContractAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now

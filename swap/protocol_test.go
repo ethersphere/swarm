@@ -164,8 +164,8 @@ func TestEmitCheque(t *testing.T) {
 	log.Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			ContractAddress:    debitorSwap.GetParams().ContractAddress,
-			BeneficiaryAddress: creditorSwap.owner.address,
+			ChequebookContract: debitorSwap.GetParams().ContractAddress,
+			Beneficiary:        creditorSwap.owner.address,
 			CumulativePayout:   balance,
 		},
 		Honey: balance,

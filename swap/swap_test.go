@@ -1231,9 +1231,9 @@ func newDummyPeerWithSpec(spec *protocols.Spec) *dummyPeer {
 func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			ContractAddress:    testChequeContract,
+			ChequebookContract: testChequeContract,
 			CumulativePayout:   uint64(42),
-			BeneficiaryAddress: beneficiaryAddress,
+			Beneficiary:        beneficiaryAddress,
 		},
 		Honey: uint64(42),
 	}
@@ -1247,9 +1247,9 @@ func newRandomTestCheque() *Cheque {
 
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
-			ContractAddress:    testChequeContract,
+			ChequebookContract: testChequeContract,
 			CumulativePayout:   uint64(amount),
-			BeneficiaryAddress: beneficiaryAddress,
+			Beneficiary:        beneficiaryAddress,
 		},
 		Honey: uint64(amount),
 	}
@@ -1469,7 +1469,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("deployed. signing cheque")
 
 	cheque := newTestCheque()
-	cheque.ChequeParams.ContractAddress = issuerSwap.GetParams().ContractAddress
+	cheque.ChequeParams.ChequebookContract = issuerSwap.GetParams().ContractAddress
 	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -1510,7 +1510,7 @@ func TestContractIntegration(t *testing.T) {
 
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
-	bouncingCheque.ChequeParams.ContractAddress = issuerSwap.GetParams().ContractAddress
+	bouncingCheque.ChequeParams.ChequebookContract = issuerSwap.GetParams().ContractAddress
 	bouncingCheque.CumulativePayout = bouncingCheque.CumulativePayout + 10000*RetrieveRequestPrice
 	bouncingCheque.Signature, err = bouncingCheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
@@ -1657,7 +1657,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 	// cheque with wrong contract
 	testCheque = newTestCheque()
-	testCheque.ContractAddress = beneficiaryAddress
+	testCheque.ChequebookContract = beneficiaryAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
 	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong contract")
@@ -1665,7 +1665,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 	// cheque with wrong beneficiary
 	testCheque = newTestCheque()
-	testCheque.BeneficiaryAddress = ownerAddress
+	testCheque.Beneficiary = ownerAddress
 	testCheque.Signature, _ = testCheque.Sign(ownerKey)
 	if err := testCheque.verifyChequeProperties(peer, swap.owner.address); err == nil {
 		t.Fatalf("accepted cheque with wrong beneficiary")
@@ -1761,7 +1761,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// invalid cheque because wrong recipient
 	cheque := newTestCheque()
-	cheque.BeneficiaryAddress = ownerAddress
+	cheque.Beneficiary = ownerAddress
 	cheque.Signature, _ = cheque.Sign(ownerKey)
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err == nil {
