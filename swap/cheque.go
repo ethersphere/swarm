@@ -112,11 +112,11 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 // verifyChequeProperties verifies the signature and if the cheque fields are appropriate for this peer
 // it does not verify anything that requires knowing the previous cheque
 func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common.Address) error {
-	if !bytes.Equal(cheque.ChequebookContract.Bytes(), p.contractAddress.Bytes()) {
-		return fmt.Errorf("wrong cheque parameters: expected contract: %x, was: %x", p.contractAddress, cheque.ChequebookContract)
+	if !bytes.Equal(cheque.ChequebookContract.Bytes(), p.chequebookContract.Bytes()) {
+		return fmt.Errorf("wrong cheque parameters: expected chequebook contract: %x, was: %x", p.chequebookContract, cheque.ChequebookContract)
 	}
 
-	// the beneficiary is the owner of the counterparty swap contract
+	// the beneficiary is the owner of the counterparty swap chequebook contract
 	if err := cheque.VerifySig(p.beneficiary); err != nil {
 		return err
 	}

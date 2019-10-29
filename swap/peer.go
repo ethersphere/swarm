@@ -37,7 +37,7 @@ type Peer struct {
 	lock               sync.RWMutex
 	swap               *Swap
 	beneficiary        common.Address
-	contractAddress    common.Address
+	chequebookContract common.Address
 	lastReceivedCheque *Cheque
 	lastSentCheque     *Cheque
 	balance            int64
@@ -47,11 +47,11 @@ type Peer struct {
 // NewPeer creates a new swap Peer instance
 func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAddress common.Address) (peer *Peer, err error) {
 	peer = &Peer{
-		Peer:            p,
-		swap:            s,
-		beneficiary:     beneficiary,
-		contractAddress: contractAddress,
-		logger:          newPeerLogger(s, p.ID()),
+		Peer:               p,
+		swap:               s,
+		beneficiary:        beneficiary,
+		chequebookContract: contractAddress,
+		logger:             newPeerLogger(s, p.ID()),
 	}
 
 	if peer.lastReceivedCheque, err = s.loadLastReceivedCheque(p.ID()); err != nil {
@@ -117,7 +117,7 @@ func (p *Peer) updateBalance(amount int64) error {
 
 // createCheque creates a new cheque whose beneficiary will be the peer and
 // whose amount is based on the last cheque and current balance for this peer
-// The cheque will be signed and point to the issuer's contract
+// The chequebook contract will be signed and point to the issuer's contract
 // To be called with mutex already held
 // Caller must be careful that the same resources aren't concurrently read and written by multiple routines
 func (p *Peer) createCheque() (*Cheque, error) {

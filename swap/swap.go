@@ -666,8 +666,8 @@ func promptInitialDepositAmount() (uint64, error) {
 	return uint64(val), nil
 }
 
-// StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
-func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) (contract swapcontract.Contract, err error) {
+// StartChequebook starts the chequebook contract, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
+func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) (chequebookContract swapcontract.Contract, err error) {
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
@@ -686,15 +686,15 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDeposit
 				return nil, err
 			}
 		}
-		if contract, err = s.Deploy(context.TODO(), toDeposit); err != nil {
+		if chequebookContract, err = s.Deploy(context.TODO(), toDeposit); err != nil {
 			return nil, err
 		}
-		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
+		if err := s.saveChequebook(chequebookContract.ContractParams().ContractAddress); err != nil {
 			return nil, err
 		}
-		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address)
+		swapLog.Info("Deployed chequebook contract", "contract address", chequebookContract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address)
 		// first time connecting by deploying a new chequebook
-		return contract, nil
+		return chequebookContract, nil
 	}
 	// first time connecting with a chequebookAddress passed in
 	if chequebookAddrFlag != (common.Address{}) {
@@ -715,7 +715,7 @@ func (s *Swap) bindToContractAt(address common.Address) (swapcontract.Contract, 
 	return swapcontract.InstanceAt(address, s.backend)
 }
 
-// Deploy deploys the Swap contract
+// Deploy deploys the Swap chequebook contract
 func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (swapcontract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	// initial topup value
@@ -725,7 +725,7 @@ func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (swapcon
 	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
 }
 
-// deployLoop repeatedly tries to deploy the swap contract .
+// deployLoop repeatedly tries to deploy the swap chequebook contract .
 func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance swapcontract.Contract, err error) {
 	for try := 0; try < deployRetries; try++ {
 		if try > 0 {
