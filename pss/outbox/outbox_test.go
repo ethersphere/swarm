@@ -72,7 +72,7 @@ func TestOutbox(t *testing.T) {
 		testOutbox.Enqueue(testOutboxMessage)
 		completionC <- struct{}{}
 	}()
-	expectNotTimeout(completionC, t)
+	expectNotTimeout(t, completionC)
 
 	// We wait for the forward function to success.
 	<-successC
@@ -83,7 +83,7 @@ func TestOutbox(t *testing.T) {
 		testOutbox.Enqueue(testOutboxMessage)
 		completionC <- struct{}{}
 	}()
-	expectNotTimeout(completionC, t)
+	expectNotTimeout(t, completionC)
 
 	// We wait for the forward function to fail
 	select {
@@ -172,7 +172,7 @@ func newTestMessage(num byte) *message.Message {
 
 const blockTimeout = 100 * time.Millisecond
 
-func expectNotTimeout(completionC chan struct{}, t *testing.T) {
+func expectNotTimeout(t *testing.T, completionC chan struct{}) {
 	select {
 	case <-completionC:
 	case <-time.After(blockTimeout):
@@ -180,7 +180,7 @@ func expectNotTimeout(completionC chan struct{}, t *testing.T) {
 	}
 }
 
-func expectTimeout(completionC chan struct{}, t *testing.T) {
+func expectTimeout(t *testing.T, completionC chan struct{}) {
 	select {
 	case <-completionC:
 		t.Fatalf("epxected blocking enqueue")
@@ -221,7 +221,7 @@ func TestMessageRetriesExpired(t *testing.T) {
 		completionC <- struct{}{}
 	}()
 
-	expectNotTimeout(completionC, t)
+	expectNotTimeout(t, completionC)
 
 	numMessages := testOutbox.Len()
 	if numMessages != 1 {

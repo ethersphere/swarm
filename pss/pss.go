@@ -596,7 +596,7 @@ func (p *Pss) enqueue(msg *message.Message) {
 // Send a raw message (any encryption is responsibility of calling client)
 //
 // Will fail if raw messages are disallowed
-func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messageTtl time.Duration) error {
+func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messageTTL time.Duration) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.send.raw", nil).UpdateSince(time.Now())
 
 	if err := validateAddress(address); err != nil {
@@ -609,7 +609,7 @@ func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messa
 
 	pssMsg := message.New(pssMsgParams)
 	pssMsg.To = address
-	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
+	pssMsg.Expire = uint32(time.Now().Add(messageTTL).Unix())
 	pssMsg.Payload = msg
 	pssMsg.Topic = topic
 
@@ -737,7 +737,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 //// forwarding fails, the node should try to forward it to the next best peer, until the message is
 //// successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *message.Message) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.forward.time", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss.forward", nil).UpdateSince(time.Now())
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
