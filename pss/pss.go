@@ -493,7 +493,6 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
 
-	var err error
 	var payload []byte
 	var from PssAddress
 	var asymmetric bool
@@ -512,6 +511,7 @@ func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
 			keyFunc = p.processAsym
 		}
 
+		var err error
 		payload, keyid, from, err = keyFunc(pssmsg)
 		if err != nil {
 			return errors.New("decryption failed")
@@ -522,7 +522,7 @@ func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
 		p.enqueue(pssmsg)
 	}
 	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
-	return err
+	return nil
 }
 
 // copy all registered handlers for respective topic in order to avoid data race or deadlock
