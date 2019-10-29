@@ -53,15 +53,15 @@ const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	store             state.Store            // store is needed in order to keep balances and cheques across sessions
-	peers             map[enode.ID]*Peer     // map of all swap Peers
-	peersLock         sync.RWMutex           // lock for peers map
-	backend           contract.Backend       // the backend (blockchain) used
-	owner             *Owner                 // contract access
-	params            *Params                // economic and operational parameters
-	contract          swap.Contract          // reference to the smart contract
-	chequebookFactory swap.SimpleSwapFactory // the chequebook factory used
-	honeyPriceOracle  HoneyOracle            // oracle which resolves the price of honey (in Wei)
+	store             state.Store                // store is needed in order to keep balances and cheques across sessions
+	peers             map[enode.ID]*Peer         // map of all swap Peers
+	peersLock         sync.RWMutex               // lock for peers map
+	backend           contract.Backend           // the backend (blockchain) used
+	owner             *Owner                     // contract access
+	params            *Params                    // economic and operational parameters
+	contract          contract.Contract          // reference to the smart contract
+	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
+	honeyPriceOracle  HoneyOracle                // oracle which resolves the price of honey (in Wei)
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -179,6 +179,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, err
 	}
 	swapLog.Info("Using backend network ID", "ID", chainID.Uint64())
+
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 	// initialize the factory
@@ -199,6 +200,13 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
 		return nil, err
 	}
+	availableBalance, err := swap.AvailableBalance()
+	if err != nil {
+		return nil, err
+	}
+
+	swapLog.Info("available balance", "balance", availableBalance)
+
 	return swap, nil
 }
 
@@ -492,6 +500,38 @@ func (s *Swap) Cheques() (map[enode.ID]*PeerCheques, error) {
 	return cheques, nil
 }
 
+// AvailableBalance returns the total balance of the chequebook against which new cheques can be written
+func (s *Swap) AvailableBalance() (uint64, error) {
+	// get the LiquidBalance of the chequebook
+	liquidBalance, err := s.contract.LiquidBalance(nil)
+	if err != nil {
+		return 0, err
+	}
+
+	// get all cheques
+	cheques, err := s.Cheques()
+	if err != nil {
+		return 0, err
+	}
+
+	// Compute the total worth of cheques sent and how much of of this is cashed
+	var sentChequesWorth uint64
+	var cashedChequesWorth uint64
+	for _, peerCheques := range cheques {
+		sentCheque := peerCheques.LastSentCheque
+		if sentCheque == nil {
+			continue
+		}
+		sentChequesWorth += sentCheque.ChequeParams.CumulativePayout
+		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
+		if err != nil {
+			return 0, err
+		}
+		cashedChequesWorth += paidOut.Uint64()
+	}
+	return liquidBalance.Uint64() + cashedChequesWorth - sentChequesWorth, nil
+}
+
 // add cheques from store for peers not already present in given cheques map
 func (s *Swap) addStoreCheques(chequePrefix string, cheques map[enode.ID]*PeerCheques) error {
 	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
@@ -597,7 +637,7 @@ func (s *Swap) Close() error {
 }
 
 // GetParams returns contract parameters (Bin, ABI, contractAddress) from the contract
-func (s *Swap) GetParams() *swap.Params {
+func (s *Swap) GetParams() *contract.Params {
 	return s.contract.ContractParams()
 }
 
