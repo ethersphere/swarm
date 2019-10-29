@@ -164,6 +164,7 @@ func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficia
 	return result, receipt, nil
 }
 
+// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
 func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
 	return s.instance.LiquidBalance(opts)
 }
