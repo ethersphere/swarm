@@ -165,6 +165,18 @@ func TestBalance(t *testing.T) {
 	testBalance(t, swap, testPeer2ID, 4)
 }
 
+// tests that expected balance for peer matches the result of the Balance function
+func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
+	t.Helper()
+	b, err := s.Balance(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b != expectedBalance {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
+	}
+}
+
 func addPeer(t *testing.T, s *Swap) *Peer {
 	t.Helper()
 	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
@@ -180,18 +192,6 @@ func setBalance(t *testing.T, p *Peer, balance int64) {
 	err := p.setBalance(balance)
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-// tests that expected balance for peer matches the result of the Balance function
-func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
-	t.Helper()
-	b, err := s.Balance(id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != expectedBalance {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
 	}
 }
 
