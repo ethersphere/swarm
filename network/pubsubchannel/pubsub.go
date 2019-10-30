@@ -16,9 +16,11 @@
 package pubsubchannel
 
 import (
+	"fmt"
 	"strconv"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 )
 
@@ -82,21 +84,27 @@ func (psc *PubSubChannel) Publish(msg interface{}) {
 	psc.subsMutex.RLock()
 	defer psc.subsMutex.RUnlock()
 	for _, sub := range psc.subscriptions {
-		sub.lock.RLock()
-		if sub.closed {
-			log.Debug("Subscription was closed", "id", sub.id)
-			sub.closeChannel()
-		} else {
-			go func(sub *Subscription) {
+		go func(sub *Subscription) {
+			sub.lock.Lock()
+			defer sub.lock.Unlock()
+			metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.pending", sub.id), nil).Inc(1)
+			defer metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.pending", sub.id), nil).Inc(-1)
+			//atomic.AddInt64(sub.pending, 1)
+			//defer atomic.AddInt64(sub.pending, -1)
+			if sub.closed {
+				log.Debug("Subscription was closed", "id", sub.id)
+				sub.closeChannel()
+			} else {
 				select {
 				case sub.signal <- msg:
+					metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.delivered", sub.id), nil).Inc(1)
+					//atomic.AddInt64(sub.msgCount, 1)
 				case <-psc.quitC:
 				case <-sub.quitC:
-					log.Warn("Subscription closed before message delivery")
 				}
-			}(sub)
-		}
-		sub.lock.RUnlock()
+			}
+
+		}(sub)
 	}
 }
 
@@ -148,6 +156,14 @@ func (sub *Subscription) closeChannel() {
 	sub.closeOnce.Do(func() {
 		close(sub.signal)
 	})
+}
+
+func (sub *Subscription) MessageCount() int64 {
+	return metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.delivered", sub.id), nil).Count()
+}
+
+func (sub *Subscription) Pending() int64 {
+	return metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.pending", sub.id), nil).Count()
 }
 
 func newSubscription(id string, psc *PubSubChannel) Subscription {

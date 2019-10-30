@@ -16,7 +16,7 @@
 package pubsubchannel_test
 
 import (
-	"runtime"
+	"fmt"
 	"runtime/pprof"
 	"sync"
 	"testing"
@@ -24,7 +24,12 @@ import (
 
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/pubsubchannel"
+	"github.com/ethersphere/swarm/testutil"
 )
+
+func init() {
+	testutil.Init()
+}
 
 func TestPubSeveralSub(t *testing.T) {
 	pubSub := pubsubchannel.New()
@@ -83,7 +88,7 @@ func testSubscriptor(pubsub *pubsubchannel.PubSubChannel, expectedMessages int, 
 				return
 			}
 		}
-		log.Debug("Finishing subscriptor gofunc", "id", subscription.ID())
+		log.Debug("Finishing subscriber gofunc", "id", subscription.ID())
 	}(subscription)
 	return msgBucket, subscription
 }
@@ -95,25 +100,23 @@ func TestUnsubscribeBeforeReadingMessages(t *testing.T) {
 	s := ps.Subscribe()
 	defer ps.Close()
 
-	numGoroutinesStart := runtime.NumGoroutine()
-
 	for i := 0; i < 1000; i++ {
 		ps.Publish(struct{}{})
 	}
 
 	s.Unsubscribe()
-	// allow goroutines to finish
-	var newGoroutines int
-	for i := 0; i < 500; i++ {
+	// allow goroutines to finish, no pending messages
+	var pendingMessages int64
+	for i := 0; i < 500 && pendingMessages > 0; i++ {
 		time.Sleep(10 * time.Millisecond)
-		newGoroutines = runtime.NumGoroutine() - numGoroutinesStart
-		if newGoroutines <= 0 {
+		pendingMessages = s.Pending()
+		if pendingMessages <= 0 {
 			break
 		}
 	}
 
-	if newGoroutines > 0 {
-		t.Errorf("%v new goroutines were active after unsubscribe, want none", newGoroutines)
+	if pendingMessages > 0 {
+		t.Errorf("%v new goroutines were active after unsubscribe, want none", pendingMessages)
 		pprof.Lookup("goroutine").WriteTo(newTestingErrorWriter(t), 1)
 	}
 }
@@ -142,13 +145,13 @@ func TestMessagesAfterUnsubscribe(t *testing.T) {
 	s := ps.Subscribe()
 
 	for i := 0; i < 1000; i++ {
-		ps.Publish(i)
+		ps.Publish(fmt.Sprintf("Message %v", i))
 	}
 	c := s.ReceiveChannel()
 
 	s.Unsubscribe()
 
-	time.Sleep(10 * time.Millisecond)
+	ps.Publish("End message")
 	var n int
 	timeout := time.After(2 * time.Second)
 loop:
