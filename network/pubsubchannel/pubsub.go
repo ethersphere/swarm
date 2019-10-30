@@ -39,6 +39,7 @@ type Subscription struct {
 	closeOnce sync.Once
 	id        string
 	lock      sync.RWMutex
+	quitC     chan struct{} // close channel for publisher goroutines
 }
 
 // New creates a new PubSubChannel.
@@ -90,6 +91,8 @@ func (psc *PubSubChannel) Publish(msg interface{}) {
 				select {
 				case sub.signal <- msg:
 				case <-psc.quitC:
+				case <-sub.quitC:
+					log.Warn("Subscription closed before message delivery")
 				}
 			}(sub)
 		}
@@ -120,6 +123,7 @@ func (psc *PubSubChannel) Close() {
 
 // Unsubscribe cancels subscription from the subscriber side. Channel is marked as closed but only writer should close it.
 func (sub *Subscription) Unsubscribe() {
+	close(sub.quitC)
 	sub.pubSubC.removeSub(sub)
 }
 
@@ -150,8 +154,9 @@ func newSubscription(id string, psc *PubSubChannel) Subscription {
 	return Subscription{
 		closed:    false,
 		pubSubC:   psc,
-		signal:    make(chan interface{}, 20),
+		signal:    make(chan interface{}),
 		closeOnce: sync.Once{},
 		id:        id,
+		quitC:     make(chan struct{}),
 	}
 }

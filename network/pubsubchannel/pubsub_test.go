@@ -16,8 +16,11 @@
 package pubsubchannel_test
 
 import (
+	"os"
+	"runtime/pprof"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/pubsubchannel"
@@ -83,4 +86,19 @@ func testSubscriptor(pubsub *pubsubchannel.PubSubChannel, expectedMessages int, 
 		log.Debug("Finishing subscriptor gofunc", "id", subscription.ID())
 	}(subscription)
 	return msgBucket, subscription
+}
+
+func TestUnsubscribeBeforeReadingMessages(t *testing.T) {
+	ps := pubsubchannel.New()
+	s := ps.Subscribe()
+	defer ps.Close()
+
+	for i := 0; i < 1000; i++ {
+		ps.Publish(struct{}{})
+	}
+
+	s.Unsubscribe()
+	// allow goroutines to finish
+	time.Sleep(100 * time.Millisecond)
+	pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 }
