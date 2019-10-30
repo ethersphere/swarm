@@ -16,11 +16,10 @@
 package pubsubchannel
 
 import (
-	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 )
 
@@ -42,6 +41,8 @@ type Subscription struct {
 	id        string
 	lock      sync.RWMutex
 	quitC     chan struct{} // close channel for publisher goroutines
+	msgCount  *int64
+	pending   *int64
 }
 
 // New creates a new PubSubChannel.
@@ -87,18 +88,15 @@ func (psc *PubSubChannel) Publish(msg interface{}) {
 		go func(sub *Subscription) {
 			sub.lock.Lock()
 			defer sub.lock.Unlock()
-			metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.pending", sub.id), nil).Inc(1)
-			defer metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.pending", sub.id), nil).Inc(-1)
-			//atomic.AddInt64(sub.pending, 1)
-			//defer atomic.AddInt64(sub.pending, -1)
+			atomic.AddInt64(sub.pending, 1)
+			defer atomic.AddInt64(sub.pending, -1)
 			if sub.closed {
 				log.Debug("Subscription was closed", "id", sub.id)
 				sub.closeChannel()
 			} else {
 				select {
 				case sub.signal <- msg:
-					metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.delivered", sub.id), nil).Inc(1)
-					//atomic.AddInt64(sub.msgCount, 1)
+					atomic.AddInt64(sub.msgCount, 1)
 				case <-psc.quitC:
 				case <-sub.quitC:
 				}
@@ -159,14 +157,17 @@ func (sub *Subscription) closeChannel() {
 }
 
 func (sub *Subscription) MessageCount() int64 {
-	return metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.delivered", sub.id), nil).Count()
+	return *sub.msgCount
 }
 
 func (sub *Subscription) Pending() int64 {
-	return metrics.GetOrRegisterCounter(fmt.Sprintf("pubsubchannel.%v.pending", sub.id), nil).Count()
+	return *sub.pending
 }
 
+
 func newSubscription(id string, psc *PubSubChannel) Subscription {
+	var count int64
+	var pending int64
 	return Subscription{
 		closed:    false,
 		pubSubC:   psc,
@@ -174,5 +175,7 @@ func newSubscription(id string, psc *PubSubChannel) Subscription {
 		closeOnce: sync.Once{},
 		id:        id,
 		quitC:     make(chan struct{}),
+		msgCount:  &count,
+		pending:   &pending,
 	}
 }
