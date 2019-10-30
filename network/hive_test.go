@@ -211,14 +211,9 @@ func TestHiveStateConnections(t *testing.T) {
 		h = NewHive(params, NewKademlia(PrivateKeyToBzzKey(prvkey), NewKadParams()), store)
 		s := p2ptest.NewProtocolTester(prvkey, 0, func(p *p2p.Peer, rw p2p.MsgReadWriter) error { return nil })
 
-		if err := h.Start(s.Server); err != nil {
-			t.Fatal(err)
-		}
-		//Close ticker to avoid interference with initial peer suggestion
-		h.ticker.Stop()
-		//Overwrite addPeer so the Node is added as a peer automatically.
+		// Overwrite addPeer so the Node is added as a peer automatically.
 		// The related Overlay address is retrieved from nodeIdToBzzAddr where it has been saved before
-		h.addPeer = func(node *enode.Node) {
+		if err := h.start(s.Server, func(node *enode.Node) {
 			bzzAddr := nodeIdToBzzAddr[encodeId(node.ID())]
 			if bzzAddr == nil {
 				t.Fatalf("Enode [%v] not found in saved peers!", encodeId(node.ID()))
@@ -226,7 +221,11 @@ func TestHiveStateConnections(t *testing.T) {
 			bzzPeer := newConnPeerLocal(bzzAddr.Address(), h.Kademlia)
 			h.On(bzzPeer)
 			addedChan <- struct{}{}
+		}); err != nil {
+			t.Fatal(err)
 		}
+		//Close ticker to avoid interference with initial peer suggestion
+		h.ticker.Stop()
 
 		cleanupFunc = func() {
 			err := h.Stop()
@@ -254,7 +253,9 @@ func TestHiveStateConnections(t *testing.T) {
 		}
 
 	}
+	h1.Kademlia.lock.Lock()
 	numConns := h1.conns.Size()
+	h1.Kademlia.lock.Unlock()
 	connAddresses := make(map[string]string)
 	h1.EachConn(h1.base, 255, func(peer *Peer, i int) bool {
 		key := hexutil.Encode(peer.Address())
@@ -269,7 +270,9 @@ func TestHiveStateConnections(t *testing.T) {
 	// there should be at some point 5 conns
 	connsAfterLoading := 0
 	iterations := 0
+	h2.Kademlia.lock.Lock()
 	connsAfterLoading = h2.conns.Size()
+	h2.Kademlia.lock.Unlock()
 	for connsAfterLoading != numConns && iterations < 5 {
 		select {
 		case <-addedChan:
