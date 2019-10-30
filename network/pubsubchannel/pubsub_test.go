@@ -16,7 +16,7 @@
 package pubsubchannel_test
 
 import (
-	"os"
+	"runtime"
 	"runtime/pprof"
 	"sync"
 	"testing"
@@ -88,10 +88,14 @@ func testSubscriptor(pubsub *pubsubchannel.PubSubChannel, expectedMessages int, 
 	return msgBucket, subscription
 }
 
+// TestUnsubscribeBeforeReadingMessages tests that there is no goroutine leak when a subscription is finished
+// before reading pending messages from the channel.
 func TestUnsubscribeBeforeReadingMessages(t *testing.T) {
 	ps := pubsubchannel.New()
 	s := ps.Subscribe()
 	defer ps.Close()
+
+	numGoroutinesStart := runtime.NumGoroutine()
 
 	for i := 0; i < 1000; i++ {
 		ps.Publish(struct{}{})
@@ -99,6 +103,71 @@ func TestUnsubscribeBeforeReadingMessages(t *testing.T) {
 
 	s.Unsubscribe()
 	// allow goroutines to finish
-	time.Sleep(100 * time.Millisecond)
-	pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+	var newGoroutines int
+	for i := 0; i < 500; i++ {
+		time.Sleep(10 * time.Millisecond)
+		newGoroutines = runtime.NumGoroutine() - numGoroutinesStart
+		if newGoroutines <= 0 {
+			break
+		}
+	}
+
+	if newGoroutines > 0 {
+		t.Errorf("%v new goroutines were active after unsubscribe, want none", newGoroutines)
+		pprof.Lookup("goroutine").WriteTo(newTestingErrorWriter(t), 1)
+	}
+}
+
+type testingErrorWriter struct {
+	t *testing.T
+}
+
+func newTestingErrorWriter(t *testing.T) testingErrorWriter {
+	return testingErrorWriter{t: t}
+}
+
+func (w testingErrorWriter) Write(b []byte) (int, error) {
+	w.t.Error(string(b))
+	return len(b), nil
+}
+
+// TestMessageAfterUnsubscribe checks that if some pending message are still readable from the channel, after
+// Unsubscribe(), the publishing goroutines will be exited and no message is received in the channel (even though the
+// channel is still not closed). However, we need to wait a bit before extracting messages from the channel to allow
+// the blocked publishers exit. In a real case, the moment a new message is published the channel will be closed.
+func TestMessagesAfterUnsubscribe(t *testing.T) {
+	ps := pubsubchannel.New()
+	defer ps.Close()
+
+	s := ps.Subscribe()
+
+	for i := 0; i < 1000; i++ {
+		ps.Publish(i)
+	}
+	c := s.ReceiveChannel()
+
+	s.Unsubscribe()
+
+	time.Sleep(10 * time.Millisecond)
+	var n int
+	timeout := time.After(2 * time.Second)
+loop:
+	for {
+		select {
+		case _, ok := <-c:
+			if !ok {
+				break loop
+			}
+			n++
+		case <-timeout:
+			t.Log("timeout")
+			break loop
+		}
+	}
+
+	t.Log("got", n, "messages")
+	if n > 0 {
+		t.Errorf("Expected no message received after unsubscribing but got %v", n)
+	}
+
 }
