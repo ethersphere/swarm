@@ -4,10 +4,30 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
+
+type peerChequesTestCase struct {
+	name            string
+	peer            *protocols.Peer
+	sentCheque      *Cheque
+	receivedCheque  *Cheque
+	expectedCheques PeerCheques
+}
+
+type chequesTestCase struct {
+	name                 string
+	protoPeers           []*protocols.Peer
+	sentCheques          map[*protocols.Peer]*Cheque
+	receivedCheques      map[*protocols.Peer]*Cheque
+	storeSentCheques     map[enode.ID]*Cheque
+	storeReceivedCheques map[enode.ID]*Cheque
+	expectedCheques      map[enode.ID]*PeerCheques
+}
 
 // Test getting a peer's balance
 func TestPeerBalance(t *testing.T) {
@@ -18,18 +38,18 @@ func TestPeerBalance(t *testing.T) {
 
 	// test for correct balance
 	setBalance(t, testPeer, 888)
-	testBalance(t, swap, testPeerID, 888)
+	testPeerBalance(t, swap, testPeerID, 888)
 
 	// test balance after change
 	setBalance(t, testPeer, 17000)
-	testBalance(t, swap, testPeerID, 17000)
+	testPeerBalance(t, swap, testPeerID, 17000)
 
 	// test balance for second peer
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
 	setBalance(t, testPeer2, 4)
-	testBalance(t, swap, testPeer2ID, 4)
+	testPeerBalance(t, swap, testPeer2ID, 4)
 
 	// test balance for inexistent node
 	invalidPeerID := adapters.RandomNodeConfig().ID
@@ -45,11 +65,32 @@ func TestPeerBalance(t *testing.T) {
 	testPeer3 := newDummyPeer().Peer
 	testPeer3ID := testPeer3.ID()
 	err = swap.saveBalance(testPeer3ID, 777)
-	testBalance(t, swap, testPeer3ID, 777)
+	testPeerBalance(t, swap, testPeer3ID, 777)
 
 	// test previous results are still correct
-	testBalance(t, swap, testPeerID, 17000)
-	testBalance(t, swap, testPeer2ID, 4)
+	testPeerBalance(t, swap, testPeerID, 17000)
+	testPeerBalance(t, swap, testPeer2ID, 4)
+}
+
+// tests that expected balance for peer matches the result of the Balance function
+func testPeerBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
+	t.Helper()
+	b, err := s.PeerBalance(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b != expectedBalance {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
+	}
+}
+
+func addPeer(t *testing.T, s *Swap) *Peer {
+	t.Helper()
+	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return peer
 }
 
 // sets the given balance for the given peer, fails if there are errors
@@ -58,18 +99,6 @@ func setBalance(t *testing.T, p *Peer, balance int64) {
 	err := p.setBalance(balance)
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-// tests that expected balance for peer matches the result of the PeerBalance function
-func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
-	t.Helper()
-	b, err := s.PeerBalance(id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != expectedBalance {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
 	}
 }
 
@@ -117,184 +146,330 @@ func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
 
 // TestCheques verifies that sent and received cheques data for all known swap peers is correct
 func TestCheques(t *testing.T) {
-	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, nil)
-	defer clean()
-
-	// check cheques are empty
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{})
-
-	// add peer
-	testPeer := addPeer(t, swap)
-	testPeerID := testPeer.ID()
-
-	// test no cheques are present
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: nil, sentChequeResponseKey: nil}})
-
-	// test sent cheque for peer
-	sentCheque := setNewSentCheque(t, testPeer)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: nil, sentChequeResponseKey: sentCheque}})
-
-	// test received cheque for peer
-	receivedCheque := setNewReceivedCheque(t, testPeer)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}})
-
-	// add second peer
-	testPeer2 := addPeer(t, swap)
-	testPeer2ID := testPeer2.ID()
-
-	// test sent cheque for second peer
-	sentCheque2 := setNewSentCheque(t, testPeer2)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: nil, sentChequeResponseKey: sentCheque2}})
-
-	// test received cheque for second peer
-	receivedCheque2 := setNewReceivedCheque(t, testPeer2)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque2, sentChequeResponseKey: sentCheque2}})
-
-	// test sent cheque change for second peer
-	receivedCheque3 := setNewReceivedCheque(t, testPeer2)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}})
-
-	// test cheques for disconnected node
+	// generate peers and cheques
+	// peer 1
+	testPeer := newDummyPeer().Peer
+	testPeerSentCheque := newRandomTestCheque()
+	testPeerReceivedCheque := newRandomTestCheque()
+	testPeerSentCheque2 := newRandomTestCheque()
+	// peer 2
+	testPeer2 := newDummyPeer().Peer
+	testPeer2SentCheque := newRandomTestCheque()
+	testPeer2ReceivedCheque := newRandomTestCheque()
+	testPeer2ReceivedCheque2 := newRandomTestCheque()
+	// disconnected peer
 	testPeer3ID := newDummyPeer().Peer.ID()
+	testPeer3SentCheque := newRandomTestCheque()
+	testPeer3SentCheque2 := newRandomTestCheque()
+	testPeer3ReceivedCheque := newRandomTestCheque()
+	testPeer3ReceivedCheque2 := newRandomTestCheque()
 
-	// test sent cheque for disconnected node
-	sentCheque3 := saveNewSentCheque(t, swap, testPeer3ID)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque3, receivedChequeResponseKey: nil}})
-
-	// test received cheque for disconnected node
-	receivedCheque4 := saveNewReceivedCheque(t, swap, testPeer3ID)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque3, receivedChequeResponseKey: receivedCheque4}})
-
-	// test cheque change for disconnected node
-	sentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
-	testChequesByPeerAndType(t, swap, map[enode.ID]map[string]*Cheque{testPeerID: {receivedChequeResponseKey: receivedCheque, sentChequeResponseKey: sentCheque}, testPeer2ID: {receivedChequeResponseKey: receivedCheque3, sentChequeResponseKey: sentCheque2}, testPeer3ID: {sentChequeResponseKey: sentCheque4, receivedChequeResponseKey: receivedCheque4}})
-}
-
-// tests that a nested map of peerID:{typeOfCheque:cheque} matches the result of the Cheques function
-func testChequesByPeerAndType(t *testing.T, s *Swap, expectedCheques map[enode.ID]map[string]*Cheque) {
-	t.Helper()
-	cheques, err := s.Cheques()
-	if err != nil {
-		t.Fatal(err)
+	// build test cases
+	testCases := []chequesTestCase{
+		{
+			name:                 "no peers",
+			protoPeers:           []*protocols.Peer{},
+			sentCheques:          map[*protocols.Peer]*Cheque{},
+			receivedCheques:      map[*protocols.Peer]*Cheque{},
+			storeSentCheques:     map[enode.ID]*Cheque{},
+			storeReceivedCheques: map[enode.ID]*Cheque{},
+			expectedCheques:      map[enode.ID]*PeerCheques{},
+		},
+		{
+			name:                 "one peer",
+			protoPeers:           []*protocols.Peer{testPeer},
+			sentCheques:          map[*protocols.Peer]*Cheque{},
+			receivedCheques:      map[*protocols.Peer]*Cheque{},
+			storeSentCheques:     map[enode.ID]*Cheque{},
+			storeReceivedCheques: map[enode.ID]*Cheque{},
+			expectedCheques:      map[enode.ID]*PeerCheques{},
+		},
+		{
+			name:                 "one peer, one sent cheque",
+			protoPeers:           []*protocols.Peer{testPeer},
+			sentCheques:          map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque},
+			receivedCheques:      map[*protocols.Peer]*Cheque{},
+			storeSentCheques:     map[enode.ID]*Cheque{},
+			storeReceivedCheques: map[enode.ID]*Cheque{},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer.ID(): {testPeerSentCheque, nil},
+			},
+		},
+		{
+			name:                 "one peer, sent and received cheques",
+			protoPeers:           []*protocols.Peer{testPeer},
+			sentCheques:          map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque},
+			receivedCheques:      map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque},
+			storeSentCheques:     map[enode.ID]*Cheque{},
+			storeReceivedCheques: map[enode.ID]*Cheque{},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer.ID(): {testPeerSentCheque, testPeerReceivedCheque},
+			},
+		},
+		{
+			name:                 "two peers, sent and received cheques",
+			protoPeers:           []*protocols.Peer{testPeer, testPeer2},
+			sentCheques:          map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque, testPeer2: testPeer2SentCheque},
+			receivedCheques:      map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque, testPeer2: testPeer2ReceivedCheque},
+			storeSentCheques:     map[enode.ID]*Cheque{},
+			storeReceivedCheques: map[enode.ID]*Cheque{},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer.ID():  {testPeerSentCheque, testPeerReceivedCheque},
+				testPeer2.ID(): {testPeer2SentCheque, testPeer2ReceivedCheque},
+			},
+		},
+		{
+			name:                 "two peers, successive sent and received cheques",
+			protoPeers:           []*protocols.Peer{testPeer, testPeer2},
+			sentCheques:          map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque, testPeer2: testPeer2SentCheque, testPeer: testPeerSentCheque2},
+			receivedCheques:      map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque, testPeer2: testPeer2ReceivedCheque, testPeer2: testPeer2ReceivedCheque2},
+			storeSentCheques:     map[enode.ID]*Cheque{},
+			storeReceivedCheques: map[enode.ID]*Cheque{},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer.ID():  {testPeerSentCheque2, testPeerReceivedCheque},
+				testPeer2.ID(): {testPeer2SentCheque, testPeer2ReceivedCheque2},
+			},
+		},
+		{
+			name:                 "disconnected node, sent and received cheques",
+			protoPeers:           []*protocols.Peer{},
+			sentCheques:          map[*protocols.Peer]*Cheque{},
+			receivedCheques:      map[*protocols.Peer]*Cheque{},
+			storeSentCheques:     map[enode.ID]*Cheque{testPeer3ID: testPeer3SentCheque},
+			storeReceivedCheques: map[enode.ID]*Cheque{testPeer3ID: testPeer3ReceivedCheque},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer3ID: {testPeer3SentCheque, testPeer3ReceivedCheque},
+			},
+		},
+		{
+			name:                 "disconnected node, successive sent and received cheques",
+			protoPeers:           []*protocols.Peer{},
+			sentCheques:          map[*protocols.Peer]*Cheque{},
+			receivedCheques:      map[*protocols.Peer]*Cheque{},
+			storeSentCheques:     map[enode.ID]*Cheque{testPeer3ID: testPeer3SentCheque, testPeer3ID: testPeer3SentCheque2},
+			storeReceivedCheques: map[enode.ID]*Cheque{testPeer3ID: testPeer3ReceivedCheque, testPeer3ID: testPeer3ReceivedCheque2},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer3ID: {testPeer3SentCheque2, testPeer3ReceivedCheque2},
+			},
+		},
+		{
+			name:                 "full",
+			protoPeers:           []*protocols.Peer{testPeer, testPeer2},
+			sentCheques:          map[*protocols.Peer]*Cheque{testPeer: testPeerSentCheque, testPeer2: testPeer2SentCheque, testPeer: testPeerSentCheque2},
+			receivedCheques:      map[*protocols.Peer]*Cheque{testPeer: testPeerReceivedCheque, testPeer2: testPeer2ReceivedCheque, testPeer2: testPeer2ReceivedCheque2},
+			storeSentCheques:     map[enode.ID]*Cheque{testPeer3ID: testPeer3SentCheque, testPeer3ID: testPeer3SentCheque2},
+			storeReceivedCheques: map[enode.ID]*Cheque{testPeer3ID: testPeer3ReceivedCheque, testPeer3ID: testPeer3ReceivedCheque2},
+			expectedCheques: map[enode.ID]*PeerCheques{
+				testPeer.ID():  {testPeerSentCheque2, testPeerReceivedCheque},
+				testPeer2.ID(): {testPeer2SentCheque, testPeer2ReceivedCheque2},
+				testPeer3ID:    {testPeer3SentCheque2, testPeer3ReceivedCheque2},
+			},
+		},
 	}
-	if !reflect.DeepEqual(expectedCheques, cheques) {
-		t.Fatalf("Expected cheques to be %v, but are %v", expectedCheques, cheques)
+	// verify test cases
+	testCheques(t, testCases)
+}
+
+func testCheques(t *testing.T, testCases []chequesTestCase) {
+	t.Helper()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// create a test swap account
+			swap, clean := newTestSwap(t, ownerKey, nil)
+			defer clean()
+
+			// add test case peers
+			peersMapping := make(map[*protocols.Peer]*Peer)
+			for _, pp := range tc.protoPeers {
+				peer, err := swap.addPeer(pp, common.Address{}, common.Address{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				peersMapping[pp] = peer
+			}
+
+			// add test case peer sent cheques
+			for pp, sc := range tc.sentCheques {
+				peer, ok := peersMapping[pp]
+				if !ok {
+					t.Fatalf("unexpected peer in test case sent cheques")
+				}
+				err := peer.setLastSentCheque(sc)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			// add test case store sent cheques
+			for p, sc := range tc.storeSentCheques {
+				err := swap.saveLastSentCheque(p, sc)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// add test case peer received cheques
+			for pp, rc := range tc.receivedCheques {
+				peer, ok := peersMapping[pp]
+				if !ok {
+					t.Fatalf("unexpected peer in test case received cheques")
+				}
+				err := peer.setLastReceivedCheque(rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			// add test case store received cheques
+			for p, rc := range tc.storeReceivedCheques {
+				err := swap.saveLastReceivedCheque(p, rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// verify results by calling Cheques function
+			cheques, err := swap.Cheques()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(tc.expectedCheques, cheques) {
+				t.Fatalf("expected cheques to be %v, but are %v", tc.expectedCheques, cheques)
+			}
+		})
 	}
-}
-
-// generates a cheque and adds it as the last sent cheque for the given peer, fails if there are errors
-func setNewSentCheque(t *testing.T, p *Peer) *Cheque {
-	t.Helper()
-	return setNewCheque(t, p.setLastSentCheque)
-}
-
-// generates a cheque and adds it as the last received cheque for the given peer, fails if there are errors
-func setNewReceivedCheque(t *testing.T, p *Peer) *Cheque {
-	t.Helper()
-	return setNewCheque(t, p.setLastReceivedCheque)
-}
-
-func setNewCheque(t *testing.T, setChequeFunction func(*Cheque) error) *Cheque {
-	t.Helper()
-	newCheque := newRandomTestCheque()
-	err := setChequeFunction(newCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return newCheque
-}
-
-// generates a cheque and saves it as the last sent cheque for a peer in the given swap struct, fails if there are errors
-func saveNewSentCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
-	t.Helper()
-	return saveNewCheque(t, id, s.saveLastSentCheque)
-}
-
-// generates a cheque and saves it as the last received cheque for a peer in the given swap struct, fails if there are errors
-func saveNewReceivedCheque(t *testing.T, s *Swap, id enode.ID) *Cheque {
-	t.Helper()
-	return saveNewCheque(t, id, s.saveLastReceivedCheque)
-}
-
-func saveNewCheque(t *testing.T, id enode.ID, saveChequeFunction func(enode.ID, *Cheque) error) *Cheque {
-	t.Helper()
-	newCheque := newRandomTestCheque()
-	err := saveChequeFunction(id, newCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return newCheque
 }
 
 // TestPeerCheques verifies that sent and received cheques data for a given peer is correct
 func TestPeerCheques(t *testing.T) {
-	testBackend := newTestBackend()
-	defer testBackend.Close()
-	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
-	defer clean()
+	// generate peers and cheques
+	// peer 1
+	testPeer := newDummyPeer().Peer
+	testPeerSentCheque := newRandomTestCheque()
+	testPeerReceivedCheque := newRandomTestCheque()
+	// peer 2
+	testPeer2 := newDummyPeer().Peer
+	testPeer2ReceivedCheque := newRandomTestCheque()
 
-	// add peer
-	testPeer := addPeer(t, swap)
-	testPeerID := testPeer.ID()
+	// build test cases
+	testCases := []peerChequesTestCase{
+		{
+			name:            "peer 1 with no cheques",
+			peer:            testPeer,
+			sentCheque:      nil,
+			receivedCheque:  nil,
+			expectedCheques: PeerCheques{nil, nil},
+		},
+		{
+			name:            "peer 1 with sent cheque",
+			peer:            testPeer,
+			sentCheque:      testPeerSentCheque,
+			receivedCheque:  nil,
+			expectedCheques: PeerCheques{testPeerSentCheque, nil},
+		},
+		{
+			name:            "peer 1 with sent and received cheque",
+			peer:            testPeer,
+			sentCheque:      testPeerSentCheque,
+			receivedCheque:  testPeerReceivedCheque,
+			expectedCheques: PeerCheques{testPeerSentCheque, testPeerReceivedCheque},
+		},
+		{
+			name:            "peer 2 with received cheque",
+			peer:            testPeer2,
+			sentCheque:      nil,
+			receivedCheque:  testPeer2ReceivedCheque,
+			expectedCheques: PeerCheques{nil, testPeer2ReceivedCheque},
+		},
+	}
+	// verify test cases
+	testPeerCheques(t, testCases)
 
-	// test peer cheques are nil
-	testChequesByType(t, swap, testPeerID, map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: nil})
-
-	// test sent cheque for peer
-	sentCheque := setNewSentCheque(t, testPeer)
-	testChequesByType(t, swap, testPeerID, map[string]*Cheque{sentChequeResponseKey: sentCheque, receivedChequeResponseKey: nil})
-
-	// test received cheque for peer
-	receivedCheque := setNewReceivedCheque(t, testPeer)
-	testChequesByType(t, swap, testPeerID, map[string]*Cheque{sentChequeResponseKey: sentCheque, receivedChequeResponseKey: receivedCheque})
-
-	// add second peer
-	testPeer2 := addPeer(t, swap)
-	testPeer2ID := testPeer2.ID()
-
-	// test sent cheque for second peer
-	sentCheque2 := setNewSentCheque(t, testPeer2)
-	testChequesByType(t, swap, testPeer2ID, map[string]*Cheque{sentChequeResponseKey: sentCheque2, receivedChequeResponseKey: nil})
-
-	// test received cheque for second peer
-	receivedCheque2 := setNewReceivedCheque(t, testPeer2)
-	testChequesByType(t, swap, testPeer2ID, map[string]*Cheque{sentChequeResponseKey: sentCheque2, receivedChequeResponseKey: receivedCheque2})
-
-	// check previous cheques are still correct
-	testChequesByType(t, swap, testPeerID, map[string]*Cheque{sentChequeResponseKey: sentCheque, receivedChequeResponseKey: receivedCheque})
-
-	// check change in cheques for peer
-	sentCheque3 := setNewSentCheque(t, testPeer)
-	testChequesByType(t, swap, testPeerID, map[string]*Cheque{sentChequeResponseKey: sentCheque3, receivedChequeResponseKey: receivedCheque})
-
-	// check previous cheques for second peer are still correct
-	testChequesByType(t, swap, testPeer2ID, map[string]*Cheque{sentChequeResponseKey: sentCheque2, receivedChequeResponseKey: receivedCheque2})
-
-	// test cheques for invalid peer
-	testChequesByType(t, swap, adapters.RandomNodeConfig().ID, map[string]*Cheque{sentChequeResponseKey: nil, receivedChequeResponseKey: nil})
-
-	// test cheques for disconnected node
+	// verify cases for disconnected peers
 	testPeer3ID := newDummyPeer().Peer.ID()
+	testPeer3SentCheque := newRandomTestCheque()
+	testPeer3ReceivedCheque := newRandomTestCheque()
+	testPeer3ExpectedCheques := PeerCheques{testPeer3SentCheque, testPeer3ReceivedCheque}
+	testPeerChequesDisconnected(t, testPeer3ID, testPeer3SentCheque, testPeer3ReceivedCheque, testPeer3ExpectedCheques)
 
-	// test sent cheque for disconnected node
-	sentCheque4 := saveNewSentCheque(t, swap, testPeer3ID)
-	testChequesByType(t, swap, testPeer3ID, map[string]*Cheque{sentChequeResponseKey: sentCheque4, receivedChequeResponseKey: nil})
-
-	// test received cheque for disconnected node
-	receivedCheque3 := saveNewReceivedCheque(t, swap, testPeer3ID)
-	testChequesByType(t, swap, testPeer3ID, map[string]*Cheque{sentChequeResponseKey: sentCheque4, receivedChequeResponseKey: receivedCheque3})
+	// verify cases for invalid peers
+	invalidPeers := []enode.ID{adapters.RandomNodeConfig().ID, {}}
+	testPeerChequesInvalid(t, invalidPeers)
 }
 
-// tests that map of typeOfCheque:cheque matches the result of the PeerCheques function
-func testChequesByType(t *testing.T, s *Swap, id enode.ID, expectedCheques map[string]*Cheque) {
+func testPeerCheques(t *testing.T, testCases []peerChequesTestCase) {
 	t.Helper()
-	peerCheques, err := s.PeerCheques(id)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// create a test swap account
+			swap, clean := newTestSwap(t, ownerKey, nil)
+			defer clean()
+
+			// add test case peer
+			peer, err := swap.addPeer(tc.peer, common.Address{}, common.Address{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// add test case peer sent cheque
+			if tc.sentCheque != nil {
+				err = peer.setLastSentCheque(tc.sentCheque)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// add test case peer received cheque
+			if tc.receivedCheque != nil {
+				err = peer.setLastReceivedCheque(tc.receivedCheque)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// verify results
+			verifyCheques(t, swap, peer.ID(), tc.expectedCheques)
+		})
+	}
+}
+
+func testPeerChequesDisconnected(t *testing.T, peerID enode.ID, sentCheque *Cheque, receivedCheque *Cheque, expectedCheques PeerCheques) {
+	t.Helper()
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
+	defer clean()
+
+	// add store sent cheque
+	err := swap.saveLastSentCheque(peerID, sentCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// add store received cheque
+	err = swap.saveLastReceivedCheque(peerID, receivedCheque)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	verifyCheques(t, swap, peerID, expectedCheques)
+}
+
+func testPeerChequesInvalid(t *testing.T, invalidPeerIDs []enode.ID) {
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
+	defer clean()
+
+	// verify results by calling PeerCheques function
+	for _, invalidPeerID := range invalidPeerIDs {
+		verifyCheques(t, swap, invalidPeerID, PeerCheques{nil, nil})
+	}
+}
+
+// compares the result of the PeerCheques function with the expected parameter
+func verifyCheques(t *testing.T, s *Swap, peer enode.ID, expectedCheques PeerCheques) {
+	peerCheques, err := s.PeerCheques(peer)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(expectedCheques, peerCheques) {
-		t.Fatalf("Expected peer cheques to be %v, but are %v", expectedCheques, peerCheques)
+		t.Fatalf("Expected peer %v cheques to be %v, but are %v", peer, expectedCheques, peerCheques)
 	}
 }
