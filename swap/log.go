@@ -5,9 +5,6 @@ import (
 )
 
 const (
-	// CallDepth is set to 1 in order to influence to reported line number of
-	// the log message with 1 skipped stack frame of calling l.Output()
-	CallDepth = 1
 	// DefaultAction is the default action filter for swap logs
 	DefaultAction string = "undefined"
 )
