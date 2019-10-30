@@ -707,7 +707,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 		}
 	}
 	if !isPssEnabled {
-		log.Warn("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", label(sp.BzzAddr.Address()))
+		log.Trace("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps, "peer", label(sp.BzzAddr.Address()))
 		return false
 	}
 
