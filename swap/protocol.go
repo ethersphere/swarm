@@ -157,8 +157,9 @@ func (s *Swap) getPeer(id enode.ID) *Peer {
 type swapAPI interface {
 	Balance(peer enode.ID) (int64, error)
 	Balances() (map[enode.ID]int64, error)
-	Cheques() (map[enode.ID]map[string]*Cheque, error)
-	PeerCheques(peer enode.ID) (map[string]*Cheque, error)
+	Cheques() (map[enode.ID]*PeerCheques, error)
+	PeerCheques(peer enode.ID) (PeerCheques, error)
+	AvailableBalance() (uint64, error)
 }
 
 // API would be the API accessor for protocol methods
