@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -41,11 +40,8 @@ import (
 )
 
 var (
-	errUnsolicitedHeader = errors.New("unsolicited header received")
-	errDuplicateHeader   = errors.New("duplicate header received")
-)
-
-var (
+	errUnsolicitedHeader    = errors.New("unsolicited header received")
+	errDuplicateHeader      = errors.New("duplicate header received")
 	errRcvdMsgFromSwarmNode = errors.New("received message from Swarm node")
 )
 
@@ -499,22 +495,17 @@ BATCH:
 	}
 }
 
-var skipHeaderFromSwarm = false
-
 // getBlockHeaderBzz retrieves a block header by its hash from swarm
 func (b *BzzEth) getBlockHeaderBzz(ctx context.Context, hash []byte) ([]byte, error) {
-	if skipHeaderFromSwarm {
-		return nil, errors.New("ignoring headers in swarm because of testcase")
-	}
 	req := &storage.Request{
 		Addr:   hash,
 		Origin: b.netStore.LocalID,
 	}
-	chunk, err := b.netStore.Get(ctx, chunk.ModeGetRequest, req)
+	chnk, err := b.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		return nil, err
 	}
-	return chunk.Data(), nil
+	return chnk.Data(), nil
 }
 
 // requestAll requests each hash and channel
@@ -600,7 +591,6 @@ func (b *BzzEth) getBlockHeadersEth(ctx context.Context, headersC, giveBackC cha
 			continue
 		}
 		// initiate request with the chosen peer
-		fmt.Println("trying to get the header from peer ", p.ID())
 		req, err := p.getBlockHeaders(ctx, header, deliveryC, giveBackC)
 		if err != nil { // in case of failure, no retries TODO: smarter retry?
 			continue
