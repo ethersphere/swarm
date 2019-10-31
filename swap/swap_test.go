@@ -908,13 +908,25 @@ func TestStartChequebookSuccess(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testPeer := newDummyPeer()
 	testDeploy(context.Background(), swap)
+
+	testPeer := newDummyPeer()
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
+
+	// leave balance exactly at disconnect threshold
 	swap.Add(int64(DefaultDisconnectThreshold), testPeer.Peer)
+	// account for traffic which increases debt
 	err := swap.Add(1, testPeer.Peer)
+	if err == nil {
+		t.Fatal("expected accounting operation to fail, but it didn't")
+	}
 	if !strings.Contains(err.Error(), "disconnect threshold") {
 		t.Fatal(err)
+	}
+	// account for traffic which reduces debt
+	err = swap.Add(-1, testPeer.Peer)
+	if err != nil {
+		t.Fatalf("expected accounting operation to succeed, but it failed with %v", err)
 	}
 }
 
