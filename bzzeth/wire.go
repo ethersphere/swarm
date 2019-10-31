@@ -51,7 +51,7 @@ type NewBlockHeaders []struct {
 // 1. When an Ethereum node asks the header corresponding to the hashes in the message (eth -> bzz)
 // 2. When a Swarm node cannot find a particular header in the network, it asks the ethereum node for the header in order to push it to the network (bzz -> eth)
 type GetBlockHeaders struct {
-	Rid    uint32   // request id
+	Rid    uint64   // request id
 	Hashes [][]byte // slice of hashes
 }
 

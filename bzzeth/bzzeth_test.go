@@ -23,16 +23,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"io/ioutil"
+	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/retrieval"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
@@ -64,17 +67,19 @@ func newBzzEthTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storage.N
 }
 
 func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.NetStore, cleanup func()) {
+	t.Helper()
 	prvkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("Could not generate key")
 	}
+	bzzAddr := network.PrivateKeyToBzzKey(prvkey)
 
+	kad := network.NewKademlia(bzzAddr, network.NewKadParams())
 	dir, err := ioutil.TempDir("", "localstore-")
 	if err != nil {
 		t.Fatalf("Could not create localStore temp dir")
 	}
 
-	bzzAddr := network.PrivateKeyToBzzKey(prvkey)
 	localStore, err := localstore.New(dir, bzzAddr, nil)
 	if err != nil {
 		os.RemoveAll(dir)
@@ -82,6 +87,8 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 	}
 
 	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
+	r := retrieval.New(kad, netStore, bzzAddr, nil)
+	netStore.RemoteGet = r.RequestFromPeers
 
 	cleanup = func() {
 		err = netStore.Close()
@@ -138,11 +145,10 @@ func dummyHandshakeMessage(tester *p2ptest.ProtocolTester, peerID enode.ID) erro
 		})
 }
 
-// tests handshake between eth node and swarm node
+// TestBzzEthHandshake between eth node and swarm node
 // on successful handshake the protocol does not go idle
 // peer added to the pool and serves headers is registered
 func TestBzzEthHandshake(t *testing.T) {
-	t.Helper()
 	tester, b, teardown, err := newBzzEthTester(t, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +282,7 @@ func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, req
 				{
 					Code: 2,
 					Msg: GetBlockHeaders{
-						Rid:    requestID,
+						Rid:    uint64(requestID),
 						Hashes: wanted,
 					},
 					Peer: peerID,
@@ -302,6 +308,33 @@ func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, reques
 		})
 }
 
+func getBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, wantedHashes [][]byte, offeredHeaders []rlp.RawValue) error {
+	return tester.TestExchanges(
+		p2ptest.Exchange{
+			Label: "GetBlockHeaders",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 2,
+					Msg: GetBlockHeaders{
+						Rid:    uint64(requestID),
+						Hashes: wantedHashes,
+					},
+					Peer: peerID,
+				},
+			},
+			Expects: []p2ptest.Expect{
+				{
+					Code: 3,
+					Msg: BlockHeaders{
+						Rid:     requestID,
+						Headers: offeredHeaders,
+					},
+					Peer: peerID,
+				},
+			},
+		})
+}
+
 // TestNewBlockHeaders full eth node sends new block header hashes
 // respond with a GetBlockHeaders requesting headers falling into the proximity of this node
 // Also test two other conditions
@@ -309,6 +342,12 @@ func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, reques
 // - If a unsolicited header is received, dont store it on localstore
 // Apart from that it also tests if all the headers are delivered and stored in localstore
 func TestNewBlockHeaders(t *testing.T) {
+	var wg sync.WaitGroup
+
+	// Add two.. one for storage and another for delivery
+	// these groups are moved to Done after storage and delivery checks are complete
+	wg.Add(2)
+
 	prvKey, netstore, cleanup := newTestNetworkStore(t)
 	defer cleanup()
 
@@ -323,7 +362,8 @@ func TestNewBlockHeaders(t *testing.T) {
 	//Construct the blocks hashes that are offered from the eth node
 	offeredBlocks := make(NewBlockHeaders, 256)
 	for i := 0; i < len(offeredBlocks); i++ {
-		offeredBlocks[i].Hash = common.BytesToHash(crypto.Keccak256([]byte{uint8(i)}))
+		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(i))}
+		offeredBlocks[i].Hash = hdr.Hash()
 		offeredBlocks[i].BlockHeight = uint64(i)
 	}
 
@@ -348,11 +388,16 @@ func TestNewBlockHeaders(t *testing.T) {
 	}
 
 	// construct the wanted headers
-	wantedHeaderHashes := make([][]byte, len(wantedIndexes))
-	wantedHeaderData := make([]rlp.RawValue, len(wantedIndexes)+1)
+	wanted := make([][]byte, len(wantedIndexes))
+	wantedData := make([]rlp.RawValue, len(wantedIndexes)+1)
 	for i, w := range wantedIndexes {
-		wantedHeaderHashes[i] = crypto.Keccak256([]byte{uint8(w)})
-		wantedHeaderData[i] = rlp.RawValue{uint8(w)}
+		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(w))}
+		res, err := rlp.EncodeToBytes(hdr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantedData[i] = res
+		wanted[i] = hdr.Hash().Bytes()
 	}
 
 	// overwrite newRequestIDFunc to be deterministic
@@ -366,13 +411,15 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	// overwrite finishStorageFunc to test deterministic storage of headers
 	finishStorageTesting := func(chunks []chunk.Chunk) {
-		checkStorage(t, wantedIndexes, wantedHeaderHashes, wantedHeaderData, netstore)
+		checkStorage(t, wantedIndexes, wanted, wantedData, netstore)
+		wg.Done()
 	}
 	finishStorageFunc = finishStorageTesting
 
 	// overwrite finishDeliveryFunc to test deterministic delivery of headers
 	finishDeliveryTesting := func(hashes map[string]bool) {
-		checkDelivery(t, wantedIndexes, wantedHeaderHashes, hashes)
+		checkDelivery(t, wantedIndexes, wanted, hashes)
+		wg.Done()
 	}
 	finishDeliveryFunc = finishDeliveryTesting
 
@@ -384,33 +431,127 @@ func TestNewBlockHeaders(t *testing.T) {
 
 	// Add a header to localstore
 	// this header should not be requested in GetBlockHeaders
-	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk([]byte{uint8(ignoreIndexes[0])}))
+	hdr := types.Header{Number: new(big.Int).SetUint64(uint64(ignoreIndexes[0]))}
+	res, err := rlp.EncodeToBytes(hdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = netstore.Store.Put(context.Background(), chunk.ModePutUpload, newChunk(res))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = newBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), &offeredBlocks, wantedHeaderHashes)
+	// Adding ignored hash also .. this hash will be ignored while storing
+	err = newBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), &offeredBlocks, wanted)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a unsolicited header
-	wantedHeaderData[len(wantedIndexes)] = rlp.RawValue{uint8(255)}
-	err = blockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedHeaderData)
+	unsolHdr := types.Header{Number: new(big.Int).SetUint64(255)}
+	unsolRes, err := rlp.EncodeToBytes(unsolHdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantedData[len(wantedIndexes)] = unsolRes
+	err = blockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the storage and delivery checks to complete
+	// only after that the cleanup functions should be allowed
+	wg.Wait()
+}
+
+//TestGetAvailableBlockHeaders tests the other side of the protocol where a light client
+// asks the Swarm node for blocks
+func TestGetAvailableBlockHeaders(t *testing.T) {
+	prvKey, netstore, cleanup := newTestNetworkStore(t)
+	defer cleanup()
+
+	// bzz pivot - full eth node peer
+	tester, _, teardown, err := newBzzEthTester(t, prvKey, netstore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	// Set this to same number of requested headers to avoid batch splitting during testcase
+	minBatchSize = 20
+
+	// construct the wanted headers hashes to request and the offered headers to check
+	// Also store the headers in the localstore to avoid remote lookup
+	// Dont use more than 2 as there is a risk of getting multiple batches which is not testcase friendly
+	wantedHeaderHashes := make([][]byte, 20)
+	offeredHeaders := make([]rlp.RawValue, 20)
+	for i := range wantedHeaderHashes {
+		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(i))}
+		res, err := rlp.EncodeToBytes(hdr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantedHeaderHashes[i] = hdr.Hash().Bytes()
+		offeredHeaders[i] = res
+
+		// store the headers in localstore so that they are offered in response
+		chunkToStore := newChunk(res)
+		yes, err := netstore.Store.Put(context.Background(), chunk.ModePutUpload, chunkToStore)
+		if err != nil {
+			t.Fatalf("could not store chunk")
+		}
+		if yes[0] {
+			t.Fatalf("chunk already found")
+		}
+	}
+
+	// arrange the headers in the order requested for the test case to pass
+	arrangeHeaderTesting := func(hashes [][]byte, headers [][]byte) [][]byte {
+		hdrMap := make(map[string][]byte)
+		for _, h := range headers {
+			var hdr types.Header
+			err := rlp.DecodeBytes(h, &hdr)
+			if err != nil {
+				t.Fatal("Could not decode header")
+				return nil
+			}
+			hdrMap[hdr.Hash().Hex()] = h
+		}
+
+		myheaders := make([][]byte, len(hashes))
+		i := 0
+		for _, k := range hashes {
+			key := "0x" + hex.EncodeToString(k)
+			if hdr, ok := hdrMap[key]; ok {
+				myheaders[i] = hdr
+				i++
+			}
+		}
+		return myheaders
+	}
+	arrangeHeaderFunc = arrangeHeaderTesting
+
+	node := tester.Nodes[0]
+	err = handshakeExchange(tester, node.ID(), true, true)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	//Now trigger the get header request
+	err = getBlockHeaderExchange(tester, node.ID(), newRequestIDFunc(), wantedHeaderHashes, offeredHeaders)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
-	t.Helper()
-
 	// Check if requested headers arrived and are stored in localstore
 	for i := range wantedIndexes {
 		chunk, err := netstore.Store.Get(context.Background(), chunk.ModeGetLookup, wanted[i])
 		if err != nil {
-			t.Fatalf("chunk  %v not found %v", hex.EncodeToString(wanted[i]), wantedData[i])
+			t.Fatalf("chunk  %v not found", hex.EncodeToString(wanted[i]))
 		}
+
 		if !bytes.Equal(wantedData[i], chunk.Data()) {
 			t.Fatalf("expected %v, got %v", wanted[i], chunk.Data())
 		}
@@ -428,7 +569,6 @@ func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData
 }
 
 func checkDelivery(t *testing.T, wantedIndexes []int, wanted [][]byte, hashes map[string]bool) {
-	t.Helper()
 	for i := range wantedIndexes {
 		hash := hex.EncodeToString(wanted[i])
 		if _, ok := hashes[hash]; !ok {
