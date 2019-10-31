@@ -78,9 +78,9 @@ func (p *peers) getEth(rcvdPeer *Peer) *Peer {
 	defer p.mtx.RUnlock()
 
 	for _, peer := range p.peers {
-
 		// Dont ask from the same peer which sent the request
 		if rcvdPeer != nil && rcvdPeer == peer {
+			log.Debug("Ignoring peer which requested headers")
 			continue
 		}
 
