@@ -16,6 +16,8 @@
 package network
 
 import (
+	"bytes"
+
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/pubsubchannel"
 	"github.com/ethersphere/swarm/network/resourceusestats"
@@ -67,7 +69,7 @@ type LBPeer struct {
 }
 
 // AddUseCount is called to account a use for these peer. Should be called if the peer is actually used.
-func (lbPeer LBPeer) AddUseCount() {
+func (lbPeer *LBPeer) AddUseCount() {
 	lbPeer.stats.AddUse(lbPeer.Peer)
 }
 
@@ -168,7 +170,11 @@ func (klb *KademliaLoadBalancer) listenOffPeers() {
 		select {
 		case <-klb.quitC:
 			return
-		case msg := <-klb.offPeerSub.ReceiveChannel():
+		case msg, ok := <-klb.offPeerSub.ReceiveChannel():
+			if !ok {
+				log.Warn("listenOffPeers closed channel, finishing subscriber to off peers")
+				return
+			}
 			peer, ok := msg.(*Peer)
 			if peer == nil {
 				log.Warn("nil peer received listening for off peers. Ignoring.")
@@ -178,7 +184,7 @@ func (klb *KademliaLoadBalancer) listenOffPeers() {
 				log.Warn("unexpected message received listening for off peers. Ignoring.")
 				continue
 			}
-			klb.removedPeer(peer)
+			klb.resourceUseStats.RemoveResource(peer)
 		}
 	}
 }
@@ -196,16 +202,14 @@ func (klb *KademliaLoadBalancer) addedPeer(peer *Peer, po int) {
 func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) int {
 	addr := klb.kademlia.BaseAddr()
 	peersInSamePo := klb.getPeersForPo(addr, po)
-	idx := 0
 	leastUsedCount := 0
-	for idx < len(peersInSamePo) {
-		leastUsed := peersInSamePo[idx]
+	for i := 0; i < len(peersInSamePo); i++ {
+		leastUsed := peersInSamePo[i]
 		if leastUsed.Peer.Key() != excludePeer.Key() {
 			leastUsedCount = klb.resourceUseStats.GetUses(leastUsed.Peer)
 			log.Debug("Least used peer is", "peer", leastUsed.Peer.Label(), "leastUsedCount", leastUsedCount)
 			break
 		}
-		idx++
 	}
 	return leastUsedCount
 }
@@ -214,7 +218,7 @@ func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) 
 func (klb *KademliaLoadBalancer) nearestNeighbourUseCount(newPeer *Peer, _ int) int {
 	var count int
 	klb.kademlia.EachConn(newPeer.Address(), 255, func(peer *Peer, po int) bool {
-		if peer != newPeer {
+		if !bytes.Equal(peer.OAddr, newPeer.OAddr) {
 			count = klb.resourceUseStats.GetUses(peer)
 			log.Debug("Nearest neighbour is", "peer", peer.Label(), "count", count)
 			return false
@@ -222,10 +226,6 @@ func (klb *KademliaLoadBalancer) nearestNeighbourUseCount(newPeer *Peer, _ int) 
 		return true
 	})
 	return count
-}
-
-func (klb *KademliaLoadBalancer) removedPeer(peer *Peer) {
-	klb.resourceUseStats.RemoveResource(peer)
 }
 
 func (klb *KademliaLoadBalancer) toLBPeers(resources []resourceusestats.Resource) []LBPeer {

@@ -16,7 +16,6 @@
 package network
 
 import (
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -24,18 +23,17 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
-	"github.com/ethersphere/swarm/network/pubsubchannel"
 	"github.com/ethersphere/swarm/pot"
 )
 
 // TestAddedNodes checks that when adding a node it is assigned the correct number of uses.
 // This number of uses will be the least number of uses of a peer in its bin.
 func TestAddedNodes(t *testing.T) {
-	kademlia := newTestKademliaBackend("11110000")
+	kademlia := newTestKademlia(t, "11110000")
 	first := newTestKadPeer("010101010")
-	kademlia.addPeer(first)
+	kademlia.Kademlia.On(first)
 	second := newTestKadPeer("010101011")
-	kademlia.addPeer(second)
+	kademlia.Kademlia.On(second)
 	klb := NewKademliaLoadBalancer(kademlia, false)
 
 	defer klb.Stop()
@@ -43,22 +41,22 @@ func TestAddedNodes(t *testing.T) {
 	if firstUses != 0 {
 		t.Errorf("Expected 0 uses for new peer at start")
 	}
-	peersFor0 := klb.getPeersForPo(kademlia.baseAddr, 0)
+	peersFor0 := klb.getPeersForPo(kademlia.base, 0)
 	peersFor0[0].AddUseCount()
 	// Now new peers still should have 0 uses
 	third := newTestKadPeer("011101011")
-	kademlia.addPeer(third)
+	kademlia.Kademlia.On(third)
 	klb.resourceUseStats.WaitKey(third.Key())
 	thirdUses := klb.resourceUseStats.GetUses(third)
 	if thirdUses != 0 {
 		t.Errorf("Expected 0 uses for new peer because minimum in bin is 0. Instead %v", thirdUses)
 	}
-	peersFor0 = klb.getPeersForPo(kademlia.baseAddr, 0)
+	peersFor0 = klb.getPeersForPo(kademlia.base, 0)
 	peersFor0[0].AddUseCount()
 	peersFor0[1].AddUseCount() //Now all peers should have 1 use
 	//New peers should start with 1 use
 	fourth := newTestKadPeer("011100011")
-	kademlia.addPeer(fourth)
+	kademlia.Kademlia.On(fourth)
 	klb.resourceUseStats.WaitKey(fourth.Key())
 	fourthUses := klb.resourceUseStats.GetUses(fourth)
 	if fourthUses != 1 {
@@ -69,11 +67,11 @@ func TestAddedNodes(t *testing.T) {
 // TestAddedNodesNearestNeighbour checks that when adding a node it is assigned the correct number of uses.
 // This number of uses will be the most similar peer uses.
 func TestAddedNodesNearestNeighbour(t *testing.T) {
-	kademlia := newTestKademliaBackend("11110000")
+	kademlia := newTestKademlia(t, "11110000")
 	first := newTestKadPeer("01010101")
-	kademlia.addPeer(first)
+	kademlia.Kademlia.On(first)
 	second := newTestKadPeer("01110101")
-	kademlia.addPeer(second)
+	kademlia.Kademlia.On(second)
 	klb := NewKademliaLoadBalancer(kademlia, true)
 
 	defer klb.Stop()
@@ -81,11 +79,11 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 	if firstUses != 0 {
 		t.Errorf("Expected 0 uses for new peer at start")
 	}
-	peersFor0 := klb.getPeersForPo(kademlia.baseAddr, 0)
+	peersFor0 := klb.getPeersForPo(kademlia.base, 0)
 	peersFor0[0].AddUseCount()
 	// Now third peer should have the same uses as second
 	third := newTestKadPeer("01110111") // most similar peer is second 01110101
-	kademlia.addPeer(third)
+	kademlia.Kademlia.On(third)
 	klb.resourceUseStats.WaitKey(third.Key())
 	secondUses := klb.resourceUseStats.GetUses(second)
 	thirdUses := klb.resourceUseStats.GetUses(third)
@@ -93,7 +91,7 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 		t.Errorf("Expected %v uses for new peer because is most similar to second. Instead %v", secondUses, thirdUses)
 	}
 	//Now we use third peer twice
-	peersFor0 = klb.getPeersForPo(kademlia.baseAddr, 0)
+	peersFor0 = klb.getPeersForPo(kademlia.base, 0)
 	for _, lbPeer := range peersFor0 {
 		if lbPeer.Peer.Key() == third.key {
 			lbPeer.AddUseCount()
@@ -102,7 +100,7 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 	}
 
 	fourth := newTestKadPeer("01110110") // most similar peer is third 01110111
-	kademlia.addPeer(fourth)
+	kademlia.Kademlia.On(fourth)
 	klb.resourceUseStats.WaitKey(fourth.Key())
 	//We expect fourth to be initialized with third peer use count
 	fourthUses := klb.resourceUseStats.GetUses(fourth)
@@ -209,12 +207,6 @@ func TestEachBinBaseUses(t *testing.T) {
 	}
 }
 
-func expectUses(actualUses int, expected int, peer string, t *testing.T) {
-	if actualUses != expected {
-		t.Errorf("expected %v uses of %v but got %v", expected, peer, actualUses)
-	}
-}
-
 // TestEachBinFiltered checks that when load balancing peers, only those with the provided capabilities are chosen.
 func TestEachBinFiltered(t *testing.T) {
 	tk := newTestKademlia(t, "11111111")
@@ -275,171 +267,6 @@ func TestEachBinFiltered(t *testing.T) {
 		t.Errorf("Expected 2 uses of second capability peer but got %v", secondCount-secondCountStart)
 	}
 
-}
-
-type testKademliaBackend struct {
-	baseAddr       []byte
-	addedChannel   *pubsubchannel.PubSubChannel
-	removedChannel *pubsubchannel.PubSubChannel
-	bins           map[int][]*Peer
-	maxPo          int
-}
-
-// EachConn iterates this test kademlia table peers in order po from nearest to furthest with respect to the base address.
-// - First it takes the po of the base address provided. With this po it takes the corresponding bin B (peers with same po
-// as this base) copy the list and sort them using sort.Slice from furthest to lowest. Then it calls the provided consume
-// function with those peers and its corresponding po (peerPo).
-// - Then, it iterates all bins with higher po than B, and iterates all peers. All of these peers will have the
-// same po as the base address with respect to the pin of the kademlia, that's why we don't need to sort them out and
-// we can iterate them in any order. For each peer the consume function is called with the same po.
-// - Finally, the bins furthest than B are iterated from highest po (nearest) to lowest (furthest). For each bin, all
-// peers are iterated and called the consume function with the peer and the bin po.
-// After any of the calls to the consume function, if that function returns false, the iteration stops.
-func (tkb *testKademliaBackend) EachConn(base []byte, maxPo int, consume func(*Peer, int) bool) {
-	po, _ := Pof(base, tkb.baseAddr, 0)
-	bin := tkb.bins[po]
-	peersInBin := make([]*Peer, len(bin))
-	copy(peersInBin, bin)
-	sort.Slice(peersInBin, func(i, j int) bool {
-		peerIPo, _ := Pof(base, peersInBin[i], 0)
-		peerJPo, _ := Pof(base, peersInBin[j], 0)
-		return peerIPo > peerJPo
-	})
-	for _, peer := range peersInBin {
-		peerPo, _ := Pof(base, peer, 0)
-		if !consume(peer, peerPo) {
-			return
-		}
-	}
-	for i := po + 1; po < maxPo; po++ {
-		bin = tkb.bins[i]
-		for _, peer := range bin {
-			if !consume(peer, po) {
-				return
-			}
-		}
-	}
-	for i := po - 1; po >= 0; po-- {
-		bin = tkb.bins[i]
-		for _, peer := range bin {
-			if !consume(peer, i) {
-				return
-			}
-		}
-	}
-
-}
-
-func newTestKademliaBackend(address string) *testKademliaBackend {
-	return &testKademliaBackend{
-		baseAddr:       pot.NewAddressFromString(address),
-		addedChannel:   pubsubchannel.New(),
-		removedChannel: pubsubchannel.New(),
-		bins:           make(map[int][]*Peer),
-	}
-}
-
-// BaseAddr returns the node address of the kademlia table. This base address is the pivot address to which other addresses
-// are sorted with respect to the proximity order function.
-func (tkb testKademliaBackend) BaseAddr() []byte {
-	return tkb.baseAddr
-}
-
-// SubscribeToPeerChanges returns a subscription to changes in the kademlia peers. It contains channels to notify about
-// peers added/removed from this kademlia.
-func (tkb *testKademliaBackend) SubscribeToPeerChanges() (addedSub *pubsubchannel.Subscription, removedPeerSub *pubsubchannel.Subscription) {
-	addedSub = tkb.addedChannel.Subscribe()
-	removedPeerSub = tkb.removedChannel.Subscribe()
-	return
-}
-
-// EachBinDescFiltered ignores capKey as in this test context it won't be used. It ignores base as EachBinDesc ignores it.
-func (tkb testKademliaBackend) EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error {
-	tkb.EachBinDesc(base, minProximityOrder, consumer)
-	return nil
-}
-
-// EachBinDesc iterates bin in the table in descending po order (from nearest to furthest). Base is always supposed to be
-// node address in this test context. For each bin found, the provided PeerBinConsumer function is called.
-func (tkb testKademliaBackend) EachBinDesc(_ []byte, minProximityOrder int, consumer PeerBinConsumer) {
-	type poPeers struct {
-		po    int
-		peers []*Peer
-	}
-	var poPeersList []poPeers
-	for po, peers := range tkb.bins {
-		poPeersList = append(poPeersList, poPeers{po: po, peers: peers})
-	}
-	sort.Slice(poPeersList, func(i, j int) bool {
-		return poPeersList[i].po > poPeersList[j].po
-	})
-	for _, aPoPeers := range poPeersList {
-		peers := aPoPeers.peers
-		po := aPoPeers.po
-		if peers != nil && po >= minProximityOrder {
-			bin := &PeerBin{
-				ProximityOrder: po,
-				Size:           len(peers),
-				PeerIterator: func(consumePeer PeerConsumer) bool {
-					for _, peer := range peers {
-						if !consumePeer(&entry{conn: peer}) {
-							return false
-						}
-					}
-					return true
-				},
-			}
-			if !consumer(bin) {
-				return
-			}
-		}
-	}
-}
-
-func (tkb *testKademliaBackend) addPeer(peer *Peer) {
-	po, _ := Pof(peer.Address(), tkb.baseAddr, 0)
-	if tkb.bins[po] == nil {
-		if po > tkb.maxPo {
-			tkb.maxPo = po
-		}
-		tkb.bins[po] = make([]*Peer, 0)
-	}
-	tkb.bins[po] = append(tkb.bins[po], peer)
-	tkb.addedChannel.Publish(newPeerSignal{
-		peer: peer,
-		po:   po,
-	})
-	// As the subscribers to add peer are asynchronous, we will sleep here to allow them to execute.
-	// Because this will be used in tests several times, we wait here so the code is not polluted with Sleep calls.
-	time.Sleep(100 * time.Millisecond)
-}
-
-func (tkb *testKademliaBackend) removePeer(peer *Peer) {
-	tkb.removePeerFromBin(peer)
-	tkb.removedChannel.Publish(peer)
-}
-
-func (tkb *testKademliaBackend) removePeerFromBin(peer *Peer) {
-	for po, bin := range tkb.bins {
-		for i, aPeer := range bin {
-			if aPeer == peer {
-				tkb.bins[po] = append(bin[:i], bin[i+1:]...)
-				if len(tkb.bins[po]) == 0 && tkb.maxPo >= po {
-					tkb.updateMaxPo()
-				}
-				return
-			}
-		}
-	}
-}
-
-func (tkb *testKademliaBackend) updateMaxPo() {
-	tkb.maxPo = 0
-	for k := range tkb.bins {
-		if k > tkb.maxPo {
-			tkb.maxPo = k
-		}
-	}
 }
 
 func newTestKadPeer(s string) *Peer {

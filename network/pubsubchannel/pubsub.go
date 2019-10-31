@@ -164,7 +164,6 @@ func (sub *Subscription) Pending() int64 {
 	return *sub.pending
 }
 
-
 func newSubscription(id string, psc *PubSubChannel) Subscription {
 	var count int64
 	var pending int64
