@@ -1095,7 +1095,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		booking := bookings[i]
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
-		// balance should be affected if debt is reduced or if under the disconnect threshold
+		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
 		if peerBalance < swap.params.DisconnectThreshold || booking.amount < 0 {
 			peerBalance += booking.amount
 		}
