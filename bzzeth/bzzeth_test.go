@@ -267,7 +267,7 @@ func isPeerDisconnected(id enode.ID, b *BzzEth) (p *Peer) {
 	return
 }
 
-func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, offered *NewBlockHeaders, wanted [][]byte) error {
+func newBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, offered *NewBlockHeaders, wanted []chunk.Address) error {
 	return tester.TestExchanges(
 		p2ptest.Exchange{
 			Label: "NewBlockHeaders",
@@ -308,7 +308,7 @@ func blockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, reques
 		})
 }
 
-func getBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, wantedHashes [][]byte, offeredHeaders []rlp.RawValue) error {
+func getBlockHeaderExchange(tester *p2ptest.ProtocolTester, peerID enode.ID, requestID uint32, wantedHashes []chunk.Address, offeredHeaders []rlp.RawValue) error {
 	return tester.TestExchanges(
 		p2ptest.Exchange{
 			Label: "GetBlockHeaders",
@@ -388,7 +388,7 @@ func TestNewBlockHeaders(t *testing.T) {
 	}
 
 	// construct the wanted headers
-	wanted := make([][]byte, len(wantedIndexes))
+	wanted := make([]chunk.Address, len(wantedIndexes))
 	wantedData := make([]rlp.RawValue, len(wantedIndexes)+1)
 	for i, w := range wantedIndexes {
 		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(w))}
@@ -483,7 +483,7 @@ func TestGetAvailableBlockHeaders(t *testing.T) {
 	// construct the wanted headers hashes to request and the offered headers to check
 	// Also store the headers in the localstore to avoid remote lookup
 	// Dont use more than 2 as there is a risk of getting multiple batches which is not testcase friendly
-	wantedHeaderHashes := make([][]byte, 20)
+	wantedHeaderHashes := make([]chunk.Address, 20)
 	offeredHeaders := make([]rlp.RawValue, 20)
 	for i := range wantedHeaderHashes {
 		hdr := types.Header{Number: new(big.Int).SetUint64(uint64(i))}
@@ -506,7 +506,7 @@ func TestGetAvailableBlockHeaders(t *testing.T) {
 	}
 
 	// arrange the headers in the order requested for the test case to pass
-	arrangeHeaderTesting := func(hashes [][]byte, headers [][]byte) [][]byte {
+	arrangeHeaderTesting := func(hashes []chunk.Address, headers []chunk.Address) []chunk.Address {
 		hdrMap := make(map[string][]byte)
 		for _, h := range headers {
 			var hdr types.Header
@@ -518,7 +518,7 @@ func TestGetAvailableBlockHeaders(t *testing.T) {
 			hdrMap[hdr.Hash().Hex()] = h
 		}
 
-		myheaders := make([][]byte, len(hashes))
+		myheaders := make([]chunk.Address, len(hashes))
 		i := 0
 		for _, k := range hashes {
 			key := "0x" + hex.EncodeToString(k)
@@ -544,7 +544,7 @@ func TestGetAvailableBlockHeaders(t *testing.T) {
 	}
 }
 
-func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData []rlp.RawValue, netstore *storage.NetStore) {
+func checkStorage(t *testing.T, wantedIndexes []int, wanted []chunk.Address, wantedData []rlp.RawValue, netstore *storage.NetStore) {
 	// Check if requested headers arrived and are stored in localstore
 	for i := range wantedIndexes {
 		chunk, err := netstore.Store.Get(context.Background(), chunk.ModeGetLookup, wanted[i])
@@ -568,7 +568,7 @@ func checkStorage(t *testing.T, wantedIndexes []int, wanted [][]byte, wantedData
 	}
 }
 
-func checkDelivery(t *testing.T, wantedIndexes []int, wanted [][]byte, hashes map[string]bool) {
+func checkDelivery(t *testing.T, wantedIndexes []int, wanted []chunk.Address, hashes map[string]bool) {
 	for i := range wantedIndexes {
 		hash := hex.EncodeToString(wanted[i])
 		if _, ok := hashes[hash]; !ok {
