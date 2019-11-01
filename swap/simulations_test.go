@@ -413,7 +413,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// we will send just maxCheques number of cheques
-	maxCheques := 10
+	maxCheques := 3
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()

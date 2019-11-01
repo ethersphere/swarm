@@ -568,6 +568,43 @@ func (s *Swap) Cheques() (map[enode.ID]*PeerCheques, error) {
 	return cheques, nil
 }
 
+// placeholder: issue of locks
+func (s *Swap) sentCheques() (map[enode.ID]*Cheque, error) {
+	sentCheques := make(map[enode.ID]*Cheque)
+	// get sent cheques from memory
+	s.peersLock.Lock()
+	for peer, swapPeer := range s.peers {
+		sentCheque := swapPeer.getLastSentCheque()
+		// don't add peer to result if there are no cheques
+		if sentCheque != nil {
+			sentCheques[peer] = sentCheque
+		}
+	}
+	s.peersLock.Unlock()
+
+	// get sent cheques from store
+	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
+		peer := keyToID(string(key), sentChequePrefix)
+		// add cheque if not present yet
+		if sentCheque := sentCheques[peer]; sentCheque == nil {
+			// add cheque from store if not already in result
+			var sentCheque Cheque
+			err = json.Unmarshal(value, &sentCheque)
+			if err == nil {
+				sentCheques[peer] = &sentCheque
+			}
+		}
+		return stop, err
+	}
+
+	err := s.store.Iterate(sentChequePrefix, chequesIterFunction)
+	if err != nil {
+		return nil, err
+	}
+
+	return sentCheques, nil
+}
+
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
 func (s *Swap) AvailableBalance() (uint64, error) {
 	// get the LiquidBalance of the chequebook
@@ -576,8 +613,8 @@ func (s *Swap) AvailableBalance() (uint64, error) {
 		return 0, err
 	}
 
-	// get all cheques
-	cheques, err := s.Cheques()
+	// get sent cheques
+	sentCheques, err := s.sentCheques()
 	if err != nil {
 		return 0, err
 	}
@@ -585,11 +622,7 @@ func (s *Swap) AvailableBalance() (uint64, error) {
 	// Compute the total worth of cheques sent and how much of of this is cashed
 	var sentChequesWorth uint64
 	var cashedChequesWorth uint64
-	for _, peerCheques := range cheques {
-		sentCheque := peerCheques.LastSentCheque
-		if sentCheque == nil {
-			continue
-		}
+	for _, sentCheque := range sentCheques {
 		sentChequesWorth += sentCheque.ChequeParams.CumulativePayout
 		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
 		if err != nil {

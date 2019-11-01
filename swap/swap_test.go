@@ -2068,7 +2068,6 @@ func TestAvailableBalance(t *testing.T) {
 	if availableBalance != (netDeposit - uint64(chequeAmount)) {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
-
 }
 
 // dummyMsgRW implements MessageReader and MessageWriter
