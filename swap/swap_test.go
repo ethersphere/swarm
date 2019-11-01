@@ -923,7 +923,7 @@ func TestDisconnectThreshold(t *testing.T) {
 	if !strings.Contains(err.Error(), "disconnect threshold") {
 		t.Fatal(err)
 	}
-	// account for traffic which reduces debt
+	// account for traffic which reduces debt, which should be allowed even when over the threshold
 	err = swap.Add(-1, testPeer.Peer)
 	if err != nil {
 		t.Fatalf("expected accounting operation to succeed, but it failed with %v", err)
@@ -1095,8 +1095,8 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		booking := bookings[i]
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
-		// balance is not expected to be affected once past the disconnect threshold
-		if peerBalance < swap.params.DisconnectThreshold {
+		// balance should be affected if debt is reduced or if under the disconnect threshold
+		if peerBalance < swap.params.DisconnectThreshold || booking.amount < 0 {
 			peerBalance += booking.amount
 		}
 		expectedBalances[peerID] = peerBalance
