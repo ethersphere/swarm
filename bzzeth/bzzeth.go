@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -568,8 +567,6 @@ func (b *BzzEth) getBlockHeadersEth(ctx context.Context, headersC, giveBackC cha
 		go b.getDelivery(ctx, req, &wg)
 	}
 	wg.Wait()
-
-	fmt.Println("Finishing getBlockHeadersEth")
 }
 
 func (b *BzzEth) getDelivery(ctx context.Context, req *request, wg *sync.WaitGroup) {
