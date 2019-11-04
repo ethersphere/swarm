@@ -433,12 +433,6 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 		return
 	}
 
-	err = p.updateBalance(int64(cheque.Honey))
-	if err != nil {
-		p.Drop(fmt.Sprintf("persistence error: %v", err))
-		return
-	}
-
 	// since more swap traffic might have occurred since this cheque was already sent, we redo the payment threshold check
 	err = s.checkPaymentThresholdAndSendCheque(p)
 	if err != nil {

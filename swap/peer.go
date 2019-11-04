@@ -212,6 +212,11 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
+	err = p.updateBalance(int64(cheque.Honey))
+	if err != nil {
+		return fmt.Errorf("error while creating cheque: %v", err)
+	}
+
 	p.logger.Info("sending cheque to peer", "honey", cheque.Honey, "cumulativePayout", cheque.ChequeParams.CumulativePayout, "beneficiary", cheque.Beneficiary, "contract", cheque.Contract)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,

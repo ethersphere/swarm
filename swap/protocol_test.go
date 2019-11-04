@@ -246,8 +246,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// balance should only be adjusted by overDraft prior to confirm msg
-	if creditor.getBalance() != -int64(expectedAmount) {
+	// balance should be reset now
+	if creditor.getBalance() != 0 {
 		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
 	}
 
@@ -285,10 +285,6 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	if err = debitorSwap.Add(-int64(DefaultPaymentThreshold), creditor.Peer); err != nil {
 		t.Fatal(err)
 	}
-
-	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
-		Cheque: creditor.getPendingCheque(),
-	})
 
 	if creditor.getBalance() != 0 {
 		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
