@@ -432,13 +432,6 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 		p.Drop(fmt.Sprintf("persistence error: %v", err))
 		return
 	}
-
-	// since more swap traffic might have occurred since this cheque was already sent, we redo the payment threshold check
-	err = s.checkPaymentThresholdAndSendCheque(p)
-	if err != nil {
-		p.logger.Warn("failed to send already due cheque", "error", err)
-		return
-	}
 }
 
 // cashCheque should be called async as it blocks until the transaction(s) are mined
