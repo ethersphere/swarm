@@ -204,7 +204,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	r := retrieval.New(kad, netStore, kad.BaseAddr(), nil)
 	netStore.RemoteGet = r.RequestFromPeers
 
-	pubSub := pss.NewPubSub(ps)
+	pubSub := pss.NewPubSub(ps, 1*time.Second)
 	// setup pusher
 	p := NewPusher(lstore, pubSub, tags)
 	bucket.Store(bucketKeyPushSyncer, p)
