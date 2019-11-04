@@ -264,7 +264,7 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{},
 			storeReceivedCheques: map[enode.ID]*Cheque{},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer.ID(): {testPeerSentCheque, nil},
+				testPeer.ID(): {nil, testPeerSentCheque, nil},
 			},
 		},
 		{
@@ -275,7 +275,7 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{},
 			storeReceivedCheques: map[enode.ID]*Cheque{},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer.ID(): {testPeerSentCheque, testPeerReceivedCheque},
+				testPeer.ID(): {nil, testPeerSentCheque, testPeerReceivedCheque},
 			},
 		},
 		{
@@ -286,8 +286,8 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{},
 			storeReceivedCheques: map[enode.ID]*Cheque{},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer.ID():  {testPeerSentCheque, testPeerReceivedCheque},
-				testPeer2.ID(): {testPeer2SentCheque, testPeer2ReceivedCheque},
+				testPeer.ID():  {nil, testPeerSentCheque, testPeerReceivedCheque},
+				testPeer2.ID(): {nil, testPeer2SentCheque, testPeer2ReceivedCheque},
 			},
 		},
 		{
@@ -298,8 +298,8 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{},
 			storeReceivedCheques: map[enode.ID]*Cheque{},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer.ID():  {testPeerSentCheque2, testPeerReceivedCheque},
-				testPeer2.ID(): {testPeer2SentCheque, testPeer2ReceivedCheque2},
+				testPeer.ID():  {nil, testPeerSentCheque2, testPeerReceivedCheque},
+				testPeer2.ID(): {nil, testPeer2SentCheque, testPeer2ReceivedCheque2},
 			},
 		},
 		{
@@ -310,7 +310,7 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{testPeer3ID: testPeer3SentCheque},
 			storeReceivedCheques: map[enode.ID]*Cheque{testPeer3ID: testPeer3ReceivedCheque},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer3ID: {testPeer3SentCheque, testPeer3ReceivedCheque},
+				testPeer3ID: {nil, testPeer3SentCheque, testPeer3ReceivedCheque},
 			},
 		},
 		{
@@ -321,7 +321,7 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{testPeer3ID: testPeer3SentCheque, testPeer3ID: testPeer3SentCheque2},
 			storeReceivedCheques: map[enode.ID]*Cheque{testPeer3ID: testPeer3ReceivedCheque, testPeer3ID: testPeer3ReceivedCheque2},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer3ID: {testPeer3SentCheque2, testPeer3ReceivedCheque2},
+				testPeer3ID: {nil, testPeer3SentCheque2, testPeer3ReceivedCheque2},
 			},
 		},
 		{
@@ -332,9 +332,9 @@ func TestCheques(t *testing.T) {
 			storeSentCheques:     map[enode.ID]*Cheque{testPeer3ID: testPeer3SentCheque, testPeer3ID: testPeer3SentCheque2},
 			storeReceivedCheques: map[enode.ID]*Cheque{testPeer3ID: testPeer3ReceivedCheque, testPeer3ID: testPeer3ReceivedCheque2},
 			expectedCheques: map[enode.ID]*PeerCheques{
-				testPeer.ID():  {testPeerSentCheque2, testPeerReceivedCheque},
-				testPeer2.ID(): {testPeer2SentCheque, testPeer2ReceivedCheque2},
-				testPeer3ID:    {testPeer3SentCheque2, testPeer3ReceivedCheque2},
+				testPeer.ID():  {nil, testPeerSentCheque2, testPeerReceivedCheque},
+				testPeer2.ID(): {nil, testPeer2SentCheque, testPeer2ReceivedCheque2},
+				testPeer3ID:    {nil, testPeer3SentCheque2, testPeer3ReceivedCheque2},
 			},
 		},
 	}
@@ -436,28 +436,28 @@ func TestPeerCheques(t *testing.T) {
 			peer:            testPeer,
 			sentCheque:      nil,
 			receivedCheque:  nil,
-			expectedCheques: PeerCheques{nil, nil},
+			expectedCheques: PeerCheques{nil, nil, nil},
 		},
 		{
 			name:            "peer 1 with sent cheque",
 			peer:            testPeer,
 			sentCheque:      testPeerSentCheque,
 			receivedCheque:  nil,
-			expectedCheques: PeerCheques{testPeerSentCheque, nil},
+			expectedCheques: PeerCheques{nil, testPeerSentCheque, nil},
 		},
 		{
 			name:            "peer 1 with sent and received cheque",
 			peer:            testPeer,
 			sentCheque:      testPeerSentCheque,
 			receivedCheque:  testPeerReceivedCheque,
-			expectedCheques: PeerCheques{testPeerSentCheque, testPeerReceivedCheque},
+			expectedCheques: PeerCheques{nil, testPeerSentCheque, testPeerReceivedCheque},
 		},
 		{
 			name:            "peer 2 with received cheque",
 			peer:            testPeer2,
 			sentCheque:      nil,
 			receivedCheque:  testPeer2ReceivedCheque,
-			expectedCheques: PeerCheques{nil, testPeer2ReceivedCheque},
+			expectedCheques: PeerCheques{nil, nil, testPeer2ReceivedCheque},
 		},
 	}
 	// verify test cases
@@ -467,7 +467,7 @@ func TestPeerCheques(t *testing.T) {
 	testPeer3ID := newDummyPeer().Peer.ID()
 	testPeer3SentCheque := newRandomTestCheque()
 	testPeer3ReceivedCheque := newRandomTestCheque()
-	testPeer3ExpectedCheques := PeerCheques{testPeer3SentCheque, testPeer3ReceivedCheque}
+	testPeer3ExpectedCheques := PeerCheques{nil, testPeer3SentCheque, testPeer3ReceivedCheque}
 	testPeerChequesDisconnected(t, testPeer3ID, testPeer3SentCheque, testPeer3ReceivedCheque, testPeer3ExpectedCheques)
 
 	// verify cases for invalid peers
@@ -539,7 +539,7 @@ func testPeerChequesInvalid(t *testing.T, invalidPeerIDs []enode.ID) {
 
 	// verify results by calling PeerCheques function
 	for _, invalidPeerID := range invalidPeerIDs {
-		verifyCheques(t, swap, invalidPeerID, PeerCheques{nil, nil})
+		verifyCheques(t, swap, invalidPeerID, PeerCheques{nil, nil, nil})
 	}
 }
 
