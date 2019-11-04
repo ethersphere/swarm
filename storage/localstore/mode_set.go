@@ -306,10 +306,46 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		return 0, err
 	}
 	if !ok {
-		err = db.gcIndex.PutInBatch(batch, item)
+		// set access timestamp based on quantile calculated from
+		// chunk proximity and db.responsibilityRadius
+		f := chunkQuantileFraction(int(db.po(item.Address)), db.getResponsibilityRadius())
+		gcSize, err := db.gcSize.Get()
 		if err != nil {
 			return 0, err
 		}
+		position := quantilePosition(gcSize, f.Numerator, f.Denominator)
+		var gcQuantiles quantiles
+		err = db.gcQuantiles.Get(&gcQuantiles)
+		if err != nil && err != leveldb.ErrNotFound {
+			return 0, err
+		}
+		var found bool
+		for _, q := range gcQuantiles {
+			if q.fraction == f {
+				item.AccessTimestamp = q.Item.AccessTimestamp + 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			var shift int64
+			if closest := gcQuantiles.Closest(f); closest == nil {
+				shift = int64(position)
+			} else {
+				shift = int64(closest.Position) - int64(position)
+			}
+			i, err = db.gcIndex.Offset(nil, shift)
+			if err != nil {
+				return 0, err
+			}
+			item.AccessTimestamp = i.AccessTimestamp + 1
+		}
+		gcQuantiles.Set(f, item, position)
+		db.gcQuantiles.PutInBatch(batch, gcQuantiles)
+
+		db.retrievalAccessIndex.PutInBatch(batch, item)
+		db.pushIndex.DeleteInBatch(batch, item)
+		db.gcIndex.PutInBatch(batch, item)
 		gcSizeChange++
 	}
 
