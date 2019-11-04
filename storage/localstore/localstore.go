@@ -19,6 +19,8 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
+	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -90,6 +92,10 @@ type DB struct {
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
 
+	// field that stores all positions (item and index)
+	// of all gc quantiles
+	gcQuantiles shed.JSONField
+
 	// garbage collection is triggered when gcSize exceeds
 	// the capacity value
 	capacity uint64
@@ -104,6 +110,9 @@ type DB struct {
 	// a wait group to ensure all updateGC goroutines
 	// are done before closing the database
 	updateGCWG sync.WaitGroup
+
+	responsibilityRadius   int
+	responsibilityRadiusMu sync.RWMutex
 
 	baseKey []byte
 
@@ -350,6 +359,8 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+	// create a bucket for gc index quantiles
+	db.gcQuantiles, err = db.shed.NewJSONField("gc-quantiles")
 
 	// Create a index structure for storing pinned chunks and their pin counts
 	db.pinIndex, err = db.shed.NewIndex("Hash->PinCounter", shed.IndexFuncs{
@@ -448,6 +459,20 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	return indexInfo, err
 }
 
+func (db *DB) SetResponsibilityRadius(r int) {
+	db.responsibilityRadiusMu.Lock()
+	defer db.responsibilityRadiusMu.Unlock()
+
+	db.responsibilityRadius = r
+}
+
+func (db *DB) getResponsibilityRadius() (r int) {
+	db.responsibilityRadiusMu.RLock()
+	defer db.responsibilityRadiusMu.RUnlock()
+
+	return db.responsibilityRadius
+}
+
 // chunkToItem creates new Item with data provided by the Chunk.
 func chunkToItem(ch chunk.Chunk) shed.Item {
 	return shed.Item{
@@ -495,4 +520,85 @@ func init() {
 func totalTimeMetric(name string, start time.Time) {
 	totalTime := time.Since(start)
 	metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
+}
+
+type fraction struct {
+	Numerator   uint64
+	Denominator uint64
+}
+
+func (f fraction) Decimal() float64 {
+	return float64(f.Numerator) / float64(f.Denominator)
+}
+
+type quantile struct {
+	fraction
+	Item     shed.Item
+	Position uint64
+}
+
+type quantiles []quantile
+
+func (q quantiles) Len() int {
+	return len(q)
+}
+
+func (q quantiles) Less(i, j int) bool {
+	return q[i].fraction.Decimal() < q[j].fraction.Decimal()
+}
+
+func (q quantiles) Swap(i, j int) {
+	q[i], q[j] = q[j], q[i]
+}
+
+func (q quantiles) Get(f fraction) (item shed.Item, position uint64, found bool) {
+	for _, x := range q {
+		if x.fraction == f {
+			return x.Item, x.Position, true
+		}
+	}
+	return item, 0, false
+}
+
+func (q quantiles) Closest(f fraction) (closest *quantile) {
+	for _, x := range q {
+		if x.fraction == f {
+			return &x
+		}
+		if closest == nil || math.Abs(x.Decimal()-f.Decimal()) < math.Abs(closest.Decimal()-f.Decimal()) {
+			closest = &x
+		}
+	}
+	return closest
+}
+
+func (q quantiles) Set(f fraction, item shed.Item, position uint64) {
+	for i := range q {
+		if q[i].fraction == f {
+			q[i].Item = item
+			q[i].Position = position
+			return
+		}
+	}
+	q = append(q, quantile{
+		fraction: f,
+		Item:     item,
+	})
+	sort.Sort(q)
+}
+
+func quantilePosition(total, numerator, denominator uint64) uint64 {
+	return total / denominator * numerator
+}
+
+// based on https://hackmd.io/t-OQFK3mTsGfrpLCqDrdlw#Synced-chunks
+// TODO: review and document exact quantiles for chunks
+func chunkQuantileFraction(po, responsibilityRadius int) fraction {
+	if po < responsibilityRadius {
+		// More Distant Chunks
+		n := uint64(responsibilityRadius - po)
+		return fraction{Numerator: n, Denominator: n + 1}
+	}
+	// Most Proximate Chunks
+	return fraction{Numerator: 1, Denominator: 3}
 }
