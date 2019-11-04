@@ -16,6 +16,7 @@
 package network
 
 import (
+	"encoding/binary"
 	"strconv"
 	"testing"
 	"time"
@@ -267,6 +268,43 @@ func TestEachBinFiltered(t *testing.T) {
 		t.Errorf("Expected 2 uses of second capability peer but got %v", secondCount-secondCountStart)
 	}
 
+}
+
+// TestResourceUseStats checks that on and off messages are delivered in order
+func TestResourceUseStats(t *testing.T) {
+
+	testResourceUseStats := func(t *testing.T, delay time.Duration) {
+		k := NewKademlia(make([]byte, 32), NewKadParams())
+		lb := NewKademliaLoadBalancer(k, false)
+		for i := uint64(0); i < 10; i++ {
+			a := make([]byte, 8)
+			binary.BigEndian.PutUint64(a, i)
+			p := NewPeer(&BzzPeer{BzzAddr: NewBzzAddr(a, a)}, nil)
+			k.On(p)
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			k.Off(p)
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+		}
+
+		// we need to sleep to allow all messages to be received by lb
+		time.Sleep(100 * time.Millisecond)
+		count := lb.resourceUseStats.Len()
+		if count > 0 {
+			t.Errorf("got resourceUseStats %v, want 0, uses: %v", count, lb.resourceUseStats.DumpAllUses())
+		}
+		lb.Stop()
+	}
+
+	t.Run("no delay", func(t *testing.T) {
+		testResourceUseStats(t, 0)
+	})
+	t.Run("1ms delay", func(t *testing.T) {
+		testResourceUseStats(t, time.Millisecond)
+	})
 }
 
 func newTestKadPeer(s string) *Peer {

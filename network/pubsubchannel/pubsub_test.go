@@ -32,7 +32,7 @@ func init() {
 }
 
 func TestPubSeveralSub(t *testing.T) {
-	pubSub := pubsubchannel.New()
+	pubSub := pubsubchannel.New(100)
 	var group sync.WaitGroup
 	bucketSubs1, _ := testSubscriptor(pubSub, 2, &group)
 	bucketSubs2, _ := testSubscriptor(pubSub, 2, &group)
@@ -54,7 +54,7 @@ func TestPubSeveralSub(t *testing.T) {
 }
 
 func TestPubUnsubscribe(t *testing.T) {
-	pubSub := pubsubchannel.New()
+	pubSub := pubsubchannel.New(100)
 	var group sync.WaitGroup
 	_, subscription := testSubscriptor(pubSub, 0, &group)
 	msgBucket2, _ := testSubscriptor(pubSub, 1, &group)
@@ -96,7 +96,7 @@ func testSubscriptor(pubsub *pubsubchannel.PubSubChannel, expectedMessages int, 
 // TestUnsubscribeBeforeReadingMessages tests that there is no goroutine leak when a subscription is finished
 // before reading pending messages from the channel.
 func TestUnsubscribeBeforeReadingMessages(t *testing.T) {
-	ps := pubsubchannel.New()
+	ps := pubsubchannel.New(1001)
 	s := ps.Subscribe()
 	defer ps.Close()
 
@@ -139,7 +139,7 @@ func (w testingErrorWriter) Write(b []byte) (int, error) {
 // channel is still not closed). However, we need to wait a bit before extracting messages from the channel to allow
 // the blocked publishers exit. In a real case, the moment a new message is published the channel will be closed.
 func TestMessagesAfterUnsubscribe(t *testing.T) {
-	ps := pubsubchannel.New()
+	ps := pubsubchannel.New(1001)
 	defer ps.Close()
 
 	s := ps.Subscribe()
@@ -151,7 +151,6 @@ func TestMessagesAfterUnsubscribe(t *testing.T) {
 
 	s.Unsubscribe()
 
-	ps.Publish("End message")
 	var n int
 	timeout := time.After(2 * time.Second)
 loop:
@@ -169,8 +168,46 @@ loop:
 	}
 
 	t.Log("got", n, "messages")
-	if n > 0 {
+	if n > 1 {
 		t.Errorf("Expected no message received after unsubscribing but got %v", n)
+	}
+
+}
+
+// TestMessagesInOrder checks that messages are delivered in order to subscribers
+func TestMessagesInOrder(t *testing.T) {
+	ps := pubsubchannel.New(1001)
+	defer ps.Close()
+
+	s := ps.Subscribe()
+
+	for i := 0; i < 1000; i++ {
+		ps.Publish(i)
+	}
+	c := s.ReceiveChannel()
+
+	var n int
+	timeout := time.After(2 * time.Second)
+	var more = true
+	var last = -1
+	for more && n < 1000 {
+		select {
+		case msg, ok := <-c:
+			if !ok {
+				more = false
+			} else {
+				newNum := msg.(int)
+				if newNum != last+1 {
+					t.Errorf("unsortered messages in pubsub channel. Expected %v, received %v", last+1, newNum)
+					more = false
+				}
+				last = last + 1
+				n++
+			}
+		case <-timeout:
+			t.Log("timeout")
+			more = false
+		}
 	}
 
 }

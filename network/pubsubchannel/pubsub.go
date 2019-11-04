@@ -23,12 +23,15 @@ import (
 	"github.com/ethersphere/swarm/log"
 )
 
-//PubSubChannel represents a pubsub system where subscriber can .Subscribe() and publishers can .Publish() or .Close().
+// PubSubChannel represents a pubsub system where subscriber can .Subscribe() and publishers can .Publish() or .Close().
+// When it publishes a message, it notifies all subscribers semi-asynchronously, meaning that each subscription will have
+// an inbox of size inboxSize, but then a different goroutine will send those messages to the subscribers.
 type PubSubChannel struct {
 	subscriptions []*Subscription
 	subsMutex     sync.RWMutex
 	nextId        int
 	quitC         chan struct{}
+	inboxSize     int // size of the inbox channels in subscriptions. Depends on the number of pseudo-simultaneous messages expected to be published.
 }
 
 // Subscription is created in PubSubChannel using pubSub.Subscribe(). Subscribers can receive using .ReceiveChannel().
@@ -36,20 +39,22 @@ type PubSubChannel struct {
 type Subscription struct {
 	closed    bool
 	pubSubC   *PubSubChannel
+	inbox     chan interface{}
 	signal    chan interface{}
 	closeOnce sync.Once
 	id        string
 	lock      sync.RWMutex
 	quitC     chan struct{} // close channel for publisher goroutines
-	msgCount  *int64
+	msgCount  int
 	pending   *int64
 }
 
 // New creates a new PubSubChannel.
-func New() *PubSubChannel {
+func New(inboxSize int) *PubSubChannel {
 	return &PubSubChannel{
 		subscriptions: make([]*Subscription, 0),
 		quitC:         make(chan struct{}),
+		inboxSize:     inboxSize,
 	}
 }
 
@@ -57,11 +62,11 @@ func New() *PubSubChannel {
 func (psc *PubSubChannel) Subscribe() *Subscription {
 	psc.subsMutex.Lock()
 	defer psc.subsMutex.Unlock()
-	newSubscription := newSubscription(strconv.Itoa(psc.nextId), psc)
+	newSubscription := newSubscription(strconv.Itoa(psc.nextId), psc, psc.inboxSize)
 	psc.nextId++
-	psc.subscriptions = append(psc.subscriptions, &newSubscription)
+	psc.subscriptions = append(psc.subscriptions, newSubscription)
 
-	return &newSubscription
+	return newSubscription
 }
 
 func (psc *PubSubChannel) removeSub(s *Subscription) {
@@ -79,30 +84,23 @@ func (psc *PubSubChannel) removeSub(s *Subscription) {
 	}
 }
 
-// Publish broadcasts a message asynchronously to each subscriber.
-// If some of the subscriptions(channels) has been marked as closeable, it does it now.
+// Publish broadcasts a message synchronously to each subscriber inbox.
 func (psc *PubSubChannel) Publish(msg interface{}) {
 	psc.subsMutex.RLock()
 	defer psc.subsMutex.RUnlock()
 	for _, sub := range psc.subscriptions {
-		go func(sub *Subscription) {
-			sub.lock.Lock()
-			defer sub.lock.Unlock()
-			atomic.AddInt64(sub.pending, 1)
-			defer atomic.AddInt64(sub.pending, -1)
-			if sub.closed {
-				log.Debug("Subscription was closed", "id", sub.id)
-				sub.closeChannel()
-			} else {
-				select {
-				case sub.signal <- msg:
-					atomic.AddInt64(sub.msgCount, 1)
-				case <-psc.quitC:
-				case <-sub.quitC:
-				}
-			}
+		psc.publishToSub(sub, msg)
+	}
+}
 
-		}(sub)
+// publishToSub will block on the subscription inbox if there are more than inboxSize messages accumulated
+func (psc *PubSubChannel) publishToSub(sub *Subscription, msg interface{}) {
+	atomic.AddInt64(sub.pending, 1)
+	defer atomic.AddInt64(sub.pending, -1)
+	select {
+	case <-psc.quitC:
+	case <-sub.quitC:
+	case sub.inbox <- msg:
 	}
 }
 
@@ -121,7 +119,7 @@ func (psc *PubSubChannel) Close() {
 	for _, sub := range psc.subscriptions {
 		sub.lock.Lock()
 		sub.closed = true
-		sub.closeChannel()
+		close(sub.quitC)
 		sub.lock.Unlock()
 	}
 	close(psc.quitC)
@@ -150,31 +148,46 @@ func (sub *Subscription) ID() string {
 	return sub.id
 }
 
-func (sub *Subscription) closeChannel() {
-	sub.closeOnce.Do(func() {
-		close(sub.signal)
-	})
-}
-
-func (sub *Subscription) MessageCount() int64 {
-	return *sub.msgCount
+func (sub *Subscription) MessageCount() int {
+	return sub.msgCount
 }
 
 func (sub *Subscription) Pending() int64 {
 	return *sub.pending
 }
 
-func newSubscription(id string, psc *PubSubChannel) Subscription {
-	var count int64
+func newSubscription(id string, psc *PubSubChannel, inboxSize int) *Subscription {
 	var pending int64
-	return Subscription{
+	subscription := &Subscription{
 		closed:    false,
 		pubSubC:   psc,
+		inbox:     make(chan interface{}, inboxSize),
 		signal:    make(chan interface{}),
 		closeOnce: sync.Once{},
 		id:        id,
 		quitC:     make(chan struct{}),
-		msgCount:  &count,
+		msgCount:  0,
 		pending:   &pending,
 	}
+	// publishing goroutine. It closes the signal channel whenever it receives the quitC signal
+	go func(sub *Subscription) {
+		for {
+			select {
+			case <-sub.quitC:
+				close(sub.signal)
+				return
+			case msg := <-sub.inbox:
+				log.Debug("Retrieved inbox message", "msg", msg)
+				select {
+				case <-psc.quitC:
+				case <-sub.quitC:
+					close(sub.signal)
+					return
+				case sub.signal <- msg:
+					sub.msgCount++
+				}
+			}
+		}
+	}(subscription)
+	return subscription
 }

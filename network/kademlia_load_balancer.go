@@ -25,7 +25,7 @@ import (
 
 // KademliaBackend is the required interface of KademliaLoadBalancer.
 type KademliaBackend interface {
-	SubscribeToPeerChanges() (addedSub *pubsubchannel.Subscription, removedPeerSub *pubsubchannel.Subscription)
+	SubscribeToPeerChanges() *pubsubchannel.Subscription
 	BaseAddr() []byte
 	EachBinDesc(base []byte, minProximityOrder int, consumer PeerBinConsumer)
 	EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error
@@ -37,13 +37,12 @@ type KademliaBackend interface {
 // If not, least used peer use count in same bin as new peer will be used. It is not clear which one is better, when
 // this load balancer would be used in several use cases we could do take some decision.
 func NewKademliaLoadBalancer(kademlia KademliaBackend, useNearestNeighbourInit bool) *KademliaLoadBalancer {
-	onPeerSub, offPeerSub := kademlia.SubscribeToPeerChanges()
+	onOffPeerSub := kademlia.SubscribeToPeerChanges()
 	quitC := make(chan struct{})
 	klb := &KademliaLoadBalancer{
 		kademlia:         kademlia,
 		resourceUseStats: resourceusestats.NewResourceUseStats(quitC),
-		onPeerSub:        onPeerSub,
-		offPeerSub:       offPeerSub,
+		onOffPeerSub:     onOffPeerSub,
 		quitC:            quitC,
 	}
 	if useNearestNeighbourInit {
@@ -52,8 +51,7 @@ func NewKademliaLoadBalancer(kademlia KademliaBackend, useNearestNeighbourInit b
 		klb.initCountFunc = klb.leastUsedCountInBin
 	}
 
-	go klb.listenNewPeers()
-	go klb.listenOffPeers()
+	go klb.listenOnOffPeers()
 	return klb
 }
 
@@ -90,8 +88,7 @@ type LBBinConsumer func(bin LBBin) bool
 type KademliaLoadBalancer struct {
 	kademlia         KademliaBackend                    // kademlia to obtain bins of peers
 	resourceUseStats *resourceusestats.ResourceUseStats // a resourceUseStats to count uses
-	onPeerSub        *pubsubchannel.Subscription        // a pubsub channel to be notified of new peers in kademlia
-	offPeerSub       *pubsubchannel.Subscription        // a pubsub channel to be notified of removed peers in kademlia
+	onOffPeerSub     *pubsubchannel.Subscription        // a pubsub channel to be notified of on/off peers in kademlia
 	quitC            chan struct{}
 
 	initCountFunc func(peer *Peer, po int) int //Function to use for initializing a new peer count
@@ -99,8 +96,7 @@ type KademliaLoadBalancer struct {
 
 // Stop unsubscribe from notifiers
 func (klb *KademliaLoadBalancer) Stop() {
-	klb.onPeerSub.Unsubscribe()
-	klb.offPeerSub.Unsubscribe()
+	klb.onOffPeerSub.Unsubscribe()
 	close(klb.quitC)
 }
 
@@ -145,46 +141,27 @@ func (klb *KademliaLoadBalancer) resourcesToLbPeers(resources []resourceusestats
 	return peers
 }
 
-func (klb *KademliaLoadBalancer) listenNewPeers() {
+func (klb *KademliaLoadBalancer) listenOnOffPeers() {
 	for {
 		select {
 		case <-klb.quitC:
 			return
-		case msg, ok := <-klb.onPeerSub.ReceiveChannel():
+		case msg, ok := <-klb.onOffPeerSub.ReceiveChannel():
 			if !ok {
-				log.Warn("listenNewPeers closed channel, finishing subscriber to new peer")
+				log.Debug("listenOnOffPeers closed channel, finishing subscriber to on/off peers")
 				return
 			}
-			signal, ok := msg.(newPeerSignal)
+			signal, ok := msg.(onOffPeerSignal)
 			if !ok {
-				log.Warn("listenNewPeers received message is not a new peer signal")
+				log.Warn("listenOnOffPeers received message is not a on/off peer signal!")
 				continue
 			}
-			klb.addedPeer(signal.peer, signal.po)
-		}
-	}
-}
-
-func (klb *KademliaLoadBalancer) listenOffPeers() {
-	for {
-		select {
-		case <-klb.quitC:
-			return
-		case msg, ok := <-klb.offPeerSub.ReceiveChannel():
-			if !ok {
-				log.Warn("listenOffPeers closed channel, finishing subscriber to off peers")
-				return
+			//log.Warn("OnOff peer", "key", signal.peer.Key(), "on", signal.on)
+			if signal.on {
+				klb.addedPeer(signal.peer, signal.po)
+			} else {
+				klb.resourceUseStats.RemoveResource(signal.peer)
 			}
-			peer, ok := msg.(*Peer)
-			if peer == nil {
-				log.Warn("nil peer received listening for off peers. Ignoring.")
-				continue
-			}
-			if !ok {
-				log.Warn("unexpected message received listening for off peers. Ignoring.")
-				continue
-			}
-			klb.resourceUseStats.RemoveResource(peer)
 		}
 	}
 }
