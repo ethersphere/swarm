@@ -417,7 +417,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {
-		p.logger.Warn("ignoring confirm msg, unexpected cheque", "got", cheque, "expected", p.getPendingCheque())
+		p.logger.Warn("ignoring confirm msg, unexpected cheque", "confirm message cheque", cheque, "expected", p.getPendingCheque())
 		return
 	}
 
