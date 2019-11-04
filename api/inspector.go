@@ -29,6 +29,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/localstore"
 )
 
 const InspectorIsPullSyncingTolerance = 15 * time.Second
@@ -38,10 +39,11 @@ type Inspector struct {
 	hive     *network.Hive
 	netStore *storage.NetStore
 	stream   *stream.Registry
+	ls       *localstore.DB
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *stream.Registry) *Inspector {
-	return &Inspector{api, hive, netStore, pullSyncer}
+func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore, pullSyncer *stream.Registry, ls *localstore.DB) *Inspector {
+	return &Inspector{api, hive, netStore, pullSyncer, ls}
 }
 
 // Hive prints the kademlia table
@@ -124,4 +126,8 @@ func (i *Inspector) PeerStreams() (string, error) {
 		return "", err
 	}
 	return string(v), nil
+}
+
+func (i *Inspector) StorageIndices() (map[string]int, error) {
+	return i.ls.DebugIndices()
 }
