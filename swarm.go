@@ -475,6 +475,10 @@ func (s *Swarm) Stop() error {
 		}
 	}
 
+	if s.pushSync != nil {
+		s.pushSync.Close()
+	}
+
 	if s.ps != nil {
 		s.ps.Stop()
 	}
@@ -490,10 +494,6 @@ func (s *Swarm) Stop() error {
 	}
 	if err := s.retrieval.Stop(); err != nil {
 		log.Error("retrieval stop", "err", err)
-	}
-
-	if s.pushSync != nil {
-		s.pushSync.Close()
 	}
 
 	if s.tags != nil {
