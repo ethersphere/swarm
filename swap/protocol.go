@@ -44,6 +44,7 @@ var (
 		Messages: []interface{}{
 			HandshakeMsg{},
 			EmitChequeMsg{},
+			ConfirmChequeMsg{},
 		},
 	}
 )
