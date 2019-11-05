@@ -417,7 +417,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {
-		p.logger.Warn("ignoring confirm msg, unexpected cheque", "got", cheque, "expected", p.getPendingCheque())
+		p.logger.Warn("ignoring confirm msg, unexpected cheque", "confirm message cheque", cheque, "expected", p.getPendingCheque())
 		return
 	}
 
@@ -430,13 +430,6 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	err = p.setPendingCheque(nil)
 	if err != nil {
 		p.Drop(fmt.Sprintf("persistence error: %v", err))
-		return
-	}
-
-	// since more swap traffic might have occurred since this cheque was already sent, we redo the payment threshold check
-	err = s.checkPaymentThresholdAndSendCheque(p)
-	if err != nil {
-		p.logger.Warn("failed to send already due cheque", "error", err)
 		return
 	}
 }
@@ -672,7 +665,10 @@ func (s *Swap) loadLastReceivedCheque(p enode.ID) (cheque *Cheque, err error) {
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, err
+	if err != nil {
+		return nil, err
+	}
+	return cheque, nil
 }
 
 // loadLastSentCheque loads the last sent cheque for the peer from the store
@@ -682,7 +678,10 @@ func (s *Swap) loadLastSentCheque(p enode.ID) (cheque *Cheque, err error) {
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, err
+	if err != nil {
+		return nil, err
+	}
+	return cheque, nil
 }
 
 // loadPendingCheque loads the current pending cheque for the peer from the store
@@ -692,7 +691,10 @@ func (s *Swap) loadPendingCheque(p enode.ID) (cheque *Cheque, err error) {
 	if err == state.ErrNotFound {
 		return nil, nil
 	}
-	return cheque, err
+	if err != nil {
+		return nil, err
+	}
+	return cheque, nil
 }
 
 // loadBalance loads the current balance for the peer from the store
@@ -702,7 +704,10 @@ func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
 	if err == state.ErrNotFound {
 		return 0, nil
 	}
-	return balance, err
+	if err != nil {
+		return 0, err
+	}
+	return balance, nil
 }
 
 // saveLastReceivedCheque saves cheque as the last received cheque for peer
