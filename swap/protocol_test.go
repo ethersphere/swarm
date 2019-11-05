@@ -143,7 +143,7 @@ func TestEmitCheque(t *testing.T) {
 
 	// create the debitor peer
 	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
-	dProtoPeer := protocols.NewPeer(dPtpPeer, nil, Spec)
+	dProtoPeer := protocols.NewPeer(dPtpPeer, &dummyMsgRW{}, Spec)
 	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
@@ -233,6 +233,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
+	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
 	creditor.setBalance(-int64(DefaultPaymentThreshold))
 
 	// we expect a cheque at the end of the test, but not yet
@@ -245,15 +246,46 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// balance should be reset now
+	if creditor.getBalance() != 0 {
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
+	}
+
+	// pending cheque should now be set
+	pending := creditor.getPendingCheque()
+	if pending == nil {
+		t.Fatal("Expected pending cheque")
+	}
+
+	if pending.CumulativePayout != expectedAmount {
+		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, pending.CumulativePayout)
+	}
+
+	if pending.Honey != expectedAmount {
+		t.Fatalf("Expected cheque honey to be %d, but is %d", expectedAmount, pending.Honey)
+	}
+
+	if pending.Beneficiary != creditor.beneficiary {
+		t.Fatalf("Expected cheque beneficiary to be %x, but is %x", creditor.beneficiary, pending.Beneficiary)
+	}
+
+	if pending.Contract != debitorSwap.contract.ContractParams().ContractAddress {
+		t.Fatalf("Expected cheque contract to be %x, but is %x", debitorSwap.contract.ContractParams().ContractAddress, pending.Contract)
+	}
+
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
+
 	// we should now have a cheque
 	if creditor.getLastSentCheque() == nil {
 		t.Fatal("Expected one cheque, but there is none")
 	}
 
 	cheque := creditor.getLastSentCheque()
-	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
-	if cheque.CumulativePayout != expectedAmount {
-		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
+
+	if !cheque.Equal(pending) {
+		t.Fatalf("Expected sent cheque to be the last pending one. expected: %v, but is %v", pending, cheque)
 	}
 
 	// because no other accounting took place in the meantime the balance should be exactly 0

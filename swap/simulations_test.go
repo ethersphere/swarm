@@ -58,7 +58,6 @@ and is purely meant for testing the accounting functionality across nodes.
 For integration tests, run test cluster deployments with all integration modueles
 (blockchains, oracles, etc.)
 */
-
 // swapSimulationParams allows to avoid global variables for the test
 type swapSimulationParams struct {
 	swaps       map[int]*Swap

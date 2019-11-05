@@ -39,7 +39,12 @@ type HandshakeMsg struct {
 	ContractAddress common.Address
 }
 
-// EmitChequeMsg is sent from the debitor to the creditor with the actual check
+// EmitChequeMsg is sent from the debitor to the creditor with the actual cheque
 type EmitChequeMsg struct {
+	Cheque *Cheque
+}
+
+// ConfirmChequeMsg is sent from the creditor to the debitor with the cheque to confirm successful processing
+type ConfirmChequeMsg struct {
 	Cheque *Cheque
 }
