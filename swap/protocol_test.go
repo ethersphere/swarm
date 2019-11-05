@@ -261,6 +261,18 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, pending.CumulativePayout)
 	}
 
+	if pending.Honey != expectedAmount {
+		t.Fatalf("Expected cheque honey to be %d, but is %d", expectedAmount, pending.Honey)
+	}
+
+	if pending.Beneficiary != creditor.beneficiary {
+		t.Fatalf("Expected cheque beneficiary to be %x, but is %x", creditor.beneficiary, pending.Beneficiary)
+	}
+
+	if pending.Contract != debitorSwap.contract.ContractParams().ContractAddress {
+		t.Fatalf("Expected cheque contract to be %x, but is %x", debitorSwap.contract.ContractParams().ContractAddress, pending.Contract)
+	}
+
 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
 		Cheque: creditor.getPendingCheque(),
 	})
@@ -272,8 +284,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	cheque := creditor.getLastSentCheque()
 
-	if cheque.CumulativePayout != expectedAmount {
-		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, cheque.CumulativePayout)
+	if !cheque.Equal(pending) {
+		t.Fatalf("Expected sent cheque to be the last pending one. expected: %v, but is %v", pending, cheque)
 	}
 
 	// because no other accounting took place in the meantime the balance should be exactly 0
