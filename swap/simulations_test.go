@@ -263,6 +263,17 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	log.Info("Initializing")
 
+	// we are going to use the metrics system to sync the test
+	// we are only going to continue with the next iteration after the message
+	// has been received on the other side
+	metricsReg := metrics.AccountingRegistry
+	// testMsgBigPrice is paid by the sender, so the credit counter will only be
+	// increased when receiving the message, which is what we want for this test
+	cter := metricsReg.Get("account.msg.credit")
+	counter := cter.(metrics.Counter)
+	counter.Clear()
+	var lastCount int64
+
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
 		t.Fatal(err)
@@ -314,16 +325,18 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			if err := p2Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := waitForChequeProcessed(t, ts2); err != nil {
+			if err := waitForChequeProcessed(t, ts2, counter, lastCount); err != nil {
 				t.Fatal(err)
 			}
+			lastCount += 1
 		} else {
 			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := waitForChequeProcessed(t, ts1); err != nil {
+			if err := waitForChequeProcessed(t, ts1, counter, lastCount); err != nil {
 				t.Fatal(err)
 			}
+			lastCount += 1
 		}
 	}
 
@@ -373,6 +386,17 @@ func TestMultiChequeSimulation(t *testing.T) {
 	defer sim.Close()
 
 	log.Info("Initializing")
+
+	// we are going to use the metrics system to sync the test
+	// we are only going to continue with the next iteration after the message
+	// has been received on the other side
+	metricsReg := metrics.AccountingRegistry
+	// testMsgBigPrice is paid by the sender, so the credit counter will only be
+	// increased when receiving the message, which is what we want for this test
+	cter := metricsReg.Get("account.msg.credit")
+	counter := cter.(metrics.Counter)
+	counter.Clear()
+	var lastCount int64
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -427,9 +451,10 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		// we need to wait a bit in order to give time for the cheque to be processed
-		if err := waitForChequeProcessed(t, creditorSvc); err != nil {
+		if err := waitForChequeProcessed(t, creditorSvc, counter, lastCount); err != nil {
 			t.Fatal(err)
 		}
+		lastCount += 1
 	}
 
 	// check balances:
@@ -651,18 +676,45 @@ func TestBasicSwapSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-func waitForChequeProcessed(t *testing.T, ts *testService) error {
+func waitForChequeProcessed(t *testing.T, ts *testService, counter metrics.Counter, lastCount int64) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	backend := ts.swap.backend.(*swapTestBackend)
+	// we are going to wait for two things:
+	// * that a cheque has been processed
+	// * that the other side actually did process the testMsgPrice message
+	//   (by checking that the message counter has been increased)
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	select {
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for cheque to be processed")
-	case <-backend.cashDone:
-	}
+	go func() {
+		backend := ts.swap.backend.(*swapTestBackend)
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for cheque to be processed")
+		case <-backend.cashDone:
+			wg.Done()
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for all swap peer connections to be established")
+			default:
+				if counter.Count() == lastCount+1 {
+					wg.Done()
+					return
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
+	}()
+
+	wg.Wait()
+
 	return nil
 }
 
