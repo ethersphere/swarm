@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -171,6 +172,7 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
 	db.gcIndex.PutInBatch(batch, item)
+	fmt.Println("GCADD", hex.EncodeToString(db.baseKey), hex.EncodeToString(item.Address))
 	gcSizeChange++
 
 	return gcSizeChange, nil
@@ -267,6 +269,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	}
 	if !ok {
 		db.gcIndex.PutInBatch(batch, item)
+		fmt.Println("GCADD", hex.EncodeToString(db.baseKey), hex.EncodeToString(item.Address))
 		gcSizeChange++
 	}
 

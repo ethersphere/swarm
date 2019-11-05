@@ -19,6 +19,7 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -41,6 +42,16 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, chs ...chunk.Chunk) (
 	exist, err = db.put(mode, chs...)
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+	}
+	addrs := make([]chunk.Address, 0)
+	for _, c := range chs {
+		addrs = append(addrs, c.Address())
+	}
+	// if err := db.Set(ctx, chunk.ModeSetSyncPull, addrs...); err != nil {
+	// 	return exist, err
+	// }
+	for _, a := range addrs {
+		fmt.Println("PUT", mode, hex.EncodeToString(db.baseKey), a)
 	}
 	return exist, err
 }
@@ -202,6 +213,7 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	// add new entry to gc index
 	db.gcIndex.PutInBatch(batch, item)
+	fmt.Println("GCADD", hex.EncodeToString(db.baseKey), hex.EncodeToString(item.Address))
 	gcSizeChange++
 
 	db.retrievalDataIndex.PutInBatch(batch, item)

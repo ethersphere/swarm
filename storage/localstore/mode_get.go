@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -155,6 +156,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	// add new entry to gc index
 	db.gcIndex.PutInBatch(batch, item)
+	fmt.Println("GCADD", hex.EncodeToString(db.baseKey), hex.EncodeToString(item.Address))
 
 	return db.shed.WriteBatch(batch)
 }

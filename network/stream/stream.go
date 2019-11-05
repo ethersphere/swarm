@@ -19,6 +19,7 @@ package stream
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -656,17 +657,25 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		allHashes  = make([]chunk.Address, l)
 	)
 
+	for i := 0; i < l; i++ {
+		allHashes[i] = o.hashes[i*HashSize : (i+1)*HashSize]
+	}
+
+	defer func() {
+		// set the chunks as synced
+		for _, a := range allHashes {
+			fmt.Println("SETSYNC", hex.EncodeToString(r.baseKey), a)
+		}
+		err := provider.Set(ctx, allHashes...)
+		if err != nil {
+			p.logger.Error("error setting chunks as synced", "addrs", allHashes, "err", err)
+			p.Drop("error setting chunks as synced")
+		}
+	}()
+
 	if len(msg.BitVector) == 0 {
 		p.logger.Debug("peer does not want any hashes in this range", "ruid", o.ruid)
-		for i := 0; i < l; i++ {
-			allHashes[i] = o.hashes[i*HashSize : (i+1)*HashSize]
-		}
 		// set all chunks as synced
-		if err := provider.Set(ctx, allHashes...); err != nil {
-			p.logger.Error("error setting chunk as synced", "addrs", allHashes, "err", err)
-			p.Drop("error setting chunk as synced")
-			return
-		}
 		return
 	}
 	want, err := bv.NewFromBytes(msg.BitVector, l)
@@ -742,13 +751,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 
 	startSet := time.Now()
 
-	// set the chunks as synced
-	err = provider.Set(ctx, allHashes...)
-	if err != nil {
-		p.logger.Error("error setting chunks as synced", "addrs", allHashes, "err", err)
-		p.Drop("error setting chunks as synced")
-		return
-	}
 	providerSetTimer.UpdateSince(startSet)
 }
 
@@ -885,6 +887,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	descriptors, stop := provider.Subscribe(ctx, key, from, to)
 	defer stop()
 
+	fmt.Println("OFFITER", hex.EncodeToString(r.baseKey), hex.EncodeToString(p.Address()), key, from, to)
 	for iterate := true; iterate; {
 		select {
 		case d, ok := <-descriptors:
@@ -893,6 +896,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 				break
 			}
 			batch = append(batch, d.Address[:]...)
+			fmt.Println("OFFER", hex.EncodeToString(r.baseKey), d.Address)
 			batchSize++
 			if batchStartID == nil {
 				// set batch start id only if

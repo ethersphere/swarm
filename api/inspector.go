@@ -18,7 +18,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -116,16 +115,8 @@ func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 	return strings.Join(hostChunks, "")
 }
 
-func (i *Inspector) PeerStreams() (string, error) {
-	peerInfo, err := i.stream.PeerInfo()
-	if err != nil {
-		return "", err
-	}
-	v, err := json.Marshal(peerInfo)
-	if err != nil {
-		return "", err
-	}
-	return string(v), nil
+func (i *Inspector) PeerStreams() (*stream.PeerInfo, error) {
+	return i.stream.PeerInfo()
 }
 
 func (i *Inspector) StorageIndices() (map[string]int, error) {
