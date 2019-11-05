@@ -39,7 +39,7 @@ func TestPeerBalance(t *testing.T) {
 	testPeerID := testPeer.ID()
 	defer clean()
 
-	// test for correct balance
+	// test balance
 	setBalance(t, testPeer, 888)
 	testPeerBalance(t, swap, testPeerID, 888)
 
@@ -86,6 +86,7 @@ func testPeerBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) 
 		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
 	}
 }
+
 func addPeer(t *testing.T, s *Swap) *Peer {
 	t.Helper()
 	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
