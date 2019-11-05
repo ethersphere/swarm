@@ -129,7 +129,7 @@ func TestBalance(t *testing.T) {
 	testPeerID := testPeer.ID()
 	defer clean()
 
-	// test for correct balance
+	// test balance
 	setBalance(t, testPeer, 888)
 	testBalance(t, swap, testPeerID, 888)
 
