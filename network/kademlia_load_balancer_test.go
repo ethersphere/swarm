@@ -291,8 +291,13 @@ func TestResourceUseStats(t *testing.T) {
 		}
 
 		// we need to sleep to allow all messages to be received by lb
-		time.Sleep(100 * time.Millisecond)
-		count := lb.resourceUseStats.Len()
+		count := 0
+		retries := 0
+		for count == 0 && retries < 15 {
+			time.Sleep(10 * time.Millisecond)
+			count = lb.resourceUseStats.Len()
+			retries++
+		}
 		if count > 0 {
 			t.Errorf("got resourceUseStats %v, want 0, uses: %v", count, lb.resourceUseStats.DumpAllUses())
 		}

@@ -180,12 +180,15 @@ func newSubscription(id string, psc *PubSubChannel, inboxSize int) *Subscription
 				log.Debug("Retrieved inbox message", "msg", msg)
 				select {
 				case <-psc.quitC:
+					return
 				case <-sub.quitC:
 					close(sub.signal)
 					return
 				case sub.signal <- msg:
 					sub.msgCount++
 				}
+			case <-psc.quitC:
+				return
 			}
 		}
 	}(subscription)
