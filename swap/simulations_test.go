@@ -702,7 +702,7 @@ func waitForChequeProcessed(t *testing.T, ts *testService, counter metrics.Count
 		for {
 			select {
 			case <-ctx.Done():
-				t.Fatal("Timed out waiting for all swap peer connections to be established")
+				t.Fatal("Timed out waiting for peer to have processed accounted message")
 			default:
 				if counter.Count() == lastCount+1 {
 					wg.Done()
