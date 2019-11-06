@@ -221,7 +221,7 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 	// if address is .rsk, resolve it with RNS resolver
 	tld := path.Ext(address)
 	if strings.ToLower(tld) == ".rsk" {
-		resolved, err := rns.ResolveDomainAddress(address)
+		resolved, err := rns.ResolveDomainContent(address)
 		if err != nil {
 			return nil, err
 		}
