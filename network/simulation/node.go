@@ -35,11 +35,13 @@ import (
 	"github.com/ethersphere/swarm/network"
 )
 
-var (
-	BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
-
+const (
 	// PropertyBootnode is a property string for NodeConfig, representing that a node is a bootnode
 	PropertyBootnode = "bootnode"
+)
+
+var (
+	BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
 )
 
 // NodeIDs returns NodeIDs for all nodes in the network.
