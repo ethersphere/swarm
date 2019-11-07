@@ -18,8 +18,10 @@ package swap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -44,70 +46,174 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-/*
-TestHandshake creates two mock nodes and initiates an exchange;
-it expects a handshake to take place between the two nodes
-(the handshake would fail because we don't actually use real nodes here)
-*/
-func TestHandshake(t *testing.T) {
-	var err error
+// protocol tester based on a swap instance
+type swapTester struct {
+	*p2ptest.ProtocolTester
+	swap *Swap
+}
 
-	// setup test swap object
+// creates a new protocol tester for swap with a deployed chequebook
+func newSwapTester(t *testing.T) (*swapTester, func(), error) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
-	defer clean()
 
-	ctx := context.Background()
-	err = testDeploy(ctx, swap)
+	err := testDeploy(context.Background(), swap)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
+
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 2, swap.run)
+	protocolTester := p2ptest.NewProtocolTester(swap.owner.privateKey, 1, swap.run)
+	return &swapTester{
+		ProtocolTester: protocolTester,
+		swap:           swap,
+	}, clean, nil
+}
 
-	// shortcut to creditor node
-	debitor := protocolTester.Nodes[0]
-	creditor := protocolTester.Nodes[1]
+// creates a test exchange for the handshakes
+func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchange {
+	return []p2ptest.Exchange{
+		{
+			Expects: []p2ptest.Expect{
+				{
+					Code: 0,
+					Msg:  lhs,
+					Peer: id,
+				},
+			},
+		},
+		{
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 0,
+					Msg:  rhs,
+					Peer: id,
+				},
+			},
+		},
+	}
+}
 
-	// set balance artifially
-	swap.saveBalance(creditor.ID(), -42)
-
-	// create the expected cheque to be received
-	cheque := newTestCheque()
-
-	// sign the cheque
-	cheque.Signature, err = cheque.Sign(swap.owner.privateKey)
-	if err != nil {
-		t.Fatal(err)
+// helper function for testing the handshake
+// lhs is the HandshakeMsg we expect to be sent, rhs the one we receive
+// disconnects is a list of disconnect events to be expected
+func (s *swapTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptest.Disconnect) error {
+	if err := s.TestExchanges(HandshakeMsgExchange(lhs, rhs, s.Nodes[0].ID())...); err != nil {
+		return err
 	}
 
-	// run the exchange:
-	// trigger a `EmitChequeMsg`
-	// expect HandshakeMsg on each node
-	err = protocolTester.TestExchanges(p2ptest.Exchange{
-		Label: "TestHandshake",
-		Triggers: []p2ptest.Trigger{
-			{
-				Code: 0,
-				Msg: &HandshakeMsg{
-					ContractAddress: swap.GetParams().ContractAddress,
-					ChainID:         swap.chainID,
-				},
-				Peer: creditor.ID(),
-			},
-		},
-		Expects: []p2ptest.Expect{
-			{
-				Code: 0,
-				Msg: &HandshakeMsg{
-					ContractAddress: swap.GetParams().ContractAddress,
-					ChainID:         swap.chainID,
-				},
-				Peer: debitor.ID(),
-			},
-		},
+	if len(disconnects) > 0 {
+		return s.TestDisconnected(disconnects...)
+	}
+
+	// If we don't expect disconnect, ensure peers remain connected
+	err := s.TestDisconnected(&p2ptest.Disconnect{
+		Peer:  s.Nodes[0].ID(),
+		Error: nil,
 	})
 
-	// there should be no error at this point
+	if err == nil {
+		return fmt.Errorf("Unexpected peer disconnect")
+	}
+
+	if err.Error() != "timed out waiting for peers to disconnect" {
+		return err
+	}
+
+	return nil
+}
+
+// creates a new HandshakeMsg
+func newSwapHandshakeMsg(contractAddress common.Address, chainID *big.Int) *HandshakeMsg {
+	return &HandshakeMsg{
+		ContractAddress: contractAddress,
+		ChainID:         chainID,
+	}
+}
+
+// creates the correct HandshakeMsg based on Swap instance
+func correctSwapHandshakeMsg(swap *Swap) *HandshakeMsg {
+	return newSwapHandshakeMsg(swap.GetParams().ContractAddress, swap.chainID)
+}
+
+// TestHandshake tests the correct handshake scenario
+func TestHandshake(t *testing.T) {
+	// setup the protocolTester, which will allow protocol testing by sending messages
+	protocolTester, clean, err := newSwapTester(t)
+	defer clean()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = protocolTester.testHandshake(
+		correctSwapHandshakeMsg(protocolTester.swap),
+		correctSwapHandshakeMsg(protocolTester.swap),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestHandshakeInvalidChainID tests that a handshake with the wrong chain id is rejected
+func TestHandshakeInvalidChainID(t *testing.T) {
+	// setup the protocolTester, which will allow protocol testing by sending messages
+	protocolTester, clean, err := newSwapTester(t)
+	defer clean()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = protocolTester.testHandshake(
+		correctSwapHandshakeMsg(protocolTester.swap),
+		newSwapHandshakeMsg(protocolTester.swap.GetParams().ContractAddress, big.NewInt(1234)),
+		&p2ptest.Disconnect{
+			Peer:  protocolTester.Nodes[0].ID(),
+			Error: errors.New("Handshake error: Message handler error: (msg code 0): different chain id"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestHandshakeEmptyContract tests that a handshake with an empty contract address is rejected
+func TestHandshakeEmptyContract(t *testing.T) {
+	// setup the protocolTester, which will allow protocol testing by sending messages
+	protocolTester, clean, err := newSwapTester(t)
+	defer clean()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = protocolTester.testHandshake(
+		correctSwapHandshakeMsg(protocolTester.swap),
+		newSwapHandshakeMsg(common.Address{}, big.NewInt(1234)),
+		&p2ptest.Disconnect{
+			Peer:  protocolTester.Nodes[0].ID(),
+			Error: errors.New("Handshake error: Message handler error: (msg code 0): empty address in handshake"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestHandshakeInvalidContract tests that a handshake with an address that's not a valid chequebook
+func TestHandshakeInvalidContract(t *testing.T) {
+	// setup the protocolTester, which will allow protocol testing by sending messages
+	protocolTester, clean, err := newSwapTester(t)
+	defer clean()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = protocolTester.testHandshake(
+		correctSwapHandshakeMsg(protocolTester.swap),
+		newSwapHandshakeMsg(ownerAddress, protocolTester.swap.chainID),
+		&p2ptest.Disconnect{
+			Peer:  protocolTester.Nodes[0].ID(),
+			Error: errors.New("Handshake error: Message handler error: (msg code 0): not deployed by factory"),
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
