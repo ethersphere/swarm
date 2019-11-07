@@ -48,6 +48,7 @@ import (
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/opentracing/opentracing-go"
 	rns "github.com/rsksmart/rds-swarm/resolver"
+	"golang.org/x/net/publicsuffix"
 )
 
 var (
@@ -219,8 +220,8 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // where address could be an ENS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
 	// if address is .rsk, resolve it with RNS resolver
-	tld := path.Ext(address)
-	if strings.ToLower(tld) == ".rsk" {
+	eTLD, _ := publicsuffix.PublicSuffix(address)
+	if strings.ToLower(eTLD) == "rsk" {
 		resolved, err := rns.ResolveDomainContent(address)
 		if err != nil {
 			return nil, err
