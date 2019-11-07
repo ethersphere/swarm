@@ -117,6 +117,8 @@ type DB struct {
 	// garbage collection and gc size write workers
 	// are done
 	collectGarbageWorkerDone chan struct{}
+
+	putSetCheckFn func([]byte) bool
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -133,6 +135,10 @@ type Options struct {
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
 	Tags          *chunk.Tags
+	// PutSetCheckFunc is a function called after a Put of a chunk
+	// to verify whether that chunk needs to be Set and added to
+	// garbage collection index too
+	PutSetCheckFunc func([]byte) bool
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -142,7 +148,12 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if o == nil {
 		// default options
 		o = &Options{
-			Capacity: defaultCapacity,
+			Capacity:        defaultCapacity,
+			PutSetCheckFunc: func(_ []byte) bool { return false },
+		}
+	} else {
+		if o.PutSetCheckFunc == nil {
+			o.PutSetCheckFunc = func(_ []byte) bool { return false }
 		}
 	}
 	db = &DB{
@@ -156,6 +167,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		collectGarbageTrigger:    make(chan struct{}, 1),
 		close:                    make(chan struct{}),
 		collectGarbageWorkerDone: make(chan struct{}),
+		putSetCheckFn:            o.PutSetCheckFunc,
 	}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity

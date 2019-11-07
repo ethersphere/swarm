@@ -318,6 +318,47 @@ func TestModePut_sameChunk(t *testing.T) {
 	}
 }
 
+// TestModePutSync_addToGc validates ModePut* with PutSetCheckFunc stub results
+// in the added chunk to show up in GC index
+func TestModePut_addToGc(t *testing.T) {
+	// PutSetCheckFunc will tell localstore to always Set the chunks that enter
+	opts := &Options{PutSetCheckFunc: func(_ []byte) bool { return true }}
+	for _, m := range []chunk.ModePut{
+		chunk.ModePutSync,
+		chunk.ModePutUpload,
+		chunk.ModePutRequest,
+	} {
+		for _, tc := range multiChunkTestCases {
+			t.Run(tc.name, func(t *testing.T) {
+
+				db, cleanupFunc := newTestDB(t, opts)
+				defer cleanupFunc()
+
+				wantTimestamp := time.Now().UTC().UnixNano()
+				defer setNow(func() (t int64) {
+					return wantTimestamp
+				})()
+
+				chunks := generateTestRandomChunks(tc.count)
+
+				_, err := db.Put(context.Background(), m, chunks...)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				binIDs := make(map[uint8]uint64)
+
+				for _, ch := range chunks {
+					po := db.po(ch.Address())
+					binIDs[po]++
+
+					newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], nil)(t)
+				}
+			})
+		}
+	}
+}
+
 // TestPutDuplicateChunks validates the expected behaviour for
 // passing duplicate chunks to the Put method.
 func TestPutDuplicateChunks(t *testing.T) {

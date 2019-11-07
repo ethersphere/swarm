@@ -758,6 +758,13 @@ func (k *Kademlia) IsClosestTo(addr []byte, filter func(*BzzPeer) bool) (closest
 	return closest
 }
 
+func (k *Kademlia) IsAddressWithinDepth(addr []byte) bool {
+	depth := k.NeighbourhoodDepth()
+
+	po, _ := Pof(addr, k.base, 0)
+	return po >= depth
+}
+
 // BaseAddr return the kademlia base address
 func (k *Kademlia) BaseAddr() []byte {
 	return k.base
