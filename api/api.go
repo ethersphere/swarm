@@ -221,7 +221,7 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
 	// if address is .rsk, resolve it with RNS resolver
 	eTLD, _ := publicsuffix.PublicSuffix(address)
-	if strings.ToLower(eTLD) == "rsk" {
+	if eTLD == "rsk" {
 		resolved, err := rns.ResolveDomainContent(address)
 		if err != nil {
 			return nil, err
