@@ -306,13 +306,10 @@ func TestAPIResolve(t *testing.T) {
 // TestRNSResolver tests resolving Content which can either contain content hashes
 // or RNS names
 func TestRNSResolver(t *testing.T) {
-	ctx := context.TODO()
-
 	rnsDomain := "marcelosdomain.rsk"
-	//rnsAddress := "000000000000000000000000ff33bc3b7324c2a808a9d415935f8d991e6c406c"
 	rnsContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
 
-	tests := []struct {
+	type test struct {
 		desc   string
 		api    *API
 		ctx    context.Context
@@ -320,15 +317,18 @@ func TestRNSResolver(t *testing.T) {
 		addr   string
 		result string
 		err    error
-	}{
+	}
+
+	tests := []*test{
 		{
 			desc:   "No resolvers, returns error",
 			api:    NewAPI(nil, nil, nil, nil, nil),
 			domain: rnsDomain,
 			addr:   rnsContent,
-			ctx:    ctx,
+			ctx:    context.TODO(),
 		},
 	}
+
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
 			res, err := x.api.Resolve(x.ctx, x.domain)
