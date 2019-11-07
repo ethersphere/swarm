@@ -377,42 +377,66 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 			// no bin with this size
 			continue
 		}
-		cur := 0
-		curPO := bins[0]
-		k.addrs.EachBin(k.base, Pof, curPO, func(bin *pot.Bin) bool {
-			curPO = bins[cur]
-			// find the next bin that has size size
-			po := bin.ProximityOrder
-			if curPO == po {
-				cur++
-			} else {
-				// skip bins that have no addresses
-				for ; cur < len(bins) && curPO < po; cur++ {
-					curPO = bins[cur]
+		//If we have unsaturated bins in the neighborhood, try to connect the closest peer
+		if bins[len(bins)-1] >= k.nDepth {
+			currBinIndex := len(bins) - 1
+			valIterator := func(val pot.Val, po int) bool {
+				if po < bins[currBinIndex] {
+					currBinIndex--
+					if currBinIndex < 0 {
+						return false
+					}
 				}
-				if po < curPO {
-					cur--
-					return true
+				if po == bins[currBinIndex] && po >= k.nDepth {
+					e := val.(*entry)
+					if k.callable(e) {
+						suggestedPeer = e.BzzAddr
+						return false
+					}
 				}
-				// stop if there are no addresses
-				if curPO < po {
-					return false
-				}
-			}
-			// curPO found
-			// find a callable peer out of the addresses in the unsaturated bin
-			// stop if found
-			bin.ValIterator(func(val pot.Val) bool {
-				e := val.(*entry)
-				if k.callable(e) {
-					suggestedPeer = e.BzzAddr
-					return false
-				}
-
 				return true
+			}
+			k.addrs.EachNeighbour(k.base, Pof, valIterator)
+		}
+
+		if suggestedPeer == nil {
+			cur := 0
+			curPO := bins[0]
+			k.addrs.EachBin(k.base, Pof, curPO, func(bin *pot.Bin) bool {
+				curPO = bins[cur]
+				// find the next bin that has size size
+				po := bin.ProximityOrder
+				if curPO == po {
+					cur++
+				} else {
+					// skip bins that have no addresses
+					for ; cur < len(bins) && curPO < po; cur++ {
+						curPO = bins[cur]
+					}
+					if po < curPO {
+						cur--
+						return true
+					}
+					// stop if there are no addresses
+					if curPO < po {
+						return false
+					}
+				}
+				// curPO found
+				// find a callable peer out of the addresses in the unsaturated bin
+				// stop if found
+				bin.ValIterator(func(val pot.Val) bool {
+					e := val.(*entry)
+					if k.callable(e) {
+						suggestedPeer = e.BzzAddr
+						return false
+					}
+
+					return true
+				})
+				return cur < len(bins) && suggestedPeer == nil
 			})
-			return cur < len(bins) && suggestedPeer == nil
-		})
+		}
 	}
 	if uint8(saturationDepth) < k.saturationDepth {
 		k.saturationDepth = uint8(saturationDepth)
