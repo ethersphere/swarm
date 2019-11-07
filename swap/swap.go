@@ -62,7 +62,7 @@ type Swap struct {
 	contract          contract.Contract          // reference to the smart contract
 	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
 	honeyPriceOracle  HoneyOracle                // oracle which resolves the price of honey (in Wei)
-	chainID           *big.Int
+	chainID           uint64                     // id of the chain the backend is connected to
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -131,7 +131,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, chainID *big.Int, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
 	return &Swap{
 		store:             stateStore,
 		peers:             make(map[enode.ID]*Peer),
@@ -195,7 +195,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		stateStore,
 		owner,
 		backend,
-		chainID,
+		chainID.Uint64(),
 		params,
 		factory,
 	)

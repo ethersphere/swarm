@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -123,7 +122,7 @@ func (s *swapTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2pte
 }
 
 // creates a new HandshakeMsg
-func newSwapHandshakeMsg(contractAddress common.Address, chainID *big.Int) *HandshakeMsg {
+func newSwapHandshakeMsg(contractAddress common.Address, chainID uint64) *HandshakeMsg {
 	return &HandshakeMsg{
 		ContractAddress: contractAddress,
 		ChainID:         chainID,
@@ -164,7 +163,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 
 	err = protocolTester.testHandshake(
 		correctSwapHandshakeMsg(protocolTester.swap),
-		newSwapHandshakeMsg(protocolTester.swap.GetParams().ContractAddress, big.NewInt(1234)),
+		newSwapHandshakeMsg(protocolTester.swap.GetParams().ContractAddress, 1234),
 		&p2ptest.Disconnect{
 			Peer:  protocolTester.Nodes[0].ID(),
 			Error: errors.New("Handshake error: Message handler error: (msg code 0): different chain id"),
@@ -186,7 +185,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 
 	err = protocolTester.testHandshake(
 		correctSwapHandshakeMsg(protocolTester.swap),
-		newSwapHandshakeMsg(common.Address{}, big.NewInt(1234)),
+		newSwapHandshakeMsg(common.Address{}, 1234),
 		&p2ptest.Disconnect{
 			Peer:  protocolTester.Nodes[0].ID(),
 			Error: errors.New("Handshake error: Message handler error: (msg code 0): empty address in handshake"),

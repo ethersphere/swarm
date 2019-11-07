@@ -101,7 +101,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 		return ErrEmptyAddressInSignature
 	}
 
-	if handshake.ChainID.Cmp(s.chainID) != 0 {
+	if handshake.ChainID != s.chainID {
 		return ErrDifferentChainId
 	}
 

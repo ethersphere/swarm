@@ -1371,7 +1371,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := newSwapInstance(stateStore, owner, backend, big.NewInt(10), params, factory)
+	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory)
 	return swap, dir
 }
 
