@@ -306,37 +306,34 @@ func TestAPIResolve(t *testing.T) {
 // TestRNSResolver tests resolving Content which can either contain content hashes
 // or RNS names
 func TestRNSResolver(t *testing.T) {
-	rnsDomain := "marcelosdomain.rsk"
-	rnsContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
+	rnsAddr := "marcelosdomain.rsk"
+	resolvedContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
 
 	type test struct {
-		desc   string
-		api    *API
-		ctx    context.Context
-		domain string
-		addr   string
-		result string
-		err    error
+		desc    string
+		ctx     context.Context
+		addr    string
+		content string
 	}
 
 	tests := []*test{
 		{
-			desc:   "No resolvers, returns error",
-			api:    NewAPI(nil, nil, nil, nil, nil),
-			domain: rnsDomain,
-			addr:   rnsContent,
-			ctx:    context.TODO(),
+			desc:    "resolve known RSK domain",
+			addr:    rnsAddr,
+			content: resolvedContent,
+			ctx:     context.TODO(),
 		},
 	}
 
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			res, err := x.api.Resolve(x.ctx, x.domain)
+			api := NewAPI(nil, nil, nil, nil, nil)
+			res, err := api.Resolve(x.ctx, x.addr)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
-			if res.Hex() != x.addr {
-				t.Fatalf("expected result %q, got %q", x.addr, res.Hex())
+			if res.Hex() != x.content {
+				t.Fatalf("expected result %q, got %q", x.content, res.Hex())
 			}
 
 		})
