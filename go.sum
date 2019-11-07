@@ -232,12 +232,10 @@ github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00 h1:8DPul/X0IT/1TNMIxoKLwde
 github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521 h1:3hxavr+IHMsQBrYUPQM5v0CgENFktkkbg1sfpgM3h20=
 github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521/go.mod h1:RvLn4FgxWubrpZHtQLnOf6EwhN2hEMusxZOhcW9H3UQ=
-github.com/rsksmart/rds-swarm v0.0.0-20190701203119-a553ab7dc3f8 h1:yl0A7ymLJZUjllzSWQgz+68yDDljclq4VOwIR9HPO6g=
-github.com/rsksmart/rds-swarm v0.0.0-20190701203119-a553ab7dc3f8/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
-github.com/rsksmart/rds-swarm v0.0.0-20191010175109-4fd7cae9e538 h1:SPSBFh4syBY8X16kkJe6SBMEZuO/oXQu2gv4XFfKmiY=
-github.com/rsksmart/rds-swarm v0.0.0-20191010175109-4fd7cae9e538/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
 github.com/rsksmart/rds-swarm v0.0.0-20191029192525-85b02e96e2ad h1:RPQtR6EeZtD4SGCeJwPde88ZNWa1FCRrkyRvoz05WV8=
 github.com/rsksmart/rds-swarm v0.0.0-20191029192525-85b02e96e2ad/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
+github.com/rsksmart/rds-swarm v0.0.0-20191107190132-24538a14203a h1:wH3H0+fVZPrjTFV1DVypY96/gocO7cXWwRUMQTV6/Y8=
+github.com/rsksmart/rds-swarm v0.0.0-20191107190132-24538a14203a/go.mod h1:OubQGgQet774hs5o+jd48lChnHv4+BMHdcSAY6sxaJw=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.1 h1:GL2rEmy6nsikmW0r8opw9JIRScdMF5hA8cOYLH7In1k=
 github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMBDgk/93Q=
@@ -294,6 +292,8 @@ golang.org/x/net v0.0.0-20190603091049-60506f45cf65/go.mod h1:HSz+uSET+XFnRR8LxR
 golang.org/x/net v0.0.0-20190613194153-d28f0bde5980/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/net v0.0.0-20190724013045-ca1201d0de80 h1:Ao/3l156eZf2AW5wK8a7/smtodRU+gha3+BeqJ69lRk=
 golang.org/x/net v0.0.0-20190724013045-ca1201d0de80/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
+golang.org/x/net v0.0.0-20191105084925-a882066a44e0 h1:QPlSTtPE2k6PZPasQUbzuK3p9JbS+vMXYVto8g/yrsg=
+golang.org/x/net v0.0.0-20191105084925-a882066a44e0/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a/go.mod h1:gOpvHmFTYa4IltrdGE7lF6nIHvwfUNPOp7c8zoXwtLw=
 golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 h1:SVwTIAaPC2U/AvvLNZ2a7OVsmBpC8L5BlwK1whH3hm0=

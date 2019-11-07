@@ -67,6 +67,7 @@ type Config struct {
 	Pss                  *pss.Params
 	EnsRoot              common.Address
 	EnsAPIs              []string
+	RnsAPI               string
 	Path                 string
 	ListenAddr           string
 	Port                 string
@@ -104,6 +105,7 @@ func NewConfig() *Config {
 		Pss:                     pss.NewParams(),
 		EnsRoot:                 ens.TestNetAddress,
 		EnsAPIs:                 nil,
+		RnsAPI:                  "",
 		Path:                    node.DefaultDataDir(),
 		ListenAddr:              DefaultHTTPListenAddr,
 		Port:                    DefaultHTTPPort,

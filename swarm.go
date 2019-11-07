@@ -61,6 +61,7 @@ import (
 	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
+	rns "github.com/rsksmart/rds-swarm/config"
 )
 
 var (
@@ -182,6 +183,14 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		resolver = api.NewMultiResolver(opts...)
 		self.dns = resolver
 	}
+	if config.RnsAPI != "" {
+		_, endpoint, addr := parseEnsAPIAddress(config.RnsAPI)
+		if err != nil {
+			return nil, err
+		}
+		rns.SetRSKConfiguration(endpoint, addr.String())
+	}
+
 	// check that we are not in the old database schema
 	// if so - fail and exit
 	isLegacy := localstore.IsLegacyDatabase(config.ChunkDbPath)

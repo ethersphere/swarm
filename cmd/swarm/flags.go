@@ -126,6 +126,11 @@ var (
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 		EnvVar: SwarmEnvENSAPI,
 	}
+	RnsAPIFlag = cli.StringSliceFlag{
+		Name:   "rns-api",
+		Usage:  "RNS API endpoint for a TLD and with contract address, can be repeated, format [contract-addr@]url",
+		EnvVar: SwarmEnvRNSAPI,
+	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",
 		Usage: "Specifies the Swarm HTTP endpoint to connect to",

@@ -78,6 +78,7 @@ const (
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
 	SwarmEnvDeliverySkipCheck       = "SWARM_DELIVERY_SKIP_CHECK"
 	SwarmEnvENSAPI                  = "SWARM_ENS_API"
+	SwarmEnvRNSAPI                  = "SWARM_RNS_API"
 	SwarmEnvENSAddr                 = "SWARM_ENS_ADDR"
 	SwarmEnvCORS                    = "SWARM_CORS"
 	SwarmEnvBootnodes               = "SWARM_BOOTNODES"
@@ -245,6 +246,14 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 			ensAPIs[i] = expandPath(ensAPIs[i])
 		}
 		currentConfig.EnsAPIs = ensAPIs
+	}
+	if ctx.GlobalIsSet(RnsAPIFlag.Name) {
+		rnsAPI := ctx.GlobalStringSlice(RnsAPIFlag.Name)
+		// preserve backward compatibility to disable RNS with --rns-api=""
+		if len(rnsAPI) == 1 && rnsAPI[0] == "" {
+			rnsAPI = nil
+		}
+		currentConfig.RnsAPI = rnsAPI[0]
 	}
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
