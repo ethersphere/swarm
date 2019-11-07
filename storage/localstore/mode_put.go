@@ -221,6 +221,13 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	if exists {
 		return true, nil
 	}
+	anonymous := false
+	if db.tags != nil {
+		tag, err := db.tags.Get(item.Tag)
+		if err == nil {
+			anonymous = tag.Anonymous
+		}
+	}
 
 	item.StoreTimestamp = now()
 	item.BinID, err = db.incBinID(binIDs, db.po(item.Address))
@@ -229,7 +236,9 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	}
 	db.retrievalDataIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
-	db.pushIndex.PutInBatch(batch, item)
+	if !anonymous {
+		db.pushIndex.PutInBatch(batch, item)
+	}
 	return false, nil
 }
 

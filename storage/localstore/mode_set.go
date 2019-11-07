@@ -191,7 +191,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		if err == leveldb.ErrNotFound {
 			// chunk is not found,
 			// no need to update gc index
-			// just delete from the push index
+			// just delete from the push  indices
 			// if it is there
 			db.pushIndex.DeleteInBatch(batch, item)
 			return 0, nil
@@ -201,48 +201,72 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
 
-	// moveToGc toggles the deletion of the item from pushsync index
-	// it will be false in the case pull sync was called but push sync was meant on that chunk (!tag.Anonymous)
-	moveToGc := true
-	if db.tags != nil {
-		i, err = db.pushIndex.Get(item)
-		switch err {
-		case nil:
-			tag, _ := db.tags.Get(i.Tag)
-			if tag != nil {
-				if tag.Anonymous {
-					// anonymous - only pull sync
-					switch mode {
-					case chunk.ModeSetSyncPull:
-						// this will not get called twice because we remove the item once after the !moveToGc check
-						tag.Inc(chunk.StateSent)
-						// this is needed since pushsync is checking if `tag.Done(chunk.StateSynced)` and when overlapping
-						// chunks are synced by both push and pull sync we have a problem. as an interim solution we increment this too
-						tag.Inc(chunk.StateSynced)
-					case chunk.ModeSetSyncPush:
-						// do nothing - this should not be possible. just log and return
-						log.Warn("chunk marked as push-synced but should be anonymous!", "tag.Uid", tag.Uid)
-						moveToGc = false
-					}
-				} else {
-					// not anonymous - push and pull should be used
-					switch mode {
-					case chunk.ModeSetSyncPull:
-						moveToGc = false
-					case chunk.ModeSetSyncPush:
-						tag.Inc(chunk.StateSynced)
-					}
-				}
+	switch mode {
+	case chunk.ModeSetSyncPull:
+		// if we are setting a chunk for pullsync we expect it to be in the index
+		// if it has a tag - we increment it and set the index item to _not_ contain the tag reference
+		// this prevents duplicate increments
+		i, err := db.pullIndex.Get(item)
+		if err != nil {
+			if err == leveldb.ErrNotFound {
+				// we handle this error internally, since this is an internal inconsistency of the indices
+				// if we return the error here - it means that for example, in stream protocol peers which we sync
+				// to would be dropped. this is possible when the chunk is put with ModePutRequest and ModeSetSyncPull is
+				// called on the same chunk (which should not happen)
+				log.Error("chunk not found in pull index", "addr", addr)
+				break
 			}
-
-		case leveldb.ErrNotFound:
-			// the chunk is not accessed before
-		default:
 			return 0, err
 		}
-	}
-	if !moveToGc {
-		return 0, nil
+
+		if db.tags != nil && i.Tag != 0 {
+			t, err := db.tags.Get(i.Tag)
+
+			// increment if and only if tag is anonymous
+			if err == nil && t.Anonymous {
+				// since pull sync does not guarantee that
+				// a chunk has reached its NN, we can only mark
+				// it as Sent
+				t.Inc(chunk.StateSent)
+
+				// setting the tag to zero makes sure that
+				// we don't increment the same tag twice when syncing
+				// the same chunk to different peers
+				item.Tag = 0
+
+				err = db.pullIndex.PutInBatch(batch, item)
+				if err != nil {
+					return 0, err
+				}
+			}
+		}
+	case chunk.ModeSetSyncPush:
+		i, err := db.pushIndex.Get(item)
+		if err != nil {
+			if err == leveldb.ErrNotFound {
+				// we handle this error internally, since this is an internal inconsistency of the indices
+				// this error can happen if the chunk is put with ModePutRequest or ModePutSync
+				// but this function is called with ModeSetSyncPush
+				log.Error("chunk not found in push index", "addr", addr)
+				break
+			}
+			return 0, err
+		}
+		if db.tags != nil && i.Tag != 0 {
+			t, err := db.tags.Get(i.Tag)
+			if err != nil {
+				// we cannot break or return here since the function needs to
+				// run to end from db.pushIndex.DeleteInBatch
+				log.Error("error getting tags on push sync set", "uid", i.Tag)
+			}
+
+			// setting a chunk for push sync assumes the tag is not anonymous
+			if err == nil && !t.Anonymous {
+				t.Inc(chunk.StateSynced)
+			}
+		}
+
+		db.pushIndex.DeleteInBatch(batch, item)
 	}
 
 	i, err = db.retrievalAccessIndex.Get(item)
@@ -258,7 +282,6 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	}
 	item.AccessTimestamp = now()
 	db.retrievalAccessIndex.PutInBatch(batch, item)
-	db.pushIndex.DeleteInBatch(batch, item)
 
 	// Add in gcIndex only if this chunk is not pinned
 	ok, err := db.pinIndex.Has(item)
