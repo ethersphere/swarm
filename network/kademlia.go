@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -900,6 +901,68 @@ func (k *Kademlia) string() string {
 	}
 	rows = append(rows, "=========================================================================")
 	return "\n" + strings.Join(rows, "\n")
+}
+
+func (k *Kademlia) MarshalJSON() (data []byte, err error) {
+	var (
+		kademliaInfo   = make(map[string]string)
+		depth          = depthForPot(k.conns, k.NeighbourhoodSize, k.base)
+		numConns       = k.conns.Size()
+		numAddrs       = k.addrs.Size()
+		connectedAddrs = make(map[string]struct{})
+		connBinMap     = make(map[string]string)
+		addrsBinMap    = make(map[string]string)
+	)
+
+	jsonizeAddrs := func(m map[string]string) func(bin *pot.Bin) bool {
+		return func(bin *pot.Bin) bool {
+			binMap := make(map[string]string)
+
+			po := bin.ProximityOrder
+			if po >= k.MaxProxDisplay {
+				po = k.MaxProxDisplay - 1 // why???
+			}
+			size := bin.Size
+			poStr := fmt.Sprintf("%d", po)
+			binMap["po"] = poStr
+			binMap["size"] = fmt.Sprintf("%d", size)
+
+			var addresses []string
+			bin.ValIterator(func(val pot.Val) bool {
+				e := val.(*Peer)
+				connectedAddrs[hex.EncodeToString(e.Address())] = struct{}{}
+				addresses = append(addresses, Label(e))
+				return true
+			})
+
+			binMap["addresses"] = strings.Join(addresses, ",")
+			var binString []byte
+			binString, err = json.Marshal(binMap)
+			if err != nil {
+				return false
+			}
+
+			m[poStr] = string(binString)
+			return true
+		}
+	}
+
+	k.conns.EachBin(k.base, Pof, 0, jsonizeAddrs(connBinMap))
+	if err != nil {
+		return nil, err
+	}
+	connectedStr, err := json.Marshal(connBinMap)
+	if err != nil {
+		return nil, err
+	}
+	kademliaInfo["connected"] = string(connectedStr)
+
+	k.addrs.EachBin(k.base, Pof, 0, jsonizeAddrs(addrsBinMap))
+	if err != nil {
+		return nil, err
+	}
+
+	kademliaInfo["depth"] = fmt.Sprintf("%d", depth)
 }
 
 // PeerPot keeps info about expected nearest neighbours
