@@ -303,9 +303,8 @@ func TestAPIResolve(t *testing.T) {
 	}
 }
 
-// TestRNSResolver tests resolving Content which can either contain content hashes
-// or RNS names
-func TestRNSResolver(t *testing.T) {
+// TestRNSResolve tests resolving content from RNS names
+func TestRNSResolve(t *testing.T) {
 	rnsAddr := "marcelosdomain.rsk"
 	resolvedContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
 
@@ -318,7 +317,7 @@ func TestRNSResolver(t *testing.T) {
 
 	tests := []*test{
 		{
-			desc:    "resolve known RSK domain",
+			desc:    "resolve valid RSK domain",
 			addr:    rnsAddr,
 			content: resolvedContent,
 			ctx:     context.TODO(),
