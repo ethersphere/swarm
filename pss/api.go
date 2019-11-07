@@ -174,7 +174,7 @@ func (pssapi *API) SendRaw(addr hexutil.Bytes, topic message.Topic, msg hexutil.
 	if err := validateMsg(msg); err != nil {
 		return err
 	}
-	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:])
+	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:], pssapi.Pss.msgTTL)
 }
 
 func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]message.Topic, error) {

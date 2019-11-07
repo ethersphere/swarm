@@ -147,3 +147,7 @@ func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount
 
 	return actualAmount, nil
 }
+
+func (cheque *Cheque) String() string {
+	return fmt.Sprintf("Contract: %x Beneficiary: %x CumulativePayout: %d Honey: %d", cheque.Contract, cheque.Beneficiary, cheque.CumulativePayout, cheque.Honey)
+}

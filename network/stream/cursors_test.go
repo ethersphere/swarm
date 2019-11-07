@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -466,10 +467,14 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		bogusNodes = append(bogusNodes[:i], bogusNodes[i+1:]...)
 		return elem
 	}
+
 	streamInfoRes := []*StreamInfoRes{}
+	var streamInfoMtx sync.Mutex
 	infoReqHook := func(msg *StreamInfoReq) {
 		log.Trace("mock got StreamInfoReq msg", "msg", msg)
 
+		streamInfoMtx.Lock()
+		defer streamInfoMtx.Unlock()
 		//create the response
 		res := &StreamInfoRes{}
 		for _, v := range msg.Streams {
@@ -487,6 +492,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		streamInfoRes = append(streamInfoRes, res)
 	}
 
+	// streamInfoMtx is expected to be held by caller
 	popRandomResponse := func() *StreamInfoRes {
 		log.Debug("responses array length", "len", len(streamInfoRes))
 		i := rand.Intn(len(streamInfoRes))
@@ -556,10 +562,15 @@ CHECKSTREAMS:
 	sub, qui := syncSubscriptionsDiff(po, -1, pivotDepth, pivotKad.MaxProxDisplay, false) //s.syncBinsOnlyWithinDepth)
 	log.Debug("got desired pivot cursor state", "depth", pivotDepth, "subs", sub, "quits", qui)
 
-	for i := len(streamInfoRes); i > 0; i-- {
+	streamInfoMtx.Lock()
+	for {
+		if len(streamInfoRes) == 0 {
+			break
+		}
 		v := popRandomResponse()
 		pivotStream.clientHandleStreamInfoRes(context.Background(), otherPeer, v)
 	}
+	streamInfoMtx.Unlock()
 
 	//get the pivot cursors for peer, assert equal to what is in `sub`
 	for _, stream := range getAllSyncStreams() {
