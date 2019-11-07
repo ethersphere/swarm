@@ -67,20 +67,24 @@ func TestOutbox(t *testing.T) {
 		Payload: nil,
 	})
 
-	err := testOutbox.Enqueue(testOutboxMessage)
-	if err != nil {
-		t.Fatalf("unexpected error enqueueing, %v", err)
-	}
+	completionC := make(chan struct{})
+	go func() {
+		testOutbox.Enqueue(testOutboxMessage)
+		completionC <- struct{}{}
+	}()
+	expectNotTimeout(t, completionC)
 
 	// We wait for the forward function to success.
 	<-successC
 
 	forwardFail = true
 
-	err = testOutbox.Enqueue(testOutboxMessage)
-	if err != nil {
-		t.Fatalf("unexpected error enqueueing, %v", err)
-	}
+	go func() {
+		testOutbox.Enqueue(testOutboxMessage)
+		completionC <- struct{}{}
+	}()
+	expectNotTimeout(t, completionC)
+
 	// We wait for the forward function to fail
 	select {
 	case <-failedC:
@@ -104,8 +108,7 @@ func TestOutbox(t *testing.T) {
 // TestOutboxWorkers checks that the number of goroutines for processing have a maximum and that there is no
 // deadlock operating.
 func TestOutboxWorkers(t *testing.T) {
-	outboxCapacity := 100
-	workers := 3
+	outboxCapacity := 3
 	endProcess := make(chan struct{}, outboxCapacity)
 
 	var parallel int32
@@ -127,7 +130,6 @@ func TestOutboxWorkers(t *testing.T) {
 	testOutbox := outbox.NewMock(&outbox.Config{
 		NumberSlots: outboxCapacity,
 		Forward:     mockForwardFunction,
-		NumWorkers:  workers,
 	})
 
 	testOutbox.Start()
@@ -153,8 +155,8 @@ func TestOutboxWorkers(t *testing.T) {
 
 	wg.Wait()
 
-	if int(maxParallel) > workers {
-		t.Errorf("Expected maximum %v worker(s) in parallel but got %v", workers, maxParallel)
+	if int(maxParallel) > outboxCapacity {
+		t.Errorf("Expected maximum %v worker(s) in parallel but got %v", outboxCapacity, maxParallel)
 	}
 }
 
@@ -165,6 +167,24 @@ func newTestMessage(num byte) *message.Message {
 		Expire:  0,
 		Topic:   message.Topic{},
 		Payload: []byte{num},
+	}
+}
+
+const blockTimeout = 100 * time.Millisecond
+
+func expectNotTimeout(t *testing.T, completionC chan struct{}) {
+	select {
+	case <-completionC:
+	case <-time.After(blockTimeout):
+		t.Fatalf("timeout waiting for enqueue")
+	}
+}
+
+func expectTimeout(t *testing.T, completionC chan struct{}) {
+	select {
+	case <-completionC:
+		t.Fatalf("epxected blocking enqueue")
+	case <-time.After(blockTimeout):
 	}
 }
 
@@ -195,10 +215,13 @@ func TestMessageRetriesExpired(t *testing.T) {
 		Payload: nil,
 	})
 
-	err := testOutbox.Enqueue(msg)
-	if err != nil {
-		t.Errorf("Expected no error enqueueing, instead got %v", err)
-	}
+	completionC := make(chan struct{})
+	go func() {
+		testOutbox.Enqueue(msg)
+		completionC <- struct{}{}
+	}()
+
+	expectNotTimeout(t, completionC)
 
 	numMessages := testOutbox.Len()
 	if numMessages != 1 {

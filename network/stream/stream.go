@@ -659,7 +659,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	if len(msg.BitVector) == 0 {
 		p.logger.Debug("peer does not want any hashes in this range", "ruid", o.ruid)
 		for i := 0; i < l; i++ {
-			allHashes = append(allHashes, o.hashes[i*HashSize:(i+1)*HashSize])
+			allHashes[i] = o.hashes[i*HashSize : (i+1)*HashSize]
 		}
 		// set all chunks as synced
 		if err := provider.Set(ctx, allHashes...); err != nil {
