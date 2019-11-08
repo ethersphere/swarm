@@ -88,7 +88,7 @@ github.com/edsrzf/mmap-go
 # github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa
 github.com/elastic/gosigar
 github.com/elastic/gosigar/sys/windows
-# github.com/ethereum/go-ethereum v1.9.2
+# github.com/ethereum/go-ethereum v1.9.7
 github.com/ethereum/go-ethereum
 github.com/ethereum/go-ethereum/accounts
 github.com/ethereum/go-ethereum/accounts/abi
@@ -122,6 +122,7 @@ github.com/ethereum/go-ethereum/core/state
 github.com/ethereum/go-ethereum/core/types
 github.com/ethereum/go-ethereum/core/vm
 github.com/ethereum/go-ethereum/crypto
+github.com/ethereum/go-ethereum/crypto/blake2b
 github.com/ethereum/go-ethereum/crypto/bn256
 github.com/ethereum/go-ethereum/crypto/bn256/cloudflare
 github.com/ethereum/go-ethereum/crypto/bn256/google

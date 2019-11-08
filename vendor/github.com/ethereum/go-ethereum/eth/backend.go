@@ -69,8 +69,6 @@ type Ethereum struct {
 	// Channel for shutting down the service
 	shutdownChan chan bool
 
-	server *p2p.Server
-
 	// Handlers
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
@@ -137,7 +135,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideIstanbul)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
