@@ -314,9 +314,7 @@ func (b *BzzEth) validateHeader(ctx context.Context, header []byte, req *request
 		} else {
 			setHeaderAsReceived(req, ch.Address().Hex())
 			// This channel is used to track deliveries
-			if req.c != nil {
-				req.c <- header
-			}
+			req.c <- header
 			return ch, nil
 		}
 	} else {
