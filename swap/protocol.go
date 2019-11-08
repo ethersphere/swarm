@@ -34,8 +34,8 @@ var (
 	// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
 	ErrEmptyAddressInSignature = errors.New("empty address in handshake")
 
-	// ErrDifferentChainId is used when the chain id exchanged during the handshake does not match
-	ErrDifferentChainId = errors.New("different chain id")
+	// ErrDifferentChainID is used when the chain id exchanged during the handshake does not match
+	ErrDifferentChainID = errors.New("different chain id")
 
 	// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
 	// structure of the HandshakeMsg
@@ -102,7 +102,7 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 	}
 
 	if handshake.ChainID != s.chainID {
-		return ErrDifferentChainId
+		return ErrDifferentChainID
 	}
 
 	return s.chequebookFactory.VerifyContract(handshake.ContractAddress)
