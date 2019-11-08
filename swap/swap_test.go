@@ -123,24 +123,30 @@ func newTestBackend() *swapTestBackend {
 }
 
 // Test getting a peer's balance
-func TestPeerBalance(t *testing.T) {
+func TestBalance(t *testing.T) {
 	// create a test swap account
 	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
+	testPeerID := testPeer.ID()
 	defer clean()
 
-	// test for correct value
-	testPeer.setBalance(888)
-	b, err := swap.Balance(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != 888 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
-	}
+	// test balance
+	setBalance(t, testPeer, 888)
+	testBalance(t, swap, testPeerID, 888)
 
-	// test for inexistent node
-	id := adapters.RandomNodeConfig().ID
-	_, err = swap.Balance(id)
+	// test balance after change
+	setBalance(t, testPeer, 17000)
+	testBalance(t, swap, testPeerID, 17000)
+
+	// test balance for second peer
+	testPeer2 := addPeer(t, swap)
+	testPeer2ID := testPeer2.ID()
+
+	setBalance(t, testPeer2, 4)
+	testBalance(t, swap, testPeer2ID, 4)
+
+	// test balance for inexistent node
+	invalidPeerID := adapters.RandomNodeConfig().ID
+	_, err := swap.Balance(invalidPeerID)
 	if err == nil {
 		t.Fatal("Expected call to fail, but it didn't!")
 	}
@@ -148,61 +154,86 @@ func TestPeerBalance(t *testing.T) {
 		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
 	}
 
-	// test for disconnected node
-	testPeer2 := newDummyPeer().Peer
-	swap.saveBalance(testPeer2.ID(), 333)
-	b, err = swap.Balance(testPeer2.ID())
+	// test balance for disconnected node
+	testPeer3 := newDummyPeer().Peer
+	testPeer3ID := testPeer3.ID()
+	err = swap.saveBalance(testPeer3ID, 777)
+	testBalance(t, swap, testPeer3ID, 777)
+
+	// test previous results are still correct
+	testBalance(t, swap, testPeerID, 17000)
+	testBalance(t, swap, testPeer2ID, 4)
+}
+
+// tests that expected balance for peer matches the result of the Balance function
+func testBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
+	t.Helper()
+	b, err := s.Balance(id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b != 333 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 333, b)
+	if b != expectedBalance {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
+	}
+}
+
+func addPeer(t *testing.T, s *Swap) *Peer {
+	t.Helper()
+	peer, err := s.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return peer
+}
+
+// sets the given balance for the given peer, fails if there are errors
+func setBalance(t *testing.T, p *Peer, balance int64) {
+	t.Helper()
+	err := p.setBalance(balance)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
 // Test getting balances for all known peers
-func TestAllBalances(t *testing.T) {
+func TestBalances(t *testing.T) {
 	// create a test swap account
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
-	balances, err := swap.Balances()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(balances) != 0 {
-		t.Fatalf("Expected balances to be empty, but are %v", balances)
-	}
+	// test balances are empty
+	testBalances(t, swap, map[enode.ID]int64{})
 
-	// test balance addition for peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testPeer.setBalance(808)
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
+	// add peer
+	testPeer := addPeer(t, swap)
+	testPeerID := testPeer.ID()
 
-	// test successive balance addition for peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testPeer2.setBalance(909)
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
+	// test balances with one peer
+	setBalance(t, testPeer, 808)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808})
 
-	// test balance change for peer
-	testPeer.setBalance(303)
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
+	// add second peer
+	testPeer2 := addPeer(t, swap)
+	testPeer2ID := testPeer2.ID()
+
+	// test balances with second peer
+	setBalance(t, testPeer2, 123)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 123})
+
+	// test balances after balance change for peer
+	setBalance(t, testPeer, 303)
+	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 123})
 }
 
-func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
+// tests that a map of peerID:balance matches the result of the Balances function
+func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
 	t.Helper()
-	balances, err := swap.Balances()
+	actualBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(balances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
+	if !reflect.DeepEqual(actualBalances, expectedBalances) {
+		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, actualBalances)
 	}
 }
 
@@ -1197,12 +1228,12 @@ func TestResetBalance(t *testing.T) {
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
 // append generated bookings to slice pointer
-func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+func testPeerBookings(t *testing.T, s *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
 	t.Helper()
 	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
 	*bookings = append(*bookings, peerBookings...)
-	addBookings(swap, peerBookings)
-	verifyBookings(t, swap, *bookings)
+	addBookings(s, peerBookings)
+	verifyBookings(t, s, *bookings)
 }
 
 // generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
@@ -1222,10 +1253,10 @@ func addBookings(swap *Swap, bookings []booking) {
 }
 
 // take a Swap struct and a list of bookings, and verify the resulting balances are as expected
-func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
+func verifyBookings(t *testing.T, s *Swap, bookings []booking) {
 	t.Helper()
-	expectedBalances := calculateExpectedBalances(swap, bookings)
-	realBalances, err := swap.Balances()
+	expectedBalances := calculateExpectedBalances(s, bookings)
+	realBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
