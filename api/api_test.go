@@ -327,7 +327,7 @@ func TestRNSResolve(t *testing.T) {
 			desc:        "invalid RSK domain",
 			addr:        ".rsk",
 			content:     resolvedContent,
-			expectedErr: nil,
+			expectedErr: errors.New("domain without registered content in RNS Resolvers"),
 		},
 	}
 
