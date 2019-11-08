@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -692,14 +693,14 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 	// * that the other side actually did process the testMsgPrice message
 	//   (by checking that the message counter has been increased)
 	var wg sync.WaitGroup
-	var err error
+	errs := []string{}
 	wg.Add(3)
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				err = errors.New("Timed out waiting for cheque to have been cashed")
+				errs = append(errs, "Timed out waiting for cheque to have been cached")
 				wg.Done()
 				return
 			case <-backend.cashDone:
@@ -713,7 +714,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 		for {
 			select {
 			case <-ctx.Done():
-				err = errors.New("Timed out waiting for cheque to be confirmed")
+				errs = append(errs, "Timed out waiting for cheque to be confirmed")
 				wg.Done()
 				return
 			default:
@@ -733,7 +734,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 		for {
 			select {
 			case <-ctx.Done():
-				err = errors.New("Timed out waiting for peer to have processed accounted message")
+				errs = append(errs, "Timed out waiting for peer to have processed accounted message")
 				wg.Done()
 				return
 			default:
@@ -748,7 +749,11 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 
 	wg.Wait()
 
-	return err
+	if len(errs) > 0 {
+		return errors.New("one or more wait routines timed out: " + strings.Join(errs, " - "))
+	}
+
+	return nil
 }
 
 func (ts *testService) Protocols() []p2p.Protocol {
