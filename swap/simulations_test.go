@@ -257,6 +257,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	params.backend.cashDone = make(chan struct{}, 1)
 	defer close(params.backend.cashDone)
+
 	// initialize the simulation
 	sim := simulation.NewBzzInProc(newSimServiceMap(params), false)
 	defer sim.Close()
@@ -273,6 +274,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
+	expectedPayout1, expectedPayout2 := DefaultPaymentThreshold+1, DefaultPaymentThreshold+1
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -325,18 +327,20 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			if err := p2Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := waitForChequeProcessed(t, ts2, counter, lastCount); err != nil {
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts1.swap.peers[p2], expectedPayout1); err != nil {
 				t.Fatal(err)
 			}
 			lastCount += 1
+			expectedPayout1 += DefaultPaymentThreshold + 1
 		} else {
 			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := waitForChequeProcessed(t, ts1, counter, lastCount); err != nil {
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts2.swap.peers[p1], expectedPayout2); err != nil {
 				t.Fatal(err)
 			}
 			lastCount += 1
+			expectedPayout2 += DefaultPaymentThreshold + 1
 		}
 	}
 
@@ -397,6 +401,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
+	expectedPayout := DefaultPaymentThreshold + 1
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -451,10 +456,11 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		// we need to wait a bit in order to give time for the cheque to be processed
-		if err := waitForChequeProcessed(t, creditorSvc, counter, lastCount); err != nil {
+		if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
 			t.Fatal(err)
 		}
 		lastCount += 1
+		expectedPayout += DefaultPaymentThreshold + 1
 	}
 
 	// check balances:
@@ -485,7 +491,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// check also the actual expected amount
-	expectedPayout := uint64(maxCheques) * (DefaultPaymentThreshold + 1)
+	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
 	if cheque2.CumulativePayout != expectedPayout {
 		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
@@ -676,25 +682,30 @@ func TestBasicSwapSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-func waitForChequeProcessed(t *testing.T, ts *testService, counter metrics.Counter, lastCount int64) error {
+func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metrics.Counter, lastCount int64, p *Peer, expectedLastPayout uint64) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	// we are going to wait for two things:
-	// * that a cheque has been processed
+	// * that a cheque has been processed and confirmed
 	// * that the other side actually did process the testMsgPrice message
 	//   (by checking that the message counter has been increased)
 	var wg sync.WaitGroup
-	wg.Add(2)
+	var err error
+	wg.Add(3)
 
 	go func() {
-		backend := ts.swap.backend.(*swapTestBackend)
-		select {
-		case <-ctx.Done():
-			t.Fatal("timed out waiting for cheque to be processed")
-		case <-backend.cashDone:
-			wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				err = errors.New("Timed out waiting for cheque to have been cashed")
+				wg.Done()
+				return
+			case <-backend.cashDone:
+				wg.Done()
+				return
+			}
 		}
 	}()
 
@@ -702,7 +713,29 @@ func waitForChequeProcessed(t *testing.T, ts *testService, counter metrics.Count
 		for {
 			select {
 			case <-ctx.Done():
-				t.Fatal("Timed out waiting for peer to have processed accounted message")
+				err = errors.New("Timed out waiting for cheque to be confirmed")
+				wg.Done()
+				return
+			default:
+				lastPayout := p.getLastSentCumulativePayout()
+				if lastPayout != expectedLastPayout {
+					time.Sleep(5 * time.Millisecond)
+					continue
+				} else {
+					wg.Done()
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				err = errors.New("Timed out waiting for peer to have processed accounted message")
+				wg.Done()
+				return
 			default:
 				if counter.Count() == lastCount+1 {
 					wg.Done()
@@ -715,7 +748,7 @@ func waitForChequeProcessed(t *testing.T, ts *testService, counter metrics.Count
 
 	wg.Wait()
 
-	return nil
+	return err
 }
 
 func (ts *testService) Protocols() []p2p.Protocol {
