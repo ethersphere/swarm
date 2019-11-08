@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -191,7 +192,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		if err == leveldb.ErrNotFound {
 			// chunk is not found,
 			// no need to update gc index
-			// just delete from the push  indices
+			// just delete from the push indices
 			// if it is there
 			db.pushIndex.DeleteInBatch(batch, item)
 			return 0, nil
@@ -261,9 +262,11 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 			}
 
 			// setting a chunk for push sync assumes the tag is not anonymous
-			if err == nil && !t.Anonymous {
-				t.Inc(chunk.StateSynced)
+			if t.Anonymous {
+				return 0, errors.New("got an anonymous chunk in push sync index")
 			}
+
+			t.Inc(chunk.StateSynced)
 		}
 
 		db.pushIndex.DeleteInBatch(batch, item)
