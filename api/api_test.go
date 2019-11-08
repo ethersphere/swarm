@@ -37,6 +37,7 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
+	rns "github.com/rsksmart/rds-swarm/resolver"
 )
 
 func init() {
@@ -327,7 +328,7 @@ func TestRNSResolve(t *testing.T) {
 			desc:        "invalid RSK domain",
 			addr:        ".rsk",
 			content:     resolvedContent,
-			expectedErr: errors.New("domain without registered content in RNS Resolvers"),
+			expectedErr: rns.ErrNoContent,
 		},
 	}
 
