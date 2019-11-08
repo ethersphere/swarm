@@ -248,12 +248,7 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.EnsAPIs = ensAPIs
 	}
 	if ctx.GlobalIsSet(RnsAPIFlag.Name) {
-		rnsAPI := ctx.GlobalStringSlice(RnsAPIFlag.Name)
-		// preserve backward compatibility to disable RNS with --rns-api=""
-		if len(rnsAPI) == 1 && rnsAPI[0] == "" {
-			rnsAPI = nil
-		}
-		currentConfig.RnsAPI = rnsAPI[0]
+		currentConfig.RnsAPI = ctx.GlobalString(RnsAPIFlag.Name)
 	}
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
