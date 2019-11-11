@@ -274,6 +274,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	cter := metricsReg.Get("account.msg.credit")
 	counter := cter.(metrics.Counter)
 	counter.Clear()
+	defer counter.Clear()
 	var lastCount int64
 	expectedPayout1, expectedPayout2 := DefaultPaymentThreshold+1, DefaultPaymentThreshold+1
 
@@ -403,6 +404,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	cter := metricsReg.Get("account.msg.credit")
 	counter := cter.(metrics.Counter)
 	counter.Clear()
+	defer counter.Clear()
 	var lastCount int64
 	expectedPayout := DefaultPaymentThreshold + 1
 
