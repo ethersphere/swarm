@@ -20,6 +20,8 @@ import (
 	"errors"
 
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/shed"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var errMissingCurrentSchema = errors.New("could not find current db schema")
@@ -103,5 +105,38 @@ func migrateSanctuary(db *DB) error {
 		return errors.New("pull index was not successfully renamed!")
 	}
 
+	ctr := 0
+	batch := new(leveldb.Batch)
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	// since pullIndex points to the Tag value, we should eliminate possible
+	// pushIndex leak due to items that were used by previous pull sync tag
+	// increment logic
+	if db.tags != nil {
+		err = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+			tag, err := db.tags.Get(item.Tag)
+			if err != nil {
+				return true, err
+			}
+
+			// anonymous tags should no longer appear in pushIndex
+			if tag != nil && tag.Anonymous {
+				db.pushIndex.DeleteInBatch(batch, item)
+				ctr++
+			}
+			return false, nil
+		}, nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	if ctr > 0 {
+		err = db.shed.WriteBatch(batch)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
