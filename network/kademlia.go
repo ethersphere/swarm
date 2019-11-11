@@ -758,7 +758,9 @@ func (k *Kademlia) IsClosestTo(addr []byte, filter func(*BzzPeer) bool) (closest
 	return closest
 }
 
-func (k *Kademlia) IsAddressWithinDepth(addr []byte) bool {
+// IsWithinDepth checks whether a given address falls within
+// this node's saturation depth
+func (k *Kademlia) IsWithinDepth(addr []byte) bool {
 	depth := k.NeighbourhoodDepth()
 
 	po, _ := Pof(addr, k.base, 0)

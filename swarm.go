@@ -212,10 +212,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 
 	localStore, err := localstore.New(config.ChunkDbPath, config.BaseKey, &localstore.Options{
-		MockStore:       mockStore,
-		Capacity:        config.DbCapacity,
-		Tags:            self.tags,
-		PutSetCheckFunc: to.IsAddressWithinDepth,
+		MockStore:    mockStore,
+		Capacity:     config.DbCapacity,
+		Tags:         self.tags,
+		PutToGCCheck: to.IsWithinDepth,
 	})
 	if err != nil {
 		return nil, err

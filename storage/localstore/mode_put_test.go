@@ -322,7 +322,7 @@ func TestModePut_sameChunk(t *testing.T) {
 // in the added chunk to show up in GC index
 func TestModePut_addToGc(t *testing.T) {
 	// PutSetCheckFunc will tell localstore to always Set the chunks that enter
-	opts := &Options{PutSetCheckFunc: func(_ []byte) bool { return true }}
+	opts := &Options{PutToGCCheck: func(_ []byte) bool { return true }}
 	for _, m := range []chunk.ModePut{
 		chunk.ModePutSync,
 		chunk.ModePutUpload,

@@ -42,10 +42,6 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, chs ...chunk.Chunk) (
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 	}
-	addrs := make([]chunk.Address, 0)
-	for _, c := range chs {
-		addrs = append(addrs, c.Address())
-	}
 
 	return exist, err
 }
@@ -219,7 +215,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	db.pullIndex.PutInBatch(batch, item)
 	db.pushIndex.PutInBatch(batch, item)
 
-	if db.putSetCheckFn(item.Address[:]) {
+	if db.putToGCCheck(item.Address[:]) {
 
 		// TODO: this might result in an edge case where a node
 		// that has very little storage and uploads using an anonymous
@@ -255,7 +251,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 	db.retrievalDataIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
 
-	if db.putSetCheckFn(item.Address[:]) {
+	if db.putToGCCheck(item.Address[:]) {
 
 		// TODO: this might result in an edge case where a node
 		// that has very little storage and uploads using an anonymous
@@ -271,7 +267,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 }
 
 // setGC is a helper function used to add chunks to the retrieval access
-// index and the gc index in the cases that the putSetCheckFn condition
+// index and the gc index in the cases that the putToGCCheck condition
 // vets a gc set. this is to mitigate index leakage in edge cases where
 // a chunk is added to a node's localstore and given that the chunk is
 // already within that node's NN (thus, it can be added to the gc index
