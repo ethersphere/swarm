@@ -286,17 +286,16 @@ func (b *BzzEth) storeChunks(ctx context.Context, chunks []chunk.Chunk) error {
 	// Store all the valid header chunks in one shot
 	results, err := b.netStore.Put(ctx, chunk.ModePutUpload, chunks...)
 	if err != nil {
+		noOfChunksNotStored := 0
 		for i, flag := range results {
 			// if this chunk is stored successfully, dont report error for it
 			if !flag {
 				continue
 			}
 			log.Error("bzzeth.store", "hash", chunks[i].Address().Hex(), "err", err)
-			// ignore all other errors, but invalid chunk incurs peer drop
-			if err == chunk.ErrChunkInvalid {
-				return err
-			}
+			noOfChunksNotStored++
 		}
+		return err
 	}
 	log.Debug("Stored all headers ", "count", len(chunks))
 	return nil
@@ -312,6 +311,7 @@ func (b *BzzEth) validateHeader(ctx context.Context, header []byte, req *request
 			// header already received
 			return nil, errDuplicateHeader
 		} else {
+			// header is still marked as "yet to be received" and we got that header
 			setHeaderAsReceived(req, ch.Address().Hex())
 			// This channel is used to track deliveries
 			req.c <- header
