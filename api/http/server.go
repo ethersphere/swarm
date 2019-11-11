@@ -792,7 +792,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 		log.Error("serving content")
-		http.ServeContent(w, r, fileName, time.Now(), newDownloader(reader, r))
+		http.ServeContent(w, r, fileName, time.Now(), langos.NewBufferedReadSeeker(reader, getFileBufferSize))
 
 	case uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
@@ -959,7 +959,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
-	http.ServeContent(w, r, fileName, time.Now(), newDownloader(reader, r))
+	http.ServeContent(w, r, fileName, time.Now(), langos.NewBufferedReadSeeker(reader, getFileBufferSize))
 }
 
 // HandleGetTag responds to the following request
@@ -1125,24 +1125,6 @@ func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 // per file request.
 // Recommended value is 4 times the io.Copy default buffer value which is 32kB.
 const getFileBufferSize = 4 * 32 * 1024
-
-var defaultDownloaderMode = "langos"
-
-func newDownloader(s langos.Reader, r *http.Request) io.ReadSeeker {
-	mode := r.URL.Query().Get("_downloader")
-	if mode == "" {
-		mode = defaultDownloaderMode
-	}
-	switch mode {
-	case "baseline":
-		return s
-	case "buffered":
-		return langos.NewBufferedReadSeeker(s, getFileBufferSize)
-	case "langos":
-		return langos.NewBufferedLangos(s, getFileBufferSize)
-	}
-	return nil
-}
 
 type loggingResponseWriter struct {
 	http.ResponseWriter
