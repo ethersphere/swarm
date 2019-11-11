@@ -287,7 +287,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	ts1 := sim.Service("swap", p1).(*testService)
 	ts2 := sim.Service("swap", p2).(*testService)
 
-	var ts1Len, ts2Len int
+	var ts1Len, ts2Len, ts1sLen, ts2sLen int
 	timeout := time.After(10 * time.Second)
 
 	for {
@@ -300,13 +300,15 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		// the node has all other peers in its peer list
 		ts1.swap.peersLock.Lock()
 		ts1Len = len(ts1.swap.peers)
+		ts1sLen = len(ts1.peers)
 		ts1.swap.peersLock.Unlock()
 
 		ts2.swap.peersLock.Lock()
 		ts2Len = len(ts2.swap.peers)
+		ts2sLen = len(ts2.peers)
 		ts2.swap.peersLock.Unlock()
 
-		if ts1Len == 1 && ts2Len == 1 {
+		if ts1Len == 1 && ts2Len == 1 && ts1sLen == 1 && ts2sLen == 1 {
 			break
 		}
 		// don't overheat the CPU...
@@ -693,6 +695,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 	// * that the other side actually did process the testMsgPrice message
 	//   (by checking that the message counter has been increased)
 	var wg sync.WaitGroup
+	var lock sync.Mutex
 	errs := []string{}
 	wg.Add(3)
 
@@ -700,7 +703,9 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 		for {
 			select {
 			case <-ctx.Done():
+				lock.Lock()
 				errs = append(errs, "Timed out waiting for cheque to have been cached")
+				lock.Unlock()
 				wg.Done()
 				return
 			case <-backend.cashDone:
@@ -714,11 +719,15 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 		for {
 			select {
 			case <-ctx.Done():
+				lock.Lock()
 				errs = append(errs, "Timed out waiting for cheque to be confirmed")
+				lock.Unlock()
 				wg.Done()
 				return
 			default:
+				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
+				p.lock.Unlock()
 				if lastPayout != expectedLastPayout {
 					time.Sleep(5 * time.Millisecond)
 					continue
@@ -734,7 +743,9 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 		for {
 			select {
 			case <-ctx.Done():
+				lock.Lock()
 				errs = append(errs, "Timed out waiting for peer to have processed accounted message")
+				lock.Unlock()
 				wg.Done()
 				return
 			default:
