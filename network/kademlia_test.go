@@ -65,6 +65,12 @@ func (tk *testKademlia) newTestKadPeer(s string) *Peer {
 	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, tk.Kademlia)
 }
 
+func (tk *testKademlia) newTestKadPeerWithCapabilities(s string, cap *capability.Capability) *Peer {
+	addr := testKadPeerAddr(s)
+	addr.Capabilities.Add(cap)
+	return NewPeer(&BzzPeer{BzzAddr: addr}, tk.Kademlia)
+}
+
 func (tk *testKademlia) On(ons ...string) {
 	for _, s := range ons {
 		tk.Kademlia.On(tk.newTestKadPeer(s))
@@ -520,21 +526,21 @@ func TestOffEffectingAddressBookNormalNode(t *testing.T) {
 	// peer added to kademlia
 	tk.On("01000000")
 	// peer should be in the address book
-	if tk.addrs.Size() != 1 {
+	if tk.defaultIndex.addrs.Size() != 1 {
 		t.Fatal("known peer addresses should contain 1 entry")
 	}
 	// peer should be among live connections
-	if tk.conns.Size() != 1 {
+	if tk.defaultIndex.conns.Size() != 1 {
 		t.Fatal("live peers should contain 1 entry")
 	}
 	// remove peer from kademlia
 	tk.Off("01000000")
 	// peer should be in the address book
-	if tk.addrs.Size() != 1 {
+	if tk.defaultIndex.addrs.Size() != 1 {
 		t.Fatal("known peer addresses should contain 1 entry")
 	}
 	// peer should not be among live connections
-	if tk.conns.Size() != 0 {
+	if tk.defaultIndex.conns.Size() != 0 {
 		t.Fatal("live peers should contain 0 entry")
 	}
 }
