@@ -90,7 +90,7 @@ func (s *Swap) Stop() error {
 	return s.Close()
 }
 
-// verifyHandshake verifies the chequebook address transmitted in the swap handshake
+// verifyHandshake verifies the chequebook address and chain id transmitted in the swap handshake
 func (s *Swap) verifyHandshake(msg interface{}) error {
 	handshake, ok := msg.(*HandshakeMsg)
 	if !ok {
