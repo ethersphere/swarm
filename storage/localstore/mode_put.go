@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
@@ -287,25 +286,29 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 // already within that node's NN (thus, it can be added to the gc index
 // safely)
 func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, err error) {
+	if item.BinID <= 0 {
+		i, err := db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return 0, err
+		}
+		item.BinID = i.BinID
+	}
 	i, err := db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
 		item.AccessTimestamp = i.AccessTimestamp
 		db.gcIndex.DeleteInBatch(batch, item)
 		gcSizeChange--
-		spew.Dump("setGCTimestampRemoveItemStamp", item.AccessTimestamp)
 	case leveldb.ErrNotFound:
 		// the chunk is not accessed before
 	default:
 		return 0, err
 	}
 	item.AccessTimestamp = now()
-	spew.Dump("setGCTimestamp", item.AccessTimestamp)
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	db.gcIndex.PutInBatch(batch, item)
 	gcSizeChange++
-	spew.Dump("batch", batch)
 
 	return gcSizeChange, nil
 }

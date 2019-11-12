@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -385,12 +384,12 @@ func TestModePut_addToGcExisting(t *testing.T) {
 		putToGc bool
 	}{
 		{mode: chunk.ModePutSync, putToGc: true},
-		//{mode: chunk.ModePutSync, putToGc: false},
-		//{mode: chunk.ModePutUpload, putToGc: true},
-		//{mode: chunk.ModePutUpload, putToGc: false},
-		//{mode: chunk.ModePutRequest, putToGc: true}, // in ModePutRequest we always insert to GC, so putToGc=false not needed
+		{mode: chunk.ModePutSync, putToGc: false},
+		{mode: chunk.ModePutUpload, putToGc: true},
+		{mode: chunk.ModePutUpload, putToGc: false},
+		{mode: chunk.ModePutRequest, putToGc: true}, // in ModePutRequest we always insert to GC, so putToGc=false not needed
 	} {
-		for _, tc := range multiChunkTestCases[:1] {
+		for _, tc := range multiChunkTestCases {
 			t.Run(tc.name, func(t *testing.T) {
 				retVal = m.putToGc
 
@@ -401,7 +400,6 @@ func TestModePut_addToGcExisting(t *testing.T) {
 				defer setNow(func() (t int64) {
 					return wantStoreTimestamp
 				})()
-				spew.Dump("storeStamp", wantStoreTimestamp)
 
 				chunks := generateTestRandomChunks(tc.count)
 
@@ -417,7 +415,6 @@ func TestModePut_addToGcExisting(t *testing.T) {
 				defer setNow(func() (t int64) {
 					return wantAccessTimestamp
 				})()
-				spew.Dump("updated stamp", wantAccessTimestamp)
 
 				_, err = db.Put(context.Background(), m.mode, chunks...)
 				if err != nil {
