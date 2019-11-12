@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -588,6 +589,89 @@ func TestPotEachNeighbourAsync(t *testing.T) {
 			t.Fatalf("incorrect neighbour calls in async iterator. %v items missed:\n%v", len(m), n)
 		}
 	}
+}
+
+// TestEachBinDesc adds peer to a pot and checks that the iteration of bin is done in descending po order.
+func TestEachBinDesc(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	pot := NewPot(baseAddr, 0)
+	pot, _, _ = testAdd(pot, pof, 1, "01111111", "01000000", "10111111", "11011111", "11101111")
+	pivotAddr := baseAddr
+	lastBin := 256 // Max  po
+	binConsumer := func(bin *Bin) bool {
+		log.Debug("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
+		// Checking correct bin po
+		if bin.ProximityOrder > lastBin {
+			t.Errorf("Incorrect desc sorting of bins, last po: %v, current po: %v", lastBin, bin.ProximityOrder)
+		}
+		lastBin = bin.ProximityOrder
+		// Checking correct value po for all values in this bin
+		bin.ValIterator(func(val Val) bool {
+			addr := val.(*testAddr)
+			log.Debug("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
+			valPo, _ := pof(pivotAddr, val, 0)
+			if valPo != bin.ProximityOrder {
+				t.Errorf("Incorrect value found in bin. Expected po %v, but was %v", bin.ProximityOrder, valPo)
+			}
+			return true
+		})
+		return true
+	}
+	// First we iterate pivoting over the base address (pot.pin)
+	log.Debug("****************Reverse order****************")
+	pot.eachBinDesc(pot.pin, pof, 0, binConsumer)
+
+	//Test eachBinDesc for a given address. For example one address with po 2 with respect to t.pin
+	pivotAddr = newTestAddr("11010000", 6)
+	//Reset back lastBin to 256
+	lastBin = 256
+	log.Debug("****************Reverse order with pivot 11010000****************")
+	pot.eachBinDesc(pivotAddr, pof, 0, binConsumer)
+}
+
+// TestEachBinDescPivotInAMissingBin checks that the sorting of bins is correct when the pivotVal po lies in a missing
+// bin below the pin address. This methods completes the coverage on the eachBinDesc method.
+func TestEachBinDescPivotInAMissingBin(t *testing.T) {
+	pof := DefaultPof(8)
+	baseAddr := newTestAddr("11111111", 0)
+	pot := NewPot(baseAddr, 0)
+	pot, _, _ = testAdd(pot, pof, 1, "01111111", "01000000", "10111111", "11101111", "11101011", "11111110")
+	//Test eachBinDesc for an address with a po that we don't have a bin for
+	pivotAddr := newTestAddr("11010000", 7)
+	lastBin := 256 // Max  po
+	binConsumer := func(bin *Bin) bool {
+		log.Debug("Bin", "pot", bin.ProximityOrder, "size", bin.Size)
+		// Checking correct bin po
+		if bin.ProximityOrder > lastBin {
+			t.Errorf("Incorrect desc sorting of bins, last po: %v, current po: %v", lastBin, bin.ProximityOrder)
+		}
+		lastBin = bin.ProximityOrder
+		// Checking correct value po for all values in this bin
+		bin.ValIterator(func(val Val) bool {
+			addr := val.(*testAddr)
+			log.Debug("    val", toBinaryByte(addr), "pot", bin.ProximityOrder)
+			valPo, _ := pof(pivotAddr, val, 0)
+			if valPo != bin.ProximityOrder {
+				t.Errorf("Incorrect value found in bin. Expected po %v, but was %v", bin.ProximityOrder, valPo)
+			}
+			return true
+		})
+		return true
+	}
+
+	log.Debug("****************Reverse order with pivot 11010000****************")
+	pot.eachBinDesc(pivotAddr, pof, 0, binConsumer)
+}
+
+func toBinaryByte(addr *testAddr) string {
+	formatted := strconv.FormatInt(int64(addr.Address()[0]), 2)
+	if len(formatted) < 8 {
+		for i := 0; i < 8-len(formatted); i++ {
+			formatted = "0" + formatted
+		}
+	}
+	return formatted
 }
 
 func benchmarkEachNeighbourSync(t *testing.B, max, count int, d time.Duration) {

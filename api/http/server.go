@@ -20,7 +20,6 @@ A simple http server interface to Swarm
 package http
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -39,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/api/http/langos"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
@@ -785,7 +785,15 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 		if typ := r.URL.Query().Get("content_type"); typ != "" {
 			w.Header().Set("Content-Type", typ)
 		}
-		http.ServeContent(w, r, "", time.Now(), reader)
+
+		fileName := uri.Addr
+		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
+			fileName = found
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
+		log.Error("serving content")
+		http.ServeContent(w, r, fileName, time.Now(), langos.NewBufferedReadSeeker(reader, getFileBufferSize))
+
 	case uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -951,7 +959,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
-	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+	http.ServeContent(w, r, fileName, time.Now(), langos.NewBufferedReadSeeker(reader, getFileBufferSize))
 }
 
 // HandleGetTag responds to the following request
@@ -1117,32 +1125,6 @@ func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 // per file request.
 // Recommended value is 4 times the io.Copy default buffer value which is 32kB.
 const getFileBufferSize = 4 * 32 * 1024
-
-// bufferedReadSeeker wraps bufio.Reader to expose Seek method
-// from the provied io.ReadSeeker in newBufferedReadSeeker.
-type bufferedReadSeeker struct {
-	r *bufio.Reader
-	s io.ReadSeeker
-}
-
-// newBufferedReadSeeker creates a new instance of bufferedReadSeeker,
-// out of io.ReadSeeker. Argument `size` is the size of the read buffer.
-func newBufferedReadSeeker(readSeeker io.ReadSeeker, size int) bufferedReadSeeker {
-	return bufferedReadSeeker{
-		r: bufio.NewReaderSize(readSeeker, size),
-		s: readSeeker,
-	}
-}
-
-func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
-	return b.r.Read(p)
-}
-
-func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
-	n, err := b.s.Seek(offset, whence)
-	b.r.Reset(b.s)
-	return n, err
-}
 
 type loggingResponseWriter struct {
 	http.ResponseWriter
