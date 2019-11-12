@@ -28,10 +28,24 @@ import (
 var errMissingCurrentSchema = errors.New("could not find current db schema")
 var errMissingTargetSchema = errors.New("could not find target db schema")
 
+type migration struct {
+	name string             // name of the schema
+	fn   func(db *DB) error // the migration function that needs to be performed in order to get to the current schema name
+}
+
+// schemaMigrations contains an ordered list of the database schemes, that is
+// in order to run data migrations in the correct sequence
+var schemaMigrations = []migration{
+	{name: DbSchemaPurity, fn: func(db *DB) error { return nil }},
+	{name: DbSchemaHalloween, fn: func(db *DB) error { return nil }},
+	{name: DbSchemaSanctuary, fn: func(db *DB) error { return nil }},
+	{name: DbSchemaDiwali, fn: migrateSanctuary},
+}
+
 func (db *DB) migrate(schemaName string) error {
 	migrations, err := getMigrations(schemaName, DbSchemaCurrent, schemaMigrations)
 	if err != nil {
-		return fmt.Errorf("error getting migrations for current schema. schema %s, err: %v", schemaName, err)
+		return fmt.Errorf("error getting migrations for current schema (%s): %v", schemaName, err)
 	}
 
 	// no migrations to run
@@ -40,16 +54,14 @@ func (db *DB) migrate(schemaName string) error {
 	}
 
 	log.Info("need to run data migrations on localstore", "numMigrations", len(migrations), "schemaName", schemaName)
-	for i := 0; i < len(migrations)-1; i++ {
-		err := migrations[i].migrationFunc(db)
+	for i := 0; i < len(migrations); i++ {
+		err := migrations[i].fn(db)
 		if err != nil {
 			return err
 		}
-		if i != len(migrations)-1 {
-			err = db.schemaName.Put(migrations[i+1].name) // put the name of the next schema
-			if err != nil {
-				return err
-			}
+		err = db.schemaName.Put(migrations[i].name) // put the name of the current schema
+		if err != nil {
+			return err
 		}
 		schemaName, err = db.schemaName.Get()
 		if err != nil {
@@ -80,7 +92,8 @@ func getMigrations(currentSchema, targetSchema string, allSchemeMigrations []mig
 				return nil, errors.New("found schema name for the second time when looking for migrations")
 			}
 			foundCurrent = true
-			log.Info("found current localstore schema", "currentSchema", currentSchema, "migrateTo", DbSchemaCurrent, "total migrations", len(allSchemeMigrations)-i-1)
+			log.Info("found current localstore schema", "currentSchema", currentSchema, "migrateTo", DbSchemaCurrent, "total migrations", len(allSchemeMigrations)-i)
+			continue // current schema migration should not be executed (already has been when schema was migrated to)
 		case targetSchema:
 			foundTarget = true
 		}

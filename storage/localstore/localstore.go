@@ -285,7 +285,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			value := make([]byte, 36) // 32 bytes address, 4 bytes tag
+			value = make([]byte, 36) // 32 bytes address, 4 bytes tag
 			copy(value, fields.Address)
 
 			if fields.Tag != 0 {

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	tagtesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -83,6 +84,7 @@ func TestModeSetSyncPullNormalTag(t *testing.T) {
 	}
 
 	tag.Inc(chunk.StateStored) // so we don't get an error on tag.Status later on
+
 	item, err := db.pullIndex.Get(shed.Item{
 		Address: ch.Address(),
 		BinID:   1,
@@ -108,27 +110,14 @@ func TestModeSetSyncPullNormalTag(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// expect the same tag Uid because when we set pull sync on a normal tag
+	// the tag Uid should remain untouched in pull index
 	if item.Tag != tag.Uid {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
 	}
 
-	cnt, _, err := tag.Status(chunk.StateSynced)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected synced count to be %d but got %d", 0, cnt)
-	}
-
-	cnt, _, err = tag.Status(chunk.StateSent)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected sent count to be %d but got %d", 0, cnt)
-	}
+	// 1 stored (because incremented manually in test), 1 sent, 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
 }
 
 // TestModeSetSyncPullAnonymousTag checks that pull sync correcly increments
@@ -178,23 +167,8 @@ func TestModeSetSyncPullAnonymousTag(t *testing.T) {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, 0)
 	}
 
-	cnt, _, err := tag.Status(chunk.StateSynced)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected synced count to be %d but got %d", 0, cnt)
-	}
-
-	cnt, _, err = tag.Status(chunk.StateSent)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 1 {
-		t.Fatalf("expected sent count to be %d but got %d", 1, cnt)
-	}
+	// 1 stored (because incremented manually in test), 1 sent, 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
 }
 
 // TestModeSetSyncPullPushAnonymousTag creates an anonymous tag and a corresponding chunk
@@ -253,23 +227,8 @@ func TestModeSetSyncPullPushAnonymousTag(t *testing.T) {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, 0)
 	}
 
-	cnt, _, err := tag.Status(chunk.StateSynced)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected synced count to be %d but got %d", 0, cnt)
-	}
-
-	cnt, _, err = tag.Status(chunk.StateSent)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 1 {
-		t.Fatalf("expected sent count to be %d but got %d", 1, cnt)
-	}
+	// 1 stored (because incremented manually in test), 1 sent, 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
 
 	// verify that the item does not exist in the push index
 	item, err = db.pushIndex.Get(shed.Item{
@@ -307,27 +266,11 @@ func TestModeSetSyncPushNormalTag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if item.Tag != tag.Uid {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
 	}
 
-	cnt, _, err := tag.Status(chunk.StateSynced)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected synced count to be %d but got %d", 0, cnt)
-	}
-	cnt, _, err = tag.Status(chunk.StateSent)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected sent count to be %d but got %d", 0, cnt)
-	}
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 0, 1)
 
 	err = db.Set(context.Background(), chunk.ModeSetSyncPush, ch.Address())
 	if err != nil {
@@ -346,23 +289,7 @@ func TestModeSetSyncPushNormalTag(t *testing.T) {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
 	}
 
-	cnt, _, err = tag.Status(chunk.StateSynced)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 1 {
-		t.Fatalf("expected synced count to be %d but got %d", 1, cnt)
-	}
-
-	// sent should be 0
-	cnt, _, err = tag.Status(chunk.StateSent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cnt != 0 {
-		t.Fatalf("expected sent count to be %d but got %d", 0, cnt)
-	}
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 1, 1)
 
 	// call pull sync set, expect no changes
 	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
@@ -378,27 +305,10 @@ func TestModeSetSyncPushNormalTag(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 1, 1)
+
 	if item.Tag != tag.Uid {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
-	}
-
-	cnt, _, err = tag.Status(chunk.StateSynced)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 1 {
-		t.Fatalf("expected synced count to be %d but got %d", 1, cnt)
-	}
-
-	// sent should equal 0
-	cnt, _, err = tag.Status(chunk.StateSent)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cnt != 0 {
-		t.Fatalf("expected sent count to be %d but got %d", 0, cnt)
 	}
 }
 

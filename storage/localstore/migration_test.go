@@ -20,22 +20,27 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 )
 
 func TestOneMigration(t *testing.T) {
+	defer func(v []migration, s string) {
+		schemaMigrations = v
+		DbSchemaCurrent = s
+	}(schemaMigrations, DbSchemaCurrent)
+
 	DbSchemaCurrent = DbSchemaSanctuary
-	defer func(v []migration) { schemaMigrations = v }(schemaMigrations)
 
 	ran := false
 	shouldNotRun := false
 	schemaMigrations = []migration{
-		{name: DbSchemaSanctuary, migrationFunc: func(db *DB) error {
-			ran = true
+		{name: DbSchemaSanctuary, fn: func(db *DB) error {
+			shouldNotRun = true // this should not be executed
 			return nil
 		}},
-		{name: DbSchemaDiwali, migrationFunc: func(db *DB) error {
-			shouldNotRun = true // this should not be executed
+		{name: DbSchemaDiwali, fn: func(db *DB) error {
+			ran = true
 			return nil
 		}},
 	}
@@ -101,27 +106,27 @@ func TestManyMigrations(t *testing.T) {
 	DbSchemaCurrent = DbSchemaSanctuary
 
 	shouldNotRun := false
-	executionOrder := make([]int, 5)
+	executionOrder := []int{-1, -1, -1, -1}
+
 	schemaMigrations = []migration{
-		{name: DbSchemaSanctuary, migrationFunc: func(db *DB) error {
+		{name: DbSchemaSanctuary, fn: func(db *DB) error {
+			shouldNotRun = true // this should not be executed
+			return nil
+		}},
+		{name: DbSchemaDiwali, fn: func(db *DB) error {
 			executionOrder[0] = 0
 			return nil
 		}},
-		{name: DbSchemaDiwali, migrationFunc: func(db *DB) error {
+		{name: "coconut", fn: func(db *DB) error {
 			executionOrder[1] = 1
 			return nil
 		}},
-		{name: "coconut", migrationFunc: func(db *DB) error {
+		{name: "mango", fn: func(db *DB) error {
 			executionOrder[2] = 2
 			return nil
 		}},
-		{name: "mango", migrationFunc: func(db *DB) error {
+		{name: "salvation", fn: func(db *DB) error {
 			executionOrder[3] = 3
-			return nil
-		}},
-		{name: "salvation", migrationFunc: func(db *DB) error {
-			executionOrder[4] = 4
-			shouldNotRun = true // this should not be executed
 			return nil
 		}},
 	}
@@ -182,20 +187,24 @@ func TestManyMigrations(t *testing.T) {
 
 // TestMigrationFailFrom checks that local store boot should fail when the schema we're migrating from cannot be found
 func TestMigrationFailFrom(t *testing.T) {
+	defer func(v []migration, s string) {
+		schemaMigrations = v
+		DbSchemaCurrent = s
+	}(schemaMigrations, DbSchemaCurrent)
+
 	DbSchemaCurrent = "koo-koo-schema"
-	defer func(v []migration) { schemaMigrations = v }(schemaMigrations)
 
 	shouldNotRun := false
 	schemaMigrations = []migration{
-		{name: "langur", migrationFunc: func(db *DB) error {
+		{name: "langur", fn: func(db *DB) error {
 			shouldNotRun = true
 			return nil
 		}},
-		{name: "coconut", migrationFunc: func(db *DB) error {
+		{name: "coconut", fn: func(db *DB) error {
 			shouldNotRun = true
 			return nil
 		}},
-		{name: "chutney", migrationFunc: func(db *DB) error {
+		{name: "chutney", fn: func(db *DB) error {
 			shouldNotRun = true
 			return nil
 		}},
@@ -226,7 +235,7 @@ func TestMigrationFailFrom(t *testing.T) {
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
-	if err != errMissingCurrentSchema {
+	if !strings.Contains(err.Error(), errMissingCurrentSchema.Error()) {
 		t.Fatalf("expected errCannotFindSchema but got %v", err)
 	}
 
@@ -237,20 +246,24 @@ func TestMigrationFailFrom(t *testing.T) {
 
 // TestMigrationFailTo checks that local store boot should fail when the schema we're migrating to cannot be found
 func TestMigrationFailTo(t *testing.T) {
+	defer func(v []migration, s string) {
+		schemaMigrations = v
+		DbSchemaCurrent = s
+	}(schemaMigrations, DbSchemaCurrent)
+
 	DbSchemaCurrent = "langur"
-	defer func(v []migration) { schemaMigrations = v }(schemaMigrations)
 
 	shouldNotRun := false
 	schemaMigrations = []migration{
-		{name: "langur", migrationFunc: func(db *DB) error {
+		{name: "langur", fn: func(db *DB) error {
 			shouldNotRun = true
 			return nil
 		}},
-		{name: "coconut", migrationFunc: func(db *DB) error {
+		{name: "coconut", fn: func(db *DB) error {
 			shouldNotRun = true
 			return nil
 		}},
-		{name: "chutney", migrationFunc: func(db *DB) error {
+		{name: "chutney", fn: func(db *DB) error {
 			shouldNotRun = true
 			return nil
 		}},
@@ -281,7 +294,7 @@ func TestMigrationFailTo(t *testing.T) {
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
-	if err != errMissingTargetSchema {
+	if !strings.Contains(err.Error(), errMissingTargetSchema.Error()) {
 		t.Fatalf("expected errMissingTargetSchema but got %v", err)
 	}
 
