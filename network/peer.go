@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/pot"
 )
@@ -33,6 +34,7 @@ type Peer struct {
 	mtx       sync.RWMutex    // protect peers map
 	peers     map[string]bool // tracks node records sent to the peer
 	depth     uint8           // the proximity order advertised by remote as depth of saturation
+	key       string          // peer key. Hex form of Address()
 }
 
 // NewPeer constructs a discovery peer
@@ -41,10 +43,21 @@ func NewPeer(p *BzzPeer, kad *Kademlia) *Peer {
 		kad:     kad,
 		BzzPeer: p,
 		peers:   make(map[string]bool),
+		key:     hexutil.Encode(p.Address()),
 	}
 	// record remote as seen so we never send a peer its own record
 	d.seen(p.BzzAddr)
 	return d
+}
+
+// Key returns a string representation of this peer to be used in maps.
+func (d *Peer) Key() string {
+	return d.key
+}
+
+// Label returns a short string representation for debugging purposes
+func (d *Peer) Label() string {
+	return d.key[:4]
 }
 
 // NotifyPeer notifies the remote node (recipient) about a peer if

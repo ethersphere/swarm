@@ -254,7 +254,7 @@ func TestHiveStateConnections(t *testing.T) {
 
 	}
 	h1.Kademlia.lock.Lock()
-	numConns := h1.conns.Size()
+	numConns := h1.defaultIndex.conns.Size()
 	h1.Kademlia.lock.Unlock()
 	connAddresses := make(map[string]string)
 	h1.EachConn(h1.base, 255, func(peer *Peer, i int) bool {
@@ -271,12 +271,12 @@ func TestHiveStateConnections(t *testing.T) {
 	connsAfterLoading := 0
 	iterations := 0
 	h2.Kademlia.lock.Lock()
-	connsAfterLoading = h2.conns.Size()
+	connsAfterLoading = h2.defaultIndex.conns.Size()
 	h2.Kademlia.lock.Unlock()
 	for connsAfterLoading != numConns && iterations < 5 {
 		select {
 		case <-addedChan:
-			connsAfterLoading = h2.conns.Size()
+			connsAfterLoading = h2.defaultIndex.conns.Size()
 		case <-time.After(1 * time.Second):
 			iterations++
 		}
