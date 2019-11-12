@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// DomainToHashedByteArray takes a string containing a domain, hashes it and returns it as an array of 32 bytes.
+// DomainToHashedByteArray takes a string containing a domain, hashes it and returns it as an array of 32 bytes
 func DomainToHashedByteArray(domain string) [32]byte {
 	var byteArrayAddress [32]byte
 
@@ -18,7 +18,7 @@ func DomainToHashedByteArray(domain string) [32]byte {
 	return byteArrayAddress
 }
 
-// RnsNode takes a string containing a domain, hashes it and returns it as a Keccak256Hash.
+// RnsNode takes a string containing a domain, hashes it and returns it as a Keccak256Hash
 func RnsNode(name string) common.Hash {
 	parentNode, parentLabel := rnsParentNode(name)
 	return crypto.Keccak256Hash(parentNode[:], parentLabel[:])

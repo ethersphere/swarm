@@ -306,11 +306,10 @@ github.com/robertkrimen/otto/registry
 github.com/robertkrimen/otto/token
 # github.com/rs/cors v1.7.0
 github.com/rs/cors
-# github.com/rsksmart/rds-swarm v0.0.0-20191112160200-4f0ed2c3b8a2
+# github.com/rsksmart/rds-swarm v0.0.0-20191112192732-7dbad3f71595
 github.com/rsksmart/rds-swarm/config
 github.com/rsksmart/rds-swarm/resolver
 github.com/rsksmart/rds-swarm/resolver/multi_chain_resolver
-github.com/rsksmart/rds-swarm/resolver/rsk_resolver
 github.com/rsksmart/rds-swarm/utils
 # github.com/sirupsen/logrus v1.4.1
 github.com/sirupsen/logrus

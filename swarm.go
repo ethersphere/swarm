@@ -187,13 +187,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		var emptyAddress common.Address
 		var contract string
 		endpoint, addr := parseRnsAPIAddress(config.RnsAPI)
-		if err != nil {
-			return nil, err
-		}
 		if !bytes.Equal(addr.Bytes(), emptyAddress.Bytes()) {
 			contract = addr.String()
 		}
-		rns.SetMultiChainConfiguration(endpoint, contract)
+		rns.SetConfiguration(endpoint, contract)
 	}
 
 	// check that we are not in the old database schema

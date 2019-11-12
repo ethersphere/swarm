@@ -314,6 +314,8 @@ github.com/rsksmart/rds-swarm v0.0.0-20191112152320-2590c5db7eba h1:+qGsAO4EkxcO
 github.com/rsksmart/rds-swarm v0.0.0-20191112152320-2590c5db7eba/go.mod h1:Tp+xzZM1NtWHm9RCQQ8T5nHK/PDbY+GJtBTCYzSMC50=
 github.com/rsksmart/rds-swarm v0.0.0-20191112160200-4f0ed2c3b8a2 h1:yAkrytBxYgRMCXmMjpSRsepX2qnTqUzxkheFMMdkXeI=
 github.com/rsksmart/rds-swarm v0.0.0-20191112160200-4f0ed2c3b8a2/go.mod h1:Tp+xzZM1NtWHm9RCQQ8T5nHK/PDbY+GJtBTCYzSMC50=
+github.com/rsksmart/rds-swarm v0.0.0-20191112192732-7dbad3f71595 h1:2JkrJLVP8n6pzVpUMoCk0GfdJgWrbSKFxV1y0pTcmFo=
+github.com/rsksmart/rds-swarm v0.0.0-20191112192732-7dbad3f71595/go.mod h1:Tp+xzZM1NtWHm9RCQQ8T5nHK/PDbY+GJtBTCYzSMC50=
 github.com/satori/go.uuid v1.2.0/go.mod h1:dA0hQrYB0VpLJoorglMZABFdXlWrHn1NEOzdhQKdks0=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.1 h1:GL2rEmy6nsikmW0r8opw9JIRScdMF5hA8cOYLH7In1k=
