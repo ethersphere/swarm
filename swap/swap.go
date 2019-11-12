@@ -729,16 +729,6 @@ func (s *Swap) loadPendingCheque(p enode.ID) (cheque *Cheque, err error) {
 	return cheque, nil
 }
 
-// loadPendingCheque loads the current pending cheque for the peer from the store
-// and returns nil when there never was a pending cheque saved
-func (s *Swap) loadPendingCheque(p enode.ID) (cheque *Cheque, err error) {
-	err = s.store.Get(pendingChequeKey(p), &cheque)
-	if err == state.ErrNotFound {
-		return nil, nil
-	}
-	return cheque, err
-}
-
 // loadBalance loads the current balance for the peer from the store
 // and returns 0 if there was no prior balance saved
 func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
