@@ -119,6 +119,7 @@ func (params *Params) WithPrivateKey(privatekey *ecdsa.PrivateKey) *Params {
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
+	kademliaLB   *network.KademliaLoadBalancer
 	forwardCache *ttlset.TTLSet
 	gcTicker     *ticker.Ticker
 
@@ -166,6 +167,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		Kademlia: k,
 		KeyStore: loadKeyStore(),
 
+		kademliaLB: network.NewKademliaLoadBalancer(k, false),
 		privateKey: params.privateKey,
 		quitC:      make(chan struct{}),
 
@@ -239,6 +241,7 @@ func (p *Pss) Stop() error {
 	}
 	close(p.quitC)
 	p.outbox.Stop()
+	p.kademliaLB.Stop()
 	return nil
 }
 
@@ -766,18 +769,22 @@ func (p *Pss) forward(msg *message.Message) error {
 		onlySendOnce = true
 	}
 
-	p.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
-		if po < broadcastThreshold && sent > 0 {
-			return false // stop iterating
+	p.kademliaLB.EachBinDesc(to, func(bin network.LBBin) bool {
+		if bin.ProximityOrder < broadcastThreshold && sent > 0 {
+			// This bin is at the same distance as the node to the message. If already sent, we stop sending
+			return false
 		}
-		if sendFunc(p, sp, msg) {
-			sent++
-			if onlySendOnce {
-				return false
-			}
-			if po == addressLength*8 {
-				// stop iterating if successfully sent to the exact recipient (perfect match of full address)
-				return false
+		for _, lbPeer := range bin.LBPeers {
+			if sendFunc(p, lbPeer.Peer, msg) {
+				lbPeer.AddUseCount()
+				sent++
+				if onlySendOnce {
+					return false
+				}
+				if bin.ProximityOrder == addressLength*8 {
+					// stop iterating if successfully sent to the exact recipient (perfect match of full address)
+					return false //stop iterating
+				}
 			}
 		}
 		return true

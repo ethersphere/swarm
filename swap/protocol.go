@@ -32,6 +32,9 @@ var (
 	// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
 	ErrEmptyAddressInSignature = errors.New("empty address in handshake")
 
+	// ErrDifferentChainID is used when the chain id exchanged during the handshake does not match
+	ErrDifferentChainID = errors.New("different chain id")
+
 	// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
 	// structure of the HandshakeMsg
 	ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
@@ -73,7 +76,7 @@ func (s *Swap) Stop() error {
 	return s.Close()
 }
 
-// verifyHandshake verifies the chequebook address transmitted in the swap handshake
+// verifyHandshake verifies the chequebook address and chain id transmitted in the swap handshake
 func (s *Swap) verifyHandshake(msg interface{}) error {
 	handshake, ok := msg.(*HandshakeMsg)
 	if !ok {
@@ -82,6 +85,10 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 
 	if (handshake.ContractAddress == common.Address{}) {
 		return ErrEmptyAddressInSignature
+	}
+
+	if handshake.ChainID != s.chainID {
+		return ErrDifferentChainID
 	}
 
 	return s.chequebookFactory.VerifyContract(handshake.ContractAddress)
@@ -93,6 +100,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 	handshake, err := protoPeer.Handshake(context.Background(), &HandshakeMsg{
 		ContractAddress: s.GetParams().ContractAddress,
+		ChainID:         s.chainID,
 	}, s.verifyHandshake)
 	if err != nil {
 		return err
