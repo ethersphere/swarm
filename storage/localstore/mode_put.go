@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
@@ -203,6 +204,13 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 		return false, 0, err
 	}
 	if exists {
+		if db.putToGCCheck(item.Address) {
+			gcSizeChange, err = db.setGC(batch, item)
+			if err != nil {
+				return false, 0, err
+			}
+		}
+
 		return true, 0, nil
 	}
 
@@ -215,7 +223,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	db.pullIndex.PutInBatch(batch, item)
 	db.pushIndex.PutInBatch(batch, item)
 
-	if db.putToGCCheck(item.Address[:]) {
+	if db.putToGCCheck(item.Address) {
 
 		// TODO: this might result in an edge case where a node
 		// that has very little storage and uploads using an anonymous
@@ -240,7 +248,14 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 		return false, 0, err
 	}
 	if exists {
-		return true, 0, nil
+		if db.putToGCCheck(item.Address) {
+			gcSizeChange, err = db.setGC(batch, item)
+			if err != nil {
+				return false, 0, err
+			}
+		}
+
+		return true, gcSizeChange, nil
 	}
 
 	item.StoreTimestamp = now()
@@ -251,8 +266,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 	db.retrievalDataIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
 
-	if db.putToGCCheck(item.Address[:]) {
-
+	if db.putToGCCheck(item.Address) {
 		// TODO: this might result in an edge case where a node
 		// that has very little storage and uploads using an anonymous
 		// upload will have some of the content GCd before being able
@@ -279,16 +293,19 @@ func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, e
 		item.AccessTimestamp = i.AccessTimestamp
 		db.gcIndex.DeleteInBatch(batch, item)
 		gcSizeChange--
+		spew.Dump("setGCTimestampRemoveItemStamp", item.AccessTimestamp)
 	case leveldb.ErrNotFound:
 		// the chunk is not accessed before
 	default:
 		return 0, err
 	}
 	item.AccessTimestamp = now()
+	spew.Dump("setGCTimestamp", item.AccessTimestamp)
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	db.gcIndex.PutInBatch(batch, item)
 	gcSizeChange++
+	spew.Dump("batch", batch)
 
 	return gcSizeChange, nil
 }
