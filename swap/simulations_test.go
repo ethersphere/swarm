@@ -542,9 +542,12 @@ func TestBasicSwapSimulation(t *testing.T) {
 	allMessagesArrived := make(chan struct{})
 
 	metricsReg := metrics.AccountingRegistry
-	cter := metricsReg.Get("account.msg.credit")
-	counter := cter.(metrics.Counter)
-	counter.Clear()
+	creditCter := metricsReg.Get("account.msg.credit")
+	creditCounter := creditCter.(metrics.Counter)
+	creditCounter.Clear()
+	debitCter := metricsReg.Get("account.msg.debit")
+	debitCounter := debitCter.(metrics.Counter)
+	debitCounter.Clear()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -558,7 +561,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 			default:
 			}
 			// all messages have been received
-			if counter.Count() == maxMsgsInt64 {
+			if creditCounter.Count() == maxMsgsInt64 && debitCounter.Count() == maxMsgsInt64 {
 				close(allMessagesArrived)
 				return
 			}
@@ -681,7 +684,8 @@ func TestBasicSwapSimulation(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-	counter.Clear()
+	creditCounter.Clear()
+	debitCounter.Clear()
 	log.Info("Simulation ended")
 }
 
