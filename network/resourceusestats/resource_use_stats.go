@@ -83,6 +83,8 @@ func (lb *ResourceUseStats) DumpAllUses() map[string]int {
 }
 
 func (lb *ResourceUseStats) getAllUseCounts(resources []Resource) []ResourceCount {
+	lb.lock.RLock()
+	defer lb.lock.RUnlock()
 	peerUses := make([]ResourceCount, len(resources))
 	for i, resource := range resources {
 		peerUses[i] = ResourceCount{
