@@ -349,11 +349,8 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	}
 	for ancestor != 0 {
 		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-			ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
-			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-				number -= ancestor
-				return ancestorHash, number
-			}
+			number -= ancestor
+			return rawdb.ReadCanonicalHash(hc.chainDb, number), number
 		}
 		if *maxNonCanonical == 0 {
 			return common.Hash{}, 0
@@ -446,10 +443,6 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 		return nil
 	}
 	return hc.GetHeader(hash, number)
-}
-
-func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
-	return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

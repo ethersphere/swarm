@@ -35,8 +35,11 @@ type checkpointOracle struct {
 	config   *params.CheckpointOracleConfig
 	contract *checkpointoracle.CheckpointOracle
 
-	running  int32                                 // Flag whether the contract backend is set or not
-	getLocal func(uint64) params.TrustedCheckpoint // Function used to retrieve local checkpoint
+	// Whether the contract backend is set.
+	running int32
+
+	getLocal     func(uint64) params.TrustedCheckpoint // Function used to retrieve local checkpoint
+	syncDoneHook func()                                // Function used to notify that light syncing has completed.
 }
 
 // newCheckpointOracle returns a checkpoint registrar handler.

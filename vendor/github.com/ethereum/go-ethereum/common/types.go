@@ -149,7 +149,7 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
 	case string:
-		err = h.UnmarshalText([]byte(input))
+		*h = HexToHash(input)
 	default:
 		err = fmt.Errorf("Unexpected type for Bytes32: %v", input)
 	}
@@ -193,7 +193,7 @@ func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
 func IsHexAddress(s string) bool {
-	if has0xPrefix(s) {
+	if hasHexPrefix(s) {
 		s = s[2:]
 	}
 	return len(s) == 2*AddressLength && isHex(s)
@@ -288,7 +288,7 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
 	case string:
-		err = a.UnmarshalText([]byte(input))
+		*a = HexToAddress(input)
 	default:
 		err = fmt.Errorf("Unexpected type for Address: %v", input)
 	}

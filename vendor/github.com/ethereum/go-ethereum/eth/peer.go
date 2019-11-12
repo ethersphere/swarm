@@ -25,7 +25,6 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -354,46 +353,22 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
+func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash) error {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 2)
+	var status statusData // safe to read after two values have been received from errc
 
-	var (
-		status63 statusData63 // safe to read after two values have been received from errc
-		status   statusData   // safe to read after two values have been received from errc
-	)
 	go func() {
-		switch {
-		case p.version == eth63:
-			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
-				ProtocolVersion: uint32(p.version),
-				NetworkId:       network,
-				TD:              td,
-				CurrentBlock:    head,
-				GenesisBlock:    genesis,
-			})
-		case p.version == eth64:
-			errc <- p2p.Send(p.rw, StatusMsg, &statusData{
-				ProtocolVersion: uint32(p.version),
-				NetworkID:       network,
-				TD:              td,
-				Head:            head,
-				Genesis:         genesis,
-				ForkID:          forkID,
-			})
-		default:
-			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
-		}
+		errc <- p2p.Send(p.rw, StatusMsg, &statusData{
+			ProtocolVersion: uint32(p.version),
+			NetworkId:       network,
+			TD:              td,
+			CurrentBlock:    head,
+			GenesisBlock:    genesis,
+		})
 	}()
 	go func() {
-		switch {
-		case p.version == eth63:
-			errc <- p.readStatusLegacy(network, &status63, genesis)
-		case p.version == eth64:
-			errc <- p.readStatus(network, &status, genesis, forkFilter)
-		default:
-			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
-		}
+		errc <- p.readStatus(network, &status, genesis)
 	}()
 	timeout := time.NewTimer(handshakeTimeout)
 	defer timeout.Stop()
@@ -407,18 +382,11 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 			return p2p.DiscReadTimeout
 		}
 	}
-	switch {
-	case p.version == eth63:
-		p.td, p.head = status63.TD, status63.CurrentBlock
-	case p.version == eth64:
-		p.td, p.head = status.TD, status.Head
-	default:
-		panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
-	}
+	p.td, p.head = status.TD, status.CurrentBlock
 	return nil
 }
 
-func (p *peer) readStatusLegacy(network uint64, status *statusData63, genesis common.Hash) error {
+func (p *peer) readStatus(network uint64, status *statusData, genesis common.Hash) (err error) {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -434,43 +402,13 @@ func (p *peer) readStatusLegacy(network uint64, status *statusData63, genesis co
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
 	if status.GenesisBlock != genesis {
-		return errResp(ErrGenesisMismatch, "%x (!= %x)", status.GenesisBlock[:8], genesis[:8])
+		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock[:8], genesis[:8])
 	}
 	if status.NetworkId != network {
-		return errResp(ErrNetworkIDMismatch, "%d (!= %d)", status.NetworkId, network)
+		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, network)
 	}
 	if int(status.ProtocolVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, p.version)
-	}
-	return nil
-}
-
-func (p *peer) readStatus(network uint64, status *statusData, genesis common.Hash, forkFilter forkid.Filter) error {
-	msg, err := p.rw.ReadMsg()
-	if err != nil {
-		return err
-	}
-	if msg.Code != StatusMsg {
-		return errResp(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
-	}
-	if msg.Size > protocolMaxMsgSize {
-		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, protocolMaxMsgSize)
-	}
-	// Decode the handshake and make sure everything matches
-	if err := msg.Decode(&status); err != nil {
-		return errResp(ErrDecode, "msg %v: %v", msg, err)
-	}
-	if status.NetworkID != network {
-		return errResp(ErrNetworkIDMismatch, "%d (!= %d)", status.NetworkID, network)
-	}
-	if int(status.ProtocolVersion) != p.version {
-		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, p.version)
-	}
-	if status.Genesis != genesis {
-		return errResp(ErrGenesisMismatch, "%x (!= %x)", status.Genesis, genesis)
-	}
-	if err := forkFilter(status.ForkID); err != nil {
-		return errResp(ErrForkIDRejected, "%v", err)
 	}
 	return nil
 }

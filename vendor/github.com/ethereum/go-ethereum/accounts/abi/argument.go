@@ -34,11 +34,10 @@ type Argument struct {
 type Arguments []Argument
 
 type ArgumentMarshaling struct {
-	Name         string
-	Type         string
-	InternalType string
-	Components   []ArgumentMarshaling
-	Indexed      bool
+	Name       string
+	Type       string
+	Components []ArgumentMarshaling
+	Indexed    bool
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface
@@ -49,7 +48,7 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("argument json err: %v", err)
 	}
 
-	argument.Type, err = NewType(arg.Type, arg.InternalType, arg.Components)
+	argument.Type, err = NewType(arg.Type, arg.Components)
 	if err != nil {
 		return err
 	}
@@ -89,13 +88,6 @@ func (arguments Arguments) isTuple() bool {
 
 // Unpack performs the operation hexdata -> Go format
 func (arguments Arguments) Unpack(v interface{}, data []byte) error {
-	if len(data) == 0 {
-		if len(arguments) != 0 {
-			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
-		} else {
-			return nil // Nothing to unmarshal, return
-		}
-	}
 	// make sure the passed value is arguments pointer
 	if reflect.Ptr != reflect.ValueOf(v).Kind() {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
@@ -112,17 +104,11 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
-	if len(data) == 0 {
-		if len(arguments) != 0 {
-			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
-		} else {
-			return nil // Nothing to unmarshal, return
-		}
-	}
 	marshalledValues, err := arguments.UnpackValues(data)
 	if err != nil {
 		return err
 	}
+
 	return arguments.unpackIntoMap(v, marshalledValues)
 }
 

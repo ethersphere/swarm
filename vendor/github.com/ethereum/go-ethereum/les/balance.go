@@ -42,7 +42,7 @@ type balanceTracker struct {
 	negTimeFactor, negRequestFactor  float64
 	sumReqCost                       uint64
 	lastUpdate, nextUpdate, initTime mclock.AbsTime
-	updateEvent                      mclock.Timer
+	updateEvent                      mclock.Event
 	// since only a limited and fixed number of callbacks are needed, they are
 	// stored in a fixed size array ordered by priority threshold.
 	callbacks [balanceCallbackCount]balanceCallback
@@ -67,7 +67,7 @@ type balanceCallback struct {
 // init initializes balanceTracker
 func (bt *balanceTracker) init(clock mclock.Clock, capacity uint64) {
 	bt.clock = clock
-	bt.initTime, bt.lastUpdate = clock.Now(), clock.Now() // Init timestamps
+	bt.initTime = clock.Now()
 	for i := range bt.callbackIndex {
 		bt.callbackIndex[i] = -1
 	}
@@ -86,7 +86,7 @@ func (bt *balanceTracker) stop(now mclock.AbsTime) {
 	bt.timeFactor = 0
 	bt.requestFactor = 0
 	if bt.updateEvent != nil {
-		bt.updateEvent.Stop()
+		bt.updateEvent.Cancel()
 		bt.updateEvent = nil
 	}
 }
@@ -235,7 +235,7 @@ func (bt *balanceTracker) checkCallbacks(now mclock.AbsTime) {
 
 // updateAfter schedules a balance update and callback check in the future
 func (bt *balanceTracker) updateAfter(dt time.Duration) {
-	if bt.updateEvent == nil || bt.updateEvent.Stop() {
+	if bt.updateEvent == nil || bt.updateEvent.Cancel() {
 		if dt == 0 {
 			bt.updateEvent = nil
 		} else {

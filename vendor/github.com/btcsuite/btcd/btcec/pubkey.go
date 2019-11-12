@@ -22,40 +22,30 @@ func isOdd(a *big.Int) bool {
 	return a.Bit(0) == 1
 }
 
-// decompressPoint decompresses a point on the secp256k1 curve given the X point and
+// decompressPoint decompresses a point on the given curve given the X point and
 // the solution to use.
-func decompressPoint(curve *KoblitzCurve, bigX *big.Int, ybit bool) (*big.Int, error) {
-	var x fieldVal
-	x.SetByteSlice(bigX.Bytes())
+func decompressPoint(curve *KoblitzCurve, x *big.Int, ybit bool) (*big.Int, error) {
+	// TODO: This will probably only work for secp256k1 due to
+	// optimizations.
 
-	// Compute x^3 + B mod p.
-	var x3 fieldVal
-	x3.SquareVal(&x).Mul(&x)
-	x3.Add(curve.fieldB).Normalize()
+	// Y = +-sqrt(x^3 + B)
+	x3 := new(big.Int).Mul(x, x)
+	x3.Mul(x3, x)
+	x3.Add(x3, curve.Params().B)
 
-	// Now calculate sqrt mod p of x^3 + B
+	// now calculate sqrt mod p of x2 + B
 	// This code used to do a full sqrt based on tonelli/shanks,
 	// but this was replaced by the algorithms referenced in
 	// https://bitcointalk.org/index.php?topic=162805.msg1712294#msg1712294
-	var y fieldVal
-	y.SqrtVal(&x3).Normalize()
-	if ybit != y.IsOdd() {
-		y.Negate(1).Normalize()
-	}
+	y := new(big.Int).Exp(x3, curve.QPlus1Div4(), curve.Params().P)
 
-	// Check that y is a square root of x^3 + B.
-	var y2 fieldVal
-	y2.SquareVal(&y).Normalize()
-	if !y2.Equals(&x3) {
-		return nil, fmt.Errorf("invalid square root")
+	if ybit != isOdd(y) {
+		y.Sub(curve.Params().P, y)
 	}
-
-	// Verify that y-coord has expected parity.
-	if ybit != y.IsOdd() {
+	if ybit != isOdd(y) {
 		return nil, fmt.Errorf("ybit doesn't match oddness")
 	}
-
-	return new(big.Int).SetBytes(y.Bytes()[:]), nil
+	return y, nil
 }
 
 const (
@@ -101,17 +91,6 @@ func ParsePubKey(pubKeyStr []byte, curve *KoblitzCurve) (key *PublicKey, err err
 		if format == pubkeyHybrid && ybit != isOdd(pubkey.Y) {
 			return nil, fmt.Errorf("ybit doesn't match oddness")
 		}
-
-		if pubkey.X.Cmp(pubkey.Curve.Params().P) >= 0 {
-			return nil, fmt.Errorf("pubkey X parameter is >= to P")
-		}
-		if pubkey.Y.Cmp(pubkey.Curve.Params().P) >= 0 {
-			return nil, fmt.Errorf("pubkey Y parameter is >= to P")
-		}
-		if !pubkey.Curve.IsOnCurve(pubkey.X, pubkey.Y) {
-			return nil, fmt.Errorf("pubkey isn't on secp256k1 curve")
-		}
-
 	case PubKeyBytesLenCompressed:
 		// format is 0x2 | solution, <X coordinate>
 		// solution determines which solution of the curve we use.
@@ -125,12 +104,20 @@ func ParsePubKey(pubKeyStr []byte, curve *KoblitzCurve) (key *PublicKey, err err
 		if err != nil {
 			return nil, err
 		}
-
 	default: // wrong!
 		return nil, fmt.Errorf("invalid pub key length %d",
 			len(pubKeyStr))
 	}
 
+	if pubkey.X.Cmp(pubkey.Curve.Params().P) >= 0 {
+		return nil, fmt.Errorf("pubkey X parameter is >= to P")
+	}
+	if pubkey.Y.Cmp(pubkey.Curve.Params().P) >= 0 {
+		return nil, fmt.Errorf("pubkey Y parameter is >= to P")
+	}
+	if !pubkey.Curve.IsOnCurve(pubkey.X, pubkey.Y) {
+		return nil, fmt.Errorf("pubkey isn't on secp256k1 curve")
+	}
 	return &pubkey, nil
 }
 

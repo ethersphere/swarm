@@ -27,8 +27,6 @@ import (
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
 	switch eipNum {
-	case 2200:
-		enable2200(jt)
 	case 1884:
 		enable1884(jt)
 	case 1344:
@@ -84,9 +82,4 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 	chainId := interpreter.intPool.get().Set(interpreter.evm.chainConfig.ChainID)
 	stack.push(chainId)
 	return nil, nil
-}
-
-// enable2200 applies EIP-2200 (Rebalance net-metered SSTORE)
-func enable2200(jt *JumpTable) {
-	jt[SSTORE].dynamicGas = gasSStoreEIP2200
 }

@@ -125,17 +125,15 @@ func parseComplete(rawurl string) (*Node, error) {
 		return nil, fmt.Errorf("invalid public key (%v)", err)
 	}
 	// Parse the IP address.
-	ips, err := net.LookupIP(u.Hostname())
+	host, port, err := net.SplitHostPort(u.Host)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid host: %v", err)
 	}
-	ip = ips[0]
-	// Ensure the IP is 4 bytes long for IPv4 addresses.
-	if ipv4 := ip.To4(); ipv4 != nil {
-		ip = ipv4
+	if ip = net.ParseIP(host); ip == nil {
+		return nil, errors.New("invalid IP address")
 	}
 	// Parse the port numbers.
-	if tcpPort, err = strconv.ParseUint(u.Port(), 10, 16); err != nil {
+	if tcpPort, err = strconv.ParseUint(port, 10, 16); err != nil {
 		return nil, errors.New("invalid port")
 	}
 	udpPort = tcpPort

@@ -30,11 +30,15 @@ var (
 // PrivateLightAPI provides an API to access the LES light server or light client.
 type PrivateLightAPI struct {
 	backend *lesCommons
+	reg     *checkpointOracle
 }
 
 // NewPrivateLightAPI creates a new LES service API.
-func NewPrivateLightAPI(backend *lesCommons) *PrivateLightAPI {
-	return &PrivateLightAPI{backend: backend}
+func NewPrivateLightAPI(backend *lesCommons, reg *checkpointOracle) *PrivateLightAPI {
+	return &PrivateLightAPI{
+		backend: backend,
+		reg:     reg,
+	}
 }
 
 // LatestCheckpoint returns the latest local checkpoint package.
@@ -63,7 +67,7 @@ func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
 //   result[2], 32 bytes hex encoded latest section bloom trie root hash
 func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
-	cp := api.backend.localCheckpoint(index)
+	cp := api.backend.getLocalCheckpoint(index)
 	if cp.Empty() {
 		return res, errNoCheckpoint
 	}
@@ -73,8 +77,8 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 
 // GetCheckpointContractAddress returns the contract contract address in hex format.
 func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
-	if api.backend.oracle == nil {
+	if api.reg == nil {
 		return "", errNotActivated
 	}
-	return api.backend.oracle.config.Address.Hex(), nil
+	return api.reg.config.Address.Hex(), nil
 }

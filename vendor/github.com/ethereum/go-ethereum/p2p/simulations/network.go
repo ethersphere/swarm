@@ -56,9 +56,6 @@ type Network struct {
 	Nodes   []*Node `json:"nodes"`
 	nodeMap map[enode.ID]int
 
-	// Maps a node property string to node indexes of all nodes that hold this property
-	propertyMap map[string][]int
-
 	Conns   []*Conn `json:"conns"`
 	connMap map[string]int
 
@@ -74,7 +71,6 @@ func NewNetwork(nodeAdapter adapters.NodeAdapter, conf *NetworkConfig) *Network 
 		NetworkConfig: *conf,
 		nodeAdapter:   nodeAdapter,
 		nodeMap:       make(map[enode.ID]int),
-		propertyMap:   make(map[string][]int),
 		connMap:       make(map[string]int),
 		quitc:         make(chan struct{}),
 	}
@@ -124,15 +120,8 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 		Config: conf,
 	}
 	log.Trace("Node created", "id", conf.ID)
-
-	nodeIndex := len(net.Nodes)
-	net.nodeMap[conf.ID] = nodeIndex
+	net.nodeMap[conf.ID] = len(net.Nodes)
 	net.Nodes = append(net.Nodes, node)
-
-	// Register any node properties with the network-level propertyMap
-	for _, property := range conf.Properties {
-		net.propertyMap[property] = append(net.propertyMap[property], nodeIndex)
-	}
 
 	// emit a "control" event
 	net.events.Send(ControlEvent(node))
@@ -421,7 +410,7 @@ func (net *Network) getNode(id enode.ID) *Node {
 	return net.Nodes[i]
 }
 
-// GetNodeByName gets the node with the given name, returning nil if the node does
+// GetNode gets the node with the given name, returning nil if the node does
 // not exist
 func (net *Network) GetNodeByName(name string) *Node {
 	net.lock.RLock()
@@ -438,102 +427,17 @@ func (net *Network) getNodeByName(name string) *Node {
 	return nil
 }
 
-// GetNodeIDs returns the IDs of all existing nodes
-// Nodes can optionally be excluded by specifying their enode.ID.
-func (net *Network) GetNodeIDs(excludeIDs ...enode.ID) []enode.ID {
+// GetNodes returns the existing nodes
+func (net *Network) GetNodes() (nodes []*Node) {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
 
-	return net.getNodeIDs(excludeIDs)
+	return net.getNodes()
 }
 
-func (net *Network) getNodeIDs(excludeIDs []enode.ID) []enode.ID {
-	// Get all curent nodeIDs
-	nodeIDs := make([]enode.ID, 0, len(net.nodeMap))
-	for id := range net.nodeMap {
-		nodeIDs = append(nodeIDs, id)
-	}
-
-	if len(excludeIDs) > 0 {
-		// Return the difference of nodeIDs and excludeIDs
-		return filterIDs(nodeIDs, excludeIDs)
-	} else {
-		return nodeIDs
-	}
-}
-
-// GetNodes returns the existing nodes.
-// Nodes can optionally be excluded by specifying their enode.ID.
-func (net *Network) GetNodes(excludeIDs ...enode.ID) []*Node {
-	net.lock.RLock()
-	defer net.lock.RUnlock()
-
-	return net.getNodes(excludeIDs)
-}
-
-func (net *Network) getNodes(excludeIDs []enode.ID) []*Node {
-	if len(excludeIDs) > 0 {
-		nodeIDs := net.getNodeIDs(excludeIDs)
-		return net.getNodesByID(nodeIDs)
-	} else {
-		return net.Nodes
-	}
-}
-
-// GetNodesByID returns existing nodes with the given enode.IDs.
-// If a node doesn't exist with a given enode.ID, it is ignored.
-func (net *Network) GetNodesByID(nodeIDs []enode.ID) []*Node {
-	net.lock.RLock()
-	defer net.lock.RUnlock()
-
-	return net.getNodesByID(nodeIDs)
-}
-
-func (net *Network) getNodesByID(nodeIDs []enode.ID) []*Node {
-	nodes := make([]*Node, 0, len(nodeIDs))
-	for _, id := range nodeIDs {
-		node := net.getNode(id)
-		if node != nil {
-			nodes = append(nodes, node)
-		}
-	}
-
+func (net *Network) getNodes() (nodes []*Node) {
+	nodes = append(nodes, net.Nodes...)
 	return nodes
-}
-
-// GetNodesByProperty returns existing nodes that have the given property string registered in their NodeConfig
-func (net *Network) GetNodesByProperty(property string) []*Node {
-	net.lock.RLock()
-	defer net.lock.RUnlock()
-
-	return net.getNodesByProperty(property)
-}
-
-func (net *Network) getNodesByProperty(property string) []*Node {
-	nodes := make([]*Node, 0, len(net.propertyMap[property]))
-	for _, nodeIndex := range net.propertyMap[property] {
-		nodes = append(nodes, net.Nodes[nodeIndex])
-	}
-
-	return nodes
-}
-
-// GetNodeIDsByProperty returns existing node's enode IDs that have the given property string registered in the NodeConfig
-func (net *Network) GetNodeIDsByProperty(property string) []enode.ID {
-	net.lock.RLock()
-	defer net.lock.RUnlock()
-
-	return net.getNodeIDsByProperty(property)
-}
-
-func (net *Network) getNodeIDsByProperty(property string) []enode.ID {
-	nodeIDs := make([]enode.ID, 0, len(net.propertyMap[property]))
-	for _, nodeIndex := range net.propertyMap[property] {
-		node := net.Nodes[nodeIndex]
-		nodeIDs = append(nodeIDs, node.ID())
-	}
-
-	return nodeIDs
 }
 
 // GetRandomUpNode returns a random node on the network, which is running.
@@ -565,19 +469,12 @@ func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
 }
 
 func (net *Network) getDownNodeIDs() (ids []enode.ID) {
-	for _, node := range net.Nodes {
+	for _, node := range net.getNodes() {
 		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
 	return ids
-}
-
-// GetRandomNode returns a random node on the network, regardless of whether it is running or not
-func (net *Network) GetRandomNode(excludeIDs ...enode.ID) *Node {
-	net.lock.RLock()
-	defer net.lock.RUnlock()
-	return net.getRandomNode(net.getNodeIDs(nil), excludeIDs) // no need to exclude twice
 }
 
 func (net *Network) getRandomNode(ids []enode.ID, excludeIDs []enode.ID) *Node {
@@ -719,7 +616,6 @@ func (net *Network) Reset() {
 	//re-initialize the maps
 	net.connMap = make(map[string]int)
 	net.nodeMap = make(map[enode.ID]int)
-	net.propertyMap = make(map[string][]int)
 
 	net.Nodes = nil
 	net.Conns = nil
@@ -738,14 +634,12 @@ type Node struct {
 	upMu sync.RWMutex
 }
 
-// Up returns whether the node is currently up (online)
 func (n *Node) Up() bool {
 	n.upMu.RLock()
 	defer n.upMu.RUnlock()
 	return n.up
 }
 
-// SetUp sets the up (online) status of the nodes with the given value
 func (n *Node) SetUp(up bool) {
 	n.upMu.Lock()
 	defer n.upMu.Unlock()

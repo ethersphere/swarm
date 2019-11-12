@@ -32,15 +32,20 @@ import (
 // the timeout using a channel or semaphore.
 type Simulated struct {
 	now       AbsTime
-	scheduled []*simTimer
+	scheduled []event
 	mu        sync.RWMutex
 	cond      *sync.Cond
 	lastId    uint64
 }
 
-// simTimer implements Timer on the virtual clock.
-type simTimer struct {
+type event struct {
 	do func()
+	at AbsTime
+	id uint64
+}
+
+// SimulatedEvent implements Event for a virtual clock.
+type SimulatedEvent struct {
 	at AbsTime
 	id uint64
 	s  *Simulated
@@ -70,7 +75,6 @@ func (s *Simulated) Run(d time.Duration) {
 	}
 }
 
-// ActiveTimers returns the number of timers that haven't fired.
 func (s *Simulated) ActiveTimers() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -78,7 +82,6 @@ func (s *Simulated) ActiveTimers() int {
 	return len(s.scheduled)
 }
 
-// WaitForTimers waits until the clock has at least n scheduled timers.
 func (s *Simulated) WaitForTimers(n int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -89,7 +92,7 @@ func (s *Simulated) WaitForTimers(n int) {
 	}
 }
 
-// Now returns the current virtual time.
+// Now implements Clock.
 func (s *Simulated) Now() AbsTime {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -97,13 +100,12 @@ func (s *Simulated) Now() AbsTime {
 	return s.now
 }
 
-// Sleep blocks until the clock has advanced by d.
+// Sleep implements Clock.
 func (s *Simulated) Sleep(d time.Duration) {
 	<-s.After(d)
 }
 
-// After returns a channel which receives the current time after the clock
-// has advanced by d.
+// After implements Clock.
 func (s *Simulated) After(d time.Duration) <-chan time.Time {
 	after := make(chan time.Time, 1)
 	s.AfterFunc(d, func() {
@@ -112,9 +114,8 @@ func (s *Simulated) After(d time.Duration) <-chan time.Time {
 	return after
 }
 
-// AfterFunc runs fn after the clock has advanced by d. Unlike with the system
-// clock, fn runs on the goroutine that calls Run.
-func (s *Simulated) AfterFunc(d time.Duration, fn func()) Timer {
+// AfterFunc implements Clock.
+func (s *Simulated) AfterFunc(d time.Duration, do func()) Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.init()
@@ -132,31 +133,44 @@ func (s *Simulated) AfterFunc(d time.Duration, fn func()) Timer {
 			l = m + 1
 		}
 	}
-	ev := &simTimer{do: fn, at: at, s: s}
-	s.scheduled = append(s.scheduled, nil)
+	s.scheduled = append(s.scheduled, event{})
 	copy(s.scheduled[l+1:], s.scheduled[l:ll])
-	s.scheduled[l] = ev
+	e := event{do: do, at: at, id: id}
+	s.scheduled[l] = e
 	s.cond.Broadcast()
-	return ev
-}
-
-func (ev *simTimer) Stop() bool {
-	s := ev.s
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for i := 0; i < len(s.scheduled); i++ {
-		if s.scheduled[i] == ev {
-			s.scheduled = append(s.scheduled[:i], s.scheduled[i+1:]...)
-			s.cond.Broadcast()
-			return true
-		}
-	}
-	return false
+	return &SimulatedEvent{at: at, id: id, s: s}
 }
 
 func (s *Simulated) init() {
 	if s.cond == nil {
 		s.cond = sync.NewCond(&s.mu)
 	}
+}
+
+// Cancel implements Event.
+func (e *SimulatedEvent) Cancel() bool {
+	s := e.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	l, h := 0, len(s.scheduled)
+	ll := h
+	for l != h {
+		m := (l + h) / 2
+		if e.id == s.scheduled[m].id {
+			l = m
+			break
+		}
+		if (e.at < s.scheduled[m].at) || ((e.at == s.scheduled[m].at) && (e.id < s.scheduled[m].id)) {
+			h = m
+		} else {
+			l = m + 1
+		}
+	}
+	if l >= ll || s.scheduled[l].id != e.id {
+		return false
+	}
+	copy(s.scheduled[l:ll-1], s.scheduled[l+1:])
+	s.scheduled = s.scheduled[:ll-1]
+	return true
 }
