@@ -44,17 +44,17 @@ const DbSchemaSanctuary = "sanctuary"
 const DbSchemaDiwali = "diwali"
 
 type migration struct {
-	name          string             //name of the schema
-	migrationFunc func(db *DB) error // the migration function that needs to be performed in order to get to the NEXT schema name
+	name string             //name of the schema
+	fn   func(db *DB) error // the migration function that needs to be performed in order to get to the NEXT schema name
 }
 
-// allDbSchemaMigrations contains an ordered list of the database schemes, that is
+// schemaMigrations contains an ordered list of the database schemes, that is
 // in order to run data migrations in the correct sequence
-var allDbSchemaMigrations = []migration{
-	{name: DbSchemaPurity, migrationFunc: func(db *DB) error { return nil }},
-	{name: DbSchemaHalloween, migrationFunc: func(db *DB) error { return nil }},
-	{name: DbSchemaSanctuary, migrationFunc: migrateSanctuary},
-	{name: DbSchemaDiwali, migrationFunc: func(db *DB) error { return nil }},
+var schemaMigrations = []migration{
+	{name: DbSchemaPurity, fn: func(db *DB) error { return nil }},
+	{name: DbSchemaHalloween, fn: func(db *DB) error { return nil }},
+	{name: DbSchemaSanctuary, fn: migrateSanctuary},
+	{name: DbSchemaDiwali, fn: func(db *DB) error { return nil }},
 }
 
 // returns true if legacy database is in the datadir

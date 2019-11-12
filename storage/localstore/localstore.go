@@ -285,11 +285,14 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			tag := make([]byte, 4)
+			value := make([]byte, 36) // 32 bytes address, 4 bytes tag
+			copy(value, fields.Address)
+
 			if fields.Tag != 0 {
-				binary.BigEndian.PutUint32(tag, fields.Tag)
+				binary.BigEndian.PutUint32(value[32:], fields.Tag)
 			}
-			return append(fields.Address, tag...), nil
+
+			return value, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.Address = value[:32]

@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/shed"
@@ -28,31 +29,33 @@ var errMissingCurrentSchema = errors.New("could not find current db schema")
 var errMissingTargetSchema = errors.New("could not find target db schema")
 
 func (db *DB) migrate(schemaName string) error {
-	migrations, err := getMigrations(schemaName, DbSchemaCurrent, allDbSchemaMigrations)
+	migrations, err := getMigrations(schemaName, DbSchemaCurrent, schemaMigrations)
 	if err != nil {
-		log.Error("error getting data migrations for current localstore version", "schemaName", schemaName)
-		return err
+		return fmt.Errorf("error getting migrations for current schema. schema %s, err: %v", schemaName, err)
 	}
 
-	if migrations != nil {
-		log.Info("need to run data migrations on localstore", "numMigrations", len(migrations), "schemaName", schemaName)
-		for i := 0; i < len(migrations)-1; i++ {
-			err := migrations[i].migrationFunc(db)
-			if err != nil {
-				return err
-			}
-			if i != len(migrations)-1 {
-				err = db.schemaName.Put(migrations[i+1].name) // put the name of the next schema
-				if err != nil {
-					return err
-				}
-			}
-			schemaName, err = db.schemaName.Get()
-			if err != nil {
-				return err
-			}
-			log.Info("successfully ran migration", "migrationId", i, "currentSchema", schemaName)
+	// no migrations to run
+	if migrations == nil {
+		return nil
+	}
+
+	log.Info("need to run data migrations on localstore", "numMigrations", len(migrations), "schemaName", schemaName)
+	for i := 0; i < len(migrations)-1; i++ {
+		err := migrations[i].migrationFunc(db)
+		if err != nil {
+			return err
 		}
+		if i != len(migrations)-1 {
+			err = db.schemaName.Put(migrations[i+1].name) // put the name of the next schema
+			if err != nil {
+				return err
+			}
+		}
+		schemaName, err = db.schemaName.Get()
+		if err != nil {
+			return err
+		}
+		log.Info("successfully ran migration", "migrationId", i, "currentSchema", schemaName)
 	}
 	return nil
 }
@@ -102,10 +105,13 @@ func migrateSanctuary(db *DB) error {
 		return err
 	}
 	if !renamed {
-		return errors.New("pull index was not successfully renamed!")
+		return errors.New("pull index was not successfully renamed")
 	}
 
-	ctr := 0
+	if db.tags == nil {
+		return errors.New("had an error accessing the tags object")
+	}
+
 	batch := new(leveldb.Batch)
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -113,30 +119,21 @@ func migrateSanctuary(db *DB) error {
 	// since pullIndex points to the Tag value, we should eliminate possible
 	// pushIndex leak due to items that were used by previous pull sync tag
 	// increment logic
-	if db.tags != nil {
-		err = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-			tag, err := db.tags.Get(item.Tag)
-			if err != nil {
-				return true, err
-			}
-
-			// anonymous tags should no longer appear in pushIndex
-			if tag != nil && tag.Anonymous {
-				db.pushIndex.DeleteInBatch(batch, item)
-				ctr++
-			}
-			return false, nil
-		}, nil)
+	err = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		tag, err := db.tags.Get(item.Tag)
 		if err != nil {
-			return err
+			return true, err
 		}
+
+		// anonymous tags should no longer appear in pushIndex
+		if tag != nil && tag.Anonymous {
+			db.pushIndex.DeleteInBatch(batch, item)
+		}
+		return false, nil
+	}, nil)
+	if err != nil {
+		return err
 	}
 
-	if ctr > 0 {
-		err = db.shed.WriteBatch(batch)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return db.shed.WriteBatch(batch)
 }

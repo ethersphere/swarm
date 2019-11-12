@@ -25,11 +25,11 @@ import (
 
 func TestOneMigration(t *testing.T) {
 	DbSchemaCurrent = DbSchemaSanctuary
-	defer func(v []migration) { allDbSchemaMigrations = v }(allDbSchemaMigrations)
+	defer func(v []migration) { schemaMigrations = v }(schemaMigrations)
 
 	ran := false
 	shouldNotRun := false
-	allDbSchemaMigrations = []migration{
+	schemaMigrations = []migration{
 		{name: DbSchemaSanctuary, migrationFunc: func(db *DB) error {
 			ran = true
 			return nil
@@ -93,12 +93,16 @@ func TestOneMigration(t *testing.T) {
 }
 
 func TestManyMigrations(t *testing.T) {
+	defer func(v []migration, s string) {
+		schemaMigrations = v
+		DbSchemaCurrent = s
+	}(schemaMigrations, DbSchemaCurrent)
+
 	DbSchemaCurrent = DbSchemaSanctuary
-	defer func(v []migration) { allDbSchemaMigrations = v }(allDbSchemaMigrations)
 
 	shouldNotRun := false
 	executionOrder := make([]int, 5)
-	allDbSchemaMigrations = []migration{
+	schemaMigrations = []migration{
 		{name: DbSchemaSanctuary, migrationFunc: func(db *DB) error {
 			executionOrder[0] = 0
 			return nil
@@ -179,10 +183,10 @@ func TestManyMigrations(t *testing.T) {
 // TestMigrationFailFrom checks that local store boot should fail when the schema we're migrating from cannot be found
 func TestMigrationFailFrom(t *testing.T) {
 	DbSchemaCurrent = "koo-koo-schema"
-	defer func(v []migration) { allDbSchemaMigrations = v }(allDbSchemaMigrations)
+	defer func(v []migration) { schemaMigrations = v }(schemaMigrations)
 
 	shouldNotRun := false
-	allDbSchemaMigrations = []migration{
+	schemaMigrations = []migration{
 		{name: "langur", migrationFunc: func(db *DB) error {
 			shouldNotRun = true
 			return nil
@@ -234,10 +238,10 @@ func TestMigrationFailFrom(t *testing.T) {
 // TestMigrationFailTo checks that local store boot should fail when the schema we're migrating to cannot be found
 func TestMigrationFailTo(t *testing.T) {
 	DbSchemaCurrent = "langur"
-	defer func(v []migration) { allDbSchemaMigrations = v }(allDbSchemaMigrations)
+	defer func(v []migration) { schemaMigrations = v }(schemaMigrations)
 
 	shouldNotRun := false
-	allDbSchemaMigrations = []migration{
+	schemaMigrations = []migration{
 		{name: "langur", migrationFunc: func(db *DB) error {
 			shouldNotRun = true
 			return nil

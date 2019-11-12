@@ -177,8 +177,12 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	return gcSizeChange, nil
 }
 
-// setSync adds the chunk to the garbage collection after syncing by updating indexes:
-//  - delete from push, insert to gc
+// setSync adds the chunk to the garbage collection after syncing by updating indexes
+// - ModeSetSyncPull - the corresponding tag is incremented, pull index item tag value
+//	 is then set to 0 to prevent duplicate increments for the same chunk synced multiple times
+// - ModeSetSyncPush - the corresponding tag is incremented, then item is removed
+//   from push sync index
+// - update to gc index happens given item does not exist in pin index
 // Provided batch is updated.
 func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeSet) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
@@ -192,7 +196,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		if err == leveldb.ErrNotFound {
 			// chunk is not found,
 			// no need to update gc index
-			// just delete from the push indices
+			// just delete from the push index
 			// if it is there
 			db.pushIndex.DeleteInBatch(batch, item)
 			return 0, nil

@@ -224,9 +224,11 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	anonymous := false
 	if db.tags != nil {
 		tag, err := db.tags.Get(item.Tag)
-		if err == nil {
-			anonymous = tag.Anonymous
+		if err != nil {
+			return err
 		}
+		anonymous = tag.Anonymous
+
 	}
 
 	item.StoreTimestamp = now()
