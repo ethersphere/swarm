@@ -56,13 +56,13 @@ type Swap struct {
 	store             state.Store                // store is needed in order to keep balances and cheques across sessions
 	peers             map[enode.ID]*Peer         // map of all swap Peers
 	peersLock         sync.RWMutex               // lock for peers map
-	backend           contract.Backend           // the backend (blockchain) used
 	owner             *Owner                     // contract access
+	backend           contract.Backend           // the backend (blockchain) used
+	chainID           uint64                     // id of the chain the backend is connected to
 	params            *Params                    // economic and operational parameters
 	contract          contract.Contract          // reference to the smart contract
 	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
 	honeyPriceOracle  HoneyOracle                // oracle which resolves the price of honey (in Wei)
-	chainID           uint64                     // id of the chain the backend is connected to
 }
 
 // Owner encapsulates information related to accessing the contract
