@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -321,15 +322,23 @@ func TestModePut_sameChunk(t *testing.T) {
 // TestModePutSync_addToGc validates ModePut* with PutSetCheckFunc stub results
 // in the added chunk to show up in GC index
 func TestModePut_addToGc(t *testing.T) {
-	// PutSetCheckFunc will tell localstore to always Set the chunks that enter
-	opts := &Options{PutToGCCheck: func(_ []byte) bool { return true }}
-	for _, m := range []chunk.ModePut{
-		chunk.ModePutSync,
-		chunk.ModePutUpload,
-		chunk.ModePutRequest,
+	retVal := true
+	// PutSetCheckFunc's output is toggled from the test case
+	opts := &Options{PutToGCCheck: func(_ []byte) bool { return retVal }}
+
+	for _, m := range []struct {
+		mode    chunk.ModePut
+		putToGc bool
+	}{
+		{mode: chunk.ModePutSync, putToGc: true},
+		{mode: chunk.ModePutSync, putToGc: false},
+		{mode: chunk.ModePutUpload, putToGc: true},
+		{mode: chunk.ModePutUpload, putToGc: false},
+		{mode: chunk.ModePutRequest, putToGc: true}, // in ModePutRequest we always insert to GC, so putToGc=false not needed
 	} {
 		for _, tc := range multiChunkTestCases {
 			t.Run(tc.name, func(t *testing.T) {
+				retVal = m.putToGc
 
 				db, cleanupFunc := newTestDB(t, opts)
 				defer cleanupFunc()
@@ -341,7 +350,7 @@ func TestModePut_addToGc(t *testing.T) {
 
 				chunks := generateTestRandomChunks(tc.count)
 
-				_, err := db.Put(context.Background(), m, chunks...)
+				_, err := db.Put(context.Background(), m.mode, chunks...)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -351,8 +360,11 @@ func TestModePut_addToGc(t *testing.T) {
 				for _, ch := range chunks {
 					po := db.po(ch.Address())
 					binIDs[po]++
-
-					newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], nil)(t)
+					var wantErr error
+					if !m.putToGc {
+						wantErr = leveldb.ErrNotFound
+					}
+					newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], wantErr)(t)
 				}
 			})
 		}
