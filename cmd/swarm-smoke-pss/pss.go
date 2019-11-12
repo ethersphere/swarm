@@ -1,3 +1,19 @@
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -317,7 +333,7 @@ func (s *pssSession) waitForMsg() error {
 		resIdx := toMsgIdx(res.Msg)
 		resJob, ok := s.jobs[resIdx]
 		if !ok {
-			return fmt.Errorf("corrupt message for job %s", resIdx)
+			return fmt.Errorf("could not find message for job %s", resIdx)
 		}
 		if !bytes.Equal(res.Msg, resJob.msg) {
 			return fmt.Errorf("message mismatch. expected: %s got: %s", resJob.msg, res.Msg)
@@ -368,7 +384,7 @@ func (s *pssSession) sendSymMessage(sender *pssNode, receiver *pssNode, msg []by
 
 	// set the secret on both nodes
 	var senderSymKeyID string
-	err = sender.client.Call(&senderSymKeyID, "pss_setSymmetricKey", symkey, s.topic, hexutil.Encode(receiver.addr), true)
+	err = sender.client.Call(&senderSymKeyID, "pss_setSymmetricKey", symkey, s.topic, hexutil.Encode(receiver.addr), false)
 	if err != nil {
 		log.Error("error setting sym key on the sender", "err", err)
 		return err

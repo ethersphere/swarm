@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -88,13 +88,13 @@ func main() {
 		cli.IntFlag{
 			Name:        "msgtimeout",
 			Value:       1,
-			Usage:       "timeout in seconds until a message is received",
+			Usage:       "message timeout after which the test fails",
 			Destination: &pssMessageTimeout,
 		},
 		cli.IntFlag{
 			Name:        "msgcount",
 			Value:       10,
-			Usage:       "number of pss messages that should be send in the pss smoke test",
+			Usage:       "number of pss messages that should be sent in the pss smoke test",
 			Destination: &pssMessageCount,
 		},
 		cli.IntFlag{
@@ -134,7 +134,7 @@ func main() {
 		},
 		{
 			Name:   "all",
-			Usage:  "send and receive raw, sym and asym messages across random nodes",
+			Usage:  "send and receive raw, sym and asym messages in sequence across random nodes",
 			Action: wrapCliCommand("all", pssAllCheck),
 		},
 	}
