@@ -56,8 +56,9 @@ type Swap struct {
 	store             state.Store                // store is needed in order to keep balances and cheques across sessions
 	peers             map[enode.ID]*Peer         // map of all swap Peers
 	peersLock         sync.RWMutex               // lock for peers map
-	backend           contract.Backend           // the backend (blockchain) used
 	owner             *Owner                     // contract access
+	backend           contract.Backend           // the backend (blockchain) used
+	chainID           uint64                     // id of the chain the backend is connected to
 	params            *Params                    // economic and operational parameters
 	contract          contract.Contract          // reference to the smart contract
 	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
@@ -130,7 +131,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
 	return &Swap{
 		store:             stateStore,
 		peers:             make(map[enode.ID]*Peer),
@@ -139,6 +140,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Back
 		params:            params,
 		chequebookFactory: chequebookFactory,
 		honeyPriceOracle:  NewHoneyPriceOracle(),
+		chainID:           chainID,
 	}
 }
 
@@ -193,6 +195,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		stateStore,
 		owner,
 		backend,
+		chainID.Uint64(),
 		params,
 		factory,
 	)

@@ -36,7 +36,8 @@ type Cheque struct {
 
 // HandshakeMsg is exchanged on peer handshake
 type HandshakeMsg struct {
-	ContractAddress common.Address
+	ChainID         uint64         // chain id of the blockchain the peer is connected to
+	ContractAddress common.Address // chequebook contract address of the peer
 }
 
 // EmitChequeMsg is sent from the debitor to the creditor with the actual cheque
