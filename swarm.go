@@ -184,11 +184,16 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.dns = resolver
 	}
 	if config.RnsAPI != "" {
-		_, endpoint, addr := parseEnsAPIAddress(config.RnsAPI)
+		var emptyAddress common.Address
+		var contract string
+		endpoint, addr := parseRnsAPIAddress(config.RnsAPI)
 		if err != nil {
 			return nil, err
 		}
-		rns.SetRSKConfiguration(endpoint, addr.String())
+		if !bytes.Equal(addr.Bytes(), emptyAddress.Bytes()) {
+			contract = addr.String()
+		}
+		rns.SetMultiChainConfiguration(endpoint, contract)
 	}
 
 	// check that we are not in the old database schema
@@ -302,6 +307,31 @@ func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
 	if i := strings.Index(endpoint, ":"); i > 0 {
 		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
 			tld = endpoint[:i]
+			endpoint = endpoint[i+1:]
+		}
+	}
+	if i := strings.Index(endpoint, "@"); i > 0 {
+		addr = common.HexToAddress(endpoint[:i])
+		endpoint = endpoint[i+1:]
+	}
+	return
+}
+
+// parseRnsAPIAddress parses string according to format
+// [contract-addr@]url and returns RNSClientConfig structure
+// with endpoint and contract address
+func parseRnsAPIAddress(s string) (endpoint string, addr common.Address) {
+	isAllLetterString := func(s string) bool {
+		for _, r := range s {
+			if !unicode.IsLetter(r) {
+				return false
+			}
+		}
+		return true
+	}
+	endpoint = s
+	if i := strings.Index(endpoint, ":"); i > 0 {
+		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
 			endpoint = endpoint[i+1:]
 		}
 	}

@@ -36,3 +36,13 @@ func SetRSKConfiguration(endpoint string, contract string) {
 		cfg.ResolverAddresses.RSK = contract
 	}
 }
+
+// SetMultiChainConfiguration overrides multichain endpoint and contract to rns node
+func SetMultiChainConfiguration(endpoint string, contract string) {
+	if endpoint != "" {
+		cfg.NetworkNodeAddress = endpoint
+	}
+	if contract != "" {
+		cfg.ResolverAddresses.MultiChain = contract
+	}
+}

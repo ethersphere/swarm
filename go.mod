@@ -50,7 +50,7 @@ require (
 	github.com/robertkrimen/otto v0.0.0-20170205013659-6a77b7cbc37d // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521 // indirect
-	github.com/rsksmart/rds-swarm v0.0.0-20191108154211-89cd67d51430
+	github.com/rsksmart/rds-swarm v0.0.0-20191112160200-4f0ed2c3b8a2
 	github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
 	github.com/tilinna/clock v1.0.2
 	github.com/uber-go/atomic v1.4.0 // indirect
