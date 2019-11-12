@@ -419,7 +419,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	// get the testService for the creditor
 	creditorSvc := sim.Service("swap", creditor).(*testService)
 
-	var debLen, credLen int
+	var debLen, credLen, debSwapLen, credSwapLen int
 	timeout := time.After(10 * time.Second)
 	for {
 		// let's always be nice and allow a time out to be catched
@@ -430,14 +430,16 @@ func TestMultiChequeSimulation(t *testing.T) {
 		}
 		// the node has all other peers in its peer list
 		debitorSvc.swap.peersLock.Lock()
-		debLen = len(debitorSvc.swap.peers)
+		debSwapLen = len(debitorSvc.swap.peers)
+		debLen = len(debitorSvc.peers)
 		debitorSvc.swap.peersLock.Unlock()
 
 		creditorSvc.swap.peersLock.Lock()
-		credLen = len(creditorSvc.swap.peers)
+		credSwapLen = len(creditorSvc.swap.peers)
+		credLen = len(creditorSvc.peers)
 		creditorSvc.swap.peersLock.Unlock()
 
-		if debLen == 1 && credLen == 1 {
+		if debLen == 1 && credLen == 1 && debSwapLen == 1 && credSwapLen == 1 {
 			break
 		}
 		// don't overheat the CPU...
