@@ -17,11 +17,16 @@
 package localstore
 
 import (
+	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"os"
+	"path"
 	"strings"
 	"testing"
+
+	"github.com/ethersphere/swarm/chunk"
 )
 
 func TestOneMigration(t *testing.T) {
@@ -301,4 +306,77 @@ func TestMigrationFailTo(t *testing.T) {
 	if shouldNotRun {
 		t.Errorf("migration ran but shouldnt have")
 	}
+}
+
+// TestMigrateSanctuaryFixture migrates an actual Sanctuary localstore
+// to the most recent schema.
+func TestMigrateSanctuaryFixture(t *testing.T) {
+
+	tmpdir, err := ioutil.TempDir("", "localstore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	cdir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir := path.Join(cdir, "testdata", "sanctuary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, f := range files {
+		copyFileContents(path.Join(dir, f.Name()), path.Join(tmpdir, f.Name()))
+	}
+
+	baseKey := make([]byte, 32)
+	if _, err := rand.Read(baseKey); err != nil {
+		t.Fatal(err)
+	}
+
+	// start localstore with the copied fixture
+	db, err := New(tmpdir, baseKey, &Options{Tags: chunk.NewTags()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaName, err := db.schemaName.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if schemaName != DbSchemaCurrent {
+		t.Fatalf("schema name mismatch, want '%s' got '%s'", DbSchemaCurrent, schemaName)
+	}
+
+	err = db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func copyFileContents(src, dst string) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = out.Close()
+	}()
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+	err = out.Sync()
+	return nil
 }
