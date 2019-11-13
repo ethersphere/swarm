@@ -281,7 +281,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 
 // setGC is a helper function used to add chunks to the retrieval access
 // index and the gc index in the cases that the putToGCCheck condition
-// vets a gc set. this is to mitigate index leakage in edge cases where
+// warrants a gc set. this is to mitigate index leakage in edge cases where
 // a chunk is added to a node's localstore and given that the chunk is
 // already within that node's NN (thus, it can be added to the gc index
 // safely)
