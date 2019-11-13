@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -131,7 +132,33 @@ func migrateSanctuary(db *DB) error {
 
 	// since pullIndex points to the Tag value, we should eliminate possible
 	// pushIndex leak due to items that were used by previous pull sync tag
-	// increment logic
+	// increment logic. we need to build the index first since db object is
+	// still not initialised at this stage
+	db.pushIndex, err = db.shed.NewIndex("StoreTimestamp|Hash->Tags", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			key = make([]byte, 40)
+			binary.BigEndian.PutUint64(key[:8], uint64(fields.StoreTimestamp))
+			copy(key[8:], fields.Address[:])
+			return key, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key[8:]
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			tag := make([]byte, 4)
+			binary.BigEndian.PutUint32(tag, fields.Tag)
+			return tag, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			if value != nil {
+				e.Tag = binary.BigEndian.Uint32(value)
+			}
+			return e, nil
+		},
+	})
+
 	err = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		tag, err := db.tags.Get(item.Tag)
 		if err != nil {
