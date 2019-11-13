@@ -222,7 +222,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 		return true, nil
 	}
 	anonymous := false
-	if db.tags != nil {
+	if db.tags != nil && item.Tag != 0 {
 		tag, err := db.tags.Get(item.Tag)
 		if err != nil {
 			return false, err
