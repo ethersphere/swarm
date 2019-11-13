@@ -302,10 +302,10 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer.lock.Lock()
 	defer swapPeer.lock.Unlock()
 
-	// Check if balance with peer is over the disconnect threshold
+	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
 	balance := swapPeer.getBalance()
-	if balance >= s.params.DisconnectThreshold {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
+	if balance >= s.params.DisconnectThreshold && amount > 0 {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
 	}
 
 	if err = swapPeer.updateBalance(amount); err != nil {
