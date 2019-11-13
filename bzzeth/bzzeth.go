@@ -310,13 +310,12 @@ func (b *BzzEth) validateHeader(ctx context.Context, header []byte, req *request
 		if headerAlreadyReceived {
 			// header already received
 			return nil, errDuplicateHeader
-		} else {
-			// header is still marked as "yet to be received" and we got that header
-			setHeaderAsReceived(req, ch.Address().Hex())
-			// This channel is used to track deliveries
-			req.c <- header
-			return ch, nil
 		}
+		// header is still marked as "yet to be received" and we got that header
+		setHeaderAsReceived(req, ch.Address().Hex())
+		// This channel is used to track deliveries
+		req.c <- header
+		return ch, nil
 	} else {
 		// header is not present in the request hash.
 		return nil, errUnsolicitedHeader
