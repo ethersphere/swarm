@@ -326,7 +326,7 @@ github.com/status-im/keycard-go/derivationpath
 github.com/steakknife/bloomfilter
 # github.com/steakknife/hamming v0.0.0-20180906055917-c99c65617cd3
 github.com/steakknife/hamming
-# github.com/syndtr/goleveldb v0.0.0-20190318030020-c3a204f8e965
+# github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
 github.com/syndtr/goleveldb/leveldb
 github.com/syndtr/goleveldb/leveldb/cache
 github.com/syndtr/goleveldb/leveldb/comparer
