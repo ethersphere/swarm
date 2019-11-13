@@ -286,7 +286,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 // already within that node's NN (thus, it can be added to the gc index
 // safely)
 func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, err error) {
-	if item.BinID <= 0 {
+	if item.BinID == 0 {
 		i, err := db.retrievalDataIndex.Get(item)
 		if err != nil {
 			return 0, err
