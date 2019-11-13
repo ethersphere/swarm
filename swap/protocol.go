@@ -25,14 +25,15 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
 var (
 	// ErrEmptyAddressInSignature is used when the empty address is used for the chequebook in the handshake
 	ErrEmptyAddressInSignature = errors.New("empty address in handshake")
+
+	// ErrDifferentChainID is used when the chain id exchanged during the handshake does not match
+	ErrDifferentChainID = errors.New("different chain id")
 
 	// ErrInvalidHandshakeMsg is used when the message received during handshake does not conform to the
 	// structure of the HandshakeMsg
@@ -63,18 +64,6 @@ func (s *Swap) Protocols() []p2p.Protocol {
 	}
 }
 
-// APIs is a node.Service interface method
-func (s *Swap) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "swap",
-			Version:   "1.0",
-			Service:   NewAPI(s),
-			Public:    false,
-		},
-	}
-}
-
 // Start is a node.Service interface method
 func (s *Swap) Start(server *p2p.Server) error {
 	log.Info("Swap service started")
@@ -87,7 +76,7 @@ func (s *Swap) Stop() error {
 	return s.Close()
 }
 
-// verifyHandshake verifies the chequebook address transmitted in the swap handshake
+// verifyHandshake verifies the chequebook address and chain id transmitted in the swap handshake
 func (s *Swap) verifyHandshake(msg interface{}) error {
 	handshake, ok := msg.(*HandshakeMsg)
 	if !ok {
@@ -96,6 +85,10 @@ func (s *Swap) verifyHandshake(msg interface{}) error {
 
 	if (handshake.ContractAddress == common.Address{}) {
 		return ErrEmptyAddressInSignature
+	}
+
+	if handshake.ChainID != s.chainID {
+		return ErrDifferentChainID
 	}
 
 	return s.chequebookFactory.VerifyContract(handshake.ContractAddress)
@@ -107,6 +100,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 	handshake, err := protoPeer.Handshake(context.Background(), &HandshakeMsg{
 		ContractAddress: s.GetParams().ContractAddress,
+		ChainID:         s.chainID,
 	}, s.verifyHandshake)
 	if err != nil {
 		return err
@@ -153,26 +147,4 @@ func (s *Swap) getPeer(id enode.ID) *Peer {
 	defer s.peersLock.RUnlock()
 	peer := s.peers[id]
 	return peer
-}
-
-type swapAPI interface {
-	Balance(peer enode.ID) (int64, error)
-	Balances() (map[enode.ID]int64, error)
-	Cheques() (map[enode.ID]*PeerCheques, error)
-	PeerCheques(peer enode.ID) (PeerCheques, error)
-	AvailableBalance() (uint64, error)
-}
-
-// API would be the API accessor for protocol methods
-type API struct {
-	swapAPI
-	*contract.Params
-}
-
-// NewAPI creates a new API instance
-func NewAPI(s *Swap) *API {
-	return &API{
-		swapAPI: s,
-		Params:  s.GetParams(),
-	}
 }
