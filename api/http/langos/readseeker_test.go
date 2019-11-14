@@ -14,24 +14,40 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package http
+package langos_test
 
 import (
 	"bytes"
-	"crypto/rand"
-	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"testing"
+
+	"github.com/ethersphere/swarm/api/http/langos"
 )
 
-// NewBufferedReadSeeker runs a series of reads and seeks on
-// bufferedReadSeeker instances with various buffer sizes.
+// TestBufferedReadSeeker runs a series of reads and seeks on
+// BufferedReadSeeker instances with various buffer sizes.
 func TestBufferedReadSeeker(t *testing.T) {
 	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
 		data := randomData(t, dataSize)
-		newReadSeekerTester(newBufferedReadSeeker(bytes.NewReader(data), bufferSize), data)(t)
+		newReadSeekerTester(langos.NewBufferedReadSeeker(bytes.NewReader(data), bufferSize), data)(t)
+	})
+}
+
+// TestLangosReadSeeker runs a series of reads and seeks on
+// Langos instances with various buffer sizes.
+func TestLangosReadSeeker(t *testing.T) {
+	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
+		data := randomData(t, dataSize)
+		newReadSeekerTester(langos.NewLangos(bytes.NewReader(data), bufferSize), data)(t)
+	})
+}
+
+// TestBufferedLangosReadSeeker runs a series of reads and seeks on
+// buffered Langos instances with various buffer sizes.
+func TestBufferedLangosReadSeeker(t *testing.T) {
+	multiSizeTester(t, func(t *testing.T, dataSize, bufferSize int) {
+		data := randomData(t, dataSize)
+		newReadSeekerTester(langos.NewBufferedLangos(bytes.NewReader(data), bufferSize), data)(t)
 	})
 }
 
@@ -120,64 +136,4 @@ func newReadSeekerTester(rs io.ReadSeeker, data []byte) func(t *testing.T) {
 		read(t, readSize1, data[seekSize1:seekSize1+readSize1], nil)
 
 	}
-}
-
-// randomDataCache keeps random data in memory between tests
-// to avoid regenerating random data for every test or subtest.
-var randomDataCache []byte
-
-// randomData returns a byte slice with random data.
-// This function is not safe for concurrent use.
-func randomData(t testing.TB, size int) []byte {
-	t.Helper()
-
-	if cacheSize := len(randomDataCache); cacheSize < size {
-		data := make([]byte, size-cacheSize)
-		_, err := rand.Read(data)
-		if err != nil {
-			t.Fatal(err)
-		}
-		randomDataCache = append(randomDataCache, data...)
-	}
-
-	return randomDataCache[:size]
-}
-
-var (
-	testDataSizes   = []string{"100", "749", "1k", "128k", "749k", "1M", "10M"}
-	testBufferSizes = []string{"1k", "128k", "753k", "1M", "10M", "25M"}
-)
-
-// multiSizeTester performs a series of subtests with different data and buffer sizes.
-func multiSizeTester(t *testing.T, newTestFunc func(t *testing.T, dataSize, bufferSize int)) {
-	t.Helper()
-
-	for _, dataSize := range testDataSizes {
-		for _, bufferSize := range testBufferSizes {
-			t.Run(fmt.Sprintf("data %s buffer %s", dataSize, bufferSize), func(t *testing.T) {
-				newTestFunc(t, parseDataSize(t, dataSize), parseDataSize(t, bufferSize))
-			})
-		}
-	}
-}
-
-func parseDataSize(t *testing.T, v string) (s int) {
-	t.Helper()
-
-	multiplier := 1
-	for suffix, value := range map[string]int{
-		"k": 1024,
-		"M": 1024 * 1024,
-	} {
-		if strings.HasSuffix(v, suffix) {
-			v = strings.TrimSuffix(v, suffix)
-			multiplier = value
-			break
-		}
-	}
-	s, err := strconv.Atoi(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s * multiplier
 }
