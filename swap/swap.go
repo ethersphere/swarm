@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -484,43 +483,6 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	return actualAmount, nil
-}
-
-// placeholder: issue of locks
-func (s *Swap) sentCheques() (map[enode.ID]*Cheque, error) {
-	sentCheques := make(map[enode.ID]*Cheque)
-	// get sent cheques from memory
-	s.peersLock.Lock()
-	for peer, swapPeer := range s.peers {
-		sentCheque := swapPeer.getLastSentCheque()
-		// don't add peer to result if there are no cheques
-		if sentCheque != nil {
-			sentCheques[peer] = sentCheque
-		}
-	}
-	s.peersLock.Unlock()
-
-	// get sent cheques from store
-	chequesIterFunction := func(key []byte, value []byte) (stop bool, err error) {
-		peer := keyToID(string(key), sentChequePrefix)
-		// add cheque if not present yet
-		if sentCheque := sentCheques[peer]; sentCheque == nil {
-			// add cheque from store if not already in result
-			var sentCheque Cheque
-			err = json.Unmarshal(value, &sentCheque)
-			if err == nil {
-				sentCheques[peer] = &sentCheque
-			}
-		}
-		return stop, err
-	}
-
-	err := s.store.Iterate(sentChequePrefix, chequesIterFunction)
-	if err != nil {
-		return nil, err
-	}
-
-	return sentCheques, nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
