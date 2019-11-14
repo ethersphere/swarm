@@ -650,7 +650,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 		minPivotDepth = 1
 		chunkSize     = 4096
 		simTimeout    = 60 * time.Second
-		syncTime      = 2 * time.Second
+		syncTime      = 4 * time.Second
 		filesize      = chunkCount * chunkSize
 	)
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -762,7 +762,8 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 		time.Sleep(syncTime)
 
 		pivotLs := sim.MustNodeItem(pivot, bucketKeyLocalStore).(*localstore.DB)
-		return verifyCorrectChunksOnPivot(chunkProx, pivotDepth, pivotLs)
+		verifyCorrectChunksOnPivot(t, chunkProx, pivotDepth, pivotLs)
+		return nil
 	})
 
 	if result.Error != nil {
@@ -770,7 +771,14 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 	}
 }
 
-func verifyCorrectChunksOnPivot(chunkProx map[string]chunkProxData, pivotDepth int, pivotLs *localstore.DB) error {
+// verifyCorrectChunksOnPivot checks which chunks should be present on the
+// pivot node from the perspective of the pivot node. All streams established
+// should be presumed from the point of view of the pivot and presence of
+// chunks should be assumed by po(chunk,uploader)
+// for example, if the pivot has depth==1 and the po(pivot,uploader)==1, then
+// all chunks that have po(chunk,uploader)==1 should be synced to the pivot
+func verifyCorrectChunksOnPivot(t *testing.T, chunkProx map[string]chunkProxData, pivotDepth int, pivotLs *localstore.DB) {
+	t.Helper()
 	for _, v := range chunkProx {
 		// outside of depth
 		if v.uploaderNodeToPivotNodePO < pivotDepth {
@@ -779,20 +787,17 @@ func verifyCorrectChunksOnPivot(chunkProx map[string]chunkProxData, pivotDepth i
 				//check that the chunk exists on the pivot when the chunkPo == uploaderPo
 				_, err := pivotLs.Get(context.Background(), chunk.ModeGetRequest, v.addr)
 				if err != nil {
-					log.Error("chunk errored", "uploaderNode", v.uploaderNode, "poUploader", v.chunkToUploaderPO, "uploaderToPivotPo", v.uploaderNodeToPivotNodePO, "chunk", hex.EncodeToString(v.addr))
-					return err
+					t.Errorf("chunk errored. err %v uploaderNode %s poUploader %d uploaderToPivotPo %d chunk %s", err, v.uploaderNode.String(), v.chunkToUploaderPO, v.uploaderNodeToPivotNodePO, hex.EncodeToString(v.addr))
 				}
 			} else {
 				//chunk should not be synced - exclusion test
 				_, err := pivotLs.Get(context.Background(), chunk.ModeGetRequest, v.addr)
 				if err == nil {
-					log.Error("chunk did not error but should have", "uploaderNode", v.uploaderNode, "poUploader", v.chunkToUploaderPO, "uploaderToPivotPo", v.uploaderNodeToPivotNodePO, "chunk", hex.EncodeToString(v.addr))
-					return err
+					t.Errorf("chunk did not error but should have. uploaderNode %s poUploader %d uploaderToPivotPo %d chunk %s", v.uploaderNode.String(), v.chunkToUploaderPO, v.uploaderNodeToPivotNodePO, hex.EncodeToString(v.addr))
 				}
 			}
 		}
 	}
-	return nil
 }
 
 type chunkProxData struct {
