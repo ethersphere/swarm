@@ -512,7 +512,7 @@ func TestSwapRPC(t *testing.T) {
 
 	// query a first time, should give error
 	var balance int64
-	err = rpcclient.Call(&balance, "swap_balance", id1)
+	err = rpcclient.Call(&balance, "swap_peerBalance", id1)
 	// at this point no balance should be there:  no peer registered with Swap
 	if err == nil {
 		t.Fatal("Expected error but no error received")
@@ -543,7 +543,7 @@ func TestSwapRPC(t *testing.T) {
 	}
 
 	// query them, values should coincide
-	err = rpcclient.Call(&balance, "swap_balance", id1)
+	err = rpcclient.Call(&balance, "swap_peerBalance", id1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,7 +552,7 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance1)
 	}
 
-	err = rpcclient.Call(&balance, "swap_balance", id2)
+	err = rpcclient.Call(&balance, "swap_peerBalance", id2)
 	if err != nil {
 		t.Fatal(err)
 	}

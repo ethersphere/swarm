@@ -25,8 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -62,18 +60,6 @@ func (s *Swap) Protocols() []p2p.Protocol {
 			Version: Spec.Version,
 			Length:  Spec.Length(),
 			Run:     s.run,
-		},
-	}
-}
-
-// APIs is a node.Service interface method
-func (s *Swap) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "swap",
-			Version:   "1.0",
-			Service:   NewAPI(s),
-			Public:    false,
 		},
 	}
 }
@@ -161,26 +147,4 @@ func (s *Swap) getPeer(id enode.ID) *Peer {
 	defer s.peersLock.RUnlock()
 	peer := s.peers[id]
 	return peer
-}
-
-type swapAPI interface {
-	Balance(peer enode.ID) (int64, error)
-	Balances() (map[enode.ID]int64, error)
-	Cheques() (map[enode.ID]*PeerCheques, error)
-	PeerCheques(peer enode.ID) (PeerCheques, error)
-	AvailableBalance() (uint64, error)
-}
-
-// API would be the API accessor for protocol methods
-type API struct {
-	swapAPI
-	*contract.Params
-}
-
-// NewAPI creates a new API instance
-func NewAPI(s *Swap) *API {
-	return &API{
-		swapAPI: s,
-		Params:  s.GetParams(),
-	}
 }
