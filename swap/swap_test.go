@@ -1636,10 +1636,6 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	swap.handleConfirmChequeMsg(context.Background(), peer, &ConfirmChequeMsg{
-		Cheque: peer.getPendingCheque(),
-	})
-
 	availableBalance, err = swap.AvailableBalance()
 	if err != nil {
 		t.Fatal(err)
