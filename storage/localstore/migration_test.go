@@ -370,12 +370,9 @@ func copyFileContents(src, dst string) (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err = out.Close()
-	}()
+	defer out.Close()
 	if _, err = io.Copy(out, in); err != nil {
 		return err
 	}
-	err = out.Sync()
-	return nil
+	return out.Sync()
 }
