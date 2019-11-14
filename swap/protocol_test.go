@@ -226,7 +226,7 @@ func TestEmitCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := protocolTester.swap
+	creditorSwap := protocolTester.swap
 
 	debitorSwap, cleanDebitorSwap := newTestSwap(t, beneficiaryKey, testBackend)
 	defer cleanDebitorSwap()
@@ -243,13 +243,13 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	if err = protocolTester.testHandshake(
-		correctSwapHandshakeMsg(swap),
+		correctSwapHandshakeMsg(creditorSwap),
 		correctSwapHandshakeMsg(debitorSwap),
 	); err != nil {
 		t.Fatal(err)
 	}
 
-	debitor := protocolTester.swap.getPeer(protocolTester.Nodes[0].ID())
+	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
 	// cashCheque cashes a cheque when the reward of doing so is twice the transaction costs.
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
@@ -268,7 +268,7 @@ func TestEmitCheque(t *testing.T) {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         debitorSwap.GetParams().ContractAddress,
-			Beneficiary:      swap.owner.address,
+			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: balance,
 		},
 		Honey: balance,
@@ -314,7 +314,7 @@ func TestEmitCheque(t *testing.T) {
 
 	// we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
-	case <-swap.backend.(*swapTestBackend).cashDone:
+	case <-creditorSwap.backend.(*swapTestBackend).cashDone:
 		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transaction to complete")
