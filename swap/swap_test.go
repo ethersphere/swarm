@@ -560,13 +560,25 @@ func TestStartChequebookSuccess(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testPeer := newDummyPeer()
 	testDeploy(context.Background(), swap)
+
+	testPeer := newDummyPeer()
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
+
+	// leave balance exactly at disconnect threshold
 	swap.Add(int64(DefaultDisconnectThreshold), testPeer.Peer)
+	// account for traffic which increases debt
 	err := swap.Add(1, testPeer.Peer)
+	if err == nil {
+		t.Fatal("expected accounting operation to fail, but it didn't")
+	}
 	if !strings.Contains(err.Error(), "disconnect threshold") {
 		t.Fatal(err)
+	}
+	// account for traffic which reduces debt, which should be allowed even when over the threshold
+	err = swap.Add(-1, testPeer.Peer)
+	if err != nil {
+		t.Fatalf("expected accounting operation to succeed, but it failed with %v", err)
 	}
 }
 
@@ -735,8 +747,8 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		booking := bookings[i]
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
-		// balance is not expected to be affected once past the disconnect threshold
-		if peerBalance < swap.params.DisconnectThreshold {
+		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
+		if peerBalance < swap.params.DisconnectThreshold || booking.amount < 0 {
 			peerBalance += booking.amount
 		}
 		expectedBalances[peerID] = peerBalance

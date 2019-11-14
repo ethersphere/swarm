@@ -217,10 +217,16 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		log.Info("loaded saved tags successfully from state store")
 	}
 
+	to := network.NewKademlia(
+		common.FromHex(config.BzzKey),
+		network.NewKadParams(),
+	)
+
 	localStore, err := localstore.New(config.ChunkDbPath, config.BaseKey, &localstore.Options{
-		MockStore: mockStore,
-		Capacity:  config.DbCapacity,
-		Tags:      self.tags,
+		MockStore:    mockStore,
+		Capacity:     config.DbCapacity,
+		Tags:         self.tags,
+		PutToGCCheck: to.IsWithinDepth,
 	})
 	if err != nil {
 		return nil, err
@@ -233,11 +239,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	nodeID := config.Enode.ID()
 	self.netStore = storage.NewNetStore(lstore, bzzconfig.OverlayAddr, nodeID)
-
-	to := network.NewKademlia(
-		common.FromHex(config.BzzKey),
-		network.NewKadParams(),
-	)
 	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
