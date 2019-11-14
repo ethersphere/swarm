@@ -318,12 +318,7 @@ func TestMigrateSanctuaryFixture(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	cdir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dir := path.Join(cdir, "testdata", "sanctuary")
+	dir := path.Join(".", "testdata", "sanctuary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,8 +327,12 @@ func TestMigrateSanctuaryFixture(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	for _, f := range files {
-		copyFileContents(path.Join(dir, f.Name()), path.Join(tmpdir, f.Name()))
+		err = copyFileContents(path.Join(dir, f.Name()), path.Join(tmpdir, f.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	baseKey := make([]byte, 32)
