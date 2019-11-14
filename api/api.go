@@ -47,7 +47,7 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/opentracing/opentracing-go"
-	rns "github.com/rnsdomains/rns-go-lib"
+	rns "github.com/rnsdomains/rns-go-lib/resolver"
 	"golang.org/x/net/publicsuffix"
 )
 
