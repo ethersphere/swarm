@@ -37,7 +37,7 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
-	rns "github.com/rsksmart/rds-swarm/resolver"
+	rns "github.com/rnsdomains/rns-go-lib/resolver"
 )
 
 func init() {
