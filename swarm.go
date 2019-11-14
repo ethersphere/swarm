@@ -61,7 +61,7 @@ import (
 	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
-	rns "github.com/rsksmart/rds-swarm/config"
+	rns "github.com/rnsdomains/rns-go-lib/config"
 )
 
 var (
