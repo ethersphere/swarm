@@ -333,6 +333,18 @@ func TestFeedRaw(t *testing.T) {
 	}
 
 	responseData, _ := ioutil.ReadAll(resp.Body)
+	buf := bytes.NewBuffer(nil)
+	version := [8]byte{}
+	buf.Write(version[:])
+	buf.Write(topic[:])
+	buf.Write(user.Bytes())
+	buf.Write(version[:7])
+	buf.Write([]byte{31})
+	buf.Write(dataBytes[:])
+	buf.Write(updateRequest.Signature[:])
+	if !bytes.Equal(buf.Bytes(), responseData) {
+		t.Fatalf("data mismatch: expected %x, got %x", buf.Bytes(), responseData)
+	}
 }
 
 // Test the transparent resolving of feed updates with bzz:// scheme
