@@ -177,8 +177,8 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 	return rs, nil
 }
 
-// RNSResolverFunc is analogous to rns.ResolveDomainContent
-type RNSResolverFunc func(string) (common.Hash, error)
+// RNSResolver is function which takes a domain in the form of a string and resolves it to a content hash through RNS
+type RNSResolver func(domain string) (common.Hash, error)
 
 /*
 API implements webserver/file system related content storage and retrieval
@@ -189,17 +189,17 @@ type API struct {
 	feed        *feed.Handler
 	fileStore   *storage.FileStore
 	dns         Resolver
-	rnsResolver RNSResolverFunc
+	rnsResolver RNSResolver
 	Tags        *chunk.Tags
 	Decryptor   func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, rnsResolver RNSResolverFunc, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, rnsResolverFunc RNSResolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
 	self = &API{
 		fileStore:   fileStore,
 		dns:         dns,
-		rnsResolver: rnsResolver,
+		rnsResolver: rnsResolverFunc,
 		feed:        feedHandler,
 		Tags:        tags,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
