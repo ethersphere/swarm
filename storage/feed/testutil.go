@@ -36,7 +36,7 @@ type TestHandler struct {
 }
 
 func (t *TestHandler) Close() {
-	//	t.chunkStore.Close()
+	t.chunkStore.Close()
 }
 
 // NewTestHandler creates Handler object to be used for testing purposes.

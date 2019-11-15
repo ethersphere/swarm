@@ -82,7 +82,6 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API, *pin.API) TestSe
 		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
 		cleanup: func() {
 			apiServer.Close()
-			fileStore.Close()
 			feeds.Close()
 			os.RemoveAll(swarmDir)
 			os.RemoveAll(feedsDir)
