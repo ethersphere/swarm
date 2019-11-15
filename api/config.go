@@ -104,7 +104,7 @@ func NewConfig() *Config {
 		Port:                    DefaultHTTPPort,
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
-		PushSyncEnabled:         false,
+		PushSyncEnabled:         true,
 		EnablePinning:           false,
 	}
 }
