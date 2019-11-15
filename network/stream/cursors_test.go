@@ -56,7 +56,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	)
 	opts := &SyncSimServiceOptions{
 		InitialChunkCount: chunkCount,
-		NoAutostart:       true,
+		Autostart:         true,
 	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -106,7 +106,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	)
 	opts := &SyncSimServiceOptions{
 		InitialChunkCount: chunkCount,
-		NoAutostart:       true,
+		Autostart:         true,
 	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -184,10 +184,9 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	}
 
 	const chunkCount = 1000
-	opts := &SyncSimServiceOptions{NoAutostart: true}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(opts),
+		serviceNameStream: newSyncSimServiceFunc(nil),
 	}, false)
 	defer sim.Close()
 
@@ -313,10 +312,9 @@ func generateReestablishCursorsSnapshot(t *testing.T, tagetPO int) {
 func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID) {
 	// initial node count
 	nodeCount := 5
-	opts := &SyncSimServiceOptions{NoAutostart: true}
 
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(opts),
+		serviceNameStream: newSyncSimServiceFunc(nil),
 	}, false)
 
 	nodeIDs, err := sim.AddNodesAndConnectStar(nodeCount)
@@ -510,7 +508,6 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		StreamConstructorFunc: func(s state.Store, b []byte, p ...StreamProvider) node.Service {
 			return New(s, b, p...)
 		},
-		NoAutostart: true,
 	}
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		serviceNameStream: newSyncSimServiceFunc(opts),

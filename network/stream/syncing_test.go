@@ -152,7 +152,7 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-				"bzz-sync": newSyncSimServiceFunc(nil),
+				"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{Autostart: true}),
 			}, false)
 			defer sim.Close()
 			defer catchDuplicateChunkSync(t)()
@@ -223,7 +223,7 @@ func TestThreeNodesUnionHistoricalSync(t *testing.T) {
 	nodes := 3
 	chunkCount := 1000
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newSyncSimServiceFunc(nil),
+		"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{Autostart: true}),
 	}, false)
 	defer sim.Close()
 	union := make(map[string]struct{})
@@ -317,7 +317,7 @@ func TestFullSync(t *testing.T) {
 			}
 
 			sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
-				"bzz-sync": newSyncSimServiceFunc(nil),
+				"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{Autostart: true}),
 			})
 			defer sim.Close()
 
@@ -567,7 +567,7 @@ func benchmarkHistoricalStream(b *testing.B, chunks uint64) {
 
 	for i := 0; i < b.N; i++ {
 		sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-			"bzz-sync": newSyncSimServiceFunc(nil),
+			"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{Autostart: true}),
 		}, false)
 
 		uploaderNode, err := sim.AddNode()
@@ -652,7 +652,7 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 		simTimeout    = 60 * time.Second
 		syncTime      = 4 * time.Second
 		filesize      = chunkCount * chunkSize
-		opts          = &SyncSimServiceOptions{SyncOnlyWithinDepth: false}
+		opts          = &SyncSimServiceOptions{SyncOnlyWithinDepth: false, Autostart: true}
 	)
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		"bzz-sync": newSyncSimServiceFunc(opts),
