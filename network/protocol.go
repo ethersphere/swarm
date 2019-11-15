@@ -40,10 +40,12 @@ var (
 	capabilitiesRelayRetrieve = 4
 	capabilitiesRelayPush     = 5
 	capabilitiesStorer        = 15
+	capabilitiesBootnode      = 20
 
 	// temporary presets to emulate the legacy LightNode/full node regime
-	fullCapability  *capability.Capability
-	lightCapability *capability.Capability
+	fullCapability     *capability.Capability
+	lightCapability    *capability.Capability
+	bootnodeCapability *capability.Capability
 )
 
 const (
@@ -79,6 +81,7 @@ var DiscoverySpec = &protocols.Spec{
 func init() {
 	fullCapability = newFullCapability()
 	lightCapability = newLightCapability()
+	bootnodeCapability = newBootnodeCapability()
 }
 
 // temporary convenience functions for legacy "LightNode"
@@ -105,6 +108,17 @@ func newFullCapability() *capability.Capability {
 
 func isFullCapability(c *capability.Capability) bool {
 	return fullCapability.IsSameAs(c)
+}
+
+// temporary convenience functions for "bootnode"
+func newBootnodeCapability() *capability.Capability {
+	c := capability.NewCapability(CapabilityID, 16)
+	c.Set(capabilitiesBootnode)
+	return c
+}
+
+func isBootnodeCapability(c *capability.Capability) bool {
+	return bootnodeCapability.IsSameAs(c)
 }
 
 // BzzConfig captures the config params used by the hive
