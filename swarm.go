@@ -559,14 +559,14 @@ func (s *Swarm) APIs() []rpc.API {
 		// public APIs
 		{
 			Namespace: "bzz",
-			Version:   "4.0",
+			Version:   "4.1",
 			Service:   &Info{s.config},
 			Public:    true,
 		},
 		// admin APIs
 		{
 			Namespace: "bzz",
-			Version:   "4.0",
+			Version:   "4.1",
 			Service:   s.inspector,
 			Public:    false,
 		},
@@ -581,6 +581,13 @@ func (s *Swarm) APIs() []rpc.API {
 			Version:   protocols.AccountingVersion,
 			Service:   protocols.NewAccountingApi(s.accountingMetrics),
 			Public:    false,
+		},
+		{
+
+			Namespace: "bzz",
+			Version:   "4.1",
+			Service:   NewDirectAccessAPI(storage.NewLNetStore(s.netStore)),
+			Public:    true,
 		},
 	}
 
