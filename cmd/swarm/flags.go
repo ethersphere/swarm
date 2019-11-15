@@ -89,11 +89,10 @@ var (
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
-	SwarmSyncModeFlag = cli.StringFlag{
-		Name:   "sync-mode",
-		Usage:  "Syncing mode (available modes: pull, push, all, none)",
-		EnvVar: SwarmSyncMode,
-		Value:  "pull",
+	SwarmNoSyncFlag = cli.BoolFlag{
+		Name:   "no-sync",
+		Usage:  "disable syncing",
+		EnvVar: SwarmNoSync,
 	}
 	SwarmSwapLogPathFlag = cli.StringFlag{
 		Name:   "swap-audit-logpath",
