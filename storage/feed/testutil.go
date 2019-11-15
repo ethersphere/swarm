@@ -61,7 +61,10 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 
 func NewTestHandlerWithStore(datadir string, db chunk.Store, params *HandlerParams) (*TestHandler, error) {
 	fh := NewHandler(params)
+	return newTestHandlerWithStore(fh, datadir, db, params)
+}
 
+func newTestHandlerWithStore(fh *Handler, datadir string, db chunk.Store, params *HandlerParams) (*TestHandler, error) {
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
 	netStore := storage.NewNetStore(localStore, make([]byte, 32), enode.ID{})
