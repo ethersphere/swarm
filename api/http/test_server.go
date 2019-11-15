@@ -65,7 +65,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API, *pin.API) TestSe
 		t.Fatal(err)
 	}
 
-	feeds, err := feed.NewTestHandler(feedsDir, &feed.HandlerParams{})
+	feeds, err := feed.NewTestHandlerWithStore(feedsDir, localStore, &feed.HandlerParams{})
 	if err != nil {
 		t.Fatal(err)
 	}

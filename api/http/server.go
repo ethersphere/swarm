@@ -732,15 +732,15 @@ func (s *Server) HandleGetFeedRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.api.RetrieveFeedUpdate(r.Context(), ref)
+	data, err := s.api.RetrieveFeedUpdate(r.Context(), ref)
 	if err != nil {
 		httpStatus := http.StatusNotFound
 		respondError(w, r, fmt.Sprintf("feed chunk not found: %s", err), httpStatus)
 		return
 	}
-	w.Header().Add("Content-type", "application/octet-stream")
+	w.Header().Set("Content-Type", api.MimeOctetStream)
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, b)
+	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
 }
 
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {

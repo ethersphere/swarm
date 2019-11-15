@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -59,12 +60,12 @@ func serverFunc(api *api.API, pinAPI *pin.API) TestServer {
 	return NewServer(api, pinAPI, "")
 }
 
-func newTestSigner() (*feed.GenericSigner, error) {
+func newTestSigner() (*feed.GenericSigner, *ecdsa.PrivateKey, error) {
 	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return feed.NewGenericSigner(privKey), nil
+	return feed.NewGenericSigner(privKey), privKey, nil
 }
 
 // TestGetTag uploads a file, retrieves the tag using http GET and check if it matches
@@ -258,6 +259,82 @@ func TestPinUnpinAPI(t *testing.T) {
 
 }
 
+func TestFeedRaw(t *testing.T) {
+
+	signer, privKey, _ := newTestSigner()
+
+	// Initialize Swarm test server
+	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
+	defer srv.Close()
+	dataBytes := []byte("onetwothreeFOURFIVEsixseveneightNINETENeleventwelve-dudududududu")
+
+	// First, create a topic for our feed:
+	topic, _ := feed.NewTopic("foobar", nil)
+
+	// Create a feed update request:
+	user := crypto.PubkeyToAddress(privKey.PublicKey)
+	feedId := feed.ID{
+		Feed: feed.Feed{
+			Topic: topic,
+			User:  user,
+		},
+		Epoch: lookup.Epoch{
+			Level: 31,
+		},
+	}
+
+	updateRequest := feed.Request{
+		Update: feed.Update{
+			Header: feed.Header{},
+			ID:     feedId,
+		},
+	}
+
+	// Store the **manifest address** as data into the feed update.
+	updateRequest.SetData(dataBytes)
+
+	// Sign the update
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	log.Info("added data", "data", common.ToHex(dataBytes))
+
+	// Build the feed update http request:
+	feedUpdateURL, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := feedUpdateURL.Query()
+	body := updateRequest.AppendValues(query) // this adds all query parameters and returns the data to be posted
+	feedUpdateURL.RawQuery = query.Encode()
+
+	// submit the feed update request to Swarm
+	resp, err := http.Post(feedUpdateURL.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+
+	// Build the feed raw retrieve request
+	feedUpdateURL, err = url.Parse(fmt.Sprintf("%s/bzz-feed-raw:/%s", srv.URL, feedId.Addr()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.Get(feedUpdateURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+
+	responseData, _ := ioutil.ReadAll(resp.Body)
+}
+
 // Test the transparent resolving of feed updates with bzz:// scheme
 //
 // First upload data to bzz:, and store the Swarm hash to the resulting manifest in a feed update.
@@ -266,7 +343,7 @@ func TestPinUnpinAPI(t *testing.T) {
 // and raw retrieve of that hash should return the data
 func TestBzzWithFeed(t *testing.T) {
 
-	signer, _ := newTestSigner()
+	signer, _, _ := newTestSigner()
 
 	// Initialize Swarm test server
 	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
@@ -388,7 +465,7 @@ func TestBzzWithFeed(t *testing.T) {
 // Test Swarm feeds using the raw update methods
 func TestBzzFeed(t *testing.T) {
 	srv := NewTestSwarmServer(t, serverFunc, nil, nil)
-	signer, _ := newTestSigner()
+	signer, _, _ := newTestSigner()
 
 	defer srv.Close()
 

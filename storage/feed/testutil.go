@@ -36,7 +36,7 @@ type TestHandler struct {
 }
 
 func (t *TestHandler) Close() {
-	t.chunkStore.Close()
+	//	t.chunkStore.Close()
 }
 
 // NewTestHandler creates Handler object to be used for testing purposes.
@@ -48,6 +48,19 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	if err != nil {
 		return nil, err
 	}
+
+	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
+
+	netStore := storage.NewNetStore(localStore, make([]byte, 32), enode.ID{})
+	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+		return nil, errors.New("not found")
+	}
+	fh.SetStore(netStore)
+	return &TestHandler{fh}, nil
+}
+
+func NewTestHandlerWithStore(datadir string, db chunk.Store, params *HandlerParams) (*TestHandler, error) {
+	fh := NewHandler(params)
 
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
