@@ -234,7 +234,6 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmNoSyncFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
-		fmt.Sprintf("--%s", SwarmDeliverySkipCheckFlag.Name),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
@@ -284,10 +283,6 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatal("Expected Push Sync to be disabled, but is true")
 	}
 
-	if !info.DeliverySkipCheck {
-		t.Fatal("Expected DeliverySkipCheck to be enabled, but it is not")
-	}
-
 	if info.Cors != "*" {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
@@ -320,7 +315,6 @@ func TestConfigFileOverrides(t *testing.T) {
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = false
-	defaultConf.DeliverySkipCheck = true
 	defaultConf.NetworkID = 54
 	defaultConf.Port = httpPort
 	defaultConf.DbCapacity = 9000000
@@ -395,10 +389,6 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if !info.DeliverySkipCheck {
-		t.Fatal("Expected DeliverySkipCheck to be enabled, but it is not")
-	}
-
 	if info.DbCapacity != 9000000 {
 		t.Fatalf("Expected DbCapacity to be %d, got %d", 9000000, info.DbCapacity)
 	}
@@ -422,7 +412,6 @@ func TestConfigEnvVars(t *testing.T) {
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIdFlag.EnvVar, "999"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNoSyncFlag.EnvVar, "true"))
-	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmDeliverySkipCheckFlag.EnvVar, "true"))
 
 	dir, err := ioutil.TempDir("", "bzztest")
 	if err != nil {
@@ -506,10 +495,6 @@ func TestConfigEnvVars(t *testing.T) {
 
 	if info.PushSyncEnabled {
 		t.Fatal("Expected Push Sync to be disabled, but is true")
-	}
-
-	if !info.DeliverySkipCheck {
-		t.Fatal("Expected DeliverySkipCheck to be enabled, but it is not")
 	}
 
 	node.Shutdown()

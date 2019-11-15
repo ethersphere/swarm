@@ -99,26 +99,10 @@ var (
 		Usage:  "Write execution logs of swap audit to the given directory",
 		EnvVar: SwarmEnvSwapLogPath,
 	}
-	SwarmSyncUpdateDelay = cli.DurationFlag{
-		Name:   "sync-update-delay",
-		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
-		EnvVar: SwarmEnvSyncUpdateDelay,
-	}
-	SwarmMaxStreamPeerServersFlag = cli.IntFlag{
-		Name:   "max-stream-peer-servers",
-		Usage:  "Limit of Stream peer servers, 0 denotes unlimited",
-		EnvVar: SwarmEnvMaxStreamPeerServers,
-		Value:  10000, // A very large default value is possible as stream servers have very small memory footprint
-	}
 	SwarmLightNodeEnabled = cli.BoolFlag{
 		Name:   "lightnode",
 		Usage:  "Enable Swarm LightNode (default false)",
 		EnvVar: SwarmEnvLightNodeEnable,
-	}
-	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
-		Name:   "delivery-skip-check",
-		Usage:  "Skip chunk delivery check (default false)",
-		EnvVar: SwarmEnvDeliverySkipCheck,
 	}
 	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
