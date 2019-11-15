@@ -192,11 +192,18 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 	if schemaName == "" {
 		// initial new localstore run
-		err := db.schemaName.Put(DbSchemaSanctuary)
+		err := db.schemaName.Put(DbSchemaCurrent)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// execute possible migrations
+		err = db.migrate(schemaName)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	// Persist gc size.
 	db.gcSize, err = db.shed.NewUint64Field("gc-size")
 	if err != nil {
@@ -278,7 +285,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 	// pull index allows history and live syncing per po bin
-	db.pullIndex, err = db.shed.NewIndex("PO|BinID->Hash", shed.IndexFuncs{
+	db.pullIndex, err = db.shed.NewIndex("PO|BinID->Hash|Tag", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			key = make([]byte, 41)
 			key[0] = db.po(fields.Address)
@@ -290,10 +297,20 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return fields.Address, nil
+			value = make([]byte, 36) // 32 bytes address, 4 bytes tag
+			copy(value, fields.Address)
+
+			if fields.Tag != 0 {
+				binary.BigEndian.PutUint32(value[32:], fields.Tag)
+			}
+
+			return value, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.Address = value
+			e.Address = value[:32]
+			if len(value) > 32 {
+				e.Tag = binary.BigEndian.Uint32(value[32:])
+			}
 			return e, nil
 		},
 	})
