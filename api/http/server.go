@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/api/http/langos"
@@ -185,6 +186,12 @@ func NewServer(api *api.API, pinAPI *pin.API, corsString string) *Server {
 	mux.Handle("/bzz-tag:/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleGetTag),
+			defaultMiddlewares...,
+		),
+	})
+	mux.Handle("/bzz-feed-raw:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetFeedRaw),
 			defaultMiddlewares...,
 		),
 	})
@@ -711,6 +718,29 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Found update", "feed", fd.Hex(), "ruid", ruid)
 	w.Header().Set("Content-Type", api.MimeOctetStream)
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
+}
+
+func (s *Server) HandleGetFeedRaw(w http.ResponseWriter, r *http.Request) {
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	log.Debug("handle.get.feed", "ruid", ruid)
+	var err error
+	ref, err := hexutil.Decode("0x" + uri.Addr)
+	if err != nil {
+		httpStatus := http.StatusBadRequest
+		respondError(w, r, fmt.Sprintf("chunk retrieval fail: %s", err), httpStatus)
+		return
+	}
+
+	b, err := s.api.RetrieveFeedUpdate(r.Context(), ref)
+	if err != nil {
+		httpStatus := http.StatusNotFound
+		respondError(w, r, fmt.Sprintf("feed chunk not found: %s", err), httpStatus)
+		return
+	}
+	w.Header().Add("Content-type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, b)
 }
 
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {
