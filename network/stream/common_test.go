@@ -94,6 +94,7 @@ func nodeBinIndexes(t *testing.T, store interface {
 type SyncSimServiceOptions struct {
 	InitialChunkCount     uint64
 	SyncOnlyWithinDepth   bool
+	Autostart             bool
 	StreamConstructorFunc func(state.Store, []byte, ...StreamProvider) node.Service
 }
 
@@ -154,8 +155,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		if err != nil {
 			return nil, nil, err
 		}
-
-		sp := NewSyncProvider(netStore, kad, true, o.SyncOnlyWithinDepth)
+		sp := NewSyncProvider(netStore, kad, o.Autostart, o.SyncOnlyWithinDepth)
 		ss := o.StreamConstructorFunc(store, addr.Over(), sp)
 
 		cleanup = func() {
