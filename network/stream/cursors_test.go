@@ -54,11 +54,13 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		nodeCount  = 2
 		chunkCount = 1000
 	)
+	opts := &SyncSimServiceOptions{
+		InitialChunkCount: chunkCount,
+		Autostart:         false,
+	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
-			InitialChunkCount: chunkCount,
-		}),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	}, false)
 	defer sim.Close()
 
@@ -102,11 +104,13 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		nodeCount  = 6
 		chunkCount = 500
 	)
+	opts := &SyncSimServiceOptions{
+		InitialChunkCount: chunkCount,
+		Autostart:         false,
+	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
-			InitialChunkCount: chunkCount,
-		}),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	}, false)
 	defer sim.Close()
 
@@ -180,9 +184,10 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	}
 
 	const chunkCount = 1000
+	opts := &SyncSimServiceOptions{Autostart: false}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(nil),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	}, false)
 	defer sim.Close()
 
@@ -308,9 +313,10 @@ func generateReestablishCursorsSnapshot(t *testing.T, tagetPO int) {
 func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID) {
 	// initial node count
 	nodeCount := 5
+	opts := &SyncSimServiceOptions{Autostart: false}
 
 	sim = simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(nil),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	}, false)
 
 	nodeIDs, err := sim.AddNodesAndConnectStar(nodeCount)
@@ -504,6 +510,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		StreamConstructorFunc: func(s state.Store, b []byte, p ...StreamProvider) node.Service {
 			return New(s, b, p...)
 		},
+		Autostart: false,
 	}
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
 		serviceNameStream: newSyncSimServiceFunc(opts),

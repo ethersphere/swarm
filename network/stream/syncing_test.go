@@ -652,9 +652,10 @@ func TestStarNetworkSyncWithBogusNodes(t *testing.T) {
 		simTimeout    = 60 * time.Second
 		syncTime      = 4 * time.Second
 		filesize      = chunkCount * chunkSize
+		opts          = &SyncSimServiceOptions{SyncOnlyWithinDepth: false, Autostart: true}
 	)
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{SyncOnlyWithinDepth: false}),
+		"bzz-sync": newSyncSimServiceFunc(opts),
 	}, false)
 	defer sim.Close()
 
