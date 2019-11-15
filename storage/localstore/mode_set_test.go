@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	tagtesting "github.com/ethersphere/swarm/chunk/testing"
+	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -63,180 +65,250 @@ func TestModeSetAccess(t *testing.T) {
 	}
 }
 
-// TestModeSetSyncPull validates ModeSetSyncPull index values on the provided DB.
-func TestModeSetSyncPull(t *testing.T) {
-	defer func(f func() uint32) {
-		chunk.TagUidFunc = f
-	}(chunk.TagUidFunc)
+// here we try to set a normal tag (that should be handled by pushsync)
+// as a result we should expect the tag value to remain in the pull index
+// and we expect that the tag should not be incremented by pull sync set
+func TestModeSetSyncPullNormalTag(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+	defer cleanupFunc()
 
-	chunk.TagUidFunc = func() uint32 { return 0 }
+	tag, err := db.tags.Create("test", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// in all cases the chunk should be found in the pull index (this is by design)
-	for _, mtc := range []struct {
-		name            string
-		mode            chunk.ModeSet
-		anonymous       bool
-		pin             bool
-		expErrPushIndex error
-		expErrGCIndex   error
-		expErrPinIndex  error
-	}{
-		// tag IS NOT anonymous, set pull synced will not cause it to go
-		// into gc index, it SHOULD NOT be in the pin index
-		{
-			name:            "set pull sync, normal tag, no pinning",
-			mode:            chunk.ModeSetSyncPull,
-			anonymous:       false,
-			pin:             false,
-			expErrPushIndex: nil,                 // is in push index
-			expErrGCIndex:   leveldb.ErrNotFound, // not GCd
-			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
-		},
-		// tag IS NOT anonymous, set pull synced will not cause it to go
-		// into gc index, it SHOULD be in the pin index
-		{
-			name:            "set pull sync, normal tag, with pinning",
-			mode:            chunk.ModeSetSyncPull,
-			anonymous:       false,
-			pin:             true,
-			expErrPushIndex: nil,                 // is in push index
-			expErrGCIndex:   leveldb.ErrNotFound, // is not GCd
-			expErrPinIndex:  nil,                 // is pinned
-		},
-		// tag IS anonymous, set pull synced WILL cause it to go
-		// into gc index, it SHOULD NOT be in the pin index
-		{
-			name:            "set pull sync, anonymous tag, no pinning",
-			mode:            chunk.ModeSetSyncPull,
-			anonymous:       true,
-			pin:             false,
-			expErrPushIndex: leveldb.ErrNotFound, // not in push index
-			expErrGCIndex:   nil,                 // GCd
-			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
-		},
-		// tag IS anonymous, set pull synced WILL cause it to go
-		// into gc index, it SHOULD be in the pin index
-		{
-			name:            "set pull sync, anonymous tag, with pinning",
-			mode:            chunk.ModeSetSyncPull,
-			anonymous:       true,
-			pin:             true,
-			expErrPushIndex: leveldb.ErrNotFound, // not in push index
-			expErrGCIndex:   nil,                 // GCd
-			expErrPinIndex:  nil,                 // is pinned
-		},
-		// tag IS NOT anonymous, set push synced WILL cause it to go
-		// into gc index, it SHOULD NOT be in the pin index
-		{
-			name:            "set push sync, normal tag, no pinning",
-			anonymous:       false,
-			pin:             false,
-			mode:            chunk.ModeSetSyncPush,
-			expErrPushIndex: leveldb.ErrNotFound, // not in push index
-			expErrGCIndex:   nil,                 // GCd
-			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
-		},
-		// tag IS NOT anonymous, set push synced WILL cause it to go
-		// into gc index, it SHOULD be in the pin index
-		{
-			name:            "set push sync, normal tag, with pinning",
-			anonymous:       false,
-			pin:             true,
-			mode:            chunk.ModeSetSyncPush,
-			expErrPushIndex: leveldb.ErrNotFound, // not in push index
-			expErrGCIndex:   nil,                 // GCd
-			expErrPinIndex:  nil,                 // is pinned
-		},
-		// tag IS anonymous, set push synced WILL cause it to go
-		// into gc index, it SHOULD NOT be in the pin index
-		{
-			name:            "set push sync, anonymous tag, no pinning",
-			anonymous:       true,
-			pin:             false,
-			mode:            chunk.ModeSetSyncPush,
-			expErrPushIndex: nil,                 // not in push index
-			expErrGCIndex:   leveldb.ErrNotFound, // not GCd
-			expErrPinIndex:  leveldb.ErrNotFound, // not pinned
-		},
-		// tag IS anonymous, set push synced WILL NOT cause it to go
-		// into gc index, it SHOULD be in the pin index
-		{
-			name:            "set push sync, anonymous tag, with pinning",
-			anonymous:       true,
-			pin:             true,
-			mode:            chunk.ModeSetSyncPush,
-			expErrPushIndex: nil,                 // is in push index
-			expErrGCIndex:   leveldb.ErrNotFound, // not GCd
-			expErrPinIndex:  nil,                 // is pinned
-		},
-	} {
-		t.Run(mtc.name, func(t *testing.T) {
-			for _, tc := range multiChunkTestCases {
-				t.Run(tc.name, func(t *testing.T) {
-					db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
-					defer cleanupFunc()
+	ch := generateTestRandomChunk().WithTagID(tag.Uid)
+	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-					tag, err := db.tags.Create(mtc.name, int64(tc.count), mtc.anonymous)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if tag.Uid != 0 {
-						t.Fatal("expected mock tag uid")
-					}
+	tag.Inc(chunk.StateStored) // so we don't get an error on tag.Status later on
 
-					chunks := generateTestRandomChunks(tc.count)
+	item, err := db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-					wantTimestamp := time.Now().UTC().UnixNano()
-					defer setNow(func() (t int64) {
-						return wantTimestamp
-					})()
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
+	}
 
-					_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
-					if err != nil {
-						t.Fatal(err)
-					}
+	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-					// these values are injected due to the fact that tag.Status will return an error
-					// if Total == 0 and if Total != Stored. The fact that they are equal signifies
-					// that the splitting and storing stage is done
-					tag.Total = int64(tc.count)
-					tag.Stored = int64(tc.count)
+	item, err = db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-					err = db.Set(context.Background(), mtc.mode, chunkAddresses(chunks)...)
-					if err != nil {
-						t.Fatal(err)
-					}
-					tagSyncedCounterTest(t, tc.count, mtc.mode, tag)
-					if mtc.pin {
-						err = db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...)
-						if err != nil {
-							t.Fatal(err)
-						}
-					}
+	// expect the same tag Uid because when we set pull sync on a normal tag
+	// the tag Uid should remain untouched in pull index
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
+	}
 
-					binIDs := make(map[uint8]uint64)
+	// 1 stored (because incremented manually in test), 1 sent, 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
+}
 
-					for _, ch := range chunks {
-						po := db.po(ch.Address())
-						binIDs[po]++
+// TestModeSetSyncPullAnonymousTag checks that pull sync correcly increments
+// counters on an anonymous tag which is expected to be handled only by pull sync
+func TestModeSetSyncPullAnonymousTag(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+	defer cleanupFunc()
 
-						newPullIndexTest(db, ch, binIDs[po], nil)(t)
-						newPushIndexTest(db, ch, wantTimestamp, mtc.expErrPushIndex)(t)
-						newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], mtc.expErrGCIndex)(t)
-						newPinIndexTest(db, ch, mtc.expErrPinIndex)(t)
+	tag, err := db.tags.Create("test", 1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-						// if the upload is anonymous then we expect to see some values in the gc index
-						if mtc.anonymous && mtc.mode != chunk.ModeSetSyncPush {
-							// run gc index count test
-							newItemsCountTest(db.gcIndex, tc.count)
-							newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
-						}
-					}
+	ch := generateTestRandomChunk().WithTagID(tag.Uid)
+	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag.Inc(chunk.StateStored) // so we don't get an error on tag.Status later on
 
-					t.Run("gc size", newIndexGCSizeTest(db))
-				})
-			}
-		})
+	item, err := db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
+	}
+
+	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	item, err = db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if item.Tag != 0 {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, 0)
+	}
+
+	// 1 stored (because incremented manually in test), 1 sent, 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
+}
+
+// TestModeSetSyncPullPushAnonymousTag creates an anonymous tag and a corresponding chunk
+// then tries to Set both with push and pull Sync modes, but asserts that only the pull sync
+// increments were done to the tag
+func TestModeSetSyncPullPushAnonymousTag(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+	defer cleanupFunc()
+
+	tag, err := db.tags.Create("test", 1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch := generateTestRandomChunk().WithTagID(tag.Uid)
+	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tag.Inc(chunk.StateStored) // so we don't get an error on tag.Status later on
+	item, err := db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
+	}
+
+	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// expect no error here. if the item cannot be found in pushsync the rest of the
+	// setSync logic should be executed
+	err = db.Set(context.Background(), chunk.ModeSetSyncPush, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check that the tag has been incremented
+	item, err = db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if item.Tag != 0 {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, 0)
+	}
+
+	// 1 stored (because incremented manually in test), 1 sent, 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
+
+	// verify that the item does not exist in the push index
+	item, err = db.pushIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err == nil {
+		t.Fatal("expected error but got none")
+	}
+}
+
+// TestModeSetSyncPushNormalTag makes sure that push sync increments tags
+// correctly on a normal tag (that is, a tag that is expected to show progress bars
+// according to push sync progress)
+func TestModeSetSyncPushNormalTag(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+	defer cleanupFunc()
+
+	tag, err := db.tags.Create("test", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch := generateTestRandomChunk().WithTagID(tag.Uid)
+	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tag.Inc(chunk.StateStored) // so we don't get an error on tag.Status later on
+	item, err := db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
+	}
+
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 0, 1)
+
+	err = db.Set(context.Background(), chunk.ModeSetSyncPush, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	item, err = db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
+	}
+
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 1, 1)
+
+	// call pull sync set, expect no changes
+	err = db.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	item, err = db.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 1, 1)
+
+	if item.Tag != tag.Uid {
+		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
 	}
 }
 
