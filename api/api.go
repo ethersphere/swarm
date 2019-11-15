@@ -47,7 +47,6 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/opentracing/opentracing-go"
-	rns "github.com/rnsdomains/rns-go-lib/resolver"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -178,26 +177,31 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 	return rs, nil
 }
 
+// RNSResolverFunc is analogous to rns.ResolveDomainContent
+type RNSResolverFunc func(string) (common.Hash, error)
+
 /*
 API implements webserver/file system related content storage and retrieval
 on top of the FileStore
 it is the public interface of the FileStore which is included in the ethereum stack
 */
 type API struct {
-	feed      *feed.Handler
-	fileStore *storage.FileStore
-	dns       Resolver
-	Tags      *chunk.Tags
-	Decryptor func(context.Context, string) DecryptFunc
+	feed        *feed.Handler
+	fileStore   *storage.FileStore
+	dns         Resolver
+	rnsResolver RNSResolverFunc
+	Tags        *chunk.Tags
+	Decryptor   func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, rnsResolver RNSResolverFunc, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
 	self = &API{
-		fileStore: fileStore,
-		dns:       dns,
-		feed:      feedHandler,
-		Tags:      tags,
+		fileStore:   fileStore,
+		dns:         dns,
+		rnsResolver: rnsResolver,
+		feed:        feedHandler,
+		Tags:        tags,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -222,7 +226,13 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 	// if address is .rsk, resolve it with RNS resolver
 	eTLD, _ := publicsuffix.PublicSuffix(address)
 	if eTLD == "rsk" {
-		resolved, err := rns.ResolveDomainContent(address)
+		// if RNS is not configured, return an error
+		if a.rnsResolver == nil {
+			apiResolveFail.Inc(1)
+			return nil, fmt.Errorf("no RNS to resolve name: %q", address)
+		}
+
+		resolved, err := a.rnsResolver(address)
 		if err != nil {
 			return nil, err
 		}

@@ -61,7 +61,8 @@ import (
 	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
-	rns "github.com/rnsdomains/rns-go-lib/config"
+	rnsconfig "github.com/rnsdomains/rns-go-lib/config"
+	rnsresolver "github.com/rnsdomains/rns-go-lib/resolver"
 )
 
 var (
@@ -73,10 +74,11 @@ var (
 
 // Swarm abstracts the complete Swarm stack
 type Swarm struct {
-	config            *api.Config        // swarm configuration
-	api               *api.API           // high level api layer (fs/manifest)
-	dns               api.Resolver       // DNS registrar
-	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	config            *api.Config         // swarm configuration
+	api               *api.API            // high level api layer (fs/manifest)
+	dns               api.Resolver        // DNS registrar
+	rns               api.RNSResolverFunc //RNS registrar
+	fileStore         *storage.FileStore  // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
 	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz // the logistic manager
@@ -190,7 +192,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		if !bytes.Equal(addr.Bytes(), emptyAddress.Bytes()) {
 			contract = addr.String()
 		}
-		rns.SetConfiguration(endpoint, contract)
+		rnsconfig.SetConfiguration(endpoint, contract)
+		self.rns = rnsresolver.ResolveDomainContent
 	}
 
 	// check that we are not in the old database schema
@@ -276,7 +279,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
+	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
 
 	if config.EnablePinning {
 		// Instantiate the pinAPI object with the already opened localstore

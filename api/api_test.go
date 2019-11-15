@@ -57,7 +57,7 @@ func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
 			return
 		}
 		defer cleanup()
-		api := NewAPI(fileStore, nil, nil, nil, tags)
+		api := NewAPI(fileStore, nil, nil, nil, nil, tags)
 		f(api, tags, v)
 	}
 }
@@ -334,7 +334,7 @@ func TestRNSResolve(t *testing.T) {
 
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			api := NewAPI(nil, nil, nil, nil, nil)
+			api := NewAPI(nil, nil, rns.ResolveDomainContent, nil, nil, nil)
 			res, err := api.Resolve(context.TODO(), x.addr)
 			if err == nil {
 				if x.expectedErr != nil {
@@ -488,7 +488,7 @@ func TestDecryptOriginForbidden(t *testing.T) {
 		Access: &AccessEntry{Type: AccessTypePass},
 	}
 
-	api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
+	api := NewAPI(nil, nil, nil, nil, nil, chunk.NewTags())
 
 	f := api.Decryptor(ctx, "")
 	err := f(me)
@@ -522,7 +522,7 @@ func TestDecryptOrigin(t *testing.T) {
 			Access: &AccessEntry{Type: AccessTypePass},
 		}
 
-		api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
+		api := NewAPI(nil, nil, nil, nil, nil, chunk.NewTags())
 
 		f := api.Decryptor(ctx, "")
 		err := f(me)
