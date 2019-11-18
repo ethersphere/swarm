@@ -19,7 +19,6 @@ package bzzeth
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -52,8 +51,8 @@ type NewBlockHeaders []struct {
 // 1. When an Ethereum node asks the header corresponding to the hashes in the message (eth -> bzz)
 // 2. When a Swarm node cannot find a particular header in the network, it asks the ethereum node for the header in order to push it to the network (bzz -> eth)
 type GetBlockHeaders struct {
-	Rid    uint64          // request id
-	Hashes []chunk.Address // slice of hashes
+	Rid    uint32   // request id
+	Hashes [][]byte // slice of hashes
 }
 
 // BlockHeaders encapsulates actual header blobs sent as a response to GetBlockHeaders

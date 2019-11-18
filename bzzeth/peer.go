@@ -22,8 +22,6 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/ethersphere/swarm/chunk"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -78,9 +76,7 @@ func (p *peers) remove(peer *Peer) {
 func (p *peers) getEth() *Peer {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
-
 	for _, peer := range p.peers {
-		// Only peers that can serve headers will be selected
 		if peer.serveHeaders {
 			return peer
 		}
@@ -97,7 +93,7 @@ type requests struct {
 type request struct {
 	hashes map[string]bool // remembers the block hashes that are requested in this connection
 	lock   sync.RWMutex    // mutex to update the hashes received status
-	c      chan []byte     // channel in which the received block headers hash are passed on
+	c      chan []byte     // channel in which the received block headers are passed on
 	cancel func()          // function to call in case of cancellation of the GetBlockHeaders event
 }
 
@@ -120,7 +116,7 @@ func newRequests() *requests {
 // create constructs a new request
 // registers it on the peer request pool
 // request.cancel() should be called to cleanup
-func (r *requests) create(hashes []chunk.Address, c chan []byte) (*request, uint32) {
+func (r *requests) create(hashes [][]byte, c chan []byte) (*request, uint32) {
 	req := &request{
 		hashes: make(map[string]bool),
 		c:      c,
@@ -155,10 +151,10 @@ func (r *requests) get(id uint32) (*request, bool) {
 
 // getBlockHeaders sends a GetBlockHeaders message to the remote peer requesting headers by their _hashes_
 // and delivers the actual block header responses to the deliveries channel
-func (p *Peer) getBlockHeaders(ctx context.Context, hashes []chunk.Address, deliveries chan []byte) (*request, error) {
+func (p *Peer) getBlockHeaders(ctx context.Context, hashes [][]byte, deliveries chan []byte) (*request, error) {
 	req, id := p.requests.create(hashes, deliveries)
 	err := p.Send(ctx, &GetBlockHeaders{
-		Rid:    uint64(id),
+		Rid:    id,
 		Hashes: hashes,
 	})
 	if err != nil {
