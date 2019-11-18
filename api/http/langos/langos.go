@@ -92,7 +92,9 @@ func (l *Langos) Read(p []byte) (n int, err error) {
 	case <-pe.done:
 	default:
 		// start the next peek while waiting for the current to finish
-		l.peek(l.cursor + int64(l.peekSize))
+		if len(l.peeks) == 0 { // ensure only one second peek
+			l.peek(l.cursor + int64(l.peekSize))
+		}
 	}
 
 	select {

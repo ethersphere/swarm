@@ -187,7 +187,7 @@ func init() {
 		SwarmSwapChequebookFactoryFlag,
 		SwarmSwapInitialDepositFlag,
 		// end of swap flags
-		SwarmSyncModeFlag,
+		SwarmNoSyncFlag,
 		SwarmSyncUpdateDelay,
 		SwarmMaxStreamPeerServersFlag,
 		SwarmLightNodeEnabled,
@@ -213,6 +213,9 @@ func init() {
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
 		SwarmGlobalStoreAPIFlag,
+		// debugging
+		SwarmMutexProfileFlag,
+		SwarmBlockProfileFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
@@ -294,6 +297,9 @@ func bzzd(ctx *cli.Context) error {
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
+
+	// start any custom pprof profiles
+	pprofProfiles(ctx)
 
 	//optionally set the bootnodes before configuring the node
 	setSwarmBootstrapNodes(ctx, &cfg)
@@ -566,4 +572,14 @@ func setSwarmNATFromInterface(ctx *cli.Context, cfg *node.Config) {
 		utils.Fatalf("could not parse IP addr from interface %s: %v", ifacename, err)
 	}
 	cfg.P2P.NAT = nat.ExtIP(ip)
+}
+
+func pprofProfiles(ctx *cli.Context) {
+	if ctx.GlobalBool(SwarmMutexProfileFlag.Name) {
+		runtime.SetMutexProfileFraction(1)
+	}
+
+	if ctx.GlobalBool(SwarmBlockProfileFlag.Name) {
+		runtime.SetBlockProfileRate(1)
+	}
 }
