@@ -197,14 +197,14 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
-	chequebookBalance, err := p.swap.AvailableBalance()
+	availableBalance, err := p.swap.AvailableBalance()
 	if err != nil {
 		return fmt.Errorf("error while getting available balance: %v", err)
 	}
 
 	chequeAmount := uint64(-p.getBalance())
-	if chequebookBalance < chequeAmount {
-		return fmt.Errorf("cannot send created cheque, amount %d is greater than chequebook available balance %d", chequeAmount, chequebookBalance)
+	if availableBalance < chequeAmount {
+		return fmt.Errorf("cannot send created cheque, amount %d is greater than chequebook available balance %d", chequeAmount, availableBalance)
 	}
 
 	err = p.setPendingCheque(cheque)
