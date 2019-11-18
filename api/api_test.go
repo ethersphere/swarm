@@ -193,8 +193,20 @@ func newTestResolveValidator(addr string) *testResolveValidator {
 	return r
 }
 
+func newTestContentResolveValidator(addr string) *testResolveValidator {
+	r := &testResolveValidator{}
+	if addr != "" && addr == "swarm.rsk" {
+		hash := common.HexToHash("88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07")
+		r.hash = &hash
+	}
+	return r
+}
+
 func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 	if t.hash == nil {
+		if strings.HasSuffix(addr, ".rsk") {
+			return common.Hash{}, rns.ErrNoContent
+		}
 		return common.Hash{}, fmt.Errorf("DNS name not found: %q", addr)
 	}
 	return *t.hash, nil
@@ -306,12 +318,15 @@ func TestAPIResolve(t *testing.T) {
 
 // TestRNSResolve tests resolving content from RNS addresses
 func TestRNSResolve(t *testing.T) {
-	rnsAddr := "marcelosdomain.rsk"
+	rnsAddr := "swarm.rsk"
 	resolvedContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
+	doesResolve := newTestContentResolveValidator(rnsAddr)
+	doesntResolve := newTestContentResolveValidator("")
 
 	type test struct {
 		desc        string
 		ctx         context.Context
+		rns         Resolver
 		addr        string
 		content     string
 		expectedErr error
@@ -320,12 +335,14 @@ func TestRNSResolve(t *testing.T) {
 	tests := []*test{
 		{
 			desc:        "valid RSK domain",
+			rns:         doesResolve,
 			addr:        rnsAddr,
 			content:     resolvedContent,
 			expectedErr: nil,
 		},
 		{
 			desc:        "invalid RSK domain",
+			rns:         doesntResolve,
 			addr:        ".rsk",
 			content:     resolvedContent,
 			expectedErr: rns.ErrNoContent,
@@ -334,7 +351,7 @@ func TestRNSResolve(t *testing.T) {
 
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			api := NewAPI(nil, nil, ResolverFunc(rns.ResolveDomainContent), nil, nil, nil)
+			api := &API{rns: x.rns}
 			res, err := api.Resolve(context.TODO(), x.addr)
 			if err == nil {
 				if x.expectedErr != nil {
