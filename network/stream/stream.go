@@ -541,22 +541,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		return
 	}
 
-	// we no longer want this stream. send an empty wanted
-	// hashes to upstream peer to not deliver the batch
-	// it is important that this case is handled after the `lenHashes==0`
-	// block above, since the case above is a special case where the
-	// upstream peer already deleted the `offer` object associated with
-	// the Ruid, while in this case we must send an empty message back to
-	// the upstream peer in order to mitigate a leak on `offer`s
-	if !provider.WantStream(p, w.stream) {
-		wantedHashesMsg.BitVector = []byte{}
-		if err := p.Send(ctx, wantedHashesMsg); err != nil {
-			p.logger.Error("error sending empty wanted hashes", "err", err)
-			p.Drop("error sending empty wanted hashes")
-		}
-		return
-	}
-
 	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
 		p.logger.Error("error initialising bitvector", "len", lenHashes/HashSize, "ruid", msg.Ruid, "err", err)
@@ -567,7 +551,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := msg.Hashes[i : i+HashSize]
 		addresses[i/HashSize] = hash
-		p.logger.Trace("clientHandleOfferedHashes peer offered hash", "ruid", msg.Ruid, "stream", w.stream, "chunk", addresses[i/HashSize])
 	}
 
 	startNeed := time.Now()
@@ -641,16 +624,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
-
-		// if the stream is wanted and has timed out
-		// then drop the peer. this safeguards the edge
-		// case that a batch times out when a kademlia
-		// depth change occurs between the call to
-		// clientSealBatch and a subsequent chunk delivery
-		// message
-		if provider.WantStream(p, w.stream) {
-			p.Drop("batch has timed out")
-		}
+		p.Drop("batch has timed out")
 		return
 	case <-r.quit:
 		return
@@ -781,12 +755,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 // clientHandleChunkDelivery handles chunk delivery messages
 func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery, w *want, provider StreamProvider) {
 	p.logger.Debug("clientHandleChunkDelivery", "ruid", msg.Ruid)
-
-	// don't process this message if we're no longer
-	// interested in this stream
-	if !provider.WantStream(p, w.stream) {
-		return
-	}
 	processReceivedChunksMsgCount.Inc(1)
 	r.setLastReceivedChunkTime() // needed for IsPullSyncing
 

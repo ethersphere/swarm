@@ -54,13 +54,11 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		nodeCount  = 2
 		chunkCount = 1000
 	)
-	opts := &SyncSimServiceOptions{
-		InitialChunkCount: chunkCount,
-		Autostart:         true,
-	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(opts),
+		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
+			InitialChunkCount: chunkCount,
+		}),
 	}, false)
 	defer sim.Close()
 
@@ -104,13 +102,11 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		nodeCount  = 6
 		chunkCount = 500
 	)
-	opts := &SyncSimServiceOptions{
-		InitialChunkCount: chunkCount,
-		Autostart:         true,
-	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(opts),
+		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
+			InitialChunkCount: chunkCount,
+		}),
 	}, false)
 	defer sim.Close()
 
