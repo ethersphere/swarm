@@ -334,7 +334,7 @@ func TestRNSResolve(t *testing.T) {
 
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			api := NewAPI(nil, nil, rns.ResolveDomainContent, nil, nil, nil)
+			api := NewAPI(nil, nil, ResolverFunc(rns.ResolveDomainContent), nil, nil, nil)
 			res, err := api.Resolve(context.TODO(), x.addr)
 			if err == nil {
 				if x.expectedErr != nil {

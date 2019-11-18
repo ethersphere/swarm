@@ -47,7 +47,6 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 	"github.com/opentracing/opentracing-go"
-	"golang.org/x/net/publicsuffix"
 )
 
 var (
@@ -76,6 +75,12 @@ var (
 	apiAppendFileFail      = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
 	apiGetInvalid          = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
+
+// ResolverFunc is function which takes a domain in the form of a string and resolves it to a content hash
+type ResolverFunc func(domain string) (common.Hash, error)
+
+// Resolve returns a resolver function
+func (f ResolverFunc) Resolve(domain string) (common.Hash, error) { return f(domain) }
 
 // Resolver interface resolve a domain name to a hash using ENS
 type Resolver interface {
@@ -177,31 +182,28 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 	return rs, nil
 }
 
-// RNSResolver is function which takes a domain in the form of a string and resolves it to a content hash through RNS
-type RNSResolver func(domain string) (common.Hash, error)
-
 /*
 API implements webserver/file system related content storage and retrieval
 on top of the FileStore
 it is the public interface of the FileStore which is included in the ethereum stack
 */
 type API struct {
-	feed        *feed.Handler
-	fileStore   *storage.FileStore
-	dns         Resolver
-	rnsResolver RNSResolver
-	Tags        *chunk.Tags
-	Decryptor   func(context.Context, string) DecryptFunc
+	feed      *feed.Handler
+	fileStore *storage.FileStore
+	dns       Resolver
+	rns       Resolver
+	Tags      *chunk.Tags
+	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, rnsResolverFunc RNSResolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, rns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
 	self = &API{
-		fileStore:   fileStore,
-		dns:         dns,
-		rnsResolver: rnsResolverFunc,
-		feed:        feedHandler,
-		Tags:        tags,
+		fileStore: fileStore,
+		dns:       dns,
+		rns:       rns,
+		feed:      feedHandler,
+		Tags:      tags,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -223,16 +225,17 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // Resolve a name into a content-addressed hash
 // where address could be an ENS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
+	str := strings.Split(address, ".")
+	eTLD := str[len(str)-1]
 	// if address is .rsk, resolve it with RNS resolver
-	eTLD, _ := publicsuffix.PublicSuffix(address)
 	if eTLD == "rsk" {
 		// if RNS is not configured, return an error
-		if a.rnsResolver == nil {
+		if a.rns == nil {
 			apiResolveFail.Inc(1)
 			return nil, fmt.Errorf("no RNS to resolve name: %q", address)
 		}
 
-		resolved, err := a.rnsResolver(address)
+		resolved, err := a.rns.Resolve(address)
 		if err != nil {
 			return nil, err
 		}
