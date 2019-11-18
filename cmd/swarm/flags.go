@@ -249,4 +249,12 @@ var (
 		Name:  "verbose",
 		Usage: "Display more verbose output",
 	}
+	SwarmMutexProfileFlag = cli.BoolFlag{
+		Name:  "mutex-profile",
+		Usage: "Enable pprof mutex profile",
+	}
+	SwarmBlockProfileFlag = cli.BoolFlag{
+		Name:  "block-profile",
+		Usage: "Enable pprof block profile",
+	}
 )
