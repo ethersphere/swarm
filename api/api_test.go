@@ -193,9 +193,9 @@ func newTestResolveValidator(addr string) *testResolveValidator {
 	return r
 }
 
-func newTestContentResolveValidator(addr string) *testResolveValidator {
+func newRSKTestResolveValidator(addr string) *testResolveValidator {
 	r := &testResolveValidator{}
-	if addr != "" && addr == "swarm.rsk" {
+	if addr == "swarm.rsk" {
 		hash := common.HexToHash("88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07")
 		r.hash = &hash
 	}
@@ -320,8 +320,8 @@ func TestAPIResolve(t *testing.T) {
 func TestRNSResolve(t *testing.T) {
 	rnsAddr := "swarm.rsk"
 	resolvedContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
-	doesResolve := newTestContentResolveValidator(rnsAddr)
-	doesntResolve := newTestContentResolveValidator("")
+	doesResolve := newRSKTestResolveValidator(rnsAddr)
+	doesntResolve := newRSKTestResolveValidator("")
 
 	type test struct {
 		desc        string
