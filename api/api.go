@@ -225,10 +225,8 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // Resolve a name into a content-addressed hash
 // where address could be an ENS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
-	str := strings.Split(address, ".")
-	eTLD := str[len(str)-1]
 	// if address is .rsk, resolve it with RNS resolver
-	if eTLD == "rsk" {
+	if tld(address) == "rsk" {
 		// if RNS is not configured, return an error
 		if a.rns == nil {
 			apiResolveFail.Inc(1)
@@ -258,6 +256,14 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 		return nil, err
 	}
 	return resolved[:], nil
+}
+
+func tld(address string) (tld string) {
+	splitAddress := strings.Split(address, ".")
+	if len(splitAddress) > 1 {
+		tld = splitAddress[len(splitAddress)-1]
+	}
+	return tld
 }
 
 // Resolve resolves a URI to an Address using the MultiResolver.
