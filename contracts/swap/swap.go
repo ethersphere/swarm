@@ -24,12 +24,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	contract "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswap"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
 )
 
 var (
@@ -80,23 +79,16 @@ type Params struct {
 }
 
 type simpleContract struct {
-	instance *contract.SimpleSwap
+	instance *contract.ERC20SimpleSwap
 	address  common.Address
 	backend  Backend
-}
-
-// Deploy deploys an instance of the underlying contract and returns its instance and the transaction identifier
-func Deploy(auth *bind.TransactOpts, backend Backend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
-	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: instance, address: addr, backend: backend}
-	return c, tx, err
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
 // It assumes that there is an existing contract instance at the given address, or an error is returned
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
 func InstanceAt(address common.Address, backend Backend) (Contract, error) {
-	instance, err := contract.NewSimpleSwap(address, backend)
+	instance, err := contract.NewERC20SimpleSwap(address, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -115,15 +107,21 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amoun
 
 // Deposit sends a transaction to the chequebook, which deposits the amount set in Auth.Value and blocks until the transaction is mined
 func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
-	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
-	if auth.Value != big.NewInt(0) {
-		return nil, fmt.Errorf("Deposit value can only be set via amount parameter")
-	}
 	if amount == big.NewInt(0) {
 		return nil, fmt.Errorf("Deposit amount cannot be equal to zero")
 	}
-	auth.Value = amount
-	tx, err := rawSimpleSwap.Transfer(auth)
+
+	tokenAddress, err := s.instance.Token(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := contract.NewERC20(tokenAddress, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := token.Transfer(auth, s.address, amount)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +170,8 @@ func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
 // ContractParams returns contract information
 func (s simpleContract) ContractParams() *Params {
 	return &Params{
-		ContractCode:    contract.SimpleSwapBin,
-		ContractAbi:     contract.SimpleSwapABI,
+		ContractCode:    contract.ERC20SimpleSwapBin,
+		ContractAbi:     contract.ERC20SimpleSwapABI,
 		ContractAddress: s.address,
 	}
 }

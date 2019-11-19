@@ -48,7 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
+	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
 	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -79,6 +79,7 @@ type booking struct {
 type swapTestBackend struct {
 	*backends.SimulatedBackend
 	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
+	tokenAddress   common.Address // address of the token in the simulated network
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
 }
@@ -112,13 +113,29 @@ func newTestBackend() *swapTestBackend {
 	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	defaultBackend.Commit()
 
+	tokenAddress, _, token, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
+	if err != nil {
+		log.Crit(err.Error())
+	}
+	defaultBackend.Commit()
+
+	_, err = token.Mint(bind.NewKeyedTransactor(ownerKey), ownerAddress, big.NewInt(1000000000000000000))
+	if err != nil {
+		log.Crit(err.Error())
+	}
+	defaultBackend.Commit()
+
 	// deploy a SimpleSwapFactoy
-	factoryAddress, _, _, _ := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend)
+	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend, tokenAddress)
+	if err != nil {
+		log.Crit(err.Error())
+	}
 	defaultBackend.Commit()
 
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
 		factoryAddress:   factoryAddress,
+		tokenAddress:     tokenAddress,
 	}
 }
 
@@ -1043,7 +1060,7 @@ func TestVerifyContractNotDeployedByFactory(t *testing.T) {
 
 	opts := bind.NewKeyedTransactor(ownerKey)
 
-	addr, _, _, err := contractFactory.DeploySimpleSwap(opts, swap.backend, ownerAddress, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
+	addr, _, _, err := contractFactory.DeployERC20SimpleSwap(opts, swap.backend, ownerAddress, common.Address{}, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1225,7 +1242,6 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 // deploy for testing (needs simulated backend commit)
 func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(9000 * int64(RetrieveRequestPrice))
 	opts.Context = ctx
 
 	var stb *swapTestBackend
@@ -1242,12 +1258,22 @@ func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
-
 	swap.contract, err = factory.DeploySimpleSwap(opts, swap.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		return err
 	}
+	stb.Commit()
 
+	// send money into the new chequebook
+	token, err := contractFactory.NewERC20(stb.tokenAddress, stb)
+	if err != nil {
+		return err
+	}
+
+	_, err = token.Transfer(opts, swap.contract.ContractParams().ContractAddress, big.NewInt(9000*int64(RetrieveRequestPrice)))
+	if err != nil {
+		return err
+	}
 	stb.Commit()
 
 	return err

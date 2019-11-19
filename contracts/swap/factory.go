@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
+	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
 )
 
 var (
@@ -76,9 +76,10 @@ func (sf simpleSwapFactory) VerifySelf() error {
 // DeploySimpleSwap deploys a new SimpleSwap contract from the factory and returns the ready to use Contract abstraction
 func (sf simpleSwapFactory) DeploySimpleSwap(auth *bind.TransactOpts, issuer common.Address, defaultHardDepositTimeoutDuration *big.Int) (Contract, error) {
 	// for some reason the automatic gas estimation is too low
-	// this value was determind by deploying through truffle and rounding up to the next 100000
+	// this value was determined by experimentation and is higher than what works in truffle
+	// this might be due to the simulated backend running on a different evm version
 	// the deployment cost should always be constant
-	auth.GasLimit = 1700000
+	auth.GasLimit = 2000000
 	tx, err := sf.instance.DeploySimpleSwap(auth, issuer, defaultHardDepositTimeoutDuration)
 	if err != nil {
 		return nil, err
