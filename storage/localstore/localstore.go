@@ -107,7 +107,9 @@ type DB struct {
 
 	baseKey []byte
 
-	batchMu sync.Mutex
+	batchMu  sync.Mutex
+	LBatchMu sync.Mutex // low-priority access mutex
+	NBatchMu sync.Mutex //next-to-access mutex
 
 	// this channel is closed when close function is called
 	// to terminate other goroutines

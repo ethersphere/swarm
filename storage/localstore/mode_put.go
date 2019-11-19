@@ -55,6 +55,17 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, chs ...chunk.Chunk) (
 // in multiple put method calls.
 func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err error) {
 	// protect parallel updates
+	switch mode {
+	case chunk.ModePutUpload:
+		db.NBatchMu.Lock()
+		defer db.NBatchMu.Unlock()
+	default:
+		db.LBatchMu.Lock()
+		defer db.LBatchMu.Unlock()
+		db.NBatchMu.Lock()
+		defer db.NBatchMu.Unlock()
+	}
+
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 

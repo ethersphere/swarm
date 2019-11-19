@@ -50,7 +50,12 @@ func (db *DB) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Addres
 // of this function for the same address in parallel.
 func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	// protect parallel updates
+	db.LBatchMu.Lock()
+	defer db.LBatchMu.Unlock()
+	db.NBatchMu.Lock()
+	defer db.NBatchMu.Unlock()
 	db.batchMu.Lock()
+
 	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
