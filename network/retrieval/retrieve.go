@@ -323,7 +323,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		p.logger.Error("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
+		p.logger.Trace("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
 		return
 	}
 
@@ -401,7 +401,7 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 FINDPEER:
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {
-		r.logger.Error(err.Error())
+		r.logger.Trace(err.Error())
 		return nil, err
 	}
 
