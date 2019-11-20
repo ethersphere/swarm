@@ -283,11 +283,25 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 	t1 := time.Now()
 	tag := uuid.New()[:8]
-	hash, err := uploadWithTag(randomBytes, httpEndpoint(hosts[0]), tag)
+
+	var (
+		hash string
+		err  error
+	)
+	const maxRetries = 5
+
+	for i := 0; i < maxRetries; i++ {
+		hash, err = uploadWithTag(randomBytes, httpEndpoint(hosts[0]), tag)
+		if err != nil {
+			log.Error(err.Error())
+		} else {
+			break
+		}
+	}
 	if err != nil {
-		log.Error(err.Error())
 		return err
 	}
+
 	t2 := time.Since(t1)
 	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
 	uploadSpeed := float64(len(randomBytes)) / t2.Seconds() // bytes per second
