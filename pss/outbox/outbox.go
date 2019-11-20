@@ -126,7 +126,6 @@ func (o *Outbox) processOutbox() {
 		case <-o.stopC:
 			return
 		case slot := <-o.process:
-			log.Debug("Processing, taking worker", "workerLimit size", len(workerLimitC), "numWorkers", cap(o.queue))
 			workerLimitC <- struct{}{}
 			metrics.GetOrRegisterGauge("pss.outbox.workers", nil).Update(int64(len(workerLimitC)))
 			go func(slot int) {
