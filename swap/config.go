@@ -30,9 +30,6 @@ const (
 	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation
 	DefaultInitialDepositAmount = 0
-	deployRetries               = 5
-	// delay between retries
-	deployDelay = 1 * time.Second
 	// This is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary.
 	// The smart-contract allows for setting this variable differently per beneficiary
 	defaultHarddepositTimeoutDuration = 24 * time.Hour

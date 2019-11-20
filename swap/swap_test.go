@@ -470,7 +470,7 @@ func TestStartChequebookFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				// try to connect with a different address
-				_, err = swap.StartChequebook(config.passIn, 0)
+				_, err = swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -487,7 +487,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// try to connect with an address not containing a chequebook instance
-				_, err := swap.StartChequebook(config.passIn, 0)
+				_, err := swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -531,7 +531,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// start chequebook with same pass in as deployed
-				_, err = swap.StartChequebook(swap.GetParams().ContractAddress, 0)
+				_, err = swap.StartChequebook(swap.GetParams().ContractAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -551,7 +551,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// start chequebook with same pass in as deployed
-				_, err = swap.StartChequebook(swap.GetParams().ContractAddress, 0)
+				_, err = swap.StartChequebook(swap.GetParams().ContractAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1637,7 +1637,7 @@ func TestAvailableBalance(t *testing.T) {
 	netDeposit := depositAmount.Uint64() - withdrawAmount.Uint64()
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
-	rec, err := swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
+	rec, err := swap.contract.Withdraw(opts, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
