@@ -91,7 +91,7 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		"bzz-sync": newSyncSimServiceFunc(nil),
+		"bzz-sync": newSyncSimServiceFunc(&SyncSimServiceOptions{Autostart: true}),
 	}, true)
 	defer sim.Close()
 

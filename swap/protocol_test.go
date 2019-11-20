@@ -30,11 +30,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-	"github.com/ethersphere/swarm/p2p/protocols"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -51,8 +49,8 @@ type swapTester struct {
 }
 
 // creates a new protocol tester for swap with a deployed chequebook
-func newSwapTester(t *testing.T) (*swapTester, func(), error) {
-	swap, clean := newTestSwap(t, ownerKey, nil)
+func newSwapTester(t *testing.T, backend *swapTestBackend) (*swapTester, func(), error) {
+	swap, clean := newTestSwap(t, ownerKey, backend)
 
 	err := testDeploy(context.Background(), swap)
 	if err != nil {
@@ -136,7 +134,7 @@ func correctSwapHandshakeMsg(swap *Swap) *HandshakeMsg {
 // TestHandshake tests the correct handshake scenario
 func TestHandshake(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t)
+	protocolTester, clean, err := newSwapTester(t, nil)
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +152,7 @@ func TestHandshake(t *testing.T) {
 // TestHandshakeInvalidChainID tests that a handshake with the wrong chain id is rejected
 func TestHandshakeInvalidChainID(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t)
+	protocolTester, clean, err := newSwapTester(t, nil)
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +174,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 // TestHandshakeEmptyContract tests that a handshake with an empty contract address is rejected
 func TestHandshakeEmptyContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t)
+	protocolTester, clean, err := newSwapTester(t, nil)
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +196,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 // TestHandshakeInvalidContract tests that a handshake with an address that's not a valid chequebook
 func TestHandshakeInvalidContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t)
+	protocolTester, clean, err := newSwapTester(t, nil)
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -217,57 +215,56 @@ func TestHandshakeInvalidContract(t *testing.T) {
 	}
 }
 
-// TestEmitCheque is a full round of a cheque exchange between peers via the protocol.
-// We create two swap, for the creditor (beneficiary) and debitor (issuer) each,
-// and deploy them to the simulated backend.
-// We then create Swap protocol peers with a MsgPipe to be able to directly write messages to each other.
-// We have the debitor send a cheque via an `EmitChequeMsg`, then the creditor "reads" (pipe) the message
-// and handles the cheque.
+// TestEmitCheque tests the correct processing of EmitChequeMsg messages
+// One protocol tester is created which will receive the EmitChequeMsg
+// A second swap instance is created for easy creation of a chequebook contract which is deployed to the simulated backend
+// We send a EmitChequeMsg to the creditor which handles the cheque and sends a ConfirmChequeMsg
 func TestEmitCheque(t *testing.T) {
 	testBackend := newTestBackend()
-	defer testBackend.Close()
+	protocolTester, clean, err := newSwapTester(t, testBackend)
+	defer clean()
+	if err != nil {
+		t.Fatal(err)
+	}
+	creditorSwap := protocolTester.swap
 
-	log.Debug("set up test swaps")
-	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey, testBackend)
-	debitorSwap, clean2 := newTestSwap(t, ownerKey, testBackend)
-	defer clean1()
-	defer clean2()
+	debitorSwap, cleanDebitorSwap := newTestSwap(t, beneficiaryKey, testBackend)
+	defer cleanDebitorSwap()
 
-	ctx := context.Background()
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+	// now we need to create the channel...
+	testBackend.cashDone = make(chan struct{})
 
 	log.Debug("deploy to simulated backend")
-	err := testDeploy(ctx, creditorSwap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = testDeploy(ctx, debitorSwap)
-	if err != nil {
+	if err := testDeploy(context.Background(), debitorSwap); err != nil {
 		t.Fatal(err)
 	}
 
-	log.Debug("create peer instances")
-
-	// create the debitor peer
-	dPtpPeer := p2p.NewPeer(enode.ID{}, "debitor", []p2p.Cap{})
-	dProtoPeer := protocols.NewPeer(dPtpPeer, &dummyMsgRW{}, Spec)
-	debitor, err := creditorSwap.addPeer(dProtoPeer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
-	if err != nil {
+	if err = protocolTester.testHandshake(
+		correctSwapHandshakeMsg(creditorSwap),
+		correctSwapHandshakeMsg(debitorSwap),
+	); err != nil {
 		t.Fatal(err)
 	}
+
+	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
 	// cashCheque cashes a cheque when the reward of doing so is twice the transaction costs.
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
 	balance := uint64(100001)
 	// set balance artificially
-	debitor.setBalance(int64(balance))
-	log.Debug("balance", "balance", debitor.getBalance())
+	if err = debitor.setBalance(int64(balance)); err != nil {
+		t.Fatal(err)
+	}
+
 	// a safe check: at this point no cheques should be in the swap
 	if debitor.getLastReceivedCheque() != nil {
 		t.Fatalf("Expected no cheques at creditor, but there is %v:", debitor.getLastReceivedCheque())
 	}
 
-	log.Debug("create a cheque")
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         debitorSwap.GetParams().ContractAddress,
@@ -281,61 +278,77 @@ func TestEmitCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	emitMsg := &EmitChequeMsg{
-		Cheque: cheque,
-	}
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
-
-	// now we need to create the channel...
-	testBackend.cashDone = make(chan struct{})
-	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, emitMsg)
+	err = protocolTester.TestExchanges(p2ptest.Exchange{
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 1,
+				Msg: &EmitChequeMsg{
+					Cheque: cheque,
+				},
+				Peer: protocolTester.Nodes[0].ID(),
+			},
+		},
+		Expects: []p2ptest.Expect{
+			{
+				Code: 2,
+				Msg: &ConfirmChequeMsg{
+					Cheque: cheque,
+				},
+				Peer: protocolTester.Nodes[0].ID(),
+			},
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
-	select {
-	case <-testBackend.cashDone:
-		log.Debug("cash transaction completed and committed")
-	case <-time.After(4 * time.Second):
-		t.Fatalf("Timeout waiting for cash transaction to complete")
-	}
-	log.Debug("balance", "balance", debitor.getBalance())
+
 	// check that the balance has been reset
 	if debitor.getBalance() != 0 {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, debitor.getBalance())
 	}
 	recvCheque := debitor.getLastReceivedCheque()
 	log.Debug("expected cheque", "cheque", recvCheque)
-	if recvCheque != cheque {
-		t.Fatalf("Expected cheque at creditor, but it was %v:", recvCheque)
+	if !recvCheque.Equal(cheque) {
+		t.Fatalf("Expected cheque %v at creditor, but it was %v:", cheque, recvCheque)
+	}
+
+	// we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	select {
+	case <-creditorSwap.backend.(*swapTestBackend).cashDone:
+		log.Debug("cash transaction completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for cash transaction to complete")
 	}
 }
 
 // TestTriggerPaymentThreshold is to test that the whole cheque protocol is triggered
 // when we reach the payment threshold
-// It is the debitor who triggers cheques
+// One protocol tester is created and then Add with a value above the payment threshold is called for another node
+// we expect a EmitChequeMsg to be sent, then we send a ConfirmChequeMsg to the swap instance
 func TestTriggerPaymentThreshold(t *testing.T) {
+	testBackend := newTestBackend()
 	log.Debug("create test swap")
-	debitorSwap, clean := newTestSwap(t, ownerKey, nil)
+	protocolTester, clean, err := newSwapTester(t, testBackend)
 	defer clean()
-
-	ctx := context.Background()
-	err := testDeploy(ctx, debitorSwap)
 	if err != nil {
 		t.Fatal(err)
 	}
+	debitorSwap := protocolTester.swap
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	// create a dummy pper
-	cPeer := newDummyPeerWithSpec(Spec)
-	creditor, err := debitorSwap.addPeer(cPeer.Peer, common.Address{}, common.Address{})
-	if err != nil {
+	if err = protocolTester.testHandshake(
+		correctSwapHandshakeMsg(debitorSwap),
+		correctSwapHandshakeMsg(debitorSwap),
+	); err != nil {
 		t.Fatal(err)
 	}
+
+	creditor := debitorSwap.getPeer(protocolTester.Nodes[0].ID())
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
@@ -379,13 +392,44 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatalf("Expected cheque contract to be %x, but is %x", debitorSwap.contract.ContractParams().ContractAddress, pending.Contract)
 	}
 
-	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
-		Cheque: creditor.getPendingCheque(),
+	// we expect a EmitChequeMsg to be sent, then we trigger a ConfirmChequeMsg for the same cheque
+	err = protocolTester.TestExchanges(p2ptest.Exchange{
+		Expects: []p2ptest.Expect{
+			{
+				Code: 1,
+				Msg: &EmitChequeMsg{
+					Cheque: creditor.getPendingCheque(),
+				},
+				Peer: protocolTester.Nodes[0].ID(),
+			},
+		},
+	}, p2ptest.Exchange{
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 2,
+				Msg: &ConfirmChequeMsg{
+					Cheque: creditor.getPendingCheque(),
+				},
+				Peer: protocolTester.Nodes[0].ID(),
+			},
+		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// we should now have a cheque
-	if creditor.getLastSentCheque() == nil {
-		t.Fatal("Expected one cheque, but there is none")
+	// we wait until the confirm message has been processed
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Expected one cheque, but there is none")
+		default:
+			if creditor.getLastSentCheque() != nil {
+				break loop
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 
 	cheque := creditor.getLastSentCheque()
@@ -401,6 +445,22 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// do some accounting again to trigger a second cheque
 	if err = debitorSwap.Add(-int64(DefaultPaymentThreshold), creditor.Peer); err != nil {
+		t.Fatal(err)
+	}
+
+	// we expect a cheque to be sent
+	err = protocolTester.TestExchanges(p2ptest.Exchange{
+		Expects: []p2ptest.Expect{
+			{
+				Code: 1,
+				Msg: &EmitChequeMsg{
+					Cheque: creditor.getPendingCheque(),
+				},
+				Peer: protocolTester.Nodes[0].ID(),
+			},
+		},
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -430,8 +490,8 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	// we don't expect any change after the test
 	debitor.setBalance(expectedBalance)
 	// we also don't expect any cheques yet
-	if debitor.getLastSentCheque() != nil {
-		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getLastSentCheque())
+	if debitor.getPendingCheque() != nil {
+		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getPendingCheque())
 	}
 	// now do some accounting
 	err = creditorSwap.Add(int64(overDraft), debitor.Peer)
@@ -444,8 +504,8 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, debitor.getBalance())
 	}
 	// still no cheques expected
-	if debitor.getLastSentCheque() != nil {
-		t.Fatalf("Expected still no cheques yet, but there is %v", debitor.getLastSentCheque())
+	if debitor.getPendingCheque() != nil {
+		t.Fatalf("Expected still no cheques yet, but there is %v", debitor.getPendingCheque())
 	}
 
 	// let's do the whole thing again (actually a bit silly, it's somehow simulating the peer would have been dropped)
@@ -458,8 +518,8 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, debitor.getBalance())
 	}
 
-	if debitor.getLastSentCheque() != nil {
-		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getLastSentCheque())
+	if debitor.getPendingCheque() != nil {
+		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getPendingCheque())
 	}
 }
 

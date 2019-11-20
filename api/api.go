@@ -216,6 +216,14 @@ func (a *API) Retrieve(ctx context.Context, addr storage.Address) (reader storag
 	return a.fileStore.Retrieve(ctx, addr)
 }
 
+func (a *API) RetrieveFeedUpdate(ctx context.Context, addr storage.Address) ([]byte, error) {
+	chunk, err := a.fileStore.ChunkStore.Get(ctx, chunk.ModeGetRequest, addr)
+	if err != nil {
+		return nil, err
+	}
+	return chunk.Data(), err
+}
+
 // Store wraps the Store API call of the embedded FileStore
 func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(ctx context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
