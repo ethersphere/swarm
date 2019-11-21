@@ -61,11 +61,16 @@ func (db *DB) GetMulti(ctx context.Context, mode chunk.ModeGet, addrs ...chunk.A
 // and updates other indexes.
 func (db *DB) getMulti(mode chunk.ModeGet, addrs ...chunk.Address) (out []shed.Item, err error) {
 	out = make([]shed.Item, len(addrs))
-	for i, addr := range addrs {
-		out[i].Address = addr
+	for i, a := range addrs {
+		c, err := db.data.Get(a)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Address = a
+		out[i].Data = c.Data()
 	}
 
-	err = db.retrievalDataIndex.Fill(out)
+	err = db.retrievalAccessIndex.Fill(out)
 	if err != nil {
 		return nil, err
 	}

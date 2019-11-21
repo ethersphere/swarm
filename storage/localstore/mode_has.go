@@ -31,7 +31,8 @@ func (db *DB) Has(ctx context.Context, addr chunk.Address) (bool, error) {
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
-	has, err := db.retrievalDataIndex.Has(addressToItem(addr))
+	has, err := db.data.Has(addr)
+	//has, err := db.retrievalDataIndex.Has(addressToItem(addr))
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 	}
@@ -46,9 +47,20 @@ func (db *DB) HasMulti(ctx context.Context, addrs ...chunk.Address) ([]bool, err
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
-	have, err := db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)
-	if err != nil {
-		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+	have := make([]bool, len(addrs))
+	for i, a := range addrs {
+		has, err := db.data.Has(a)
+		if err != nil {
+			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+			return nil, err
+		}
+		have[i] = has
 	}
-	return have, err
+	return have, nil
+
+	// have, err := db.retrievalDataIndex.HasMulti(addressesToItems(addrs...)...)
+	// if err != nil {
+	// 	metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+	// }
+	// return have, err
 }

@@ -54,6 +54,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
+	var removeChunks bool
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
@@ -96,6 +97,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 			}
 			gcSizeChange += c
 		}
+		removeChunks = true
 
 	case chunk.ModeSetPin:
 		for _, addr := range addrs {
@@ -125,6 +127,15 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	if err != nil {
 		return err
 	}
+
+	if removeChunks {
+		for _, a := range addrs {
+			if err := db.data.Delete(a); err != nil {
+				return err
+			}
+		}
+	}
+
 	for po := range triggerPullFeed {
 		db.triggerPullSubscriptions(po)
 	}
@@ -141,25 +152,27 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	// need to get access timestamp here as it is not
 	// provided by the access function, and it is not
 	// a property of a chunk provided to Accessor.Put.
-	i, err := db.retrievalDataIndex.Get(item)
-	switch err {
-	case nil:
-		item.StoreTimestamp = i.StoreTimestamp
-		item.BinID = i.BinID
-	case leveldb.ErrNotFound:
-		db.pushIndex.DeleteInBatch(batch, item)
-		item.StoreTimestamp = now()
-		item.BinID, err = db.incBinID(binIDs, po)
-		if err != nil {
-			return 0, err
-		}
-	default:
-		return 0, err
-	}
+	// i, err := db.retrievalDataIndex.Get(item)
+	// switch err {
+	// case nil:
+	// 	item.StoreTimestamp = i.StoreTimestamp
+	// 	item.BinID = i.BinID
+	// case leveldb.ErrNotFound:
+	// 	db.pushIndex.DeleteInBatch(batch, item)
+	// 	item.StoreTimestamp = now()
+	// 	item.BinID, err = db.incBinID(binIDs, po)
+	// 	if err != nil {
+	// 		return 0, err
+	// 	}
+	// default:
+	// 	return 0, err
+	// }
 
-	i, err = db.retrievalAccessIndex.Get(item)
+	i, err := db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
+		item.BinID = i.BinID
+		item.StoreTimestamp = i.StoreTimestamp
 		item.AccessTimestamp = i.AccessTimestamp
 		db.gcIndex.DeleteInBatch(batch, item)
 		gcSizeChange--
@@ -191,20 +204,16 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	// provided by the access function, and it is not
 	// a property of a chunk provided to Accessor.Put.
 
-	i, err := db.retrievalDataIndex.Get(item)
+	i, err := db.retrievalAccessIndex.Get(item)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			// chunk is not found,
-			// no need to update gc index
-			// just delete from the push index
-			// if it is there
-			db.pushIndex.DeleteInBatch(batch, item)
 			return 0, nil
 		}
 		return 0, err
 	}
-	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
+	item.StoreTimestamp = i.StoreTimestamp
+	item.AccessTimestamp = i.AccessTimestamp
 
 	switch mode {
 	case chunk.ModeSetSyncPull:
@@ -263,30 +272,22 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 				// we cannot break or return here since the function needs to
 				// run to end from db.pushIndex.DeleteInBatch
 				log.Error("error getting tags on push sync set", "uid", i.Tag)
-			}
+			} else {
+				// setting a chunk for push sync assumes the tag is not anonymous
+				if t.Anonymous {
+					return 0, errors.New("got an anonymous chunk in push sync index")
+				}
 
-			// setting a chunk for push sync assumes the tag is not anonymous
-			if t.Anonymous {
-				return 0, errors.New("got an anonymous chunk in push sync index")
+				t.Inc(chunk.StateSynced)
 			}
-
-			t.Inc(chunk.StateSynced)
 		}
 
 		db.pushIndex.DeleteInBatch(batch, item)
 	}
 
-	i, err = db.retrievalAccessIndex.Get(item)
-	switch err {
-	case nil:
-		item.AccessTimestamp = i.AccessTimestamp
-		db.gcIndex.DeleteInBatch(batch, item)
-		gcSizeChange--
-	case leveldb.ErrNotFound:
-		// the chunk is not accessed before
-	default:
-		return 0, err
-	}
+	db.gcIndex.DeleteInBatch(batch, item)
+	gcSizeChange--
+
 	item.AccessTimestamp = now()
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 
@@ -315,19 +316,21 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange 
 	i, err := db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
+		item.BinID = i.BinID
+		item.StoreTimestamp = i.StoreTimestamp
 		item.AccessTimestamp = i.AccessTimestamp
 	case leveldb.ErrNotFound:
 	default:
 		return 0, err
 	}
-	i, err = db.retrievalDataIndex.Get(item)
-	if err != nil {
-		return 0, err
-	}
-	item.StoreTimestamp = i.StoreTimestamp
-	item.BinID = i.BinID
+	// i, err = db.retrievalDataIndex.Get(item)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// item.StoreTimestamp = i.StoreTimestamp
+	// item.BinID = i.BinID
 
-	db.retrievalDataIndex.DeleteInBatch(batch, item)
+	//db.retrievalDataIndex.DeleteInBatch(batch, item)
 	db.retrievalAccessIndex.DeleteInBatch(batch, item)
 	db.pullIndex.DeleteInBatch(batch, item)
 	db.gcIndex.DeleteInBatch(batch, item)

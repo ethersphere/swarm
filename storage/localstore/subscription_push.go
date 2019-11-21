@@ -70,13 +70,13 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 				var count int
 				err := db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					// get chunk data
-					dataItem, err := db.retrievalDataIndex.Get(item)
+					c, err := db.data.Get(item.Address)
 					if err != nil {
 						return true, err
 					}
 
 					select {
-					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data).WithTagID(dataItem.Tag):
+					case chunks <- chunk.NewChunk(c.Address(), c.Data()).WithTagID(item.Tag):
 						count++
 						// set next iteration start item
 						// when its chunk is successfully sent to channel

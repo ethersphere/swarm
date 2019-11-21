@@ -141,6 +141,12 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 		return nil, err
 	}
 
+	for _, ch := range chs {
+		if err := db.data.Put(ch); err != nil {
+			return nil, err
+		}
+	}
+
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
 		return nil, err
@@ -161,12 +167,13 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
 func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
-	i, err := db.retrievalDataIndex.Get(item)
+	i, err := db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
 		exists = true
-		item.StoreTimestamp = i.StoreTimestamp
 		item.BinID = i.BinID
+		item.StoreTimestamp = i.StoreTimestamp
+		item.AccessTimestamp = i.AccessTimestamp
 	case leveldb.ErrNotFound:
 		// no chunk accesses
 		exists = false
@@ -188,7 +195,7 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 		return false, 0, err
 	}
 
-	db.retrievalDataIndex.PutInBatch(batch, item)
+	db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	return exists, gcSizeChange, nil
 }
@@ -198,7 +205,7 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
 func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
-	exists, err = db.retrievalDataIndex.Has(item)
+	exists, err = db.data.Has(item.Address)
 	if err != nil {
 		return false, 0, err
 	}
@@ -226,7 +233,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	if err != nil {
 		return false, 0, err
 	}
-	db.retrievalDataIndex.PutInBatch(batch, item)
+	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
 	if !anonymous {
 		db.pushIndex.PutInBatch(batch, item)
@@ -252,7 +259,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
 func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
-	exists, err = db.retrievalDataIndex.Has(item)
+	exists, err = db.data.Has(item.Address)
 	if err != nil {
 		return false, 0, err
 	}
@@ -272,7 +279,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 	if err != nil {
 		return false, 0, err
 	}
-	db.retrievalDataIndex.PutInBatch(batch, item)
+	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
 
 	if db.putToGCCheck(item.Address) {
@@ -296,16 +303,18 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 // already within that node's NN (thus, it can be added to the gc index
 // safely)
 func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, err error) {
-	if item.BinID == 0 {
-		i, err := db.retrievalDataIndex.Get(item)
-		if err != nil {
-			return 0, err
-		}
-		item.BinID = i.BinID
-	}
+	// if item.BinID == 0 {
+	// 	i, err := db.retrievalDataIndex.Get(item)
+	// 	if err != nil {
+	// 		return 0, err
+	// 	}
+	// 	item.BinID = i.BinID
+	// }
 	i, err := db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
+		item.BinID = i.BinID
+		item.StoreTimestamp = i.StoreTimestamp
 		item.AccessTimestamp = i.AccessTimestamp
 		db.gcIndex.DeleteInBatch(batch, item)
 		gcSizeChange--
