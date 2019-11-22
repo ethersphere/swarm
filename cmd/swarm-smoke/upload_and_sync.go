@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -186,6 +187,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 	for k, v := range bzzAddrs {
 		log.Trace("bzzAddr", "bzz", v, "host", k)
 	}
+	errored := false
 
 	for i := range addrs {
 		var foundAt int
@@ -212,16 +214,12 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 		}
 
 		log.Trace("sync mode", "sync mode", syncMode)
-
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {
 				if allHostChunks[maxProxHost][i] == '0' {
 					metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-not-max-prox", nil).Inc(1)
-					e := fmt.Errorf("chunk not found at max prox host\tref: %s\thost: %s\tbzzAddr: %s", addrs[i], maxProxHost, bzzAddrs[maxProxHost])
-					if bail {
-						return e
-					}
-					log.Error(e.Error())
+					log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+					errored = true
 				} else {
 					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
 				}
@@ -230,11 +228,8 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			// if chunk found at less than 2 hosts, which is actually less that the min size of a NN
 			if foundAt < 2 {
 				metrics.GetOrRegisterCounter("upload-and-sync.pull-sync.chunk-less-nn", nil).Inc(1)
-				e := fmt.Errorf("chunk found at less than two hosts\tfoundAt: %d\tref: %s", foundAt, addrs[i])
-				if bail {
-					return e
-				}
-				log.Error(e.Error())
+				log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
+				errored = true
 			}
 		}
 
@@ -250,14 +245,14 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			if !found {
 				for _, maxProxHost := range maxProxHosts {
 					metrics.GetOrRegisterCounter("upload-and-sync.push-sync.chunk-not-max-prox", nil).Inc(1)
-					e := fmt.Errorf("chunk not found at any max prox host\tref: %s\thosts: %s\tbzzAddr: %s", addrs[i], maxProxHost, bzzAddrs[maxProxHost])
-					if bail {
-						return e
-					}
-					log.Error(e.Error())
+					log.Error("chunk not found at any max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+					errored = true
 				}
 			}
 		}
+	}
+	if errored {
+		return errors.New("error in checkChunksVsMostProxHost. see smoke test output for more details")
 	}
 	return nil
 }
@@ -283,11 +278,25 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 	t1 := time.Now()
 	tag := uuid.New()[:8]
-	hash, err := uploadWithTag(randomBytes, httpEndpoint(hosts[0]), tag)
+
+	var (
+		hash string
+		err  error
+	)
+	const maxRetries = 5
+
+	for i := 0; i < maxRetries; i++ {
+		hash, err = uploadWithTag(randomBytes, httpEndpoint(hosts[0]), tag)
+		if err != nil {
+			log.Error(err.Error())
+		} else {
+			break
+		}
+	}
 	if err != nil {
-		log.Error(err.Error())
 		return err
 	}
+
 	t2 := time.Since(t1)
 	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
 	uploadSpeed := float64(len(randomBytes)) / t2.Seconds() // bytes per second
