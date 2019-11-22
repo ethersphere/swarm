@@ -1117,20 +1117,6 @@ func TestFactoryVerifySelf(t *testing.T) {
 	if factory.VerifySelf() != nil {
 		t.Fatal(err)
 	}
-
-	addr, _, _, err := contractFactory.DeployECDSA(bind.NewKeyedTransactor(ownerKey), testBackend)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testBackend.Commit()
-
-	if _, err = cswap.FactoryAt(addr, testBackend); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err = cswap.FactoryAt(common.Address{}, testBackend); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // TestContractIntegration tests a end-to-end cheque interaction.
