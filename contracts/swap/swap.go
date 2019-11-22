@@ -44,13 +44,13 @@ type Backend interface {
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
-	// Withdraw attempts to withdraw Wei from the chequebook
+	// Withdraw attempts to withdraw ERC20-token from the chequebook
 	Withdraw(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error)
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
 	Deposit(auth *bind.TransactOpts, amout *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
-	// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+	// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
 	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
 	//Token returns the address of the ERC20 contract, used by the chequebook
 	Token(auth *bind.CallOpts) (common.Address, error)
@@ -173,7 +173,7 @@ func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficia
 	return result, receipt, nil
 }
 
-// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
 func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
 	return s.instance.LiquidBalance(opts)
 }
