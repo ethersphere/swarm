@@ -123,6 +123,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	if err != nil {
 		return nil, err
 	}
+	// check if we have sufficient balance
 	balance, err := s.BalanceOf(nil, auth.From)
 	if err != nil {
 		return nil, err
@@ -193,7 +194,6 @@ func (s simpleContract) BalanceOf(opts *bind.CallOpts, account common.Address) (
 	if err != nil {
 		return nil, err
 	}
-	// Check if we have sufficient balance
 	balance, err := token.BalanceOf(opts, account)
 	if err != nil {
 		return nil, err

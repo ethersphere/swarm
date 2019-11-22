@@ -19,7 +19,8 @@ var (
 	// Deployments maps from network ids to deployed contract factories
 	Deployments = map[uint64]common.Address{
 		// Ropsten
-		3: common.HexToAddress("TODO"),
+		//TODO: update to point to an address with the new go-bindings
+		3: common.HexToAddress("0x2e9C43E186eaF4fee10799d67e75f8CFc5BA3a0c"),
 	}
 )
 
