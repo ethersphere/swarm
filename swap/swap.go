@@ -599,7 +599,6 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	// ask user for input
 	input, err := prompter.PromptInput(promptMessage)
 	if err != nil {
-		log.Info("eknir")
 		return big.NewInt(0), err
 	}
 	// check input
@@ -625,7 +624,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract cont
 	// nothing written to state disk before, no flag provided: deploying new chequebook
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
 
-		if contract, err = s.Deploy(context.TODO()); err != nil {
+		if contract, err = s.Deploy(context.Background()); err != nil {
 			return nil, err
 		}
 		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
