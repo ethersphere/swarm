@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 
@@ -150,7 +149,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Back
 // - connects to the blockchain backend;
 // - verifies that we have not connected SWAP before on a different blockchain backend;
 // - starts the chequebook; creates the swap instance
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
 	// verify that backendURL is not empty
@@ -203,8 +202,8 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag); err != nil {
 		return nil, err
 	}
-	var toDeposit = big.NewInt(int64(initialDepositAmountFlag))
-	if initialDepositAmountFlag == 0 {
+	var toDeposit = big.NewInt(int64(depositAmountFlag))
+	if depositAmountFlag == 0 {
 		toDeposit, err = swap.promptDepositAmount()
 		if err != nil {
 			return nil, err
@@ -587,16 +586,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	// retrieve ERC20 balance of owner
-	tokenAddress, err := s.contract.Token(nil)
-	if err != nil {
-		return nil, err
-	}
-	token, err := erc20simpleswap.NewERC20(tokenAddress, s.backend)
-	if err != nil {
-		return nil, err
-	}
-	balance, err := token.BalanceOf(nil, s.owner.address)
+	balance, err := s.contract.BalanceOf(nil, s.owner.address)
 	if err != nil {
 		return nil, err
 	}

@@ -54,6 +54,8 @@ type Contract interface {
 	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
 	//Token returns the address of the ERC20 contract, used by the chequebook
 	Token(auth *bind.CallOpts) (common.Address, error)
+	//BalanceOf returns the balance of the account for the underlying ERC20 contract of the chequebook
+	BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
@@ -112,7 +114,6 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	if amount.Cmp(big.NewInt(0)) == 0 {
 		return nil, fmt.Errorf("Deposit amount cannot be equal to zero")
 	}
-
 	// get ERC20Instance at the address of token which is registered in the chequebook
 	tokenAddress, err := s.Token(nil)
 	if err != nil {
@@ -122,8 +123,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	if err != nil {
 		return nil, err
 	}
-	// Check if we have sufficient balance
-	balance, err := token.BalanceOf(nil, auth.From)
+	balance, err := s.BalanceOf(nil, auth.From)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +180,25 @@ func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
 //Token returns the address of the ERC20 contract, used by the chequebook
 func (s simpleContract) Token(opts *bind.CallOpts) (common.Address, error) {
 	return s.instance.Token(opts)
+}
+
+//BalanceOf returns the balance of the account for the underlying ERC20 contract of the chequebook
+func (s simpleContract) BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error) {
+	// get ERC20Instance at the address of token which is registered in the chequebook
+	tokenAddress, err := s.Token(opts)
+	if err != nil {
+		return nil, err
+	}
+	token, err := contract.NewERC20(tokenAddress, s.backend)
+	if err != nil {
+		return nil, err
+	}
+	// Check if we have sufficient balance
+	balance, err := token.BalanceOf(opts, account)
+	if err != nil {
+		return nil, err
+	}
+	return balance, nil
 }
 
 // ContractParams returns contract information
