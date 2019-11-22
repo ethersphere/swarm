@@ -34,8 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
@@ -203,7 +205,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	}
 	var toDeposit = big.NewInt(int64(initialDepositAmountFlag))
 	if initialDepositAmountFlag == 0 {
-		toDeposit, err = promptInitialDepositAmount()
+		toDeposit, err = swap.promptDepositAmount()
 		if err != nil {
 			return nil, err
 		}
@@ -211,13 +213,6 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
 		swapLog.Warn("Could not deposit tokens into the chequebook", "error", err)
 	}
-	availableBalance, err := swap.AvailableBalance()
-	if err != nil {
-		return nil, err
-	}
-
-	swapLog.Info("available balance", "balance", availableBalance)
-
 	return swap, nil
 }
 
@@ -586,14 +581,35 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-func promptInitialDepositAmount() (*big.Int, error) {
+func (s *Swap) promptDepositAmount() (*big.Int, error) {
+	// retrieve available balance
+	availableBalance, err := s.AvailableBalance()
+	if err != nil {
+		return nil, err
+	}
+	// retrieve ERC20 balance of owner
+	tokenAddress, err := s.contract.Token(nil)
+	if err != nil {
+		return nil, err
+	}
+	token, err := erc20simpleswap.NewERC20(tokenAddress, s.backend)
+	if err != nil {
+		return nil, err
+	}
+	balance, err := token.BalanceOf(nil, s.owner.address)
+	if err != nil {
+		return nil, err
+	}
+	// log available balance and ERC20 balance
+	swapLog.Info("Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
+	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook: ")
 	// need to prompt user for initial deposit amount
 	// if 0, can not cash in cheques
 	prompter := console.Stdin
-
 	// ask user for input
-	input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
+	input, err := prompter.PromptInput(promptMessage)
 	if err != nil {
+		log.Info("eknir")
 		return big.NewInt(0), err
 	}
 	// check input
