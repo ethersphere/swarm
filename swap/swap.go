@@ -667,7 +667,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	opts.Context = ctx
-	swapLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
+	swapLog.Info("Deploying new swap", "owner", opts.From.Hex())
 	chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy chequebook: %v", err)

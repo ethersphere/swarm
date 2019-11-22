@@ -57,7 +57,7 @@ type Config struct {
 	SwapEnabled             bool           // whether SWAP incentives are enabled
 	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
 	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
-	SwapInitialDeposit      uint64         // initial deposit amount to the chequebook
+	SwapDeposit             uint64         // deposit amount to the chequebook
 	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract
 	SwapChequebookFactory   common.Address // address of the chequebook factory contract
@@ -96,7 +96,7 @@ func NewConfig() *Config {
 		FileStoreParams:         storage.NewFileStoreParams(),
 		SwapBackendURL:          "",
 		SwapEnabled:             false,
-		SwapInitialDeposit:      swap.DefaultInitialDepositAmount,
+		SwapDeposit:             swap.DefaultDepositAmount,
 		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
 		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 		SwapLogPath:             "",
