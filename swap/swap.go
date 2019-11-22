@@ -586,7 +586,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	balance, err := s.contract.BalanceOf(nil, s.owner.address)
+	balance, err := s.contract.BalanceAtTokenContract(nil, s.owner.address)
 	if err != nil {
 		return nil, err
 	}

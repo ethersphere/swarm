@@ -54,8 +54,8 @@ type Contract interface {
 	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
 	//Token returns the address of the ERC20 contract, used by the chequebook
 	Token(auth *bind.CallOpts) (common.Address, error)
-	//BalanceOf returns the balance of the account for the underlying ERC20 contract of the chequebook
-	BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error)
+	//BalanceAtTokenContract returns the balance of the account for the underlying ERC20 contract of the chequebook
+	BalanceAtTokenContract(opts *bind.CallOpts, account common.Address) (*big.Int, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
@@ -124,7 +124,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 		return nil, err
 	}
 	// check if we have sufficient balance
-	balance, err := s.BalanceOf(nil, auth.From)
+	balance, err := s.BalanceAtTokenContract(nil, auth.From)
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +183,8 @@ func (s simpleContract) Token(opts *bind.CallOpts) (common.Address, error) {
 	return s.instance.Token(opts)
 }
 
-//BalanceOf returns the balance of the account for the underlying ERC20 contract of the chequebook
-func (s simpleContract) BalanceOf(opts *bind.CallOpts, account common.Address) (*big.Int, error) {
+//BalanceAtTokenContract returns the balance of the account for the underlying ERC20 contract of the chequebook
+func (s simpleContract) BalanceAtTokenContract(opts *bind.CallOpts, account common.Address) (*big.Int, error) {
 	// get ERC20Instance at the address of token which is registered in the chequebook
 	tokenAddress, err := s.Token(opts)
 	if err != nil {
