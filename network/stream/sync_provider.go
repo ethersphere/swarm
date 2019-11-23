@@ -35,8 +35,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-const syncStreamName = "SYNC"
-const cacheCapacity = 10000
+const (
+	syncStreamName      = "SYNC"
+	cacheCapacity       = 10000
+	maxBinZeroSyncPeers = 3
+)
 
 type syncProvider struct {
 	netStore                *storage.NetStore // netstore
@@ -70,7 +73,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 		quit:                    make(chan struct{}),
 		cache:                   c,
 		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
-		binZeroSem:              make(chan struct{}, 3), //allow 3 syncing peers
+		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
 	}
 }
 
