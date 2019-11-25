@@ -317,7 +317,7 @@ func TestNewSwapFailure(t *testing.T) {
 
 	params := newDefaultParams(t)
 	chequebookAddress := testChequeContract
-	InitialDeposit := uint64(1)
+	Deposit := uint64(1)
 
 	type testSwapConfig struct {
 		dbPath            string
@@ -325,7 +325,7 @@ func TestNewSwapFailure(t *testing.T) {
 		backendURL        string
 		params            *Params
 		chequebookAddress common.Address
-		initialDeposit    uint64
+		deposit           uint64
 		factoryAddress    common.Address
 	}
 
@@ -344,7 +344,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.backendURL = ""
 				config.params = params
 				config.chequebookAddress = chequebookAddress
-				config.initialDeposit = InitialDeposit
+				config.deposit = Deposit
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
@@ -355,7 +355,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.initialDeposit,
+					config.deposit,
 					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "no backend URL given") {
@@ -379,7 +379,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.initialDeposit,
+					config.deposit,
 					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "disconnect threshold lower or at payment threshold") {
@@ -403,7 +403,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.initialDeposit,
+					config.deposit,
 					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "error connecting to Ethereum API") {

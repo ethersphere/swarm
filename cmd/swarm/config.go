@@ -66,7 +66,7 @@ const (
 	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
 	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvChequebookFactoryAddr   = "SWARM_SWAP_CHEQUEBOOK_FACTORY_ADDR"
-	SwarmEnvInitialDeposit          = "SWARM_INITIAL_DEPOSIT"
+	SwarmEnvSwapDeposit             = "SWARM_SWAP_DEPOSIT"
 	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
