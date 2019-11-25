@@ -298,6 +298,9 @@ func bzzd(ctx *cli.Context) error {
 		cfg.DataDir = bzzconfig.Path
 	}
 
+	// disable USB devices
+	cfg.NoUSB = true
+
 	// start any custom pprof profiles
 	pprofProfiles(ctx)
 
