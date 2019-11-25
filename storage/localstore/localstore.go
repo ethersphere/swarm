@@ -119,6 +119,11 @@ type DB struct {
 	collectGarbageWorkerDone chan struct{}
 
 	putToGCCheck func([]byte) bool
+
+	// wait for all subscriptions to finish before closing
+	// underlaying LevelDB to prevent possible panics from
+	// iterators
+	subscritionsWG sync.WaitGroup
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -432,6 +437,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 func (db *DB) Close() (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
+	db.subscritionsWG.Wait()
 
 	// wait for gc worker to
 	// return before closing the shed
