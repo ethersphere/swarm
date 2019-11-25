@@ -43,6 +43,7 @@ import (
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
+var ErrNoDeposit = errors.New("swap-deposit-amount non-zero, but swap-no-deposit true")
 
 var swapLog log.Logger // logger for Swap related messages and audit trail
 const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
@@ -149,12 +150,16 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Back
 // - connects to the blockchain backend;
 // - verifies that we have not connected SWAP before on a different blockchain backend;
 // - starts the chequebook; creates the swap instance
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, noDepositFlag bool, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
 	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
+	}
+	// verify that depositAmountFlag and noDeposit are not conflicting
+	if depositAmountFlag > 0 && noDepositFlag {
+		return nil, ErrNoDeposit
 	}
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
@@ -202,16 +207,26 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag); err != nil {
 		return nil, err
 	}
-	var toDeposit = big.NewInt(int64(depositAmountFlag))
-	if depositAmountFlag == 0 {
-		toDeposit, err = swap.promptDepositAmount()
-		if err != nil {
-			return nil, err
+
+	// deposit money in the chequebook if desired
+	if !noDepositFlag {
+		// prompt the user for a depositAmount
+		var toDeposit = big.NewInt(int64(depositAmountFlag))
+		if toDeposit.Cmp(big.NewInt(0)) == 0 {
+			toDeposit, err = swap.promptDepositAmount()
+			if err != nil {
+				return nil, err
+			}
 		}
+		// deposit if toDeposit is bigger than zero
+		if toDeposit.Cmp(big.NewInt(0)) > 0 {
+			if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
+				return nil, err
+			}
+		}
+
 	}
-	if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
-		swapLog.Warn("Could not deposit tokens into the chequebook", "error", err)
-	}
+
 	return swap, nil
 }
 

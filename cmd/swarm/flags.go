@@ -54,10 +54,15 @@ var (
 		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
 	}
-	SwarmSwapDepositFlag = cli.StringFlag{
-		Name:   "swap-deposit",
+	SwarmSwapDepositAmountFlag = cli.StringFlag{
+		Name:   "swap-deposit-amount",
 		Usage:  "Deposit amount for swap chequebook",
-		EnvVar: SwarmEnvSwapDeposit,
+		EnvVar: SwarmEnvSwapDepositAmount,
+	}
+	SwarmSwapNoDepositFlag = cli.BoolFlag{
+		Name:   "swap-no-deposit",
+		Usage:  "Don't deposit during boot sequence",
+		EnvVar: SwarmEnvSwapNoDeposit,
 	}
 	SwarmSwapChequebookAddrFlag = cli.StringFlag{
 		Name:   "swap-chequebook",

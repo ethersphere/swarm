@@ -325,6 +325,7 @@ func TestNewSwapFailure(t *testing.T) {
 		backendURL        string
 		params            *Params
 		chequebookAddress common.Address
+		noDeposit         bool
 		deposit           uint64
 		factoryAddress    common.Address
 	}
@@ -348,13 +349,13 @@ func TestNewSwapFailure(t *testing.T) {
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
-				defer os.RemoveAll(config.dbPath)
 				_, err := New(
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
+					config.noDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)
@@ -379,6 +380,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
+					config.noDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)
@@ -388,11 +390,12 @@ func TestNewSwapFailure(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid backendURL",
+			name: "no deposit and given deposit amount",
 			configure: func(config *testSwapConfig) {
-				config.prvkey = prvKey
-				config.backendURL = "invalid backendURL"
-				params.PaymentThreshold = int64(DefaultPaymentThreshold)
+				config.params = newDefaultParams(t)
+				config.chequebookAddress = chequebookAddress
+				config.noDeposit = true
+				config.deposit = Deposit
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
@@ -403,6 +406,33 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
+					config.noDeposit,
+					config.deposit,
+					config.factoryAddress,
+				)
+				if !strings.Contains(err.Error(), ErrNoDeposit.Error()) {
+					t.Fatal("NoDeposit true and non-zero depositAmount, but created SWAP", err)
+				}
+			},
+		},
+		{
+			name: "invalid backendURL",
+			configure: func(config *testSwapConfig) {
+				config.prvkey = prvKey
+				config.backendURL = "invalid backendURL"
+				params.PaymentThreshold = int64(DefaultPaymentThreshold)
+				config.noDeposit = false
+				config.factoryAddress = testBackend.factoryAddress
+			},
+			check: func(t *testing.T, config *testSwapConfig) {
+				defer os.RemoveAll(config.dbPath)
+				_, err := New(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.params,
+					config.chequebookAddress,
+					config.noDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)
