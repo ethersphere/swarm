@@ -720,6 +720,11 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
 }
 
+// HandleGetFeedRaw retrieves Swarm raw feed chunks:
+// bzz-raw-feed://<reference> - get the raw feed chunk contents from the reference address
+//
+// Optional parameters:
+// timeout=xx - wait timeout milliseconds before returning if the chunk is not found
 func (s *Server) HandleGetFeedRaw(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
@@ -732,15 +737,33 @@ func (s *Server) HandleGetFeedRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := s.api.RetrieveFeedUpdate(r.Context(), ref)
+	timeout := r.URL.Query().Get("timeout")
+	if timeout == "" {
+		timeout = "0"
+	}
+	timeoutDuration, err := time.ParseDuration(fmt.Sprintf("%sms", timeout))
 	if err != nil {
-		httpStatus := http.StatusNotFound
-		respondError(w, r, fmt.Sprintf("feed chunk not found: %s", err), httpStatus)
+		httpStatus := http.StatusBadRequest
+		respondError(w, r, fmt.Sprintf("chunk retrieval fail: %s", err), httpStatus)
 		return
 	}
-	w.Header().Set("Content-Type", api.MimeOctetStream)
-	w.WriteHeader(http.StatusOK)
-	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
+	until := time.Now().Local().Add(timeoutDuration)
+	for {
+		data, err := s.api.RetrieveFeedUpdate(r.Context(), ref)
+		if err == nil {
+			w.Header().Set("Content-Type", api.MimeOctetStream)
+			w.WriteHeader(http.StatusOK)
+			http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
+			return
+		}
+
+		if time.Now().After(until) {
+			httpStatus := http.StatusNotFound
+			respondError(w, r, fmt.Sprintf("feed chunk not found: %s", err), httpStatus)
+			return
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {
