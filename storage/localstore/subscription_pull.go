@@ -201,12 +201,12 @@ func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
 // this function should be called.
 func (db *DB) triggerPullSubscriptions(bin uint8) {
 	db.pullTriggersMu.RLock()
+	defer db.pullTriggersMu.RUnlock()
+
 	triggers, ok := db.pullTriggers[bin]
-	db.pullTriggersMu.RUnlock()
 	if !ok {
 		return
 	}
-
 	for _, t := range triggers {
 		select {
 		case t <- struct{}{}:

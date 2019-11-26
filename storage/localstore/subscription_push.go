@@ -150,10 +150,9 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 // this function should be called.
 func (db *DB) triggerPushSubscriptions() {
 	db.pushTriggersMu.RLock()
-	triggers := db.pushTriggers
-	db.pushTriggersMu.RUnlock()
+	defer db.pushTriggersMu.RUnlock()
 
-	for _, t := range triggers {
+	for _, t := range db.pushTriggers {
 		select {
 		case t <- struct{}{}:
 		default:
