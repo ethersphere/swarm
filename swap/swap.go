@@ -477,6 +477,13 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 		return 0, err
 	}
 
+	// calculate tentative new balance after cheque is processed
+	newBalance := p.getBalance() - int64(actualAmount)
+	// check if this new balance would put us into debt
+	if newBalance < -int64(DefaultChequeDebtTolerance) {
+		return 0, errors.New("received cheque exceeds tolerance and would cause debt")
+	}
+
 	if err := p.setLastReceivedCheque(cheque); err != nil {
 		p.logger.Error("error while saving last received cheque", "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
