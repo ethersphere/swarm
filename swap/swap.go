@@ -479,9 +479,9 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 
 	// calculate tentative new balance after cheque is processed
 	newBalance := p.getBalance() - int64(actualAmount)
-	// check if this new balance would put us into debt
+	// check if this new balance would put creditor into debt
 	if newBalance < -int64(ChequeDebtTolerance) {
-		return 0, errors.New("received cheque exceeds tolerance and would cause debt")
+		return 0, fmt.Errorf("received cheque would result in balance %d which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
