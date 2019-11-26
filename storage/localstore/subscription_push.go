@@ -49,7 +49,9 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 	stopChan := make(chan struct{})
 	var stopChanOnce sync.Once
 
+	db.subscritionsWG.Add(1)
 	go func() {
+		defer db.subscritionsWG.Done()
 		defer metrics.GetOrRegisterCounter(metricName+".done", nil).Inc(1)
 		// close the returned chunkInfo channel at the end to
 		// signal that the subscription is done
