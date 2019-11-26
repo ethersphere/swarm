@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1144,6 +1146,9 @@ func (r *Registry) Stop() error {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		log.Error("stream closed with still active handlers")
+		// Print a full goroutine dump to debug blocking.
+		// TODO: use a logger to write a goroutine profile
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 	}
 
 	for _, v := range r.providers {
