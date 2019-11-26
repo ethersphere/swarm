@@ -1145,7 +1145,7 @@ func (r *Registry) Stop() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		log.Error("stream closed with still active handlers")
+		r.logger.Error("stream closed with still active handlers")
 		// Print a full goroutine dump to debug blocking.
 		// TODO: use a logger to write a goroutine profile
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
