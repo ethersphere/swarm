@@ -116,8 +116,7 @@ type testSwarmNetworkStep struct {
 // testSwarmNetworkOptions contains optional parameters for running
 // testSwarmNetwork.
 type testSwarmNetworkOptions struct {
-	Timeout   time.Duration
-	SkipCheck bool
+	Timeout time.Duration
 }
 
 func longRunningCases() []testSwarmNetworkCase {
@@ -265,7 +264,6 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			}
 
 			config.Init(privkey, nodekey)
-			config.DeliverySkipCheck = o.SkipCheck
 			config.Port = ""
 
 			swarm, err := NewSwarm(config, nil)
