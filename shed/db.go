@@ -23,6 +23,7 @@
 package shed
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,6 +40,8 @@ const (
 	openFileLimit              = 128 // The limit for LevelDB OpenFilesCacheCapacity.
 	writePauseWarningThrottler = 1 * time.Minute
 )
+
+var ErrDBAccess = errors.New("cannot access db: not ready")
 
 // DB provides abstractions over LevelDB in order to
 // implement complex structures using fields and ordered indexes.

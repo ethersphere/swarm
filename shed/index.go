@@ -301,6 +301,9 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 			return err
 		}
 	}
+	if f.db == nil {
+		return ErrDBAccess
+	}
 	it := f.db.NewIterator()
 	defer it.Release()
 
