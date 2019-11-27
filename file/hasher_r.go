@@ -1,7 +1,6 @@
 package file
 
 import (
-	"encoding/binary"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,123 +10,158 @@ import (
 )
 
 type ReferenceFileHasher struct {
-	hasher         *bmt.Hasher
-	branches       int
-	segmentSize    int
-	buffer         []byte
-	cursors        []int
-	chunkSize      int
-	totalBytes     int
-	writeByteCount int
-	writeCount     int
+	hasher         *bmt.Hasher // synchronous hasher
+	branches       int         // branching factor
+	sectionSize    int         // write section size, equals digest length of hasher
+	chunkSize      int         // cached chunk size, equals branches * sectionSize
+	spans          []int       // potential spans per level
+	buffer         []byte      // keeps intermediate chunks during hashing
+	cursors        []int       // write cursors in sectionSize units for each tree level
+	totalBytes     int         // total data bytes to be written
+	totalLevel     int         // total number of levels in tree. (level 0 is the data level)
+	writeByteCount int         // amount of bytes currently written
+	writeCount     int         // amount of sections currently written
 }
 
 func NewReferenceFileHasher(hasher *bmt.Hasher, branches int) *ReferenceFileHasher {
-	return &ReferenceFileHasher{
+	f := &ReferenceFileHasher{
 		hasher:      hasher,
 		branches:    branches,
-		segmentSize: hasher.Size(),
+		sectionSize: hasher.Size(),
 		chunkSize:   branches * hasher.Size(),
 	}
+	return f
 }
 
-// reads segmentwise from input data and writes
-// TODO: Write directly to f.buffer instead of input
-// TODO: See if level 0 data can be written directly to hasher without complicating code
+// Hash makes l reads of up to sectionSize bytes from r
 func (f *ReferenceFileHasher) Hash(r io.Reader, l int) common.Hash {
+
 	f.totalBytes = l
 	// TODO: old implementation of function skewed the level by 1, realign code to new, correct results
-	levelCount := getLevelsFromLength(l, f.segmentSize, f.branches) + 1
-	log.Trace("level count", "l", levelCount, "b", f.branches, "c", l, "s", f.segmentSize)
-	bufLen := f.segmentSize
-	for i := 1; i < levelCount; i++ {
+	f.totalLevel = getLevelsFromLength(l, f.sectionSize, f.branches) + 1
+	log.Trace("Starting reference file hasher", "levels", f.totalLevel, "length", f.totalBytes, "b", f.branches, "s", f.sectionSize)
+
+	// prepare a buffer for intermediate the chunks
+	bufLen := f.sectionSize
+	for i := 1; i < f.totalLevel; i++ {
 		bufLen *= f.branches
 	}
-	f.cursors = make([]int, levelCount)
 	f.buffer = make([]byte, bufLen)
+	f.cursors = make([]int, f.totalLevel)
+
+	// calculate what the potential span under this chunk will be
+	span := f.sectionSize
+	for i := 0; i < f.totalLevel; i++ {
+		f.spans = append(f.spans, span)
+		span *= f.branches
+	}
+
 	var res bool
 	for !res {
-		input := make([]byte, f.segmentSize)
+
+		// read a data section into input copy buffer
+		input := make([]byte, f.sectionSize)
 		c, err := r.Read(input)
-		log.Trace("read", "c", c, "wbc", f.writeByteCount)
+		log.Trace("read", "bytes", c, "total read", f.writeByteCount)
 		if err != nil {
 			if err == io.EOF {
-				log.Debug("haveeof")
-				res = true
+				panic("EOF")
 			} else {
 				panic(err)
 			}
-		} else if c < f.segmentSize {
-			input = input[:c]
 		}
-		f.writeByteCount += c
-		if f.writeByteCount == f.totalBytes {
+
+		// read only up to the announced length, since we dimensioned buffer and level count accordingly
+		readSize := f.sectionSize
+		remainingBytes := f.totalBytes - f.writeByteCount
+		if remainingBytes <= f.sectionSize {
+			readSize = remainingBytes
+			input = input[:remainingBytes]
 			res = true
 		}
+		f.writeByteCount += readSize
 		f.write(input, 0, res)
 	}
-	return common.BytesToHash(f.buffer[f.cursors[levelCount-1] : f.cursors[levelCount-1]+f.segmentSize])
+	// TODO: logically this should merely be f.buffer[0:f.sectionSize]
+	//return common.BytesToHash(f.buffer[f.cursors[f.totalLevel-1] : f.cursors[f.totalLevel-1]+f.sectionSize])
+	if f.cursors[f.totalLevel-1] != 0 {
+		panic("totallevel cursor misaligned")
+	}
+	return common.BytesToHash(f.buffer[0:f.sectionSize])
 }
 
-// TODO: check if length 0
 // performs recursive hashing on complete batches or data end
 func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
-	log.Debug("write", "l", level, "len", len(b), "b", hexutil.Encode(b), "end", end, "wbc", f.writeByteCount)
 
-	// copy data from buffer to current position of corresponding level in buffer
-	copy(f.buffer[f.cursors[level]*f.segmentSize:], b)
+	log.Trace("write", "level", level, "bytes", len(b), "total written", f.writeByteCount, "end", end, "data", hexutil.Encode(b))
+
+	// copy data from input copy buffer to current position of corresponding level in intermediate chunk buffer
+	copy(f.buffer[f.cursors[level]*f.sectionSize:], b)
 	for i, l := range f.cursors {
-		log.Trace("cursor", "#", i, "pos", l)
+		log.Trace("cursor", "level", i, "position", l)
 	}
 
-	// if we are at the tree root the result will be in the first segmentSize bytes of the buffer. Return
-	if level == len(f.cursors)-1 {
+	// if we are at the tree root the result will be in the first sectionSize bytes of the buffer.
+	// the true bool return will bubble up to the data write frame in the call stack and terminate the loop
+	//if level == len(f.cursors)-1 {
+	if level == f.totalLevel-1 {
 		return true
 	}
 
-	// if the offset is the same one level up, then we have a dangling chunk and we merely pass it down the tree
+	// if we are at the end of the write, AND
+	// if the offset of a chunk reference is the same one level up, THEN
+	// we have a "dangling chunk" and we merely pass it to the next level
 	if end && level > 0 && f.cursors[level] == f.cursors[level+1] {
 		res := f.write(b, level+1, end)
 		return res
 	}
 
-	// we've written to the buffer of this level, so we increment the cursor
+	// we've written to the buffer a particular level
+	// so we increment the cursor of that level
 	f.cursors[level]++
 
-	// perform recursive writes down the tree if end of output or on batch boundary
+	// hash the intermediate chunk buffer data for this level if:
+	// - the difference of cursors between this level and the one above equals the branch factor (equals one full chunk of data)
+	// - end is set
+	// the resulting digest will be written to the corresponding section of the level above
 	var res bool
 	if f.cursors[level]-f.cursors[level+1] == f.branches || end {
 
-		// calculate what the potential span under this chunk will be
-		span := f.chunkSize
-		for i := 0; i < level; i++ {
-			span *= f.branches
-		}
-
-		// calculate the data in this chunk (the data to be hashed)
+		// calculate the actual data under this span
+		// if we're at end, the span is given by the period of the potential span
+		// if not, it will be the full span (since we then must have full chunk writes in the levels below)
 		var dataUnderSpan int
+		span := f.spans[level] * branches
 		if end {
 			dataUnderSpan = (f.totalBytes-1)%span + 1
 		} else {
 			dataUnderSpan = span
 		}
 
-		// calculate the actual data under this span
+		// calculate the data in this chunk (the data to be hashed)
+		// on level 0 it is merely the actual spanned data
+		// on levels above the
+		// TODO: can this be replaced by dataSectionToLevelSection
 		var hashDataSize int
 		if level == 0 {
 			hashDataSize = dataUnderSpan
 		} else {
-			hashDataSize = ((dataUnderSpan-1)/(span/f.branches) + 1) * f.segmentSize
+			hashSectionCount := (dataUnderSpan-1)/(span/f.branches) + 1
+			hashDataSize = hashSectionCount * f.sectionSize
 		}
 
-		// hash the chunk and write it to the current cursor position on the next level
-		meta := make([]byte, 8)
-		binary.LittleEndian.PutUint64(meta, uint64(dataUnderSpan))
-		f.hasher.ResetWithLength(meta)
-		writeHashOffset := f.cursors[level+1] * f.segmentSize
-		f.hasher.Write(f.buffer[writeHashOffset : writeHashOffset+hashDataSize])
+		// prepare the hasher,
+		// write data since previous hash operation from the current level cursor position
+		// and sum
+		spanBytes := lengthToSpan(dataUnderSpan)
+		f.hasher.ResetWithLength(spanBytes)
+		hasherWriteOffset := f.cursors[level+1] * f.sectionSize
+		f.hasher.Write(f.buffer[hasherWriteOffset : hasherWriteOffset+hashDataSize])
 		hashResult := f.hasher.Sum(nil)
-		log.Debug("summed", "b", hexutil.Encode(hashResult), "l", f.cursors[level], "l+1", f.cursors[level+1], "spanlength", dataUnderSpan, "span", span, "meta", meta, "from", writeHashOffset, "to", writeHashOffset+hashDataSize, "data", f.buffer[writeHashOffset:writeHashOffset+hashDataSize])
+		log.Debug("summed", "level", level, "cursor", f.cursors[level], "parent cursor", f.cursors[level+1], "span", spanBytes, "digest", hexutil.Encode(hashResult))
+
+		// write the digest to the current cursor position of the next level
+		// note the f.write() call will move the next level's cursor according to the write and possible hash operation
 		res = f.write(hashResult, level+1, end)
 
 		// recycle buffer space from the threshold of just written hash
