@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -65,30 +64,26 @@ type Config struct {
 	// end of Swap configs
 
 	*network.HiveParams
-	Pss                  *pss.Params
-	EnsRoot              common.Address
-	EnsAPIs              []string
-	Path                 string
-	ListenAddr           string
-	Port                 string
-	PublicKey            string
-	BzzKey               string
-	Enode                *enode.Node `toml:"-"`
-	NetworkID            uint64
-	SyncEnabled          bool
-	PushSyncEnabled      bool
-	SyncingSkipCheck     bool
-	DeliverySkipCheck    bool
-	MaxStreamPeerServers int
-	LightNodeEnabled     bool
-	BootnodeMode         bool
-	DisableAutoConnect   bool
-	EnablePinning        bool
-	SyncUpdateDelay      time.Duration
-	Cors                 string
-	BzzAccount           string
-	GlobalStoreAPI       string
-	privateKey           *ecdsa.PrivateKey
+	Pss                *pss.Params
+	EnsRoot            common.Address
+	EnsAPIs            []string
+	Path               string
+	ListenAddr         string
+	Port               string
+	PublicKey          string
+	BzzKey             string
+	Enode              *enode.Node `toml:"-"`
+	NetworkID          uint64
+	SyncEnabled        bool
+	PushSyncEnabled    bool
+	LightNodeEnabled   bool
+	BootnodeMode       bool
+	DisableAutoConnect bool
+	EnablePinning      bool
+	Cors               string
+	BzzAccount         string
+	GlobalStoreAPI     string
+	privateKey         *ecdsa.PrivateKey
 }
 
 //NewConfig creates a default config with all parameters to set to defaults
@@ -112,10 +107,6 @@ func NewConfig() *Config {
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
 		PushSyncEnabled:         true,
-		SyncingSkipCheck:        false,
-		DeliverySkipCheck:       true,
-		MaxStreamPeerServers:    10000,
-		SyncUpdateDelay:         15 * time.Second,
 		EnablePinning:           false,
 	}
 }

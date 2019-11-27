@@ -189,10 +189,7 @@ func init() {
 		SwarmSwapDepositAmountFlag,
 		// end of swap flags
 		SwarmNoSyncFlag,
-		SwarmSyncUpdateDelay,
-		SwarmMaxStreamPeerServersFlag,
 		SwarmLightNodeEnabled,
-		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
@@ -298,6 +295,9 @@ func bzzd(ctx *cli.Context) error {
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
+
+	// disable USB devices
+	cfg.NoUSB = true
 
 	// start any custom pprof profiles
 	pprofProfiles(ctx)
@@ -444,6 +444,10 @@ func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
+
+	// disable USB devices
+	cfg.NoUSB = true
+
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
 	if err != nil {

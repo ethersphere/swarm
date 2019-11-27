@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +37,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	bv "github.com/ethersphere/swarm/network/bitvector"
 	"github.com/ethersphere/swarm/network/stream/intervals"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -72,8 +75,6 @@ var (
 	providerPutTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_put.total-time", nil)
 	providerSetTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_set.total-time", nil)
 	providerNeedDataTimer    = metrics.GetOrRegisterResettingTimer("network.stream.provider_need_data.total-time", nil)
-
-	activeBatchTimeout = 20 * time.Second
 
 	// Protocol spec
 	Spec = &protocols.Spec{
@@ -635,7 +636,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			p.Drop("error persisting interval")
 			return
 		}
-	case <-time.After(activeBatchTimeout):
+	case <-time.After(timeouts.SyncBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
 		close(w.closeC) // signal the polling goroutine to terminate
 		p.mtx.Lock()
@@ -892,8 +893,6 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
 	p.logger.Debug("serverCollectBatch", "from", from, "to", to)
 
-	const batchTimeout = 1 * time.Second
-
 	var (
 		batch        []byte
 		batchSize    int
@@ -937,12 +936,12 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 				metrics.GetOrRegisterCounter("network.stream.server_collect_batch.full-batch", nil).Inc(1)
 			}
 			if timer == nil {
-				timer = time.NewTimer(batchTimeout)
+				timer = time.NewTimer(timeouts.BatchTimeout)
 			} else {
 				if !timer.Stop() {
 					<-timer.C
 				}
-				timer.Reset(batchTimeout)
+				timer.Reset(timeouts.BatchTimeout)
 			}
 			timerC = timer.C
 		case <-timerC:
@@ -1143,7 +1142,10 @@ func (r *Registry) Stop() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		log.Error("stream closed with still active handlers")
+		r.logger.Error("stream closed with still active handlers")
+		// Print a full goroutine dump to debug blocking.
+		// TODO: use a logger to write a goroutine profile
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 	}
 
 	for _, v := range r.providers {
