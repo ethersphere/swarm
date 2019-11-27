@@ -224,8 +224,9 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 			if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
 				return nil, err
 			}
+		} else {
+			swapLog.Info("Skipping deposit")
 		}
-
 	}
 
 	return swap, nil
@@ -596,6 +597,7 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
+// promptDepositAmount blocks and asks the user how much ERC20 he wants to deposit
 func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	// retrieve available balance
 	availableBalance, err := s.AvailableBalance()
@@ -608,7 +610,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	}
 	// log available balance and ERC20 balance
 	swapLog.Info("Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
-	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook: ")
+	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): ")
 	// need to prompt user for deposit amount
 	prompter := console.Stdin
 	// ask user for input
