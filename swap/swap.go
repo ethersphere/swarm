@@ -212,14 +212,15 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if !noDepositFlag {
 		// prompt the user for a depositAmount
 		var toDeposit = big.NewInt(int64(depositAmountFlag))
-		if toDeposit.Cmp(big.NewInt(0)) == 0 {
+		var zero big.Int
+		if toDeposit.Cmp(&zero) == 0 {
 			toDeposit, err = swap.promptDepositAmount()
 			if err != nil {
 				return nil, err
 			}
 		}
 		// deposit if toDeposit is bigger than zero
-		if toDeposit.Cmp(big.NewInt(0)) > 0 {
+		if toDeposit.Cmp(&zero) > 0 {
 			if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
 				return nil, err
 			}
@@ -612,19 +613,20 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	prompter := console.Stdin
 	// ask user for input
 	input, err := prompter.PromptInput(promptMessage)
+	var zero big.Int
 	if err != nil {
-		return big.NewInt(0), err
+		return &zero, err
 	}
 	// check input
 	val, err := strconv.ParseInt(input, 10, 64)
 	if err != nil {
 		// maybe we should provide a fallback here? A bad input results in stopping the boot
-		return big.NewInt(0), fmt.Errorf("Conversion error while reading user input: %v", err)
+		return &zero, fmt.Errorf("Conversion error while reading user input: %v", err)
 	}
 	return big.NewInt(val), nil
 }
 
-// StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
+// StartChequebook starts the chequebook, takingV into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
 func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract contract.Contract, err error) {
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk

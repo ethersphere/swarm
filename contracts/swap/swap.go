@@ -111,7 +111,8 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, amount *big.Int) (*typ
 
 // Deposit sends an amount in ERC20 token to the chequebook and blocks until the transaction is mined
 func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error) {
-	if amount.Cmp(big.NewInt(0)) == 0 {
+	var zero big.Int
+	if amount.Cmp(&zero) == 0 {
 		return nil, fmt.Errorf("Deposit amount cannot be equal to zero")
 	}
 	// get ERC20Instance at the address of token which is registered in the chequebook

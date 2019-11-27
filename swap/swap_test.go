@@ -113,12 +113,16 @@ func newTestBackend() *swapTestBackend {
 	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	defaultBackend.Commit()
 
+	// deploy the ERC20-contract
+	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
 	tokenAddress, _, token, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
 	if err != nil {
 		log.Crit(err.Error())
 	}
 	defaultBackend.Commit()
 
+	// mint 1000000000000000000 ERC20-tokens
+	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
 	_, err = token.Mint(bind.NewKeyedTransactor(ownerKey), ownerAddress, big.NewInt(1000000000000000000))
 	if err != nil {
 		log.Crit(err.Error())
@@ -126,6 +130,8 @@ func newTestBackend() *swapTestBackend {
 	defaultBackend.Commit()
 
 	// deploy a SimpleSwapFactoy
+	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
+	// ignore factory instance, because the address is all we need at this point
 	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend, tokenAddress)
 	if err != nil {
 		log.Crit(err.Error())
