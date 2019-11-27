@@ -56,7 +56,6 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	)
 	opts := &SyncSimServiceOptions{
 		InitialChunkCount: chunkCount,
-		Autostart:         true,
 	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -104,9 +103,10 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		nodeCount  = 6
 		chunkCount = 500
 	)
+	binZeroPeers := 0
+
 	opts := &SyncSimServiceOptions{
 		InitialChunkCount: chunkCount,
-		Autostart:         true,
 	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
@@ -114,26 +114,25 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	}, false)
 	defer sim.Close()
 
-	_, err := sim.AddNodesAndConnectStar(2)
+	idPivot, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	nodeIDs := sim.UpNodeIDs()
-	if len(nodeIDs) != 2 {
-		t.Fatal("not enough nodes up")
+	if len(sim.UpNodeIDs()) != 1 {
+		t.Fatal("node not started")
 	}
 
-	waitForCursors(t, sim, nodeIDs[0], nodeIDs[1], true)
-	waitForCursors(t, sim, nodeIDs[1], nodeIDs[0], true)
+	pivotKademlia := nodeKademlia(sim, idPivot)
+	pivotSyncer := nodeRegistry(sim, idPivot)
 
-	for j := 2; j <= nodeCount; j++ {
+	for j := 1; j <= nodeCount; j++ {
 		// append a node to the simulation
-		id, err := sim.AddNodes(1)
+		id, err := sim.AddNode()
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		err = sim.Net.ConnectNodesStar([]enode.ID{id}, idPivot)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,26 +140,43 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		if len(nodeIDs) != j+1 {
 			t.Fatalf("not enough nodes up. got %d, want %d", len(nodeIDs), j+1)
 		}
-		idPivot := nodeIDs[0]
 
-		waitForCursors(t, sim, idPivot, nodeIDs[j], true)
-		waitForCursors(t, sim, nodeIDs[j], idPivot, true)
+		otherKad := sim.MustNodeItem(id, simulation.BucketKeyKademlia).(*network.Kademlia)
+		po := chunk.Proximity(otherKad.BaseAddr(), pivotKademlia.BaseAddr())
+		if po == 0 {
+			binZeroPeers++
+			if binZeroPeers <= maxBinZeroSyncPeers {
+				waitForCursors(t, sim, idPivot, nodeIDs[j], true)
+				waitForCursors(t, sim, nodeIDs[j], idPivot, true)
+			} else {
+				// wait for the peer to get created in the protocol
+				waitForPeer(t, sim, idPivot, id)
+			}
+		} else {
+			waitForCursors(t, sim, idPivot, nodeIDs[j], true)
+			waitForCursors(t, sim, nodeIDs[j], idPivot, true)
+		}
 
-		pivotSyncer := nodeRegistry(sim, idPivot)
-		pivotKademlia := nodeKademlia(sim, idPivot)
-		pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
-
-		for i := 1; i < j; i++ {
+		binZeroRun := 0
+		for i := 1; i < len(nodeIDs); i++ {
 			idOther := nodeIDs[i]
 			otherKademlia := sim.MustNodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
+
 			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 			pivotCursors := pivotSyncer.getPeer(idOther).getCursorsCopy()
+			pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
+			if po == 0 {
+				binZeroRun++
+				if binZeroRun > maxBinZeroSyncPeers {
+					continue
+				}
+			}
 
 			// check that the pivot node is interested just in bins >= depth
 			if po >= int(pivotDepth) {
 				othersBins := nodeInitialBinIndexes(sim, idOther)
 				if err := compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth); err != nil {
-					t.Error(err)
+					t.Error(i, j, po, err)
 				}
 			}
 		}
@@ -354,6 +370,20 @@ func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulati
 	}
 	t.Fatal("node with po<=depth not found")
 	return
+}
+
+func waitForPeer(t *testing.T, sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID) {
+	for i := 0; i < 1000; i++ { // 10s total wait
+		time.Sleep(5 * time.Millisecond)
+		s, ok := sim.Service(serviceNameStream, pivotEnode).(*Registry)
+		if !ok {
+			continue
+		}
+		p := s.getPeer(lookupEnode)
+		if p == nil {
+			continue
+		}
+	}
 }
 
 // waitForCursors checks if the pivot node has some cursors or not

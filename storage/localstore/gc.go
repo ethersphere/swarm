@@ -37,7 +37,7 @@ var (
 	gcTargetRatio = 0.9
 	// gcBatchSize limits the number of chunks in a single
 	// leveldb batch on garbage collection.
-	gcBatchSize uint64 = 1000
+	gcBatchSize uint64 = 200
 )
 
 // collectGarbageWorker is a long running function that waits for

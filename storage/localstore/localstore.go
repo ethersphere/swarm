@@ -19,6 +19,8 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
+	"os"
+	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -119,6 +121,11 @@ type DB struct {
 	collectGarbageWorkerDone chan struct{}
 
 	putToGCCheck func([]byte) bool
+
+	// wait for all subscriptions to finish before closing
+	// underlaying LevelDB to prevent possible panics from
+	// iterators
+	subscritionsWG sync.WaitGroup
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -431,14 +438,24 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 // Close closes the underlying database.
 func (db *DB) Close() (err error) {
 	close(db.close)
-	db.updateGCWG.Wait()
 
-	// wait for gc worker to
-	// return before closing the shed
+	// wait for all handlers to finish
+	done := make(chan struct{})
+	go func() {
+		db.updateGCWG.Wait()
+		db.subscritionsWG.Wait()
+		// wait for gc worker to
+		// return before closing the shed
+		<-db.collectGarbageWorkerDone
+		close(done)
+	}()
 	select {
-	case <-db.collectGarbageWorkerDone:
+	case <-done:
 	case <-time.After(5 * time.Second):
-		log.Error("localstore: collect garbage worker did not return after db close")
+		log.Error("localstore closed with still active goroutines")
+		// Print a full goroutine dump to debug blocking.
+		// TODO: use a logger to write a goroutine profile
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 	}
 	return db.shed.Close()
 }
