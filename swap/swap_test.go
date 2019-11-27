@@ -332,7 +332,7 @@ func TestNewSwapFailure(t *testing.T) {
 		backendURL        string
 		params            *Params
 		chequebookAddress common.Address
-		noDeposit         bool
+		skipDeposit         bool
 		deposit           uint64
 		factoryAddress    common.Address
 	}
@@ -362,7 +362,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.noDeposit,
+					config.skipDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)
@@ -387,7 +387,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.noDeposit,
+					config.skipDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)
@@ -401,7 +401,7 @@ func TestNewSwapFailure(t *testing.T) {
 			configure: func(config *testSwapConfig) {
 				config.params = newDefaultParams(t)
 				config.chequebookAddress = chequebookAddress
-				config.noDeposit = true
+				config.skipDeposit = true
 				config.deposit = Deposit
 				config.factoryAddress = testBackend.factoryAddress
 			},
@@ -413,12 +413,12 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.noDeposit,
+					config.skipDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)
-				if !strings.Contains(err.Error(), ErrNoDeposit.Error()) {
-					t.Fatal("NoDeposit true and non-zero depositAmount, but created SWAP", err)
+				if !strings.Contains(err.Error(), ErrskipDeposit.Error()) {
+					t.Fatal("skipDeposit true and non-zero depositAmount, but created SWAP", err)
 				}
 			},
 		},
@@ -428,7 +428,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
 				params.PaymentThreshold = int64(DefaultPaymentThreshold)
-				config.noDeposit = false
+				config.skipDeposit = false
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
@@ -439,7 +439,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.noDeposit,
+					config.skipDeposit,
 					config.deposit,
 					config.factoryAddress,
 				)

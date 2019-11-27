@@ -59,10 +59,10 @@ var (
 		Usage:  "Deposit amount for swap chequebook",
 		EnvVar: SwarmEnvSwapDepositAmount,
 	}
-	SwarmSwapNoDepositFlag = cli.BoolFlag{
-		Name:   "swap-no-deposit",
+	SwarmSwapSkipDepositFlag = cli.BoolFlag{
+		Name:   "swap-skip-deposit",
 		Usage:  "Don't deposit during boot sequence",
-		EnvVar: SwarmEnvSwapNoDeposit,
+		EnvVar: SwarmEnvSwapSkipDeposit,
 	}
 	SwarmSwapChequebookAddrFlag = cli.StringFlag{
 		Name:   "swap-chequebook",
