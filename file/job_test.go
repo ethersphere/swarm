@@ -543,6 +543,7 @@ func TestVectors(t *testing.T) {
 	}
 	dataHash := bmt.New(poolSync)
 	params := newTreeParams(sectionSize, branches, refHashFunc)
+	var mismatch int
 
 	for i := start; i < end; i++ {
 		tgt := newTarget()
@@ -580,6 +581,7 @@ func TestVectors(t *testing.T) {
 		}
 		dataSections := dataSizeToSectionIndex(dataLength, params.SectionSize)
 		tgt.Set(dataLength, dataSections, getLevelsFromLength(dataLength, params.SectionSize, params.Branches))
+		eq := true
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*1000)
 		defer cancel()
 		select {
@@ -587,11 +589,17 @@ func TestVectors(t *testing.T) {
 			refCorrectHex := "0x" + expected[i]
 			refHex := hexutil.Encode(ref)
 			if refHex != refCorrectHex {
-				t.Fatalf("writespan sequential %d/%d: expected %s, got %s", i, dataLength, refCorrectHex, refHex)
+				mismatch++
+				eq = false
 			}
+			t.Logf("[%7d+%4d]\t%v\tref: %x\texpect: %s", dataLength/chunkSize, dataLength%chunkSize, eq, ref, expected[i])
 		case <-ctx.Done():
 			t.Fatalf("timeout: %v", ctx.Err())
 		}
+
+	}
+	if mismatch > 0 {
+		t.Fatalf("mismatches: %d/%d", mismatch, end-start)
 	}
 }
 
