@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -161,9 +162,15 @@ func migrateSanctuary(db *DB) error {
 
 	err = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		tag, err := db.tags.Get(item.Tag)
+		if err != nil {
+			if err == chunk.TagNotFoundErr {
+				return false, nil
+			}
+			return true, err
+		}
 
 		// anonymous tags should no longer appear in pushIndex
-		if err == nil && tag != nil && tag.Anonymous {
+		if tag != nil && tag.Anonymous {
 			db.pushIndex.DeleteInBatch(batch, item)
 		}
 		return false, nil
