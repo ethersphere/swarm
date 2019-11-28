@@ -332,7 +332,7 @@ func TestNewSwapFailure(t *testing.T) {
 		backendURL        string
 		params            *Params
 		chequebookAddress common.Address
-		skipDeposit         bool
+		skipDeposit       bool
 		deposit           uint64
 		factoryAddress    common.Address
 	}
