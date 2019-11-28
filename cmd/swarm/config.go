@@ -73,10 +73,7 @@ const (
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
 	SwarmNoSync                     = "SWARM_NO_SYNC"
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
-	SwarmEnvSyncUpdateDelay         = "SWARM_ENV_SYNC_UPDATE_DELAY"
-	SwarmEnvMaxStreamPeerServers    = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
-	SwarmEnvDeliverySkipCheck       = "SWARM_DELIVERY_SKIP_CHECK"
 	SwarmEnvENSAPI                  = "SWARM_ENS_API"
 	SwarmEnvENSAddr                 = "SWARM_ENS_ADDR"
 	SwarmEnvCORS                    = "SWARM_CORS"
@@ -225,16 +222,8 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		val := !ctx.GlobalBool(SwarmNoSyncFlag.Name)
 		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = val, val // if the flag is set (true) - push and pull sync should be disabled
 	}
-	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
-		currentConfig.SyncUpdateDelay = d
-	}
-	// any value including 0 is acceptable
-	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
-	}
-	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
-		currentConfig.DeliverySkipCheck = true
 	}
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {
 		ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)

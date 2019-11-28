@@ -35,8 +35,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-const syncStreamName = "SYNC"
-const cacheCapacity = 10000
+const (
+	syncStreamName      = "SYNC"
+	cacheCapacity       = 10000
+	maxBinZeroSyncPeers = 3
+)
 
 type syncProvider struct {
 	netStore                *storage.NetStore // netstore
@@ -48,6 +51,7 @@ type syncProvider struct {
 	cacheMtx                sync.RWMutex      // synchronization primitive to protect cache
 	cache                   *lru.Cache        // cache to minimize load on netstore
 	logger                  log.Logger        // logger that appends the base address to loglines
+	binZeroSem              chan struct{}     // semaphore to limit number of syncing peers on bin 0
 }
 
 // NewSyncProvider creates a new sync provider that is used by the stream protocol to sink data and control its behaviour
@@ -69,6 +73,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 		quit:                    make(chan struct{}),
 		cache:                   c,
 		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
+		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
 	}
 }
 
@@ -279,11 +284,24 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	case <-timer.C:
 	case <-p.quit:
 		return
+	case <-s.quit:
+		return
 	}
 
 	po := chunk.Proximity(p.BzzAddr.Over(), s.kad.BaseAddr())
 	depth := s.kad.NeighbourhoodDepth()
 
+	if po == 0 {
+		select {
+		case s.binZeroSem <- struct{}{}:
+		case <-p.quit:
+			return
+		case <-s.quit:
+			return
+		}
+		defer func() { <-s.binZeroSem }()
+
+	}
 	p.logger.Debug("update syncing subscriptions: initial", "po", po, "depth", depth)
 
 	subBins, quitBins := syncSubscriptionsDiff(po, -1, depth, s.kad.MaxProxDisplay, s.syncBinsOnlyWithinDepth)
