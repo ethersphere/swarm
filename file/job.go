@@ -93,6 +93,7 @@ type target struct {
 	level    int32         // target level calculated from bytes written against branching factor and sector size
 	resultC  chan []byte   // channel to receive root hash
 	doneC    chan struct{} // when this channel is closed all jobs will calculate their end write count
+	mu       sync.Mutex
 }
 
 func newTarget() *target {
@@ -105,9 +106,14 @@ func newTarget() *target {
 // Set is called when the final length of the data to be written is known
 // TODO: method can be simplified to calculate sections and level internally
 func (t *target) Set(size int, sections int, level int) {
-	atomic.StoreInt32(&t.size, int32(size))
-	atomic.StoreInt32(&t.sections, int32(sections))
-	atomic.StoreInt32(&t.level, int32(level))
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.size = int32(size)
+	t.sections = int32(sections)
+	t.level = int32(level)
+	//	atomic.StoreInt32(&t.size, int32(size))
+	//	atomic.StoreInt32(&t.sections, int32(sections))
+	//	atomic.StoreInt32(&t.level, int32(level))
 	log.Trace("target set", "size", size, "sections", sections, "level", level)
 	close(t.doneC)
 }
@@ -176,17 +182,21 @@ func (jb *job) String() string {
 // atomically increments the write counter of the job
 func (jb *job) inc() int {
 	return int(atomic.AddInt32(&jb.cursorSection, 1))
+	//jb.cursorSection++
+	//return int(jb.cursorSection)
 }
 
 // atomically returns the write counter of the job
 func (jb *job) count() int {
 	return int(atomic.LoadInt32(&jb.cursorSection))
+	//return int(jb.cursorSection)
 }
 
 // size returns the byte size of the span the job represents
 // if job is last index in a level and writes have been finalized, it will return the target size
 // otherwise, regardless of job index, it will return the size according to the current write count
 // TODO: returning expected size in one case and actual size in another can lead to confusion
+// TODO: two atomic ops, may change value inbetween
 func (jb *job) size() int {
 	count := jb.count()
 	endCount := int(atomic.LoadInt32(&jb.endCount))
@@ -224,6 +234,7 @@ func (jb *job) write(index int, data []byte) {
 // - data write is finalized and targetcount is reached on a subsequent job write
 func (jb *job) process() {
 
+	doneC := jb.target.doneC
 	defer jb.destroy()
 
 	// is set when data write is finished, AND
@@ -236,11 +247,12 @@ OUTER:
 
 		// enter here if new data is written to the job
 		case entry := <-jb.writeC:
+			jb.mu.Lock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
 			newCount := jb.inc()
-			log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "count", jb.count(), "index", entry.index, "data", hexutil.Encode(entry.data))
+			log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "count", newCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
 			// this write is superfluous when the received data is the root hash
 			jb.writer.Write(entry.index, entry.data)
 
@@ -249,44 +261,50 @@ OUTER:
 			// otherwise if we reached the chunk limit we also continue to hashing
 			if newCount == endCount {
 				log.Trace("quitting writec - endcount")
+				jb.mu.Unlock()
 				break OUTER
 			}
 			if newCount == jb.params.Branches {
 				log.Trace("quitting writec - branches")
+				jb.mu.Unlock()
 				break OUTER
 			}
+			jb.mu.Unlock()
 
 		// enter here if data writes have been completed
 		// TODO: this case currently executes for all cycles after data write is complete for which writes to this job do not happen. perhaps it can be improved
-		case <-jb.target.doneC:
+		case <-doneC:
+
+			jb.mu.Lock()
 
 			// we can never have count 0 and have a completed job
 			// this is the easiest check we can make
-			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
+			log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
 			count := jb.count()
 			if count == 0 {
+				jb.mu.Unlock()
 				continue
 			}
-
-			// if we have reached the end count for this chunk, we proceed to hashing
-			// this case is important when write to the level happen after this goroutine
-			// registers that data writes have been completed
-			if count == int(endCount) {
-				log.Trace("quitting donec", "level", jb.level, "count", jb.count())
-				break OUTER
-			}
-
-			// if endcount is already calculated, don't calculate it again
-			if endCount > 0 {
-				continue
-			}
+			doneC = nil
 
 			// if the target count falls within the span of this job
 			// set the endcount so we know we have to do extra calculations for
 			// determining span in case of unbalanced tree
 			targetCount := jb.target.Count()
 			endCount = jb.targetCountToEndCount(targetCount)
-			atomic.StoreInt32(&jb.endCount, int32(endCount))
+			jb.endCount = int32(endCount)
+			//atomic.StoreInt32(&jb.endCount, int32(endCount))
+			log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", endCount)
+
+			// if we have reached the end count for this chunk, we proceed to hashing
+			// this case is important when write to the level happen after this goroutine
+			// registers that data writes have been completed
+			if count == int(endCount) {
+				log.Trace("quitting donec", "level", jb.level, "count", jb.count())
+				jb.mu.Unlock()
+				break OUTER
+			}
+			jb.mu.Unlock()
 		}
 	}
 
@@ -313,6 +331,7 @@ OUTER:
 
 	// retrieve the parent and the corresponding section in it to write to
 	parent := jb.parent()
+	log.Trace("have parent", "level", jb.level, "jb p", fmt.Sprintf("%p", jb), "jbp p", fmt.Sprintf("%p", parent))
 	nextLevel := jb.level + 1
 	parentSection := dataSectionToLevelSection(jb.params, nextLevel, jb.dataSection)
 
@@ -335,7 +354,7 @@ OUTER:
 
 // determine whether the given data section count falls within the span of the current job
 func (jb *job) targetWithinJob(targetSection int) (int, bool) {
-	var endCount int
+	var endIndex int
 	var ok bool
 
 	// span one level above equals the data size of 128 units of one section on this level
@@ -349,12 +368,12 @@ func (jb *job) targetWithinJob(targetSection int) (int, bool) {
 
 		// data section index must be divided by corresponding section size on the job's level
 		// then wrap on branch period to find the correct section within this job
-		endCount = (targetSection / jb.params.Spans[jb.level]) % jb.params.Branches
+		endIndex = (targetSection / jb.params.Spans[jb.level]) % jb.params.Branches
 
 		ok = true
 	}
-	log.Trace("within", "level", jb.level, "datasection", jb.dataSection, "boundary", dataBoundary, "upper", upperLimit, "target", targetSection, "endcount", endCount, "ok", ok)
-	return int(endCount), ok
+	log.Trace("within", "level", jb.level, "datasection", jb.dataSection, "boundary", dataBoundary, "upper", upperLimit, "target", targetSection, "endindex", endIndex, "ok", ok)
+	return int(endIndex), ok
 }
 
 // if last data index falls within the span, return the appropriate end count for the level
