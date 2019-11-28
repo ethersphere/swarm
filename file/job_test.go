@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ type dummySectionWriter struct {
 	data        []byte
 	sectionSize int
 	writer      hash.Hash
+	mu          sync.Mutex
 }
 
 func newDummySectionWriter(cp int, sectionSize int) *dummySectionWriter {
@@ -48,16 +50,22 @@ func newDummySectionWriter(cp int, sectionSize int) *dummySectionWriter {
 // implements bmt.SectionWriter
 // BUG: not actually writing to hasher
 func (d *dummySectionWriter) Write(index int, data []byte) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	copy(d.data[index*sectionSize:], data)
 }
 
 // implements bmt.SectionWriter
 func (d *dummySectionWriter) Sum(b []byte, size int, span []byte) []byte {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.writer.Sum(b)
 }
 
 // implements bmt.SectionWriter
 func (d *dummySectionWriter) Reset() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.data = make([]byte, len(d.data))
 	d.writer.Reset()
 }
@@ -139,8 +147,9 @@ func TestTargetWithinJob(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, dummyHashFunc)
 	params.Debug = true
 	index := newJobIndex(9)
+	tgt := newTarget()
 
-	jb := newJob(params, nil, index, 1, branches*branches)
+	jb := newJob(params, tgt, index, 1, branches*branches)
 	defer jb.destroy()
 
 	finalSize := chunkSize*branches + chunkSize*2
@@ -366,7 +375,7 @@ func TestWriteParentSection(t *testing.T) {
 	finalSection := dataSizeToSectionIndex(finalSize, sectionSize)
 	tgt.Set(finalSize, finalSection, 3)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
 	defer cancel()
 	select {
 	case <-tgt.Done():
@@ -378,7 +387,13 @@ func TestWriteParentSection(t *testing.T) {
 		t.Fatalf("parent count: expected %d, got %d", 1, jbnp.count())
 	}
 	correctRefHex := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-	parentRef := jbnp.writer.(*dummySectionWriter).data[32:64]
+
+	// extract data in section 2 from the writer
+	// TODO: overload writer to provide a get method to extract data to improve clarity
+	w := jbnp.writer.(*dummySectionWriter)
+	w.mu.Lock()
+	parentRef := w.data[32:64]
+	w.mu.Unlock()
 	parentRefHex := hexutil.Encode(parentRef)
 	if parentRefHex != correctRefHex {
 		t.Fatalf("parent data: expected %s, got %s", correctRefHex, parentRefHex)
