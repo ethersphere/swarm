@@ -625,10 +625,10 @@ func benchmarkVector(b *testing.B) {
 	}
 	dataHash := bmt.New(poolSync)
 	treeParams := newTreeParams(sectionSize, branches, refHashFunc)
+	_, data := testutil.SerialData(dataLength, 255, 0)
 
 	for j := 0; j < b.N; j++ {
 		tgt := newTarget()
-		_, data := testutil.SerialData(dataLength, 255, 0)
 		jb := newJob(treeParams, tgt, nil, 1, 0)
 		count := 0
 		//log.Info("test vector", "length", dataLength)
