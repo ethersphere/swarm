@@ -161,12 +161,9 @@ func migrateSanctuary(db *DB) error {
 
 	err = db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		tag, err := db.tags.Get(item.Tag)
-		if err != nil {
-			return true, err
-		}
 
 		// anonymous tags should no longer appear in pushIndex
-		if tag != nil && tag.Anonymous {
+		if err == nil && tag != nil && tag.Anonymous {
 			db.pushIndex.DeleteInBatch(batch, item)
 		}
 		return false, nil
