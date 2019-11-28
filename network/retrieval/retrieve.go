@@ -147,6 +147,9 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 			go r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
 			go r.handleChunkDelivery(ctx, p, msg)
+
+		case *NewPrice:
+			go r.handleNewPrice(ctx, p, msg)
 		}
 		return nil
 	}
@@ -285,6 +288,13 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 	}
 
 	return retPeer, nil
+}
+
+// handleNewPrice updates the priceInformation for the particular peer. If there are outstanding requests for the particular chunk, we handle them.
+func (r *Retrieval) handleNewPrice(ctx context.Context, p *Peer, msg *NewPrice) {
+	// update price
+	r.peers[p.ID()].priceInformation[chunk.Proximity(msg.Addr, r.kad.BaseAddr())] = msg.Price
+	// TODO: look up outstanding chunk requests, verify wether the newPrice + margin >= the price of the outstanding request. If so, resend with new price, if not, send newPrice message ourself to Origininator of request
 }
 
 // handleRetrieveRequest handles an incoming retrieve request from a certain Peer
