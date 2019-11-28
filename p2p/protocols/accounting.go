@@ -62,7 +62,7 @@ const (
 
 // Price represents the costs of a message
 type Price struct {
-	Value   uint64
+	Value   uint
 	PerByte bool // True if the price is per byte or for unit
 	Payer   Payer
 }

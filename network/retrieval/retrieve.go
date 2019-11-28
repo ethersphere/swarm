@@ -39,7 +39,6 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/swap"
 	opentracing "github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -72,21 +71,21 @@ var (
 // Price is the method through which a message type marks itself
 // as implementing the protocols.Price protocol and thus
 // as swap-enabled message
-func (rr *RetrieveRequest) Price() *protocols.Price {
-	return &protocols.Price{
-		Value:   swap.RetrieveRequestPrice,
-		PerByte: false,
-		Payer:   protocols.Sender,
-	}
-}
+// func (rr *RetrieveRequest) Price() *protocols.Price {
+// 	return &protocols.Price{
+// 		Value:   swap.RetrieveRequestPrice,
+// 		PerByte: false,
+// 		Payer:   protocols.Sender,
+// 	}
+// }
 
 // Price is the method through which a message type marks itself
 // as implementing the protocols.Price protocol and thus
 // as swap-enabled message
 func (cd *ChunkDelivery) Price() *protocols.Price {
 	return &protocols.Price{
-		Value:   swap.ChunkDeliveryPrice,
-		PerByte: true,
+		Value:   cd.price,
+		PerByte: false,
 		Payer:   protocols.Receiver,
 	}
 }
