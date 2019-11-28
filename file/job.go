@@ -5,9 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
-	"github.com/ethersphere/swarm/log"
 )
 
 // keeps an index of all the existing jobs for a file hashing operation
@@ -41,7 +39,7 @@ func (ji *jobIndex) String() string {
 // Add adds a job to the index at the level
 // and data section index specified in the job
 func (ji *jobIndex) Add(jb *job) {
-	log.Trace("adding job", "job", jb)
+	//log.Trace("adding job", "job", jb)
 	ji.jobs[jb.level].Store(jb.dataSection, jb)
 }
 
@@ -70,7 +68,7 @@ func (ji *jobIndex) AddTopHash(ref []byte) {
 	ji.mu.Lock()
 	defer ji.mu.Unlock()
 	ji.topHashes = append(ji.topHashes, ref)
-	log.Trace("added top hash", "length", len(ji.topHashes), "index", ji)
+	//log.Trace("added top hash", "length", len(ji.topHashes), "index", ji)
 }
 
 // GetJobHash gets the current top hash for a particular level set by AddTopHash
@@ -114,14 +112,24 @@ func (t *target) Set(size int, sections int, level int) {
 	//	atomic.StoreInt32(&t.size, int32(size))
 	//	atomic.StoreInt32(&t.sections, int32(sections))
 	//	atomic.StoreInt32(&t.level, int32(level))
-	log.Trace("target set", "size", size, "sections", sections, "level", level)
+	//log.Trace("target set", "size", size, "sections", sections, "level", level)
 	close(t.doneC)
 }
 
 // Count returns the total section count for the target
 // it should only be called after Set()
 func (t *target) Count() int {
-	return int(atomic.LoadInt32(&t.sections)) + 1
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return int(t.sections) + 1
+	//return int(atomic.LoadInt32(&t.sections)) + 1
+}
+
+func (t *target) Level() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return int(t.level)
+	//return int(atomic.LoadInt32(&t.level))
 }
 
 // Done returns the channel in which the root hash will be sent
@@ -203,7 +211,7 @@ func (jb *job) size() int {
 	if endCount == 0 {
 		return count * jb.params.SectionSize * jb.params.Spans[jb.level]
 	}
-	log.Trace("size", "sections", jb.target.sections, "endcount", endCount, "level", jb.level)
+	//log.Trace("size", "sections", jb.target.sections, "endcount", endCount, "level", jb.level)
 	return int(jb.target.size) % (jb.params.Spans[jb.level] * jb.params.SectionSize * jb.params.Branches)
 }
 
@@ -218,7 +226,7 @@ func (jb *job) write(index int, data []byte) {
 	if jb.dataSection == 0 {
 		topHashLevel := jb.index.GetTopHashLevel()
 		if topHashLevel < jb.level {
-			log.Trace("have tophash", "level", jb.level, "ref", hexutil.Encode(data))
+			//log.Trace("have tophash", "level", jb.level, "ref", hexutil.Encode(data))
 			jb.index.AddTopHash(data)
 		}
 	}
@@ -247,12 +255,12 @@ OUTER:
 
 		// enter here if new data is written to the job
 		case entry := <-jb.writeC:
-			jb.mu.Lock()
+			//jb.mu.Lock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
 			newCount := jb.inc()
-			log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "count", newCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
+			//log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "count", newCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
 			// this write is superfluous when the received data is the root hash
 			jb.writer.Write(entry.index, entry.data)
 
@@ -260,31 +268,31 @@ OUTER:
 			// which means data write has been completed
 			// otherwise if we reached the chunk limit we also continue to hashing
 			if newCount == endCount {
-				log.Trace("quitting writec - endcount")
-				jb.mu.Unlock()
+				//log.Trace("quitting writec - endcount")
+				//	jb.mu.Unlock()
 				break OUTER
 			}
 			if newCount == jb.params.Branches {
-				log.Trace("quitting writec - branches")
-				jb.mu.Unlock()
+				//log.Trace("quitting writec - branches")
+				//	jb.mu.Unlock()
 				break OUTER
 			}
-			jb.mu.Unlock()
+			//jb.mu.Unlock()
 
 		// enter here if data writes have been completed
 		// TODO: this case currently executes for all cycles after data write is complete for which writes to this job do not happen. perhaps it can be improved
 		case <-doneC:
 
-			jb.mu.Lock()
+			//jb.mu.Lock()
 
 			// we can never have count 0 and have a completed job
 			// this is the easiest check we can make
-			log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
 			count := jb.count()
 			if count == 0 {
-				jb.mu.Unlock()
+				//	jb.mu.Unlock()
 				continue
 			}
+			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
 			doneC = nil
 
 			// if the target count falls within the span of this job
@@ -294,21 +302,21 @@ OUTER:
 			endCount = jb.targetCountToEndCount(targetCount)
 			jb.endCount = int32(endCount)
 			//atomic.StoreInt32(&jb.endCount, int32(endCount))
-			log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", endCount)
+			//log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", endCount)
 
 			// if we have reached the end count for this chunk, we proceed to hashing
 			// this case is important when write to the level happen after this goroutine
 			// registers that data writes have been completed
 			if count == int(endCount) {
-				log.Trace("quitting donec", "level", jb.level, "count", jb.count())
-				jb.mu.Unlock()
+				//log.Trace("quitting donec", "level", jb.level, "count", jb.count())
+				//	jb.mu.Unlock()
 				break OUTER
 			}
-			jb.mu.Unlock()
+			//jb.mu.Unlock()
 		}
 	}
 
-	targetLevel := atomic.LoadInt32(&jb.target.level)
+	targetLevel := jb.target.Level()
 	if int(targetLevel) == jb.level {
 		jb.target.resultC <- jb.index.GetTopHash(jb.level)
 		return
@@ -318,7 +326,7 @@ OUTER:
 	size := jb.size()
 	span := lengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", endCount)
+	//log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", endCount)
 	ref := jb.writer.Sum(nil, refSize, span)
 
 	// endCount > 0 means this is the last chunk on the level
@@ -331,7 +339,7 @@ OUTER:
 
 	// retrieve the parent and the corresponding section in it to write to
 	parent := jb.parent()
-	log.Trace("have parent", "level", jb.level, "jb p", fmt.Sprintf("%p", jb), "jbp p", fmt.Sprintf("%p", parent))
+	//log.Trace("have parent", "level", jb.level, "jb p", fmt.Sprintf("%p", jb), "jbp p", fmt.Sprintf("%p", parent))
 	nextLevel := jb.level + 1
 	parentSection := dataSectionToLevelSection(jb.params, nextLevel, jb.dataSection)
 
@@ -340,7 +348,7 @@ OUTER:
 	if endCount == 1 {
 		ref = jb.firstSectionData
 		for parent.level < belowRootLevel {
-			log.Trace("parent write skip", "level", parent.level)
+			//log.Trace("parent write skip", "level", parent.level)
 			oldParent := parent
 			parent = parent.parent()
 			oldParent.destroy()
@@ -372,7 +380,7 @@ func (jb *job) targetWithinJob(targetSection int) (int, bool) {
 
 		ok = true
 	}
-	log.Trace("within", "level", jb.level, "datasection", jb.dataSection, "boundary", dataBoundary, "upper", upperLimit, "target", targetSection, "endindex", endIndex, "ok", ok)
+	//log.Trace("within", "level", jb.level, "datasection", jb.dataSection, "boundary", dataBoundary, "upper", upperLimit, "target", targetSection, "endindex", endIndex, "ok", ok)
 	return int(endIndex), ok
 }
 
