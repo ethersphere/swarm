@@ -3,8 +3,6 @@ package file
 import (
 	"encoding/binary"
 	"math"
-
-	"github.com/ethersphere/swarm/log"
 )
 
 // creates a binary span size representation
@@ -41,7 +39,7 @@ func dataSectionToLevelBoundary(p *treeParams, lvl int, section int) int {
 	span := p.Spans[lvl+1]
 	spans := section / span
 	spanBytes := spans * span
-	log.Trace("levelboundary", "spans", spans, "section", section, "span", span)
+	//log.Trace("levelboundary", "spans", spans, "section", section, "span", span)
 	return spanBytes
 }
 

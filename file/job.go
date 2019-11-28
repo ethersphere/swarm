@@ -252,6 +252,7 @@ OUTER:
 
 		// enter here if new data is written to the job
 		case entry := <-jb.writeC:
+			jb.mu.Lock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
@@ -265,25 +266,28 @@ OUTER:
 			// otherwise if we reached the chunk limit we also continue to hashing
 			if newCount == endCount {
 				//log.Trace("quitting writec - endcount")
+				jb.mu.Unlock()
 				break OUTER
 			}
 			if newCount == jb.params.Branches {
 				//log.Trace("quitting writec - branches")
+				jb.mu.Unlock()
 				break OUTER
 			}
+			jb.mu.Unlock()
 
 		// enter here if data writes have been completed
 		// TODO: this case currently executes for all cycles after data write is complete for which writes to this job do not happen. perhaps it can be improved
 		case <-doneC:
-
+			jb.mu.Lock()
 			// we can never have count 0 and have a completed job
 			// this is the easiest check we can make
-			count := jb.count()
-			if count == 0 {
-				continue
-			}
+			//			if count == 0 {
+			//				continue
+			//			}
 			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
 			doneC = nil
+			count := jb.count()
 
 			// if the target count falls within the span of this job
 			// set the endcount so we know we have to do extra calculations for
@@ -296,10 +300,12 @@ OUTER:
 			// if we have reached the end count for this chunk, we proceed to hashing
 			// this case is important when write to the level happen after this goroutine
 			// registers that data writes have been completed
-			if count == int(endCount) {
+			if count > 0 && count == int(endCount) {
 				//log.Trace("quitting donec", "level", jb.level, "count", jb.count())
+				jb.mu.Unlock()
 				break OUTER
 			}
+			jb.mu.Unlock()
 		}
 	}
 
