@@ -263,14 +263,14 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 				// we cannot break or return here since the function needs to
 				// run to end from db.pushIndex.DeleteInBatch
 				log.Error("error getting tags on push sync set", "uid", i.Tag)
-			}
+			} else {
+				// setting a chunk for push sync assumes the tag is not anonymous
+				if t.Anonymous {
+					return 0, errors.New("got an anonymous chunk in push sync index")
+				}
 
-			// setting a chunk for push sync assumes the tag is not anonymous
-			if t.Anonymous {
-				return 0, errors.New("got an anonymous chunk in push sync index")
+				t.Inc(chunk.StateSynced)
 			}
-
-			t.Inc(chunk.StateSynced)
 		}
 
 		db.pushIndex.DeleteInBatch(batch, item)
