@@ -17,6 +17,7 @@ import (
 // TestReferenceFileHasherDanglingChunk explicitly tests the edge case where a single chunk hash after a balanced tree
 // should skip to the level with a single reference
 func TestReferenceFileHasherDanglingChunk(t *testing.T) {
+	t.Skip("too big")
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	h := bmt.New(pool)
 	r, data := testutil.SerialData(chunkSize*branches*branches+sectionSize, 255, 0)

@@ -442,7 +442,7 @@ func TestJobWriteSpan(t *testing.T) {
 	finalSection := dataSizeToSectionIndex(finalSize, sectionSize)
 	tgt.Set(finalSize, finalSection, 3)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*1000)
 	defer cancel()
 	select {
 	case ref := <-tgt.Done():
@@ -631,7 +631,7 @@ func benchmarkVector(b *testing.B) {
 		_, data := testutil.SerialData(dataLength, 255, 0)
 		jb := newJob(treeParams, tgt, nil, 1, 0)
 		count := 0
-		log.Info("test vector", "length", dataLength)
+		//log.Info("test vector", "length", dataLength)
 		for i := 0; i < dataLength; i += chunkSize {
 			ie := i + chunkSize
 			if ie > dataLength {
