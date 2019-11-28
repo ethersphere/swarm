@@ -500,7 +500,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 	finalSection := dataSizeToSectionIndex(finalSize, sectionSize)
 	tgt.Set(finalSize, finalSection, 3)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer cancel()
 	select {
 	case ref := <-tgt.Done():
