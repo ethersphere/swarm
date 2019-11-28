@@ -70,6 +70,7 @@ var (
 	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
+	margin             = uint(500) // TODO: make this configurable
 )
 
 // Swarm abstracts the complete Swarm stack
@@ -241,7 +242,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	nodeID := config.Enode.ID()
 	self.netStore = storage.NewNetStore(lstore, bzzconfig.OverlayAddr, nodeID)
-	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap) // nodeID.Bytes())
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap, margin) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)

@@ -84,6 +84,7 @@ func (cd *ChunkDelivery) Price() *protocols.Price {
 type Retrieval struct {
 	netStore *storage.NetStore
 	kad      *network.Kademlia
+	margin   uint
 	mtx      sync.RWMutex       // protect peer map
 	peers    map[enode.ID]*Peer // compatible peers
 	spec     *protocols.Spec    // protocol spec
@@ -92,10 +93,11 @@ type Retrieval struct {
 }
 
 // New returns a new instance of the retrieval protocol handler
-func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance) *Retrieval {
+func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance, margin uint) *Retrieval {
 	r := &Retrieval{
 		netStore: ns,
 		kad:      kad,
+		margin:   margin,
 		peers:    make(map[enode.ID]*Peer),
 		spec:     spec,
 		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
