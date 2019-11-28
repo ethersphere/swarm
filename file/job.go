@@ -80,6 +80,12 @@ func (ji *jobIndex) GetTopHash(lvl int) []byte {
 	return ji.topHashes[lvl-1]
 }
 
+func (ji *jobIndex) GetTopHashLevel() int {
+	ji.mu.Lock()
+	defer ji.mu.Unlock()
+	return len(ji.topHashes)
+}
+
 // passed to a job to determine at which data lengths and levels a job should terminate
 type target struct {
 	size     int32         // bytes written
@@ -199,9 +205,12 @@ func (jb *job) write(index int, data []byte) {
 	// in case of a balanced tree and we need to send it to resultC later
 	// at the time of hasing of a balanced tree we have no way of knowing for sure whether
 	// that is the end of the job or not
-	if len(jb.index.topHashes) < jb.level && jb.dataSection == 0 {
-		log.Trace("have tophash", "level", jb.level, "ref", hexutil.Encode(data))
-		jb.index.AddTopHash(data)
+	if jb.dataSection == 0 {
+		topHashLevel := jb.index.GetTopHashLevel()
+		if topHashLevel < jb.level {
+			log.Trace("have tophash", "level", jb.level, "ref", hexutil.Encode(data))
+			jb.index.AddTopHash(data)
+		}
 	}
 	jb.writeC <- jobUnit{
 		index: index,
@@ -281,7 +290,8 @@ OUTER:
 		}
 	}
 
-	if int(jb.target.level) == jb.level {
+	targetLevel := atomic.LoadInt32(&jb.target.level)
+	if int(targetLevel) == jb.level {
 		jb.target.resultC <- jb.index.GetTopHash(jb.level)
 		return
 	}
@@ -290,12 +300,12 @@ OUTER:
 	size := jb.size()
 	span := lengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", jb.target.level, "endcount", endCount)
+	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", endCount)
 	ref := jb.writer.Sum(nil, refSize, span)
 
 	// endCount > 0 means this is the last chunk on the level
 	// the hash from the level below the target level will be the result
-	belowRootLevel := int(jb.target.level) - 1
+	belowRootLevel := int(targetLevel) - 1
 	if endCount > 0 && jb.level == belowRootLevel {
 		jb.target.resultC <- ref
 		return

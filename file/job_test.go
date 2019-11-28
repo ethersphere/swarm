@@ -516,7 +516,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 
 		jbparent := jb.parent()
 		jbnparent := jbn.parent()
-		log.Error("failing", "jb count", jb.count(), "jbn count", jbn.count(), "jb parent count", jbparent.count(), "jbn parent count", jbnparent.count())
+		log.Error("failing", "jb count", jb.count(), "jbn count", jbn.count(), "jb parent count", jbparent.count(), "jbn parent count", jbnparent.count(), "jb parent p", fmt.Sprintf("%p", jbparent), "jbn parent p", fmt.Sprintf("%p", jbnparent))
 		t.Fatalf("timeout: %v", ctx.Err())
 	}
 
@@ -631,7 +631,6 @@ func benchmarkVector(b *testing.B) {
 			}
 			writeSize := ie - i
 			span := lengthToSpan(writeSize)
-			log.Debug("data write", "i", i, "length", writeSize, "span", span)
 			dataHash.ResetWithLength(span)
 			c, err := dataHash.Write(data[i:ie])
 			if err != nil {
@@ -643,7 +642,6 @@ func benchmarkVector(b *testing.B) {
 				b.Fatalf("data ref short write: expect %d, got %d", ie-i, c)
 			}
 			ref := dataHash.Sum(nil)
-			log.Debug("data ref", "i", i, "ie", ie, "data", hexutil.Encode(ref))
 			jb.write(count, ref)
 			count += 1
 			if ie%(chunkSize*branches) == 0 {
