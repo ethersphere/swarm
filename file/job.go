@@ -290,11 +290,6 @@ OUTER:
 		case <-jb.doneC:
 			jb.mu.Lock()
 			jb.doneC = nil
-			// we can never have count 0 and have a completed job
-			// this is the easiest check we can make
-			//			if count == 0 {
-			//				continue
-			//			}
 			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", jb.endCount)
 			count := jb.count()
 
