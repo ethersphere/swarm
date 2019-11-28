@@ -307,6 +307,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 
 	req := &storage.Request{
 		Addr:   msg.Addr,
+		Price:  msg.Price,
 		Origin: p.ID(),
 	}
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
@@ -386,7 +387,7 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 
 	const maxFindPeerRetries = 5
 	retries := 0
-
+	//TODO: make FINDPEER request based on r.Peer.priceInformation
 FINDPEER:
 	sp, err := r.findPeer(ctx, req)
 	if err != nil {
@@ -408,8 +409,9 @@ FINDPEER:
 	}
 
 	ret := &RetrieveRequest{
-		Ruid: uint(rand.Uint32()),
-		Addr: req.Addr,
+		Ruid:  uint(rand.Uint32()),
+		Price: r.peers[sp.ID()].priceInformation[chunk.Proximity(req.Addr, r.kad.BaseAddr())],
+		Addr:  req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)
 	protoPeer.addRetrieval(ret.Ruid, ret.Addr)

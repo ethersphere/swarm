@@ -30,6 +30,7 @@ import (
 // like a better option
 type Request struct {
 	Addr        Address  // chunk address
+	Price       uint     // the price offered by Origin
 	Origin      enode.ID // who is sending us that request? we compare Origin to the suggested peer from RequestFromPeers
 	PeersToSkip sync.Map // peers not to request chunk from
 }
