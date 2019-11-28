@@ -38,8 +38,13 @@ import (
 const (
 	syncStreamName      = "SYNC"
 	cacheCapacity       = 10000
-	setCacheCapacity    = 50000 // 50000 * 32 = ~1.6mb
+	setCacheCapacity    = 200000 // 200000 * 32 = ~6.4mb mem footprint, 200K chunks ~=800 megs of data
 	maxBinZeroSyncPeers = 3
+)
+
+var (
+	setCacheMissCount = metrics.GetOrRegisterCounter("network.stream.sync_provider.set.cachemiss", nil)
+	setCacheHitCount  = metrics.GetOrRegisterCounter("network.stream.sync_provider.set.cachehit", nil)
 )
 
 type syncProvider struct {
@@ -66,7 +71,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 	if err != nil {
 		panic(err)
 	}
-	sc, err := lru.New(cacheCapacity)
+	sc, err := lru.New(setCacheCapacity)
 	if err != nil {
 		panic(err)
 	}
@@ -204,6 +209,9 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 	for _, addr := range addrs {
 		if _, ok := s.setCache.Get(addr); !ok {
 			chunksToSet = append(chunksToSet, addr)
+			setCacheMissCount.Inc(1)
+		} else {
+			setCacheHitCount.Inc(1)
 		}
 	}
 	s.setCacheMtx.RUnlock()
