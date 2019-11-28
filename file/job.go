@@ -109,10 +109,6 @@ func (t *target) Set(size int, sections int, level int) {
 	t.size = int32(size)
 	t.sections = int32(sections)
 	t.level = int32(level)
-	//	atomic.StoreInt32(&t.size, int32(size))
-	//	atomic.StoreInt32(&t.sections, int32(sections))
-	//	atomic.StoreInt32(&t.level, int32(level))
-	//log.Trace("target set", "size", size, "sections", sections, "level", level)
 	close(t.doneC)
 }
 
@@ -122,14 +118,18 @@ func (t *target) Count() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return int(t.sections) + 1
-	//return int(atomic.LoadInt32(&t.sections)) + 1
 }
 
 func (t *target) Level() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return int(t.level)
-	//return int(atomic.LoadInt32(&t.level))
+}
+
+func (t *target) Size() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return int(t.size)
 }
 
 // Done returns the channel in which the root hash will be sent
@@ -190,14 +190,11 @@ func (jb *job) String() string {
 // atomically increments the write counter of the job
 func (jb *job) inc() int {
 	return int(atomic.AddInt32(&jb.cursorSection, 1))
-	//jb.cursorSection++
-	//return int(jb.cursorSection)
 }
 
 // atomically returns the write counter of the job
 func (jb *job) count() int {
 	return int(atomic.LoadInt32(&jb.cursorSection))
-	//return int(jb.cursorSection)
 }
 
 // size returns the byte size of the span the job represents
@@ -212,7 +209,7 @@ func (jb *job) size() int {
 		return count * jb.params.SectionSize * jb.params.Spans[jb.level]
 	}
 	//log.Trace("size", "sections", jb.target.sections, "endcount", endCount, "level", jb.level)
-	return int(jb.target.size) % (jb.params.Spans[jb.level] * jb.params.SectionSize * jb.params.Branches)
+	return int(jb.target.Size()) % (jb.params.Spans[jb.level] * jb.params.SectionSize * jb.params.Branches)
 }
 
 // add data to job
@@ -255,7 +252,6 @@ OUTER:
 
 		// enter here if new data is written to the job
 		case entry := <-jb.writeC:
-			//jb.mu.Lock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
@@ -269,27 +265,21 @@ OUTER:
 			// otherwise if we reached the chunk limit we also continue to hashing
 			if newCount == endCount {
 				//log.Trace("quitting writec - endcount")
-				//	jb.mu.Unlock()
 				break OUTER
 			}
 			if newCount == jb.params.Branches {
 				//log.Trace("quitting writec - branches")
-				//	jb.mu.Unlock()
 				break OUTER
 			}
-			//jb.mu.Unlock()
 
 		// enter here if data writes have been completed
 		// TODO: this case currently executes for all cycles after data write is complete for which writes to this job do not happen. perhaps it can be improved
 		case <-doneC:
 
-			//jb.mu.Lock()
-
 			// we can never have count 0 and have a completed job
 			// this is the easiest check we can make
 			count := jb.count()
 			if count == 0 {
-				//	jb.mu.Unlock()
 				continue
 			}
 			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
@@ -301,7 +291,6 @@ OUTER:
 			targetCount := jb.target.Count()
 			endCount = jb.targetCountToEndCount(targetCount)
 			jb.endCount = int32(endCount)
-			//atomic.StoreInt32(&jb.endCount, int32(endCount))
 			//log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", endCount)
 
 			// if we have reached the end count for this chunk, we proceed to hashing
@@ -309,10 +298,8 @@ OUTER:
 			// registers that data writes have been completed
 			if count == int(endCount) {
 				//log.Trace("quitting donec", "level", jb.level, "count", jb.count())
-				//	jb.mu.Unlock()
 				break OUTER
 			}
-			//jb.mu.Unlock()
 		}
 	}
 
