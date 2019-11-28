@@ -38,7 +38,7 @@ import (
 const (
 	syncStreamName      = "SYNC"
 	cacheCapacity       = 10000
-	setCacheCapacity    = 200000 // 200000 * 32 = ~6.4mb mem footprint, 200K chunks ~=800 megs of data
+	setCacheCapacity    = 80000 // 80000 * 32 = ~2.5mb mem footprint, 80K chunks ~=330 megs of data
 	maxBinZeroSyncPeers = 3
 )
 
@@ -207,7 +207,7 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 
 	s.setCacheMtx.RLock()
 	for _, addr := range addrs {
-		if _, ok := s.setCache.Get(addr); !ok {
+		if _, ok := s.setCache.Get(addr.String()); !ok {
 			chunksToSet = append(chunksToSet, addr)
 			setCacheMissCount.Inc(1)
 		} else {
@@ -226,7 +226,7 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 	defer s.setCacheMtx.Unlock()
 
 	for _, addr := range chunksToSet {
-		s.setCache.Add(addr, struct{}{})
+		s.setCache.Add(addr.String(), struct{}{})
 	}
 	return nil
 }

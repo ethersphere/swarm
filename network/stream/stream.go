@@ -45,7 +45,7 @@ import (
 
 const (
 	HashSize     = 32
-	BatchSize    = 128
+	BatchSize    = 64
 	MinFrameSize = 16
 )
 
