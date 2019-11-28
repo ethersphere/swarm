@@ -157,6 +157,7 @@ type job struct {
 
 	writeC chan jobUnit
 	writer bmt.SectionWriter // underlying data processor
+	doneC  chan struct{}     // pointer to target doneC channel, set to nil in process() when closed
 
 	mu sync.Mutex
 }
@@ -170,10 +171,21 @@ func newJob(params *treeParams, tgt *target, jobIndex *jobIndex, lvl int, dataSe
 		writer:      params.hashFunc(),
 		writeC:      make(chan jobUnit),
 		target:      tgt,
+		doneC:       nil,
 	}
 	if jb.index == nil {
 		jb.index = newJobIndex(9)
 	}
+	targetLevel := tgt.Level()
+	if targetLevel == 0 {
+		//log.Trace("setting target", "level", lvl)
+		jb.doneC = tgt.doneC
+
+	} else {
+		targetCount := tgt.Count()
+		jb.endCount = int32(jb.targetCountToEndCount(targetCount))
+	}
+	//log.Trace("target count", "level", lvl, "count", tgt.Count())
 
 	jb.index.Add(jb)
 	if !params.Debug {
@@ -239,13 +251,11 @@ func (jb *job) write(index int, data []byte) {
 // - data write is finalized and targetcount is reached on a subsequent job write
 func (jb *job) process() {
 
-	doneC := jb.target.doneC
 	defer jb.destroy()
 
 	// is set when data write is finished, AND
 	// the final data section falls within the span of this job
 	// if not, loop will only exit on Branches writes
-	endCount := 0
 OUTER:
 	for {
 		select {
@@ -253,10 +263,12 @@ OUTER:
 		// enter here if new data is written to the job
 		case entry := <-jb.writeC:
 			jb.mu.Lock()
+			newCount := jb.inc()
+			endCount := int(jb.endCount)
+			jb.mu.Unlock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
-			newCount := jb.inc()
 			//log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "count", newCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
 			// this write is superfluous when the received data is the root hash
 			jb.writer.Write(entry.index, entry.data)
@@ -266,41 +278,37 @@ OUTER:
 			// otherwise if we reached the chunk limit we also continue to hashing
 			if newCount == endCount {
 				//log.Trace("quitting writec - endcount")
-				jb.mu.Unlock()
 				break OUTER
 			}
 			if newCount == jb.params.Branches {
 				//log.Trace("quitting writec - branches")
-				jb.mu.Unlock()
 				break OUTER
 			}
-			jb.mu.Unlock()
 
 		// enter here if data writes have been completed
 		// TODO: this case currently executes for all cycles after data write is complete for which writes to this job do not happen. perhaps it can be improved
-		case <-doneC:
+		case <-jb.doneC:
 			jb.mu.Lock()
+			jb.doneC = nil
 			// we can never have count 0 and have a completed job
 			// this is the easiest check we can make
 			//			if count == 0 {
 			//				continue
 			//			}
-			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", endCount)
-			doneC = nil
+			//log.Trace("doneloop", "level", jb.level, "count", jb.count(), "endcount", jb.endCount)
 			count := jb.count()
 
 			// if the target count falls within the span of this job
 			// set the endcount so we know we have to do extra calculations for
 			// determining span in case of unbalanced tree
 			targetCount := jb.target.Count()
-			endCount = jb.targetCountToEndCount(targetCount)
-			jb.endCount = int32(endCount)
-			//log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", endCount)
+			jb.endCount = int32(jb.targetCountToEndCount(targetCount))
+			//log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", jb.endCount)
 
 			// if we have reached the end count for this chunk, we proceed to hashing
 			// this case is important when write to the level happen after this goroutine
 			// registers that data writes have been completed
-			if count > 0 && count == int(endCount) {
+			if count > 0 && count == int(jb.endCount) {
 				//log.Trace("quitting donec", "level", jb.level, "count", jb.count())
 				jb.mu.Unlock()
 				break OUTER
@@ -319,13 +327,13 @@ OUTER:
 	size := jb.size()
 	span := lengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	//log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", endCount)
+	//log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
 	ref := jb.writer.Sum(nil, refSize, span)
 
 	// endCount > 0 means this is the last chunk on the level
 	// the hash from the level below the target level will be the result
 	belowRootLevel := int(targetLevel) - 1
-	if endCount > 0 && jb.level == belowRootLevel {
+	if jb.endCount > 0 && jb.level == belowRootLevel {
 		jb.target.resultC <- ref
 		return
 	}
@@ -338,7 +346,7 @@ OUTER:
 
 	// in the event that we have a balanced tree and a chunk with single reference below the target level
 	// we move the single reference up to the penultimate level
-	if endCount == 1 {
+	if jb.endCount == 1 {
 		ref = jb.firstSectionData
 		for parent.level < belowRootLevel {
 			//log.Trace("parent write skip", "level", parent.level)
