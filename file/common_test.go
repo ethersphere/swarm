@@ -58,7 +58,7 @@ var (
 	}
 
 	start = 0
-	end   = len(dataLengths) - 1
+	end   = len(dataLengths)
 )
 
 func init() {
