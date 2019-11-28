@@ -32,17 +32,19 @@ import (
 // retrievals for that peer
 type Peer struct {
 	*network.BzzPeer
-	logger     log.Logger             // logger with base and peer address
-	mtx        sync.Mutex             // synchronize retrievals
-	retrievals map[uint]chunk.Address // current ongoing retrievals
+	logger           log.Logger             // logger with base and peer address
+	mtx              sync.Mutex             // synchronize retrievals
+	retrievals       map[uint]chunk.Address // current ongoing retrievals
+	priceInformation []uint                 // price per Proximity order
 }
 
 // NewPeer is the constructor for Peer
 func NewPeer(peer *network.BzzPeer, baseKey []byte) *Peer {
 	return &Peer{
-		BzzPeer:    peer,
-		logger:     log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
-		retrievals: make(map[uint]chunk.Address),
+		BzzPeer:          peer,
+		logger:           log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
+		retrievals:       make(map[uint]chunk.Address),
+		priceInformation: make([]uint, 10), //TODO: more intelligent way of creating this array. Load historical data from store
 	}
 }
 

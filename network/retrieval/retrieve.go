@@ -62,22 +62,12 @@ var (
 		Messages: []interface{}{
 			ChunkDelivery{},
 			RetrieveRequest{},
+			NewPrice{},
 		},
 	}
 
 	ErrNoPeerFound = errors.New("no peer found")
 )
-
-// Price is the method through which a message type marks itself
-// as implementing the protocols.Price protocol and thus
-// as swap-enabled message
-// func (rr *RetrieveRequest) Price() *protocols.Price {
-// 	return &protocols.Price{
-// 		Value:   swap.RetrieveRequestPrice,
-// 		PerByte: false,
-// 		Payer:   protocols.Sender,
-// 	}
-// }
 
 // Price is the method through which a message type marks itself
 // as implementing the protocols.Price protocol and thus

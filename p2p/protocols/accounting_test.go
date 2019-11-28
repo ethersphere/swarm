@@ -58,7 +58,7 @@ type nilPriceMsg struct{}
 func (m *perBytesMsgReceiverPays) Price() *Price {
 	return &Price{
 		PerByte: true,
-		Value:   uint64(100),
+		Value:   uint(100),
 		Payer:   Receiver,
 	}
 }
@@ -66,7 +66,7 @@ func (m *perBytesMsgReceiverPays) Price() *Price {
 func (m *perBytesMsgSenderPays) Price() *Price {
 	return &Price{
 		PerByte: true,
-		Value:   uint64(100),
+		Value:   uint(100),
 		Payer:   Sender,
 	}
 }
@@ -74,7 +74,7 @@ func (m *perBytesMsgSenderPays) Price() *Price {
 func (m *perUnitMsgReceiverPays) Price() *Price {
 	return &Price{
 		PerByte: false,
-		Value:   uint64(99),
+		Value:   uint(99),
 		Payer:   Receiver,
 	}
 }
@@ -82,7 +82,7 @@ func (m *perUnitMsgReceiverPays) Price() *Price {
 func (m *perUnitMsgSenderPays) Price() *Price {
 	return &Price{
 		PerByte: false,
-		Value:   uint64(99),
+		Value:   uint(99),
 		Payer:   Sender,
 	}
 }
@@ -90,7 +90,7 @@ func (m *perUnitMsgSenderPays) Price() *Price {
 func (m *zeroPriceMsg) Price() *Price {
 	return &Price{
 		PerByte: false,
-		Value:   uint64(0),
+		Value:   uint(0),
 		Payer:   Sender,
 	}
 }

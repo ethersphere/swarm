@@ -77,7 +77,7 @@ type Price struct {
 func (p *Price) For(payer Payer, size uint32) int64 {
 	price := p.Value
 	if p.PerByte {
-		price *= uint64(size)
+		price *= uint(size)
 	}
 	if p.Payer == payer {
 		return 0 - int64(price)

@@ -32,3 +32,9 @@ type ChunkDelivery struct {
 	Addr  storage.Address // the address of the chunk
 	SData []byte          // the chunk
 }
+
+// NewPrice is the protocol msg to notify a peer about a price for a certain chunk (distance)
+type NewPrice struct {
+	Price uint            // the proposed price for the chunk (distance)
+	Addr  storage.Address // the address of the chunk, may be synthetic (does not correspond to a real chunk)
+}

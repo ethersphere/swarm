@@ -468,11 +468,6 @@ func TestHasPriceImplementation(t *testing.T) {
 	if price == nil || price.Value == 0 {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
-
-	price = (&RetrieveRequest{}).Price()
-	if price == nil || price.Value == 0 {
-		t.Fatal("No prices set for retrieve requests")
-	}
 }
 
 func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
