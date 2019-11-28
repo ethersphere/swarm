@@ -7,11 +7,36 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
+
+// TestReferenceFileHasherDanglingChunk explicitly tests the edge case where a single chunk hash after a balanced tree
+// should skip to the level with a single reference
+func TestReferenceFileHasherDanglingChunk(t *testing.T) {
+	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	h := bmt.New(pool)
+	r, data := testutil.SerialData(chunkSize*branches*branches+sectionSize, 255, 0)
+	fh := NewReferenceFileHasher(h, branches)
+	leftHash := fh.Hash(r, chunkSize*branches*branches)
+
+	h = bmt.New(pool)
+	fh = NewReferenceFileHasher(h, branches)
+	rightHash := fh.Hash(bytes.NewBuffer(data[chunkSize*branches*branches:]), sectionSize)
+	log.Info("left", "h", hexutil.Encode(leftHash))
+	log.Info("right", "h", hexutil.Encode(rightHash))
+
+	h = bmt.New(pool)
+	span := lengthToSpan(chunkSize * branches * branches * sectionSize)
+	h.ResetWithLength(span)
+	h.Write(leftHash)
+	h.Write(rightHash)
+	topHash := h.Sum(nil)
+	log.Info("top", "h", hexutil.Encode(topHash))
+}
 
 // TestReferenceFileHasher executes the file hasher algorithms on serial input data of periods of 0-254
 // of lengths defined in common_test.go
@@ -20,15 +45,15 @@ import (
 // result mismatch is nothing else than an indication that something has changed in the reference filehasher
 // or the underlying hashing algorithm
 func TestReferenceFileHasher(t *testing.T) {
-	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, 128, bmt.PoolSize)
+	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	h := bmt.New(pool)
 	var mismatch int
 	for i := start; i < end; i++ {
 		dataLength := dataLengths[i]
 		log.Info("start", "i", i, "len", dataLength)
-		fh := NewReferenceFileHasher(h, 128)
-		_, data := testutil.SerialData(dataLength, 255, 0)
-		refHash := fh.Hash(bytes.NewReader(data), len(data))
+		fh := NewReferenceFileHasher(h, branches)
+		r, data := testutil.SerialData(dataLength, 255, 0)
+		refHash := fh.Hash(r, len(data))
 		eq := true
 		if expected[i] != fmt.Sprintf("%x", refHash) {
 			mismatch++
@@ -55,12 +80,12 @@ func benchmarkReferenceFileHasher(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	_, data := testutil.SerialData(int(dataLength), 255, 0)
-	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, 128, bmt.PoolSize)
+	r, data := testutil.SerialData(int(dataLength), 255, 0)
+	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		h := bmt.New(pool)
-		fh := NewReferenceFileHasher(h, 128)
-		fh.Hash(bytes.NewReader(data), len(data))
+		fh := NewReferenceFileHasher(h, branches)
+		fh.Hash(r, len(data))
 	}
 }

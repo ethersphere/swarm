@@ -30,7 +30,8 @@ var (
 		chunkSize*128 + 64,     // 16
 		chunkSize * 129,        // 17
 		chunkSize * 130,        // 18
-		chunkSize*128*128 - 32, // 19
+		chunkSize * 128 * 128,  // 19
+		chunkSize*128*128 + 32, // 20
 	}
 	expected = []string{
 		"ece86edb20669cc60d142789d464d57bdf5e33cb789d443f608cbd81cfa5697d", // 0
@@ -52,11 +53,12 @@ var (
 		"624b2abb7aefc0978f891b2a56b665513480e5dc195b4a66cd8def074a6d2e94", // 16
 		"b8e1804e37a064d28d161ab5f256cc482b1423d5cd0a6b30fde7b0f51ece9199", // 17
 		"59de730bf6c67a941f3b2ffa2f920acfaa1713695ad5deea12b4a121e5f23fa1", // 18
-		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b", // 19, reference file hasher returns false on this match, claims 3606dd2e51a2a71fd12bc5cacfd4d4191073e0bf3dd2a60528c2515f15920006
+		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b", // 19
+		"1d1bae3a0f2d3ef6b58df4fd6c55c2d3752339b6b474eaab52c579fafe336bfa", // 20
 	}
 
-	start = 0
-	end   = len(dataLengths) - 1
+	start = 20
+	end   = 21 //len(dataLengths) - 1
 )
 
 func init() {
