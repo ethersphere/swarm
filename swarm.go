@@ -174,7 +174,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if len(config.EnsAPIs) > 0 {
 		opts := []api.MultiResolverOption{}
 		for _, c := range config.EnsAPIs {
-			tld, endpoint, addr := parseEnsAPIAddress(c)
+			tld, endpoint, addr := parseResolverAPIAddress(c)
 			r, err := newEnsClient(endpoint, addr, config, self.privateKey)
 			if err != nil {
 				return nil, err
@@ -187,7 +187,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	if config.RnsAPI != "" {
 		var contractAddress string
-		endpoint, addr := parseRnsAPIAddress(config.RnsAPI)
+		_, endpoint, addr := parseResolverAPIAddress(config.RnsAPI)
 		if !bytes.Equal(addr.Bytes(), common.Address{}.Bytes()) {
 			contractAddress = addr.String()
 		}
@@ -291,10 +291,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	return self, nil
 }
 
-// parseEnsAPIAddress parses string according to format
-// [tld:][contract-addr@]url and returns ENSClientConfig structure
+// parseResolverAPIAddress parses string according to format
+// [tld:][contract-addr@]url and returns ClientConfig structure
 // with endpoint, contract address and TLD.
-func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
+func parseResolverAPIAddress(s string) (tld, endpoint string, addr common.Address) {
 	isAllLetterString := func(s string) bool {
 		for _, r := range s {
 			if !unicode.IsLetter(r) {
@@ -307,31 +307,6 @@ func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
 	if i := strings.Index(endpoint, ":"); i > 0 {
 		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
 			tld = endpoint[:i]
-			endpoint = endpoint[i+1:]
-		}
-	}
-	if i := strings.Index(endpoint, "@"); i > 0 {
-		addr = common.HexToAddress(endpoint[:i])
-		endpoint = endpoint[i+1:]
-	}
-	return
-}
-
-// parseRnsAPIAddress parses string according to format
-// [contract-addr@]url and returns RNSClientConfig structure
-// with endpoint and contract address
-func parseRnsAPIAddress(s string) (endpoint string, addr common.Address) {
-	isAllLetterString := func(s string) bool {
-		for _, r := range s {
-			if !unicode.IsLetter(r) {
-				return false
-			}
-		}
-		return true
-	}
-	endpoint = s
-	if i := strings.Index(endpoint, ":"); i > 0 {
-		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
 			endpoint = endpoint[i+1:]
 		}
 	}

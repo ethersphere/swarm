@@ -79,7 +79,7 @@ var (
 // ResolverFunc is function which takes a domain in the form of a string and resolves it to a content hash
 type ResolverFunc func(domain string) (common.Hash, error)
 
-// Resolve returns a resolver function
+// Resolve returns a resolver function compatible with ENS/RNS resolvers
 func (f ResolverFunc) Resolve(domain string) (common.Hash, error) { return f(domain) }
 
 // Resolver interface resolve a domain name to a hash using ENS
@@ -190,8 +190,8 @@ it is the public interface of the FileStore which is included in the ethereum st
 type API struct {
 	feed      *feed.Handler
 	fileStore *storage.FileStore
-	dns       Resolver
-	rns       Resolver
+	dns       Resolver //provides access to multiple resolvers, usually associated with ens
+	rns       Resolver //provides access to rns resolvers
 	Tags      *chunk.Tags
 	Decryptor func(context.Context, string) DecryptFunc
 }
@@ -231,7 +231,7 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 }
 
 // Resolve a name into a content-addressed hash
-// where address could be an ENS name, or a content addressed hash
+// where address could be an ENS/RNS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
 	// if address is .rsk, resolve it with RNS resolver
 	if tld(address) == "rsk" {
@@ -266,6 +266,7 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 	return resolved[:], nil
 }
 
+//
 func tld(address string) (tld string) {
 	splitAddress := strings.Split(address, ".")
 	if len(splitAddress) > 1 {
