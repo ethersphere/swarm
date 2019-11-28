@@ -3,18 +3,18 @@ package file
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
 )
 
+// ReferenceFileHasher is a non-performant source of truth implementation for the file hashing algorithm used in Swarm
+// the aim of its design is that is should be easy to understand
+// TODO: bmt.Hasher should instead be passed as hash.Hash and ResetWithLength() should be abolished
 type ReferenceFileHasher struct {
+	params         *treeParams
 	hasher         *bmt.Hasher // synchronous hasher
-	branches       int         // branching factor
-	sectionSize    int         // write section size, equals digest length of hasher
 	chunkSize      int         // cached chunk size, equals branches * sectionSize
-	spans          []int       // potential spans per level
 	buffer         []byte      // keeps intermediate chunks during hashing
 	cursors        []int       // write cursors in sectionSize units for each tree level
 	totalBytes     int         // total data bytes to be written
@@ -23,44 +23,39 @@ type ReferenceFileHasher struct {
 	writeCount     int         // amount of sections currently written
 }
 
+// NewReferenceFileHasher creates a new file hasher with the supplied branch factor
+// the section count will be the Size() of the hasher
 func NewReferenceFileHasher(hasher *bmt.Hasher, branches int) *ReferenceFileHasher {
 	f := &ReferenceFileHasher{
-		hasher:      hasher,
-		branches:    branches,
-		sectionSize: hasher.Size(),
-		chunkSize:   branches * hasher.Size(),
+		params:    newTreeParams(hasher.Size(), branches, nil),
+		hasher:    hasher,
+		chunkSize: branches * hasher.Size(),
 	}
 	return f
 }
 
-// Hash makes l reads of up to sectionSize bytes from r
-func (f *ReferenceFileHasher) Hash(r io.Reader, l int) common.Hash {
+// Hash executes l reads of up to sectionSize bytes from r
+// and performs the filehashing algorithm on the data
+// it returns the root hash
+func (f *ReferenceFileHasher) Hash(r io.Reader, l int) []byte {
 
 	f.totalBytes = l
-	// TODO: old implementation of function skewed the level by 1, realign code to new, correct results
-	f.totalLevel = getLevelsFromLength(l, f.sectionSize, f.branches) + 1
-	log.Trace("Starting reference file hasher", "levels", f.totalLevel, "length", f.totalBytes, "b", f.branches, "s", f.sectionSize)
+	f.totalLevel = getLevelsFromLength(l, f.params.SectionSize, f.params.Branches) + 1
+	log.Trace("Starting reference file hasher", "levels", f.totalLevel, "length", f.totalBytes, "b", f.params.Branches, "s", f.params.SectionSize)
 
 	// prepare a buffer for intermediate the chunks
-	bufLen := f.sectionSize
+	bufLen := f.params.SectionSize
 	for i := 1; i < f.totalLevel; i++ {
-		bufLen *= f.branches
+		bufLen *= f.params.Branches
 	}
 	f.buffer = make([]byte, bufLen)
 	f.cursors = make([]int, f.totalLevel)
-
-	// calculate what the potential span under this chunk will be
-	span := f.sectionSize
-	for i := 0; i < f.totalLevel; i++ {
-		f.spans = append(f.spans, span)
-		span *= f.branches
-	}
 
 	var res bool
 	for !res {
 
 		// read a data section into input copy buffer
-		input := make([]byte, f.sectionSize)
+		input := make([]byte, f.params.SectionSize)
 		c, err := r.Read(input)
 		log.Trace("read", "bytes", c, "total read", f.writeByteCount)
 		if err != nil {
@@ -72,9 +67,9 @@ func (f *ReferenceFileHasher) Hash(r io.Reader, l int) common.Hash {
 		}
 
 		// read only up to the announced length, since we dimensioned buffer and level count accordingly
-		readSize := f.sectionSize
+		readSize := f.params.SectionSize
 		remainingBytes := f.totalBytes - f.writeByteCount
-		if remainingBytes <= f.sectionSize {
+		if remainingBytes <= f.params.SectionSize {
 			readSize = remainingBytes
 			input = input[:remainingBytes]
 			res = true
@@ -82,12 +77,10 @@ func (f *ReferenceFileHasher) Hash(r io.Reader, l int) common.Hash {
 		f.writeByteCount += readSize
 		f.write(input, 0, res)
 	}
-	// TODO: logically this should merely be f.buffer[0:f.sectionSize]
-	//return common.BytesToHash(f.buffer[f.cursors[f.totalLevel-1] : f.cursors[f.totalLevel-1]+f.sectionSize])
 	if f.cursors[f.totalLevel-1] != 0 {
 		panic("totallevel cursor misaligned")
 	}
-	return common.BytesToHash(f.buffer[0:f.sectionSize])
+	return f.buffer[0:f.params.SectionSize]
 }
 
 // performs recursive hashing on complete batches or data end
@@ -96,7 +89,7 @@ func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
 	log.Trace("write", "level", level, "bytes", len(b), "total written", f.writeByteCount, "end", end, "data", hexutil.Encode(b))
 
 	// copy data from input copy buffer to current position of corresponding level in intermediate chunk buffer
-	copy(f.buffer[f.cursors[level]*f.sectionSize:], b)
+	copy(f.buffer[f.cursors[level]*f.params.SectionSize:], b)
 	for i, l := range f.cursors {
 		log.Trace("cursor", "level", i, "position", l)
 	}
@@ -125,13 +118,13 @@ func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
 	// - end is set
 	// the resulting digest will be written to the corresponding section of the level above
 	var res bool
-	if f.cursors[level]-f.cursors[level+1] == f.branches || end {
+	if f.cursors[level]-f.cursors[level+1] == f.params.Branches || end {
 
 		// calculate the actual data under this span
 		// if we're at end, the span is given by the period of the potential span
 		// if not, it will be the full span (since we then must have full chunk writes in the levels below)
 		var dataUnderSpan int
-		span := f.spans[level] * branches
+		span := f.params.Spans[level] * chunkSize
 		if end {
 			dataUnderSpan = (f.totalBytes-1)%span + 1
 		} else {
@@ -140,14 +133,15 @@ func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
 
 		// calculate the data in this chunk (the data to be hashed)
 		// on level 0 it is merely the actual spanned data
-		// on levels above the
-		// TODO: can this be replaced by dataSectionToLevelSection
+		// on levels above data level, we get number of sections the data equals, and divide by the level span
 		var hashDataSize int
 		if level == 0 {
 			hashDataSize = dataUnderSpan
 		} else {
-			hashSectionCount := (dataUnderSpan-1)/(span/f.branches) + 1
-			hashDataSize = hashSectionCount * f.sectionSize
+			dataSectionCount := dataSizeToSectionCount(dataUnderSpan, f.params.SectionSize)
+			// TODO: this is the same as dataSectionToLevelSection, but without wrap to 0 on end boundary. Inspect whether the function should be amended, and necessary changes made to Hasher
+			levelSectionCount := (dataSectionCount-1)/f.params.Spans[level] + 1
+			hashDataSize = levelSectionCount * f.params.SectionSize
 		}
 
 		// prepare the hasher,
@@ -155,7 +149,7 @@ func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
 		// and sum
 		spanBytes := lengthToSpan(dataUnderSpan)
 		f.hasher.ResetWithLength(spanBytes)
-		hasherWriteOffset := f.cursors[level+1] * f.sectionSize
+		hasherWriteOffset := f.cursors[level+1] * f.params.SectionSize
 		f.hasher.Write(f.buffer[hasherWriteOffset : hasherWriteOffset+hashDataSize])
 		hashResult := f.hasher.Sum(nil)
 		log.Debug("summed", "level", level, "cursor", f.cursors[level], "parent cursor", f.cursors[level+1], "span", spanBytes, "digest", hexutil.Encode(hashResult))

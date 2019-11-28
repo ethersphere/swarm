@@ -16,11 +16,13 @@ func lengthToSpan(length int) []byte {
 	return spanBytes
 }
 
+// TODO: use params instead of sectionSize
 // calculates the section index of the given byte size
 func dataSizeToSectionIndex(length int, sectionSize int) int {
 	return (length - 1) / sectionSize
 }
 
+// TODO: use params instead of sectionSize
 // calculates the section count of the given byte size
 func dataSizeToSectionCount(length int, sectionSize int) int {
 	return dataSizeToSectionIndex(length, sectionSize) + 1
@@ -43,7 +45,8 @@ func dataSectionToLevelBoundary(p *treeParams, lvl int, section int) int {
 	return spanBytes
 }
 
-// calculate how many levels a particular section count will result in.
+// TODO: use params instead of sectionSize, branches
+// calculate the last level index which a particular data section count will result in.
 // the returned level will be the level of the root hash
 func getLevelsFromLength(l int, sectionSize int, branches int) int {
 	if l == 0 {
