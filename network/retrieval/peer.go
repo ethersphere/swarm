@@ -28,7 +28,10 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-// Peer wraps BzzPeer with a contextual logger and tracks open
+var ErrCannotFindRUID = errors.New("cannot find ruid")
+var ErrNoAddressMatch = errors.New("retrieve request found but address does not match")
+
+// Peer wraps BzzPeer with a contextual logger and tracks open. TODO: update comment
 // retrievals for that peer
 type Peer struct {
 	*network.BzzPeer
@@ -59,16 +62,23 @@ func (p *Peer) addRetrieval(ruid uint, addr storage.Address) {
 // chunkReceived is called upon ChunkDelivery message reception
 // it is meant to idenfify unsolicited chunk deliveries
 func (p *Peer) checkRequest(ruid uint, addr storage.Address) error {
+	// 0 means synthetic chunk
+	if ruid == uint(0) {
+		return nil
+	}
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	v, ok := p.retrievals[ruid]
 	if !ok {
-		return errors.New("cannot find ruid")
+		return ErrCannotFindRUID
 	}
-	delete(p.retrievals, ruid) // since we got the delivery we wanted - it is safe to delete the retrieve request
 	if !bytes.Equal(v, addr) {
-		return errors.New("retrieve request found but address does not match")
+		return ErrNoAddressMatch
 	}
 
 	return nil
+}
+
+func (p *Peer) deleteRequest(ruid uint) {
+	delete(p.retrievals, ruid)
 }

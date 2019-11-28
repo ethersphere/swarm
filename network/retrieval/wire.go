@@ -35,6 +35,7 @@ type ChunkDelivery struct {
 
 // NewPrice is the protocol msg to notify a peer about a price for a certain chunk (distance)
 type NewPrice struct {
+	Ruid  uint            // unique identifier. 0 signifisies synthetic chunk
 	Price uint            // the proposed price for the chunk (distance)
 	Addr  storage.Address // the address of the chunk, may be synthetic (does not correspond to a real chunk)
 }

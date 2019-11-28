@@ -296,6 +296,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 func (r *Retrieval) handleNewPrice(ctx context.Context, p *Peer, msg *NewPrice) {
 	// update price
 	r.peers[p.ID()].priceInformation[chunk.Proximity(msg.Addr, r.kad.BaseAddr())] = msg.Price
+	r.peers[p.ID()].checkRequest(msg.Ruid, msg.Addr)
 	// TODO: look up outstanding chunk requests, verify wether the newPrice + margin >= the price of the outstanding request. If so, resend with new price, if not, send newPrice message ourself to Origininator of request
 }
 
@@ -333,6 +334,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 
 	deliveryMsg := &ChunkDelivery{
 		Ruid:  msg.Ruid,
+		price: msg.Price,
 		Addr:  chunk.Address(),
 		SData: chunk.Data(),
 	}
@@ -352,6 +354,9 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
 	err := p.checkRequest(msg.Ruid, msg.Addr)
+	if err == ErrNoAddressMatch {
+		p.deleteRequest(msg.Ruid)
+	}
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
 		p.logger.Error("unsolicited chunk delivery from peer", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
@@ -419,9 +424,14 @@ FINDPEER:
 
 		goto FINDPEER
 	}
+	// create a non-zero ruid (zero specifices synthetic chunk)
+	ruid := uint(rand.Uint32())
+	for ruid == 0 {
+		ruid = uint(rand.Uint32())
+	}
 
 	ret := &RetrieveRequest{
-		Ruid:  uint(rand.Uint32()),
+		Ruid:  ruid,
 		Price: r.peers[sp.ID()].priceInformation[chunk.Proximity(req.Addr, r.kad.BaseAddr())],
 		Addr:  req.Addr,
 	}
