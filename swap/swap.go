@@ -43,7 +43,9 @@ import (
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
-var ErrskipDeposit = errors.New("swap-deposit-amount non-zero, but swap-skip-deposit true")
+
+//ErrSkipDeposit indicates that the users wants to deposit (swap-deposit-amount) and NOT wants to deposit (swap-skip-deposit)
+var ErrSkipDeposit = errors.New("swap-deposit-amount non-zero, but swap-skip-deposit true")
 
 var swapLog log.Logger // logger for Swap related messages and audit trail
 const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
