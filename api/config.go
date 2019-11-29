@@ -54,8 +54,8 @@ type Config struct {
 	// Swap configs
 	SwapBackendURL          string         // Ethereum API endpoint
 	SwapEnabled             bool           // whether SWAP incentives are enabled
-	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
-	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
+	SwapPaymentThreshold    uint           // honey amount at which a payment is triggered
+	SwapDisconnectThreshold uint           // honey amount at which a peer disconnects
 	SwapInitialDeposit      uint64         // initial deposit amount to the chequebook
 	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract

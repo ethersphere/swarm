@@ -352,7 +352,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
-	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
+	expectedAmount := uint(overDraft) + DefaultPaymentThreshold
 	creditor.setBalance(-int64(DefaultPaymentThreshold))
 
 	// we expect a cheque at the end of the test, but not yet
@@ -376,11 +376,11 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal("Expected pending cheque")
 	}
 
-	if pending.CumulativePayout != expectedAmount {
+	if pending.CumulativePayout != uint64(expectedAmount) {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, pending.CumulativePayout)
 	}
 
-	if pending.Honey != expectedAmount {
+	if pending.Honey != uint64(expectedAmount) {
 		t.Fatalf("Expected cheque honey to be %d, but is %d", expectedAmount, pending.Honey)
 	}
 

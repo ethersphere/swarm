@@ -25,7 +25,7 @@ import (
 const (
 	// Thresholds which trigger payment or disconnection. The unit is in honey (internal accounting unit)
 	// DefaultPaymentThreshold is set to be equivalent to requesting and serving 10mb of data (2441 chunks (4096 bytes) = 10 mb, 10^7 bytes = 10 mb)
-	DefaultPaymentThreshold    = 2441*RetrieveRequestPrice + (10^7)*ChunkDeliveryPrice // 4096 * 2441 = 10 mb,
+	DefaultPaymentThreshold    = uint(2441*RetrieveRequestPrice + (10^7)*ChunkDeliveryPrice) // 4096 * 2441 = 10 mb,
 	DefaultDisconnectThreshold = 20 * DefaultPaymentThreshold
 	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation

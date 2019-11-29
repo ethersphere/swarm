@@ -476,7 +476,7 @@ FINDPEER:
 
 	ret := &RetrieveRequest{
 		Ruid:  ruid,
-		Price: r.getPeer(sp.ID(), req.Addr),
+		Price: r.getPeerPrice(sp.ID(), req.Addr),
 		Addr:  req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)

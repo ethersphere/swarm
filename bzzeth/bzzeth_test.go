@@ -87,7 +87,7 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 	}
 
 	netStore = storage.NewNetStore(localStore, bzzAddr, enode.ID{})
-	r := retrieval.New(kad, netStore, bzzAddr, nil)
+	r := retrieval.New(kad, netStore, bzzAddr, nil, 0)
 	netStore.RemoteGet = r.RequestFromPeers
 
 	cleanup = func() {

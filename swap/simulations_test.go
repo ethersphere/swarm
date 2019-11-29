@@ -275,7 +275,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout1, expectedPayout2 := DefaultPaymentThreshold+1, DefaultPaymentThreshold+1
+	expectedPayout1, expectedPayout2 := uint64(DefaultPaymentThreshold)+1, uint64(DefaultPaymentThreshold)+1
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -334,7 +334,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 				t.Fatal(err)
 			}
 			lastCount += 1
-			expectedPayout1 += DefaultPaymentThreshold + 1
+			expectedPayout1 += uint64(DefaultPaymentThreshold) + 1
 		} else {
 			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
@@ -343,7 +343,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 				t.Fatal(err)
 			}
 			lastCount += 1
-			expectedPayout2 += DefaultPaymentThreshold + 1
+			expectedPayout2 += uint64(DefaultPaymentThreshold) + 1
 		}
 	}
 
@@ -356,7 +356,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
+	expected := uint64(maxCheques) / 2 * (uint64(DefaultPaymentThreshold) + 1)
 	if ch1.CumulativePayout != expected {
 		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
 	}
@@ -404,7 +404,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout := DefaultPaymentThreshold + 1
+	expectedPayout := uint64(DefaultPaymentThreshold) + 1
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -465,7 +465,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		lastCount += 1
-		expectedPayout += DefaultPaymentThreshold + 1
+		expectedPayout += uint64(DefaultPaymentThreshold) + 1
 	}
 
 	// check balances:
@@ -496,9 +496,9 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// check also the actual expected amount
-	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
+	expectedPayout = uint64(uint(maxCheques) * (DefaultPaymentThreshold + 1))
 
-	if cheque2.CumulativePayout != expectedPayout {
+	if cheque2.CumulativePayout != uint64(expectedPayout) {
 		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
 	}
 

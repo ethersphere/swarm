@@ -465,7 +465,7 @@ func TestRequestFromPeers(t *testing.T) {
 //TestHasPriceImplementation is to check that Retrieval provides priced messages
 func TestHasPriceImplementation(t *testing.T) {
 	price := (&ChunkDelivery{}).Price()
-	if price == nil || price.Value == 0 {
+	if price == nil {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
 }

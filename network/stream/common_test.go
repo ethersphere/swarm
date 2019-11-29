@@ -126,7 +126,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(bucketKeyLocalStore, localStore)
 
-		ret := retrieval.New(kad, netStore, kad.BaseAddr(), nil)
+		ret := retrieval.New(kad, netStore, kad.BaseAddr(), nil, 0)
 		netStore.RemoteGet = ret.RequestFromPeers
 
 		if o.InitialChunkCount > 0 {

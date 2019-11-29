@@ -213,10 +213,10 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if initialDepo := ctx.GlobalUint64(SwarmSwapInitialDepositFlag.Name); initialDepo != 0 {
 		currentConfig.SwapInitialDeposit = initialDepo
 	}
-	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
+	if paymentThreshold := ctx.GlobalUint(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
 	}
-	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
+	if disconnectThreshold := ctx.GlobalUint(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
 	if ctx.GlobalIsSet(SwarmNoSyncFlag.Name) {
