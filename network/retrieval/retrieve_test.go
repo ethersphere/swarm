@@ -449,7 +449,7 @@ func TestRequestFromPeers(t *testing.T) {
 
 	to.On(peer)
 
-	s := New(to, nil, to.BaseAddr(), nil)
+	s := New(to, nil, to.BaseAddr(), nil, 0)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := s.findPeer(context.Background(), req)
@@ -497,7 +497,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := New(kad, netStore, kad.BaseAddr(), nil)
+	r := New(kad, netStore, kad.BaseAddr(), nil, 0)
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)
@@ -616,7 +616,7 @@ func newRetrievalTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storag
 		prvkey = key
 	}
 
-	r := New(kad, netStore, kad.BaseAddr(), nil)
+	r := New(kad, netStore, kad.BaseAddr(), nil, 0)
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, r.runProtocol)
 
 	return protocolTester, r, protocolTester.Stop, nil

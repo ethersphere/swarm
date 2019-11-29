@@ -131,6 +131,29 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 	return r.peers[id]
 }
 
+// get the pric for requesting a chunk from peer
+func (r *Retrieval) getPeerPrice(peer enode.ID, chunkAddr chunk.Address) uint {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	//TODO: does this return 0 if the price was never initialized?
+	return r.peers[peer].priceInformation[chunk.Proximity(chunkAddr, peer.Bytes())] //TODO: is peer.Bytes() the correct address to use?
+}
+
+func (r *Retrieval) setPeerPrice(peer enode.ID, chunkAddr chunk.Address, newPrice uint) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.peers[peer].priceInformation[chunk.Proximity(chunkAddr, peer.Bytes())] = newPrice
+}
+
+// returns true if the price
+func (r *Retrieval) verifyPrice(offeredPrice uint, wantedPrice uint) bool {
+	if offeredPrice >= wantedPrice {
+		return true
+	} else {
+		return false
+	}
+}
+
 // Run is being dispatched when 2 nodes connect
 func (r *Retrieval) Run(bp *network.BzzPeer) error {
 	sp := NewPeer(bp, r.kad.BaseAddr())
@@ -295,8 +318,14 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 // handleNewPrice updates the priceInformation for the particular peer. If there are outstanding requests for the particular chunk, we handle them.
 func (r *Retrieval) handleNewPrice(ctx context.Context, p *Peer, msg *NewPrice) {
 	// update price
-	r.peers[p.ID()].priceInformation[chunk.Proximity(msg.Addr, r.kad.BaseAddr())] = msg.Price
-	r.peers[p.ID()].checkRequest(msg.Ruid, msg.Addr)
+	r.setPeerPrice(p.ID(), msg.Addr, msg.Price)
+	err := r.peers[p.ID()].checkRequest(msg.Ruid, msg.Addr)
+	// outstanding request
+	if err == nil {
+		// TODO: compare newPrice with margin
+		// if newPrice + margin >= outstanding request price => issue new request
+		// else => send NewPrice message
+	}
 	// TODO: look up outstanding chunk requests, verify wether the newPrice + margin >= the price of the outstanding request. If so, resend with new price, if not, send newPrice message ourself to Origininator of request
 }
 
@@ -304,6 +333,13 @@ func (r *Retrieval) handleNewPrice(ctx context.Context, p *Peer, msg *NewPrice) 
 // if the chunk is found in the localstore it is served immediately, otherwise
 // it results in a new retrieve request to candidate peers in our kademlia
 func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) {
+	// return directly with a NewPrice msg if msg.price is not bigger than margin
+	wantedPrice := r.margin
+	ok := r.verifyPrice(msg.Price, wantedPrice)
+	if !ok {
+		r.createAndSendNewPrice(ctx, p, msg.Ruid, msg.Addr, wantedPrice)
+	}
+
 	p.logger.Debug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
@@ -315,14 +351,15 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 
 	defer osp.Finish()
 
-	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-	defer cancel()
-
 	req := &storage.Request{
 		Addr:   msg.Addr,
+		Ruid: 	msg.Ruid,
 		Price:  msg.Price,
 		Origin: p.ID(),
 	}
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
@@ -331,7 +368,6 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	}
 
 	p.logger.Trace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
-
 	deliveryMsg := &ChunkDelivery{
 		Ruid:  msg.Ruid,
 		price: msg.Price,
@@ -424,6 +460,14 @@ FINDPEER:
 
 		goto FINDPEER
 	}
+
+	//check if the price is ok, if not ok send a NewPrice msg
+	wantedPrice := r.margin + r.getPeerPrice(sp.ID(), req.Addr)
+	ok := r.verifyPrice(req.Price, wantedPrice)
+	if !ok {
+		r.createAndSendNewPrice(ctx, protoPeer, req.Ruid, req.Addr, wantedPrice)
+	}
+	
 	// create a non-zero ruid (zero specifices synthetic chunk)
 	ruid := uint(rand.Uint32())
 	for ruid == 0 {
@@ -432,7 +476,7 @@ FINDPEER:
 
 	ret := &RetrieveRequest{
 		Ruid:  ruid,
-		Price: r.peers[sp.ID()].priceInformation[chunk.Proximity(req.Addr, r.kad.BaseAddr())],
+		Price: r.getPeer(sp.ID(), req.Addr),
 		Addr:  req.Addr,
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)
@@ -445,6 +489,15 @@ FINDPEER:
 
 	spID := protoPeer.ID()
 	return &spID, nil
+}
+
+func (r *Retrieval) createAndSendNewPrice(ctx context.Context, destinationPeer *Peer, ruid uint, addr storage.Address, wantedPrice uint) error {
+	newPriceMsg := &NewPrice{
+		Ruid:  ruid,
+		Price: wantedPrice,
+		Addr:  addr,
+	}
+	return destinationPeer.Send(ctx, newPriceMsg)
 }
 
 func (r *Retrieval) Start(server *p2p.Server) error {

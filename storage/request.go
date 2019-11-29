@@ -29,7 +29,8 @@ import (
 // These could have also been added as part of the interface of NetStore.Get, but a request struct seemed
 // like a better option
 type Request struct {
-	Addr        Address  // chunk address
+	Addr        Address // chunk address
+	Ruid        uint	// Ruid of the originating RetriveRequest
 	Price       uint     // the price offered by Origin
 	Origin      enode.ID // who is sending us that request? we compare Origin to the suggested peer from RequestFromPeers
 	PeersToSkip sync.Map // peers not to request chunk from
