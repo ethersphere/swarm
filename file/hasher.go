@@ -19,6 +19,7 @@ type Hasher struct {
 	doneC      chan struct{}
 	job        *job // current level 1 job being written to
 	writerPool sync.Pool
+	hasherPool sync.Pool
 	size       int
 	count      int
 }
@@ -26,13 +27,16 @@ type Hasher struct {
 // New creates a new Hasher object
 func New(sectionSize int, branches int, dataWriter *bmt.Hasher, refWriterFunc func() bmt.SectionWriter) *Hasher {
 	h := &Hasher{
-		writer: dataWriter,
+		//writer: dataWriter,
 		target: newTarget(),
 		index:  newJobIndex(9),
 		writeC: make(chan []byte, branches),
 	}
 	h.writerPool.New = func() interface{} {
 		return refWriterFunc()
+	}
+	h.hasherPool.New = func() interface{} {
+		return dataWriterFunc()
 	}
 	h.params = newTreeParams(sectionSize, branches, h.getWriter)
 	h.job = newJob(h.params, h.target, h.index, 1, 0)
@@ -48,14 +52,16 @@ func (h *Hasher) Write(b []byte) {
 		h.job = h.job.Next()
 		jb.destroy()
 	}
-	span := lengthToSpan(len(b))
-	h.writer.ResetWithLength(span)
-	_, err := h.writer.Write(b)
-	if err != nil {
-		panic(err)
-	}
+	go func(i int, jb *job) {
+		hasher := h.getDataWriter(len(b))
+		_, err := hasher.Write(b)
+		if err != nil {
+			panic(err)
+		}
+		h.job.write(h.count%h.params.Branches, h.writer.Sum(nil))
+		h.putDataWriter(hasher)
+	}(h.count, h.job)
 	h.size += len(b)
-	h.job.write(h.count%h.params.Branches, h.writer.Sum(nil))
 	h.count++
 
 }
@@ -70,6 +76,19 @@ func (h *Hasher) Sum(_ []byte) []byte {
 	case ref = <-h.target.Done():
 	}
 	return ref
+}
+
+// proxy for sync.Pool
+func (h *Hasher) putDataWriter(w *bmt.Hasher) {
+	h.hasherPool.Put(w)
+}
+
+// proxy for sync.Pool
+func (h *Hasher) getDataWriter() bmt.SectionWriter {
+	span := lengthToSpan(len(b))
+	hasher := h.hasherPool.Get().(*bmt.Hasher)
+	hasher.ResetWithLength(span)
+	return hasher
 }
 
 // proxy for sync.Pool

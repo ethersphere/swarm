@@ -81,10 +81,11 @@ func benchmarkReferenceFileHasher(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	r, data := testutil.SerialData(int(dataLength), 255, 0)
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	log.Trace("running reference bench", "l", dataLength)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		r, data := testutil.SerialData(int(dataLength), 255, 0)
 		h := bmt.New(pool)
 		fh := NewReferenceFileHasher(h, branches)
 		fh.Hash(r, len(data))
