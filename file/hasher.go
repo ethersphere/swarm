@@ -10,7 +10,6 @@ import (
 // it is intended to be chainable to accommodate for arbitrary chunk manipulation
 // like encryption, erasure coding etc
 type Hasher struct {
-	writer *bmt.Hasher
 	target *target
 	params *treeParams
 	index  *jobIndex
@@ -24,19 +23,20 @@ type Hasher struct {
 	count      int
 }
 
-// New creates a new Hasher object
-func New(sectionSize int, branches int, dataWriter *bmt.Hasher, refWriterFunc func() bmt.SectionWriter) *Hasher {
+// New creates a new Hasher object using the given sectionSize and branch factor
+// hasherFunc is used to create *bmt.Hashers to hash the incoming data
+// writerFunc is used as the underlying bmt.SectionWriter for the asynchronous hasher jobs. It may be pipelined to other components with the same interface
+func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher, writerFunc func() bmt.SectionWriter) *Hasher {
 	h := &Hasher{
-		//writer: dataWriter,
 		target: newTarget(),
 		index:  newJobIndex(9),
 		writeC: make(chan []byte, branches),
 	}
 	h.writerPool.New = func() interface{} {
-		return refWriterFunc()
+		return writerFunc()
 	}
 	h.hasherPool.New = func() interface{} {
-		return dataWriterFunc()
+		return hasherFunc()
 	}
 	h.params = newTreeParams(sectionSize, branches, h.getWriter)
 	h.job = newJob(h.params, h.target, h.index, 1, 0)
@@ -46,24 +46,22 @@ func New(sectionSize int, branches int, dataWriter *bmt.Hasher, refWriterFunc fu
 
 // Write implements hash.Hash
 // TODO: enforce buffered writes and limits
+// TODO: attempt omit modulo calc on every pass
 func (h *Hasher) Write(b []byte) {
-	if h.count > 0 && h.count%branches == 0 {
-		jb := h.job
+	if h.count%branches == 0 && h.count > 0 {
 		h.job = h.job.Next()
-		jb.destroy()
 	}
 	go func(i int, jb *job) {
-		hasher := h.getDataWriter(len(b))
+		hasher := h.getHasher(len(b))
 		_, err := hasher.Write(b)
 		if err != nil {
 			panic(err)
 		}
-		h.job.write(h.count%h.params.Branches, h.writer.Sum(nil))
-		h.putDataWriter(hasher)
+		jb.write(i%h.params.Branches, hasher.Sum(nil))
+		h.putHasher(hasher)
 	}(h.count, h.job)
 	h.size += len(b)
 	h.count++
-
 }
 
 // Sum implements hash.Hash
@@ -79,13 +77,13 @@ func (h *Hasher) Sum(_ []byte) []byte {
 }
 
 // proxy for sync.Pool
-func (h *Hasher) putDataWriter(w *bmt.Hasher) {
+func (h *Hasher) putHasher(w *bmt.Hasher) {
 	h.hasherPool.Put(w)
 }
 
 // proxy for sync.Pool
-func (h *Hasher) getDataWriter() bmt.SectionWriter {
-	span := lengthToSpan(len(b))
+func (h *Hasher) getHasher(l int) *bmt.Hasher {
+	span := lengthToSpan(l)
 	hasher := h.hasherPool.Get().(*bmt.Hasher)
 	hasher.ResetWithLength(span)
 	return hasher
