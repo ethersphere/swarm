@@ -10,9 +10,41 @@ import (
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
 )
+
+func TestPyramidHasherVector(t *testing.T) {
+	t.Skip("only provided for easy reference to bug in case chunkSize*129")
+	var mismatch int
+	for i := start; i < end; i++ {
+		eq := true
+		dataLength := dataLengths[i]
+		log.Info("pyramidvector start", "i", i, "l", dataLength)
+		buf, _ := testutil.SerialData(dataLength, 255, 0)
+		putGetter := storage.NewHasherStore(&storage.FakeChunkStore{}, storage.MakeHashFunc(storage.BMTHash), false, chunk.NewTag(0, "foo", 0, false))
+
+		ctx := context.Background()
+		ref, wait, err := storage.PyramidSplit(ctx, buf, putGetter, putGetter, chunk.NewTag(0, "foo", int64(dataLength/4096+1), false))
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		err = wait(ctx)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if ref.Hex() != expected[i] {
+			mismatch++
+			eq = false
+		}
+		t.Logf("[%7d+%4d]\t%v\tref: %s\texpect: %s", dataLength/chunkSize, dataLength%chunkSize, eq, ref, expected[i])
+	}
+
+	if mismatch != 1 {
+		t.Fatalf("mismatches: %d/%d", mismatch, end-start)
+	}
+}
 
 func BenchmarkPyramidHasher(b *testing.B) {
 
