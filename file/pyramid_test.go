@@ -15,6 +15,8 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 )
 
+// TestPyramidHasherVector executes the file hasher algorithms on serial input data of periods of 0-254
+// of lengths defined in common_test.go
 func TestPyramidHasherVector(t *testing.T) {
 	t.Skip("only provided for easy reference to bug in case chunkSize*129")
 	var mismatch int
@@ -46,6 +48,7 @@ func TestPyramidHasherVector(t *testing.T) {
 	}
 }
 
+// BenchmarkPyramidHasher establishes the benchmark BenchmarkHasher should be compared to
 func BenchmarkPyramidHasher(b *testing.B) {
 
 	for i := start; i < end; i++ {
