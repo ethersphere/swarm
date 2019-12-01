@@ -550,7 +550,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 // and verifies against source of truth results generated from the reference hasher
 // for the same data
 // TODO: vet dynamically against the referencefilehasher instead of expect vector
-func TestVectors(t *testing.T) {
+func TestJobVector(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	refHashFunc := func() bmt.SectionWriter {
@@ -619,13 +619,13 @@ func TestVectors(t *testing.T) {
 }
 
 // BenchmarkVector generates benchmarks that are comparable to the pyramid hasher
-func BenchmarkVector(b *testing.B) {
+func BenchmarkJob(b *testing.B) {
 	for i := start; i < end; i++ {
-		b.Run(fmt.Sprintf("%d/%d", i, dataLengths[i]), benchmarkVector)
+		b.Run(fmt.Sprintf("%d/%d", i, dataLengths[i]), benchmarkJob)
 	}
 }
 
-func benchmarkVector(b *testing.B) {
+func benchmarkJob(b *testing.B) {
 	params := strings.Split(b.Name(), "/")
 	dataLengthParam, err := strconv.ParseInt(params[2], 10, 64)
 	if err != nil {
