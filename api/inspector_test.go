@@ -2,7 +2,6 @@ package api
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -31,8 +30,13 @@ func TestInspectorPeerStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	peerBaseKey := make([]byte, 32)
+	_, err = rand.Read(peerBaseKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	baseAddress := network.NewBzzAddr(baseKey, nil)
+	baseAddress := network.NewBzzAddr(baseKey, peerBaseKey)
 	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +62,7 @@ func TestInspectorPeerStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(peerInfo, `"base":"`+hex.EncodeToString(baseKey)[:16]+`"`) {
+	if !strings.Contains(peerInfo, `"base":"`+baseAddress.ShortUnder()) {
 		t.Error("missing base key in response")
 	}
 }
@@ -76,7 +80,6 @@ func TestInspectorStorageIndices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	peerBaseKey := make([]byte, 32)
 	_, err = rand.Read(peerBaseKey)
 	if err != nil {
