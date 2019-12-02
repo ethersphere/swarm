@@ -80,8 +80,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	hp.KeepAliveInterval = 300 * time.Millisecond
 
 	config := &network.BzzConfig{
-		OverlayAddr:  addr.Over(),
-		UnderlayAddr: addr.Under(),
+		Address: addr,
 		HiveParams:   hp,
 	}
 

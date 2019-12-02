@@ -37,9 +37,9 @@ func TestInspectorPeerStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
+	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(baseKey, baseKey), enode.ID{})
 
-	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), network.NewBzzAddr(baseKey, baseKey), stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
 	), false, false)), localStore)
@@ -81,9 +81,9 @@ func TestInspectorStorageIndices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
+	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(baseKey, baseKey), enode.ID{})
 
-	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), network.NewBzzAddr(baseKey, baseKey), stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
 	), false, false)), localStore)

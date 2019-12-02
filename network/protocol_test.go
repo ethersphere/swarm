@@ -169,8 +169,7 @@ type bzzTester struct {
 
 func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 	config := &BzzConfig{
-		OverlayAddr:  addr.Over(),
-		UnderlayAddr: addr.Under(),
+		Address: addr,
 		HiveParams:   NewHiveParams(),
 		NetworkID:    DefaultTestNetworkID,
 		LightNode:    lightNode,

@@ -25,6 +25,8 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
+	"github.com/ethersphere/swarm/network"
+
 )
 
 const (
@@ -51,7 +53,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
-	netStore := storage.NewNetStore(localStore, make([]byte, 32), enode.ID{})
+	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), make([]byte, 32)) , enode.ID{})
 	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
 		return nil, errors.New("not found")
 	}
@@ -67,7 +69,7 @@ func NewTestHandlerWithStore(datadir string, db chunk.Store, params *HandlerPara
 func newTestHandlerWithStore(fh *Handler, datadir string, db chunk.Store, params *HandlerParams) (*TestHandler, error) {
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
-	netStore := storage.NewNetStore(localStore, make([]byte, 32), enode.ID{})
+	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), make([]byte, 32)), enode.ID{})
 	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
 		return nil, errors.New("not found")
 	}

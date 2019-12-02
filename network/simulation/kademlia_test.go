@@ -132,9 +132,8 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 			hp := network.NewHiveParams()
 			hp.Discovery = discovery
 			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
+				Address: addr,
+				HiveParams: hp,
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			// store kademlia in node's bucket under BucketKeyKademlia

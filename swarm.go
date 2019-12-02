@@ -153,8 +153,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	bzzconfig := &network.BzzConfig{
-		NetworkID:    config.NetworkID,
-		OverlayAddr:  common.FromHex(config.BzzKey),
+		NetworkID:	config.NetworkID,
+		Address:  network.NewBzzAddr(common.FromHex(config.BzzKey), []byte(config.Enode.URLv4())),
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,
@@ -227,8 +227,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 
 	nodeID := config.Enode.ID()
-	self.netStore = storage.NewNetStore(lstore, bzzconfig.OverlayAddr, nodeID)
-	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.OverlayAddr, self.swap) // nodeID.Bytes())
+	self.netStore = storage.NewNetStore(lstore, bzzconfig.Address, nodeID)
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.Address, self.swap) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
@@ -239,7 +239,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	syncProvider := stream.NewSyncProvider(self.netStore, to, syncing, false)
-	self.streamer = stream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
+	self.streamer = stream.New(self.stateStore, bzzconfig.Address, syncProvider)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)

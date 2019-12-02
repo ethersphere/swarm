@@ -1539,9 +1539,8 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
+				Address: addr,
+				HiveParams: hp,
 			}
 			pskad := kademlia(ctx.Config.ID, addr.OAddr)
 			bucket.Store(simulation.BucketKeyKademlia, pskad)

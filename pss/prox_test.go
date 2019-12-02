@@ -415,9 +415,8 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[messag
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
+				Address: addr,
+				HiveParams: hp,
 			}
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
