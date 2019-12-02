@@ -99,14 +99,10 @@ func (a *BzzAddr) ShortString() string {
 
 	if len(oaddr) >= 16 {
 		oaddr = oaddr[:16]
-	} else {
-		oaddr = oaddr[:len(oaddr)]
 	}
 
 	if len(uaddr) >= 16 {
 		uaddr = uaddr[:16]
-	} else {
-		uaddr = uaddr[:len(uaddr)]
 	}
 
 	return fmt.Sprintf("%s:%s ", oaddr, uaddr)
