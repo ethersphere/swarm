@@ -48,7 +48,7 @@ type Peer struct {
 }
 
 // newPeer is the constructor for Peer
-func newPeer(peer *network.BzzPeer, address *network.BzzAddr, i state.Store, providers map[string]StreamProvider) *Peer {
+func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
 		BzzPeer:        peer,
 		providers:      providers,
@@ -57,7 +57,7 @@ func newPeer(peer *network.BzzPeer, address *network.BzzAddr, i state.Store, pro
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
-		logger:         log.New("base", address.ShortString(), "peer", peer.BzzAddr.ShortString()),
+		logger:         log.New("base", baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
 	return p
 }

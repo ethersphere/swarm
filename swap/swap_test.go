@@ -26,6 +26,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/ethersphere/swarm/network"
 	"io/ioutil"
 	"math/big"
 	mrand "math/rand"
@@ -822,7 +823,7 @@ func newDefaultParams(t *testing.T) *Params {
 		t.Fatal(err)
 	}
 	return &Params{
-		OverlayAddr:         baseKey,
+		BaseAddrs:         network.NewBzzAddr(baseKey, nil),
 		LogPath:             "",
 		PaymentThreshold:    int64(DefaultPaymentThreshold),
 		DisconnectThreshold: int64(DefaultDisconnectThreshold),
@@ -842,7 +843,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	}
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
-	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
+	swapLog = newSwapLogger(params.LogPath, params.BaseAddrs)
 	factory, err := cswap.FactoryAt(backend.factoryAddress, backend)
 	if err != nil {
 		t.Fatal(err)

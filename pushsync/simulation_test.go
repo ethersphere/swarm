@@ -186,7 +186,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 	// setup netstore
-	netStore := storage.NewNetStore(lstore, addr, n.ID())
+	netStore := storage.NewNetStore(lstore, addr)
 
 	// setup pss
 	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))

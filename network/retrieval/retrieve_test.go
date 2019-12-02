@@ -487,7 +487,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 	kad := k.(*network.Kademlia)
 
-	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(kad.BaseAddr(), addr.OAddr), n.ID())
+	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(kad.BaseAddr(), addr.OAddr))
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
@@ -621,7 +621,7 @@ func newRetrievalTester(t *testing.T, prvkey *ecdsa.PrivateKey, netStore *storag
 		prvkey = key
 	}
 
-	r := New(kad, netStore, network.NewBzzAddr(kad.BaseAddr(), network.PrivateKeyToBzzKey(prvkey)), nil)
+	r := New(kad, netStore, network.NewBzzAddr(kad.BaseAddr(), nil), nil)
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, r.runProtocol)
 
 	return protocolTester, r, protocolTester.Stop, nil
@@ -646,7 +646,7 @@ func newTestNetstore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.
 		t.Fatalf("Could not create localStore")
 	}
 
-	netStore = storage.NewNetStore(localStore, network.NewBzzAddr(bzzAddr, bzzAddr), enode.ID{})
+	netStore = storage.NewNetStore(localStore, network.NewBzzAddr(bzzAddr, bzzAddr))
 
 	cleanup = func() {
 		err = netStore.Close()

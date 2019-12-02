@@ -116,6 +116,15 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	log.Debug("Setting up Swarm service components")
 
+	bzzconfig := &network.BzzConfig{
+		NetworkID:    config.NetworkID,
+		Address:      network.NewBzzAddr(common.FromHex(config.BzzKey), []byte(config.Enode.URLv4())),
+		HiveParams:   config.HiveParams,
+		LightNode:    config.LightNodeEnabled,
+		BootnodeMode: config.BootnodeMode,
+		SyncEnabled:  config.SyncEnabled,
+	}
+
 	// Swap initialization
 	if config.SwapEnabled {
 		// for now, Swap can only be enabled in a whitelisted network
@@ -123,7 +132,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, fmt.Errorf("swap can only be enabled under BZZ Network ID %d, found Network ID %d instead", swap.AllowedNetworkID, self.config.NetworkID)
 		}
 		swapParams := &swap.Params{
-			OverlayAddr:         common.FromHex(self.config.BzzKey),
+			BaseAddrs:         bzzconfig.Address,
 			LogPath:             self.config.SwapLogPath,
 			DisconnectThreshold: int64(self.config.SwapDisconnectThreshold),
 			PaymentThreshold:    int64(self.config.SwapPaymentThreshold),
@@ -150,15 +159,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	if config.DisableAutoConnect {
 		config.HiveParams.DisableAutoConnect = true
-	}
-
-	bzzconfig := &network.BzzConfig{
-		NetworkID:    config.NetworkID,
-		Address:      network.NewBzzAddr(common.FromHex(config.BzzKey), []byte(config.Enode.URLv4())),
-		HiveParams:   config.HiveParams,
-		LightNode:    config.LightNodeEnabled,
-		BootnodeMode: config.BootnodeMode,
-		SyncEnabled:  config.SyncEnabled,
 	}
 
 	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -226,8 +226,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		feedsHandler,
 	)
 
-	nodeID := config.Enode.ID()
-	self.netStore = storage.NewNetStore(lstore, bzzconfig.Address, nodeID)
+	self.netStore = storage.NewNetStore(lstore, bzzconfig.Address)
 	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.Address, self.swap) // nodeID.Bytes())
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
@@ -238,7 +237,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		syncing = false
 	}
 
-	syncProvider := stream.NewSyncProvider(self.netStore, to, syncing, false)
+	syncProvider := stream.NewSyncProvider(self.netStore, to, bzzconfig.Address, syncing, false)
 	self.streamer = stream.New(self.stateStore, bzzconfig.Address, syncProvider)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage

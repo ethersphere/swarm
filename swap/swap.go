@@ -19,9 +19,9 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethersphere/swarm/network"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -73,22 +73,22 @@ type Owner struct {
 
 // Params encapsulates economic and operational parameters
 type Params struct {
-	OverlayAddr         []byte // this node's base address
+	BaseAddrs           *network.BzzAddr // this node's base address
 	LogPath             string // optional audit log path
 	PaymentThreshold    int64  // honey amount at which a payment is triggered
 	DisconnectThreshold int64  // honey amount at which a peer disconnects
 }
 
 // newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, overlayAddr []byte) log.Logger {
-	swapLogger := log.New("swaplog", "*", "base", hex.EncodeToString(overlayAddr)[:16])
+func newSwapLogger(logPath string, baseAddress *network.BzzAddr) log.Logger {
+	swapLogger := log.New("swaplog", "*", "base", baseAddress.ShortString())
 	setLoggerHandler(logPath, swapLogger)
 	return swapLogger
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) log.Logger {
-	peerLogger := log.New("swaplog", "*", "base", hex.EncodeToString(s.params.OverlayAddr)[:16], "peer", peerID.String()[:16])
+	peerLogger := log.New("swaplog", "*", "base", s.params.BaseAddrs.ShortString(), "peer", peerID.String()[:16])
 	setLoggerHandler(s.params.LogPath, peerLogger)
 	return peerLogger
 }
@@ -151,7 +151,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Back
 // - starts the chequebook; creates the swap instance
 func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
-	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
+	swapLog = newSwapLogger(params.LogPath, params.BaseAddrs)
 	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")

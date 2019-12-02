@@ -120,7 +120,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 		kad := k.(*network.Kademlia)
 
-		netStore := storage.NewNetStore(localStore, network.NewBzzAddr(kad.BaseAddr(), addr.UAddr), n.ID())
+		netStore := storage.NewNetStore(localStore, network.NewBzzAddr(kad.BaseAddr(), addr.UAddr))
 		lnetStore := storage.NewLNetStore(netStore)
 		fileStore := storage.NewFileStore(lnetStore, lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		bucket.Store(bucketKeyFileStore, fileStore)
@@ -155,7 +155,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		if err != nil {
 			return nil, nil, err
 		}
-		sp := NewSyncProvider(netStore, kad, o.Autostart, o.SyncOnlyWithinDepth)
+		sp := NewSyncProvider(netStore, kad, addr, o.Autostart, o.SyncOnlyWithinDepth)
 		ss := o.StreamConstructorFunc(store, addr, sp)
 
 		cleanup = func() {
