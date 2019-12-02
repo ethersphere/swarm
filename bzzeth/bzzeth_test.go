@@ -86,8 +86,8 @@ func newTestNetworkStore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *stor
 		t.Fatalf("Could not create localStore")
 	}
 
-	netStore = storage.NewNetStore(localStore, network.NewBzzAddr(bzzAddr, bzzAddr))
-	r := retrieval.New(kad, netStore, network.NewBzzAddr(bzzAddr, bzzAddr), nil)
+	netStore = storage.NewNetStore(localStore, network.NewBzzAddr(bzzAddr, nil))
+	r := retrieval.New(kad, netStore, network.NewBzzAddr(bzzAddr, nil), nil)
 	netStore.RemoteGet = r.RequestFromPeers
 
 	cleanup = func() {

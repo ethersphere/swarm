@@ -279,7 +279,7 @@ func TestResourceUseStats(t *testing.T) {
 		for i := uint64(0); i < 10; i++ {
 			a := make([]byte, 8)
 			binary.BigEndian.PutUint64(a, i)
-			p := NewPeer(&BzzPeer{BzzAddr: NewBzzAddr(a, a)}, nil)
+			p := NewPeer(&BzzPeer{BzzAddr: NewBzzAddr(a, nil)}, nil)
 			k.On(p)
 			if delay > 0 {
 				time.Sleep(delay)

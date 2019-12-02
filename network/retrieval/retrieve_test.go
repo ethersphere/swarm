@@ -487,7 +487,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 	kad := k.(*network.Kademlia)
 
-	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(kad.BaseAddr(), addr.OAddr))
+	netStore := storage.NewNetStore(localStore, addr)
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
@@ -502,7 +502,7 @@ func newBzzRetrieveWithLocalstore(ctx *adapters.ServiceContext, bucket *sync.Map
 		return nil, nil, err
 	}
 
-	r := New(kad, netStore, network.NewBzzAddr(kad.BaseAddr(), addr.OAddr), nil)
+	r := New(kad, netStore, addr, nil)
 	netStore.RemoteGet = r.RequestFromPeers
 	bucket.Store(bucketKeyFileStore, fileStore)
 	bucket.Store(bucketKeyNetstore, netStore)
@@ -646,7 +646,7 @@ func newTestNetstore(t *testing.T) (prvkey *ecdsa.PrivateKey, netStore *storage.
 		t.Fatalf("Could not create localStore")
 	}
 
-	netStore = storage.NewNetStore(localStore, network.NewBzzAddr(bzzAddr, bzzAddr))
+	netStore = storage.NewNetStore(localStore, network.NewBzzAddr(bzzAddr, nil))
 
 	cleanup = func() {
 		err = netStore.Close()

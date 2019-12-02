@@ -191,7 +191,7 @@ func TestAddressMatchProx(t *testing.T) {
 		peerAddr := pot.RandomAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
 			Peer:    protoPeer,
-			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), nil),
 		}
 		peer := network.NewPeer(bzzPeer, kad)
 		kad.On(peer)

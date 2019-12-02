@@ -120,13 +120,13 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 		kad := k.(*network.Kademlia)
 
-		netStore := storage.NewNetStore(localStore, network.NewBzzAddr(kad.BaseAddr(), addr.UAddr))
+		netStore := storage.NewNetStore(localStore, addr)
 		lnetStore := storage.NewLNetStore(netStore)
 		fileStore := storage.NewFileStore(lnetStore, lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(bucketKeyLocalStore, localStore)
 
-		ret := retrieval.New(kad, netStore, network.NewBzzAddr(kad.BaseAddr(), addr.UAddr), nil)
+		ret := retrieval.New(kad, netStore, addr, nil)
 		netStore.RemoteGet = ret.RequestFromPeers
 
 		if o.InitialChunkCount > 0 {

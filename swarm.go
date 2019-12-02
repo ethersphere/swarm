@@ -227,7 +227,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 
 	self.netStore = storage.NewNetStore(lstore, bzzconfig.Address)
-	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.Address, self.swap) // nodeID.Bytes())
+	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.Address, self.swap)
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
