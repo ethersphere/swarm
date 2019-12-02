@@ -44,7 +44,7 @@ import (
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
 
-//ErrSkipDeposit indicates that the users wants to deposit (swap-deposit-amount) and NOT wants to deposit (swap-skip-deposit)
+// ErrSkipDeposit indicates that the user has specified an amount to deposit (swap-deposit-amount) but also indicated that depositing should be skipped (swap-skip-deposit)
 var ErrSkipDeposit = errors.New("swap-deposit-amount non-zero, but swap-skip-deposit true")
 
 var swapLog log.Logger // logger for Swap related messages and audit trail
@@ -161,7 +161,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	}
 	// verify that depositAmountFlag and skipDeposit are not conflicting
 	if depositAmountFlag > 0 && skipDepositFlag {
-		return nil, ErrskipDeposit
+		return nil, ErrSkipDeposit
 	}
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
@@ -214,8 +214,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if !skipDepositFlag {
 		// prompt the user for a depositAmount
 		var toDeposit = big.NewInt(int64(depositAmountFlag))
-		var zero big.Int
-		if toDeposit.Cmp(&zero) == 0 {
+		if toDeposit.Cmp(&big.Int{}) == 0 {
 			toDeposit, err = swap.promptDepositAmount()
 			if err != nil {
 				return nil, err
@@ -617,20 +616,19 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	prompter := console.Stdin
 	// ask user for input
 	input, err := prompter.PromptInput(promptMessage)
-	var zero big.Int
 	if err != nil {
-		return &zero, err
+		return &big.Int{}, err
 	}
 	// check input
 	val, err := strconv.ParseInt(input, 10, 64)
 	if err != nil {
 		// maybe we should provide a fallback here? A bad input results in stopping the boot
-		return &zero, fmt.Errorf("Conversion error while reading user input: %v", err)
+		return &big.Int{}, fmt.Errorf("Conversion error while reading user input: %v", err)
 	}
 	return big.NewInt(val), nil
 }
 
-// StartChequebook starts the chequebook, takingV into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
+// StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
 func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract contract.Contract, err error) {
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk

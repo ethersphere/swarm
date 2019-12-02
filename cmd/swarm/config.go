@@ -214,8 +214,8 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if skipDeposit := ctx.GlobalBool(SwarmSwapSkipDepositFlag.Name); skipDeposit {
 		currentConfig.SwapSkipDeposit = true
 	}
-	if initialDepo := ctx.GlobalUint64(SwarmSwapDepositAmountFlag.Name); initialDepo != 0 {
-		currentConfig.SwapDepositAmount = initialDepo
+	if deposit := ctx.GlobalUint64(SwarmSwapDepositAmountFlag.Name); initialDepo != 0 {
+		currentConfig.SwapDepositAmount = deposit
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold

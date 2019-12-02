@@ -417,7 +417,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.deposit,
 					config.factoryAddress,
 				)
-				if !strings.Contains(err.Error(), ErrskipDeposit.Error()) {
+				if !strings.Contains(err.Error(), ErrSkipDeposit.Error()) {
 					t.Fatal("skipDeposit true and non-zero depositAmount, but created SWAP", err)
 				}
 			},
