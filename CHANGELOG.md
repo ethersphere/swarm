@@ -1,3 +1,19 @@
+## v0.5.5 (Unreleased)
+
+## v0.5.4 (November 29, 2019)
+
+### Notes
+
+- This release fixes a possible error with the data migration that was introduced in 0.5.3 and an optimization that mitigates I/O bottlenecks when syncing
+- Users can directly use this version from previous versions, there's no explicit need to run 0.5.3 before running 0.5.4
+
+### Commits
+
+* [#1993](https://github.com/ethersphere/swarm/pull/1993) stream: avoid repeated SetSyncPull for chunk
+* [#1980](https://github.com/ethersphere/swarm/pull/1980) localstore: skip tag not found on migration
+* [#1980](https://github.com/ethersphere/swarm/pull/1980) shed: RenameIndex return true if index is already renamed
+
+
 ## v0.5.3 (November 27, 2019)
 
 ### Notes
