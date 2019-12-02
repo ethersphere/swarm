@@ -74,9 +74,9 @@ type Owner struct {
 // Params encapsulates economic and operational parameters
 type Params struct {
 	BaseAddrs           *network.BzzAddr // this node's base address
-	LogPath             string // optional audit log path
-	PaymentThreshold    int64  // honey amount at which a payment is triggered
-	DisconnectThreshold int64  // honey amount at which a peer disconnects
+	LogPath             string           // optional audit log path
+	PaymentThreshold    int64            // honey amount at which a payment is triggered
+	DisconnectThreshold int64            // honey amount at which a peer disconnects
 }
 
 // newSwapLogger returns a new logger for standard swap logs

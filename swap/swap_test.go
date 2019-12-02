@@ -823,7 +823,7 @@ func newDefaultParams(t *testing.T) *Params {
 		t.Fatal(err)
 	}
 	return &Params{
-		BaseAddrs:         network.NewBzzAddr(baseKey, nil),
+		BaseAddrs:           network.NewBzzAddr(baseKey, nil),
 		LogPath:             "",
 		PaymentThreshold:    int64(DefaultPaymentThreshold),
 		DisconnectThreshold: int64(DefaultDisconnectThreshold),
