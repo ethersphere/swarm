@@ -91,7 +91,7 @@ func (a *BzzAddr) Under() []byte {
 	return a.UAddr
 }
 
-// ShortString prints beggining of the oaddr and UAddr
+// ShortString prints beginning of the OAddr and UAddr
 // It can be used for id in logging
 func (a *BzzAddr) ShortString() string {
 	return fmt.Sprintf("%s:%s ", hex.EncodeToString(a.OAddr)[:16], hex.EncodeToString(a.UAddr)[:16])
