@@ -94,7 +94,22 @@ func (a *BzzAddr) Under() []byte {
 // ShortString prints beginning of the OAddr and UAddr
 // It can be used for id in logging
 func (a *BzzAddr) ShortString() string {
-	return fmt.Sprintf("%s:%s ", hex.EncodeToString(a.OAddr)[:16], hex.EncodeToString(a.UAddr)[:16])
+	oaddr := hex.EncodeToString(a.OAddr)
+	uaddr := hex.EncodeToString(a.UAddr)
+
+	if len(oaddr) >= 16 {
+		oaddr = oaddr[:16]
+	} else {
+		oaddr = oaddr[:len(oaddr)]
+	}
+
+	if len(uaddr) >= 16 {
+		uaddr = uaddr[:16]
+	} else {
+		uaddr = uaddr[:len(uaddr)]
+	}
+
+	return fmt.Sprintf("%s:%s ", oaddr, uaddr)
 }
 
 // ID returns the node identifier in the underlay.
