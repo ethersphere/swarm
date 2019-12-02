@@ -30,7 +30,10 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 )
 
-var TagUidFunc = rand.Uint32
+var (
+	TagUidFunc     = rand.Uint32
+	TagNotFoundErr = errors.New("tag not found")
+)
 
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
@@ -72,7 +75,7 @@ func (ts *Tags) All() (t []*Tag) {
 func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	t, ok := ts.tags.Load(uid)
 	if !ok {
-		return nil, errors.New("tag not found")
+		return nil, TagNotFoundErr
 	}
 	return t.(*Tag), nil
 }

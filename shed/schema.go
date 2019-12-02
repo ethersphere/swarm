@@ -111,6 +111,9 @@ func (db *DB) RenameIndex(name, newName string) (renamed bool, err error) {
 			}
 			return true, db.putSchema(s)
 		}
+		if f.Name == newName {
+			return true, nil
+		}
 	}
 	return false, nil
 }

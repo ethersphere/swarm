@@ -75,6 +75,7 @@ const (
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
 	SwarmEnvENSAPI                  = "SWARM_ENS_API"
+	SwarmEnvRNSAPI                  = "SWARM_RNS_API"
 	SwarmEnvENSAddr                 = "SWARM_ENS_ADDR"
 	SwarmEnvCORS                    = "SWARM_CORS"
 	SwarmEnvBootnodes               = "SWARM_BOOTNODES"
@@ -235,6 +236,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 			ensAPIs[i] = expandPath(ensAPIs[i])
 		}
 		currentConfig.EnsAPIs = ensAPIs
+	}
+	if rns := ctx.GlobalString(RnsAPIFlag.Name); rns != "" {
+		currentConfig.RnsAPI = rns
 	}
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
