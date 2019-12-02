@@ -337,6 +337,7 @@ type BzzPeer struct {
 }
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
+	// TODO The overlay address is not correct until there is a way to fetch overlay address from the peer
 	return &BzzPeer{Peer: p, BzzAddr: NewBzzAddrFromEnode(p.Node())}
 }
 
