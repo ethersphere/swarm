@@ -1041,7 +1041,7 @@ type PeerState struct {
 // peer cursors and intervals are returned
 func (r *Registry) PeerInfo() (*PeerInfo, error) {
 	info := &PeerInfo{
-		Base:    hex.EncodeToString(r.address.UAddr)[:16],
+		Base:    r.address.ShortUnder(),
 		Cursors: make(map[string]map[string]uint64),
 	}
 	for name, p := range r.providers {
