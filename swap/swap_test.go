@@ -26,7 +26,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/ethersphere/swarm/network"
 	"io/ioutil"
 	"math/big"
 	mrand "math/rand"
@@ -37,6 +36,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethersphere/swarm/network"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"

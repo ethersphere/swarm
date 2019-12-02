@@ -21,7 +21,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/ethersphere/swarm/network"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -37,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
