@@ -244,7 +244,7 @@ func getPinApiAndFileStore(t *testing.T) (*API, *storage.FileStore, func()) {
 		t.Fatal(err)
 	}
 
-	swarmApi := api.NewAPI(fileStore, nil, feeds.Handler, nil, tags)
+	swarmApi := api.NewAPI(fileStore, nil, nil, feeds.Handler, nil, tags)
 	pinAPI := NewAPI(lStore, stateStore, nil, tags, swarmApi)
 
 	closeFunc := func() {
