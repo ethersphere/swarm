@@ -252,8 +252,8 @@ func newServices() adapters.Services {
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				Address: addr,
-				HiveParams:   hp,
+				Address:    addr,
+				HiveParams: hp,
 			}
 			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil, nil, nil), nil
 		},

@@ -415,7 +415,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[messag
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				Address: addr,
+				Address:    addr,
 				HiveParams: hp,
 			}
 			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)

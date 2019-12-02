@@ -57,7 +57,7 @@ func newPeer(peer *network.BzzPeer, address *network.BzzAddr, i state.Store, pro
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
-		logger:         log.New("base",address.ShortString(), "peer", peer.BzzAddr.ShortString()),
+		logger:         log.New("base", address.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
 	return p
 }

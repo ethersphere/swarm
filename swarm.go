@@ -153,8 +153,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	bzzconfig := &network.BzzConfig{
-		NetworkID:	config.NetworkID,
-		Address:  network.NewBzzAddr(common.FromHex(config.BzzKey), []byte(config.Enode.URLv4())),
+		NetworkID:    config.NetworkID,
+		Address:      network.NewBzzAddr(common.FromHex(config.BzzKey), []byte(config.Enode.URLv4())),
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,

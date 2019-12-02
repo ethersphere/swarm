@@ -70,8 +70,8 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 			bucket.Store(simulation.BucketKeyKademlia, kad)
 
 			config := &network.BzzConfig{
-				Address:addr,
-				HiveParams:   hp,
+				Address:    addr,
+				HiveParams: hp,
 			}
 			return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 		},

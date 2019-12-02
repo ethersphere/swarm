@@ -23,10 +23,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
-	"github.com/ethersphere/swarm/network"
-
 )
 
 const (
@@ -53,7 +52,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
-	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), make([]byte, 32)) , enode.ID{})
+	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), make([]byte, 32)), enode.ID{})
 	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
 		return nil, errors.New("not found")
 	}

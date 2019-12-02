@@ -109,7 +109,7 @@ func isFullCapability(c *capability.Capability) bool {
 
 // BzzConfig captures the config params used by the hive
 type BzzConfig struct {
-	Address  	*BzzAddr
+	Address      *BzzAddr
 	HiveParams   *HiveParams
 	NetworkID    uint64
 	LightNode    bool // temporarily kept as we still only define light/full on operational level

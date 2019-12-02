@@ -1539,7 +1539,7 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				Address: addr,
+				Address:    addr,
 				HiveParams: hp,
 			}
 			pskad := kademlia(ctx.Config.ID, addr.OAddr)
