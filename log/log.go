@@ -11,6 +11,18 @@ const (
 	CallDepth = 1
 )
 
+var (
+	LogBaseAddr = false
+)
+
+func New(baseAddr string, ctx ...interface{}) l.Logger {
+	if LogBaseAddr {
+		return l.New(append([]interface{}{"base", baseAddr}, ctx...)...)
+	}
+
+	return l.New(ctx...)
+}
+
 // Warn is a convenient alias for log.Warn with stats
 func Warn(msg string, ctx ...interface{}) {
 	metrics.GetOrRegisterCounter("warn", nil).Inc(1)

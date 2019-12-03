@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
+	swarmlog "github.com/ethersphere/swarm/log"
 	"github.com/mattn/go-colorable"
 )
 
@@ -28,14 +29,16 @@ import (
 var (
 	Loglevel    = flag.Int("loglevel", 2, "verbosity of logs")
 	Longrunning = flag.Bool("longrunning", false, "do run long-running tests")
-
-	rawlog = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+	rawlog      = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
 
 // Init ensures that testing.Init is called before flag.Parse and sets common
 // logging options.
 func Init() {
 	testing.Init()
+
+	// enable base address logging
+	swarmlog.LogBaseAddr = true
 
 	flag.Parse()
 
