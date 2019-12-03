@@ -221,7 +221,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 			}
 		}
 		// deposit if toDeposit is bigger than zero
-		if toDeposit.Cmp(&zero) > 0 {
+		if toDeposit.Cmp(&big.Int{}) > 0 {
 			if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
 				return nil, err
 			}
