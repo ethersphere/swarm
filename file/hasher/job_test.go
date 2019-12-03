@@ -48,6 +48,9 @@ func newDummySectionWriter(cp int, sectionSize int) *dummySectionWriter {
 	}
 }
 
+func (d *dummySectionWriter) Link(_ func() param.SectionWriter) {
+}
+
 // implements param.SectionWriter
 // BUG: not actually writing to hasher
 func (d *dummySectionWriter) Write(index int, data []byte) {
@@ -64,7 +67,7 @@ func (d *dummySectionWriter) Sum(b []byte, size int, span []byte) []byte {
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) Reset() {
+func (d *dummySectionWriter) Reset(_ context.Context) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.data = make([]byte, len(d.data))
@@ -85,7 +88,7 @@ func (d *dummySectionWriter) DigestSize() int {
 func TestDummySectionWriter(t *testing.T) {
 
 	w := newDummySectionWriter(chunkSize*2, sectionSize)
-	w.Reset()
+	w.Reset(context.Background())
 
 	data := make([]byte, 32)
 	rand.Seed(23115)
@@ -151,7 +154,6 @@ func TestTarget(t *testing.T) {
 // falls within a particular job's span
 func TestTargetWithinJob(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, dummyHashFunc)
-	params.Debug = true
 	index := newJobIndex(9)
 	tgt := newTarget()
 
@@ -308,6 +310,7 @@ func TestJobWriteTwoAndFinish(t *testing.T) {
 	params := newTreeParams(sectionSize*2, branches, dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
+	jb.start()
 	_, data := testutil.SerialData(sectionSize*2, 255, 0)
 	jb.write(0, data[:sectionSize])
 	jb.write(1, data[:sectionSize])
@@ -342,6 +345,7 @@ func TestGetJobParent(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, branches*branches)
+	jb.start()
 	jbp := jb.parent()
 	if jbp == nil {
 		t.Fatalf("parent: nil")
@@ -414,7 +418,7 @@ func TestJobWriteFull(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
-
+	jb.start()
 	_, data := testutil.SerialData(chunkSize, 255, 0)
 	for i := 0; i < branches; i++ {
 		jb.write(i, data[i*sectionSize:i*sectionSize+sectionSize])
@@ -451,6 +455,7 @@ func TestJobWriteSpan(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, hashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
+	jb.start()
 	_, data := testutil.SerialData(chunkSize+sectionSize*2, 255, 0)
 
 	for i := 0; i < chunkSize; i += sectionSize {
@@ -501,6 +506,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, hashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
+	jb.start()
 	_, data := testutil.SerialData(chunkSize+sectionSize*2, 255, 0)
 
 	var idxs []int
@@ -571,6 +577,7 @@ func TestJobVector(t *testing.T) {
 		dataLength := dataLengths[i]
 		_, data := testutil.SerialData(dataLength, 255, 0)
 		jb := newJob(params, tgt, nil, 1, 0)
+		jb.start()
 		count := 0
 		log.Info("test vector", "length", dataLength)
 		for i := 0; i < dataLength; i += chunkSize {

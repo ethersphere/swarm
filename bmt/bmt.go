@@ -18,11 +18,14 @@
 package bmt
 
 import (
+	"context"
 	"fmt"
 	"hash"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ethersphere/swarm/param"
 )
 
 /*
@@ -433,7 +436,19 @@ type AsyncHasher struct {
 	write   func(i int, section []byte, final bool)
 }
 
-// methods needed to implement AsyncWriter
+// Implements param.SectionWriter
+func (sw *AsyncHasher) Reset(_ context.Context) {
+	sw.Hasher.Reset()
+}
+
+// Implements param.SectionWriter
+func (sw *AsyncHasher) Init(_ context.Context) {
+
+}
+
+// Implements param.SectionWriter
+func (sw *AsyncHasher) Link(_ func() param.SectionWriter) {
+}
 
 // SectionSize returns the size of async section unit to use
 // Implements param.SectionWriter

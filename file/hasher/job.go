@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -41,7 +43,6 @@ func newJob(params *treeParams, tgt *target, jobIndex *jobIndex, lvl int, dataSe
 		index:       jobIndex,
 		level:       lvl,
 		dataSection: dataSection,
-		writer:      params.hashFunc(),
 		writeC:      make(chan jobUnit),
 		target:      tgt,
 		doneC:       nil,
@@ -51,20 +52,22 @@ func newJob(params *treeParams, tgt *target, jobIndex *jobIndex, lvl int, dataSe
 	}
 	targetLevel := tgt.Level()
 	if targetLevel == 0 {
-		//log.Trace("target not set", "level", lvl)
+		log.Trace("target not set", "level", lvl)
 		jb.doneC = tgt.doneC
 
 	} else {
 		targetCount := tgt.Count()
 		jb.endCount = int32(jb.targetCountToEndCount(targetCount))
 	}
-	//log.Trace("target count", "level", lvl, "count", tgt.Count())
+	log.Trace("target count", "level", lvl, "count", tgt.Count())
 
 	jb.index.Add(jb)
-	if !params.Debug {
-		go jb.process()
-	}
 	return jb
+}
+
+func (jb *job) start() {
+	jb.writer = jb.params.hashFunc()
+	go jb.process()
 }
 
 // implements Stringer interface
@@ -94,7 +97,7 @@ func (jb *job) size() int {
 	if endCount%jb.params.Branches == 0 {
 		return count * jb.params.SectionSize * jb.params.Spans[jb.level]
 	}
-	//log.Trace("size", "sections", jb.target.sections, "size", jb.target.Size(), "endcount", endCount, "level", jb.level)
+	log.Trace("size", "sections", jb.target.sections, "size", jb.target.Size(), "endcount", endCount, "level", jb.level)
 	return jb.target.Size() % (jb.params.Spans[jb.level] * jb.params.SectionSize * jb.params.Branches)
 }
 
@@ -112,7 +115,7 @@ func (jb *job) write(index int, data []byte) {
 	if jb.dataSection == 0 && index == 0 {
 		topHashLevel := jb.index.GetTopHashLevel()
 		if topHashLevel < jb.level {
-			//log.Trace("have tophash", "level", jb.level, "ref", hexutil.Encode(data))
+			log.Trace("have tophash", "level", jb.level, "ref", hexutil.Encode(data))
 			jb.index.AddTopHash(data)
 		}
 	}
@@ -147,19 +150,20 @@ OUTER:
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
-			//log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
-			// this write is superfluous when the received data is the root hash
+			log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
+
+			// TODO: this write is superfluous when the received data is the root hash
 			jb.writer.Write(entry.index, entry.data)
 
 			// since newcount is incremented above it can only equal endcount if this has been set in the case below,
 			// which means data write has been completed
 			// otherwise if we reached the chunk limit we also continue to hashing
 			if processCount == endCount {
-				//log.Trace("quitting writec - endcount", "c", processCount, "level", jb.level)
+				log.Trace("quitting writec - endcount", "c", processCount, "level", jb.level)
 				break OUTER
 			}
 			if processCount == jb.params.Branches {
-				//log.Trace("quitting writec - branches")
+				log.Trace("quitting writec - branches")
 				break OUTER
 			}
 
@@ -168,7 +172,7 @@ OUTER:
 		case <-jb.doneC:
 			jb.mu.Lock()
 			jb.doneC = nil
-			//log.Trace("doneloop", "level", jb.level, "processCount", processCount, "endcount", jb.endCount)
+			log.Trace("doneloop", "level", jb.level, "processCount", processCount, "endcount", jb.endCount)
 			//count := jb.count()
 
 			// if the target count falls within the span of this job
@@ -176,13 +180,13 @@ OUTER:
 			// determining span in case of unbalanced tree
 			targetCount := jb.target.Count()
 			jb.endCount = int32(jb.targetCountToEndCount(targetCount))
-			//log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", jb.endCount)
+			log.Trace("doneloop done", "level", jb.level, "targetcount", jb.target.Count(), "endcount", jb.endCount)
 
 			// if we have reached the end count for this chunk, we proceed to hashing
 			// this case is important when write to the level happen after this goroutine
 			// registers that data writes have been completed
 			if processCount > 0 && processCount == int(jb.endCount) {
-				//log.Trace("quitting donec", "level", jb.level, "processcount", processCount)
+				log.Trace("quitting donec", "level", jb.level, "processcount", processCount)
 				jb.mu.Unlock()
 				break OUTER
 			}
@@ -205,7 +209,7 @@ func (jb *job) sum() {
 	size := jb.size()
 	span := lengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	//log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
+	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
 	ref := jb.writer.Sum(nil, refSize, span)
 
 	// endCount > 0 means this is the last chunk on the level
@@ -218,7 +222,7 @@ func (jb *job) sum() {
 
 	// retrieve the parent and the corresponding section in it to write to
 	parent := jb.parent()
-	//log.Trace("have parent", "level", jb.level, "jb p", fmt.Sprintf("%p", jb), "jbp p", fmt.Sprintf("%p", parent))
+	log.Trace("have parent", "level", jb.level, "jb p", fmt.Sprintf("%p", jb), "jbp p", fmt.Sprintf("%p", parent))
 	nextLevel := jb.level + 1
 	parentSection := dataSectionToLevelSection(jb.params, nextLevel, jb.dataSection)
 
@@ -227,7 +231,7 @@ func (jb *job) sum() {
 	if jb.endCount == 1 {
 		ref = jb.firstSectionData
 		for parent.level < belowRootLevel {
-			//log.Trace("parent write skip", "level", parent.level)
+			log.Trace("parent write skip", "level", parent.level)
 			oldParent := parent
 			parent = parent.parent()
 			oldParent.destroy()
@@ -284,17 +288,23 @@ func (jb *job) parent() *job {
 	if parent != nil {
 		return parent
 	}
-	return newJob(jb.params, jb.target, jb.index, jb.level+1, newDataSection)
+	jbp := newJob(jb.params, jb.target, jb.index, jb.level+1, newDataSection)
+	jbp.start()
+	return jbp
 }
 
 // Next creates the job for the next data section span on the same level as the receiver job
 // this is only meant to be called once for each job, consecutive calls will overwrite index with new empty job
 func (jb *job) Next() *job {
-	return newJob(jb.params, jb.target, jb.index, jb.level, jb.dataSection+jb.params.Spans[jb.level+1])
+	jbn := newJob(jb.params, jb.target, jb.index, jb.level, jb.dataSection+jb.params.Spans[jb.level+1])
+	jbn.start()
+	return jbn
 }
 
 // cleans up the job; reset hasher and remove pointer to job from index
 func (jb *job) destroy() {
-	jb.writer.Reset()
+	if jb.writer != nil {
+		jb.writer.Reset(jb.params.GetContext())
+	}
 	jb.index.Delete(jb)
 }
