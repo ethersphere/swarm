@@ -1,4 +1,4 @@
-package file
+package hasher
 
 import (
 	"sync"
@@ -46,7 +46,7 @@ func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher, writerFun
 // TODO: enforce buffered writes and limits
 // TODO: attempt omit modulo calc on every pass
 func (h *Hasher) Write(index int, b []byte) {
-	if h.count%branches == 0 && h.count > 0 {
+	if h.count%h.params.Branches == 0 && h.count > 0 {
 		h.job = h.job.Next()
 	}
 	go func(i int, jb *job) {

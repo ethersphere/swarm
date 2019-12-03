@@ -1,4 +1,4 @@
-package file
+package hasher
 
 import (
 	"github.com/ethersphere/swarm/testutil"
