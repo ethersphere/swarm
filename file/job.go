@@ -189,6 +189,11 @@ OUTER:
 		}
 	}
 
+	jb.sum()
+}
+
+func (jb *job) sum() {
+
 	targetLevel := jb.target.Level()
 	if targetLevel == jb.level {
 		jb.target.resultC <- jb.index.GetTopHash(jb.level)
