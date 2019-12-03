@@ -9,6 +9,9 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// TestSplit creates a Splitter with a reader with one chunk of serial data and
+// a Hasher as the underlying bmt.SectionWriter
+// It verifies the returned result
 func TestSplit(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)

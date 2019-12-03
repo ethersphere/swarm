@@ -8,13 +8,14 @@ import (
 	"github.com/ethersphere/swarm/bmt"
 )
 
+// necessary metadata across asynchronous input
 type jobUnit struct {
 	index int
 	data  []byte
 	count int
 }
 
-// encapsulates one single chunk to be hashed
+// encapsulates one single intermediate chunk to be hashed
 type job struct {
 	target *target
 	params *treeParams
