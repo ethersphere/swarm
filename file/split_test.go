@@ -5,9 +5,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/file/hasher"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
+)
+
+const (
+	sectionSize = 32
+	branches    = 128
+	chunkSize   = 4096
 )
 
 // TestSplit creates a Splitter with a reader with one chunk of serial data and
@@ -22,7 +29,7 @@ func TestSplit(t *testing.T) {
 	dataHashFunc := func() *bmt.Hasher {
 		return bmt.New(poolSync)
 	}
-	h := New(sectionSize, branches, dataHashFunc, refHashFunc)
+	h := hasher.New(sectionSize, branches, dataHashFunc, refHashFunc)
 
 	r, _ := testutil.SerialData(chunkSize, 255, 0)
 	s := NewSplitter(r, h)

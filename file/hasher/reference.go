@@ -1,4 +1,4 @@
-package file
+package hasher
 
 import (
 	"io"
@@ -124,7 +124,7 @@ func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
 		// if we're at end, the span is given by the period of the potential span
 		// if not, it will be the full span (since we then must have full chunk writes in the levels below)
 		var dataUnderSpan int
-		span := f.params.Spans[level] * chunkSize
+		span := f.params.Spans[level] * f.params.ChunkSize
 		if end {
 			dataUnderSpan = (f.totalBytes-1)%span + 1
 		} else {
