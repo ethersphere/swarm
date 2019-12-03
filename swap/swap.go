@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -37,12 +36,16 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
 var ErrInvalidChequeSignature = errors.New("invalid cheque signature")
+
+// ErrSkipDeposit indicates that the user has specified an amount to deposit (swap-deposit-amount) but also indicated that depositing should be skipped (swap-skip-deposit)
+var ErrSkipDeposit = errors.New("swap-deposit-amount non-zero, but swap-skip-deposit true")
 
 var swapLog log.Logger // logger for Swap related messages and audit trail
 const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
@@ -149,12 +152,16 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Back
 // - connects to the blockchain backend;
 // - verifies that we have not connected SWAP before on a different blockchain backend;
 // - starts the chequebook; creates the swap instance
-func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, initialDepositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
+func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, skipDepositFlag bool, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
 	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
 	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
+	}
+	// verify that depositAmountFlag and skipDeposit are not conflicting
+	if depositAmountFlag > 0 && skipDepositFlag {
+		return nil, ErrSkipDeposit
 	}
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
@@ -199,15 +206,29 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		factory,
 	)
 	// start the chequebook
-	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag, initialDepositAmountFlag); err != nil {
-		return nil, err
-	}
-	availableBalance, err := swap.AvailableBalance()
-	if err != nil {
+	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag); err != nil {
 		return nil, err
 	}
 
-	swapLog.Info("available balance", "balance", availableBalance)
+	// deposit money in the chequebook if desired
+	if !skipDepositFlag {
+		// prompt the user for a depositAmount
+		var toDeposit = big.NewInt(int64(depositAmountFlag))
+		if toDeposit.Cmp(&big.Int{}) == 0 {
+			toDeposit, err = swap.promptDepositAmount()
+			if err != nil {
+				return nil, err
+			}
+		}
+		// deposit if toDeposit is bigger than zero
+		if toDeposit.Cmp(&big.Int{}) > 0 {
+			if err := swap.Deposit(context.TODO(), toDeposit); err != nil {
+				return nil, err
+			}
+		} else {
+			swapLog.Info("Skipping deposit")
+		}
+	}
 
 	return swap, nil
 }
@@ -577,27 +598,38 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	return contr.Issuer(nil)
 }
 
-func promptInitialDepositAmount() (uint64, error) {
-	// need to prompt user for initial deposit amount
-	// if 0, can not cash in cheques
-	prompter := console.Stdin
-
-	// ask user for input
-	input, err := prompter.PromptInput("Please provide the amount in Wei which will deposited to your chequebook upon deployment: ")
+// promptDepositAmount blocks and asks the user how much ERC20 he wants to deposit
+func (s *Swap) promptDepositAmount() (*big.Int, error) {
+	// retrieve available balance
+	availableBalance, err := s.AvailableBalance()
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+	balance, err := s.contract.BalanceAtTokenContract(nil, s.owner.address)
+	if err != nil {
+		return nil, err
+	}
+	// log available balance and ERC20 balance
+	swapLog.Info("Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
+	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): ")
+	// need to prompt user for deposit amount
+	prompter := console.Stdin
+	// ask user for input
+	input, err := prompter.PromptInput(promptMessage)
+	if err != nil {
+		return &big.Int{}, err
 	}
 	// check input
 	val, err := strconv.ParseInt(input, 10, 64)
 	if err != nil {
 		// maybe we should provide a fallback here? A bad input results in stopping the boot
-		return 0, fmt.Errorf("Conversion error while reading user input: %v", err)
+		return &big.Int{}, fmt.Errorf("Conversion error while reading user input: %v", err)
 	}
-	return uint64(val), nil
+	return big.NewInt(val), nil
 }
 
 // StartChequebook starts the chequebook, taking into account the chequebookAddress passed in by the user and the chequebook addresses saved on the node's database
-func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDepositAmount uint64) (contract contract.Contract, err error) {
+func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract contract.Contract, err error) {
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
@@ -609,21 +641,14 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address, initialDeposit
 	}
 	// nothing written to state disk before, no flag provided: deploying new chequebook
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
-		var toDeposit = initialDepositAmount
-		if toDeposit == 0 {
-			toDeposit, err = promptInitialDepositAmount()
-			if err != nil {
-				return nil, err
-			}
-		}
-		if contract, err = s.Deploy(context.TODO(), toDeposit); err != nil {
+
+		if contract, err = s.Deploy(context.Background()); err != nil {
 			return nil, err
 		}
 		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
 			return nil, err
 		}
-		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "deposit", toDeposit, "owner", s.owner.address)
-		// first time connecting by deploying a new chequebook
+		swapLog.Info("Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "owner", s.owner.address)
 		return contract, nil
 	}
 	// first time connecting with a chequebookAddress passed in
@@ -646,31 +671,28 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 }
 
 // Deploy deploys the Swap contract
-func (s *Swap) Deploy(ctx context.Context, initialDepositAmount uint64) (contract.Contract, error) {
+func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
-	// initial topup value
-	opts.Value = big.NewInt(int64(initialDepositAmount))
 	opts.Context = ctx
-	swapLog.Info("Deploying new swap", "owner", opts.From.Hex(), "deposit", opts.Value)
-	return s.deployLoop(opts, defaultHarddepositTimeoutDuration)
+	swapLog.Info("Deploying new swap", "owner", opts.From.Hex())
+	chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy chequebook: %v", err)
+	}
+	return chequebook, nil
 }
 
-// deployLoop repeatedly tries to deploy the swap contract .
-func (s *Swap) deployLoop(opts *bind.TransactOpts, defaultHarddepositTimeoutDuration time.Duration) (instance contract.Contract, err error) {
-	for try := 0; try < deployRetries; try++ {
-		if try > 0 {
-			time.Sleep(deployDelay)
-		}
-
-		chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
-		if err != nil {
-			swapLog.Warn("chequebook deploy error, retrying...", "try", try, "error", err)
-			continue
-		}
-
-		return chequebook, nil
+// Deposit deposits ERC20 into the chequebook contract
+func (s *Swap) Deposit(ctx context.Context, amount *big.Int) error {
+	opts := bind.NewKeyedTransactor(s.owner.privateKey)
+	opts.Context = ctx
+	swapLog.Info("Depositing ERC20 into chequebook", "amount", amount)
+	rec, err := s.contract.Deposit(opts, amount)
+	if err != nil {
+		return err
 	}
-	return nil, fmt.Errorf("failed to deploy chequebook: %v", err)
+	log.Info("Deposited ERC20 into chequebook", "amount", amount, "transaction", rec.TxHash)
+	return nil
 }
 
 func (s *Swap) loadChequebook() (common.Address, error) {
