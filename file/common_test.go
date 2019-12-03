@@ -57,8 +57,8 @@ var (
 		"ed0cc44c93b14fef2d91ab3a3674eeb6352a42ac2f0bbe524711824aae1e7bcc", // 20
 	}
 
-	start = 14
-	end   = 15 //len(dataLengths)
+	start = 0
+	end   = len(dataLengths)
 )
 
 func init() {
