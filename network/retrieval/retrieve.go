@@ -228,7 +228,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 
 		// skip peers that we have already tried
 		if req.SkipPeer(id.String()) {
-			r.logger.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
+			r.logger.Trace("findpeer skip peer", "peer", p.ShortString(), "ref", req.Addr.String())
 			return true
 		}
 

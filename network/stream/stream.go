@@ -859,7 +859,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				processReceivedChunksCount.Inc(1)
 				p.mtx.Lock()
 				if _, ok := w.hashes[c.Hex()]; !ok {
-					p.logger.Error("got an unsolicited chunk from peer", "peer", p.ID(), "caddr", c)
+					p.logger.Error("got an unsolicited chunk from peer", "peer", p.String(), "caddr", c)
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop("got an unsolicited chunk from peer")
 					p.mtx.Unlock()
