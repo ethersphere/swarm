@@ -1,6 +1,7 @@
 package hasher
 
 import (
+	"context"
 	"sync"
 
 	"github.com/ethersphere/swarm/param"
@@ -16,6 +17,7 @@ type treeParams struct {
 	Debug       bool
 	hashFunc    func() param.SectionWriter
 	writerPool  sync.Pool
+	ctx         context.Context
 }
 
 func newTreeParams(section int, branches int, hashFunc func() param.SectionWriter) *treeParams {
@@ -25,9 +27,10 @@ func newTreeParams(section int, branches int, hashFunc func() param.SectionWrite
 		Branches:    branches,
 		ChunkSize:   section * branches,
 		hashFunc:    hashFunc,
+		ctx:         context.Background(),
 	}
 	p.writerPool.New = func() interface{} {
-		return hashFunc()
+		return p.hashFunc()
 	}
 
 	span := 1
@@ -36,4 +39,12 @@ func newTreeParams(section int, branches int, hashFunc func() param.SectionWrite
 		span *= p.Branches
 	}
 	return p
+}
+
+func (p *treeParams) SetContext(ctx context.Context) {
+	p.ctx = ctx
+}
+
+func (p *treeParams) GetContext() context.Context {
+	return p.ctx
 }

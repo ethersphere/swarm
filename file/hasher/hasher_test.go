@@ -26,7 +26,8 @@ func TestHasherJobTopHash(t *testing.T) {
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc, refHashFunc)
+	h := New(sectionSize, branches, dataHashFunc)
+	h.Link(refHashFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -52,7 +53,8 @@ func TestHasherOneFullChunk(t *testing.T) {
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc, refHashFunc)
+	h := New(sectionSize, branches, dataHashFunc)
+	h.Link(refHashFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -77,8 +79,8 @@ func TestHasherJobChange(t *testing.T) {
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc, refHashFunc)
-
+	h := New(sectionSize, branches, dataHashFunc)
+	h.Link(refHashFunc)
 	jobs := make(map[string]int)
 	for i := 0; i < chunkSize*branches*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -108,7 +110,8 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc, refHashFunc)
+	h := New(sectionSize, branches, dataHashFunc)
+	h.Link(refHashFunc)
 	var i int
 	for i = 0; i < chunkSize*branches*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -135,7 +138,8 @@ func TestHasherVector(t *testing.T) {
 	for i, dataLength := range dataLengths {
 		log.Info("hashervector start", "i", i, "l", dataLength)
 		eq := true
-		h := New(sectionSize, branches, dataHashFunc, refHashFunc)
+		h := New(sectionSize, branches, dataHashFunc)
+		h.Link(refHashFunc)
 		_, data := testutil.SerialData(dataLength, 255, 0)
 		for j := 0; j < dataLength; j += chunkSize {
 			size := chunkSize
@@ -184,7 +188,8 @@ func benchmarkHasher(b *testing.B) {
 	_, data := testutil.SerialData(dataLength, 255, 0)
 
 	for j := 0; j < b.N; j++ {
-		h := New(sectionSize, branches, dataHashFunc, refHashFunc)
+		h := New(sectionSize, branches, dataHashFunc)
+		h.Link(refHashFunc)
 		for i := 0; i < dataLength; i += chunkSize {
 			size := chunkSize
 			if dataLength-i < chunkSize {

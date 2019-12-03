@@ -29,7 +29,8 @@ func TestSplit(t *testing.T) {
 	dataHashFunc := func() *bmt.Hasher {
 		return bmt.New(poolSync)
 	}
-	h := hasher.New(sectionSize, branches, dataHashFunc, refHashFunc)
+	h := hasher.New(sectionSize, branches, dataHashFunc)
+	h.Link(refHashFunc)
 
 	r, _ := testutil.SerialData(chunkSize, 255, 0)
 	s := NewSplitter(r, h)

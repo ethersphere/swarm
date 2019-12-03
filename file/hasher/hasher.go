@@ -1,9 +1,11 @@
 package hasher
 
 import (
+	"context"
 	"sync"
 
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -23,21 +25,25 @@ type Hasher struct {
 // New creates a new Hasher object using the given sectionSize and branch factor
 // hasherFunc is used to create *bmt.Hashers to hash the incoming data
 // writerFunc is used as the underlying bmt.SectionWriter for the asynchronous hasher jobs. It may be pipelined to other components with the same interface
-func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher, writerFunc func() param.SectionWriter) *Hasher {
+func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher) *Hasher {
 	h := &Hasher{
 		target: newTarget(),
 		index:  newJobIndex(9),
 	}
+	h.params = newTreeParams(sectionSize, branches, h.getWriter)
 	h.writerPool.New = func() interface{} {
-		return writerFunc()
+		return h.params.hashFunc()
 	}
 	h.hasherPool.New = func() interface{} {
 		return hasherFunc()
 	}
-	h.params = newTreeParams(sectionSize, branches, h.getWriter)
 	h.job = newJob(h.params, h.target, h.index, 1, 0)
-
 	return h
+}
+
+func (h *Hasher) Link(writerFunc func() param.SectionWriter) {
+	h.params.hashFunc = writerFunc
+	h.job.start()
 }
 
 // Write implements bmt.SectionWriter
@@ -45,6 +51,7 @@ func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher, writerFun
 // the intermediate chunk holding the data references
 // TODO: enforce buffered writes and limits
 // TODO: attempt omit modulo calc on every pass
+// TODO: preallocate full size span slice
 func (h *Hasher) Write(index int, b []byte) {
 	if h.count%h.params.Branches == 0 && h.count > 0 {
 		h.job = h.job.Next()
@@ -55,7 +62,10 @@ func (h *Hasher) Write(index int, b []byte) {
 		if err != nil {
 			panic(err)
 		}
-		jb.write(i%h.params.Branches, hasher.Sum(nil))
+		span := lengthToSpan(len(b))
+		ref := hasher.Sum(nil)
+		chunk.NewChunk(ref, append(span, b...))
+		jb.write(i%h.params.Branches, ref)
 		h.putHasher(hasher)
 	}(h.count, h.job)
 	h.size += len(b)
@@ -73,18 +83,11 @@ func (h *Hasher) Sum(_ []byte, length int, _ []byte) []byte {
 	return <-h.target.Done()
 }
 
-func (h *Hasher) Reset() {
+func (h *Hasher) Reset(ctx context.Context) {
+	h.params.ctx = ctx
 }
 
 func (h *Hasher) SectionSize() int {
-	return h.params.ChunkSize
-}
-
-func (h *Hasher) Branches() int {
-	return h.params.Branches
-}
-
-func (h *Hasher) ChunkSize() int {
 	return h.params.ChunkSize
 }
 
@@ -107,7 +110,7 @@ func (h *Hasher) getHasher(l int) *bmt.Hasher {
 
 // proxy for sync.Pool
 func (h *Hasher) putWriter(w param.SectionWriter) {
-	w.Reset()
+	w.Reset(h.params.ctx)
 	h.writerPool.Put(w)
 }
 
