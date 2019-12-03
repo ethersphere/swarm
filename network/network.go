@@ -94,7 +94,7 @@ func (a *BzzAddr) Under() []byte {
 // ShortString prints beginning of the OAddr and UAddr
 // It can be used for id in logging
 func (a *BzzAddr) ShortString() string {
-	return fmt.Sprintf("%s:%s ", a.ShortOver(), a.ShortUnder())
+	return fmt.Sprintf("%s:%s", a.ShortOver(), a.ShortUnder())
 }
 
 func (a *BzzAddr) ShortOver() string {
