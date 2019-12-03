@@ -215,7 +215,6 @@ func (jb *job) count() int {
 // if job is last index in a level and writes have been finalized, it will return the target size
 // otherwise, regardless of job index, it will return the size according to the current write count
 // TODO: returning expected size in one case and actual size in another can lead to confusion
-// TODO: two atomic ops, may change value inbetween
 func (jb *job) size() int {
 	jb.mu.Lock()
 	count := int(jb.cursorSection) //jb.count()
@@ -225,7 +224,7 @@ func (jb *job) size() int {
 		return count * jb.params.SectionSize * jb.params.Spans[jb.level]
 	}
 	//log.Trace("size", "sections", jb.target.sections, "size", jb.target.Size(), "endcount", endCount, "level", jb.level)
-	return int(jb.target.Size()) % (jb.params.Spans[jb.level] * jb.params.SectionSize * jb.params.Branches)
+	return jb.target.Size() % (jb.params.Spans[jb.level] * jb.params.SectionSize * jb.params.Branches)
 }
 
 // add data to job
@@ -320,7 +319,7 @@ OUTER:
 	}
 
 	targetLevel := jb.target.Level()
-	if int(targetLevel) == jb.level {
+	if targetLevel == jb.level {
 		jb.target.resultC <- jb.index.GetTopHash(jb.level)
 		return
 	}
@@ -334,7 +333,7 @@ OUTER:
 
 	// endCount > 0 means this is the last chunk on the level
 	// the hash from the level below the target level will be the result
-	belowRootLevel := int(targetLevel) - 1
+	belowRootLevel := targetLevel - 1
 	if jb.endCount > 0 && jb.level == belowRootLevel {
 		jb.target.resultC <- ref
 		return
@@ -383,7 +382,7 @@ func (jb *job) targetWithinJob(targetSection int) (int, bool) {
 
 		ok = true
 	}
-	return int(endIndex), ok
+	return endIndex, ok
 }
 
 // if last data index falls within the span, return the appropriate end count for the level
@@ -412,7 +411,7 @@ func (jb *job) parent() *job {
 }
 
 // Next creates the job for the next data section span on the same level as the receiver job
-// this is only meant to be called once for each job, consequtive calls will overwrite index with new empty job
+// this is only meant to be called once for each job, consecutive calls will overwrite index with new empty job
 func (jb *job) Next() *job {
 	return newJob(jb.params, jb.target, jb.index, jb.level, jb.dataSection+jb.params.Spans[jb.level+1])
 }

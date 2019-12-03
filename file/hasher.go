@@ -69,11 +69,7 @@ func (h *Hasher) Sum(_ []byte) []byte {
 	sectionCount := dataSizeToSectionIndex(h.size, h.params.SectionSize)
 	targetLevel := getLevelsFromLength(h.size, h.params.SectionSize, h.params.Branches)
 	h.target.Set(h.size, sectionCount, targetLevel)
-	var ref []byte
-	select {
-	case ref = <-h.target.Done():
-	}
-	return ref
+	return <-h.target.Done()
 }
 
 // proxy for sync.Pool
