@@ -30,13 +30,9 @@ func TestInspectorPeerStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peerBaseKey := make([]byte, 32)
-	_, err = rand.Read(peerBaseKey)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	baseAddress := network.NewBzzAddr(baseKey, peerBaseKey)
+	// using the same key in for underlay address as well as it is not important for test
+	baseAddress := network.NewBzzAddr(baseKey, baseKey)
 	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -80,13 +76,9 @@ func TestInspectorStorageIndices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peerBaseKey := make([]byte, 32)
-	_, err = rand.Read(peerBaseKey)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	baseAddress := network.NewBzzAddr(baseKey, peerBaseKey)
+	// using the same key in for underlay address as well as it is not important for test
+	baseAddress := network.NewBzzAddr(baseKey, baseKey)
 	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
 	if err != nil {
 		t.Fatal(err)
