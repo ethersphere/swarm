@@ -6,7 +6,6 @@ import (
 	"github.com/ethersphere/swarm/bmt"
 )
 
-// Hasher implements file.SectionWriter
 // it is intended to be chainable to accommodate for arbitrary chunk manipulation
 // like encryption, erasure coding etc
 type Hasher struct {
@@ -44,7 +43,6 @@ func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher, writerFun
 	return h
 }
 
-// Write implements hash.Hash
 // TODO: enforce buffered writes and limits
 // TODO: attempt omit modulo calc on every pass
 func (h *Hasher) Write(b []byte) {
@@ -64,7 +62,6 @@ func (h *Hasher) Write(b []byte) {
 	h.count++
 }
 
-// Sum implements hash.Hash
 func (h *Hasher) Sum(_ []byte) []byte {
 	sectionCount := dataSizeToSectionIndex(h.size, h.params.SectionSize)
 	targetLevel := getLevelsFromLength(h.size, h.params.SectionSize, h.params.Branches)
