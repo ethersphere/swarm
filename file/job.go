@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/param"
 )
 
 // necessary metadata across asynchronous input
@@ -29,8 +29,8 @@ type job struct {
 	firstSectionData []byte // store first section of data written to solve the dangling chunk edge case
 
 	writeC chan jobUnit
-	writer bmt.SectionWriter // underlying data processor
-	doneC  chan struct{}     // pointer to target doneC channel, set to nil in process() when closed
+	writer param.SectionWriter // underlying data processor
+	doneC  chan struct{}       // pointer to target doneC channel, set to nil in process() when closed
 
 	mu sync.Mutex
 }
