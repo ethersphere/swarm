@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
@@ -547,16 +548,16 @@ func splitAndShuffle(secsize int, data []byte) (idxs []int, segments [][]byte) {
 }
 
 // splits the input data performs a random shuffle to mock async section writes
-func asyncHashRandom(bmt SectionWriter, span []byte, data []byte, wh whenHash) (s []byte) {
+func asyncHashRandom(bmt param.SectionWriter, span []byte, data []byte, wh whenHash) (s []byte) {
 	idxs, segments := splitAndShuffle(bmt.SectionSize(), data)
 	return asyncHash(bmt, span, len(data), wh, idxs, segments)
 }
 
-// mock for async section writes for BMT SectionWriter
+// mock for async section writes for param.SectionWriter
 // requires a permutation (a random shuffle) of list of all indexes of segments
 // and writes them in order to the appropriate section
 // the Sum function is called according to the wh parameter (first, last, random [relative to segment writes])
-func asyncHash(bmt SectionWriter, span []byte, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
+func asyncHash(bmt param.SectionWriter, span []byte, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
 	bmt.Reset()
 	if l == 0 {
 		return bmt.Sum(nil, l, span)

@@ -3,18 +3,18 @@ package file
 import (
 	"io"
 
-	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/param"
 )
 
 // TODO: grow buffer on demand to reduce allocs
 // Splitter returns the result of a data stream from a bmt.SectionWriter
 type Splitter struct {
 	r io.Reader
-	w bmt.SectionWriter
+	w param.SectionWriter
 }
 
 // NewSplitter creates a new Splitter object
-func NewSplitter(r io.Reader, w bmt.SectionWriter) *Splitter {
+func NewSplitter(r io.Reader, w param.SectionWriter) *Splitter {
 	s := &Splitter{
 		r: r,
 		w: w,

@@ -411,14 +411,6 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 	}
 }
 
-// SectionWriter is an asynchronous segment/section writer interface
-type SectionWriter interface {
-	Reset()                                       // standard init to be called before reuse
-	Write(index int, data []byte)                 // write into section of index
-	Sum(b []byte, length int, span []byte) []byte // returns the hash of the buffer
-	SectionSize() int                             // size of the async section unit to use
-}
-
 // AsyncHasher extends BMT Hasher with an asynchronous segment/section writer interface
 // AsyncHasher is unsafe and does not check indexes and section data lengths
 // it must be used with the right indexes and length and the right number of sections
@@ -444,7 +436,14 @@ type AsyncHasher struct {
 // methods needed to implement AsyncWriter
 
 // SectionSize returns the size of async section unit to use
+// Implements param.SectionWriter
 func (sw *AsyncHasher) SectionSize() int {
+	return sw.secsize
+}
+
+// DigestSize returns the size of the result
+// Implements param.SectionWriter
+func (sw *AsyncHasher) DigestSize() int {
 	return sw.secsize
 }
 

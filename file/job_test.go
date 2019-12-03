@@ -15,21 +15,22 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
 
 var (
-	dummyHashFunc = func() bmt.SectionWriter {
+	dummyHashFunc = func() param.SectionWriter {
 		return newDummySectionWriter(chunkSize*branches, sectionSize)
 	}
 	// placeholder for cases where a hasher is not necessary
-	noHashFunc = func() bmt.SectionWriter {
+	noHashFunc = func() param.SectionWriter {
 		return nil
 	}
 )
 
-// simple bmt.SectionWriter hasher that keeps the data written to it
+// simple param.SectionWriter hasher that keeps the data written to it
 // for later inspection
 // TODO: see if this can be replaced with the fake hasher from storage module
 type dummySectionWriter struct {
@@ -47,7 +48,7 @@ func newDummySectionWriter(cp int, sectionSize int) *dummySectionWriter {
 	}
 }
 
-// implements bmt.SectionWriter
+// implements param.SectionWriter
 // BUG: not actually writing to hasher
 func (d *dummySectionWriter) Write(index int, data []byte) {
 	d.mu.Lock()
@@ -55,14 +56,14 @@ func (d *dummySectionWriter) Write(index int, data []byte) {
 	copy(d.data[index*sectionSize:], data)
 }
 
-// implements bmt.SectionWriter
+// implements param.SectionWriter
 func (d *dummySectionWriter) Sum(b []byte, size int, span []byte) []byte {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.writer.Sum(b)
 }
 
-// implements bmt.SectionWriter
+// implements param.SectionWriter
 func (d *dummySectionWriter) Reset() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -70,8 +71,13 @@ func (d *dummySectionWriter) Reset() {
 	d.writer.Reset()
 }
 
-// implements bmt.SectionWriter
+// implements param.SectionWriter
 func (d *dummySectionWriter) SectionSize() int {
+	return d.sectionSize
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) DigestSize() int {
 	return d.sectionSize
 }
 
@@ -439,7 +445,7 @@ func TestJobWriteSpan(t *testing.T) {
 
 	tgt := newTarget()
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	hashFunc := func() bmt.SectionWriter {
+	hashFunc := func() param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
 	params := newTreeParams(sectionSize, branches, hashFunc)
@@ -489,7 +495,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 
 	tgt := newTarget()
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	hashFunc := func() bmt.SectionWriter {
+	hashFunc := func() param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
 	params := newTreeParams(sectionSize, branches, hashFunc)
@@ -553,7 +559,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 func TestJobVector(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() bmt.SectionWriter {
+	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHash := bmt.New(poolSync)
@@ -635,7 +641,7 @@ func benchmarkJob(b *testing.B) {
 
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() bmt.SectionWriter {
+	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHash := bmt.New(poolSync)

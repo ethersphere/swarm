@@ -3,7 +3,7 @@ package file
 import (
 	"sync"
 
-	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/param"
 )
 
 // defines the boundaries of the hashing job and also contains the hash factory functino of the job
@@ -14,11 +14,11 @@ type treeParams struct {
 	ChunkSize   int
 	Spans       []int
 	Debug       bool
-	hashFunc    func() bmt.SectionWriter
+	hashFunc    func() param.SectionWriter
 	writerPool  sync.Pool
 }
 
-func newTreeParams(section int, branches int, hashFunc func() bmt.SectionWriter) *treeParams {
+func newTreeParams(section int, branches int, hashFunc func() param.SectionWriter) *treeParams {
 
 	p := &treeParams{
 		SectionSize: section,

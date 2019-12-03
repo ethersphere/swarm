@@ -5,17 +5,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
 
 // TestSplit creates a Splitter with a reader with one chunk of serial data and
-// a Hasher as the underlying bmt.SectionWriter
+// a Hasher as the underlying param.SectionWriter
 // It verifies the returned result
 func TestSplit(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() bmt.SectionWriter {
+	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHashFunc := func() *bmt.Hasher {
