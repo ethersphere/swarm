@@ -27,6 +27,8 @@ github.com/apilayer/freegeoip
 github.com/aristanetworks/goarista/monotime
 # github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6
 github.com/btcsuite/btcd/btcec
+# github.com/caarlos0/env v3.5.0+incompatible
+github.com/caarlos0/env
 # github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 github.com/codahale/hdrhistogram
 # github.com/containerd/containerd v1.2.7
@@ -255,7 +257,7 @@ github.com/konsorten/go-windows-terminal-sequences
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.8
 github.com/mattn/go-isatty
-# github.com/mattn/go-runewidth v0.0.3
+# github.com/mattn/go-runewidth v0.0.6
 github.com/mattn/go-runewidth
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/concurrent
@@ -296,6 +298,11 @@ github.com/pkg/errors
 github.com/prometheus/tsdb/fileutil
 # github.com/rjeczalik/notify v0.9.1
 github.com/rjeczalik/notify
+# github.com/rnsdomains/rns-go-lib v0.0.0-20191114120302-3505575b0b8f
+github.com/rnsdomains/rns-go-lib/config
+github.com/rnsdomains/rns-go-lib/resolver
+github.com/rnsdomains/rns-go-lib/resolver/multi_chain_resolver
+github.com/rnsdomains/rns-go-lib/utils
 # github.com/robertkrimen/otto v0.0.0-20170205013659-6a77b7cbc37d
 github.com/robertkrimen/otto
 github.com/robertkrimen/otto/ast
@@ -306,7 +313,7 @@ github.com/robertkrimen/otto/registry
 github.com/robertkrimen/otto/token
 # github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00
 github.com/rs/cors
-# github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521
+# github.com/rs/xhandler v0.0.0-20170707052532-1eb70cf1520d
 github.com/rs/xhandler
 # github.com/sirupsen/logrus v1.4.1
 github.com/sirupsen/logrus

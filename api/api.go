@@ -76,6 +76,12 @@ var (
 	apiGetInvalid          = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
+// ResolverFunc is function which takes a domain in the form of a string and resolves it to a content hash
+type ResolverFunc func(domain string) (common.Hash, error)
+
+// Resolve returns a resolver function compatible with ENS/RNS resolvers
+func (f ResolverFunc) Resolve(domain string) (common.Hash, error) { return f(domain) }
+
 // Resolver interface resolve a domain name to a hash using ENS
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
@@ -184,16 +190,18 @@ it is the public interface of the FileStore which is included in the ethereum st
 type API struct {
 	feed      *feed.Handler
 	fileStore *storage.FileStore
-	dns       Resolver
+	dns       Resolver //provides access to multiple resolvers, usually associated with ens
+	rns       Resolver //provides access to rns resolvers
 	Tags      *chunk.Tags
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, rns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
+		rns:       rns,
 		feed:      feedHandler,
 		Tags:      tags,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
@@ -223,8 +231,22 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 }
 
 // Resolve a name into a content-addressed hash
-// where address could be an ENS name, or a content addressed hash
+// where address could be an ENS/RNS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
+	// if address is .rsk, resolve it with RNS resolver
+	if tld(address) == "rsk" {
+		// if RNS is not configured, return an error
+		if a.rns == nil {
+			apiResolveFail.Inc(1)
+			return nil, fmt.Errorf("no RNS to resolve name: %q", address)
+		}
+
+		resolved, err := a.rns.Resolve(address)
+		if err != nil {
+			return nil, err
+		}
+		return resolved[:], nil
+	}
 	// if DNS is not configured, return an error
 	if a.dns == nil {
 		if hashMatcher.MatchString(address) {
@@ -242,6 +264,15 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 		return nil, err
 	}
 	return resolved[:], nil
+}
+
+//
+func tld(address string) (tld string) {
+	splitAddress := strings.Split(address, ".")
+	if len(splitAddress) > 1 {
+		tld = splitAddress[len(splitAddress)-1]
+	}
+	return tld
 }
 
 // Resolve resolves a URI to an Address using the MultiResolver.
