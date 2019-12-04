@@ -20,6 +20,10 @@ const (
 	chunkSize   = 4096
 )
 
+func init() {
+	testutil.Init()
+}
+
 // wraps storage.FakeChunkStore to intercept incoming chunk
 type testChunkStore struct {
 	*storage.FakeChunkStore
