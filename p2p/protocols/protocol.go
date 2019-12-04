@@ -232,12 +232,18 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // resulting in disconnection
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
 	for {
-		if err := p.handleIncoming(handler); err != nil {
-			if err != io.EOF {
-				metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
-				log.Error("peer.handleIncoming", "err", err)
+		if wait, err := p.handleIncoming(handler); err != nil {
+			if err != nil {
+				return err
 			}
-			return err
+
+			go func() {
+				err := wait()
+				if err != io.EOF {
+					metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
+					log.Error("peer.handleIncoming", "err", err)
+				}
+			}()
 		}
 	}
 }
@@ -296,49 +302,64 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 // * checks for out-of-range message codes,
 // * handles decoding with reflection,
 // * call handlers as callbacks
-func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) error) error {
+func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) error) (func() error, error) {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
-		return err
-	}
-	// make sure that the payload has been fully consumed
-	defer msg.Discard()
-
-	if msg.Size > p.spec.MaxMsgSize {
-		return errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
+		return nil, err
 	}
 
-	val, ok := p.spec.NewMsg(msg.Code)
-	if !ok {
-		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
-	}
+	errc := make(chan error)
+	go func() {
+		// make sure that the payload has been fully consumed
+		defer msg.Discard()
+		defer close(errc)
 
-	ctx, msgBytes, err := p.decode(msg)
-	if err != nil {
-		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
-	}
-
-	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		return errorf(ErrDecode, "<= %v: %v", msg, err)
-	}
-
-	// if the accounting hook is set, call it
-	if p.spec.Hook != nil {
-		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
-		if err != nil {
-			return err
+		if msg.Size > p.spec.MaxMsgSize {
+			errc <- errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
+			return
 		}
-	}
 
-	// call the registered handler callbacks
-	// a registered callback take the decoded message as argument as an interface
-	// which the handler is supposed to cast to the appropriate type
-	// it is entirely safe not to check the cast in the handler since the handler is
-	// chosen based on the proper type in the first place
-	if err := handle(ctx, val); err != nil {
-		return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
-	}
-	return nil
+		val, ok := p.spec.NewMsg(msg.Code)
+		if !ok {
+			errc <- errorf(ErrInvalidMsgCode, "%v", msg.Code)
+			return
+		}
+
+		ctx, msgBytes, err := p.decode(msg)
+		if err != nil {
+			errc <- errorf(ErrDecode, "%v err=%v", msg.Code, err)
+			return
+		}
+
+		if err := rlp.DecodeBytes(msgBytes, val); err != nil {
+			errc <- errorf(ErrDecode, "<= %v: %v", msg, err)
+			return
+		}
+		// if the accounting hook is set, call it
+		if p.spec.Hook != nil {
+			err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
+			if err != nil {
+				errc <- err
+				return
+			}
+		}
+
+		// call the registered handler callbacks
+		// a registered callback take the decoded message as argument as an interface
+		// which the handler is supposed to cast to the appropriate type
+		// it is entirely safe not to check the cast in the handler since the handler is
+		// chosen based on the proper type in the first place
+		if err := handle(ctx, val); err != nil {
+			errc <- errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
+			return
+		}
+
+		errc <- nil
+	}()
+
+	return func() error {
+		return <-errc
+	}, nil
 }
 
 // Handshake negotiates a handshake on the peer connection
@@ -365,7 +386,15 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 		return nil
 	}
 	send := func() { errc <- p.Send(ctx, hs) }
-	receive := func() { errc <- p.handleIncoming(handle) }
+	receive := func() {
+		wait, err := p.handleIncoming(handle)
+		if err != nil {
+			errc <- err
+			return
+		}
+
+		errc <- wait()
+	}
 
 	go func() {
 		if p.Inbound() {

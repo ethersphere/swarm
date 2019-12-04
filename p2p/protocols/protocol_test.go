@@ -372,7 +372,9 @@ func TestNoHook(t *testing.T) {
 		return nil
 	}
 
-	if err := peer.handleIncoming(handler); err != nil {
+	if wait, err := peer.handleIncoming(handler); err != nil {
+		t.Fatal(err)
+	} else if err = wait(); err != nil {
 		t.Fatal(err)
 	}
 }
