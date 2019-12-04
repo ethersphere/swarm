@@ -21,8 +21,8 @@ func TestHasherJobTopHash(t *testing.T) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
@@ -48,8 +48,8 @@ func TestHasherOneFullChunk(t *testing.T) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
@@ -74,8 +74,8 @@ func TestHasherJobChange(t *testing.T) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
@@ -105,8 +105,8 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
@@ -130,8 +130,8 @@ func TestHasherVector(t *testing.T) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	var mismatch int
@@ -182,8 +182,8 @@ func benchmarkHasher(b *testing.B) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 	_, data := testutil.SerialData(dataLength, 255, 0)
 

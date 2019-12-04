@@ -53,7 +53,7 @@ func TestSplit(t *testing.T) {
 	}
 }
 
-func TestSplitWithFileStore(t *testing.T) {
+func TestSplitWithIntermediateFileStore(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	refHashFunc := func() param.SectionWriter {
@@ -83,6 +83,7 @@ func TestSplitWithFileStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	time.Sleep(time.Second)
 	refHex := hexutil.Encode(ref)
 	correctRefHex := "0x29a5fb121ce96194ba8b7b823a1f9c6af87e1791f824940a53b5a7efe3f790d9"
 	if refHex != correctRefHex {
