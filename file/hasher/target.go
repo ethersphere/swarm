@@ -1,6 +1,10 @@
 package hasher
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/ethersphere/swarm/log"
+)
 
 // passed to a job to determine at which data lengths and levels a job should terminate
 type target struct {
@@ -27,7 +31,7 @@ func (t *target) Set(size int, sections int, level int) {
 	t.size = int32(size)
 	t.sections = int32(sections)
 	t.level = int32(level)
-	//log.Trace("target set", "size", t.size, "section", t.sections, "level", t.level)
+	log.Trace("target set", "size", t.size, "section", t.sections, "level", t.level)
 	close(t.doneC)
 }
 
