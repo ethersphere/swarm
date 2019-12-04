@@ -52,4 +52,9 @@ func TestCacheLink(t *testing.T) {
 	if refHex != correctRefHex {
 		t.Fatalf("cache link; expected %s, got %s", correctRefHex, refHex)
 	}
+
+	c.Delete(0)
+	if _, ok := c.data[0]; ok {
+		t.Fatalf("delete; expected not found")
+	}
 }

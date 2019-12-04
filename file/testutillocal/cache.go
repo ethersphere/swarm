@@ -67,3 +67,7 @@ func (c *Cache) DigestSize() int {
 func (c *Cache) Get(index int) []byte {
 	return c.data[index]
 }
+
+func (c *Cache) Delete(index int) {
+	delete(c.data, index)
+}
