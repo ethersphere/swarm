@@ -24,12 +24,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	contract "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswap"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
 )
 
 var (
@@ -45,14 +44,18 @@ type Backend interface {
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
-	// Withdraw attempts to withdraw Wei from the chequebook
-	Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error)
+	// Withdraw attempts to withdraw ERC20-token from the chequebook
+	Withdraw(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error)
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
-	Deposit(auth *bind.TransactOpts, backend Backend, amout *big.Int) (*types.Receipt, error)
+	Deposit(auth *bind.TransactOpts, amout *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiary cashes the cheque by the beneficiary
 	CashChequeBeneficiary(auth *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*CashChequeResult, *types.Receipt, error)
-	// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+	// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
 	LiquidBalance(auth *bind.CallOpts) (*big.Int, error)
+	//Token returns the address of the ERC20 contract, used by the chequebook
+	Token(auth *bind.CallOpts) (common.Address, error)
+	//BalanceAtTokenContract returns the balance of the account for the underlying ERC20 contract of the chequebook
+	BalanceAtTokenContract(opts *bind.CallOpts, account common.Address) (*big.Int, error)
 	// ContractParams returns contract info (e.g. deployed address)
 	ContractParams() *Params
 	// Issuer returns the contract owner from the blockchain
@@ -80,23 +83,16 @@ type Params struct {
 }
 
 type simpleContract struct {
-	instance *contract.SimpleSwap
+	instance *contract.ERC20SimpleSwap
 	address  common.Address
 	backend  Backend
-}
-
-// Deploy deploys an instance of the underlying contract and returns its instance and the transaction identifier
-func Deploy(auth *bind.TransactOpts, backend Backend, owner common.Address, harddepositTimeout time.Duration) (Contract, *types.Transaction, error) {
-	addr, tx, instance, err := contract.DeploySimpleSwap(auth, backend, owner, big.NewInt(int64(harddepositTimeout)))
-	c := simpleContract{instance: instance, address: addr, backend: backend}
-	return c, tx, err
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
 // It assumes that there is an existing contract instance at the given address, or an error is returned
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
 func InstanceAt(address common.Address, backend Backend) (Contract, error) {
-	instance, err := contract.NewSimpleSwap(address, backend)
+	instance, err := contract.NewERC20SimpleSwap(address, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -105,29 +101,42 @@ func InstanceAt(address common.Address, backend Backend) (Contract, error) {
 }
 
 // Withdraw withdraws amount from the chequebook and blocks until the transaction is mined
-func (s simpleContract) Withdraw(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
+func (s simpleContract) Withdraw(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error) {
 	tx, err := s.instance.Withdraw(auth, amount)
 	if err != nil {
 		return nil, err
 	}
-	return WaitFunc(auth, backend, tx)
+	return WaitFunc(auth, s.backend, tx)
 }
 
-// Deposit sends a transaction to the chequebook, which deposits the amount set in Auth.Value and blocks until the transaction is mined
-func (s simpleContract) Deposit(auth *bind.TransactOpts, backend Backend, amount *big.Int) (*types.Receipt, error) {
-	rawSimpleSwap := contract.SimpleSwapRaw{Contract: s.instance}
-	if auth.Value != big.NewInt(0) {
-		return nil, fmt.Errorf("Deposit value can only be set via amount parameter")
-	}
-	if amount == big.NewInt(0) {
+// Deposit sends an amount in ERC20 token to the chequebook and blocks until the transaction is mined
+func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error) {
+	if amount.Cmp(&big.Int{}) == 0 {
 		return nil, fmt.Errorf("Deposit amount cannot be equal to zero")
 	}
-	auth.Value = amount
-	tx, err := rawSimpleSwap.Transfer(auth)
+	// get ERC20Instance at the address of token which is registered in the chequebook
+	tokenAddress, err := s.Token(nil)
 	if err != nil {
 		return nil, err
 	}
-	return WaitFunc(auth, backend, tx)
+	token, err := contract.NewERC20(tokenAddress, s.backend)
+	if err != nil {
+		return nil, err
+	}
+	// check if we have sufficient balance
+	balance, err := s.BalanceAtTokenContract(nil, auth.From)
+	if err != nil {
+		return nil, err
+	}
+	if balance.Cmp(amount) == -1 {
+		return nil, fmt.Errorf("Not enough ERC20 balance at %x for account %x", tokenAddress, auth.From)
+	}
+	// transfer ERC20 to the chequebook
+	tx, err := token.Transfer(auth, s.address, amount)
+	if err != nil {
+		return nil, err
+	}
+	return WaitFunc(auth, s.backend, tx)
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
@@ -164,16 +173,39 @@ func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficia
 	return result, receipt, nil
 }
 
-// LiquidBalance returns the LiquidBalance (total balance in Wei - total hard deposits in Wei) of the chequebook
+// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
 func (s simpleContract) LiquidBalance(opts *bind.CallOpts) (*big.Int, error) {
 	return s.instance.LiquidBalance(opts)
+}
+
+//Token returns the address of the ERC20 contract, used by the chequebook
+func (s simpleContract) Token(opts *bind.CallOpts) (common.Address, error) {
+	return s.instance.Token(opts)
+}
+
+//BalanceAtTokenContract returns the balance of the account for the underlying ERC20 contract of the chequebook
+func (s simpleContract) BalanceAtTokenContract(opts *bind.CallOpts, account common.Address) (*big.Int, error) {
+	// get ERC20Instance at the address of token which is registered in the chequebook
+	tokenAddress, err := s.Token(opts)
+	if err != nil {
+		return nil, err
+	}
+	token, err := contract.NewERC20(tokenAddress, s.backend)
+	if err != nil {
+		return nil, err
+	}
+	balance, err := token.BalanceOf(opts, account)
+	if err != nil {
+		return nil, err
+	}
+	return balance, nil
 }
 
 // ContractParams returns contract information
 func (s simpleContract) ContractParams() *Params {
 	return &Params{
-		ContractCode:    contract.SimpleSwapBin,
-		ContractAbi:     contract.SimpleSwapABI,
+		ContractCode:    contract.ERC20SimpleSwapBin,
+		ContractAbi:     contract.ERC20SimpleSwapABI,
 		ContractAddress: s.address,
 	}
 }

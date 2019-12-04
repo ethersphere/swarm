@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
+	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -215,7 +215,21 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
 	defaultBackend.Commit()
 
-	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(keys[0]), defaultBackend)
+	tokenAddress, _, token, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(keys[0]), defaultBackend)
+	if err != nil {
+		return nil, err
+	}
+	defaultBackend.Commit()
+
+	for i := 0; i < nodeCount; i++ {
+		_, err = token.Mint(bind.NewKeyedTransactor(keys[0]), addrs[i], big.NewInt(10000*int64(RetrieveRequestPrice)))
+		if err != nil {
+			return nil, err
+		}
+		defaultBackend.Commit()
+	}
+
+	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(keys[0]), defaultBackend, tokenAddress)
 	if err != nil {
 		t.Fatalf("Error while deploying factory: %v", err)
 	}

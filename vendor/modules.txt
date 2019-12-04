@@ -174,9 +174,9 @@ github.com/ethereum/go-ethereum/signer/core
 github.com/ethereum/go-ethereum/signer/storage
 github.com/ethereum/go-ethereum/trie
 github.com/ethereum/go-ethereum/whisper/whisperv6
-# github.com/ethersphere/go-sw3 v0.1.1
-github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswap
-github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory
+# github.com/ethersphere/go-sw3 v0.2.1
+github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap
+github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory
 # github.com/fatih/color v1.7.0
 github.com/fatih/color
 # github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc

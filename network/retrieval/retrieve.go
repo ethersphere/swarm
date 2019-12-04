@@ -19,7 +19,6 @@ package retrieval
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -93,24 +92,26 @@ func (cd *ChunkDelivery) Price() *protocols.Price {
 
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
-	netStore *storage.NetStore
-	kad      *network.Kademlia
-	mtx      sync.RWMutex       // protect peer map
-	peers    map[enode.ID]*Peer // compatible peers
-	spec     *protocols.Spec    // protocol spec
-	logger   log.Logger         // custom logger to append a basekey
-	quit     chan struct{}      // shutdown channel
+	netStore    *storage.NetStore
+	baseAddress *network.BzzAddr
+	kad         *network.Kademlia
+	mtx         sync.RWMutex       // protect peer map
+	peers       map[enode.ID]*Peer // compatible peers
+	spec        *protocols.Spec    // protocol spec
+	logger      log.Logger         // custom logger to append a basekey
+	quit        chan struct{}      // shutdown channel
 }
 
 // New returns a new instance of the retrieval protocol handler
-func New(kad *network.Kademlia, ns *storage.NetStore, baseKey []byte, balance protocols.Balance) *Retrieval {
+func New(kad *network.Kademlia, ns *storage.NetStore, baseKey *network.BzzAddr, balance protocols.Balance) *Retrieval {
 	r := &Retrieval{
-		netStore: ns,
-		kad:      kad,
-		peers:    make(map[enode.ID]*Peer),
-		spec:     spec,
-		logger:   log.New("base", hex.EncodeToString(baseKey)[:16]),
-		quit:     make(chan struct{}),
+		netStore:    ns,
+		kad:         kad,
+		peers:       make(map[enode.ID]*Peer),
+		spec:        spec,
+		logger:      log.New("base", baseKey.ShortString()),
+		baseAddress: baseKey,
+		quit:        make(chan struct{}),
 	}
 	if balance != nil && !reflect.ValueOf(balance).IsNil() {
 		// swap is enabled, so setup the hook
@@ -142,7 +143,7 @@ func (r *Retrieval) getPeer(id enode.ID) *Peer {
 
 // Run is being dispatched when 2 nodes connect
 func (r *Retrieval) Run(bp *network.BzzPeer) error {
-	sp := NewPeer(bp, r.kad.BaseAddr())
+	sp := NewPeer(bp, r.baseAddress)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
@@ -227,7 +228,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 
 		// skip peers that we have already tried
 		if req.SkipPeer(id.String()) {
-			r.logger.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
+			r.logger.Trace("findpeer skip peer", "peer", p.ShortString(), "ref", req.Addr.String())
 			return true
 		}
 

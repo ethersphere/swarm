@@ -32,6 +32,7 @@ but it could potentially be any currency the oracle and Swarm support,
 allowing for a multi-currency design.
 */
 
+//TODO: this calculations make little sense now, after update to ERC20-enabled chequebook
 // Placeholder prices
 // Based on a very crude calculation: average monthly cost for bandwidth in the US / average monthly usage of bandwidth in the US
 // $67 / 190GB = $0.35 / GB

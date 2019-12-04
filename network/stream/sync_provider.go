@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -66,7 +65,7 @@ type syncProvider struct {
 // syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
 // established only within depth ( >=depth ). This is needed for Push Sync. When set to false, the streams are
 // established on all bins as they did traditionally with Pull Sync.
-func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
+func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, baseAddr *network.BzzAddr, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
 	c, err := lru.New(cacheCapacity)
 	if err != nil {
 		panic(err)
@@ -85,7 +84,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 		quit:                    make(chan struct{}),
 		cache:                   c,
 		setCache:                sc,
-		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
+		logger:                  log.New("base", baseAddr.ShortString()),
 		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
 	}
 }

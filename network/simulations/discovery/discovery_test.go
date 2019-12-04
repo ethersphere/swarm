@@ -509,9 +509,8 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	log.Info(fmt.Sprintf("discovery for nodeID %s is %t", ctx.Config.ID.String(), hp.Discovery))
 
 	config := &network.BzzConfig{
-		OverlayAddr:  addr.Over(),
-		UnderlayAddr: addr.Under(),
-		HiveParams:   hp,
+		Address:    addr,
+		HiveParams: hp,
 	}
 
 	if persistenceEnabled {

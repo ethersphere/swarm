@@ -38,7 +38,7 @@ func init() {
 
 func testKadPeerAddr(s string) *BzzAddr {
 	a := pot.NewAddressFromString(s)
-	return NewBzzAddr(a, a)
+	return NewBzzAddr(a, nil)
 }
 
 func newTestKademliaParams() *KadParams {

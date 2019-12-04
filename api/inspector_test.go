@@ -2,7 +2,6 @@ package api
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/state"
 )
@@ -33,16 +31,18 @@ func TestInspectorPeerStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// using the same key in for underlay address as well as it is not important for test
+	baseAddress := network.NewBzzAddr(baseKey, baseKey)
 	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
+	netStore := storage.NewNetStore(localStore, baseAddress)
 
-	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseAddress, stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
-	), false, false)), localStore)
+	), baseAddress, false, false)), localStore)
 
 	server := rpc.NewServer()
 	if err := server.RegisterName("inspector", i); err != nil {
@@ -58,7 +58,7 @@ func TestInspectorPeerStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(peerInfo, `"base":"`+hex.EncodeToString(baseKey)[:16]+`"`) {
+	if !strings.Contains(peerInfo, `"base":"`+baseAddress.ShortUnder()) {
 		t.Error("missing base key in response")
 	}
 }
@@ -77,16 +77,18 @@ func TestInspectorStorageIndices(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// using the same key in for underlay address as well as it is not important for test
+	baseAddress := network.NewBzzAddr(baseKey, baseKey)
 	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	netStore := storage.NewNetStore(localStore, baseKey, enode.ID{})
+	netStore := storage.NewNetStore(localStore, baseAddress)
 
-	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), baseKey, stream.NewSyncProvider(netStore, network.NewKademlia(
+	i := NewInspector(nil, nil, netStore, stream.New(state.NewInmemoryStore(), network.NewBzzAddr(baseKey, baseKey), stream.NewSyncProvider(netStore, network.NewKademlia(
 		baseKey,
 		network.NewKadParams(),
-	), false, false)), localStore)
+	), baseAddress, false, false)), localStore)
 
 	server := rpc.NewServer()
 	if err := server.RegisterName("inspector", i); err != nil {
