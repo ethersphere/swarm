@@ -437,13 +437,12 @@ type AsyncHasher struct {
 }
 
 // Implements param.SectionWriter
-func (sw *AsyncHasher) Reset(_ context.Context) {
-	sw.Hasher.Reset()
+func (sw *AsyncHasher) Init(_ context.Context, errFunc func(error)) {
 }
 
 // Implements param.SectionWriter
-func (sw *AsyncHasher) Init(_ context.Context) {
-
+func (sw *AsyncHasher) Reset(_ context.Context) {
+	sw.Hasher.Reset()
 }
 
 // Implements param.SectionWriter
