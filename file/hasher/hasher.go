@@ -41,6 +41,10 @@ func New(sectionSize int, branches int, hasherFunc func() *bmt.Hasher) *Hasher {
 	return h
 }
 
+func (h *Hasher) Init(ctx context.Context, errFunc func(error)) {
+	h.params.SetContext(ctx)
+}
+
 func (h *Hasher) Link(writerFunc func() param.SectionWriter) {
 	h.params.hashFunc = writerFunc
 	h.job.start()

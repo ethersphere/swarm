@@ -48,6 +48,9 @@ func newDummySectionWriter(cp int, sectionSize int) *dummySectionWriter {
 	}
 }
 
+func (d *dummySectionWriter) Init(_ context.Context, _ func(error)) {
+}
+
 func (d *dummySectionWriter) Link(_ func() param.SectionWriter) {
 }
 
