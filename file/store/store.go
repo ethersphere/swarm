@@ -53,7 +53,6 @@ func (f *FileStore) Write(index int, b []byte) {
 // Sum implements param.SectionWriter
 // calls underlying writer's Sum and sends the result with data as a chunk to chunk.Store
 func (f *FileStore) Sum(b []byte, length int, span []byte) []byte {
-	log.Trace("filestore put chunk", "ch", span)
 	ref := f.w.Sum(b, length, span)
 	go func(ref []byte) {
 		b = span
@@ -62,6 +61,7 @@ func (f *FileStore) Sum(b []byte, length int, span []byte) []byte {
 		}
 		ch := chunk.NewChunk(ref, b)
 		_, err := f.chunkStore.Put(f.ctx, chunk.ModePutUpload, ch)
+		log.Trace("filestore put chunk", "ch", ch)
 		if err != nil {
 			f.errFunc(err)
 		}

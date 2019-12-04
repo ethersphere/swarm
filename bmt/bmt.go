@@ -292,6 +292,10 @@ func (h *Hasher) BlockSize() int {
 	return 2 * h.pool.SegmentSize
 }
 
+func (h *Hasher) ChunkSize() int {
+	return h.pool.Size
+}
+
 // Sum returns the BMT root hash of the buffer
 // using Sum presupposes sequential synchronous writes (io.Writer interface)
 // hash.Hash interface Sum method appends the byte slice to the underlying
