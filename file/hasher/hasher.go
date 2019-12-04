@@ -66,7 +66,7 @@ func (h *Hasher) Write(index int, b []byte) {
 		if err != nil {
 			panic(err)
 		}
-		span := lengthToSpan(len(b))
+		span := bmt.LengthToSpan(len(b))
 		ref := hasher.Sum(nil)
 		chunk.NewChunk(ref, append(span, b...))
 		jb.write(i%h.params.Branches, ref)
@@ -106,7 +106,7 @@ func (h *Hasher) putHasher(w *bmt.Hasher) {
 
 // proxy for sync.Pool
 func (h *Hasher) getHasher(l int) *bmt.Hasher {
-	span := lengthToSpan(l)
+	span := bmt.LengthToSpan(l)
 	hasher := h.hasherPool.Get().(*bmt.Hasher)
 	hasher.ResetWithLength(span)
 	return hasher

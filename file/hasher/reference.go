@@ -147,7 +147,7 @@ func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
 		// prepare the hasher,
 		// write data since previous hash operation from the current level cursor position
 		// and sum
-		spanBytes := lengthToSpan(dataUnderSpan)
+		spanBytes := bmt.LengthToSpan(dataUnderSpan)
 		f.hasher.ResetWithLength(spanBytes)
 		hasherWriteOffset := f.cursors[level+1] * f.params.SectionSize
 		f.hasher.Write(f.buffer[hasherWriteOffset : hasherWriteOffset+hashDataSize])

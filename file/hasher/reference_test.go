@@ -31,7 +31,7 @@ func TestManualDanglingChunk(t *testing.T) {
 
 	// hash the balanced tree portion of the data level and write to level 1
 	_, levels[0] = testutil.SerialData(chunkSize*branches+chunkSize, 255, 0)
-	span := lengthToSpan(chunkSize)
+	span := bmt.LengthToSpan(chunkSize)
 	for i := 0; i < chunkSize*branches; i += chunkSize {
 		h.ResetWithLength(span)
 		h.Write(levels[0][i : i+chunkSize])
@@ -45,7 +45,7 @@ func TestManualDanglingChunk(t *testing.T) {
 
 	// write the dangling chunk
 	// hash it and write the reference on the second section of level 2
-	span = lengthToSpan(chunkSize)
+	span = bmt.LengthToSpan(chunkSize)
 	h.ResetWithLength(span)
 	h.Write(levels[0][chunkSize*branches:])
 	copy(levels[2][sectionSize:], h.Sum(nil))
@@ -56,7 +56,7 @@ func TestManualDanglingChunk(t *testing.T) {
 	}
 
 	// hash the chunk on level 1 and write into the first section of level 2
-	span = lengthToSpan(chunkSize * branches)
+	span = bmt.LengthToSpan(chunkSize * branches)
 	h.ResetWithLength(span)
 	h.Write(levels[1])
 	copy(levels[2], h.Sum(nil))
@@ -67,7 +67,7 @@ func TestManualDanglingChunk(t *testing.T) {
 	}
 
 	// hash the two sections on level 2 to obtain the root hash
-	span = lengthToSpan(chunkSize*branches + chunkSize)
+	span = bmt.LengthToSpan(chunkSize*branches + chunkSize)
 	h.ResetWithLength(span)
 	h.Write(levels[2])
 	ref := h.Sum(nil)
