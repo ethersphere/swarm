@@ -9,8 +9,9 @@ import (
 )
 
 type Encrypt struct {
-	e encryption.Encryption
-	w param.SectionWriter
+	e       encryption.Encryption
+	w       param.SectionWriter
+	errFunc func(error)
 }
 
 func New(key []byte, initCtr uint32) *Encrypt {
@@ -20,6 +21,7 @@ func New(key []byte, initCtr uint32) *Encrypt {
 }
 
 func (e *Encrypt) Init(_ context.Context, errFunc func(error)) {
+	e.errFunc = errFunc
 }
 
 func (e *Encrypt) Link(writerFunc func() param.SectionWriter) {
@@ -27,7 +29,12 @@ func (e *Encrypt) Link(writerFunc func() param.SectionWriter) {
 }
 
 func (e *Encrypt) Write(index int, b []byte) {
-	e.w.Write(index, b)
+	cipherText, err := e.e.Encrypt(b)
+	if err != nil {
+		e.errFunc(err)
+		return
+	}
+	e.w.Write(index, cipherText)
 }
 
 func (e *Encrypt) Reset(ctx context.Context) {

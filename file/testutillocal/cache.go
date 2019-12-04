@@ -6,6 +6,10 @@ import (
 	"github.com/ethersphere/swarm/param"
 )
 
+var (
+	defaultSectionSize = 32
+)
+
 type Cache struct {
 	data map[int][]byte
 	w    param.SectionWriter
@@ -44,6 +48,20 @@ func (c *Cache) Reset(ctx context.Context) {
 		return
 	}
 	c.w.Reset(ctx)
+}
+
+func (c *Cache) SectionSize() int {
+	if c.w != nil {
+		return c.w.SectionSize()
+	}
+	return defaultSectionSize
+}
+
+func (c *Cache) DigestSize() int {
+	if c.w != nil {
+		return c.w.DigestSize()
+	}
+	return defaultSectionSize
 }
 
 func (c *Cache) Get(index int) []byte {
