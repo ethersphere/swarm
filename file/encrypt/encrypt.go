@@ -60,7 +60,7 @@ func (e *Encrypt) Write(index int, b []byte) {
 }
 
 func (e *Encrypt) Reset(ctx context.Context) {
-	//e.e.Reset() uncomment when change is made to storage/encryption interface
+	e.e.Reset()
 	e.w.Reset(ctx)
 }
 
