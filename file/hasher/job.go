@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
@@ -207,7 +208,7 @@ func (jb *job) sum() {
 
 	// get the size of the span and execute the hash digest of the content
 	size := jb.size()
-	span := lengthToSpan(size)
+	span := bmt.LengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
 	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
 	ref := jb.writer.Sum(nil, refSize, span)

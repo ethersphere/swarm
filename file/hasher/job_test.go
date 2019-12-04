@@ -589,7 +589,7 @@ func TestJobVector(t *testing.T) {
 				ie = dataLength
 			}
 			writeSize := ie - i
-			span := lengthToSpan(writeSize)
+			span := bmt.LengthToSpan(writeSize)
 			log.Debug("data write", "i", i, "length", writeSize, "span", span)
 			dataHash.ResetWithLength(span)
 			c, err := dataHash.Write(data[i:ie])
@@ -669,7 +669,7 @@ func benchmarkJob(b *testing.B) {
 				ie = dataLength
 			}
 			writeSize := ie - i
-			span := lengthToSpan(writeSize)
+			span := bmt.LengthToSpan(writeSize)
 			dataHash.ResetWithLength(span)
 			c, err := dataHash.Write(data[i:ie])
 			if err != nil {

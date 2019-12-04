@@ -19,6 +19,7 @@ package bmt
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"strings"
@@ -700,4 +701,13 @@ func calculateDepthFor(n int) (d int) {
 		d++
 	}
 	return d + 1
+}
+
+// creates a binary span size representation
+// to pass to bmt.SectionWriter
+// TODO: move to bmt.SectionWriter, which is the object for which this is actually relevant
+func LengthToSpan(length int) []byte {
+	spanBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(spanBytes, uint64(length))
+	return spanBytes
 }

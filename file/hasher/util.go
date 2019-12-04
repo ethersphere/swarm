@@ -1,18 +1,8 @@
 package hasher
 
 import (
-	"encoding/binary"
 	"math"
 )
-
-// creates a binary span size representation
-// to pass to bmt.SectionWriter
-// TODO: move to bmt.SectionWriter, which is the object for which this is actually relevant
-func lengthToSpan(length int) []byte {
-	spanBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(spanBytes, uint64(length))
-	return spanBytes
-}
 
 // TODO: use params instead of sectionSize
 // calculates the section index of the given byte size
