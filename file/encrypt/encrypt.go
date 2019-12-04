@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
@@ -20,23 +21,24 @@ type Encrypt struct {
 }
 
 func New(key []byte, initCtr uint32) (*Encrypt, error) {
-	e := &Encrypt{
-		e:       encryption.New(key, 0, initCtr, sha3.NewLegacyKeccak256),
-		key:     make([]byte, encryption.KeyLength),
-		keyHash: param.HashFunc(),
-	}
 	if key == nil {
-		e.key = make([]byte, encryption.KeyLength)
-		c, err := crand.Read(e.key)
+		key = make([]byte, encryption.KeyLength)
+		c, err := crand.Read(key)
 		if err != nil {
 			return nil, err
 		}
 		if c < encryption.KeyLength {
 			return nil, fmt.Errorf("short read: %d", c)
 		}
-	} else {
-		copy(e.key, key)
+	} else if len(key) != encryption.KeyLength {
+		return nil, fmt.Errorf("encryption key must be %d bytes", encryption.KeyLength)
 	}
+	e := &Encrypt{
+		e:       encryption.New(key, 0, initCtr, sha3.NewLegacyKeccak256),
+		key:     make([]byte, encryption.KeyLength),
+		keyHash: param.HashFunc(),
+	}
+	copy(e.key, key)
 	return e, nil
 }
 
@@ -58,16 +60,20 @@ func (e *Encrypt) Write(index int, b []byte) {
 }
 
 func (e *Encrypt) Reset(ctx context.Context) {
+	//e.e.Reset() uncomment when change is made to storage/encryption interface
 	e.w.Reset(ctx)
 }
 
 func (e *Encrypt) Sum(b []byte, length int, span []byte) []byte {
+	// derive new key
 	oldKey := make([]byte, 32)
 	copy(oldKey, e.key)
 	e.keyHash.Reset()
 	e.keyHash.Write(e.key)
-	copy(e.key, e.keyHash.Sum(nil))
+	newKey := e.keyHash.Sum(nil)
+	copy(e.key, newKey)
 	s := e.w.Sum(b, length, span)
+	log.Trace("key", "key", oldKey, "ekey", e.key, "newkey", newKey)
 	return append(oldKey, s...)
 }
 
