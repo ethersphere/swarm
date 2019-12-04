@@ -38,10 +38,8 @@ func Init() {
 	testing.Init()
 
 	// enable base address logging
-	swarmlog.LogBaseAddr = true
-
+	swarmlog.EnableBaseAddress()
 	flag.Parse()
-
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*Loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }

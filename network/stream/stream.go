@@ -118,7 +118,7 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
 		address:        address,
-		logger:         swarmlog.New(address.ShortString()),
+		logger:         swarmlog.NewBaseAddressLogger(address.ShortString()),
 		spec:           Spec,
 	}
 	for _, p := range providers {
