@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
+	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
 )
 
 var (
@@ -19,7 +19,7 @@ var (
 	// Deployments maps from network ids to deployed contract factories
 	Deployments = map[uint64]common.Address{
 		// Ropsten
-		3: common.HexToAddress("0x2e9C43E186eaF4fee10799d67e75f8CFc5BA3a0c"),
+		3: common.HexToAddress("0x878Ccb2e3c2973767e431bAec86D1EFd809480d5"),
 	}
 )
 
@@ -64,21 +64,20 @@ func (sf simpleSwapFactory) VerifySelf() error {
 	if err != nil {
 		return err
 	}
-
 	referenceCode := common.FromHex(chequebookFactory.SimpleSwapFactoryDeployedCode)
 	if !bytes.Equal(code, referenceCode) {
 		return errors.New("not a valid factory contract")
 	}
-
 	return nil
 }
 
 // DeploySimpleSwap deploys a new SimpleSwap contract from the factory and returns the ready to use Contract abstraction
 func (sf simpleSwapFactory) DeploySimpleSwap(auth *bind.TransactOpts, issuer common.Address, defaultHardDepositTimeoutDuration *big.Int) (Contract, error) {
 	// for some reason the automatic gas estimation is too low
-	// this value was determind by deploying through truffle and rounding up to the next 100000
+	// this value was determined by experimentation and is higher than what works in truffle
+	// this might be due to the simulated backend running on a different evm version
 	// the deployment cost should always be constant
-	auth.GasLimit = 1700000
+	auth.GasLimit = 2000000
 	tx, err := sf.instance.DeploySimpleSwap(auth, issuer, defaultHardDepositTimeoutDuration)
 	if err != nil {
 		return nil, err

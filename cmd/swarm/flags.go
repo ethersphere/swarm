@@ -54,10 +54,15 @@ var (
 		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
 	}
-	SwarmSwapInitialDepositFlag = cli.StringFlag{
-		Name:   "swap-initial-deposit",
-		Usage:  "Initial deposit amount for swap chequebook",
-		EnvVar: SwarmEnvInitialDeposit,
+	SwarmSwapDepositAmountFlag = cli.StringFlag{
+		Name:   "swap-deposit-amount",
+		Usage:  "Deposit amount for swap chequebook",
+		EnvVar: SwarmEnvSwapDepositAmount,
+	}
+	SwarmSwapSkipDepositFlag = cli.BoolFlag{
+		Name:   "swap-skip-deposit",
+		Usage:  "Don't deposit during boot sequence",
+		EnvVar: SwarmEnvSwapSkipDeposit,
 	}
 	SwarmSwapChequebookAddrFlag = cli.StringFlag{
 		Name:   "swap-chequebook",
@@ -108,6 +113,11 @@ var (
 		Name:   "ens-api",
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 		EnvVar: SwarmEnvENSAPI,
+	}
+	RnsAPIFlag = cli.StringFlag{
+		Name:   "rns-api",
+		Usage:  "RNS API endpoint for RKS domains contract address, format [contract-addr@]url",
+		EnvVar: SwarmEnvRNSAPI,
 	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",

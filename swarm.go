@@ -61,6 +61,8 @@ import (
 	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
+	rnsconfig "github.com/rnsdomains/rns-go-lib/config"
+	rnsresolver "github.com/rnsdomains/rns-go-lib/resolver"
 )
 
 var (
@@ -75,6 +77,7 @@ type Swarm struct {
 	config            *api.Config        // swarm configuration
 	api               *api.API           // high level api layer (fs/manifest)
 	dns               api.Resolver       // DNS registrar
+	rns               api.Resolver       // RNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
 	retrieval         *retrieval.Retrieval
@@ -145,7 +148,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			self.config.SwapBackendURL,
 			swapParams,
 			self.config.Contract,
-			self.config.SwapInitialDeposit,
+			self.config.SwapSkipDeposit,
+			self.config.SwapDepositAmount,
 			self.config.SwapChequebookFactory,
 		)
 		if err != nil {
@@ -171,7 +175,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if len(config.EnsAPIs) > 0 {
 		opts := []api.MultiResolverOption{}
 		for _, c := range config.EnsAPIs {
-			tld, endpoint, addr := parseEnsAPIAddress(c)
+			tld, endpoint, addr := parseResolverAPIAddress(c)
 			r, err := newEnsClient(endpoint, addr, config, self.privateKey)
 			if err != nil {
 				return nil, err
@@ -182,6 +186,16 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		resolver = api.NewMultiResolver(opts...)
 		self.dns = resolver
 	}
+	if config.RnsAPI != "" {
+		var contractAddress string
+		_, endpoint, addr := parseResolverAPIAddress(config.RnsAPI)
+		if !bytes.Equal(addr.Bytes(), common.Address{}.Bytes()) {
+			contractAddress = addr.String()
+		}
+		rnsconfig.SetConfiguration(endpoint, contractAddress)
+		self.rns = api.ResolverFunc(rnsresolver.ResolveDomainContent)
+	}
+
 	// check that we are not in the old database schema
 	// if so - fail and exit
 	isLegacy := localstore.IsLegacyDatabase(config.ChunkDbPath)
@@ -264,7 +278,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, self.tags)
+	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
 
 	if config.EnablePinning {
 		// Instantiate the pinAPI object with the already opened localstore
@@ -277,10 +291,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	return self, nil
 }
 
-// parseEnsAPIAddress parses string according to format
-// [tld:][contract-addr@]url and returns ENSClientConfig structure
+// parseResolverAPIAddress parses string according to format
+// [tld:][contract-addr@]url and returns ClientConfig structure
 // with endpoint, contract address and TLD.
-func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
+func parseResolverAPIAddress(s string) (tld, endpoint string, addr common.Address) {
 	isAllLetterString := func(s string) bool {
 		for _, r := range s {
 			if !unicode.IsLetter(r) {
