@@ -56,7 +56,8 @@ type Config struct {
 	SwapEnabled             bool           // whether SWAP incentives are enabled
 	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
 	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
-	SwapInitialDeposit      uint64         // initial deposit amount to the chequebook
+	SwapSkipDeposit         bool           // do not ask the user to deposit during boot sequence
+	SwapDepositAmount       uint64         // deposit amount to the chequebook
 	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract
 	SwapChequebookFactory   common.Address // address of the chequebook factory contract
@@ -66,6 +67,7 @@ type Config struct {
 	Pss                *pss.Params
 	EnsRoot            common.Address
 	EnsAPIs            []string
+	RnsAPI             string
 	Path               string
 	ListenAddr         string
 	Port               string
@@ -91,7 +93,8 @@ func NewConfig() *Config {
 		FileStoreParams:         storage.NewFileStoreParams(),
 		SwapBackendURL:          "",
 		SwapEnabled:             false,
-		SwapInitialDeposit:      swap.DefaultInitialDepositAmount,
+		SwapSkipDeposit:         false,
+		SwapDepositAmount:       swap.DefaultDepositAmount,
 		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
 		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 		SwapLogPath:             "",
@@ -99,6 +102,7 @@ func NewConfig() *Config {
 		Pss:                     pss.NewParams(),
 		EnsRoot:                 ens.TestNetAddress,
 		EnsAPIs:                 nil,
+		RnsAPI:                  "",
 		Path:                    node.DefaultDataDir(),
 		ListenAddr:              DefaultHTTPListenAddr,
 		Port:                    DefaultHTTPPort,

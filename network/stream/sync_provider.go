@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -38,7 +37,13 @@ import (
 const (
 	syncStreamName      = "SYNC"
 	cacheCapacity       = 10000
+	setCacheCapacity    = 80000 // 80000 * 32 = ~2.5mb mem footprint, 80K chunks ~=330 megs of data
 	maxBinZeroSyncPeers = 3
+)
+
+var (
+	setCacheMissCount = metrics.GetOrRegisterCounter("network.stream.sync_provider.set.cachemiss", nil)
+	setCacheHitCount  = metrics.GetOrRegisterCounter("network.stream.sync_provider.set.cachehit", nil)
 )
 
 type syncProvider struct {
@@ -50,6 +55,8 @@ type syncProvider struct {
 	quit                    chan struct{}     // shutdown
 	cacheMtx                sync.RWMutex      // synchronization primitive to protect cache
 	cache                   *lru.Cache        // cache to minimize load on netstore
+	setCacheMtx             sync.RWMutex      // set cache mutex
+	setCache                *lru.Cache        // cache to reduce load on localstore to not set the same chunk as synced
 	logger                  log.Logger        // logger that appends the base address to loglines
 	binZeroSem              chan struct{}     // semaphore to limit number of syncing peers on bin 0
 }
@@ -58,8 +65,12 @@ type syncProvider struct {
 // syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
 // established only within depth ( >=depth ). This is needed for Push Sync. When set to false, the streams are
 // established on all bins as they did traditionally with Pull Sync.
-func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
+func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, baseAddr *network.BzzAddr, autostart bool, syncOnlyWithinDepth bool) StreamProvider {
 	c, err := lru.New(cacheCapacity)
+	if err != nil {
+		panic(err)
+	}
+	sc, err := lru.New(setCacheCapacity)
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +83,8 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, autostart bool
 		name:                    syncStreamName,
 		quit:                    make(chan struct{}),
 		cache:                   c,
-		logger:                  log.New("base", hex.EncodeToString(kad.BaseAddr()[:16])),
+		setCache:                sc,
+		logger:                  log.New("base", baseAddr.ShortString()),
 		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
 	}
 }
@@ -190,10 +202,30 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 
 // Set the supplied addrs as synced in order to allow for garbage collection
 func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
-	err := s.netStore.Set(ctx, chunk.ModeSetSyncPull, addrs...)
+	var chunksToSet []chunk.Address
+
+	s.setCacheMtx.RLock()
+	for _, addr := range addrs {
+		if _, ok := s.setCache.Get(addr.String()); !ok {
+			chunksToSet = append(chunksToSet, addr)
+			setCacheMissCount.Inc(1)
+		} else {
+			setCacheHitCount.Inc(1)
+		}
+	}
+	s.setCacheMtx.RUnlock()
+
+	err := s.netStore.Set(ctx, chunk.ModeSetSyncPull, chunksToSet...)
 	if err != nil {
 		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
 		return err
+	}
+
+	s.setCacheMtx.Lock()
+	defer s.setCacheMtx.Unlock()
+
+	for _, addr := range chunksToSet {
+		s.setCache.Add(addr.String(), struct{}{})
 	}
 	return nil
 }

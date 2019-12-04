@@ -66,7 +66,8 @@ const (
 	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
 	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvChequebookFactoryAddr   = "SWARM_SWAP_CHEQUEBOOK_FACTORY_ADDR"
-	SwarmEnvInitialDeposit          = "SWARM_INITIAL_DEPOSIT"
+	SwarmEnvSwapSkipDeposit         = "SWARM_SWAP_SKIP_DEPOSIT"
+	SwarmEnvSwapDepositAmount       = "SWARM_SWAP_DEPOSIT_AMOUNT"
 	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
@@ -75,6 +76,7 @@ const (
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
 	SwarmEnvENSAPI                  = "SWARM_ENS_API"
+	SwarmEnvRNSAPI                  = "SWARM_RNS_API"
 	SwarmEnvENSAddr                 = "SWARM_ENS_ADDR"
 	SwarmEnvCORS                    = "SWARM_CORS"
 	SwarmEnvBootnodes               = "SWARM_BOOTNODES"
@@ -209,8 +211,12 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
 		currentConfig.SwapLogPath = swapLogPath
 	}
-	if initialDepo := ctx.GlobalUint64(SwarmSwapInitialDepositFlag.Name); initialDepo != 0 {
-		currentConfig.SwapInitialDeposit = initialDepo
+
+	if skipDeposit := ctx.GlobalBool(SwarmSwapSkipDepositFlag.Name); skipDeposit {
+		currentConfig.SwapSkipDeposit = true
+	}
+	if deposit := ctx.GlobalUint64(SwarmSwapDepositAmountFlag.Name); deposit != 0 {
+		currentConfig.SwapDepositAmount = deposit
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
@@ -235,6 +241,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 			ensAPIs[i] = expandPath(ensAPIs[i])
 		}
 		currentConfig.EnsAPIs = ensAPIs
+	}
+	if rns := ctx.GlobalString(RnsAPIFlag.Name); rns != "" {
+		currentConfig.RnsAPI = rns
 	}
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors

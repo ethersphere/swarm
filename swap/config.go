@@ -30,12 +30,9 @@ const (
 	// ChequeDebtTolerance is the lowest resulting balance a node is willing to accept when receiving a cheque
 	// the value is meant to be used below 0, as positive resulting balances should always be accepted when receiving cheques
 	ChequeDebtTolerance = DefaultPaymentThreshold / 100 * 5 // roughly 5% of the payment threshold
-	// DefaultInitialDepositAmount is the default amount to send to the contract when initially deploying
+	// DefaultDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation
-	DefaultInitialDepositAmount = 0
-	deployRetries               = 5
-	// delay between retries
-	deployDelay = 1 * time.Second
+	DefaultDepositAmount = 0
 	// This is the amount of time in seconds which an issuer has to wait to decrease the harddeposit of a beneficiary.
 	// The smart-contract allows for setting this variable differently per beneficiary
 	defaultHarddepositTimeoutDuration = 24 * time.Hour

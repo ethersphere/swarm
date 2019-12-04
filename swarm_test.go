@@ -335,7 +335,7 @@ func TestParseEnsAPIAddress(t *testing.T) {
 		},
 	} {
 		t.Run(x.description, func(t *testing.T) {
-			tld, endpoint, addr := parseEnsAPIAddress(x.value)
+			tld, endpoint, addr := parseResolverAPIAddress(x.value)
 			if endpoint != x.endpoint {
 				t.Errorf("expected Endpoint %q, got %q", x.endpoint, endpoint)
 			}

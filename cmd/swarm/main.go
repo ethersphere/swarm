@@ -176,6 +176,7 @@ func init() {
 		// bzzd-specific flags
 		CorsStringFlag,
 		EnsAPIFlag,
+		RnsAPIFlag,
 		SwarmTomlConfigPathFlag,
 		//swap flags
 		SwarmSwapEnabledFlag,
@@ -185,7 +186,8 @@ func init() {
 		SwarmSwapLogPathFlag,
 		SwarmSwapChequebookAddrFlag,
 		SwarmSwapChequebookFactoryFlag,
-		SwarmSwapInitialDepositFlag,
+		SwarmSwapSkipDepositFlag,
+		SwarmSwapDepositAmountFlag,
 		// end of swap flags
 		SwarmNoSyncFlag,
 		SwarmLightNodeEnabled,

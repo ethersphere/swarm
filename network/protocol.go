@@ -109,8 +109,7 @@ func isFullCapability(c *capability.Capability) bool {
 
 // BzzConfig captures the config params used by the hive
 type BzzConfig struct {
-	OverlayAddr  []byte // base address of the overlay network
-	UnderlayAddr []byte // node's underlay address
+	Address      *BzzAddr
 	HiveParams   *HiveParams
 	NetworkID    uint64
 	LightNode    bool // temporarily kept as we still only define light/full on operational level
@@ -140,7 +139,7 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec, r
 	bzz := &Bzz{
 		Hive:          NewHive(config.HiveParams, kad, store),
 		NetworkID:     config.NetworkID,
-		localAddr:     NewBzzAddr(config.OverlayAddr, config.UnderlayAddr),
+		localAddr:     config.Address,
 		handshakes:    make(map[enode.ID]*HandshakeMsg),
 		streamerRun:   streamerRun,
 		streamerSpec:  streamerSpec,
@@ -338,6 +337,7 @@ type BzzPeer struct {
 }
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
+	// TODO The overlay address is not correct until there is a way to fetch overlay address from the peer
 	return &BzzPeer{Peer: p, BzzAddr: NewBzzAddrFromEnode(p.Node())}
 }
 

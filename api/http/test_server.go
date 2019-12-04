@@ -70,7 +70,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API, *pin.API) TestSe
 		t.Fatal(err)
 	}
 
-	swarmApi := api.NewAPI(fileStore, resolver, feeds.Handler, nil, tags)
+	swarmApi := api.NewAPI(fileStore, resolver, nil, feeds.Handler, nil, tags)
 	pinAPI := pin.NewAPI(localStore, stateStore, nil, tags, swarmApi)
 	apiServer := httptest.NewServer(serverFunc(swarmApi, pinAPI))
 

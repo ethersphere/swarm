@@ -37,6 +37,7 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
+	rns "github.com/rnsdomains/rns-go-lib/resolver"
 )
 
 func init() {
@@ -56,7 +57,7 @@ func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
 			return
 		}
 		defer cleanup()
-		api := NewAPI(fileStore, nil, nil, nil, tags)
+		api := NewAPI(fileStore, nil, nil, nil, nil, tags)
 		f(api, tags, v)
 	}
 }
@@ -192,8 +193,20 @@ func newTestResolveValidator(addr string) *testResolveValidator {
 	return r
 }
 
+func newRSKTestResolveValidator(addr string) *testResolveValidator {
+	r := &testResolveValidator{}
+	if addr == "swarm.rsk" {
+		hash := common.HexToHash("88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07")
+		r.hash = &hash
+	}
+	return r
+}
+
 func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 	if t.hash == nil {
+		if strings.HasSuffix(addr, ".rsk") {
+			return common.Hash{}, rns.ErrNoContent
+		}
 		return common.Hash{}, fmt.Errorf("DNS name not found: %q", addr)
 	}
 	return *t.hash, nil
@@ -297,6 +310,62 @@ func TestAPIResolve(t *testing.T) {
 				}
 				if err.Error() != x.expectErr.Error() {
 					t.Fatalf("expected error %q, got %q", x.expectErr, err)
+				}
+			}
+		})
+	}
+}
+
+// TestRNSResolve tests resolving content from RNS addresses
+func TestRNSResolve(t *testing.T) {
+	rnsAddr := "swarm.rsk"
+	resolvedContent := "88ced8ba8e9396672840b47e332b33d6679d9962d80cf340d3cf615db23d4e07"
+	doesResolve := newRSKTestResolveValidator(rnsAddr)
+	doesntResolve := newRSKTestResolveValidator("")
+
+	type test struct {
+		desc        string
+		ctx         context.Context
+		rns         Resolver
+		addr        string
+		content     string
+		expectedErr error
+	}
+
+	tests := []*test{
+		{
+			desc:        "valid RSK domain",
+			rns:         doesResolve,
+			addr:        rnsAddr,
+			content:     resolvedContent,
+			expectedErr: nil,
+		},
+		{
+			desc:        "invalid RSK domain",
+			rns:         doesntResolve,
+			addr:        ".rsk",
+			content:     resolvedContent,
+			expectedErr: rns.ErrNoContent,
+		},
+	}
+
+	for _, x := range tests {
+		t.Run(x.desc, func(t *testing.T) {
+			api := &API{rns: x.rns}
+			res, err := api.Resolve(context.TODO(), x.addr)
+			if err == nil {
+				if x.expectedErr != nil {
+					t.Fatalf("expected error %q, got %q", x.expectedErr, res)
+				}
+				if x.content != res.Hex() {
+					t.Fatalf("expected result %q, got %q", x.content, res.Hex())
+				}
+			} else {
+				if x.expectedErr == nil {
+					t.Fatalf("expected no error, got %q", err)
+				}
+				if x.expectedErr.Error() != err.Error() {
+					t.Fatalf("expected error %q, got %q", x.expectedErr, err)
 				}
 			}
 		})
@@ -436,7 +505,7 @@ func TestDecryptOriginForbidden(t *testing.T) {
 		Access: &AccessEntry{Type: AccessTypePass},
 	}
 
-	api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
+	api := NewAPI(nil, nil, nil, nil, nil, chunk.NewTags())
 
 	f := api.Decryptor(ctx, "")
 	err := f(me)
@@ -470,7 +539,7 @@ func TestDecryptOrigin(t *testing.T) {
 			Access: &AccessEntry{Type: AccessTypePass},
 		}
 
-		api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
+		api := NewAPI(nil, nil, nil, nil, nil, chunk.NewTags())
 
 		f := api.Decryptor(ctx, "")
 		err := f(me)

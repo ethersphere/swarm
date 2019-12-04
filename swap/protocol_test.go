@@ -220,7 +220,7 @@ func TestHandshakeInvalidContract(t *testing.T) {
 // A second swap instance is created for easy creation of a chequebook contract which is deployed to the simulated backend
 // We send a EmitChequeMsg to the creditor which handles the cheque and sends a ConfirmChequeMsg
 func TestEmitCheque(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	protocolTester, clean, err := newSwapTester(t, testBackend)
 	defer clean()
 	if err != nil {
@@ -326,7 +326,7 @@ func TestEmitCheque(t *testing.T) {
 // One protocol tester is created and then Add with a value above the payment threshold is called for another node
 // we expect a EmitChequeMsg to be sent, then we send a ConfirmChequeMsg to the swap instance
 func TestTriggerPaymentThreshold(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
 	protocolTester, clean, err := newSwapTester(t, testBackend)
 	defer clean()

@@ -45,7 +45,7 @@ import (
 
 const (
 	HashSize     = 32
-	BatchSize    = 128
+	BatchSize    = 64
 	MinFrameSize = 16
 )
 
@@ -99,7 +99,7 @@ type Registry struct {
 	mtx                     sync.RWMutex
 	intervalsStore          state.Store               // store intervals for all peers
 	peers                   map[enode.ID]*Peer        // peers
-	baseKey                 []byte                    // this node's base address
+	address                 *network.BzzAddr          // this node's base address
 	providers               map[string]StreamProvider // stream providers by name of stream
 	spec                    *protocols.Spec           // this protocol's spec
 	handlersWg              sync.WaitGroup            // waits for all handlers to finish in Close method
@@ -110,14 +110,14 @@ type Registry struct {
 }
 
 // New creates a new stream protocol handler
-func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider) *Registry {
+func New(intervalsStore state.Store, address *network.BzzAddr, providers ...StreamProvider) *Registry {
 	r := &Registry{
 		intervalsStore: intervalsStore,
 		peers:          make(map[enode.ID]*Peer),
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
-		baseKey:        baseKey,
-		logger:         log.New("base", hex.EncodeToString(baseKey)[:16]),
+		address:        address,
+		logger:         log.New("base", address.ShortString()),
 		spec:           Spec,
 	}
 	for _, p := range providers {
@@ -129,7 +129,7 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 
 // Run is being dispatched when 2 nodes connect
 func (r *Registry) Run(bp *network.BzzPeer) error {
-	sp := NewPeer(bp, r.baseKey, r.intervalsStore, r.providers)
+	sp := newPeer(bp, r.address, r.intervalsStore, r.providers)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
@@ -859,7 +859,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				processReceivedChunksCount.Inc(1)
 				p.mtx.Lock()
 				if _, ok := w.hashes[c.Hex()]; !ok {
-					p.logger.Error("got an unsolicited chunk from peer", "peer", p.ID(), "caddr", c)
+					p.logger.Error("got an unsolicited chunk from peer", "peer", p.ShortString(), "caddr", c)
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop("got an unsolicited chunk from peer")
 					p.mtx.Unlock()
@@ -1041,7 +1041,7 @@ type PeerState struct {
 // peer cursors and intervals are returned
 func (r *Registry) PeerInfo() (*PeerInfo, error) {
 	info := &PeerInfo{
-		Base:    hex.EncodeToString(r.baseKey)[:16],
+		Base:    r.address.ShortUnder(),
 		Cursors: make(map[string]map[string]uint64),
 	}
 	for name, p := range r.providers {
