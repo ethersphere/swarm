@@ -97,7 +97,7 @@ func (a *BzzAddr) ShortString() string {
 	return fmt.Sprintf("%s:%s", a.ShortOver(), a.ShortUnder())
 }
 
-// ShortOver prints shortened version of Overlay address
+// ShortOver returns shortened version of Overlay address
 // It can be used for logging
 func (a *BzzAddr) ShortOver() string {
 	if oaddr := hex.EncodeToString(a.OAddr); len(oaddr) >= 16 {
@@ -107,7 +107,7 @@ func (a *BzzAddr) ShortOver() string {
 	}
 }
 
-// ShortUnder prints shortened version of Underlay address
+// ShortUnder returns shortened version of Underlay address
 // It can be used for logging
 func (a *BzzAddr) ShortUnder() string {
 	if uaddr := hex.EncodeToString(a.UAddr); len(uaddr) >= 16 {
