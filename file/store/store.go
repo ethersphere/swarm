@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -45,13 +46,14 @@ func (f *FileStore) Reset(ctx context.Context) {
 // Write implements param.SectionWriter
 // it asynchronously writes to the underlying writer while caching the data slice
 func (f *FileStore) Write(index int, b []byte) {
-	go f.w.Write(index, b)
+	f.w.Write(index, b)
 	f.data = append(f.data, b)
 }
 
 // Sum implements param.SectionWriter
 // calls underlying writer's Sum and sends the result with data as a chunk to chunk.Store
 func (f *FileStore) Sum(b []byte, length int, span []byte) []byte {
+	log.Trace("filestore put chunk", "ch", span)
 	ref := f.w.Sum(b, length, span)
 	go func(ref []byte) {
 		b = span
