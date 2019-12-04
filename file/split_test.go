@@ -34,8 +34,8 @@ func TestSplit(t *testing.T) {
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 	h := hasher.New(sectionSize, branches, dataHashFunc)
 	h.Link(refHashFunc)
@@ -53,6 +53,46 @@ func TestSplit(t *testing.T) {
 	}
 }
 
+// TestSplitWithDataFileStore verifies chunk.Store sink result for data hashing
+func TestSplitWithDataFileStore(t *testing.T) {
+	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	refHashFunc := func() param.SectionWriter {
+		return bmt.New(poolAsync).NewAsyncWriter(false)
+	}
+	dataHashFunc := func() param.SectionWriter {
+		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	chunkStore := &storage.FakeChunkStore{}
+	storeFunc := func() param.SectionWriter {
+		h := store.New(chunkStore)
+		h.Init(ctx, func(_ error) {})
+		h.Link(dataHashFunc)
+		return h
+	}
+
+	h := hasher.New(sectionSize, branches, storeFunc)
+	h.Init(ctx, func(error) {})
+	h.Link(refHashFunc)
+
+	r, _ := testutil.SerialData(chunkSize, 255, 0)
+	s := NewSplitter(r, h)
+	ref, err := s.Split()
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second)
+	refHex := hexutil.Encode(ref)
+	correctRefHex := "0xc10090961e7682a10890c334d759a28426647141213abda93b096b892824d2ef"
+	if refHex != correctRefHex {
+		t.Fatalf("split, expected %s, got %s", correctRefHex, refHex)
+	}
+}
+
+// TestSplitWithIntermediateFileStore verifies chunk.Store sink result for intermediate hashing
 func TestSplitWithIntermediateFileStore(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
@@ -70,8 +110,8 @@ func TestSplitWithIntermediateFileStore(t *testing.T) {
 		return h
 	}
 
-	dataHashFunc := func() *bmt.Hasher {
-		return bmt.New(poolSync)
+	dataHashFunc := func() param.SectionWriter {
+		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	h := hasher.New(sectionSize, branches, dataHashFunc)
@@ -86,6 +126,51 @@ func TestSplitWithIntermediateFileStore(t *testing.T) {
 	time.Sleep(time.Second)
 	refHex := hexutil.Encode(ref)
 	correctRefHex := "0x29a5fb121ce96194ba8b7b823a1f9c6af87e1791f824940a53b5a7efe3f790d9"
+	if refHex != correctRefHex {
+		t.Fatalf("split, expected %s, got %s", correctRefHex, refHex)
+	}
+}
+
+// TestSplitWithBothFileStore verifies chunk.Store sink result for both data and intermediate hashing
+func TestSplitWithBothFileStore(t *testing.T) {
+	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	refHashFunc := func() param.SectionWriter {
+		return bmt.New(poolAsync).NewAsyncWriter(false)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	chunkStore := &storage.FakeChunkStore{}
+	refStoreFunc := func() param.SectionWriter {
+		h := store.New(chunkStore)
+		h.Init(ctx, func(_ error) {})
+		h.Link(refHashFunc)
+		return h
+	}
+
+	dataHashFunc := func() param.SectionWriter {
+		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
+	}
+	dataStoreFunc := func() param.SectionWriter {
+		h := store.New(chunkStore)
+		h.Init(ctx, func(_ error) {})
+		h.Link(dataHashFunc)
+		return h
+	}
+
+	h := hasher.New(sectionSize, branches, dataStoreFunc)
+	h.Link(refStoreFunc)
+
+	r, _ := testutil.SerialData(chunkSize*128, 255, 0)
+	s := NewSplitter(r, h)
+	ref, err := s.Split()
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second)
+	refHex := hexutil.Encode(ref)
+	correctRefHex := "0x3047d841077898c26bbe6be652a2ec590a5d9bd7cd45d290ea42511b48753c09"
 	if refHex != correctRefHex {
 		t.Fatalf("split, expected %s, got %s", correctRefHex, refHex)
 	}
