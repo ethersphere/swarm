@@ -18,6 +18,7 @@ var (
 // Export go-ethereum/log interface so that swarm/log can be used with it interchangeably
 type Logger = l.Logger
 
+// NewBaseAddressLogger creates a new logger with a `base` prefix
 func NewBaseAddressLogger(baseAddr string, ctx ...interface{}) l.Logger {
 	if logBaseAddr {
 		return l.New(append([]interface{}{"base", baseAddr}, ctx...)...)
@@ -26,6 +27,7 @@ func NewBaseAddressLogger(baseAddr string, ctx ...interface{}) l.Logger {
 	return l.New(ctx...)
 }
 
+// New creates new swarm logger
 func New(ctx ...interface{}) Logger {
 	return l.New(ctx)
 }
