@@ -1,6 +1,7 @@
 package encrypt
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"testing"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/file/hasher"
+	"github.com/ethersphere/swarm/file/testutillocal"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/storage/encryption"
 	"github.com/ethersphere/swarm/testutil"
@@ -38,7 +41,11 @@ func TestEncryptOneChunk(t *testing.T) {
 	defer cancel()
 	errFunc := func(error) {}
 
-	cacheFunc := func() params.SectionWriter {
+	cache := testutillocal.NewCache()
+	cache.Init(ctx, errFunc)
+	cache.Link(dataHashFunc)
+	cacheFunc := func() param.SectionWriter {
+		return cache
 	}
 
 	key := make([]byte, encryption.KeyLength)
@@ -52,7 +59,7 @@ func TestEncryptOneChunk(t *testing.T) {
 	encryptFunc := func() param.SectionWriter {
 		eFunc := New(key, uint32(42))
 		eFunc.Init(ctx, errFunc)
-		eFunc.Link(dataHashFunc)
+		eFunc.Link(cacheFunc)
 		return eFunc
 	}
 
@@ -68,7 +75,9 @@ func TestEncryptOneChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Logf("cipher: %x - ref: %x", cipherText, ref)
-
+	cacheText := cache.Get(0)
+	if !bytes.Equal(cipherText, cacheText) {
+		log.Trace("data mismatch", "expect", cipherText, "got", cacheText)
+		t.Fatalf("encrypt onechunk; data mismatch")
+	}
 }
