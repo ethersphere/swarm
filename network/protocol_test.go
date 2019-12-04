@@ -169,11 +169,10 @@ type bzzTester struct {
 
 func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 	config := &BzzConfig{
-		OverlayAddr:  addr.Over(),
-		UnderlayAddr: addr.Under(),
-		HiveParams:   NewHiveParams(),
-		NetworkID:    DefaultTestNetworkID,
-		LightNode:    lightNode,
+		Address:    addr,
+		HiveParams: NewHiveParams(),
+		NetworkID:  DefaultTestNetworkID,
+		LightNode:  lightNode,
 	}
 	kad := NewKademlia(addr.OAddr, NewKadParams())
 	bzz := NewBzz(config, kad, nil, nil, nil, nil, nil)

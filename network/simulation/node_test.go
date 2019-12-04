@@ -284,9 +284,8 @@ func TestUploadSnapshot(t *testing.T) {
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
+				Address:    addr,
+				HiveParams: hp,
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			b.Store(BucketKeyKademlia, kad)

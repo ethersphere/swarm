@@ -34,6 +34,8 @@ import (
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/ethersphere/swarm/network"
 )
 
 const (
@@ -100,14 +102,14 @@ type NetStore struct {
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
-func NewNetStore(store chunk.Store, baseAddr []byte, localID enode.ID) *NetStore {
+func NewNetStore(store chunk.Store, baseAddr *network.BzzAddr) *NetStore {
 	fetchers, _ := lru.New(fetchersCapacity)
 
 	return &NetStore{
 		fetchers: fetchers,
 		Store:    store,
-		LocalID:  localID,
-		logger:   log.New("base", hex.EncodeToString(baseAddr)[:16]),
+		LocalID:  baseAddr.ID(),
+		logger:   log.New("base", baseAddr.ShortString()),
 	}
 }
 

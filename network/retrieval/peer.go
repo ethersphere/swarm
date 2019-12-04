@@ -18,7 +18,6 @@ package retrieval
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"sync"
 
@@ -38,10 +37,10 @@ type Peer struct {
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer, baseKey []byte) *Peer {
+func NewPeer(peer *network.BzzPeer, baseKey *network.BzzAddr) *Peer {
 	return &Peer{
 		BzzPeer:    peer,
-		logger:     log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
+		logger:     log.New("base", baseKey.ShortString(), "peer", peer.BzzAddr.ShortString()),
 		retrievals: make(map[uint]chunk.Address),
 	}
 }
