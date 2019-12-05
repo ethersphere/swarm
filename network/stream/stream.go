@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
+	swarmlog "github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	bv "github.com/ethersphere/swarm/network/bitvector"
 	"github.com/ethersphere/swarm/network/stream/intervals"
@@ -117,7 +118,7 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
 		address:        address,
-		logger:         log.New("base", address.ShortString()),
+		logger:         swarmlog.NewBaseAddressLogger(address.ShortString()),
 		spec:           Spec,
 	}
 	for _, p := range providers {

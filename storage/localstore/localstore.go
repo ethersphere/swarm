@@ -350,7 +350,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return tag, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			if value != nil {
+			if len(value) == 4 { // only values with tag should be decoded
 				e.Tag = binary.BigEndian.Uint32(value)
 			}
 			return e, nil

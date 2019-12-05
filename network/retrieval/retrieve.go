@@ -26,21 +26,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
+
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/swap"
-	opentracing "github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 var (
@@ -109,7 +110,7 @@ func New(kad *network.Kademlia, ns *storage.NetStore, baseKey *network.BzzAddr, 
 		kad:         kad,
 		peers:       make(map[enode.ID]*Peer),
 		spec:        spec,
-		logger:      log.New("base", baseKey.ShortString()),
+		logger:      log.NewBaseAddressLogger("base", baseKey.ShortString()),
 		baseAddress: baseKey,
 		quit:        make(chan struct{}),
 	}
