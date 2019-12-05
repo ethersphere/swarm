@@ -27,7 +27,6 @@ import (
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/shed"
 )
 
 const (
@@ -58,23 +57,25 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 		return 0, err
 	}
 
-	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+	err = db.data.Iterate(func(ch chunk.Chunk) (stop bool, err error) {
+
+		data := ch.Data()
 
 		hdr := &tar.Header{
-			Name: hex.EncodeToString(item.Address),
+			Name: hex.EncodeToString(ch.Address()),
 			Mode: 0644,
-			Size: int64(len(item.Data)),
+			Size: int64(len(data)),
 		}
 
 		if err := tw.WriteHeader(hdr); err != nil {
 			return false, err
 		}
-		if _, err := tw.Write(item.Data); err != nil {
+		if _, err := tw.Write(data); err != nil {
 			return false, err
 		}
 		count++
 		return false, nil
-	}, nil)
+	})
 
 	return count, err
 }

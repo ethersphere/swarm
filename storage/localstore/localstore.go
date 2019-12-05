@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
 	"sync"
 	"time"
@@ -28,6 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
+	"github.com/ethersphere/swarm/storage/fcds"
+	fcdsleveldb "github.com/ethersphere/swarm/storage/fcds/leveldb"
+	fcdsmock "github.com/ethersphere/swarm/storage/fcds/mock"
 	"github.com/ethersphere/swarm/storage/mock"
 )
 
@@ -61,9 +65,10 @@ type DB struct {
 	// schema name of loaded data
 	schemaName shed.StringField
 
-	// retrieval indexes
-	retrievalDataIndex   shed.Index
-	retrievalAccessIndex shed.Index
+	// chunk data storage
+	data fcds.Interface
+	// bin index and timestamps index
+	metaIndex shed.Index
 	// push syncing index
 	pushIndex shed.Index
 	// push syncing subscriptions triggers
@@ -216,61 +221,22 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// Functions for retrieval data index.
-	var (
-		encodeValueFunc func(fields shed.Item) (value []byte, err error)
-		decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
-	)
-	if o.MockStore != nil {
-		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 16)
-			binary.BigEndian.PutUint64(b[:8], fields.BinID)
-			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
-			err = o.MockStore.Put(fields.Address, fields.Data)
-			if err != nil {
-				return nil, err
-			}
-			return b, nil
-		}
-		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
-			e.BinID = binary.BigEndian.Uint64(value[:8])
-			e.Data, err = o.MockStore.Get(keyItem.Address)
-			return e, err
-		}
-	} else {
-		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 16)
-			binary.BigEndian.PutUint64(b[:8], fields.BinID)
-			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
-			value = append(b, fields.Data...)
-			return value, nil
-		}
-		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
-			e.BinID = binary.BigEndian.Uint64(value[:8])
-			e.Data = value[16:]
-			return e, nil
-		}
-	}
-	// Index storing actual chunk address, data and bin id.
-	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: encodeValueFunc,
-		DecodeValue: decodeValueFunc,
-	})
+
+	metaStore, err := fcdsleveldb.NewMetaStore(filepath.Join(path, "meta"))
 	if err != nil {
 		return nil, err
 	}
-	// Index storing access timestamp for a particular address.
+	if o.MockStore == nil {
+		db.data, err = fcds.NewStore(path, chunk.DefaultSize+8, metaStore, false)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		db.data = fcdsmock.NewStore(o.MockStore)
+	}
+	// Index storing bin id, store and access timestamp for a particular address.
 	// It is needed in order to update gc index keys for iteration order.
-	db.retrievalAccessIndex, err = db.shed.NewIndex("Address->AccessTimestamp", shed.IndexFuncs{
+	db.metaIndex, err = db.shed.NewIndex("Address->BinID|StoreTimestamp|AccessTimestamp", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
@@ -279,12 +245,16 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 8)
-			binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
+			b := make([]byte, 24)
+			binary.BigEndian.PutUint64(b[:8], fields.BinID)
+			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
+			binary.BigEndian.PutUint64(b[16:24], uint64(fields.AccessTimestamp))
 			return b, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
+			e.BinID = binary.BigEndian.Uint64(value[:8])
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[16:24]))
 			return e, nil
 		},
 	})
@@ -457,6 +427,9 @@ func (db *DB) Close() (err error) {
 		// TODO: use a logger to write a goroutine profile
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 	}
+	if err := db.data.Close(); err != nil {
+		log.Error("close chunk data storage", "err", err)
+	}
 	return db.shed.Close()
 }
 
@@ -471,13 +444,12 @@ func (db *DB) po(addr chunk.Address) (bin uint8) {
 func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	indexInfo = make(map[string]int)
 	for k, v := range map[string]shed.Index{
-		"retrievalDataIndex":   db.retrievalDataIndex,
-		"retrievalAccessIndex": db.retrievalAccessIndex,
-		"pushIndex":            db.pushIndex,
-		"pullIndex":            db.pullIndex,
-		"gcIndex":              db.gcIndex,
-		"gcExcludeIndex":       db.gcExcludeIndex,
-		"pinIndex":             db.pinIndex,
+		"metaIndex":      db.metaIndex,
+		"pushIndex":      db.pushIndex,
+		"pullIndex":      db.pullIndex,
+		"gcIndex":        db.gcIndex,
+		"gcExcludeIndex": db.gcExcludeIndex,
+		"pinIndex":       db.pinIndex,
 	} {
 		indexSize, err := v.Count()
 		if err != nil {
@@ -491,6 +463,7 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	}
 	indexInfo["gcSize"] = int(val)
 
+	indexInfo["data"], err = db.data.Count()
 	return indexInfo, err
 }
 

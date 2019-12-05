@@ -58,19 +58,19 @@ func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (
 // get returns Item from the retrieval index
 // and updates other indexes.
 func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err error) {
-	item := addressToItem(addr)
-
-	out, err = db.retrievalDataIndex.Get(item)
+	c, err := db.data.Get(addr)
 	if err != nil {
 		return out, err
 	}
+	out.Address = addr
+	out.Data = c.Data()
 	switch mode {
 	// update the access timestamp and gc index
 	case chunk.ModeGetRequest:
 		db.updateGCItems(out)
 
 	case chunk.ModeGetPin:
-		pinnedItem, err := db.pinIndex.Get(item)
+		pinnedItem, err := db.pinIndex.Get(addressToItem(addr))
 		if err != nil {
 			return out, err
 		}
@@ -133,9 +133,11 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 
 	// update accessTimeStamp in retrieve, gc
 
-	i, err := db.retrievalAccessIndex.Get(item)
+	i, err := db.metaIndex.Get(item)
 	switch err {
 	case nil:
+		item.BinID = i.BinID
+		item.StoreTimestamp = i.StoreTimestamp
 		item.AccessTimestamp = i.AccessTimestamp
 	case leveldb.ErrNotFound:
 		// no chunk accesses
@@ -152,10 +154,9 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	// update access timestamp
 	item.AccessTimestamp = now()
 	// update retrieve access index
-	db.retrievalAccessIndex.PutInBatch(batch, item)
+	db.metaIndex.PutInBatch(batch, item)
 	// add new entry to gc index
 	db.gcIndex.PutInBatch(batch, item)
-
 	return db.shed.WriteBatch(batch)
 }
 
