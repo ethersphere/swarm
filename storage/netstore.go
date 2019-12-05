@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
@@ -35,6 +34,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 )
 
@@ -109,7 +109,7 @@ func NewNetStore(store chunk.Store, baseAddr *network.BzzAddr) *NetStore {
 		fetchers: fetchers,
 		Store:    store,
 		LocalID:  baseAddr.ID(),
-		logger:   log.New("base", baseAddr.ShortString()),
+		logger:   log.NewBaseAddressLogger("base", baseAddr.ShortString()),
 	}
 }
 

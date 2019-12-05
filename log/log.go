@@ -11,6 +11,33 @@ const (
 	CallDepth = 1
 )
 
+var (
+	logBaseAddr = false
+)
+
+// Export go-ethereum/log interface so that swarm/log can be used with it interchangeably
+type Logger = l.Logger
+
+// NewBaseAddressLogger creates a new logger with a `base` prefix
+func NewBaseAddressLogger(baseAddr string, ctx ...interface{}) l.Logger {
+	if logBaseAddr {
+		return l.New(append([]interface{}{"base", baseAddr}, ctx...)...)
+	}
+
+	return l.New(ctx...)
+}
+
+// New creates new swarm logger
+func New(ctx ...interface{}) Logger {
+	return l.New(ctx)
+}
+
+// EnableBaseAddress enables the logging of the base address
+// it is used for tests
+func EnableBaseAddress() {
+	logBaseAddr = true
+}
+
 // Warn is a convenient alias for log.Warn with stats
 func Warn(msg string, ctx ...interface{}) {
 	metrics.GetOrRegisterCounter("warn", nil).Inc(1)
