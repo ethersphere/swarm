@@ -258,7 +258,7 @@ func (s *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error {
 		expects[disconnect.Peer] = disconnect.Error
 	}
 
-	timeout := time.After(time.Second)
+	timeout := time.After(5 * time.Second)
 	for len(expects) > 0 {
 		select {
 		case event := <-s.events:

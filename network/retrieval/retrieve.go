@@ -154,11 +154,9 @@ func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error 
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
 		case *RetrieveRequest:
-			// we must handle them in a different goroutine otherwise parallel requests
-			// for other chunks from the same peer will get stuck in the queue
-			go r.handleRetrieveRequest(ctx, p, msg)
+			return r.handleRetrieveRequest(ctx, p, msg)
 		case *ChunkDelivery:
-			go r.handleChunkDelivery(ctx, p, msg)
+			return r.handleChunkDelivery(ctx, p, msg)
 		}
 		return nil
 	}
@@ -302,7 +300,7 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 // handleRetrieveRequest handles an incoming retrieve request from a certain Peer
 // if the chunk is found in the localstore it is served immediately, otherwise
 // it results in a new retrieve request to candidate peers in our kademlia
-func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) {
+func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) error {
 	p.logger.Debug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
@@ -325,7 +323,8 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	if err != nil {
 		retrieveChunkFail.Inc(1)
 		p.logger.Trace("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
-		return
+		// continue in event loop
+		return nil
 	}
 
 	p.logger.Trace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
@@ -340,22 +339,24 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	if err != nil {
 		p.logger.Error("retrieval.handleRetrieveRequest - peer delivery failed", "ref", msg.Addr, "err", err)
 		osp.LogFields(olog.Bool("delivered", false))
-		return
+		// continue in event loop
+		return nil
 	}
 	osp.LogFields(olog.Bool("delivered", true))
+
+	return nil
 }
 
 // handleChunkDelivery handles a ChunkDelivery message from a certain peer
 // if the chunk proximity order in relation to our base address is within depth
 // we treat the chunk as a chunk received in syncing
-func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) {
+func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery) error {
 	p.logger.Debug("retrieval.handleChunkDelivery", "ref", msg.Addr)
 	err := p.checkRequest(msg.Ruid, msg.Addr)
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
 		p.logger.Error("unsolicited chunk delivery from peer", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
-		p.Drop("unsolicited chunk delivery")
-		return
+		return errors.New(fmt.Sprintf("unsolicited chunk delivery from peer: %s", err))
 	}
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
@@ -386,9 +387,11 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	if err != nil {
 		p.logger.Error("netstore error putting chunk to localstore", "err", err)
 		if err == storage.ErrChunkInvalid {
-			p.Drop("invalid chunk in netstore put")
+			return errors.New(fmt.Sprintf("netstore error putting chunk to localstore: %s", err))
 		}
 	}
+
+	return nil
 }
 
 // RequestFromPeers sends a chunk retrieve request to the next found peer
