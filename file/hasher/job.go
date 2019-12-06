@@ -67,7 +67,7 @@ func newJob(params *treeParams, tgt *target, jobIndex *jobIndex, lvl int, dataSe
 }
 
 func (jb *job) start() {
-	jb.writer = jb.params.hashFunc()
+	jb.writer = jb.params.GetWriter()
 	go jb.process()
 }
 
@@ -131,6 +131,8 @@ func (jb *job) write(index int, data []byte) {
 // - data write is finalized and targetcount for this chunk was already reached
 // - data write is finalized and targetcount is reached on a subsequent job write
 func (jb *job) process() {
+
+	log.Trace("starting job process", "level", jb.level, "sec", jb.dataSection)
 
 	var processCount int
 	defer jb.destroy()
@@ -317,7 +319,7 @@ func (jb *job) Next() *job {
 // cleans up the job; reset hasher and remove pointer to job from index
 func (jb *job) destroy() {
 	if jb.writer != nil {
-		jb.writer.Reset(jb.params.GetContext())
+		jb.params.PutWriter(jb.writer)
 	}
 	jb.index.Delete(jb)
 }

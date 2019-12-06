@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -20,15 +21,18 @@ type treeParams struct {
 	ctx         context.Context
 }
 
-func newTreeParams(section int, branches int, hashFunc func() param.SectionWriter) *treeParams {
+func newTreeParams(hashFunc func() param.SectionWriter) *treeParams {
 
+	h := hashFunc()
 	p := &treeParams{
-		SectionSize: section,
-		Branches:    branches,
-		ChunkSize:   section * branches,
+		SectionSize: h.SectionSize(),
+		Branches:    h.Branches(),
+		ChunkSize:   h.SectionSize() * h.Branches(),
 		hashFunc:    hashFunc,
 		ctx:         context.Background(),
 	}
+	h.Reset(p.ctx)
+	log.Trace("new tree params", "sectionsize", p.SectionSize, "branches", p.Branches, "chunksize", p.ChunkSize)
 	p.writerPool.New = func() interface{} {
 		return p.hashFunc()
 	}
@@ -47,4 +51,14 @@ func (p *treeParams) SetContext(ctx context.Context) {
 
 func (p *treeParams) GetContext() context.Context {
 	return p.ctx
+}
+
+func (p *treeParams) PutWriter(w param.SectionWriter) {
+	w.Reset(p.ctx)
+	p.writerPool.Put(w)
+
+}
+
+func (p *treeParams) GetWriter() param.SectionWriter {
+	return p.writerPool.Get().(param.SectionWriter)
 }

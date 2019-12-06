@@ -24,7 +24,7 @@ const (
 // TestTreeParams verifies that params are set correctly by the param constructor
 func TestTreeParams(t *testing.T) {
 
-	params := newTreeParams(sectionSize, branches, noHashFunc)
+	params := newTreeParams(dummyHashFunc)
 
 	if params.SectionSize != 32 {
 		t.Fatalf("section: expected %d, got %d", sectionSize, params.SectionSize)
@@ -59,10 +59,10 @@ func TestTarget(t *testing.T) {
 	}
 }
 
-// TestTargetWithinJobDefault verifies the calculation of whether a final data section index
+// TestJobTargetWithinJobDefault verifies the calculation of whether a final data section index
 // falls within a particular job's span without regard to differing SectionSize
-func TestTargetWithinJobDefault(t *testing.T) {
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+func TestJobTargetWithinDefault(t *testing.T) {
+	params := newTreeParams(dummyHashFunc)
 	index := newJobIndex(9)
 	tgt := newTarget()
 
@@ -81,13 +81,13 @@ func TestTargetWithinJobDefault(t *testing.T) {
 	}
 }
 
-// TestTargetWithinJobDifferentSections does the same as TestTargetWithinJobDefault but
+// TestJobTargetWithinDifferentSections does the same as TestTargetWithinJobDefault but
 // with SectionSize/Branches settings differeing between client target and underlying writer
-func TestTargetWithinJobDifferentSections(t *testing.T) {
+func TestJobTargetWithinDifferentSections(t *testing.T) {
 	dummyHashDoubleFunc := func() param.SectionWriter {
 		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
 	}
-	params := newTreeParams(sectionSize, branches, dummyHashDoubleFunc)
+	params := newTreeParams(dummyHashDoubleFunc)
 	index := newJobIndex(9)
 	tgt := newTarget()
 
@@ -111,7 +111,7 @@ func TestTargetWithinJobDifferentSections(t *testing.T) {
 // TestNewJob verifies that a job is initialized with the correct values
 func TestNewJob(t *testing.T) {
 
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 	params.Debug = true
 
 	tgt := newTarget()
@@ -130,7 +130,7 @@ func TestNewJob(t *testing.T) {
 // under a particular level reference
 // it tests both a balanced and an unbalanced tree
 func TestJobSize(t *testing.T) {
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 	params.Debug = true
 	index := newJobIndex(9)
 
@@ -166,7 +166,7 @@ func TestJobSize(t *testing.T) {
 // a data section index is within a level's span is correct
 func TestJobTarget(t *testing.T) {
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 	params.Debug = true
 	index := newJobIndex(9)
 
@@ -204,7 +204,7 @@ func TestJobTarget(t *testing.T) {
 // and removes it on job destruction
 func TestJobIndex(t *testing.T) {
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, branches)
 	jobIndex := jb.index
@@ -218,11 +218,11 @@ func TestJobIndex(t *testing.T) {
 	}
 }
 
-// TestGetJobNext verifies that the new job constructed through the job.Next() method
+// TestJobGetNext verifies that the new job constructed through the job.Next() method
 // has the correct level and data section index
-func TestGetJobNext(t *testing.T) {
+func TestJobGetNext(t *testing.T) {
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 	params.Debug = true
 
 	jb := newJob(params, tgt, nil, 1, branches*branches)
@@ -243,7 +243,7 @@ func TestGetJobNext(t *testing.T) {
 func TestJobWriteTwoAndFinish(t *testing.T) {
 
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
 	jb.start()
@@ -273,12 +273,12 @@ func TestJobWriteTwoAndFinish(t *testing.T) {
 	}
 }
 
-// TestGetJobParent verifies that the parent returned from two jobs' parent() calls
+// TestJobGetParent verifies that the parent returned from two jobs' parent() calls
 // that are within the same span as the parent chunk of references is the same
 // BUG: not guaranteed to return same parent when run with eg -count 100
-func TestGetJobParent(t *testing.T) {
+func TestJobGetParent(t *testing.T) {
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, branches*branches)
 	jb.start()
@@ -304,11 +304,11 @@ func TestGetJobParent(t *testing.T) {
 	}
 }
 
-// TestWriteParentSection verifies that a data write translates to a write
+// TestJobWriteParentSection verifies that a data write translates to a write
 // in the correct section of its parent
-func TestWriteParentSection(t *testing.T) {
+func TestJobWriteParentSection(t *testing.T) {
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 	index := newJobIndex(9)
 
 	jb := newJob(params, tgt, index, 1, 0)
@@ -351,7 +351,7 @@ func TestWriteParentSection(t *testing.T) {
 func TestJobWriteFull(t *testing.T) {
 
 	tgt := newTarget()
-	params := newTreeParams(sectionSize, branches, dummyHashFunc)
+	params := newTreeParams(dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
 	jb.start()
@@ -388,7 +388,7 @@ func TestJobWriteSpan(t *testing.T) {
 	hashFunc := func() param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
-	params := newTreeParams(sectionSize, branches, hashFunc)
+	params := newTreeParams(hashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
 	jb.start()
@@ -439,7 +439,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 	hashFunc := func() param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
-	params := newTreeParams(sectionSize, branches, hashFunc)
+	params := newTreeParams(hashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
 	jb.start()
@@ -501,7 +501,7 @@ func TestJobWriteDoubleSection(t *testing.T) {
 	dummyHashDoubleFunc := func() param.SectionWriter {
 		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
 	}
-	params := newTreeParams(sectionSize, branches, dummyHashDoubleFunc)
+	params := newTreeParams(dummyHashDoubleFunc)
 
 	tgt := newTarget()
 	jb := newJob(params, tgt, nil, 1, 0)
@@ -538,7 +538,7 @@ func TestJobVector(t *testing.T) {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHash := bmt.New(poolSync)
-	params := newTreeParams(sectionSize, branches, refHashFunc)
+	params := newTreeParams(refHashFunc)
 	var mismatch int
 
 	for i := start; i < end; i++ {
@@ -621,7 +621,7 @@ func benchmarkJob(b *testing.B) {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHash := bmt.New(poolSync)
-	treeParams := newTreeParams(sectionSize, branches, refHashFunc)
+	treeParams := newTreeParams(refHashFunc)
 	_, data := testutil.SerialData(dataLength, 255, 0)
 
 	for j := 0; j < b.N; j++ {

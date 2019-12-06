@@ -27,7 +27,7 @@ type ReferenceFileHasher struct {
 // the section count will be the Size() of the hasher
 func NewReferenceFileHasher(hasher *bmt.Hasher, branches int) *ReferenceFileHasher {
 	f := &ReferenceFileHasher{
-		params:    newTreeParams(hasher.Size(), branches, nil),
+		params:    newTreeParams(dummyHashFunc),
 		hasher:    hasher,
 		chunkSize: branches * hasher.Size(),
 	}

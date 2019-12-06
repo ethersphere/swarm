@@ -1,6 +1,7 @@
 package hasher
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,18 +17,16 @@ import (
 
 // TestHasherJobTopHash verifies that the top hash on the first level is correctly set even though the Hasher writes asynchronously to the underlying job
 func TestHasherJobTopHash(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() param.SectionWriter {
-		return NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc)
-	h.Link(refHashFunc)
+	h := New(refHashFunc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -43,18 +42,16 @@ func TestHasherJobTopHash(t *testing.T) {
 
 // TestHasherOneFullChunk verifies the result of writing a single data chunk to Hasher
 func TestHasherOneFullChunk(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() param.SectionWriter {
-		return NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc)
-	h.Link(refHashFunc)
+	h := New(refHashFunc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -69,18 +66,16 @@ func TestHasherOneFullChunk(t *testing.T) {
 
 // TestHasherOneFullChunk verifies that Hasher creates new jobs on branch thresholds
 func TestHasherJobChange(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() param.SectionWriter {
-		return NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc)
-	h.Link(refHashFunc)
+	h := New(refHashFunc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.Init(ctx, logErrFunc)
 	jobs := make(map[string]int)
 	for i := 0; i < chunkSize*branches*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -100,18 +95,16 @@ func TestHasherJobChange(t *testing.T) {
 
 // TestHasherONeFullLevelOneChunk verifies the result of writing branches times data chunks to Hasher
 func TestHasherOneFullLevelOneChunk(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() param.SectionWriter {
-		return NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
-	h := New(sectionSize, branches, dataHashFunc)
-	h.Link(refHashFunc)
+	h := New(refHashFunc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches*branches; i += chunkSize {
 		h.Write(i, data[i:i+chunkSize])
@@ -125,21 +118,19 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 }
 
 func TestHasherVector(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
-	dataHashFunc := func() param.SectionWriter {
-		return NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	var mismatch int
 	for i, dataLength := range dataLengths {
 		log.Info("hashervector start", "i", i, "l", dataLength)
 		eq := true
-		h := New(sectionSize, branches, dataHashFunc)
-		h.Link(refHashFunc)
+		h := New(refHashFunc)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		h.Init(ctx, logErrFunc)
 		_, data := testutil.SerialData(dataLength, 255, 0)
 		for j := 0; j < dataLength; j += chunkSize {
 			size := chunkSize
@@ -177,19 +168,17 @@ func benchmarkHasher(b *testing.B) {
 	}
 	dataLength := int(dataLengthParam)
 
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() param.SectionWriter {
-		return NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
 	_, data := testutil.SerialData(dataLength, 255, 0)
 
 	for j := 0; j < b.N; j++ {
-		h := New(sectionSize, branches, dataHashFunc)
-		h.Link(refHashFunc)
+		h := New(refHashFunc)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		h.Init(ctx, logErrFunc)
 		for i := 0; i < dataLength; i += chunkSize {
 			size := chunkSize
 			if dataLength-i < chunkSize {

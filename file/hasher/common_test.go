@@ -80,6 +80,10 @@ var (
 	noHashFunc = func() param.SectionWriter {
 		return nil
 	}
+
+	logErrFunc = func(err error) {
+		log.Error("SectionWriter pipeline error", "err", err)
+	}
 )
 
 func init() {
@@ -124,7 +128,7 @@ func (d *dummySectionWriter) Write(index int, data []byte) {
 	d.mu.Lock()
 	copy(d.data[index*d.sectionSize:], data)
 	d.size += len(data)
-	log.Trace("dummywriter", "index", index, "size", d.size, "threshold", d.sectionSize*d.branches)
+	log.Trace("dummywriter write", "index", index, "size", d.size, "threshold", d.sectionSize*d.branches)
 	if d.isFull() {
 		d.summed = true
 		d.mu.Unlock()
@@ -132,6 +136,17 @@ func (d *dummySectionWriter) Write(index int, data []byte) {
 	} else {
 		d.mu.Unlock()
 	}
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) WriteAll(data []byte) {
+	d.mu.Lock()
+	copy(d.data, data)
+	d.size += len(data)
+	d.mu.Unlock()
+	log.Trace("dummywriter writeall", "size", d.size, "threshold", d.sectionSize*d.branches)
+	d.summed = true
+	d.sum()
 }
 
 // implements param.SectionWriter

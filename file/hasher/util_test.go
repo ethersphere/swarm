@@ -35,7 +35,7 @@ func TestDataSizeToSectionIndex(t *testing.T) {
 // TestsDataSectionToLevelSection verifies dataSectionToLevelSection
 func TestDataSectionToLevelSection(t *testing.T) {
 
-	params := newTreeParams(sectionSize, branches, nil)
+	params := newTreeParams(dummyHashFunc)
 	sections := []int{0, branches - 1, branches, branches + 1, branches * 2, branches*2 + 1, branches * branches}
 	levels := []int{1, 2}
 	expects := []int{
@@ -58,7 +58,7 @@ func TestDataSectionToLevelSection(t *testing.T) {
 
 // TestDataSectionToLevelBoundary verifies dataSectionToLevelBoundary
 func TestDataSectionToLevelBoundary(t *testing.T) {
-	params := newTreeParams(sectionSize, branches, nil)
+	params := newTreeParams(dummyHashFunc)
 	size := chunkSize*branches + chunkSize*2
 	section := dataSizeToSectionIndex(size, sectionSize)
 	lvl := 1
