@@ -561,6 +561,39 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 	}
 }
 
+func TestJobWriteDoubleSection(t *testing.T) {
+	//poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	//dataHash := bmt.New(poolSync)
+	writeSize := sectionSize * 2
+	dummyHashLongSectionFunc := func() param.SectionWriter {
+		return newDummySectionWriter(chunkSize*branches, sectionSize)
+	}
+	params := newTreeParams(sectionSize, branches, dummyHashLongSectionFunc)
+
+	tgt := newTarget()
+	jb := newJob(params, tgt, nil, 1, 0)
+	jb.start()
+	_, data := testutil.SerialData(chunkSize, 255, 0)
+
+	for i := 0; i < chunkSize; i += writeSize {
+		jb.write(i/writeSize, data[i:i+writeSize])
+	}
+	tgt.Set(chunkSize, branches, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	select {
+	case refLong := <-tgt.Done():
+		refLongHex := hexutil.Encode(refLong)
+		correctRefLongHex := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+		if refLongHex != correctRefLongHex {
+			t.Fatalf("section long: expected %s, got %s", correctRefLongHex, refLongHex)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timeout: %v", ctx.Err())
+	}
+
+}
+
 // TestVectors executes the barebones functionality of the hasher
 // and verifies against source of truth results generated from the reference hasher
 // for the same data

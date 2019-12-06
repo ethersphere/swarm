@@ -143,18 +143,29 @@ OUTER:
 		select {
 
 		// enter here if new data is written to the job
+		// TODO: Error if calculated write count exceed chunk
 		case entry := <-jb.writeC:
+
+			// split the contents to fit the underlying SectionWriter
+			entrySections := len(entry.data) / jb.writer.SectionSize()
 			jb.mu.Lock()
 			endCount := int(jb.endCount)
-			processCount++
+			processCount += entrySections
 			jb.mu.Unlock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
-			log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
+			log.Trace("job entry", "datasection", jb.dataSection, "num sections", entrySections, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
 
 			// TODO: this write is superfluous when the received data is the root hash
-			jb.writer.Write(entry.index, entry.data)
+			var offset int
+			for i := 0; i < entrySections; i++ {
+				idx := entry.index + i
+				data := entry.data[offset : offset+sectionSize]
+				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
+				jb.writer.Write(idx, data)
+				offset += sectionSize
+			}
 
 			// since newcount is incremented above it can only equal endcount if this has been set in the case below,
 			// which means data write has been completed
