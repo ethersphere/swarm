@@ -1,14 +1,11 @@
 package hasher
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"hash"
 	"math/rand"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,157 +20,6 @@ import (
 const (
 	zeroHex = "0000000000000000000000000000000000000000000000000000000000000000"
 )
-
-var (
-	dummyHashFunc = func() param.SectionWriter {
-		return newDummySectionWriter(chunkSize*branches, sectionSize, sectionSize, branches)
-	}
-	// placeholder for cases where a hasher is not necessary
-	noHashFunc = func() param.SectionWriter {
-		return nil
-	}
-)
-
-// simple param.SectionWriter hasher that keeps the data written to it
-// for later inspection
-// TODO: see if this can be replaced with the fake hasher from storage module
-type dummySectionWriter struct {
-	sectionSize int
-	digestSize  int
-	branches    int
-	data        []byte
-	digest      []byte
-	size        int
-	summed      bool
-	writer      hash.Hash
-	mu          sync.Mutex
-	wg          sync.WaitGroup
-}
-
-func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int) *dummySectionWriter {
-	return &dummySectionWriter{
-		sectionSize: sectionSize,
-		digestSize:  digestSize,
-		branches:    branches,
-		data:        make([]byte, cp),
-		writer:      sha3.NewLegacyKeccak256(),
-		digest:      make([]byte, digestSize),
-	}
-}
-
-func (d *dummySectionWriter) Init(_ context.Context, _ func(error)) {
-}
-
-func (d *dummySectionWriter) Link(_ func() param.SectionWriter) {
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) Write(index int, data []byte) {
-	d.mu.Lock()
-	copy(d.data[index*d.sectionSize:], data)
-	d.size += len(data)
-	log.Trace("dummywriter", "index", index, "size", d.size, "threshold", d.sectionSize*d.branches)
-	if d.isFull() {
-		d.summed = true
-		d.mu.Unlock()
-		d.sum()
-	} else {
-		d.mu.Unlock()
-	}
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) Sum(_ []byte, size int, _ []byte) []byte {
-	log.Trace("dummy Sumcall", "size", size)
-	d.mu.Lock()
-	if !d.summed {
-		d.size = size
-		d.summed = true
-		d.mu.Unlock()
-		d.sum()
-	} else {
-		d.mu.Unlock()
-	}
-	return d.digest
-}
-
-func (d *dummySectionWriter) sum() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for i := 0; i < d.size; i += d.writer.Size() {
-		sectionData := d.data[i : i+d.writer.Size()]
-		log.Trace("dummy sum write", "i", i/d.writer.Size(), "data", hexutil.Encode(sectionData), "size", d.size)
-		d.writer.Write(sectionData)
-	}
-	copy(d.digest, d.writer.Sum(nil))
-	log.Trace("dummy sum result", "ref", hexutil.Encode(d.digest))
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) Reset(_ context.Context) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.data = make([]byte, len(d.data))
-	d.digest = make([]byte, d.digestSize)
-	d.size = 0
-	d.summed = false
-	d.writer.Reset()
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) SectionSize() int {
-	return d.sectionSize
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) DigestSize() int {
-	return d.sectionSize
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) Branches() int {
-	return d.branches
-}
-
-func (d *dummySectionWriter) isFull() bool {
-	return d.size == d.sectionSize*d.branches
-}
-
-// TestDummySectionWriter
-func TestDummySectionWriter(t *testing.T) {
-
-	w := newDummySectionWriter(chunkSize*2, sectionSize, sectionSize, branches)
-	w.Reset(context.Background())
-
-	_, data := testutil.SerialData(sectionSize*2, 255, 0)
-
-	w.Write(branches, data[:sectionSize])
-	w.Write(branches+1, data[sectionSize:])
-	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
-		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
-	}
-
-	correctDigestHex := "0xfbc16f6db3534b456cb257d00148127f69909000c89f8ce5bc6183493ef01da1"
-	digest := w.Sum(nil, chunkSize*2, nil)
-	digestHex := hexutil.Encode(digest)
-	if digestHex != correctDigestHex {
-		t.Fatalf("Digest: 2xsectionSize*1; expected %s, got %s", correctDigestHex, digestHex)
-	}
-
-	w = newDummySectionWriter(chunkSize*2, sectionSize*2, sectionSize*2, branches/2)
-	w.Reset(context.Background())
-	w.Write(branches/2, data)
-	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
-		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
-	}
-
-	correctDigestHex += zeroHex
-	digest = w.Sum(nil, chunkSize*2, nil)
-	digestHex = hexutil.Encode(digest)
-	if digestHex != correctDigestHex {
-		t.Fatalf("Digest 1xsectionSize*2; expected %s, got %s", correctDigestHex, digestHex)
-	}
-}
 
 // TestTreeParams verifies that params are set correctly by the param constructor
 func TestTreeParams(t *testing.T) {
@@ -213,9 +59,9 @@ func TestTarget(t *testing.T) {
 	}
 }
 
-// TestTargetWithinJob verifies the calculation of whether a final data section index
-// falls within a particular job's span
-func TestTargetWithinJob(t *testing.T) {
+// TestTargetWithinJobDefault verifies the calculation of whether a final data section index
+// falls within a particular job's span without regard to differing SectionSize
+func TestTargetWithinJobDefault(t *testing.T) {
 	params := newTreeParams(sectionSize, branches, dummyHashFunc)
 	index := newJobIndex(9)
 	tgt := newTarget()
@@ -232,6 +78,33 @@ func TestTargetWithinJob(t *testing.T) {
 	}
 	if c != 1 {
 		t.Fatalf("target %d within %d: expected %d, got %d", finalCount, jb.level, 2, c)
+	}
+}
+
+// TestTargetWithinJobDifferentSections does the same as TestTargetWithinJobDefault but
+// with SectionSize/Branches settings differeing between client target and underlying writer
+func TestTargetWithinJobDifferentSections(t *testing.T) {
+	dummyHashDoubleFunc := func() param.SectionWriter {
+		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
+	}
+	params := newTreeParams(sectionSize, branches, dummyHashDoubleFunc)
+	index := newJobIndex(9)
+	tgt := newTarget()
+
+	//jb := newJob(params, tgt, index, 1, branches*branches)
+	jb := newJob(params, tgt, index, 1, 0)
+	defer jb.destroy()
+
+	//finalSize := chunkSize*branches + chunkSize*2
+	finalSize := chunkSize
+	finalCount := dataSizeToSectionCount(finalSize, sectionSize)
+	log.Trace("within test", "size", finalSize, "count", finalCount)
+	c, ok := jb.targetWithinJob(finalCount - 1)
+	if !ok {
+		t.Fatalf("target %d within %d: expected true", finalCount, jb.level)
+	}
+	if c != 1 {
+		t.Fatalf("target %d within %d: expected %d, got %d", finalCount, jb.level, 1, c)
 	}
 }
 
@@ -625,10 +498,10 @@ func TestJobWriteDoubleSection(t *testing.T) {
 	//poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	//dataHash := bmt.New(poolSync)
 	writeSize := sectionSize * 2
-	dummyHashLongSectionFunc := func() param.SectionWriter {
+	dummyHashDoubleFunc := func() param.SectionWriter {
 		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
 	}
-	params := newTreeParams(sectionSize, branches, dummyHashLongSectionFunc)
+	params := newTreeParams(sectionSize, branches, dummyHashDoubleFunc)
 
 	tgt := newTarget()
 	jb := newJob(params, tgt, nil, 1, 0)

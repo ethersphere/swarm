@@ -1,7 +1,17 @@
 package hasher
 
 import (
+	"bytes"
+	"context"
+	"hash"
+	"sync"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -61,6 +71,158 @@ var (
 	end   = 14 //len(dataLengths)
 )
 
+var (
+	dummyHashFunc = func() param.SectionWriter {
+		return newDummySectionWriter(chunkSize*branches, sectionSize, sectionSize, branches)
+	}
+
+	// placeholder for cases where a hasher is not necessary
+	noHashFunc = func() param.SectionWriter {
+		return nil
+	}
+)
+
 func init() {
 	testutil.Init()
+}
+
+// simple param.SectionWriter hasher that keeps the data written to it
+// for later inspection
+// TODO: see if this can be replaced with the fake hasher from storage module
+type dummySectionWriter struct {
+	sectionSize int
+	digestSize  int
+	branches    int
+	data        []byte
+	digest      []byte
+	size        int
+	summed      bool
+	writer      hash.Hash
+	mu          sync.Mutex
+	wg          sync.WaitGroup
+}
+
+func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int) *dummySectionWriter {
+	return &dummySectionWriter{
+		sectionSize: sectionSize,
+		digestSize:  digestSize,
+		branches:    branches,
+		data:        make([]byte, cp),
+		writer:      sha3.NewLegacyKeccak256(),
+		digest:      make([]byte, digestSize),
+	}
+}
+
+func (d *dummySectionWriter) Init(_ context.Context, _ func(error)) {
+}
+
+func (d *dummySectionWriter) Link(_ func() param.SectionWriter) {
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) Write(index int, data []byte) {
+	d.mu.Lock()
+	copy(d.data[index*d.sectionSize:], data)
+	d.size += len(data)
+	log.Trace("dummywriter", "index", index, "size", d.size, "threshold", d.sectionSize*d.branches)
+	if d.isFull() {
+		d.summed = true
+		d.mu.Unlock()
+		d.sum()
+	} else {
+		d.mu.Unlock()
+	}
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) Sum(_ []byte, size int, _ []byte) []byte {
+	log.Trace("dummy Sumcall", "size", size)
+	d.mu.Lock()
+	if !d.summed {
+		d.size = size
+		d.summed = true
+		d.mu.Unlock()
+		d.sum()
+	} else {
+		d.mu.Unlock()
+	}
+	return d.digest
+}
+
+func (d *dummySectionWriter) sum() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for i := 0; i < d.size; i += d.writer.Size() {
+		sectionData := d.data[i : i+d.writer.Size()]
+		log.Trace("dummy sum write", "i", i/d.writer.Size(), "data", hexutil.Encode(sectionData), "size", d.size)
+		d.writer.Write(sectionData)
+	}
+	copy(d.digest, d.writer.Sum(nil))
+	log.Trace("dummy sum result", "ref", hexutil.Encode(d.digest))
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) Reset(_ context.Context) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.data = make([]byte, len(d.data))
+	d.digest = make([]byte, d.digestSize)
+	d.size = 0
+	d.summed = false
+	d.writer.Reset()
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) SectionSize() int {
+	return d.sectionSize
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) DigestSize() int {
+	return d.sectionSize
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) Branches() int {
+	return d.branches
+}
+
+func (d *dummySectionWriter) isFull() bool {
+	return d.size == d.sectionSize*d.branches
+}
+
+// TestDummySectionWriter
+func TestDummySectionWriter(t *testing.T) {
+
+	w := newDummySectionWriter(chunkSize*2, sectionSize, sectionSize, branches)
+	w.Reset(context.Background())
+
+	_, data := testutil.SerialData(sectionSize*2, 255, 0)
+
+	w.Write(branches, data[:sectionSize])
+	w.Write(branches+1, data[sectionSize:])
+	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
+		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
+	}
+
+	correctDigestHex := "0xfbc16f6db3534b456cb257d00148127f69909000c89f8ce5bc6183493ef01da1"
+	digest := w.Sum(nil, chunkSize*2, nil)
+	digestHex := hexutil.Encode(digest)
+	if digestHex != correctDigestHex {
+		t.Fatalf("Digest: 2xsectionSize*1; expected %s, got %s", correctDigestHex, digestHex)
+	}
+
+	w = newDummySectionWriter(chunkSize*2, sectionSize*2, sectionSize*2, branches/2)
+	w.Reset(context.Background())
+	w.Write(branches/2, data)
+	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
+		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
+	}
+
+	correctDigestHex += zeroHex
+	digest = w.Sum(nil, chunkSize*2, nil)
+	digestHex = hexutil.Encode(digest)
+	if digestHex != correctDigestHex {
+		t.Fatalf("Digest 1xsectionSize*2; expected %s, got %s", correctDigestHex, digestHex)
+	}
 }
