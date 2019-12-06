@@ -13,4 +13,5 @@ type SectionWriter interface {
 	Sum(b []byte, length int, span []byte) []byte  // returns the hash of the buffer
 	SectionSize() int                              // size of the async section unit to use
 	DigestSize() int
+	Branches() int
 }

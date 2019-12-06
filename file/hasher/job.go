@@ -150,21 +150,22 @@ OUTER:
 			entrySections := len(entry.data) / jb.writer.SectionSize()
 			jb.mu.Lock()
 			endCount := int(jb.endCount)
+			oldProcessCount := processCount
 			processCount += entrySections
 			jb.mu.Unlock()
 			if entry.index == 0 {
 				jb.firstSectionData = entry.data
 			}
-			log.Trace("job entry", "datasection", jb.dataSection, "num sections", entrySections, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
+			log.Trace("job entry", "datasection", jb.dataSection, "num sections", entrySections, "level", jb.level, "processCount", oldProcessCount, "endcount", endCount, "index", entry.index, "data", hexutil.Encode(entry.data))
 
 			// TODO: this write is superfluous when the received data is the root hash
 			var offset int
 			for i := 0; i < entrySections; i++ {
 				idx := entry.index + i
-				data := entry.data[offset : offset+sectionSize]
-				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", processCount, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
+				data := entry.data[offset : offset+jb.writer.SectionSize()]
+				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", oldProcessCount+i, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
 				jb.writer.Write(idx, data)
-				offset += sectionSize
+				offset += jb.writer.SectionSize()
 			}
 
 			// since newcount is incremented above it can only equal endcount if this has been set in the case below,
@@ -174,7 +175,7 @@ OUTER:
 				log.Trace("quitting writec - endcount", "c", processCount, "level", jb.level)
 				break OUTER
 			}
-			if processCount == jb.params.Branches {
+			if processCount == jb.writer.Branches() {
 				log.Trace("quitting writec - branches")
 				break OUTER
 			}

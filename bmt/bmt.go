@@ -296,6 +296,10 @@ func (h *Hasher) ChunkSize() int {
 	return h.pool.Size
 }
 
+func (h *Hasher) Count() int {
+	return h.pool.SegmentCount
+}
+
 // Sum returns the BMT root hash of the buffer
 // using Sum presupposes sequential synchronous writes (io.Writer interface)
 // hash.Hash interface Sum method appends the byte slice to the underlying
@@ -403,19 +407,25 @@ func (h *Hasher) releaseTree() {
 }
 
 // NewAsyncWriter extends Hasher with an interface for concurrent segment/section writes
+// TODO: Instead of explicitly setting double size of segment should be dynamic and chunked internally. If not, we have to keep different bmt hashers generation functions for different purposes in the same instance, or cope with added complexity of bmt hasher generation functions having to receive parameters
 func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 	secsize := h.pool.SegmentSize
 	if double {
 		secsize *= 2
 	}
+	seccount := h.pool.SegmentCount
+	if double {
+		seccount /= 2
+	}
 	write := func(i int, section []byte, final bool) {
 		h.writeSection(i, section, double, final)
 	}
 	return &AsyncHasher{
-		Hasher:  h,
-		double:  double,
-		secsize: secsize,
-		write:   write,
+		Hasher:   h,
+		double:   double,
+		secsize:  secsize,
+		seccount: seccount,
+		write:    write,
 	}
 }
 
@@ -434,11 +444,12 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 // * it will not leak processes if not all sections are written but it blocks
 //   and keeps the resource which can be released calling Reset()
 type AsyncHasher struct {
-	*Hasher            // extends the Hasher
-	mtx     sync.Mutex // to lock the cursor access
-	double  bool       // whether to use double segments (call Hasher.writeSection)
-	secsize int        // size of base section (size of hash or double)
-	write   func(i int, section []byte, final bool)
+	*Hasher             // extends the Hasher
+	mtx      sync.Mutex // to lock the cursor access
+	double   bool       // whether to use double segments (call Hasher.writeSection)
+	secsize  int        // size of base section (size of hash or double)
+	seccount int        // base section count
+	write    func(i int, section []byte, final bool)
 }
 
 // Implements param.SectionWriter
@@ -464,6 +475,12 @@ func (sw *AsyncHasher) SectionSize() int {
 // Implements param.SectionWriter
 func (sw *AsyncHasher) DigestSize() int {
 	return sw.secsize
+}
+
+// DigestSize returns the branching factor, which is equivalent to the size of the BMT input
+// Implements param.SectionWriter
+func (sw *AsyncHasher) Branches() int {
+	return sw.seccount
 }
 
 // Write writes the i-th section of the BMT base

@@ -78,3 +78,8 @@ func (f *FileStore) SectionSize() int {
 func (f *FileStore) DigestSize() int {
 	return f.w.DigestSize()
 }
+
+// Branches implements param.SectionWriter
+func (f *FileStore) Branches() int {
+	return f.w.Branches()
+}

@@ -20,9 +20,13 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+const (
+	zeroHex = "0000000000000000000000000000000000000000000000000000000000000000"
+)
+
 var (
 	dummyHashFunc = func() param.SectionWriter {
-		return newDummySectionWriter(chunkSize*branches, sectionSize)
+		return newDummySectionWriter(chunkSize*branches, sectionSize, sectionSize, branches)
 	}
 	// placeholder for cases where a hasher is not necessary
 	noHashFunc = func() param.SectionWriter {
@@ -34,17 +38,26 @@ var (
 // for later inspection
 // TODO: see if this can be replaced with the fake hasher from storage module
 type dummySectionWriter struct {
-	data        []byte
 	sectionSize int
+	digestSize  int
+	branches    int
+	data        []byte
+	digest      []byte
+	size        int
+	summed      bool
 	writer      hash.Hash
 	mu          sync.Mutex
+	wg          sync.WaitGroup
 }
 
-func newDummySectionWriter(cp int, sectionSize int) *dummySectionWriter {
+func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int) *dummySectionWriter {
 	return &dummySectionWriter{
-		data:        make([]byte, cp),
 		sectionSize: sectionSize,
+		digestSize:  digestSize,
+		branches:    branches,
+		data:        make([]byte, cp),
 		writer:      sha3.NewLegacyKeccak256(),
+		digest:      make([]byte, digestSize),
 	}
 }
 
@@ -55,18 +68,45 @@ func (d *dummySectionWriter) Link(_ func() param.SectionWriter) {
 }
 
 // implements param.SectionWriter
-// BUG: not actually writing to hasher
 func (d *dummySectionWriter) Write(index int, data []byte) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	copy(d.data[index*sectionSize:], data)
+	copy(d.data[index*d.sectionSize:], data)
+	d.size += len(data)
+	log.Trace("dummywriter", "index", index, "size", d.size, "threshold", d.sectionSize*d.branches)
+	if d.isFull() {
+		d.summed = true
+		d.mu.Unlock()
+		d.sum()
+	} else {
+		d.mu.Unlock()
+	}
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) Sum(b []byte, size int, span []byte) []byte {
+func (d *dummySectionWriter) Sum(_ []byte, size int, _ []byte) []byte {
+	log.Trace("dummy Sumcall", "size", size)
+	d.mu.Lock()
+	if !d.summed {
+		d.size = size
+		d.summed = true
+		d.mu.Unlock()
+		d.sum()
+	} else {
+		d.mu.Unlock()
+	}
+	return d.digest
+}
+
+func (d *dummySectionWriter) sum() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.writer.Sum(b)
+	for i := 0; i < d.size; i += d.writer.Size() {
+		sectionData := d.data[i : i+d.writer.Size()]
+		log.Trace("dummy sum write", "i", i/d.writer.Size(), "data", hexutil.Encode(sectionData), "size", d.size)
+		d.writer.Write(sectionData)
+	}
+	copy(d.digest, d.writer.Sum(nil))
+	log.Trace("dummy sum result", "ref", hexutil.Encode(d.digest))
 }
 
 // implements param.SectionWriter
@@ -74,6 +114,9 @@ func (d *dummySectionWriter) Reset(_ context.Context) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.data = make([]byte, len(d.data))
+	d.digest = make([]byte, d.digestSize)
+	d.size = 0
+	d.summed = false
 	d.writer.Reset()
 }
 
@@ -87,31 +130,48 @@ func (d *dummySectionWriter) DigestSize() int {
 	return d.sectionSize
 }
 
+// implements param.SectionWriter
+func (d *dummySectionWriter) Branches() int {
+	return d.branches
+}
+
+func (d *dummySectionWriter) isFull() bool {
+	return d.size == d.sectionSize*d.branches
+}
+
 // TestDummySectionWriter
 func TestDummySectionWriter(t *testing.T) {
 
-	w := newDummySectionWriter(chunkSize*2, sectionSize)
+	w := newDummySectionWriter(chunkSize*2, sectionSize, sectionSize, branches)
 	w.Reset(context.Background())
 
-	data := make([]byte, 32)
-	rand.Seed(23115)
-	c, err := rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c < 32 {
-		t.Fatalf("short read %d", c)
+	_, data := testutil.SerialData(sectionSize*2, 255, 0)
+
+	w.Write(branches, data[:sectionSize])
+	w.Write(branches+1, data[sectionSize:])
+	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
+		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
 	}
 
-	w.Write(branches, data)
-	if !bytes.Equal(w.data[chunkSize:chunkSize+32], data) {
-		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+32], data)
-	}
-
-	correctDigest := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+	correctDigestHex := "0xfbc16f6db3534b456cb257d00148127f69909000c89f8ce5bc6183493ef01da1"
 	digest := w.Sum(nil, chunkSize*2, nil)
-	if hexutil.Encode(digest) != correctDigest {
-		t.Fatalf("Digest: expected %s, got %x", correctDigest, digest)
+	digestHex := hexutil.Encode(digest)
+	if digestHex != correctDigestHex {
+		t.Fatalf("Digest: 2xsectionSize*1; expected %s, got %s", correctDigestHex, digestHex)
+	}
+
+	w = newDummySectionWriter(chunkSize*2, sectionSize*2, sectionSize*2, branches/2)
+	w.Reset(context.Background())
+	w.Write(branches/2, data)
+	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
+		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
+	}
+
+	correctDigestHex += zeroHex
+	digest = w.Sum(nil, chunkSize*2, nil)
+	digestHex = hexutil.Encode(digest)
+	if digestHex != correctDigestHex {
+		t.Fatalf("Digest 1xsectionSize*2; expected %s, got %s", correctDigestHex, digestHex)
 	}
 }
 
@@ -310,23 +370,23 @@ func TestGetJobNext(t *testing.T) {
 func TestJobWriteTwoAndFinish(t *testing.T) {
 
 	tgt := newTarget()
-	params := newTreeParams(sectionSize*2, branches, dummyHashFunc)
+	params := newTreeParams(sectionSize, branches, dummyHashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
 	jb.start()
 	_, data := testutil.SerialData(sectionSize*2, 255, 0)
 	jb.write(0, data[:sectionSize])
-	jb.write(1, data[:sectionSize])
+	jb.write(1, data[sectionSize:])
 
 	finalSize := chunkSize * 2
 	finalSection := dataSizeToSectionIndex(finalSize, sectionSize)
-	tgt.Set(finalSize, finalSection, 2)
+	tgt.Set(finalSize, finalSection-1, 2)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*199)
 	defer cancel()
 	select {
 	case ref := <-tgt.Done():
-		correctRefHex := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+		correctRefHex := "0x002030bde3d4cf89919649775cd71875c4d0ab1708a380e03fefc3a28aa24831"
 		refHex := hexutil.Encode(ref)
 		if refHex != correctRefHex {
 			t.Fatalf("job write full: expected %s, got %s", correctRefHex, refHex)
@@ -399,7 +459,7 @@ func TestWriteParentSection(t *testing.T) {
 	if jbnp.count() != 1 {
 		t.Fatalf("parent count: expected %d, got %d", 1, jbnp.count())
 	}
-	correctRefHex := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+	correctRefHex := "0x002030bde3d4cf89919649775cd71875c4d0ab1708a380e03fefc3a28aa24831"
 
 	// extract data in section 2 from the writer
 	// TODO: overload writer to provide a get method to extract data to improve clarity
@@ -423,16 +483,16 @@ func TestJobWriteFull(t *testing.T) {
 	jb := newJob(params, tgt, nil, 1, 0)
 	jb.start()
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	for i := 0; i < branches; i++ {
-		jb.write(i, data[i*sectionSize:i*sectionSize+sectionSize])
+	for i := 0; i < chunkSize; i += sectionSize {
+		jb.write(i/sectionSize, data[i:i+sectionSize])
 	}
 
 	tgt.Set(chunkSize, branches, 2)
-	correctRefHex := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
 	defer cancel()
 	select {
 	case ref := <-tgt.Done():
+		correctRefHex := "0x8ace4673563b86281778b943aa60481fc4ede9f238dd98f1b3a5df4cb54ee79b"
 		refHex := hexutil.Encode(ref)
 		if refHex != correctRefHex {
 			t.Fatalf("job write full: expected %s, got %s", correctRefHex, refHex)
@@ -566,7 +626,7 @@ func TestJobWriteDoubleSection(t *testing.T) {
 	//dataHash := bmt.New(poolSync)
 	writeSize := sectionSize * 2
 	dummyHashLongSectionFunc := func() param.SectionWriter {
-		return newDummySectionWriter(chunkSize*branches, sectionSize)
+		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
 	}
 	params := newTreeParams(sectionSize, branches, dummyHashLongSectionFunc)
 
@@ -578,13 +638,13 @@ func TestJobWriteDoubleSection(t *testing.T) {
 	for i := 0; i < chunkSize; i += writeSize {
 		jb.write(i/writeSize, data[i:i+writeSize])
 	}
-	tgt.Set(chunkSize, branches, 2)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	tgt.Set(chunkSize, branches/2-1, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
 	defer cancel()
 	select {
 	case refLong := <-tgt.Done():
 		refLongHex := hexutil.Encode(refLong)
-		correctRefLongHex := "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+		correctRefLongHex := "0x8ace4673563b86281778b943aa60481fc4ede9f238dd98f1b3a5df4cb54ee79b" + zeroHex
 		if refLongHex != correctRefLongHex {
 			t.Fatalf("section long: expected %s, got %s", correctRefLongHex, refLongHex)
 		}

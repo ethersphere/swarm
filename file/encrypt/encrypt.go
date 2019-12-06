@@ -66,7 +66,7 @@ func (e *Encrypt) Reset(ctx context.Context) {
 
 func (e *Encrypt) Sum(b []byte, length int, span []byte) []byte {
 	// derive new key
-	oldKey := make([]byte, 32)
+	oldKey := make([]byte, encryption.KeyLength)
 	copy(oldKey, e.key)
 	e.keyHash.Reset()
 	e.keyHash.Write(e.key)
@@ -77,10 +77,18 @@ func (e *Encrypt) Sum(b []byte, length int, span []byte) []byte {
 	return append(oldKey, s...)
 }
 
+// DigestSize implements param.SectionWriter
+// TODO: cache these calculations
 func (e *Encrypt) DigestSize() int {
 	return e.w.DigestSize() + encryption.KeyLength
 }
 
+// SectionSize implements param.SectionWriter
 func (e *Encrypt) SectionSize() int {
 	return e.w.SectionSize()
+}
+
+// Branches implements param.SectionWriter
+func (e *Encrypt) Branches() int {
+	return e.w.Branches() / (e.DigestSize() / e.w.SectionSize())
 }

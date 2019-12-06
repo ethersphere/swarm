@@ -8,6 +8,7 @@ import (
 
 var (
 	defaultSectionSize = 32
+	defaultBranches    = 128
 )
 
 type Cache struct {
@@ -62,6 +63,13 @@ func (c *Cache) DigestSize() int {
 		return c.w.DigestSize()
 	}
 	return defaultSectionSize
+}
+
+func (c *Cache) Branches() int {
+	if c.w != nil {
+		return c.w.Branches()
+	}
+	return defaultBranches
 }
 
 func (c *Cache) Get(index int) []byte {

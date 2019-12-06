@@ -56,6 +56,11 @@ func (b *BMTSyncSectionWriter) DigestSize() int {
 	return b.hasher.Size()
 }
 
+// Branches implements param.SectionWriter
+func (b *BMTSyncSectionWriter) Branches() int {
+	return b.hasher.Count()
+}
+
 // Hasher is a bmt.SectionWriter that executes the file hashing algorithm on arbitary data
 type Hasher struct {
 	target *target
@@ -72,6 +77,7 @@ type Hasher struct {
 // New creates a new Hasher object using the given sectionSize and branch factor
 // hasherFunc is used to create *bmt.Hashers to hash the incoming data
 // writerFunc is used as the underlying bmt.SectionWriter for the asynchronous hasher jobs. It may be pipelined to other components with the same interface
+// TODO: sectionSize and branches should be inferred from underlying writer, not shared across job and hasher
 func New(sectionSize int, branches int, hasherFunc func() param.SectionWriter) *Hasher {
 	h := &Hasher{
 		target: newTarget(),
@@ -145,6 +151,11 @@ func (h *Hasher) SectionSize() int {
 // DigestSize implements param.SectionWriter
 func (h *Hasher) DigestSize() int {
 	return h.params.SectionSize
+}
+
+// DigestSize implements param.SectionWriter
+func (h *Hasher) Branches() int {
+	return h.params.Branches
 }
 
 // proxy for sync.Pool
