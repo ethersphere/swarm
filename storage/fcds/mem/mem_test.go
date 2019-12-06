@@ -25,12 +25,10 @@ import (
 	"github.com/ethersphere/swarm/storage/fcds/test"
 )
 
-func init() {
-	test.Init()
-}
-
+// TestFCDS runs a standard series of tests on main Store implementation
+// with in-memory meta store.
 func TestFCDS(t *testing.T) {
-	test.Test(t, func(t *testing.T) (fcds.Interface, func()) {
+	test.RunAll(t, func(t *testing.T) (fcds.Interface, func()) {
 		path, err := ioutil.TempDir("", "swarm-fcds-")
 		if err != nil {
 			t.Fatal(err)

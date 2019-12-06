@@ -27,12 +27,15 @@ import (
 
 var _ fcds.MetaStore = new(MetaStore)
 
+// MetaStore implements FCDS MetaStore with LevelDB
+// for persistence.
 type MetaStore struct {
 	db *leveldb.DB
 }
 
-func NewMetaStore(filename string) (s *MetaStore, err error) {
-	db, err := leveldb.OpenFile(filename, &opt.Options{})
+// NewMetaStore returns new MetaStore at path.
+func NewMetaStore(path string) (s *MetaStore, err error) {
+	db, err := leveldb.OpenFile(path, &opt.Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +44,7 @@ func NewMetaStore(filename string) (s *MetaStore, err error) {
 	}, err
 }
 
+// Get returns chunk meta information.
 func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	data, err := s.db.Get(chunkKey(addr), nil)
 	if err != nil {
@@ -56,6 +60,9 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	return m, nil
 }
 
+// Set adds a new chunk meta information for a shard.
+// Reclaimed flag denotes that the chunk is at the place of
+// already deleted chunk, not appended to the end of the file.
 func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
 	batch := new(leveldb.Batch)
 	if reclaimed {
@@ -69,6 +76,21 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	return s.db.Write(batch, nil)
 }
 
+// Remove removes chunk meta information from the shard.
+func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
+	m, err := s.Get(addr)
+	if err != nil {
+		return err
+	}
+	batch := new(leveldb.Batch)
+	batch.Put(freeKey(shard, m.Offset), nil)
+	batch.Delete(chunkKey(addr))
+	return s.db.Write(batch, nil)
+}
+
+// FreeOffset returns an offset that can be reclaimed by
+// another chunk. If the returned value is less then 0
+// there are no free offset at this shard.
 func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	i := s.db.NewIterator(nil, nil)
 	defer i.Release()
@@ -82,17 +104,8 @@ func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	return offset, nil
 }
 
-func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
-	m, err := s.Get(addr)
-	if err != nil {
-		return err
-	}
-	batch := new(leveldb.Batch)
-	batch.Put(freeKey(shard, m.Offset), nil)
-	batch.Delete(chunkKey(addr))
-	return s.db.Write(batch, nil)
-}
-
+// Count returns a number of chunks in MetaStore.
+// This operation is slow for larger numbers of chunks.
 func (s *MetaStore) Count() (count int, err error) {
 	it := s.db.NewIterator(nil, nil)
 	defer it.Release()
@@ -111,6 +124,7 @@ func (s *MetaStore) Count() (count int, err error) {
 	return count, it.Error()
 }
 
+// Iterate iterates over all chunk meta information.
 func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err error)) (err error) {
 	it := s.db.NewIterator(nil, nil)
 	defer it.Release()
@@ -139,6 +153,7 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 	return it.Error()
 }
 
+// Close closes the underlaying LevelDB instance.
 func (s *MetaStore) Close() (err error) {
 	return s.db.Close()
 }

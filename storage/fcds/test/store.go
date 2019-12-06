@@ -25,9 +25,9 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/storage/fcds"
 )
 
@@ -37,22 +37,24 @@ var (
 	noCacheFlag     = flag.Bool("no-cache", false, "Disable memory cache.")
 )
 
-func Init() {
-	testing.Init()
+// Main parses custom cli flags automatically on test runs.
+func Main(m *testing.M) {
 	flag.Parse()
+	os.Exit(m.Run())
 }
 
-func Test(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())) {
+// RunAll runs all available tests for a Store implementation.
+func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())) {
 
 	t.Run("empty", func(t *testing.T) {
-		TestStore(t, &TestStoreOptions{
+		RunStore(t, &RunStoreOptions{
 			ChunkCount:   *chunksFlag,
 			NewStoreFunc: newStoreFunc,
 		})
 	})
 
 	t.Run("cleaned", func(t *testing.T) {
-		TestStore(t, &TestStoreOptions{
+		RunStore(t, &RunStoreOptions{
 			ChunkCount:   *chunksFlag,
 			NewStoreFunc: newStoreFunc,
 			Cleaned:      true,
@@ -89,7 +91,7 @@ func Test(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			TestStore(t, &TestStoreOptions{
+			RunStore(t, &RunStoreOptions{
 				ChunkCount:   *chunksFlag,
 				DeleteSplit:  tc.deleteSplit,
 				NewStoreFunc: newStoreFunc,
@@ -98,18 +100,22 @@ func Test(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())
 	}
 
 	t.Run("iterator", func(t *testing.T) {
-		TestIterator(t, newStoreFunc)
+		RunIterator(t, newStoreFunc)
 	})
 }
 
-type TestStoreOptions struct {
+// RunStoreOptions define parameters for Store test function.
+type RunStoreOptions struct {
+	NewStoreFunc func(t *testing.T) (fcds.Interface, func())
 	ChunkCount   int
 	DeleteSplit  int
 	Cleaned      bool
-	NewStoreFunc func(t *testing.T) (fcds.Interface, func())
 }
 
-func TestStore(t *testing.T, o *TestStoreOptions) {
+// RunStore tests a single Store implementation for its general functionalities.
+// Subtests are deliberately separated into sections that can have timings
+// printed on test runs for each of them.
+func RunStore(t *testing.T, o *RunStoreOptions) {
 	db, clean := o.NewStoreFunc(t)
 	defer clean()
 
@@ -238,7 +244,8 @@ func TestStore(t *testing.T, o *TestStoreOptions) {
 	})
 }
 
-func TestIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())) {
+// RunIterator validates behaviour of Iterate and Count methods on a Store.
+func RunIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())) {
 	chunkCount := 1000
 
 	db, clean := newStoreFunc(t)
@@ -280,6 +287,8 @@ func TestIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface,
 	}
 }
 
+// NewFCDSStore is a test helper function that constructs
+// a new Store for testing purposes into which a specific MetaStore can be injected.
 func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.Store, clean func()) {
 	t.Helper()
 
@@ -288,7 +297,7 @@ func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.
 		t.Fatal(err)
 	}
 
-	s, err = fcds.NewStore(path, chunk.DefaultSize, metaStore, *noCacheFlag)
+	s, err = fcds.NewStore(path, chunk.DefaultSize, metaStore, !*noCacheFlag)
 	if err != nil {
 		os.RemoveAll(path)
 		t.Fatal(err)
@@ -299,34 +308,26 @@ func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.
 	}
 }
 
+// chunkCache reduces the work done by generating random chunks
+// by getChunks function by keeping storing them for future reuse.
 var chunkCache []chunk.Chunk
 
+// getChunk returns a number of chunks with random data for testing purposes.
+// By calling it multiple times, it will return same chunks from the cache.
 func getChunks(count int) []chunk.Chunk {
 	l := len(chunkCache)
 	if l == 0 {
 		chunkCache = make([]chunk.Chunk, count)
 		for i := 0; i < count; i++ {
-			chunkCache[i] = GenerateTestRandomChunk()
+			chunkCache[i] = chunktesting.GenerateTestRandomChunk()
 		}
 		return chunkCache
 	}
 	if l < count {
 		for i := 0; i < count-l; i++ {
-			chunkCache = append(chunkCache, GenerateTestRandomChunk())
+			chunkCache = append(chunkCache, chunktesting.GenerateTestRandomChunk())
 		}
 		return chunkCache
 	}
 	return chunkCache[:count]
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-func GenerateTestRandomChunk() chunk.Chunk {
-	data := make([]byte, chunk.DefaultSize)
-	rand.Read(data)
-	key := make([]byte, 32)
-	rand.Read(key)
-	return chunk.NewChunk(key, data)
 }

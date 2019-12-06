@@ -24,16 +24,21 @@ import (
 
 var _ fcds.Interface = new(Store)
 
+// Store implements FCDS Interface by using mock
+// store for persistence.
 type Store struct {
 	m *mock.NodeStore
 }
 
+// NewStore returns a new store with mock NodeStore
+// for storing Chunk data.
 func NewStore(m *mock.NodeStore) (s *Store) {
 	return &Store{
 		m: m,
 	}
 }
 
+// Get returns a chunk with data.
 func (s *Store) Get(addr chunk.Address) (c chunk.Chunk, err error) {
 	data, err := s.m.Get(addr)
 	if err != nil {
@@ -45,6 +50,7 @@ func (s *Store) Get(addr chunk.Address) (c chunk.Chunk, err error) {
 	return chunk.NewChunk(addr, data), nil
 }
 
+// Has returns true if chunk is stored.
 func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	_, err = s.m.Get(addr)
 	if err != nil {
@@ -56,14 +62,17 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	return true, nil
 }
 
+// Put stores chunk data.
 func (s *Store) Put(ch chunk.Chunk) (err error) {
 	return s.m.Put(ch.Address(), ch.Data())
 }
 
+// Delete removes chunk data.
 func (s *Store) Delete(addr chunk.Address) (err error) {
 	return s.m.Delete(addr)
 }
 
+// Count returns a number of stored chunks.
 func (s *Store) Count() (count int, err error) {
 	var startKey []byte
 	for {
@@ -80,6 +89,7 @@ func (s *Store) Count() (count int, err error) {
 	return count, nil
 }
 
+// Iterate iterates over stored chunks in no particular order.
 func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error) {
 	var startKey []byte
 	for {
@@ -108,6 +118,8 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	return nil
 }
 
+// Close doesn't do anything.
+// It exists to implement fcdb.MetaStore interface.
 func (s *Store) Close() error {
 	return nil
 }

@@ -28,10 +28,9 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 )
 
-const shardCount = 32
-
-var ErrDBClosed = errors.New("closed database")
-
+// Interface specifies methods required for FCDS implementation.
+// It can be used where alternative implementations are needed to
+// switch at runtime.
 type Interface interface {
 	Get(addr chunk.Address) (ch chunk.Chunk, err error)
 	Has(addr chunk.Address) (yes bool, err error)
@@ -44,20 +43,33 @@ type Interface interface {
 
 var _ Interface = new(Store)
 
+// Number of files that store chunk data.
+const shardCount = 32
+
+// ErrDBClosed is returned if database is already closed.
+var ErrDBClosed = errors.New("closed database")
+
+// Store is the main FCDS implementation. It stores chunk data into
+// a number of files partitioned by the last byte of the chunk address.
 type Store struct {
-	shards       map[uint8]*os.File
-	shardsMu     map[uint8]*sync.Mutex
-	meta         MetaStore
-	free         map[uint8]struct{}
-	freeMu       sync.RWMutex
-	freeCache    *offsetCache
-	wg           sync.WaitGroup
-	maxChunkSize int
-	quit         chan struct{}
-	quitOnce     sync.Once
+	shards       map[uint8]*os.File    // relations with shard id and a shard file
+	shardsMu     map[uint8]*sync.Mutex // mutex for every shard file
+	meta         MetaStore             // stores chunk offsets
+	free         map[uint8]struct{}    // which shards have free offsets
+	freeMu       sync.RWMutex          // protects free field
+	freeCache    *offsetCache          // optional cache of free offset values
+	wg           sync.WaitGroup        // blocks Close until all other method calls are done
+	maxChunkSize int                   // maximal chunk data size
+	quit         chan struct{}         // quit disables all operations after Close is called
+	quitOnce     sync.Once             // protects close channel from multiple Close calls
 }
 
-func NewStore(path string, maxChunkSize int, metaStore MetaStore, noCache bool) (s *Store, err error) {
+// NewStore constructs a new Store with files at path, with specified max chunk size.
+// Argument withCache enables in memory cache of free chunk data positions in files.
+func NewStore(path string, maxChunkSize int, metaStore MetaStore, withCache bool) (s *Store, err error) {
+	if err := os.MkdirAll(path, 0777); err != nil {
+		return nil, err
+	}
 	shards := make(map[byte]*os.File, shardCount)
 	shardsMu := make(map[uint8]*sync.Mutex)
 	for i := byte(0); i < shardCount; i++ {
@@ -67,10 +79,8 @@ func NewStore(path string, maxChunkSize int, metaStore MetaStore, noCache bool) 
 		}
 		shardsMu[i] = new(sync.Mutex)
 	}
-	var (
-		freeCache *offsetCache
-	)
-	if !noCache {
+	var freeCache *offsetCache
+	if withCache {
 		freeCache = newOffsetCache(shardCount)
 	}
 	return &Store{
@@ -84,6 +94,7 @@ func NewStore(path string, maxChunkSize int, metaStore MetaStore, noCache bool) 
 	}, nil
 }
 
+// Get returns a chunk with data.
 func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	done, err := s.protect()
 	if err != nil {
@@ -110,6 +121,7 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	return chunk.NewChunk(addr, data), nil
 }
 
+// Has returns true if chunk is stored.
 func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	done, err := s.protect()
 	if err != nil {
@@ -131,6 +143,7 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	return true, nil
 }
 
+// Put stores chunk data.
 func (s *Store) Put(ch chunk.Chunk) (err error) {
 	done, err := s.protect()
 	if err != nil {
@@ -207,6 +220,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	})
 }
 
+// Delete removes chunk data.
 func (s *Store) Delete(addr chunk.Address) (err error) {
 	done, err := s.protect()
 	if err != nil {
@@ -233,10 +247,12 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	return s.meta.Remove(addr, shard)
 }
 
+// Count returns a number of stored chunks.
 func (s *Store) Count() (count int, err error) {
 	return s.meta.Count()
 }
 
+// Iterate iterates over stored chunks in no particular order.
 func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error) {
 	done, err := s.protect()
 	if err != nil {
@@ -263,6 +279,10 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	})
 }
 
+// Close disables of further operations on the Store.
+// Every call to its methods will return ErrDBClosed error.
+// Close will wait for all running operations to finish before
+// closing its MetaStore and returning.
 func (s *Store) Close() (err error) {
 	s.quitOnce.Do(func() {
 		close(s.quit)
@@ -286,9 +306,15 @@ func (s *Store) Close() (err error) {
 	return s.meta.Close()
 }
 
+// protect protects Store from executing operations
+// after the Close method is called and makes sure
+// that Close method will wait for all ongoing operations
+// to finish before returning. Returned function done
+// must be closed to unblock the Close method call.
 func (s *Store) protect() (done func(), err error) {
 	select {
 	case <-s.quit:
+		// Store is closed.
 		return nil, ErrDBClosed
 	default:
 	}
@@ -296,10 +322,12 @@ func (s *Store) protect() (done func(), err error) {
 	return s.wg.Done, nil
 }
 
+// getMeta returns Meta information from MetaStore.
 func (s *Store) getMeta(addr chunk.Address) (m *Meta, err error) {
 	return s.meta.Get(addr)
 }
 
+// getShard returns a shard number for the chunk address.
 func getShard(addr chunk.Address) (shard uint8) {
 	return addr[len(addr)-1] % shardCount
 }

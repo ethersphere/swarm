@@ -25,12 +25,15 @@ import (
 
 var _ fcds.MetaStore = new(MetaStore)
 
+// MetaStore is the simplest in-memory implementation of FCDS MetaStore.
+// It is meant to be used as the reference implementation.
 type MetaStore struct {
 	meta map[string]*fcds.Meta
 	free map[uint8]map[int64]struct{}
 	mu   sync.RWMutex
 }
 
+// NewMetaStore constructs a new MetaStore.
 func NewMetaStore() (s *MetaStore) {
 	free := make(map[uint8]map[int64]struct{})
 	for shard := uint8(0); shard < 255; shard++ {
@@ -42,6 +45,7 @@ func NewMetaStore() (s *MetaStore) {
 	}
 }
 
+// Get returns chunk meta information.
 func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	s.mu.RLock()
 	m = s.meta[string(addr)]
@@ -52,6 +56,9 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	return m, nil
 }
 
+// Set adds a new chunk meta information for a shard.
+// Reclaimed flag denotes that the chunk is at the place of
+// already deleted chunk, not appended to the end of the file.
 func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
 	s.mu.Lock()
 	if reclaimed {
@@ -62,6 +69,7 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	return nil
 }
 
+// Remove removes chunk meta information from the shard.
 func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -75,6 +83,9 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	return nil
 }
 
+// FreeOffset returns an offset that can be reclaimed by
+// another chunk. If the returned value is less then 0
+// there are no free offset at this shard.
 func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	s.mu.RLock()
 	for o := range s.free[shard] {
@@ -85,6 +96,7 @@ func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	return -1, nil
 }
 
+// Count returns a number of chunks in MetaStore.
 func (s *MetaStore) Count() (count int, err error) {
 	s.mu.RLock()
 	count = len(s.meta)
@@ -92,6 +104,7 @@ func (s *MetaStore) Count() (count int, err error) {
 	return count, nil
 }
 
+// Iterate iterates over all chunk meta information.
 func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err error)) (err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -107,6 +120,8 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 	return nil
 }
 
+// Close doesn't do anything.
+// It exists to implement fcdb.MetaStore interface.
 func (s *MetaStore) Close() (err error) {
 	return nil
 }

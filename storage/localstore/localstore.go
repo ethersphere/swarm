@@ -222,16 +222,22 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 
-	metaStore, err := fcdsleveldb.NewMetaStore(filepath.Join(path, "meta"))
-	if err != nil {
-		return nil, err
-	}
 	if o.MockStore == nil {
-		db.data, err = fcds.NewStore(path, chunk.DefaultSize+8, metaStore, false)
+		metaStore, err := fcdsleveldb.NewMetaStore(filepath.Join(path, "meta"))
+		if err != nil {
+			return nil, err
+		}
+		db.data, err = fcds.NewStore(
+			filepath.Join(path, "data"),
+			chunk.DefaultSize+8, // chunk data has additional 8 bytes prepended
+			metaStore,
+			true, // enable offset cache
+		)
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		// Mock store is provided, use mock FCDS.
 		db.data = fcdsmock.NewStore(o.MockStore)
 	}
 	// Index storing bin id, store and access timestamp for a particular address.

@@ -18,11 +18,14 @@ package fcds
 
 import "sync"
 
+// offsetCache is a simple cache of offset integers
+// by shard files.
 type offsetCache struct {
 	m  map[uint8]map[int64]struct{}
 	mu sync.RWMutex
 }
 
+// newOffsetCache constructs offsetCache for a fixed number of shards.
 func newOffsetCache(shardCount uint8) (c *offsetCache) {
 	m := make(map[uint8]map[int64]struct{})
 	for i := uint8(0); i < shardCount; i++ {
@@ -33,6 +36,9 @@ func newOffsetCache(shardCount uint8) (c *offsetCache) {
 	}
 }
 
+// get returns a free offset in a shard. If the returned
+// value is less then 0, there are no free offset in that
+// shard.
 func (c *offsetCache) get(shard uint8) (offset int64) {
 	c.mu.RLock()
 	for o := range c.m[shard] {
@@ -43,12 +49,14 @@ func (c *offsetCache) get(shard uint8) (offset int64) {
 	return -1
 }
 
+// set sets a free offset for a shard file.
 func (c *offsetCache) set(shard uint8, offset int64) {
 	c.mu.Lock()
 	c.m[shard][offset] = struct{}{}
 	c.mu.Unlock()
 }
 
+// remove removes a free offset for a shard file.
 func (c *offsetCache) remove(shard uint8, offset int64) {
 	c.mu.Lock()
 	delete(c.m[shard], offset)

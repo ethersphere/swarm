@@ -23,6 +23,8 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 )
 
+// MetaStore defines methods to store and manage
+// chunk meta information in Store FCDS implementation.
 type MetaStore interface {
 	Get(addr chunk.Address) (*Meta, error)
 	Set(addr chunk.Address, shard uint8, reclaimed bool, m *Meta) error
@@ -33,11 +35,13 @@ type MetaStore interface {
 	Close() error
 }
 
+// Meta stores chunk data size and its offset in a file.
 type Meta struct {
 	Size   uint16
 	Offset int64
 }
 
+// MarshalBinary returns binary encoded value of meta chunk information.
 func (m *Meta) MarshalBinary() (data []byte, err error) {
 	data = make([]byte, 10)
 	binary.BigEndian.PutUint64(data[:8], uint64(m.Offset))
@@ -45,6 +49,7 @@ func (m *Meta) MarshalBinary() (data []byte, err error) {
 	return data, nil
 }
 
+// UnmarshalBinary sets meta chunk information from encoded data.
 func (m *Meta) UnmarshalBinary(data []byte) error {
 	m.Offset = int64(binary.BigEndian.Uint64(data[:8]))
 	m.Size = binary.BigEndian.Uint16(data[8:10])
