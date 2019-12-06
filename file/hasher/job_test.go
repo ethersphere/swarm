@@ -627,6 +627,7 @@ func benchmarkJob(b *testing.B) {
 	for j := 0; j < b.N; j++ {
 		tgt := newTarget()
 		jb := newJob(treeParams, tgt, nil, 1, 0)
+		jb.start()
 		count := 0
 		//log.Info("test vector", "length", dataLength)
 		for i := 0; i < dataLength; i += chunkSize {
