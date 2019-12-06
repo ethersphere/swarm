@@ -20,7 +20,7 @@ type Encrypt struct {
 	errFunc func(error)
 }
 
-func New(key []byte, initCtr uint32, hashFunc func() param.SectionWriter) (*Encrypt, error) {
+func New(key []byte, initCtr uint32, hashFunc param.SectionWriterFunc) (*Encrypt, error) {
 	if key == nil {
 		key = make([]byte, encryption.KeyLength)
 		c, err := crand.Read(key)
@@ -37,10 +37,15 @@ func New(key []byte, initCtr uint32, hashFunc func() param.SectionWriter) (*Encr
 		e:       encryption.New(key, 0, initCtr, sha3.NewLegacyKeccak256),
 		key:     make([]byte, encryption.KeyLength),
 		keyHash: param.HashFunc(),
-		w:       hashFunc(),
 	}
 	copy(e.key, key)
 	return e, nil
+}
+
+func (e *Encrypt) Connect(hashFunc param.SectionWriterFunc) param.SectionWriter {
+	e.w = hashFunc(nil)
+	return e
+
 }
 
 func (e *Encrypt) Init(_ context.Context, errFunc func(error)) {

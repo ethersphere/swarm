@@ -37,7 +37,7 @@ var (
 // It verifies the returned result
 func TestSplit(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	h := hasher.New(refHashFunc)
@@ -61,14 +61,14 @@ func TestSplit(t *testing.T) {
 // TestSplitWithDataFileStore verifies chunk.Store sink result for data hashing
 func TestSplitWithDataFileStore(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	chunkStore := &storage.FakeChunkStore{}
-	storeFunc := func() param.SectionWriter {
+	storeFunc := func(_ context.Context) param.SectionWriter {
 		h := store.New(chunkStore, refHashFunc)
 		h.Init(ctx, errFunc)
 		return h
@@ -94,14 +94,14 @@ func TestSplitWithDataFileStore(t *testing.T) {
 // TestSplitWithIntermediateFileStore verifies chunk.Store sink result for intermediate hashing
 func TestSplitWithIntermediateFileStore(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	chunkStore := &storage.FakeChunkStore{}
-	storeFunc := func() param.SectionWriter {
+	storeFunc := func(_ context.Context) param.SectionWriter {
 		h := store.New(chunkStore, refHashFunc)
 		h.Init(ctx, errFunc)
 		return h
@@ -127,14 +127,14 @@ func TestSplitWithIntermediateFileStore(t *testing.T) {
 // TestSplitWithBothFileStore verifies chunk.Store sink result for both data and intermediate hashing
 func TestSplitWithBothFileStore(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	chunkStore := &storage.FakeChunkStore{}
-	refStoreFunc := func() param.SectionWriter {
+	refStoreFunc := func(_ context.Context) param.SectionWriter {
 		h := store.New(chunkStore, refHashFunc)
 		h.Init(ctx, errFunc)
 		return h

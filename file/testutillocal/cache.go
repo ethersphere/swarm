@@ -25,8 +25,9 @@ func NewCache() *Cache {
 func (c *Cache) Init(_ context.Context, _ func(error)) {
 }
 
-func (c *Cache) Link(writeFunc func() param.SectionWriter) {
-	c.w = writeFunc()
+func (c *Cache) Connect(writeFunc param.SectionWriterFunc) param.SectionWriter {
+	c.w = writeFunc(nil)
+	return c
 }
 
 func (c *Cache) Write(index int, b []byte) {

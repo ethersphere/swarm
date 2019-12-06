@@ -21,11 +21,17 @@ type FileStore struct {
 }
 
 // New creates a new FileStore with the supplied chunk.Store
-func New(chunkStore chunk.Store, writerFunc func() param.SectionWriter) *FileStore {
-	return &FileStore{
+func New(chunkStore chunk.Store, writerFunc param.SectionWriterFunc) *FileStore {
+	f := &FileStore{
 		chunkStore: chunkStore,
-		w:          writerFunc(),
 	}
+	f.w = writerFunc(f.ctx)
+	return f
+}
+
+func (f *FileStore) Connect(hashFunc param.SectionWriterFunc) param.SectionWriter {
+	f.w = hashFunc(f.ctx)
+	return f
 }
 
 // Init implements param.SectionWriter

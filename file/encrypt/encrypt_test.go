@@ -33,7 +33,7 @@ func init() {
 
 func TestKey(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -50,7 +50,7 @@ func TestKey(t *testing.T) {
 	errFunc := func(error) {}
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cacheFunc := func() param.SectionWriter {
+	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
 	e, err = New(testKey, 42, cacheFunc)
@@ -60,6 +60,7 @@ func TestKey(t *testing.T) {
 	if !bytes.Equal(testKey, e.key) {
 		t.Fatalf("key seed; expected %x, got %x", testKey, e.key)
 	}
+	e.Connect(cacheFunc)
 
 	_, data := testutil.SerialData(chunkSize, 255, 0)
 	e.Write(0, data)
@@ -79,7 +80,7 @@ func TestKey(t *testing.T) {
 
 func TestEncryptOneChunk(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -89,16 +90,17 @@ func TestEncryptOneChunk(t *testing.T) {
 
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cache.Link(refHashFunc)
-	cacheFunc := func() param.SectionWriter {
+	cache.Connect(refHashFunc)
+	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
 
-	encryptFunc := func() param.SectionWriter {
+	encryptFunc := func(_ context.Context) param.SectionWriter {
 		eFunc, err := New(testKey, uint32(42), cacheFunc)
 		if err != nil {
 			t.Fatal(err)
 		}
+		eFunc.Connect(cacheFunc)
 		eFunc.Init(ctx, errFunc)
 		return eFunc
 	}
@@ -133,7 +135,7 @@ func TestEncryptOneChunk(t *testing.T) {
 
 func TestEncryptChunkWholeAndSections(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -143,8 +145,8 @@ func TestEncryptChunkWholeAndSections(t *testing.T) {
 
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cache.Link(refHashFunc)
-	cacheFunc := func() param.SectionWriter {
+	cache.Connect(refHashFunc)
+	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
 
@@ -163,7 +165,6 @@ func TestEncryptChunkWholeAndSections(t *testing.T) {
 	copy(cacheCopy, cache.Get(0))
 	cache.Delete(0)
 
-	//cache.Link(refHashFunc)
 	e, err = New(testKey, uint32(42), cacheFunc)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +187,7 @@ func TestEncryptChunkWholeAndSections(t *testing.T) {
 
 func TestEncryptIntermediateChunk(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -199,12 +200,12 @@ func TestEncryptIntermediateChunk(t *testing.T) {
 
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cache.Link(refHashFunc)
-	cacheFunc := func() param.SectionWriter {
+	cache.Connect(refHashFunc)
+	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
 
-	encryptRefFunc := func() param.SectionWriter {
+	encryptRefFunc := func(_ context.Context) param.SectionWriter {
 		eFunc, err := New(testKey, uint32(42), cacheFunc)
 		if err != nil {
 			t.Fatal(err)
@@ -212,16 +213,6 @@ func TestEncryptIntermediateChunk(t *testing.T) {
 		eFunc.Init(ctx, errFunc)
 		return eFunc
 	}
-
-	//	encryptDataFunc := func() param.SectionWriter {
-	//		eFunc, err := New(nil, uint32(42))
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		eFunc.Init(ctx, errFunc)
-	//		eFunc.Link(dataHashFunc)
-	//		return eFunc
-	//	}
 
 	h := hasher.New(encryptRefFunc)
 

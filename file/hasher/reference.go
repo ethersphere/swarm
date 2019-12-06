@@ -1,6 +1,7 @@
 package hasher
 
 import (
+	"context"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -29,7 +30,7 @@ type ReferenceFileHasher struct {
 // the section count will be the Size() of the hasher
 func NewReferenceFileHasher(hasher *bmt.Hasher, branches int) *ReferenceFileHasher {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	f := &ReferenceFileHasher{

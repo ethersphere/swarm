@@ -49,7 +49,7 @@ func (s *testChunkStore) Put(_ context.Context, _ chunk.ModePut, chs ...chunk.Ch
 // through the underlying chunk store
 func TestStoreWithHasher(t *testing.T) {
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	hashFunc := func() param.SectionWriter {
+	hashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
 

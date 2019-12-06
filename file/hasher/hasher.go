@@ -10,9 +10,11 @@ import (
 
 // Hasher is a bmt.SectionWriter that executes the file hashing algorithm on arbitary data
 type Hasher struct {
-	target *target
-	params *treeParams
-	index  *jobIndex
+	target  *target
+	params  *treeParams
+	index   *jobIndex
+	errFunc func(error)
+	ctx     context.Context
 
 	job   *job // current level 1 job being written to
 	size  int
@@ -23,18 +25,24 @@ type Hasher struct {
 // hasherFunc is used to create *bmt.Hashers to hash the incoming data
 // writerFunc is used as the underlying bmt.SectionWriter for the asynchronous hasher jobs. It may be pipelined to other components with the same interface
 // TODO: sectionSize and branches should be inferred from underlying writer, not shared across job and hasher
-func New(hasherFunc func() param.SectionWriter) *Hasher {
-	hs := &Hasher{
+func New(hashFunc param.SectionWriterFunc) *Hasher {
+	h := &Hasher{
 		target: newTarget(),
 		index:  newJobIndex(9),
+		params: newTreeParams(hashFunc),
 	}
-	hs.params = newTreeParams(hasherFunc)
-	hs.job = newJob(hs.params, hs.target, hs.index, 1, 0)
-	return hs
+	h.job = newJob(h.params, h.target, h.index, 1, 0)
+	return h
+}
+
+func (h *Hasher) Connect(hashFunc param.SectionWriterFunc) param.SectionWriter {
+	h.params = newTreeParams(hashFunc)
+	return h
 }
 
 // Init implements param.SectionWriter
 func (h *Hasher) Init(ctx context.Context, errFunc func(error)) {
+	h.errFunc = errFunc
 	h.params.SetContext(ctx)
 	h.job.start()
 }

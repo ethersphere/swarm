@@ -26,6 +26,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -464,7 +465,9 @@ func (sw *AsyncHasher) Reset(_ context.Context) {
 }
 
 // Implements param.SectionWriter
-func (sw *AsyncHasher) Link(_ func() param.SectionWriter) {
+func (sw *AsyncHasher) Connect(_ param.SectionWriterFunc) param.SectionWriter {
+	log.Warn("Asynchasher does not currently support SectionWriter chaining")
+	return sw
 }
 
 // SectionSize returns the size of async section unit to use

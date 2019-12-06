@@ -72,12 +72,12 @@ var (
 )
 
 var (
-	dummyHashFunc = func() param.SectionWriter {
+	dummyHashFunc = func(_ context.Context) param.SectionWriter {
 		return newDummySectionWriter(chunkSize*branches, sectionSize, sectionSize, branches)
 	}
 
 	// placeholder for cases where a hasher is not necessary
-	noHashFunc = func() param.SectionWriter {
+	noHashFunc = func(_ context.Context) param.SectionWriter {
 		return nil
 	}
 
@@ -120,7 +120,9 @@ func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int
 func (d *dummySectionWriter) Init(_ context.Context, _ func(error)) {
 }
 
-func (d *dummySectionWriter) Link(_ func() param.SectionWriter) {
+func (d *dummySectionWriter) Connect(_ param.SectionWriterFunc) param.SectionWriter {
+	log.Error("dummySectionWriter does not support SectionWriter chaining")
+	return d
 }
 
 // implements param.SectionWriter
@@ -136,17 +138,6 @@ func (d *dummySectionWriter) Write(index int, data []byte) {
 	} else {
 		d.mu.Unlock()
 	}
-}
-
-// implements param.SectionWriter
-func (d *dummySectionWriter) WriteAll(data []byte) {
-	d.mu.Lock()
-	copy(d.data, data)
-	d.size += len(data)
-	d.mu.Unlock()
-	log.Trace("dummywriter writeall", "size", d.size, "threshold", d.sectionSize*d.branches)
-	d.summed = true
-	d.sum()
 }
 
 // implements param.SectionWriter

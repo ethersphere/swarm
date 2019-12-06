@@ -84,7 +84,7 @@ func TestJobTargetWithinDefault(t *testing.T) {
 // TestJobTargetWithinDifferentSections does the same as TestTargetWithinJobDefault but
 // with SectionSize/Branches settings differeing between client target and underlying writer
 func TestJobTargetWithinDifferentSections(t *testing.T) {
-	dummyHashDoubleFunc := func() param.SectionWriter {
+	dummyHashDoubleFunc := func(_ context.Context) param.SectionWriter {
 		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
 	}
 	params := newTreeParams(dummyHashDoubleFunc)
@@ -385,7 +385,7 @@ func TestJobWriteSpan(t *testing.T) {
 
 	tgt := newTarget()
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	hashFunc := func() param.SectionWriter {
+	hashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
 	params := newTreeParams(hashFunc)
@@ -436,7 +436,7 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 
 	tgt := newTarget()
 	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	hashFunc := func() param.SectionWriter {
+	hashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
 	params := newTreeParams(hashFunc)
@@ -498,7 +498,7 @@ func TestJobWriteDoubleSection(t *testing.T) {
 	//poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	//dataHash := bmt.New(poolSync)
 	writeSize := sectionSize * 2
-	dummyHashDoubleFunc := func() param.SectionWriter {
+	dummyHashDoubleFunc := func(_ context.Context) param.SectionWriter {
 		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
 	}
 	params := newTreeParams(dummyHashDoubleFunc)
@@ -534,7 +534,7 @@ func TestJobWriteDoubleSection(t *testing.T) {
 func TestJobVector(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHash := bmt.New(poolSync)
@@ -617,7 +617,7 @@ func benchmarkJob(b *testing.B) {
 
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	dataHash := bmt.New(poolSync)

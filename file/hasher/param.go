@@ -16,27 +16,27 @@ type treeParams struct {
 	ChunkSize   int
 	Spans       []int
 	Debug       bool
-	hashFunc    func() param.SectionWriter
+	hashFunc    param.SectionWriterFunc
 	writerPool  sync.Pool
 	ctx         context.Context
 }
 
-func newTreeParams(hashFunc func() param.SectionWriter) *treeParams {
+func newTreeParams(hashFunc param.SectionWriterFunc) *treeParams {
 
-	h := hashFunc()
+	h := hashFunc(context.Background())
 	p := &treeParams{
 		SectionSize: h.SectionSize(),
 		Branches:    h.Branches(),
 		ChunkSize:   h.SectionSize() * h.Branches(),
 		hashFunc:    hashFunc,
-		ctx:         context.Background(),
 	}
-	h.Reset(p.ctx)
+	h.Reset(context.Background())
 	log.Trace("new tree params", "sectionsize", p.SectionSize, "branches", p.Branches, "chunksize", p.ChunkSize)
 	p.writerPool.New = func() interface{} {
-		return p.hashFunc()
+		hf := p.hashFunc(p.ctx)
+		log.Trace("param new hasher", "h", hf)
+		return hf
 	}
-
 	span := 1
 	for i := 0; i < 9; i++ {
 		p.Spans = append(p.Spans, span)
@@ -56,7 +56,6 @@ func (p *treeParams) GetContext() context.Context {
 func (p *treeParams) PutWriter(w param.SectionWriter) {
 	w.Reset(p.ctx)
 	p.writerPool.Put(w)
-
 }
 
 func (p *treeParams) GetWriter() param.SectionWriter {

@@ -18,7 +18,7 @@ import (
 // TestHasherJobTopHash verifies that the top hash on the first level is correctly set even though the Hasher writes asynchronously to the underlying job
 func TestHasherJobTopHash(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -43,7 +43,7 @@ func TestHasherJobTopHash(t *testing.T) {
 // TestHasherOneFullChunk verifies the result of writing a single data chunk to Hasher
 func TestHasherOneFullChunk(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -67,7 +67,7 @@ func TestHasherOneFullChunk(t *testing.T) {
 // TestHasherOneFullChunk verifies that Hasher creates new jobs on branch thresholds
 func TestHasherJobChange(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -96,7 +96,7 @@ func TestHasherJobChange(t *testing.T) {
 // TestHasherONeFullLevelOneChunk verifies the result of writing branches times data chunks to Hasher
 func TestHasherOneFullLevelOneChunk(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -119,7 +119,7 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 
 func TestHasherVector(t *testing.T) {
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
@@ -169,7 +169,7 @@ func benchmarkHasher(b *testing.B) {
 	dataLength := int(dataLengthParam)
 
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128*128)
-	refHashFunc := func() param.SectionWriter {
+	refHashFunc := func(_ context.Context) param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 	_, data := testutil.SerialData(dataLength, 255, 0)

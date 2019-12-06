@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
-	"github.com/ethersphere/swarm/file/hasher"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
@@ -35,16 +34,16 @@ func TestCache(t *testing.T) {
 }
 
 func TestCacheLink(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	dataHashFunc := func() param.SectionWriter {
-		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	refHashFunc := func(_ context.Context) param.SectionWriter {
+		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
 
 	c := NewCache()
 	c.Init(context.Background(), func(error) {})
-	c.Link(dataHashFunc)
+	c.Connect(refHashFunc)
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	c.Write(0, data)
+	c.Write(-1, data)
 	span := bmt.LengthToSpan(chunkSize)
 	ref := c.Sum(nil, chunkSize, span)
 	refHex := hexutil.Encode(ref)
