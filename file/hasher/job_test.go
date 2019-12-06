@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/file/testutillocal"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
@@ -384,10 +385,7 @@ func TestJobWriteFull(t *testing.T) {
 func TestJobWriteSpan(t *testing.T) {
 
 	tgt := newTarget()
-	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	hashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(pool).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
 	params := newTreeParams(hashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
@@ -435,10 +433,7 @@ func TestJobWriteSpan(t *testing.T) {
 func TestJobWriteSpanShuffle(t *testing.T) {
 
 	tgt := newTarget()
-	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	hashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(pool).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
 	params := newTreeParams(hashFunc)
 
 	jb := newJob(params, tgt, nil, 1, 0)
@@ -495,8 +490,6 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 }
 
 func TestJobWriteDoubleSection(t *testing.T) {
-	//poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	//dataHash := bmt.New(poolSync)
 	writeSize := sectionSize * 2
 	dummyHashDoubleFunc := func(_ context.Context) param.SectionWriter {
 		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
@@ -533,12 +526,9 @@ func TestJobWriteDoubleSection(t *testing.T) {
 // TODO: vet dynamically against the referencefilehasher instead of expect vector
 func TestJobVector(t *testing.T) {
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
 	dataHash := bmt.New(poolSync)
-	params := newTreeParams(refHashFunc)
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
+	params := newTreeParams(hashFunc)
 	var mismatch int
 
 	for i := start; i < end; i++ {
@@ -616,12 +606,9 @@ func benchmarkJob(b *testing.B) {
 	dataLength := int(dataLengthParam)
 
 	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
 	dataHash := bmt.New(poolSync)
-	treeParams := newTreeParams(refHashFunc)
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
+	treeParams := newTreeParams(hashFunc)
 	_, data := testutil.SerialData(dataLength, 255, 0)
 
 	for j := 0; j < b.N; j++ {

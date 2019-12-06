@@ -1,14 +1,12 @@
 package hasher
 
 import (
-	"context"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/file/testutillocal"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/param"
-	"golang.org/x/crypto/sha3"
 )
 
 // ReferenceFileHasher is a non-performant source of truth implementation for the file hashing algorithm used in Swarm
@@ -29,12 +27,9 @@ type ReferenceFileHasher struct {
 // NewReferenceFileHasher creates a new file hasher with the supplied branch factor
 // the section count will be the Size() of the hasher
 func NewReferenceFileHasher(hasher *bmt.Hasher, branches int) *ReferenceFileHasher {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(128)
 	f := &ReferenceFileHasher{
-		params:    newTreeParams(refHashFunc),
+		params:    newTreeParams(hashFunc),
 		hasher:    hasher,
 		chunkSize: branches * hasher.Size(),
 	}

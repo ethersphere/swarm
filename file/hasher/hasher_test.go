@@ -8,22 +8,17 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/file/testutillocal"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
-	"golang.org/x/crypto/sha3"
 )
 
 // TestHasherJobTopHash verifies that the top hash on the first level is correctly set even though the Hasher writes asynchronously to the underlying job
 func TestHasherJobTopHash(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
-	h := New(refHashFunc)
+	h := New(hashFunc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	h.Init(ctx, logErrFunc)
@@ -42,13 +37,10 @@ func TestHasherJobTopHash(t *testing.T) {
 
 // TestHasherOneFullChunk verifies the result of writing a single data chunk to Hasher
 func TestHasherOneFullChunk(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
-	h := New(refHashFunc)
+	h := New(hashFunc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	h.Init(ctx, logErrFunc)
@@ -66,13 +58,10 @@ func TestHasherOneFullChunk(t *testing.T) {
 
 // TestHasherOneFullChunk verifies that Hasher creates new jobs on branch thresholds
 func TestHasherJobChange(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(0)
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
-	h := New(refHashFunc)
+	h := New(hashFunc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	h.Init(ctx, logErrFunc)
@@ -95,13 +84,10 @@ func TestHasherJobChange(t *testing.T) {
 
 // TestHasherONeFullLevelOneChunk verifies the result of writing branches times data chunks to Hasher
 func TestHasherOneFullLevelOneChunk(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(128)
 
 	_, data := testutil.SerialData(chunkSize*branches*branches, 255, 0)
-	h := New(refHashFunc)
+	h := New(hashFunc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	h.Init(ctx, logErrFunc)
@@ -118,16 +104,13 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 }
 
 func TestHasherVector(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(128)
 
 	var mismatch int
 	for i, dataLength := range dataLengths {
 		log.Info("hashervector start", "i", i, "l", dataLength)
 		eq := true
-		h := New(refHashFunc)
+		h := New(hashFunc)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		h.Init(ctx, logErrFunc)
@@ -168,14 +151,11 @@ func benchmarkHasher(b *testing.B) {
 	}
 	dataLength := int(dataLengthParam)
 
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128*128)
-	refHashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
+	hashFunc := testutillocal.NewBMTHasherFunc(128)
 	_, data := testutil.SerialData(dataLength, 255, 0)
 
 	for j := 0; j < b.N; j++ {
-		h := New(refHashFunc)
+		h := New(hashFunc)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		h.Init(ctx, logErrFunc)

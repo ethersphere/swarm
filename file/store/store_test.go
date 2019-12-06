@@ -8,10 +8,9 @@ import (
 
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/param"
+	"github.com/ethersphere/swarm/file/testutillocal"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -48,10 +47,8 @@ func (s *testChunkStore) Put(_ context.Context, _ chunk.ModePut, chs ...chunk.Ch
 // TestStoreWithHasher writes a single chunk and verifies the asynchronusly received chunk
 // through the underlying chunk store
 func TestStoreWithHasher(t *testing.T) {
-	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
-	hashFunc := func(_ context.Context) param.SectionWriter {
-		return bmt.New(pool).NewAsyncWriter(false)
-	}
+
+	hashFunc := testutillocal.NewBMTHasherFunc(128)
 
 	// initialize chunk store with channel to intercept chunk
 	chunkC := make(chan chunk.Chunk)
