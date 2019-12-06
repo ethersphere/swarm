@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -50,16 +51,9 @@ func (h *Hasher) Write(index int, b []byte) {
 	}
 	go func(i int, jb *job) {
 		hasher := h.params.GetWriter()
+		hasher.Write(-1, b)
 		l := len(b)
-		for i := 0; i < len(b); i += hasher.SectionSize() {
-			var sl int
-			if l-i < hasher.SectionSize() {
-				sl = l - i
-			} else {
-				sl = hasher.SectionSize()
-			}
-			hasher.Write(i/hasher.SectionSize(), b[i:i+sl])
-		}
+		log.Trace("data write", "count", i, "size", l)
 		span := bmt.LengthToSpan(l)
 		jb.write(i%h.params.Branches, hasher.Sum(nil, l, span))
 		h.params.PutWriter(hasher)

@@ -450,6 +450,7 @@ type AsyncHasher struct {
 	secsize  int        // size of base section (size of hash or double)
 	seccount int        // base section count
 	write    func(i int, section []byte, final bool)
+	all      bool // if all written in one go
 }
 
 // Implements param.SectionWriter
@@ -458,6 +459,7 @@ func (sw *AsyncHasher) Init(_ context.Context, errFunc func(error)) {
 
 // Implements param.SectionWriter
 func (sw *AsyncHasher) Reset(_ context.Context) {
+	sw.all = false
 	sw.Hasher.Reset()
 }
 
@@ -487,6 +489,13 @@ func (sw *AsyncHasher) Branches() int {
 // this function can and is meant to be called concurrently
 // it sets max segment threadsafely
 func (sw *AsyncHasher) Write(i int, section []byte) {
+	if i < 0 {
+		span := LengthToSpan(len(section))
+		sw.Hasher.ResetWithLength(span)
+		sw.Hasher.Write(section)
+		sw.all = true
+		return
+	}
 	sw.mtx.Lock()
 	defer sw.mtx.Unlock()
 	t := sw.getTree()
@@ -528,6 +537,9 @@ func (sw *AsyncHasher) Write(i int, section []byte) {
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
 func (sw *AsyncHasher) Sum(b []byte, length int, meta []byte) (s []byte) {
+	if sw.all {
+		return sw.Hasher.Sum(nil)
+	}
 	sw.mtx.Lock()
 	t := sw.getTree()
 	if length == 0 {

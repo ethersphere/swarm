@@ -21,9 +21,10 @@ type FileStore struct {
 }
 
 // New creates a new FileStore with the supplied chunk.Store
-func New(chunkStore chunk.Store) *FileStore {
+func New(chunkStore chunk.Store, writerFunc func() param.SectionWriter) *FileStore {
 	return &FileStore{
 		chunkStore: chunkStore,
+		w:          writerFunc(),
 	}
 }
 
@@ -31,11 +32,6 @@ func New(chunkStore chunk.Store) *FileStore {
 func (f *FileStore) Init(ctx context.Context, errFunc func(error)) {
 	f.ctx = ctx
 	f.errFunc = errFunc
-}
-
-// Link implements param.SectionWriter
-func (f *FileStore) Link(writerFunc func() param.SectionWriter) {
-	f.w = writerFunc()
 }
 
 // Reset implements param.SectionWriter
@@ -71,7 +67,7 @@ func (f *FileStore) Sum(b []byte, length int, span []byte) []byte {
 
 // SectionSize implements param.SectionWriter
 func (f *FileStore) SectionSize() int {
-	return chunk.DefaultSize
+	return f.w.SectionSize()
 }
 
 // DigestSize implements param.SectionWriter

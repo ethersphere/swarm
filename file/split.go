@@ -3,6 +3,7 @@ package file
 import (
 	"io"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
@@ -37,9 +38,10 @@ func (s *Splitter) Split() ([]byte, error) {
 			}
 			return nil, err
 		}
+		log.Trace("split read", "c", c, "wc", c, "l", l)
 		s.w.Write(wc, d)
 		wc++
 		l += c
 	}
-	return s.w.Sum(nil, l, nil), nil
+	return s.w.Sum(nil, 0, nil), nil
 }

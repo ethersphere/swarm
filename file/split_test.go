@@ -9,6 +9,7 @@ import (
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/file/hasher"
 	"github.com/ethersphere/swarm/file/store"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
@@ -25,20 +26,24 @@ func init() {
 	testutil.Init()
 }
 
+var (
+	errFunc = func(err error) {
+		log.Error("split writer pipeline error", "err", err)
+	}
+)
+
 // TestSplit creates a Splitter with a reader with one chunk of serial data and
 // a Hasher as the underlying param.SectionWriter
 // It verifies the returned result
 func TestSplit(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
-	dataHashFunc := func() param.SectionWriter {
-		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
-	h := hasher.New(sectionSize, branches, dataHashFunc)
-	h.Link(refHashFunc)
+	h := hasher.New(refHashFunc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.Init(ctx, errFunc)
 
 	r, _ := testutil.SerialData(chunkSize, 255, 0)
 	s := NewSplitter(r, h)
@@ -55,28 +60,22 @@ func TestSplit(t *testing.T) {
 
 // TestSplitWithDataFileStore verifies chunk.Store sink result for data hashing
 func TestSplitWithDataFileStore(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
-	}
-	dataHashFunc := func() param.SectionWriter {
-		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	chunkStore := &storage.FakeChunkStore{}
 	storeFunc := func() param.SectionWriter {
-		h := store.New(chunkStore)
-		h.Init(ctx, func(_ error) {})
-		h.Link(dataHashFunc)
+		h := store.New(chunkStore, refHashFunc)
+		h.Init(ctx, errFunc)
 		return h
 	}
 
-	h := hasher.New(sectionSize, branches, storeFunc)
-	h.Init(ctx, func(error) {})
-	h.Link(refHashFunc)
+	h := hasher.New(storeFunc)
+	h.Init(ctx, errFunc)
 
 	r, _ := testutil.SerialData(chunkSize, 255, 0)
 	s := NewSplitter(r, h)
@@ -94,8 +93,7 @@ func TestSplitWithDataFileStore(t *testing.T) {
 
 // TestSplitWithIntermediateFileStore verifies chunk.Store sink result for intermediate hashing
 func TestSplitWithIntermediateFileStore(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
@@ -104,18 +102,13 @@ func TestSplitWithIntermediateFileStore(t *testing.T) {
 	defer cancel()
 	chunkStore := &storage.FakeChunkStore{}
 	storeFunc := func() param.SectionWriter {
-		h := store.New(chunkStore)
-		h.Init(ctx, func(_ error) {})
-		h.Link(refHashFunc)
+		h := store.New(chunkStore, refHashFunc)
+		h.Init(ctx, errFunc)
 		return h
 	}
 
-	dataHashFunc := func() param.SectionWriter {
-		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
-
-	h := hasher.New(sectionSize, branches, dataHashFunc)
-	h.Link(storeFunc)
+	h := hasher.New(storeFunc)
+	h.Init(ctx, errFunc)
 
 	r, _ := testutil.SerialData(chunkSize*2, 255, 0)
 	s := NewSplitter(r, h)
@@ -133,8 +126,7 @@ func TestSplitWithIntermediateFileStore(t *testing.T) {
 
 // TestSplitWithBothFileStore verifies chunk.Store sink result for both data and intermediate hashing
 func TestSplitWithBothFileStore(t *testing.T) {
-	poolSync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
@@ -143,24 +135,13 @@ func TestSplitWithBothFileStore(t *testing.T) {
 	defer cancel()
 	chunkStore := &storage.FakeChunkStore{}
 	refStoreFunc := func() param.SectionWriter {
-		h := store.New(chunkStore)
-		h.Init(ctx, func(_ error) {})
-		h.Link(refHashFunc)
+		h := store.New(chunkStore, refHashFunc)
+		h.Init(ctx, errFunc)
 		return h
 	}
 
-	dataHashFunc := func() param.SectionWriter {
-		return hasher.NewBMTSyncSectionWriter(bmt.New(poolSync))
-	}
-	dataStoreFunc := func() param.SectionWriter {
-		h := store.New(chunkStore)
-		h.Init(ctx, func(_ error) {})
-		h.Link(dataHashFunc)
-		return h
-	}
-
-	h := hasher.New(sectionSize, branches, dataStoreFunc)
-	h.Link(refStoreFunc)
+	h := hasher.New(refStoreFunc)
+	h.Init(ctx, errFunc)
 
 	r, _ := testutil.SerialData(chunkSize*128, 255, 0)
 	s := NewSplitter(r, h)

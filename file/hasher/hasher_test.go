@@ -95,7 +95,7 @@ func TestHasherJobChange(t *testing.T) {
 
 // TestHasherONeFullLevelOneChunk verifies the result of writing branches times data chunks to Hasher
 func TestHasherOneFullLevelOneChunk(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128*128)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}
@@ -118,7 +118,7 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 }
 
 func TestHasherVector(t *testing.T) {
-	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128*128)
+	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	refHashFunc := func() param.SectionWriter {
 		return bmt.New(poolAsync).NewAsyncWriter(false)
 	}

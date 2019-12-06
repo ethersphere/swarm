@@ -48,7 +48,7 @@ func (s *testChunkStore) Put(_ context.Context, _ chunk.ModePut, chs ...chunk.Ch
 // TestStoreWithHasher writes a single chunk and verifies the asynchronusly received chunk
 // through the underlying chunk store
 func TestStoreWithHasher(t *testing.T) {
-	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
+	pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize*128)
 	hashFunc := func() param.SectionWriter {
 		return bmt.New(pool).NewAsyncWriter(false)
 	}
@@ -58,11 +58,10 @@ func TestStoreWithHasher(t *testing.T) {
 	store := newTestChunkStore(chunkC)
 
 	// initialize FileStore
-	h := New(store)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	h := New(store, hashFunc)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer cancel()
 	h.Init(ctx, nil)
-	h.Link(hashFunc)
 
 	// Write data to Store
 	_, data := testutil.SerialData(chunkSize, 255, 0)
