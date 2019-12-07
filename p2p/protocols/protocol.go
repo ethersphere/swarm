@@ -207,8 +207,8 @@ type Peer struct {
 	encode    func(context.Context, interface{}) (interface{}, int, error)
 	decode    func(p2p.Msg) (context.Context, []byte, error)
 	eg        *errgroup.Group // error group used for executing handlers asynchronously
-	running   bool
-	runLock   sync.RWMutex // guards running
+	running   bool            // is event loop still running
+	runLock   sync.RWMutex    // guards running
 }
 
 // NewPeer constructs a new peer
@@ -232,16 +232,18 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	}
 }
 
-// Run starts the forever loop that handles incoming messages
-// the handler argument is a function which is called for each message received
+// Run starts the forever loop that handles incoming messages.
+// The handler argument is a function which is called for each message received
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
-// there can be only one run loop per peer
+// there can be only one run loop per peer.
+// Run returns an error if there was a problem with starting the loop or if there was a problem with
+// reading the next incoming message. The async handler errors are not returned here.
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
 	p.runLock.Lock()
 	if p.running == true {
 		defer p.runLock.Unlock()
-		return nil
+		return errors.New("the peer event loop is already running")
 	}
 
 	p.running = true
@@ -253,11 +255,14 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 			if err != io.EOF {
 				metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
 				log.Error("peer.handleIncoming", "err", err)
+				return err
 			}
 
-			return err
+			// EOF is treated as the normal end of the loop. It happens after the peer is disconnected.
+			return nil
 		}
 
+		// Same as EOF
 		if err := p.dispatchAsyncHandleMsg(msg, handler); err != nil {
 			return nil
 		}
@@ -268,7 +273,7 @@ func (p *Peer) dispatchAsyncHandleMsg(msg p2p.Msg, handler func(ctx context.Cont
 	p.runLock.RLock()
 	defer p.runLock.RUnlock()
 	if p.running == false {
-		return errors.New("stopped")
+		return errors.New("cannot dispatch new msg: event loop is not running")
 	}
 	p.eg.Go(func() error {
 		return p.handleMsg(&msg, handler)
@@ -277,20 +282,21 @@ func (p *Peer) dispatchAsyncHandleMsg(msg p2p.Msg, handler func(ctx context.Cont
 	return nil
 }
 
-// Drop disconnects a peer.
+// Drop disconnects a peer
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
 func (p *Peer) Drop(reason string) {
-	log.Error("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
+	log.Info("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
-// Shutdown stops the peer and waits for asunc go routines to finish if any
+// Shutdown stops the peer and waits for async go routines to finish.
 func (p *Peer) Shutdown() {
 	p.Stop(errors.New("shutdown"))
 	p.eg.Wait()
 }
 
+// Stop drops the peer and stops the event loop.
 func (p *Peer) Stop(err error) {
 	p.runLock.Lock()
 	defer p.runLock.Unlock()
@@ -341,14 +347,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	return p2p.Send(p.rw, code, wmsg)
 }
 
-// handleIncoming(code)
-// is called each cycle of the main forever loop that dispatches incoming messages
-// if this returns an error the loop returns and the peer is disconnected with the error
-// this generic handler
-// * checks message size,
-// * checks for out-of-range message codes,
-// * handles decoding with reflection,
-// * call handlers as callbacks
+// Receive(code) is a sync call that handles incoming message with provided message handler
 func (p *Peer) Receive(handler func(ctx context.Context, msg interface{}) error) error {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
@@ -358,6 +357,11 @@ func (p *Peer) Receive(handler func(ctx context.Context, msg interface{}) error)
 	return p.handleMsg(&msg, handler)
 }
 
+// handleMsg is handling message with provided handler. It:
+// * checks message size,
+// * checks for out-of-range message codes,
+// * handles decoding with reflection,
+// * call handlers as callbacks
 func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg interface{}) error) error {
 	// make sure that the payload has been fully consume
 	defer msg.Discard()
