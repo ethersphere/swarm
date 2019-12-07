@@ -206,7 +206,7 @@ type Peer struct {
 	spec      *Spec
 	encode    func(context.Context, interface{}) (interface{}, int, error)
 	decode    func(p2p.Msg) (context.Context, []byte, error)
-	eg        *errgroup.Group // error group used in peer.Run() for executing handlers async
+	eg        *errgroup.Group // error group used for executing handlers asynchronously
 	running   bool
 	runLock   sync.RWMutex // guards running
 }
