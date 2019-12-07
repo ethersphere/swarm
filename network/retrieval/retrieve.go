@@ -356,7 +356,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
 		p.logger.Error("unsolicited chunk delivery from peer", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
-		return errors.New(fmt.Sprintf("unsolicited chunk delivery from peer: %s", err))
+		return fmt.Errorf("unsolicited chunk delivery from peer: %s", err)
 	}
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
@@ -387,7 +387,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	if err != nil {
 		p.logger.Error("netstore error putting chunk to localstore", "err", err)
 		if err == storage.ErrChunkInvalid {
-			return errors.New(fmt.Sprintf("netstore error putting chunk to localstore: %s", err))
+			return fmt.Errorf("netstore error putting chunk to localstore: %s", err)
 		}
 	}
 
