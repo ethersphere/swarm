@@ -237,21 +237,19 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
 // there can be only one run loop per peer
-// todo: check if there is already a loop running and return error
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
+	p.runLock.Lock()
+	if p.running == true {
+		defer p.runLock.Unlock()
+		return nil
+	}
+
 	p.running = true
-	fmt.Println("run loop {}", p)
+	p.runLock.Unlock()
 
-	// this will never exit unless there is an error
-	// that is why the peer is disconnected on errors that should break this loop
-	// in which case the error will be returned on read message
 	for {
-		fmt.Println("1")
 		msg, err := p.rw.ReadMsg()
-		fmt.Println("1 close")
 		if err != nil {
-			fmt.Println("2 err: {}", err)
-
 			if err != io.EOF {
 				metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
 				log.Error("peer.handleIncoming", "err", err)
@@ -261,7 +259,6 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 		}
 
 		if err := p.dispatchAsyncHandleMsg(msg, handler); err != nil {
-			fmt.Println("3 err: {}", err)
 			return nil
 		}
 	}
@@ -271,8 +268,7 @@ func (p *Peer) dispatchAsyncHandleMsg(msg p2p.Msg, handler func(ctx context.Cont
 	p.runLock.RLock()
 	defer p.runLock.RUnlock()
 	if p.running == false {
-		fmt.Println("already running")
-		return errors.New("peer was stopped")
+		return errors.New("stopped")
 	}
 	p.eg.Go(func() error {
 		return p.handleMsg(&msg, handler)
@@ -289,13 +285,17 @@ func (p *Peer) Drop(reason string) {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
+// Shutdown stops the peer and waits for asunc go routines to finish if any
+func (p *Peer) Shutdown() {
+	p.Stop(errors.New("shutdown"))
+	p.eg.Wait()
+}
+
 func (p *Peer) Stop(err error) {
-	fmt.Println("stop {}", err)
 	p.runLock.Lock()
 	defer p.runLock.Unlock()
 
 	if p.running == false {
-		fmt.Println("already stopped")
 		return
 	}
 

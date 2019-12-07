@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1112,20 +1114,28 @@ func (r *Registry) Stop() error {
 
 	close(r.quit)
 	//// todo: handle done better
-	//// wait for all handlers to finish
-	//done := make(chan struct{})
-	//go func() {
-	//	r.handlersWg.Wait()
-	//	close(done)
-	//}()
-	//select {
-	//case <-done:
-	//case <-time.After(5 * time.Second):
-	//	r.logger.Error("stream closed with still active handlers")
-	//	// Print a full goroutine dump to debug blocking.
-	//	// TODO: use a logger to write a goroutine profile
-	//	pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
-	//}
+	// wait for all handlers to finish
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, peer := range r.peers {
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			peer.Shutdown()
+		}()
+	}
+
+	wg.Wait()
+	close(done)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		r.logger.Error("stream closed with still active handlers")
+		// Print a full goroutine dump to debug blocking.
+		// TODO: use a logger to write a goroutine profile
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
+	}
 
 	for _, v := range r.providers {
 		v.Close()
