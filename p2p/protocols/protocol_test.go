@@ -342,11 +342,10 @@ func TestProtocolHook(t *testing.T) {
 	<-testHook.waitC
 
 	time.Sleep(100 * time.Millisecond)
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: errors.New("subprotocol error")})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: fmt.Errorf("subprotocol error")})
 	if err != nil {
 		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
 	}
-
 }
 
 //We need to test that if the hook is not defined, then message infrastructure
@@ -369,7 +368,6 @@ func TestNoHook(t *testing.T) {
 	}
 	//simulate receiving a message
 	rw.msg = msg
-
 	handler := func(ctx context.Context, msg interface{}) error {
 		return nil
 	}
@@ -380,11 +378,11 @@ func TestNoHook(t *testing.T) {
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
-	runProtoHandshake(t, &protoHandshake{41, "420"}, errors.New("subprotocol error"))
+	runProtoHandshake(t, &protoHandshake{41, "420"}, errorf(ErrHandshake, errorf(ErrHandler, "(msg code 0): 41 (!= 42)").Error()))
 }
 
 func TestProtoHandshakeNetworkIDMismatch(t *testing.T) {
-	runProtoHandshake(t, &protoHandshake{42, "421"}, errors.New("subprotocol error"))
+	runProtoHandshake(t, &protoHandshake{42, "421"}, errorf(ErrHandshake, errorf(ErrHandler, "(msg code 0): 421 (!= 420)").Error()))
 }
 
 func TestProtoHandshakeSuccess(t *testing.T) {

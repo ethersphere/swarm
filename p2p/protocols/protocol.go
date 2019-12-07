@@ -367,41 +367,37 @@ func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg inte
 	defer msg.Discard()
 
 	// helper function to make sure the peer is dropped
-	dropAndErr := func(err error) {
+	dropAndErr := func(err error) error {
 		p.Stop(err)
+		return err
 	}
 
 	if msg.Size > p.spec.MaxMsgSize {
 		err := errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
-		dropAndErr(err)
-		return err
+		return dropAndErr(err)
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
 		err := errorf(ErrInvalidMsgCode, "%v", msg.Code)
-		dropAndErr(err)
-		return err
+		return dropAndErr(err)
 	}
 
 	ctx, msgBytes, err := p.decode(*msg)
 	if err != nil {
 		err := errorf(ErrDecode, "%v err=%v", msg.Code, err)
-		dropAndErr(err)
-		return err
+		return dropAndErr(err)
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
 		err := errorf(ErrDecode, "<= %v: %v", msg, err)
-		dropAndErr(err)
-		return err
+		return dropAndErr(err)
 	}
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
 		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
 		if err != nil {
-			dropAndErr(err)
-			return err
+			return dropAndErr(err)
 		}
 	}
 
@@ -412,8 +408,7 @@ func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg inte
 	// chosen based on the proper type in the first place
 	if err := handle(ctx, val); err != nil {
 		err = errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
-		dropAndErr(err)
-		return err
+		return dropAndErr(err)
 	}
 
 	return nil
