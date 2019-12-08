@@ -142,19 +142,6 @@ func (r *Registry) Run(bp *network.BzzPeer) error {
 // HandleMsg is the main message handler for the stream protocol
 func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		//r.mtx.Lock() // ensure that quit read and handlersWg add are locked together
-		//defer r.mtx.Unlock()
-
-		select {
-		case <-r.quit:
-			// no message handling if we quit
-			return nil
-		case <-p.quit:
-			// peer has been removed, quit
-			return nil
-		default:
-		}
-
 		// handleMsgPauser should not be nil only in tests.
 		// It does not use mutex lock protection and because of that
 		// it must be set before the Registry is constructed and
@@ -331,13 +318,13 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 			if s.Cursor > 0 {
 				p.logger.Debug("requesting history stream", "stream", s.Stream, "cursor", s.Cursor)
 				// fetch everything from beginning till s.Cursor
-
-				err := r.clientRequestStreamRange(ctx, p, provider, s.Stream, s.Cursor)
-				// todo: there was a go routine here, check if needed
-				if err != nil {
-					return fmt.Errorf("had an error sending initial GetRange for historical stream: %s", err)
-
-				}
+				go func() {
+					err := r.clientRequestStreamRange(ctx, p, provider, s.Stream, s.Cursor)
+					// todo: there was a go routine here, check if needed
+					if err != nil {
+						p.Drop("had an error sending initial GetRange for historical stream: %s")
+					}
+				}()
 			}
 
 			// handle stream unboundedness
@@ -347,11 +334,13 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 
 				// todo: there was a go routine here, check if needed
 				// ask the tip (cursor + 1)
-				err := r.clientRequestStreamHead(ctx, p, s.Stream, s.Cursor+1)
-				// https://github.com/golang/go/issues/4373 - use of closed network connection
-				if err != nil && err != p2p.ErrShuttingDown && !strings.Contains(err.Error(), "use of closed network connection") {
-					return fmt.Errorf("had an error with initial stream head fetch: %s", err)
-				}
+				go func() {
+					err := r.clientRequestStreamHead(ctx, p, s.Stream, s.Cursor+1)
+					// https://github.com/golang/go/issues/4373 - use of closed network connection
+					if err != nil && err != p2p.ErrShuttingDown && !strings.Contains(err.Error(), "use of closed network connection") {
+						p.Drop("had an error with initial stream head fetch: %s")
+					}
+				}()
 			}
 		}
 	}
@@ -1109,24 +1098,28 @@ func (r *Registry) Start(server *p2p.Server) error {
 
 func (r *Registry) Stop() error {
 	log.Debug("stream registry stopping")
+	fmt.Println("in stop")
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
 	close(r.quit)
-	//// todo: handle done better
-	// wait for all handlers to finish
-	done := make(chan struct{})
+
 	var wg sync.WaitGroup
 	for _, peer := range r.peers {
-		go func() {
-			wg.Add(1)
+		wg.Add(1)
+		go func(peer *Peer) {
 			defer wg.Done()
 			peer.Shutdown()
-		}()
+		}(peer)
 	}
 
-	wg.Wait()
-	close(done)
+	done := make(chan bool)
+	go func() {
+		fmt.Println("before wait ")
+		wg.Wait()
+		close(done)
+		fmt.Println("after wait ")
+	}()
 
 	select {
 	case <-done:

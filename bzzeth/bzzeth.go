@@ -179,11 +179,15 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 			ch := newChunk(hdr)
 			deliveredCnt++
 			p.logger.Trace("bzzeth.handleNewBlockHeaders", "hash", ch.Address().Hex(), "delivered", deliveredCnt)
+
+			req.lock.RLock()
 			if deliveredCnt == len(req.hashes) {
 				p.logger.Debug("all headers delivered", "count", deliveredCnt)
 				finishDeliveryFunc(req.hashes)
+				req.lock.RUnlock()
 				return nil
 			}
+			req.lock.RUnlock()
 		case <-ctx.Done():
 			p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt, "err", err)
 			return nil
@@ -268,12 +272,13 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 			return nil
 		})
 	}
-	// finish storage is used mostly in testing
-	// in normal scenario.. it just logs Trace
-	defer finishStorageFunc(chunks)
 
 	// wait for all validations to get over and close the channels
 	err := wg.Wait()
+
+	// finish storage is used mostly in testing
+	// in normal scenario.. it just logs Trace
+	defer finishStorageFunc(chunks)
 
 	// We want to store even if there is any validation error.
 	// since some headers may be valid in the batch.

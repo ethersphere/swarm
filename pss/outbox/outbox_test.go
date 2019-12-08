@@ -18,7 +18,6 @@ package outbox_test
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -115,14 +114,20 @@ func TestOutboxWorkers(t *testing.T) {
 	var maxParallel int32
 
 	var wg sync.WaitGroup
+	var mtx sync.Mutex
 	mockForwardFunction := func(msg *message.Message) error {
-		atomic.AddInt32(&parallel, 1)
+		mtx.Lock()
+		parallel++
 		if parallel > maxParallel {
-			atomic.StoreInt32(&maxParallel, parallel)
 			maxParallel = parallel
 		}
+		mtx.Unlock()
+
 		<-endProcess
-		atomic.AddInt32(&parallel, -1)
+		mtx.Lock()
+		parallel--
+		mtx.Unlock()
+
 		wg.Done()
 		return nil
 	}

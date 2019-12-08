@@ -390,6 +390,8 @@ func (h *Hive) handlePeersMsg(d *Peer, msg *peersMsg) error {
 func (h *Hive) handleSubPeersMsg(ctx context.Context, d *Peer, msg *subPeersMsg) error {
 	d.setDepth(msg.Depth)
 	// only send peers after the initial subPeersMsg
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	if !d.sentPeers {
 		var peers []*BzzAddr
 		// iterate connection in ascending order of disctance from the remote address

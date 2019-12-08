@@ -30,7 +30,6 @@ package protocols
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -207,9 +206,9 @@ type Peer struct {
 	encode    func(context.Context, interface{}) (interface{}, int, error)
 	decode    func(p2p.Msg) (context.Context, []byte, error)
 	eg        *errgroup.Group // error group used for executing handlers asynchronously
-	running   bool            // is event loop still running
-	runLock   sync.RWMutex    // guards running
-	quit      chan error
+	running   bool
+	mtx       sync.RWMutex // guards running
+	shutdown  chan error
 }
 
 // NewPeer constructs a new peer
@@ -230,7 +229,6 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 		encode: encode,
 		decode: decode,
 		eg:     &errgroup.Group{},
-		quit:   make(chan error, 2),
 	}
 }
 
@@ -241,15 +239,9 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // there can be only one run loop per peer.
 // It returns the error that caused the loop to exit.
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
-	p.runLock.Lock()
-	if p.running == true {
-		defer p.runLock.Unlock()
-		return errors.New("the peer event loop is already running")
-	}
+	p.setRunning(true)
 
-	p.running = true
-	p.runLock.Unlock()
-
+	done := make(chan error, 1)
 	go func() {
 		for {
 			msg, err := p.rw.ReadMsg()
@@ -259,29 +251,53 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 					log.Error("peer.handleIncoming", "err", err)
 				}
 
-				p.quit <- err
+				select {
+				case done <- err:
+				default:
+				}
+
 				return
 			}
 
-			p.dispatchAsyncHandleMsg(&msg, handler)
-
+			p.dispatchAsyncHandleMsg(&msg, handler, done)
 		}
 	}()
 
-	return <-p.quit
-
+	select {
+	case err := <-done:
+		return err
+	case err := <-p.shutdown:
+		return err
+	}
 }
 
-func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Context, msg interface{}) error) {
-	p.runLock.RLock()
-	defer p.runLock.RUnlock()
-	if p.running == true {
-		p.eg.Go(func() error {
-			return p.handleMsg(msg, handler)
-		})
-	}
-
+func (p *Peer) setRunning(isRunning bool) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	p.running = isRunning
 	return
+}
+
+func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Context, msg interface{}) error, done chan error) {
+	p.mtx.RLock()
+	defer p.mtx.RUnlock()
+
+	if p.running {
+		p.eg.Go(func() error {
+			err := p.handleMsg(msg, handler)
+			if err != nil {
+				p.stop(err, done)
+			}
+
+			return err
+		})
+	} else {
+		select {
+		case done <- nil:
+		default:
+			fmt.Println("nil inside")
+		}
+	}
 }
 
 // Drop disconnects a peer
@@ -292,23 +308,31 @@ func (p *Peer) Drop(reason string) {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
-// Shutdown  waits for async go routines to finish and returns.
-// It does not stop the event loop. Use Peer.Stop() before to achieve that.
+//Shutdown waits for async go routines to finish and returns.
 func (p *Peer) Shutdown() {
+	p.mtx.Lock()
+	p.running = false
+	p.mtx.Unlock()
+
 	p.eg.Wait()
+
+	// todo: should break the loop here but at the moment there seems to be a part of the code in localstore that expects the loop to still work
+	//select {
+	//case p.shutdown <- nil:
+	//default:
+	//}
 }
 
 // Stop drops the peer and stops the event loop.
-func (p *Peer) Stop(err error) {
-	p.runLock.Lock()
-	defer p.runLock.Unlock()
+func (p *Peer) stop(err error, done chan error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 
-	if p.running == false {
-		return
+	select {
+	case done <- err:
+	default:
+		fmt.Println("stopping already stopped channel")
 	}
-
-	p.running = false
-	p.quit <- err
 }
 
 // Send takes a message, encodes it in RLP, finds the right message code and sends the
@@ -368,38 +392,32 @@ func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg inte
 	// make sure that the payload has been fully consume
 	defer msg.Discard()
 
-	// helper function to make sure the peer is dropped
-	dropAndErr := func(err error) error {
-		p.Stop(err)
-		return err
-	}
-
 	if msg.Size > p.spec.MaxMsgSize {
 		err := errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
-		return dropAndErr(err)
+		return err
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
 		err := errorf(ErrInvalidMsgCode, "%v", msg.Code)
-		return dropAndErr(err)
+		return err
 	}
 
 	ctx, msgBytes, err := p.decode(*msg)
 	if err != nil {
 		err := errorf(ErrDecode, "%v err=%v", msg.Code, err)
-		return dropAndErr(err)
+		return err
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
 		err := errorf(ErrDecode, "<= %v: %v", msg, err)
-		return dropAndErr(err)
+		return err
 	}
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
 		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
 		if err != nil {
-			return dropAndErr(err)
+			return err
 		}
 	}
 
@@ -410,7 +428,7 @@ func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg inte
 	// chosen based on the proper type in the first place
 	if err := handle(ctx, val); err != nil {
 		err = errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
-		return dropAndErr(err)
+		return err
 	}
 
 	return nil
