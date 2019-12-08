@@ -342,7 +342,7 @@ func TestProtocolHook(t *testing.T) {
 	<-testHook.waitC
 
 	time.Sleep(100 * time.Millisecond)
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: fmt.Errorf("subprotocol error")})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: testHook.err})
 	if err != nil {
 		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
 	}
@@ -573,13 +573,13 @@ WAIT:
 func TestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("subprotocol error"),
-		fmt.Errorf("subprotocol error"),
+		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 	)
 }
 
 func TestMultiplePeersDropOther(t *testing.T) {
 	runMultiplePeers(t, 1,
-		fmt.Errorf("subprotocol error"),
+		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 		fmt.Errorf("subprotocol error"),
 	)
 }

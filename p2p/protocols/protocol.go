@@ -209,6 +209,7 @@ type Peer struct {
 	eg        *errgroup.Group // error group used for executing handlers asynchronously
 	running   bool            // is event loop still running
 	runLock   sync.RWMutex    // guards running
+	quit      chan error
 }
 
 // NewPeer constructs a new peer
@@ -229,6 +230,7 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 		encode: encode,
 		decode: decode,
 		eg:     &errgroup.Group{},
+		quit:   make(chan error, 2),
 	}
 }
 
@@ -237,8 +239,7 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
 // there can be only one run loop per peer.
-// Run returns an error if there was a problem with starting the loop or if there was a problem with
-// reading the next incoming message. The async handler errors are not returned here.
+// It returns the error that caused the loop to exit.
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
 	p.runLock.Lock()
 	if p.running == true {
@@ -249,37 +250,38 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 	p.running = true
 	p.runLock.Unlock()
 
-	for {
-		msg, err := p.rw.ReadMsg()
-		if err != nil {
-			if err != io.EOF {
-				metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
-				log.Error("peer.handleIncoming", "err", err)
-				return err
+	go func() {
+		for {
+			msg, err := p.rw.ReadMsg()
+			if err != nil {
+				if err != io.EOF {
+					metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
+					log.Error("peer.handleIncoming", "err", err)
+				}
+
+				p.quit <- err
+				return
 			}
 
-			// EOF is treated as the normal end of the loop. It happens after the peer is disconnected.
-			return nil
-		}
+			p.dispatchAsyncHandleMsg(&msg, handler)
 
-		// Same as EOF
-		if err := p.dispatchAsyncHandleMsg(msg, handler); err != nil {
-			return nil
 		}
-	}
+	}()
+
+	return <-p.quit
+
 }
 
-func (p *Peer) dispatchAsyncHandleMsg(msg p2p.Msg, handler func(ctx context.Context, msg interface{}) error) error {
+func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Context, msg interface{}) error) {
 	p.runLock.RLock()
 	defer p.runLock.RUnlock()
-	if p.running == false {
-		return errors.New("cannot dispatch new msg: event loop is not running")
+	if p.running == true {
+		p.eg.Go(func() error {
+			return p.handleMsg(msg, handler)
+		})
 	}
-	p.eg.Go(func() error {
-		return p.handleMsg(&msg, handler)
-	})
 
-	return nil
+	return
 }
 
 // Drop disconnects a peer
@@ -290,9 +292,9 @@ func (p *Peer) Drop(reason string) {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
-// Shutdown stops the peer and waits for async go routines to finish.
+// Shutdown  waits for async go routines to finish and returns.
+// It does not stop the event loop. Use Peer.Stop() before to achieve that.
 func (p *Peer) Shutdown() {
-	p.Stop(errors.New("shutdown"))
 	p.eg.Wait()
 }
 
@@ -306,7 +308,7 @@ func (p *Peer) Stop(err error) {
 	}
 
 	p.running = false
-	p.Drop(err.Error())
+	p.quit <- err
 }
 
 // Send takes a message, encodes it in RLP, finds the right message code and sends the
