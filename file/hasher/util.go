@@ -4,13 +4,23 @@ import (
 	"math"
 )
 
-// TODO: use params instead of sectionSize
+// TODO: level 0 should be SectionSize() not Branches()
+// generates a dictionary of maximum span lengths per level represented by one SectionSize() of data
+func generateSpanSizes(branches int, levels int) int {
+	spans := make([]int, levels)
+	span := 1
+	for i := 0; i < 9; i++ {
+		spans = append(spans, span)
+		span *= p.Branches
+	}
+	return spans
+}
+
 // calculates the section index of the given byte size
 func dataSizeToSectionIndex(length int, sectionSize int) int {
 	return (length - 1) / sectionSize
 }
 
-// TODO: use params instead of sectionSize
 // calculates the section count of the given byte size
 func dataSizeToSectionCount(length int, sectionSize int) int {
 	return dataSizeToSectionIndex(length, sectionSize) + 1

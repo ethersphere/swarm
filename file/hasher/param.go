@@ -37,11 +37,7 @@ func newTreeParams(hashFunc param.SectionWriterFunc) *treeParams {
 		log.Trace("param new hasher", "h", hf)
 		return hf
 	}
-	span := 1
-	for i := 0; i < 9; i++ {
-		p.Spans = append(p.Spans, span)
-		span *= p.Branches
-	}
+	p.Spans = generateSpanSizes(p.branches, 9)
 	return p
 }
 
