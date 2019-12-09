@@ -2,6 +2,7 @@ package network
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -88,6 +89,32 @@ func (a *BzzAddr) Over() []byte {
 // Under returns the underlay address.
 func (a *BzzAddr) Under() []byte {
 	return a.UAddr
+}
+
+// ShortString returns shortened versions of overlay and underlay address in a format: shortOver:shortUnder
+// It can be used for logging
+func (a *BzzAddr) ShortString() string {
+	return fmt.Sprintf("%s:%s", a.ShortOver(), a.ShortUnder())
+}
+
+// ShortOver returns shortened version of Overlay address
+// It can be used for logging
+func (a *BzzAddr) ShortOver() string {
+	if oaddr := hex.EncodeToString(a.OAddr); len(oaddr) >= 16 {
+		return oaddr[:16]
+	} else {
+		return oaddr
+	}
+}
+
+// ShortUnder returns shortened version of Underlay address
+// It can be used for logging
+func (a *BzzAddr) ShortUnder() string {
+	if uaddr := hex.EncodeToString(a.UAddr); len(uaddr) >= 16 {
+		return uaddr[:16]
+	} else {
+		return uaddr
+	}
 }
 
 // ID returns the node identifier in the underlay.

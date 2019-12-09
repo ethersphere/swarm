@@ -191,7 +191,7 @@ func TestAddressMatchProx(t *testing.T) {
 		peerAddr := pot.RandomAddressAt(localPotAddr, i)
 		bzzPeer := &network.BzzPeer{
 			Peer:    protoPeer,
-			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), nil),
 		}
 		peer := network.NewPeer(bzzPeer, kad)
 		kad.On(peer)
@@ -1539,9 +1539,8 @@ func newServices(allowRaw bool) map[string]simulation.ServiceFunc {
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
+				Address:    addr,
+				HiveParams: hp,
 			}
 			pskad := kademlia(ctx.Config.ID, addr.OAddr)
 			bucket.Store(simulation.BucketKeyKademlia, pskad)

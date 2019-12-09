@@ -23,8 +23,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/stream/intervals"
 	"github.com/ethersphere/swarm/state"
@@ -47,8 +46,8 @@ type Peer struct {
 	quit chan struct{} // closed when peer is going offline
 }
 
-// NewPeer is the constructor for Peer
-func NewPeer(peer *network.BzzPeer, baseKey []byte, i state.Store, providers map[string]StreamProvider) *Peer {
+// newPeer is the constructor for Peer
+func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
 		BzzPeer:        peer,
 		providers:      providers,
@@ -57,7 +56,7 @@ func NewPeer(peer *network.BzzPeer, baseKey []byte, i state.Store, providers map
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
-		logger:         log.New("base", hex.EncodeToString(baseKey)[:16], "peer", peer.ID().String()[:16]),
+		logger:         log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
 	return p
 }

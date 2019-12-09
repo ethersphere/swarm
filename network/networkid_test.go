@@ -211,10 +211,9 @@ func newServices() adapters.Services {
 			nodeMap[currentNetworkID] = append(nodeMap[currentNetworkID], ctx.Config.ID)
 			log.Debug("current network ID:", "id", currentNetworkID)
 			config := &BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
-				NetworkID:    uint64(currentNetworkID),
+				Address:    addr,
+				HiveParams: hp,
+				NetworkID:  uint64(currentNetworkID),
 			}
 			return NewBzz(config, kademlia(ctx.Config.ID), nil, nil, nil, nil, nil), nil
 		},

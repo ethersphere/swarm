@@ -30,10 +30,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -535,7 +535,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		return elem
 	}
 	opts := &SyncSimServiceOptions{
-		StreamConstructorFunc: func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+		StreamConstructorFunc: func(s state.Store, b *network.BzzAddr, p ...StreamProvider) node.Service {
 			return New(s, b, p...)
 		},
 	}
@@ -551,7 +551,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 	}
 
 	// second node should start with the mock protocol
-	opts.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+	opts.StreamConstructorFunc = func(s state.Store, b *network.BzzAddr, p ...StreamProvider) node.Service {
 		return newMock(infoReqHook)
 	}
 
@@ -583,7 +583,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		peerAddr := pot.RandomAddressAt(pivotAddr, i)
 		bzzPeer := &network.BzzPeer{
 			Peer:    protoPeer,
-			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), nil),
 		}
 		peer := network.NewPeer(bzzPeer, pivotKad)
 		pivotKad.On(peer)

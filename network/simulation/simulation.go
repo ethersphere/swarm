@@ -114,9 +114,8 @@ func NewBzzInProc(services map[string]ServiceFunc, disableAutoConnect bool) (s *
 		kad := k.(*network.Kademlia)
 
 		config := &network.BzzConfig{
-			OverlayAddr:  addr.Over(),
-			UnderlayAddr: addr.Under(),
-			HiveParams:   hp,
+			Address:    addr,
+			HiveParams: hp,
 		}
 		return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 	}
