@@ -28,12 +28,7 @@ import (
 
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
-	"github.com/ethersphere/swarm/testutil"
 )
-
-func init() {
-	testutil.Init()
-}
 
 /*
 Binary Merkle Tree Hash is a hash function over arbitrary datachunks of limited size.
@@ -91,7 +86,7 @@ type BaseHasherFunc func() hash.Hash
 type Hasher struct {
 	pool    *TreePool // BMT resource pool
 	bmt     *tree     // prebuilt BMT resource for flowcontrol and proofs
-	size    int32     // bytes written to Hasher since last Reset()
+	size    uint64    // bytes written to Hasher since last Reset()
 	jobSize int       // size of data written in current session
 	cursor  int64     // cursor to write to on next Write() call
 }
@@ -304,10 +299,6 @@ func (h *Hasher) SetLength(length int) {
 	h.getTree().span = span
 }
 
-//func (h *Hasher) Count() int {
-//	return h.pool.SegmentCount
-//}
-
 // Implements param.SectionWriter
 func (h *Hasher) Branches() int {
 	return h.pool.SegmentCount
@@ -328,7 +319,6 @@ func (h *Hasher) Size() int {
 // Seek sets the section that will be written to on the next Write()
 // Implements io.Seeker in param.SectionWriter
 func (h *Hasher) Seek(offset int64, whence int) (int64, error) {
-	//return 0, errors.New("Seek not supported currently, use AsyncHasher for Seek")
 	atomic.StoreInt64(&h.cursor, offset)
 	return offset, nil
 }
@@ -348,10 +338,18 @@ func (h *Hasher) BlockSize() int {
 // TODO: if span is nil return the zero-hash
 func (h *Hasher) Sum(b []byte) (s []byte) {
 	t := h.getTree()
+	if h.size == 0 && t.offset == 0 {
+		h.releaseTree()
+		return h.pool.zerohashes[h.pool.Depth]
+	}
 	// write the last section with final flag set to true
 	go h.writeSection(t.cursor, t.section, true, true)
 	// wait for the result
 	s = <-t.result
+	if t.span == nil {
+		t.span = make([]byte, 8)
+		binary.LittleEndian.PutUint64(t.span, h.size)
+	}
 	span := t.span
 	// release the tree resource back to the pool
 	h.releaseTree()
@@ -371,6 +369,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	if l == 0 || l > h.pool.Size {
 		return 0, nil
 	}
+	atomic.AddUint64(&h.size, uint64(len(b)))
 	t := h.getTree()
 	secsize := 2 * h.pool.SegmentSize
 	// calculate length of missing bit to complete current open section
@@ -416,18 +415,9 @@ func (h *Hasher) Write(b []byte) (int, error) {
 func (h *Hasher) Reset() {
 	h.cursor = 0
 	h.size = 0
+	h.jobSize = 0
 	h.releaseTree()
 }
-
-// methods needed to implement the SwarmHash interface
-
-// ResetWithLength needs to be called before writing to the hasher
-// the argument is supposed to be the byte slice binary representation of
-// the length of the data subsumed under the hash, i.e., span
-//func (h *Hasher) ResetWithLength(span []byte) {
-//	h.Reset()
-//	h.getTree().span = span
-//}
 
 // releaseTree gives back the Tree to the pool whereby it unlocks
 // it resets tree, segment and index
@@ -531,14 +521,20 @@ func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
+// Write writes to the current position cursor of the Hasher
+// The cursor must be manually set with Seek().
+// The method will NOT advance the cursor.
+//
+// Implements hash.hash in param.SectionWriter
+func (sw *AsyncHasher) Write(section []byte) (int, error) {
+	atomic.AddUint64(&sw.Hasher.size, uint64(len(section)))
+	cursor := atomic.LoadInt64(&sw.Hasher.cursor)
+	return sw.writeSection(int(cursor)/sw.secsize, section)
+}
+
 // Write writes the i-th section of the BMT base
 // this function can and is meant to be called concurrently
 // it sets max segment threadsafely
-func (sw *AsyncHasher) Write(section []byte) (int, error) {
-	c := atomic.LoadInt64(&sw.Hasher.cursor)
-	return sw.writeSection(int(c)/sw.secsize, section)
-}
-
 func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 	// TODO: Temporary workaround for chunkwise write
 	if i < 0 {
@@ -589,8 +585,8 @@ func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 // length: known length of the input (unsafe; undefined if out of range)
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
-
-//func (sw *AsyncHasher) sum(b []byte, length int, meta []byte) (s []byte) {
+//
+// Implements hash.hash in param.SectionWriter
 func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	if sw.all {
 		return sw.Hasher.Sum(nil)
@@ -598,7 +594,6 @@ func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	sw.mtx.Lock()
 	t := sw.getTree()
 	length := int(sw.Hasher.jobSize)
-	log.Trace("async sum", "l", length)
 	if length == 0 {
 		sw.mtx.Unlock()
 		s = sw.pool.zerohashes[sw.pool.Depth]
@@ -620,10 +615,6 @@ func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	// relesase the tree back to the pool
 	sw.releaseTree()
 	meta := t.span
-	// if no meta is given just append digest to b
-	//if len(meta) == 0 {
-	//	return append(b, s...)
-	//}
 	// hash together meta and BMT root hash using the pools
 	return doSum(sw.pool.hasher(), b, meta, s)
 }
@@ -637,8 +628,6 @@ func (h *Hasher) writeSection(i int, section []byte, double bool, final bool) {
 	var hasher hash.Hash
 	var level int
 	t := h.getTree()
-	log.Trace("hasher writesection adding", "len", len(section))
-	atomic.AddInt32(&h.size, int32(len(section)))
 	if double {
 		level++
 		n = t.leaves[i]

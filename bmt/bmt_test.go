@@ -32,6 +32,10 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+func init() {
+	testutil.Init()
+}
+
 // the actual data length generated (could be longer than max datalength of the BMT)
 const BufferSize = 4128
 
@@ -143,14 +147,10 @@ func TestHasherEmptyData(t *testing.T) {
 			defer pool.Drain(0)
 			bmt := New(pool)
 			rbmt := NewRefHasher(hasher, count)
-			refNoMetaHash := rbmt.Hash(data)
-			h := hasher()
-			h.Write(zeroSpan)
-			h.Write(refNoMetaHash)
-			refHash := h.Sum(nil)
-			expHash := syncHash(bmt, 0, data)
-			if !bytes.Equal(expHash, refHash) {
-				t.Fatalf("hash mismatch with reference. expected %x, got %x", refHash, expHash)
+			expHash := rbmt.Hash(data)
+			resHash := syncHash(bmt, 0, data)
+			if !bytes.Equal(expHash, resHash) {
+				t.Fatalf("hash mismatch with reference. expected %x, got %x", resHash, expHash)
 			}
 		})
 	}
@@ -364,7 +364,13 @@ func testHasherCorrectness(bmt *Hasher, hasher BaseHasherFunc, d []byte, n, coun
 	binary.LittleEndian.PutUint64(span, uint64(n))
 	data := d[:n]
 	rbmt := NewRefHasher(hasher, count)
-	exp := sha3hash(span, rbmt.Hash(data))
+	var exp []byte
+	log.Trace("correct", "n", n, "count", count, "depth", bmt.pool.Depth)
+	if n == 0 {
+		exp = bmt.pool.zerohashes[bmt.pool.Depth]
+	} else {
+		exp = sha3hash(span, rbmt.Hash(data))
+	}
 	got := syncHash(bmt, n, data)
 	if !bytes.Equal(got, exp) {
 		return fmt.Errorf("wrong hash: expected %x, got %x", exp, got)
@@ -536,9 +542,7 @@ func benchmarkRefHasher(t *testing.B, n int) {
 // Hash hashes the data and the span using the bmt hasher
 func syncHash(h *Hasher, spanLength int, data []byte) []byte {
 	h.Reset()
-	//if spanLength > 0 {
 	h.SetLength(spanLength)
-	//}
 	h.Write(data)
 	return h.Sum(nil)
 }
@@ -600,10 +604,99 @@ func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs
 		}
 	}
 	if wh == last {
-		log.Trace("asyncHash", "length", l)
 		bmt.SetLength(spanLength)
 		bmt.(*AsyncHasher).Hasher.jobSize = l
 		return bmt.Sum(nil)
 	}
 	return <-c
+}
+
+func TestHashSpanCases(t *testing.T) {
+	hasher := sha3.NewLegacyKeccak256
+	pool := NewTreePool(hasher, 128, PoolSize)
+	zeroHash := pool.zerohashes[7]
+	refRes := zeroHash
+
+	// check that SetLength(0) is equivalent to no Write() in all cases
+	h := New(pool)
+	res := h.Sum(nil)
+	if !bytes.Equal(refRes, res) {
+		t.Fatalf("nilspan vs zerohash; expected %x, got %x", refRes, res)
+	}
+	h.Reset()
+	h.SetLength(0)
+	res = h.Sum(nil)
+	if !bytes.Equal(refRes, res) {
+		t.Fatalf("length 0 vs zerohash; expected %x, got %x", refRes, res)
+	}
+	h.Reset()
+	h.Write([]byte("foo"))
+	h.SetLength(0)
+	res = h.Sum(nil)
+	refh := NewRefHasher(hasher, 128)
+	resh := refh.Hash([]byte("foo"))
+	hsub := hasher()
+	hsub.Write(zeroSpan)
+	hsub.Write(resh)
+	refRes = hsub.Sum(nil)
+	if !bytes.Equal(refRes, res) {
+		t.Fatalf("length 0 overwrite vs zerohash; expected %x, got %x", refRes, res)
+	}
+
+	// span and length is automatically set if SetLength() is not called
+	h.Reset()
+	h.Write([]byte("foo"))
+	resNoLength := h.Sum(nil)
+
+	h.Reset()
+	h.Write([]byte("foo"))
+	h.SetLength(3)
+	resLength := h.Sum(nil)
+
+	if !bytes.Equal(resLength, resNoLength) {
+		t.Fatalf("foo length %d, expected %x, got %x", 3, resLength, resNoLength)
+	}
+
+	h.Reset()
+	h.Write([]byte("foo"))
+	h.SetLength(4)
+	resLength = h.Sum(nil)
+	if bytes.Equal(resLength, resNoLength) {
+		t.Fatalf("foo length %d; unexpected %x == %x", 4, resLength, resNoLength)
+	}
+
+	// correct length is calculated when span exceeds size of bottom tree level
+	h.Reset()
+	h.Write([]byte("foo"))
+	h.SetLength(4096 + 3)
+	res = h.Sum(nil)
+	refh = NewRefHasher(hasher, 128)
+	resh = refh.Hash([]byte("foo"))
+	hsub = hasher()
+	span := make([]byte, 8)
+	binary.LittleEndian.PutUint64(span, 4096+3)
+	hsub.Write(span)
+	hsub.Write(resh)
+	refRes = hsub.Sum(nil)
+
+	if !bytes.Equal(refRes, res) {
+		t.Fatalf("foo length %d, expected %x, got %x", 4096+3, refRes, res)
+	}
+
+	h.Reset()
+	h.Write([]byte("foo"))
+	h.SetLength(4096 + 4)
+	res = h.Sum(nil)
+	refh = NewRefHasher(hasher, 128)
+	resh = refh.Hash([]byte("foo"))
+	hsub = hasher()
+	span = make([]byte, 8)
+	binary.LittleEndian.PutUint64(span, 4096+4)
+	hsub.Write(span)
+	hsub.Write(resh)
+	refRes = hsub.Sum(nil)
+
+	if !bytes.Equal(refRes, res) {
+		t.Fatalf("foo length %d; expected %x, got %x", 4096+4, refRes, res)
+	}
 }
