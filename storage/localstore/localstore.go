@@ -62,6 +62,8 @@ type DB struct {
 	shed *shed.DB
 	tags *chunk.Tags
 
+	path string
+
 	// schema name of loaded data
 	schemaName shed.StringField
 
@@ -69,6 +71,8 @@ type DB struct {
 	data fcds.Interface
 	// bin index and timestamps index
 	metaIndex shed.Index
+	// legacy data index, used only in export for manual migration
+	retrievalDataIndex shed.Index
 	// push syncing index
 	pushIndex shed.Index
 	// push syncing subscriptions triggers
@@ -169,6 +173,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 
 	db = &DB{
+		path:     path,
 		capacity: o.Capacity,
 		baseKey:  baseKey,
 		tags:     o.Tags,
@@ -205,12 +210,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if schemaName == "" {
 		// initial new localstore run
 		err := db.schemaName.Put(dbSchemaCurrent)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// execute possible migrations
-		err = db.migrate(schemaName)
 		if err != nil {
 			return nil, err
 		}
@@ -261,6 +260,33 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			e.BinID = binary.BigEndian.Uint64(value[:8])
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
 			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[16:24]))
+			return e, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Index storing actual chunk address, data and bin id.
+	// Used only in export to provide migration functionality.
+	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 16)
+			binary.BigEndian.PutUint64(b[:8], fields.BinID)
+			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
+			value = append(b, fields.Data...)
+			return value, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+			e.BinID = binary.BigEndian.Uint64(value[:8])
+			e.Data = value[16:]
 			return e, nil
 		},
 	})

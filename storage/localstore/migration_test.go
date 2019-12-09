@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -24,7 +25,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -77,6 +77,9 @@ func TestOneMigration(t *testing.T) {
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -163,6 +166,9 @@ func TestManyMigrations(t *testing.T) {
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -421,8 +427,12 @@ func TestMigrationFailFrom(t *testing.T) {
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
-	if !strings.Contains(err.Error(), errMissingCurrentSchema.Error()) {
-		t.Fatalf("expected errCannotFindSchema but got %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Migrate(); !errors.Is(err, errMissingCurrentSchema) {
+		t.Fatalf("got error %v, want %v", err, errMissingCurrentSchema)
 	}
 
 	if shouldNotRun {
@@ -480,8 +490,12 @@ func TestMigrationFailTo(t *testing.T) {
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
-	if !strings.Contains(err.Error(), errMissingTargetSchema.Error()) {
-		t.Fatalf("expected errMissingTargetSchema but got %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Migrate(); !errors.Is(err, errMissingTargetSchema) {
+		t.Fatalf("got error %v, want %v", err, errMissingTargetSchema)
 	}
 
 	if shouldNotRun {
@@ -531,8 +545,8 @@ func TestMigrateSanctuaryFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if schemaName != dbSchemaCurrent {
-		t.Fatalf("schema name mismatch, want '%s' got '%s'", dbSchemaCurrent, schemaName)
+	if schemaName != dbSchemaSanctuary {
+		t.Fatalf("schema name mismatch, want '%s' got '%s'", dbSchemaSanctuary, schemaName)
 	}
 
 	err = db.Close()

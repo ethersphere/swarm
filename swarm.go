@@ -232,6 +232,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err != nil {
 		return nil, err
 	}
+	if err := localStore.Migrate(); err != nil {
+		return nil, err
+	}
 	lstore := chunk.NewValidatorStore(
 		localStore,
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),

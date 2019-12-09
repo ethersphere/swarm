@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/shed"
 )
 
 const (
@@ -57,24 +58,36 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 		return 0, err
 	}
 
-	err = db.data.Iterate(func(ch chunk.Chunk) (stop bool, err error) {
-
-		data := ch.Data()
-
+	exportchunk := func(addr chunk.Address, data []byte) error {
 		hdr := &tar.Header{
-			Name: hex.EncodeToString(ch.Address()),
+			Name: hex.EncodeToString(addr),
 			Mode: 0644,
 			Size: int64(len(data)),
 		}
 
 		if err := tw.WriteHeader(hdr); err != nil {
-			return false, err
+			return err
 		}
 		if _, err := tw.Write(data); err != nil {
-			return false, err
+			return err
 		}
 		count++
-		return false, nil
+		return nil
+	}
+
+	// Export legacy (pre fcds) data index.
+	// This is required as a manual step in migrateDiwali migration.
+	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		err = exportchunk(item.Address, item.Data)
+		return false, err
+	}, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	err = db.data.Iterate(func(ch chunk.Chunk) (stop bool, err error) {
+		err = exportchunk(ch.Address(), ch.Data())
+		return false, err
 	})
 
 	return count, err

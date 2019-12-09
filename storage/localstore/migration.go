@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
@@ -39,14 +38,26 @@ type BreakingMigrationError struct {
 
 // NewBreakingMigrationError returns a new BreakingMigrationError
 // with instructions for manual operations.
-func NewBreakingMigrationError(manual ...string) *BreakingMigrationError {
+func NewBreakingMigrationError(manual string) *BreakingMigrationError {
 	return &BreakingMigrationError{
-		Manual: strings.Join(manual, "\n"),
+		Manual: manual,
 	}
 }
 
 func (e *BreakingMigrationError) Error() string {
 	return "breaking migration"
+}
+
+func (db *DB) Migrate() (err error) {
+	schemaName, err := db.schemaName.Get()
+	if err != nil {
+		return err
+	}
+	if schemaName == "" {
+		return nil
+	}
+	// execute possible migrations
+	return db.migrate(schemaName)
 }
 
 type migration struct {
@@ -66,7 +77,7 @@ var schemaMigrations = []migration{
 func (db *DB) migrate(schemaName string) error {
 	migrations, err := getMigrations(schemaName, dbSchemaCurrent, schemaMigrations)
 	if err != nil {
-		return fmt.Errorf("error getting migrations for current schema (%s): %v", schemaName, err)
+		return fmt.Errorf("get migrations for current schema %s: %w", schemaName, err)
 	}
 
 	// no migrations to run
@@ -210,8 +221,21 @@ func migrateSanctuary(db *DB) error {
 }
 
 func migrateDiwali(db *DB) error {
-	return NewBreakingMigrationError(
-		"Swarm chunk storage layer is changed.",
-		"Please do a manual export to preserve chunk data.",
-	)
+	return NewBreakingMigrationError(fmt.Sprintf(`
+Swarm chunk storage layer is changed.
+
+You can choose if you want to do a manual migration or to discard current data.
+
+Preserving data requires additional storage roughly the size of the data directory and may take longer time depending on storage performance.
+
+To continue by discarding data, just remove %[1]s directory and start the swarm binary again.
+
+To preserve data:
+  - export data
+    swarm db export %[1]s data.tar %[2]x
+  - remove data directory %[1]s
+  - import data
+    swarm db import %[1]s data.tar %[2]x
+  - start the swarm
+`, db.path, db.baseKey))
 }
