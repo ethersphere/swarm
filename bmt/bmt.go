@@ -20,6 +20,7 @@ package bmt
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 	"strings"
@@ -86,9 +87,9 @@ type BaseHasherFunc func() hash.Hash
 type Hasher struct {
 	pool    *TreePool // BMT resource pool
 	bmt     *tree     // prebuilt BMT resource for flowcontrol and proofs
-	size    uint64    // bytes written to Hasher since last Reset()
+	size    int       // bytes written to Hasher since last Reset()
 	jobSize int       // size of data written in current session
-	cursor  int64     // cursor to write to on next Write() call
+	cursor  int       // cursor to write to on next Write() call
 }
 
 // New creates a reusable BMT Hasher that
@@ -314,13 +315,22 @@ func (h *Hasher) Size() int {
 	return h.pool.SegmentSize
 }
 
-// TODO: Rework seek to work for AsyncHasher transparently
-// TODO: whence ignored
+// TODO: Rework seek to work for AsyncHasher transparently when asynchasher doesn't have "double" anymore
+// TODO: performant offset to cursor calculation - or consider sectionwise Seek
+// TODO: whence
 // Seek sets the section that will be written to on the next Write()
 // Implements io.Seeker in param.SectionWriter
 func (h *Hasher) Seek(offset int64, whence int) (int64, error) {
-	atomic.StoreInt64(&h.cursor, offset)
-	return offset, nil
+	if whence > 0 {
+		return 0, errors.New("whence is not currently implemented")
+	}
+	cursor := int(offset) / h.pool.SegmentSize
+	h.seek(cursor)
+	return int64(cursor), nil
+}
+
+func (h *Hasher) seek(cursor int) {
+	h.cursor = cursor
 }
 
 // BlockSize returns the block size
@@ -348,7 +358,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 	s = <-t.result
 	if t.span == nil {
 		t.span = make([]byte, 8)
-		binary.LittleEndian.PutUint64(t.span, h.size)
+		binary.LittleEndian.PutUint64(t.span, uint64(h.size))
 	}
 	span := t.span
 	// release the tree resource back to the pool
@@ -369,7 +379,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	if l == 0 || l > h.pool.Size {
 		return 0, nil
 	}
-	atomic.AddUint64(&h.size, uint64(len(b)))
+	h.size += len(b)
 	t := h.getTree()
 	secsize := 2 * h.pool.SegmentSize
 	// calculate length of missing bit to complete current open section
@@ -484,7 +494,7 @@ type AsyncHasher struct {
 	secsize  int        // size of base section (size of hash or double)
 	seccount int        // base section count
 	write    func(i int, section []byte, final bool)
-	all      bool // if all written in one go
+	all      bool // if all written in one go, temporary workaround
 }
 
 // Implements param.SectionWriter
@@ -521,15 +531,25 @@ func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
+// Seek is a temporary override for Hasher.Seek() to handle double sections from AsyncHasher
+// Implements io.Seeker in param.SectionWriter
+func (sw *AsyncHasher) Seek(offset int64, whence int) (int64, error) {
+	if whence > 0 {
+		return 0, errors.New("whence is not currently implemented")
+	}
+	cursor := int(offset) / sw.secsize
+	sw.Hasher.seek(cursor)
+	return int64(cursor), nil
+}
+
 // Write writes to the current position cursor of the Hasher
 // The cursor must be manually set with Seek().
 // The method will NOT advance the cursor.
 //
 // Implements hash.hash in param.SectionWriter
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
-	atomic.AddUint64(&sw.Hasher.size, uint64(len(section)))
-	cursor := atomic.LoadInt64(&sw.Hasher.cursor)
-	return sw.writeSection(int(cursor)/sw.secsize, section)
+	sw.Hasher.size += len(section)
+	return sw.writeSection(sw.Hasher.cursor, section)
 }
 
 // Write writes the i-th section of the BMT base

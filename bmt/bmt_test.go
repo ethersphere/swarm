@@ -611,6 +611,7 @@ func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs
 	return <-c
 }
 
+// TestHashSpanCases verifies that span and size is set automatically even if SetLength() is not explicitly called
 func TestHashSpanCases(t *testing.T) {
 	hasher := sha3.NewLegacyKeccak256
 	pool := NewTreePool(hasher, 128, PoolSize)
