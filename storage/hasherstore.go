@@ -18,6 +18,7 @@ package storage
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -184,8 +185,10 @@ func (h *hasherStore) startWait(ctx context.Context) {
 
 func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	hasher := h.hashFunc()
-	hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
-	hasher.Write(chunkData[8:])           // minus 8 []byte length
+	hasher.Reset()
+	lengthNumber := int(binary.LittleEndian.Uint64(chunkData[:8]))
+	hasher.SetLength(lengthNumber) // 8 bytes of length
+	hasher.Write(chunkData[8:])    // minus 8 []byte length
 	return hasher.Sum(nil)
 }
 

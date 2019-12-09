@@ -30,7 +30,7 @@ func newTreeParams(hashFunc param.SectionWriterFunc) *treeParams {
 		ChunkSize:   h.SectionSize() * h.Branches(),
 		hashFunc:    hashFunc,
 	}
-	h.Reset(context.Background())
+	h.Reset()
 	log.Trace("new tree params", "sectionsize", p.SectionSize, "branches", p.Branches, "chunksize", p.ChunkSize)
 	p.writerPool.New = func() interface{} {
 		hf := p.hashFunc(p.ctx)
@@ -50,7 +50,7 @@ func (p *treeParams) GetContext() context.Context {
 }
 
 func (p *treeParams) PutWriter(w param.SectionWriter) {
-	w.Reset(p.ctx)
+	w.Reset()
 	p.writerPool.Put(w)
 }
 

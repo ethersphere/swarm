@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
@@ -60,11 +59,11 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	}
 	go func(i int, jb *job) {
 		hasher := h.params.GetWriter()
-		hasher.Write(-1, b)
+		hasher.Seek(-1, 0)
+		hasher.Write(b)
 		l := len(b)
 		log.Trace("data write", "count", i, "size", l)
-		span := bmt.LengthToSpan(l)
-		jb.write(i%h.params.Branches, hasher.Sum(nil, l, span))
+		jb.write(i%h.params.Branches, hasher.Sum(nil))
 		h.params.PutWriter(hasher)
 	}(h.count, h.job)
 	h.size += len(b)
@@ -87,14 +86,25 @@ func (h *Hasher) Sum(b []byte) []byte {
 	return append(b, ref...)
 }
 
+func (h *Hasher) SetLength(length int) {
+	h.size = length
+}
+
 // Seek implements io.Seeker in param.SectionWriter
-func (h *Hasher) Seek(offset uint64, whence int) (int64, error) {
+func (h *Hasher) Seek(offset int64, whence int) (int64, error) {
 	return int64(h.size), errors.New("Hasher cannot seek")
 }
 
 // Reset implements param.SectionWriter
-func (h *Hasher) Reset(ctx context.Context) {
-	h.params.ctx = ctx
+func (h *Hasher) Reset() {
+	h.size = 0
+	h.count = 0
+	h.target = newTarget()
+	h.job = newJob(h.params, h.target, h.index, 1, 0)
+}
+
+func (h *Hasher) BlockSize() int {
+	return h.params.ChunkSize
 }
 
 // SectionSize implements param.SectionWriter
@@ -103,7 +113,7 @@ func (h *Hasher) SectionSize() int {
 }
 
 // DigestSize implements param.SectionWriter
-func (h *Hasher) DigestSize() int {
+func (h *Hasher) Size() int {
 	return h.params.SectionSize
 }
 

@@ -24,9 +24,10 @@ func TestHasherJobTopHash(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
-		h.Write(i, data[i:i+chunkSize])
+		h.Seek(int64(i*h.SectionSize()), 0)
+		h.Write(data[i : i+chunkSize])
 	}
-	h.Sum(nil, i, nil)
+	h.Sum(nil)
 	levelOneTopHash := hexutil.Encode(h.index.GetTopHash(1))
 	correctLevelOneTopHash := "0xc10090961e7682a10890c334d759a28426647141213abda93b096b892824d2ef"
 	if levelOneTopHash != correctLevelOneTopHash {
@@ -46,9 +47,10 @@ func TestHasherOneFullChunk(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
-		h.Write(i, data[i:i+chunkSize])
+		h.Seek(int64(i*h.SectionSize()), 0)
+		h.Write(data[i : i+chunkSize])
 	}
-	ref := h.Sum(nil, i, nil)
+	ref := h.Sum(nil)
 	correctRootHash := "0x3047d841077898c26bbe6be652a2ec590a5d9bd7cd45d290ea42511b48753c09"
 	rootHash := hexutil.Encode(ref)
 	if rootHash != correctRootHash {
@@ -67,7 +69,8 @@ func TestHasherJobChange(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	jobs := make(map[string]int)
 	for i := 0; i < chunkSize*branches*branches; i += chunkSize {
-		h.Write(i, data[i:i+chunkSize])
+		h.Seek(int64(i*h.SectionSize()), 0)
+		h.Write(data[i : i+chunkSize])
 		jobs[h.job.String()]++
 	}
 	i := 0
@@ -93,9 +96,10 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches*branches; i += chunkSize {
-		h.Write(i, data[i:i+chunkSize])
+		h.Seek(int64(i*h.SectionSize()), 0)
+		h.Write(data[i : i+chunkSize])
 	}
-	ref := h.Sum(nil, i, nil)
+	ref := h.Sum(nil)
 	correctRootHash := "0x522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b"
 	rootHash := hexutil.Encode(ref)
 	if rootHash != correctRootHash {
@@ -120,9 +124,10 @@ func TestHasherVector(t *testing.T) {
 			if dataLength-j < chunkSize {
 				size = dataLength - j
 			}
-			h.Write(j, data[j:j+size])
+			h.Seek(int64(j*h.SectionSize()), 0)
+			h.Write(data[j : j+size])
 		}
-		ref := h.Sum(nil, dataLength, nil)
+		ref := h.Sum(nil)
 		correctRefHex := "0x" + expected[i]
 		refHex := hexutil.Encode(ref)
 		if refHex != correctRefHex {
@@ -164,8 +169,9 @@ func benchmarkHasher(b *testing.B) {
 			if dataLength-i < chunkSize {
 				size = dataLength - i
 			}
-			h.Write(i, data[i:i+size])
+			h.Seek(int64(i*h.SectionSize()), 0)
+			h.Write(data[i : i+size])
 		}
-		h.Sum(nil, dataLength, nil)
+		h.Sum(nil)
 	}
 }

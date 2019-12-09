@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
@@ -166,7 +165,8 @@ OUTER:
 				idx := entry.index + i
 				data := entry.data[offset : offset+jb.writer.SectionSize()]
 				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", oldProcessCount+i, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
-				jb.writer.Write(idx, data)
+				jb.writer.Seek(int64(idx*jb.writer.SectionSize()), 0)
+				jb.writer.Write(data)
 				offset += jb.writer.SectionSize()
 			}
 
@@ -222,10 +222,11 @@ func (jb *job) sum() {
 
 	// get the size of the span and execute the hash digest of the content
 	size := jb.size()
-	span := bmt.LengthToSpan(size)
+	//span := bmt.LengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "span", span, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
-	ref := jb.writer.Sum(nil, refSize, span)
+	jb.writer.SetLength(size)
+	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
+	ref := jb.writer.Sum(nil)
 
 	// endCount > 0 means this is the last chunk on the level
 	// the hash from the level below the target level will be the result

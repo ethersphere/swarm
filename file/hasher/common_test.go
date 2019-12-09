@@ -71,6 +71,10 @@ var (
 	end   = len(dataLengths)
 )
 
+func init() {
+	testutil.Init()
+}
+
 var (
 	dummyHashFunc = func(_ context.Context) param.SectionWriter {
 		return newDummySectionWriter(chunkSize*branches, sectionSize, sectionSize, branches)
@@ -86,10 +90,6 @@ var (
 	}
 )
 
-func init() {
-	testutil.Init()
-}
-
 // simple param.SectionWriter hasher that keeps the data written to it
 // for later inspection
 // TODO: see if this can be replaced with the fake hasher from storage module
@@ -101,6 +101,7 @@ type dummySectionWriter struct {
 	digest      []byte
 	size        int
 	summed      bool
+	index       int
 	writer      hash.Hash
 	mu          sync.Mutex
 	wg          sync.WaitGroup
@@ -120,17 +121,28 @@ func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int
 func (d *dummySectionWriter) Init(_ context.Context, _ func(error)) {
 }
 
-func (d *dummySectionWriter) Connect(_ param.SectionWriterFunc) param.SectionWriter {
+func (d *dummySectionWriter) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
 	log.Error("dummySectionWriter does not support SectionWriter chaining")
 	return d
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) Write(index int, data []byte) {
+func (d *dummySectionWriter) Seek(offset int64, whence int) (int64, error) {
+	d.index = int(offset)
+	return offset, nil
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) SetLength(length int) {
+	d.size = length
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) Write(data []byte) (int, error) {
 	d.mu.Lock()
-	copy(d.data[index*d.sectionSize:], data)
+	copy(d.data[d.index:], data)
 	d.size += len(data)
-	log.Trace("dummywriter write", "index", index, "size", d.size, "threshold", d.sectionSize*d.branches)
+	log.Trace("dummywriter write", "index", d.index, "size", d.size, "threshold", d.sectionSize*d.branches)
 	if d.isFull() {
 		d.summed = true
 		d.mu.Unlock()
@@ -138,14 +150,14 @@ func (d *dummySectionWriter) Write(index int, data []byte) {
 	} else {
 		d.mu.Unlock()
 	}
+	return len(data), nil
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) Sum(_ []byte, size int, _ []byte) []byte {
-	log.Trace("dummy Sumcall", "size", size)
+func (d *dummySectionWriter) Sum(_ []byte) []byte {
+	log.Trace("dummy Sumcall", "size", d.size)
 	d.mu.Lock()
 	if !d.summed {
-		d.size = size
 		d.summed = true
 		d.mu.Unlock()
 		d.sum()
@@ -168,7 +180,7 @@ func (d *dummySectionWriter) sum() {
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) Reset(_ context.Context) {
+func (d *dummySectionWriter) Reset() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.data = make([]byte, len(d.data))
@@ -179,12 +191,17 @@ func (d *dummySectionWriter) Reset(_ context.Context) {
 }
 
 // implements param.SectionWriter
+func (d *dummySectionWriter) BlockSize() int {
+	return d.sectionSize
+}
+
+// implements param.SectionWriter
 func (d *dummySectionWriter) SectionSize() int {
 	return d.sectionSize
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) DigestSize() int {
+func (d *dummySectionWriter) Size() int {
 	return d.sectionSize
 }
 
@@ -201,32 +218,35 @@ func (d *dummySectionWriter) isFull() bool {
 func TestDummySectionWriter(t *testing.T) {
 
 	w := newDummySectionWriter(chunkSize*2, sectionSize, sectionSize, branches)
-	w.Reset(context.Background())
+	w.Reset()
 
 	_, data := testutil.SerialData(sectionSize*2, 255, 0)
 
-	w.Write(branches, data[:sectionSize])
-	w.Write(branches+1, data[sectionSize:])
+	w.Seek(int64(branches), 0)
+	w.Write(data[:sectionSize])
+	w.Seek(int64(branches+1), 0)
+	w.Write(data[sectionSize:])
 	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
 		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
 	}
 
 	correctDigestHex := "0xfbc16f6db3534b456cb257d00148127f69909000c89f8ce5bc6183493ef01da1"
-	digest := w.Sum(nil, chunkSize*2, nil)
+	digest := w.Sum(nil)
 	digestHex := hexutil.Encode(digest)
 	if digestHex != correctDigestHex {
 		t.Fatalf("Digest: 2xsectionSize*1; expected %s, got %s", correctDigestHex, digestHex)
 	}
 
 	w = newDummySectionWriter(chunkSize*2, sectionSize*2, sectionSize*2, branches/2)
-	w.Reset(context.Background())
-	w.Write(branches/2, data)
+	w.Reset()
+	w.Seek(int64(branches/2), 0)
+	w.Write(data)
 	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
 		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
 	}
 
 	correctDigestHex += zeroHex
-	digest = w.Sum(nil, chunkSize*2, nil)
+	digest = w.Sum(nil)
 	digestHex = hexutil.Encode(digest)
 	if digestHex != correctDigestHex {
 		t.Fatalf("Digest 1xsectionSize*2; expected %s, got %s", correctDigestHex, digestHex)

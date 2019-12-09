@@ -33,9 +33,9 @@ func TestManualDanglingChunk(t *testing.T) {
 
 	// hash the balanced tree portion of the data level and write to level 1
 	_, levels[0] = testutil.SerialData(chunkSize*branches+chunkSize, 255, 0)
-	span := bmt.LengthToSpan(chunkSize)
 	for i := 0; i < chunkSize*branches; i += chunkSize {
-		h.ResetWithLength(span)
+		h.Reset()
+		h.SetLength(chunkSize)
 		h.Write(levels[0][i : i+chunkSize])
 		copy(levels[1][i/branches:], h.Sum(nil))
 	}
@@ -47,8 +47,8 @@ func TestManualDanglingChunk(t *testing.T) {
 
 	// write the dangling chunk
 	// hash it and write the reference on the second section of level 2
-	span = bmt.LengthToSpan(chunkSize)
-	h.ResetWithLength(span)
+	h.Reset()
+	h.SetLength(chunkSize)
 	h.Write(levels[0][chunkSize*branches:])
 	copy(levels[2][sectionSize:], h.Sum(nil))
 	refHex = hexutil.Encode(levels[2][sectionSize:])
@@ -58,8 +58,8 @@ func TestManualDanglingChunk(t *testing.T) {
 	}
 
 	// hash the chunk on level 1 and write into the first section of level 2
-	span = bmt.LengthToSpan(chunkSize * branches)
-	h.ResetWithLength(span)
+	h.Reset()
+	h.SetLength(chunkSize * branches)
 	h.Write(levels[1])
 	copy(levels[2], h.Sum(nil))
 	refHex = hexutil.Encode(levels[2][:sectionSize])
@@ -69,8 +69,8 @@ func TestManualDanglingChunk(t *testing.T) {
 	}
 
 	// hash the two sections on level 2 to obtain the root hash
-	span = bmt.LengthToSpan(chunkSize*branches + chunkSize)
-	h.ResetWithLength(span)
+	h.Reset()
+	h.SetLength(chunkSize*branches + chunkSize)
 	h.Write(levels[2])
 	ref := h.Sum(nil)
 	refHex = hexutil.Encode(ref)
@@ -90,8 +90,7 @@ func TestReferenceHasherVector(t *testing.T) {
 
 	hashFunc := func(_ context.Context) param.SectionWriter {
 		pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-		h := bmt.New(pool)
-		return &BMTHasherSectionWriter{Hasher: h}
+		return bmt.New(pool)
 	}
 	params := newTreeParams(hashFunc)
 	var mismatch int
@@ -129,8 +128,7 @@ func benchmarkReferenceHasher(b *testing.B) {
 	}
 	hashFunc := func(_ context.Context) param.SectionWriter {
 		pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-		h := bmt.New(pool)
-		return &BMTHasherSectionWriter{Hasher: h}
+		return bmt.New(pool)
 	}
 	params := newTreeParams(hashFunc)
 	b.ResetTimer()

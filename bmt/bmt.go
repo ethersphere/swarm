@@ -290,6 +290,12 @@ func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
 }
 
 // Implements param.SectionWriter
+func (h *Hasher) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
+	log.Warn("Synchasher does not currently support SectionWriter chaining")
+	return h
+}
+
+// Implements param.SectionWriter
 func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize
 }
@@ -519,12 +525,6 @@ func (sw *AsyncHasher) SectionSize() int {
 	return sw.secsize
 }
 
-// DigestSize returns the size of the result
-// Implements param.SectionWriter
-func (sw *AsyncHasher) DigestSize() int {
-	return sw.secsize
-}
-
 // DigestSize returns the branching factor, which is equivalent to the size of the BMT input
 // Implements param.SectionWriter
 func (sw *AsyncHasher) Branches() int {
@@ -543,6 +543,7 @@ func (sw *AsyncHasher) Seek(offset int64, whence int) (int64, error) {
 	} else {
 		cursor = int(offset) / sw.secsize
 	}
+	log.Trace("async seek", "offset", offset, "cursor", cursor)
 	sw.Hasher.seek(cursor)
 	return int64(cursor), nil
 }

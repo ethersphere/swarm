@@ -1,47 +1,24 @@
 package hasher
 
 import (
-	"context"
-
-	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 )
 
-type BMTHasherSectionWriter struct {
-	*bmt.Hasher
-}
-
-func (b *BMTHasherSectionWriter) Write(_ int, data []byte) {
-	b.Hasher.Write(data)
-}
-
-func (b *BMTHasherSectionWriter) Sum(data []byte, _ int, _ []byte) []byte {
-	return b.Hasher.Sum(data)
-}
-
-func (b *BMTHasherSectionWriter) Connect(_ param.SectionWriterFunc) param.SectionWriter {
-	return b
-}
-
-func (b *BMTHasherSectionWriter) Reset(_ context.Context) {
-	b.Hasher.Reset()
-}
-
 // ReferenceHasher is the source-of-truth implementation of the swarm file hashing algorithm
 type ReferenceHasher struct {
 	params  *treeParams
-	cursors []int       // section write position, indexed per level
-	length  int         // number of bytes written to the data level of the hasher
-	buffer  []byte      // keeps data and hashes, indexed by cursors
-	counts  []int       // number of sums performed, indexed per level
-	hasher  *bmt.Hasher // underlying hasher
+	cursors []int               // section write position, indexed per level
+	length  int                 // number of bytes written to the data level of the hasher
+	buffer  []byte              // keeps data and hashes, indexed by cursors
+	counts  []int               // number of sums performed, indexed per level
+	hasher  param.SectionWriter // underlying hasher
 }
 
 // NewReferenceHasher constructs and returns a new ReferenceHasher
 func NewReferenceHasher(params *treeParams) *ReferenceHasher {
 	// TODO: remove when bmt interface is amended
-	h := params.GetWriter().(*BMTHasherSectionWriter).Hasher
+	h := params.GetWriter()
 	return &ReferenceHasher{
 		params:  params,
 		cursors: make([]int, 9),
@@ -87,11 +64,11 @@ func (r *ReferenceHasher) sum(lvl int) []byte {
 	r.counts[lvl]++
 	spanSize := r.params.Spans[lvl] * r.params.ChunkSize
 	span := (r.length-1)%spanSize + 1
-	spanBytes := bmt.LengthToSpan(span)
 
 	toSumSize := r.cursors[lvl] - r.cursors[lvl+1]
 
-	r.hasher.ResetWithLength(spanBytes)
+	r.hasher.Reset()
+	r.hasher.SetLength(span)
 	r.hasher.Write(r.buffer[r.cursors[lvl+1] : r.cursors[lvl+1]+toSumSize])
 	ref := r.hasher.Sum(nil)
 	return ref
