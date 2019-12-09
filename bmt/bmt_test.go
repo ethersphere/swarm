@@ -143,7 +143,7 @@ func TestHasherEmptyData(t *testing.T) {
 			bmt := New(pool)
 			rbmt := NewRefHasher(hasher, count)
 			refHash := rbmt.Hash(data)
-			expHash := syncHash(bmt, nil, data)
+			expHash := syncHash(bmt, 0, data)
 			if !bytes.Equal(expHash, refHash) {
 				t.Fatalf("hash mismatch with reference. expected %x, got %x", refHash, expHash)
 			}
@@ -199,12 +199,12 @@ func TestAsyncCorrectness(t *testing.T) {
 						d := data[:n]
 						rbmt := NewRefHasher(hasher, count)
 						exp := rbmt.Hash(d)
-						got := syncHash(bmt, nil, d)
+						got := syncHash(bmt, 0, d)
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong sync hash for datalength %v: expected %x (ref), got %x", n, exp, got)
 						}
 						sw := bmt.NewAsyncWriter(double)
-						got = asyncHashRandom(sw, nil, d, wh)
+						got = asyncHashRandom(sw, 0, d, wh)
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong async hash for datalength %v: expected %x, got %x", n, exp, got)
 						}
@@ -290,7 +290,7 @@ func TestBMTWriterBuffers(t *testing.T) {
 			data := testutil.RandomBytes(1, n)
 			rbmt := NewRefHasher(hasher, count)
 			refHash := rbmt.Hash(data)
-			expHash := syncHash(bmt, nil, data)
+			expHash := syncHash(bmt, 0, data)
 			if !bytes.Equal(expHash, refHash) {
 				t.Fatalf("hash mismatch with reference. expected %x, got %x", refHash, expHash)
 			}
@@ -351,7 +351,7 @@ func testHasherCorrectness(bmt *Hasher, hasher BaseHasherFunc, d []byte, n, coun
 	data := d[:n]
 	rbmt := NewRefHasher(hasher, count)
 	exp := sha3hash(span, rbmt.Hash(data))
-	got := syncHash(bmt, span, data)
+	got := syncHash(bmt, n, data)
 	if !bytes.Equal(got, exp) {
 		return fmt.Errorf("wrong hash: expected %x, got %x", exp, got)
 	}
@@ -461,7 +461,7 @@ func benchmarkBMT(t *testing.B, n int) {
 	t.ReportAllocs()
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		syncHash(bmt, nil, data)
+		syncHash(bmt, 0, data)
 	}
 }
 
@@ -479,7 +479,7 @@ func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 	t.ReportAllocs()
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		asyncHash(bmt, nil, n, wh, idxs, segments)
+		asyncHash(bmt, 0, n, wh, idxs, segments)
 	}
 }
 
@@ -499,7 +499,7 @@ func benchmarkPool(t *testing.B, poolsize, n int) {
 			go func() {
 				defer wg.Done()
 				bmt := New(pool)
-				syncHash(bmt, nil, data)
+				syncHash(bmt, 0, data)
 			}()
 		}
 		wg.Wait()
@@ -520,8 +520,9 @@ func benchmarkRefHasher(t *testing.B, n int) {
 }
 
 // Hash hashes the data and the span using the bmt hasher
-func syncHash(h *Hasher, span, data []byte) []byte {
-	h.ResetWithLength(span)
+func syncHash(h *Hasher, spanLength int, data []byte) []byte {
+	h.Reset()
+	h.SetLength(spanLength)
 	h.Write(data)
 	return h.Sum(nil)
 }
@@ -548,23 +549,25 @@ func splitAndShuffle(secsize int, data []byte) (idxs []int, segments [][]byte) {
 }
 
 // splits the input data performs a random shuffle to mock async section writes
-func asyncHashRandom(bmt param.SectionWriter, span []byte, data []byte, wh whenHash) (s []byte) {
+func asyncHashRandom(bmt param.SectionWriter, spanLength int, data []byte, wh whenHash) (s []byte) {
 	idxs, segments := splitAndShuffle(bmt.SectionSize(), data)
-	return asyncHash(bmt, span, len(data), wh, idxs, segments)
+	return asyncHash(bmt, spanLength, len(data), wh, idxs, segments)
 }
 
 // mock for async section writes for param.SectionWriter
 // requires a permutation (a random shuffle) of list of all indexes of segments
 // and writes them in order to the appropriate section
 // the Sum function is called according to the wh parameter (first, last, random [relative to segment writes])
-func asyncHash(bmt param.SectionWriter, span []byte, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
+func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
 	bmt.Reset()
 	if l == 0 {
-		return bmt.Sum(nil, l, span)
+		bmt.SetLength(spanLength)
+		return bmt.Sum(nil)
 	}
 	c := make(chan []byte, 1)
 	hashf := func() {
-		c <- bmt.Sum(nil, l, span)
+		bmt.SetLength(spanLength)
+		c <- bmt.Sum(nil)
 	}
 	maxsize := len(idxs)
 	var r int
@@ -572,13 +575,15 @@ func asyncHash(bmt param.SectionWriter, span []byte, l int, wh whenHash, idxs []
 		r = rand.Intn(maxsize)
 	}
 	for i, idx := range idxs {
-		bmt.Write(idx, segments[idx])
+		bmt.Seek(int64(idx*bmt.SectionSize()), 0)
+		bmt.Write(segments[idx])
 		if (wh == first || wh == random) && i == r {
 			go hashf()
 		}
 	}
 	if wh == last {
-		return bmt.Sum(nil, l, span)
+		bmt.SetLength(spanLength)
+		return bmt.Sum(nil)
 	}
 	return <-c
 }
