@@ -28,7 +28,12 @@ import (
 
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
+	"github.com/ethersphere/swarm/testutil"
 )
+
+func init() {
+	testutil.Init()
+}
 
 /*
 Binary Merkle Tree Hash is a hash function over arbitrary datachunks of limited size.
@@ -65,6 +70,10 @@ const (
 	PoolSize = 8
 )
 
+var (
+	zeroSpan = make([]byte, 8)
+)
+
 // BaseHasherFunc is a hash.Hash constructor function used for the base hash of the BMT.
 // implemented by Keccak256 SHA3 sha3.NewLegacyKeccak256
 type BaseHasherFunc func() hash.Hash
@@ -80,9 +89,11 @@ type BaseHasherFunc func() hash.Hash
 //   the tree and itself in a state reusable for hashing a new chunk
 // - generates and verifies segment inclusion proofs (TODO:)
 type Hasher struct {
-	pool *TreePool // BMT resource pool
-	bmt  *tree     // prebuilt BMT resource for flowcontrol and proofs
-	size int       // bytes written to Hasher since last Reset()
+	pool    *TreePool // BMT resource pool
+	bmt     *tree     // prebuilt BMT resource for flowcontrol and proofs
+	size    int32     // bytes written to Hasher since last Reset()
+	jobSize int       // size of data written in current session
+	cursor  int64     // cursor to write to on next Write() call
 }
 
 // New creates a reusable BMT Hasher that
@@ -288,6 +299,7 @@ func (h *Hasher) SectionSize() int {
 }
 
 func (h *Hasher) SetLength(length int) {
+	h.jobSize = (length-1)%h.pool.Size + 1
 	span := LengthToSpan(length)
 	h.getTree().span = span
 }
@@ -317,7 +329,7 @@ func (h *Hasher) Size() int {
 // Implements io.Seeker in param.SectionWriter
 func (h *Hasher) Seek(offset int64, whence int) (int64, error) {
 	//return 0, errors.New("Seek not supported currently, use AsyncHasher for Seek")
-	h.getTree().cursor = int(offset)
+	atomic.StoreInt64(&h.cursor, offset)
 	return offset, nil
 }
 
@@ -402,6 +414,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 // Reset needs to be called before writing to the hasher
 // Implements hash.Hash in param.SectionWriter
 func (h *Hasher) Reset() {
+	h.cursor = 0
 	h.size = 0
 	h.releaseTree()
 }
@@ -482,7 +495,6 @@ type AsyncHasher struct {
 	seccount int        // base section count
 	write    func(i int, section []byte, final bool)
 	all      bool // if all written in one go
-	index    int  // index to write to on next Write() call
 }
 
 // Implements param.SectionWriter
@@ -523,12 +535,13 @@ func (sw *AsyncHasher) Branches() int {
 // this function can and is meant to be called concurrently
 // it sets max segment threadsafely
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
-	return sw.writeSection(sw.getTree().cursor, section)
+	c := atomic.LoadInt64(&sw.Hasher.cursor)
+	return sw.writeSection(int(c)/sw.secsize, section)
 }
 
 func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 	// TODO: Temporary workaround for chunkwise write
-	if sw.index < 0 {
+	if i < 0 {
 		sw.Hasher.Reset()
 		sw.Hasher.SetLength(len(section))
 		sw.Hasher.Write(section)
@@ -540,19 +553,19 @@ func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 	t := sw.getTree()
 	// cursor keeps track of the rightmost section written so far
 	// if index is lower than cursor then just write non-final section as is
-	if sw.index < t.cursor {
+	if i < t.cursor {
 		// if index is not the rightmost, safe to write section
-		go sw.write(sw.index, section, false)
+		go sw.write(i, section, false)
 		return len(section), nil
 	}
 	// if there is a previous rightmost section safe to write section
 	if t.offset > 0 {
-		if sw.index == t.cursor {
+		if i == t.cursor {
 			// i==cursor implies cursor was set by Hash call so we can write section as final one
 			// since it can be shorter, first we copy it to the padded buffer
 			t.section = make([]byte, sw.secsize)
 			copy(t.section, section)
-			go sw.write(sw.index, t.section, true)
+			go sw.write(i, t.section, true)
 			return len(section), nil
 		}
 		// the rightmost section just changed, so we write the previous one as non-final
@@ -560,7 +573,7 @@ func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 	}
 	// set i as the index of the righmost section written so far
 	// set t.offset to cursor*secsize+1
-	t.cursor = sw.index
+	t.cursor = i
 	t.offset = i*sw.secsize + 1
 	t.section = make([]byte, sw.secsize)
 	copy(t.section, section)
@@ -584,7 +597,8 @@ func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	}
 	sw.mtx.Lock()
 	t := sw.getTree()
-	length := sw.Hasher.size
+	length := int(sw.Hasher.jobSize)
+	log.Trace("async sum", "l", length)
 	if length == 0 {
 		sw.mtx.Unlock()
 		s = sw.pool.zerohashes[sw.pool.Depth]
@@ -623,7 +637,8 @@ func (h *Hasher) writeSection(i int, section []byte, double bool, final bool) {
 	var hasher hash.Hash
 	var level int
 	t := h.getTree()
-	h.size += len(section)
+	log.Trace("hasher writesection adding", "len", len(section))
+	atomic.AddInt32(&h.size, int32(len(section)))
 	if double {
 		level++
 		n = t.leaves[i]

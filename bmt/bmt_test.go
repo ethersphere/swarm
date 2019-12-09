@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
@@ -142,7 +143,11 @@ func TestHasherEmptyData(t *testing.T) {
 			defer pool.Drain(0)
 			bmt := New(pool)
 			rbmt := NewRefHasher(hasher, count)
-			refHash := rbmt.Hash(data)
+			refNoMetaHash := rbmt.Hash(data)
+			h := hasher()
+			h.Write(zeroSpan)
+			h.Write(refNoMetaHash)
+			refHash := h.Sum(nil)
 			expHash := syncHash(bmt, 0, data)
 			if !bytes.Equal(expHash, refHash) {
 				t.Fatalf("hash mismatch with reference. expected %x, got %x", refHash, expHash)
@@ -198,15 +203,19 @@ func TestAsyncCorrectness(t *testing.T) {
 						bmt := New(pool)
 						d := data[:n]
 						rbmt := NewRefHasher(hasher, count)
-						exp := rbmt.Hash(d)
+						expNoMeta := rbmt.Hash(d)
+						h := hasher()
+						h.Write(zeroSpan)
+						h.Write(expNoMeta)
+						exp := h.Sum(nil)
 						got := syncHash(bmt, 0, d)
 						if !bytes.Equal(got, exp) {
-							t.Fatalf("wrong sync hash for datalength %v: expected %x (ref), got %x", n, exp, got)
+							t.Fatalf("wrong sync hash (syncpart) for datalength %v: expected %x (ref), got %x", n, exp, got)
 						}
 						sw := bmt.NewAsyncWriter(double)
 						got = asyncHashRandom(sw, 0, d, wh)
 						if !bytes.Equal(got, exp) {
-							t.Fatalf("wrong async hash for datalength %v: expected %x, got %x", n, exp, got)
+							t.Fatalf("wrong async hash (asyncpart) for datalength %v: expected %x, got %x", n, exp, got)
 						}
 					}
 				})
@@ -289,7 +298,11 @@ func TestBMTWriterBuffers(t *testing.T) {
 			bmt := New(pool)
 			data := testutil.RandomBytes(1, n)
 			rbmt := NewRefHasher(hasher, count)
-			refHash := rbmt.Hash(data)
+			refNoMetaHash := rbmt.Hash(data)
+			h := hasher()
+			h.Write(zeroSpan)
+			h.Write(refNoMetaHash)
+			refHash := h.Sum(nil)
 			expHash := syncHash(bmt, 0, data)
 			if !bytes.Equal(expHash, refHash) {
 				t.Fatalf("hash mismatch with reference. expected %x, got %x", refHash, expHash)
@@ -309,6 +322,7 @@ func TestBMTWriterBuffers(t *testing.T) {
 						return fmt.Errorf("incorrect read. expected %v bytes, got %v", buflen, read)
 					}
 				}
+				bmt.SetLength(0)
 				hash := bmt.Sum(nil)
 				if !bytes.Equal(hash, expHash) {
 					return fmt.Errorf("hash mismatch. expected %x, got %x", hash, expHash)
@@ -347,7 +361,7 @@ func testHasherCorrectness(bmt *Hasher, hasher BaseHasherFunc, d []byte, n, coun
 	if len(d) < n {
 		n = len(d)
 	}
-	binary.BigEndian.PutUint64(span, uint64(n))
+	binary.LittleEndian.PutUint64(span, uint64(n))
 	data := d[:n]
 	rbmt := NewRefHasher(hasher, count)
 	exp := sha3hash(span, rbmt.Hash(data))
@@ -522,7 +536,9 @@ func benchmarkRefHasher(t *testing.B, n int) {
 // Hash hashes the data and the span using the bmt hasher
 func syncHash(h *Hasher, spanLength int, data []byte) []byte {
 	h.Reset()
+	//if spanLength > 0 {
 	h.SetLength(spanLength)
+	//}
 	h.Write(data)
 	return h.Sum(nil)
 }
@@ -562,11 +578,13 @@ func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs
 	bmt.Reset()
 	if l == 0 {
 		bmt.SetLength(spanLength)
+		bmt.(*AsyncHasher).Hasher.jobSize = l
 		return bmt.Sum(nil)
 	}
 	c := make(chan []byte, 1)
 	hashf := func() {
 		bmt.SetLength(spanLength)
+		bmt.(*AsyncHasher).Hasher.jobSize = l
 		c <- bmt.Sum(nil)
 	}
 	maxsize := len(idxs)
@@ -582,7 +600,9 @@ func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs
 		}
 	}
 	if wh == last {
+		log.Trace("asyncHash", "length", l)
 		bmt.SetLength(spanLength)
+		bmt.(*AsyncHasher).Hasher.jobSize = l
 		return bmt.Sum(nil)
 	}
 	return <-c
