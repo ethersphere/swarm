@@ -117,7 +117,7 @@ func TestReferenceHasherVector(t *testing.T) {
 // it will be vastly inefficient
 func BenchmarkReferenceHasher(b *testing.B) {
 	for i := start; i < end; i++ {
-		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkReferenceFileHasher)
+		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkReferenceHasher)
 	}
 }
 
@@ -135,8 +135,8 @@ func benchmarkReferenceHasher(b *testing.B) {
 	params := newTreeParams(hashFunc)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r, data := testutil.SerialData(int(dataLength), 255, 0)
-		fh := NewReferenceFileHasher(params)
-		fh.Hash(r, len(data))
+		_, data := testutil.SerialData(int(dataLength), 255, 0)
+		fh := NewReferenceHasher(params)
+		fh.Hash(data)
 	}
 }
