@@ -284,7 +284,12 @@ func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
 // methods needed to implement hash.Hash
 
 // Size returns the size
+// TODO: Remove
 func (h *Hasher) Size() int {
+	return h.pool.SegmentSize
+}
+
+func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize
 }
 
@@ -297,8 +302,20 @@ func (h *Hasher) ChunkSize() int {
 	return h.pool.Size
 }
 
+// TODO: remove
 func (h *Hasher) Count() int {
 	return h.pool.SegmentCount
+}
+
+func (h *Hasher) Branches() int {
+	return h.pool.SegmentCount
+}
+
+func (h *Hasher) DigestSize() int {
+	return h.pool.SegmentSize
+}
+
+func (h *Hasher) Init(_ context.Context, _ func(error)) {
 }
 
 // Sum returns the BMT root hash of the buffer

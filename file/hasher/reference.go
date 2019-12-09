@@ -1,167 +1,140 @@
 package hasher
 
 import (
-	"io"
+	"context"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethersphere/swarm/bmt"
-	"github.com/ethersphere/swarm/file/testutillocal"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/param"
 )
 
-// ReferenceFileHasher is a non-performant source of truth implementation for the file hashing algorithm used in Swarm
-// the aim of its design is that is should be easy to understand
-// TODO: bmt.Hasher should instead be passed as hash.Hash and ResetWithLength() should be abolished
-type ReferenceFileHasher struct {
-	params         *treeParams
-	hasher         *bmt.Hasher // synchronous hasher
-	chunkSize      int         // cached chunk size, equals branches * sectionSize
-	buffer         []byte      // keeps intermediate chunks during hashing
-	cursors        []int       // write cursors in sectionSize units for each tree level
-	totalBytes     int         // total data bytes to be written
-	totalLevel     int         // total number of levels in tree. (level 0 is the data level)
-	writeByteCount int         // amount of bytes currently written
-	writeCount     int         // amount of sections currently written
+type BMTHasherSectionWriter struct {
+	*bmt.Hasher
 }
 
-// NewReferenceFileHasher creates a new file hasher with the supplied branch factor
-// the section count will be the Size() of the hasher
-func NewReferenceFileHasher(hasher *bmt.Hasher, branches int) *ReferenceFileHasher {
-	hashFunc := testutillocal.NewBMTHasherFunc(128)
-	f := &ReferenceFileHasher{
-		params:    newTreeParams(hashFunc),
-		hasher:    hasher,
-		chunkSize: branches * hasher.Size(),
-	}
-	return f
+func (b *BMTHasherSectionWriter) Write(_ int, data []byte) {
+	b.Hasher.Write(data)
 }
 
-// Hash executes l reads of up to sectionSize bytes from r
-// and performs the filehashing algorithm on the data
-// it returns the root hash
-func (f *ReferenceFileHasher) Hash(r io.Reader, l int) []byte {
+func (b *BMTHasherSectionWriter) Sum(data []byte, _ int, _ []byte) []byte {
+	return b.Hasher.Sum(data)
+}
 
-	f.totalBytes = l
-	f.totalLevel = getLevelsFromLength(l, f.params.SectionSize, f.params.Branches) + 1
-	log.Trace("Starting reference file hasher", "levels", f.totalLevel, "length", f.totalBytes, "b", f.params.Branches, "s", f.params.SectionSize)
+func (b *BMTHasherSectionWriter) Connect(_ param.SectionWriterFunc) param.SectionWriter {
+	return b
+}
 
-	// prepare a buffer for intermediate the chunks
-	bufLen := f.params.SectionSize
-	for i := 1; i < f.totalLevel; i++ {
-		bufLen *= f.params.Branches
+func (b *BMTHasherSectionWriter) Reset(_ context.Context) {
+	b.Hasher.Reset()
+}
+
+// ReferenceHasher is the source-of-truth implementation of the swarm file hashing algorithm
+type ReferenceHasher struct {
+	params  *treeParams
+	cursors []int       // section write position, indexed per level
+	length  int         // number of bytes written to the data level of the hasher
+	buffer  []byte      // keeps data and hashes, indexed by cursors
+	counts  []int       // number of sums performed, indexed per level
+	hasher  *bmt.Hasher // underlying hasher
+}
+
+// NewReferenceHasher constructs and returns a new ReferenceHasher
+func NewReferenceHasher(params *treeParams) *ReferenceHasher {
+	// TODO: remove when bmt interface is amended
+	h := params.GetWriter().(*BMTHasherSectionWriter).Hasher
+	return &ReferenceHasher{
+		params:  params,
+		cursors: make([]int, 9),
+		counts:  make([]int, 9),
+		buffer:  make([]byte, params.ChunkSize*9),
+		hasher:  h,
 	}
-	f.buffer = make([]byte, bufLen)
-	f.cursors = make([]int, f.totalLevel)
+}
 
-	var res bool
-	for !res {
+// Hash computes and returns the root hash of arbitrary data
+func (r *ReferenceHasher) Hash(data []byte) []byte {
+	l := r.params.ChunkSize
+	for i := 0; i < len(data); i += r.params.ChunkSize {
+		if len(data)-i < r.params.ChunkSize {
+			l = len(data) - i
+		}
+		r.update(0, data[i:i+l])
+	}
+	for i := 0; i < 9; i++ {
+		log.Trace("cursor", "lvl", i, "pos", r.cursors[i])
+	}
+	return r.digest()
+}
 
-		// read a data section into input copy buffer
-		input := make([]byte, f.params.SectionSize)
-		c, err := r.Read(input)
-		log.Trace("read", "bytes", c, "total read", f.writeByteCount)
-		if err != nil {
-			if err == io.EOF {
-				panic("EOF")
-			} else {
-				panic(err)
+// write to the data buffer on the specified level
+// calls sum if chunk boundary is reached and recursively calls this function for the next level with the acquired bmt hash
+// adjusts cursors accordingly
+func (r *ReferenceHasher) update(lvl int, data []byte) {
+	if lvl == 0 {
+		r.length += len(data)
+	}
+	copy(r.buffer[r.cursors[lvl]:r.cursors[lvl]+len(data)], data)
+	r.cursors[lvl] += len(data)
+	if r.cursors[lvl]-r.cursors[lvl+1] == r.params.ChunkSize {
+		ref := r.sum(lvl)
+		r.update(lvl+1, ref)
+		r.cursors[lvl] = r.cursors[lvl+1]
+	}
+}
+
+// calculates and returns the bmt sum of the last written data on the level
+func (r *ReferenceHasher) sum(lvl int) []byte {
+	r.counts[lvl]++
+	spanSize := r.params.Spans[lvl] * r.params.ChunkSize
+	span := (r.length-1)%spanSize + 1
+	spanBytes := bmt.LengthToSpan(span)
+
+	toSumSize := r.cursors[lvl] - r.cursors[lvl+1]
+
+	r.hasher.ResetWithLength(spanBytes)
+	r.hasher.Write(r.buffer[r.cursors[lvl+1] : r.cursors[lvl+1]+toSumSize])
+	ref := r.hasher.Sum(nil)
+	return ref
+}
+
+// called after all data has been written
+// sums the final chunks of each level
+// skips intermediate levels that end on span boundary
+func (r *ReferenceHasher) digest() []byte {
+
+	// if we did not end on a chunk boundary, the last chunk hasn't been hashed
+	// we need to do this first
+	if r.length%r.params.ChunkSize != 0 {
+		ref := r.sum(0)
+		copy(r.buffer[r.cursors[1]:], ref)
+		r.cursors[1] += len(ref)
+		r.cursors[0] = r.cursors[1]
+	}
+
+	// calculate the total number of levels needed to represent the data (including the data level)
+	targetLevel := getLevelsFromLength(r.length, r.params.SectionSize, r.params.Branches)
+
+	// sum every intermediate level and write to the level above it
+	for i := 1; i < targetLevel; i++ {
+
+		// if the tree is balanced or if there is a single reference outside a balanced tree on this level
+		// don't hash it again but pass it on to the next level
+		if r.counts[i] > 0 {
+			// TODO: simplify if possible
+			if r.counts[i-1]-r.params.Spans[targetLevel-1-i] <= 1 {
+				log.Trace("skip")
+				r.cursors[i+1] = r.cursors[i]
+				r.cursors[i] = r.cursors[i-1]
+				continue
 			}
 		}
 
-		// read only up to the announced length, since we dimensioned buffer and level count accordingly
-		readSize := f.params.SectionSize
-		remainingBytes := f.totalBytes - f.writeByteCount
-		if remainingBytes <= f.params.SectionSize {
-			readSize = remainingBytes
-			input = input[:remainingBytes]
-			res = true
-		}
-		f.writeByteCount += readSize
-		f.write(input, 0, res)
-	}
-	if f.cursors[f.totalLevel-1] != 0 {
-		panic("totallevel cursor misaligned")
-	}
-	return f.buffer[0:f.params.SectionSize]
-}
-
-// performs recursive hashing on complete batches or data end
-func (f *ReferenceFileHasher) write(b []byte, level int, end bool) bool {
-
-	log.Trace("write", "level", level, "bytes", len(b), "total written", f.writeByteCount, "end", end, "data", hexutil.Encode(b))
-
-	// copy data from input copy buffer to current position of corresponding level in intermediate chunk buffer
-	copy(f.buffer[f.cursors[level]*f.params.SectionSize:], b)
-	for i, l := range f.cursors {
-		log.Trace("cursor", "level", i, "position", l)
+		ref := r.sum(i)
+		copy(r.buffer[r.cursors[i+1]:], ref)
+		r.cursors[i+1] += len(ref)
+		r.cursors[i] = r.cursors[i+1]
 	}
 
-	// if we are at the tree root the result will be in the first sectionSize bytes of the buffer.
-	// the true bool return will bubble up to the data write frame in the call stack and terminate the loop
-	//if level == len(f.cursors)-1 {
-	if level == f.totalLevel-1 {
-		return true
-	}
-
-	// if we are at the end of the write, AND
-	// if the offset of a chunk reference is the same one level up, THEN
-	// we have a "dangling chunk" and we merely pass it to the next level
-	if end && level > 0 && f.cursors[level] == f.cursors[level+1] {
-		res := f.write(b, level+1, end)
-		return res
-	}
-
-	// we've written to the buffer a particular level
-	// so we increment the cursor of that level
-	f.cursors[level]++
-
-	// hash the intermediate chunk buffer data for this level if:
-	// - the difference of cursors between this level and the one above equals the branch factor (equals one full chunk of data)
-	// - end is set
-	// the resulting digest will be written to the corresponding section of the level above
-	var res bool
-	if f.cursors[level]-f.cursors[level+1] == f.params.Branches || end {
-
-		// calculate the actual data under this span
-		// if we're at end, the span is given by the period of the potential span
-		// if not, it will be the full span (since we then must have full chunk writes in the levels below)
-		var dataUnderSpan int
-		span := f.params.Spans[level] * f.params.ChunkSize
-		if end {
-			dataUnderSpan = (f.totalBytes-1)%span + 1
-		} else {
-			dataUnderSpan = span
-		}
-
-		// calculate the data in this chunk (the data to be hashed)
-		// on level 0 it is merely the actual spanned data
-		// on levels above data level, we get number of sections the data equals, and divide by the level span
-		var hashDataSize int
-		if level == 0 {
-			hashDataSize = dataUnderSpan
-		} else {
-			dataSectionCount := dataSizeToSectionCount(dataUnderSpan, f.params.SectionSize)
-			// TODO: this is the same as dataSectionToLevelSection, but without wrap to 0 on end boundary. Inspect whether the function should be amended, and necessary changes made to Hasher
-			levelSectionCount := (dataSectionCount-1)/f.params.Spans[level] + 1
-			hashDataSize = levelSectionCount * f.params.SectionSize
-		}
-
-		// prepare the hasher,
-		// write data since previous hash operation from the current level cursor position
-		// and sum
-		spanBytes := bmt.LengthToSpan(dataUnderSpan)
-		f.hasher.ResetWithLength(spanBytes)
-		hasherWriteOffset := f.cursors[level+1] * f.params.SectionSize
-		f.hasher.Write(f.buffer[hasherWriteOffset : hasherWriteOffset+hashDataSize])
-		hashResult := f.hasher.Sum(nil)
-		log.Debug("summed", "level", level, "cursor", f.cursors[level], "parent cursor", f.cursors[level+1], "span", spanBytes, "digest", hexutil.Encode(hashResult))
-
-		// write the digest to the current cursor position of the next level
-		// note the f.write() call will move the next level's cursor according to the write and possible hash operation
-		res = f.write(hashResult, level+1, end)
-
-		// recycle buffer space from the threshold of just written hash
-		f.cursors[level] = f.cursors[level+1]
-	}
-	return res
+	// the first section of the buffer will hold the root hash
+	return r.buffer[:r.params.SectionSize]
 }

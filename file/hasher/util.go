@@ -6,12 +6,12 @@ import (
 
 // TODO: level 0 should be SectionSize() not Branches()
 // generates a dictionary of maximum span lengths per level represented by one SectionSize() of data
-func generateSpanSizes(branches int, levels int) int {
+func generateSpanSizes(branches int, levels int) []int {
 	spans := make([]int, levels)
 	span := 1
 	for i := 0; i < 9; i++ {
-		spans = append(spans, span)
-		span *= p.Branches
+		spans[i] = span
+		span *= branches
 	}
 	return spans
 }
