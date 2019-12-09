@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
@@ -30,22 +31,40 @@ import (
 var errMissingCurrentSchema = errors.New("could not find current db schema")
 var errMissingTargetSchema = errors.New("could not find target db schema")
 
+// BreakingMigrationError is returned from migration functions that require
+// manual migration steps.
+type BreakingMigrationError struct {
+	Manual string
+}
+
+// NewBreakingMigrationError returns a new BreakingMigrationError
+// with instructions for manual operations.
+func NewBreakingMigrationError(manual ...string) *BreakingMigrationError {
+	return &BreakingMigrationError{
+		Manual: strings.Join(manual, "\n"),
+	}
+}
+
+func (e *BreakingMigrationError) Error() string {
+	return "breaking migration"
+}
+
 type migration struct {
-	name string             // name of the schema
-	fn   func(db *DB) error // the migration function that needs to be performed in order to get to the current schema name
+	name     string             // name of the schema
+	fn       func(db *DB) error // the migration function that needs to be performed in order to get to the current schema name
+	breaking bool
 }
 
 // schemaMigrations contains an ordered list of the database schemes, that is
 // in order to run data migrations in the correct sequence
 var schemaMigrations = []migration{
-	{name: DbSchemaPurity, fn: func(db *DB) error { return nil }},
-	{name: DbSchemaHalloween, fn: func(db *DB) error { return nil }},
-	{name: DbSchemaSanctuary, fn: func(db *DB) error { return nil }},
-	{name: DbSchemaDiwali, fn: migrateSanctuary},
+	{name: dbSchemaSanctuary, fn: func(db *DB) error { return nil }},
+	{name: dbSchemaDiwali, fn: migrateSanctuary},
+	{name: dbSchemaForky, fn: migrateDiwali, breaking: true},
 }
 
 func (db *DB) migrate(schemaName string) error {
-	migrations, err := getMigrations(schemaName, DbSchemaCurrent, schemaMigrations)
+	migrations, err := getMigrations(schemaName, dbSchemaCurrent, schemaMigrations)
 	if err != nil {
 		return fmt.Errorf("error getting migrations for current schema (%s): %v", schemaName, err)
 	}
@@ -84,23 +103,31 @@ type migrationFn func(db *DB) error
 func getMigrations(currentSchema, targetSchema string, allSchemeMigrations []migration) (migrations []migration, err error) {
 	foundCurrent := false
 	foundTarget := false
-	if currentSchema == DbSchemaCurrent {
+	if currentSchema == dbSchemaCurrent {
 		return nil, nil
 	}
 	for i, v := range allSchemeMigrations {
-		switch v.name {
-		case currentSchema:
+		if v.name == targetSchema {
+			foundTarget = true
+		}
+		if v.name == currentSchema {
 			if foundCurrent {
 				return nil, errors.New("found schema name for the second time when looking for migrations")
 			}
 			foundCurrent = true
-			log.Info("found current localstore schema", "currentSchema", currentSchema, "migrateTo", DbSchemaCurrent, "total migrations", len(allSchemeMigrations)-i)
+			log.Info("found current localstore schema", "currentSchema", currentSchema, "migrateTo", dbSchemaCurrent, "total migrations", len(allSchemeMigrations)-i)
 			continue // current schema migration should not be executed (already has been when schema was migrated to)
-		case targetSchema:
-			foundTarget = true
 		}
 		if foundCurrent {
-			migrations = append(migrations, v)
+			if v.breaking {
+				// discard all migrations before a breaking one
+				migrations = []migration{v}
+			} else {
+				migrations = append(migrations, v)
+			}
+		}
+		if foundTarget {
+			break
 		}
 	}
 	if !foundCurrent {
@@ -180,4 +207,11 @@ func migrateSanctuary(db *DB) error {
 	}
 
 	return db.shed.WriteBatch(batch)
+}
+
+func migrateDiwali(db *DB) error {
+	return NewBreakingMigrationError(
+		"Swarm chunk storage layer is changed.",
+		"Please do a manual export to preserve chunk data.",
+	)
 }

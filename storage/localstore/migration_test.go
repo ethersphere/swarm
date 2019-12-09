@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,19 +33,19 @@ import (
 func TestOneMigration(t *testing.T) {
 	defer func(v []migration, s string) {
 		schemaMigrations = v
-		DbSchemaCurrent = s
-	}(schemaMigrations, DbSchemaCurrent)
+		dbSchemaCurrent = s
+	}(schemaMigrations, dbSchemaCurrent)
 
-	DbSchemaCurrent = DbSchemaSanctuary
+	dbSchemaCurrent = dbSchemaSanctuary
 
 	ran := false
 	shouldNotRun := false
 	schemaMigrations = []migration{
-		{name: DbSchemaSanctuary, fn: func(db *DB) error {
+		{name: dbSchemaSanctuary, fn: func(db *DB) error {
 			shouldNotRun = true // this should not be executed
 			return nil
 		}},
-		{name: DbSchemaDiwali, fn: func(db *DB) error {
+		{name: dbSchemaDiwali, fn: func(db *DB) error {
 			ran = true
 			return nil
 		}},
@@ -71,7 +72,7 @@ func TestOneMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	DbSchemaCurrent = DbSchemaDiwali
+	dbSchemaCurrent = dbSchemaDiwali
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
@@ -84,8 +85,8 @@ func TestOneMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if schemaName != DbSchemaDiwali {
-		t.Errorf("schema name mismatch. got '%s', want '%s'", schemaName, DbSchemaDiwali)
+	if schemaName != dbSchemaDiwali {
+		t.Errorf("schema name mismatch. got '%s', want '%s'", schemaName, dbSchemaDiwali)
 	}
 
 	if !ran {
@@ -105,20 +106,20 @@ func TestOneMigration(t *testing.T) {
 func TestManyMigrations(t *testing.T) {
 	defer func(v []migration, s string) {
 		schemaMigrations = v
-		DbSchemaCurrent = s
-	}(schemaMigrations, DbSchemaCurrent)
+		dbSchemaCurrent = s
+	}(schemaMigrations, dbSchemaCurrent)
 
-	DbSchemaCurrent = DbSchemaSanctuary
+	dbSchemaCurrent = dbSchemaSanctuary
 
 	shouldNotRun := false
 	executionOrder := []int{-1, -1, -1, -1}
 
 	schemaMigrations = []migration{
-		{name: DbSchemaSanctuary, fn: func(db *DB) error {
+		{name: dbSchemaSanctuary, fn: func(db *DB) error {
 			shouldNotRun = true // this should not be executed
 			return nil
 		}},
-		{name: DbSchemaDiwali, fn: func(db *DB) error {
+		{name: dbSchemaDiwali, fn: func(db *DB) error {
 			executionOrder[0] = 0
 			return nil
 		}},
@@ -157,7 +158,7 @@ func TestManyMigrations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	DbSchemaCurrent = "salvation"
+	dbSchemaCurrent = "salvation"
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
@@ -190,14 +191,194 @@ func TestManyMigrations(t *testing.T) {
 	}
 }
 
+// TestGetMigrations validates the migration selection based on
+// current and target schema names.
+func TestGetMigrations(t *testing.T) {
+	currentSchema := "current"
+	defaultTargetSchema := "target"
+
+	for _, tc := range []struct {
+		name           string
+		targetSchema   string
+		migrations     []migration
+		wantMigrations []migration
+	}{
+		{
+			name:         "empty",
+			targetSchema: "current",
+			migrations: []migration{
+				{name: "current"},
+			},
+		},
+		{
+			name: "single",
+			migrations: []migration{
+				{name: "current"},
+				{name: "target"},
+			},
+			wantMigrations: []migration{
+				{name: "target"},
+			},
+		},
+		{
+			name: "multiple",
+			migrations: []migration{
+				{name: "current"},
+				{name: "middle"},
+				{name: "target"},
+			},
+			wantMigrations: []migration{
+				{name: "middle"},
+				{name: "target"},
+			},
+		},
+		{
+			name: "between",
+			migrations: []migration{
+				{name: "current"},
+				{name: "target"},
+				{name: "future"},
+			},
+			wantMigrations: []migration{
+				{name: "target"},
+			},
+		},
+		{
+			name: "between multiple",
+			migrations: []migration{
+				{name: "current"},
+				{name: "middle"},
+				{name: "target"},
+				{name: "future"},
+			},
+			wantMigrations: []migration{
+				{name: "middle"},
+				{name: "target"},
+			},
+		},
+		{
+			name: "with previous",
+			migrations: []migration{
+				{name: "previous"},
+				{name: "current"},
+				{name: "target"},
+			},
+			wantMigrations: []migration{
+				{name: "target"},
+			},
+		},
+		{
+			name: "with previous multiple",
+			migrations: []migration{
+				{name: "previous"},
+				{name: "current"},
+				{name: "middle"},
+				{name: "target"},
+			},
+			wantMigrations: []migration{
+				{name: "middle"},
+				{name: "target"},
+			},
+		},
+		{
+			name: "breaking",
+			migrations: []migration{
+				{name: "current"},
+				{name: "target", breaking: true},
+			},
+			wantMigrations: []migration{
+				{name: "target", breaking: true},
+			},
+		},
+		{
+			name: "breaking multiple",
+			migrations: []migration{
+				{name: "current"},
+				{name: "middle"},
+				{name: "breaking", breaking: true},
+				{name: "target"},
+			},
+			wantMigrations: []migration{
+				{name: "breaking", breaking: true},
+				{name: "target"},
+			},
+		},
+		{
+			name: "breaking with previous",
+			migrations: []migration{
+				{name: "previous"},
+				{name: "current"},
+				{name: "target", breaking: true},
+			},
+			wantMigrations: []migration{
+				{name: "target", breaking: true},
+			},
+		},
+		{
+			name: "breaking multiple breaks",
+			migrations: []migration{
+				{name: "current"},
+				{name: "middle", breaking: true},
+				{name: "target", breaking: true},
+			},
+			wantMigrations: []migration{
+				{name: "target", breaking: true},
+			},
+		},
+		{
+			name: "breaking multiple with middle",
+			migrations: []migration{
+				{name: "current"},
+				{name: "breaking", breaking: true},
+				{name: "middle"},
+				{name: "target", breaking: true},
+			},
+			wantMigrations: []migration{
+				{name: "target", breaking: true},
+			},
+		},
+		{
+			name: "breaking multiple between",
+			migrations: []migration{
+				{name: "current"},
+				{name: "breaking", breaking: true},
+				{name: "middle"},
+				{name: "target", breaking: true},
+				{name: "future"},
+			},
+			wantMigrations: []migration{
+				{name: "target", breaking: true},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			targetSchema := tc.targetSchema
+			if targetSchema == "" {
+				targetSchema = defaultTargetSchema
+			}
+			got, err := getMigrations(
+				currentSchema,
+				targetSchema,
+				tc.migrations,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.wantMigrations) {
+				t.Errorf("got migrations %v, want %v", got, tc.wantMigrations)
+			}
+		})
+	}
+}
+
 // TestMigrationFailFrom checks that local store boot should fail when the schema we're migrating from cannot be found
 func TestMigrationFailFrom(t *testing.T) {
 	defer func(v []migration, s string) {
 		schemaMigrations = v
-		DbSchemaCurrent = s
-	}(schemaMigrations, DbSchemaCurrent)
+		dbSchemaCurrent = s
+	}(schemaMigrations, dbSchemaCurrent)
 
-	DbSchemaCurrent = "koo-koo-schema"
+	dbSchemaCurrent = "koo-koo-schema"
 
 	shouldNotRun := false
 	schemaMigrations = []migration{
@@ -236,7 +417,7 @@ func TestMigrationFailFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	DbSchemaCurrent = "foo"
+	dbSchemaCurrent = "foo"
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
@@ -253,10 +434,10 @@ func TestMigrationFailFrom(t *testing.T) {
 func TestMigrationFailTo(t *testing.T) {
 	defer func(v []migration, s string) {
 		schemaMigrations = v
-		DbSchemaCurrent = s
-	}(schemaMigrations, DbSchemaCurrent)
+		dbSchemaCurrent = s
+	}(schemaMigrations, dbSchemaCurrent)
 
-	DbSchemaCurrent = "langur"
+	dbSchemaCurrent = "langur"
 
 	shouldNotRun := false
 	schemaMigrations = []migration{
@@ -295,7 +476,7 @@ func TestMigrationFailTo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	DbSchemaCurrent = "foo"
+	dbSchemaCurrent = "foo"
 
 	// start the existing localstore and expect the migration to run
 	db, err = New(dir, baseKey, nil)
@@ -350,8 +531,8 @@ func TestMigrateSanctuaryFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if schemaName != DbSchemaCurrent {
-		t.Fatalf("schema name mismatch, want '%s' got '%s'", DbSchemaCurrent, schemaName)
+	if schemaName != dbSchemaCurrent {
+		t.Fatalf("schema name mismatch, want '%s' got '%s'", dbSchemaCurrent, schemaName)
 	}
 
 	err = db.Close()

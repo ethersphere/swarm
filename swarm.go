@@ -198,9 +198,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	// check that we are not in the old database schema
 	// if so - fail and exit
-	isLegacy := localstore.IsLegacyDatabase(config.ChunkDbPath)
-
-	if isLegacy {
+	if localstore.IsLegacyDatabase(config.ChunkDbPath) {
 		return nil, errors.New("Legacy database format detected! Please read the migration announcement at: https://github.com/ethersphere/swarm/blob/master/docs/Migration-v0.3-to-v0.4.md")
 	}
 
