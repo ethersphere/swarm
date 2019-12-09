@@ -537,7 +537,12 @@ func (sw *AsyncHasher) Seek(offset int64, whence int) (int64, error) {
 	if whence > 0 {
 		return 0, errors.New("whence is not currently implemented")
 	}
-	cursor := int(offset) / sw.secsize
+	var cursor int
+	if offset < 0 {
+		cursor = int(offset)
+	} else {
+		cursor = int(offset) / sw.secsize
+	}
 	sw.Hasher.seek(cursor)
 	return int64(cursor), nil
 }
@@ -558,6 +563,7 @@ func (sw *AsyncHasher) Write(section []byte) (int, error) {
 func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 	// TODO: Temporary workaround for chunkwise write
 	if i < 0 {
+		sw.Hasher.cursor = 0
 		sw.Hasher.Reset()
 		sw.Hasher.SetLength(len(section))
 		sw.Hasher.Write(section)

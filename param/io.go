@@ -15,6 +15,5 @@ type SectionWriter interface {
 	Init(ctx context.Context, errFunc func(error)) // errFunc is used for asynchronous components to signal error and termination
 	SetLength(length int)
 	SectionSize() int // size of the async section unit to use
-	DigestSize() int
 	Branches() int
 }

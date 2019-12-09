@@ -2,6 +2,7 @@ package hasher
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/log"
@@ -35,7 +36,7 @@ func New(hashFunc param.SectionWriterFunc) *Hasher {
 	return h
 }
 
-func (h *Hasher) Connect(hashFunc param.SectionWriterFunc) param.SectionWriter {
+func (h *Hasher) SetWriter(hashFunc param.SectionWriterFunc) param.SectionWriter {
 	h.params = newTreeParams(hashFunc)
 	return h
 }
@@ -53,7 +54,7 @@ func (h *Hasher) Init(ctx context.Context, errFunc func(error)) {
 // TODO: enforce buffered writes and limits
 // TODO: attempt omit modulo calc on every pass
 // TODO: preallocate full size span slice
-func (h *Hasher) Write(index int, b []byte) {
+func (h *Hasher) Write(b []byte) (int, error) {
 	if h.count%h.params.Branches == 0 && h.count > 0 {
 		h.job = h.job.Next()
 	}
@@ -68,17 +69,27 @@ func (h *Hasher) Write(index int, b []byte) {
 	}(h.count, h.job)
 	h.size += len(b)
 	h.count++
+	return len(b), nil
 }
 
 // Sum implements param.SectionWriter
 // It is a blocking call that calculates the target level and section index of the received data
 // and alerts hasher jobs the end of write is reached
 // It returns the root hash
-func (h *Hasher) Sum(_ []byte, length int, _ []byte) []byte {
+func (h *Hasher) Sum(b []byte) []byte {
 	sectionCount := dataSizeToSectionIndex(h.size, h.params.SectionSize)
 	targetLevel := getLevelsFromLength(h.size, h.params.SectionSize, h.params.Branches)
 	h.target.Set(h.size, sectionCount, targetLevel)
-	return <-h.target.Done()
+	ref := <-h.target.Done()
+	if b == nil {
+		return ref
+	}
+	return append(b, ref...)
+}
+
+// Seek implements io.Seeker in param.SectionWriter
+func (h *Hasher) Seek(offset uint64, whence int) (int64, error) {
+	return int64(h.size), errors.New("Hasher cannot seek")
 }
 
 // Reset implements param.SectionWriter

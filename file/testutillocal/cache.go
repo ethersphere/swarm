@@ -2,6 +2,7 @@ package testutillocal
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethersphere/swarm/param"
 )
@@ -12,8 +13,9 @@ var (
 )
 
 type Cache struct {
-	data map[int][]byte
-	w    param.SectionWriter
+	data  map[int][]byte
+	index int
+	w     param.SectionWriter
 }
 
 func NewCache() *Cache {
@@ -25,31 +27,49 @@ func NewCache() *Cache {
 func (c *Cache) Init(_ context.Context, _ func(error)) {
 }
 
-func (c *Cache) Connect(writeFunc param.SectionWriterFunc) param.SectionWriter {
+func (c *Cache) SetWriter(writeFunc param.SectionWriterFunc) param.SectionWriter {
 	c.w = writeFunc(nil)
 	return c
 }
 
-func (c *Cache) Write(index int, b []byte) {
-	c.data[index] = b
-	if c.w == nil {
-		return
+func (c *Cache) SetLength(length int) {
+	if c.w != nil {
+		c.w.SetLength(length)
 	}
-	c.w.Write(index, b)
+
 }
 
-func (c *Cache) Sum(b []byte, length int, span []byte) []byte {
+func (c *Cache) Seek(offset int64, whence int) (int64, error) {
+	if whence > 0 {
+		return 0, errors.New("whence for Cache.Seek not implemented")
+	}
+	c.index = int(offset) / c.SectionSize()
+	if c.w != nil {
+		return c.w.Seek(offset, whence)
+	}
+	return int64(c.index), nil
+}
+
+func (c *Cache) Write(b []byte) (int, error) {
+	c.data[c.index] = b
+	if c.w != nil {
+		return c.w.Write(b)
+	}
+	return len(b), nil
+}
+
+func (c *Cache) Sum(b []byte) []byte {
 	if c.w == nil {
 		return nil
 	}
-	return c.w.Sum(b, length, span)
+	return c.w.Sum(b)
 }
 
-func (c *Cache) Reset(ctx context.Context) {
+func (c *Cache) Reset() {
 	if c.w == nil {
 		return
 	}
-	c.w.Reset(ctx)
+	c.w.Reset()
 }
 
 func (c *Cache) SectionSize() int {
@@ -59,9 +79,13 @@ func (c *Cache) SectionSize() int {
 	return defaultSectionSize
 }
 
-func (c *Cache) DigestSize() int {
+func (c *Cache) BlockSize() int {
+	return c.SectionSize()
+}
+
+func (c *Cache) Size() int {
 	if c.w != nil {
-		return c.w.DigestSize()
+		return c.w.Size()
 	}
 	return defaultSectionSize
 }

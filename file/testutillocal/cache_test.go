@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -23,7 +22,7 @@ func TestCache(t *testing.T) {
 	c := NewCache()
 	c.Init(context.Background(), func(error) {})
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	c.Write(0, data)
+	c.Write(data)
 	cachedData := c.Get(0)
 	if !bytes.Equal(cachedData, data) {
 		t.Fatalf("cache data; expected %x, got %x", data, cachedData)
@@ -36,11 +35,11 @@ func TestCacheLink(t *testing.T) {
 
 	c := NewCache()
 	c.Init(context.Background(), func(error) {})
-	c.Connect(hashFunc)
+	c.SetWriter(hashFunc)
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	c.Write(-1, data)
-	span := bmt.LengthToSpan(chunkSize)
-	ref := c.Sum(nil, chunkSize, span)
+	c.Seek(-1, 0)
+	c.Write(data)
+	ref := c.Sum(nil)
 	refHex := hexutil.Encode(ref)
 	correctRefHex := "0xc10090961e7682a10890c334d759a28426647141213abda93b096b892824d2ef"
 	if refHex != correctRefHex {
