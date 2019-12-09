@@ -48,6 +48,9 @@ func (e *BreakingMigrationError) Error() string {
 	return "breaking migration"
 }
 
+// Migrate checks the schema name in storage dir and compares it
+// with the expected schema name to construct a series of data migrations
+// if they are required.
 func (db *DB) Migrate() (err error) {
 	schemaName, err := db.schemaName.Get()
 	if err != nil {

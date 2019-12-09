@@ -101,7 +101,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 
 	case chunk.ModeSetPin:
 		for _, addr := range addrs {
-			err := db.setPin(batch, addr)
+			err := db.setPin(batch, addr, 1)
 			if err != nil {
 				return err
 			}
@@ -326,7 +326,7 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange 
 // setPin increments pin counter for the chunk by updating
 // pin index and sets the chunk to be excluded from garbage collection.
 // Provided batch is updated.
-func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address) (err error) {
+func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address, count uint64) (err error) {
 	item := addressToItem(addr)
 
 	// Get the existing pin counter of the chunk
@@ -346,8 +346,8 @@ func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 		existingPinCounter = pinnedChunk.PinCounter
 	}
 
-	// Otherwise increase the existing counter by 1
-	item.PinCounter = existingPinCounter + 1
+	// Otherwise increase the existing counter by the pin count
+	item.PinCounter = existingPinCounter + count
 	db.pinIndex.PutInBatch(batch, item)
 
 	return nil
