@@ -1096,7 +1096,6 @@ func (r *Registry) Start(server *p2p.Server) error {
 
 func (r *Registry) Stop() error {
 	log.Debug("stream registry stopping")
-	fmt.Println("in stop")
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
@@ -1113,10 +1112,8 @@ func (r *Registry) Stop() error {
 
 	done := make(chan bool)
 	go func() {
-		fmt.Println("before wait ")
 		wg.Wait()
 		close(done)
-		fmt.Println("after wait ")
 	}()
 
 	select {

@@ -208,7 +208,7 @@ type Peer struct {
 	eg        *errgroup.Group // error group used for executing handlers asynchronously
 	running   bool
 	mtx       sync.RWMutex // guards running
-	shutdown  chan error
+	//shutdown  chan error
 }
 
 // NewPeer constructs a new peer
@@ -263,12 +263,14 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 		}
 	}()
 
-	select {
-	case err := <-done:
-		return err
-	case err := <-p.shutdown:
-		return err
-	}
+	return <-done
+
+	//select {
+	//case err := <-done:
+	//	return err
+	//case err := <-p.shutdown:
+	//	return err
+	//}
 }
 
 func (p *Peer) setRunning(isRunning bool) {
