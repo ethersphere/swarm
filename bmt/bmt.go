@@ -517,12 +517,18 @@ func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
+func (sw *AsyncHasher) SeekSection(offset int) {
+	sw.mtx.Lock()
+	sw.Hasher.SeekSection(offset)
+}
+
 // Write writes to the current position cursor of the Hasher
 // The cursor must be manually set with SeekSection().
 // The method will NOT advance the cursor.
 //
 // Implements hash.hash in param.SectionWriter
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
+	defer sw.mtx.Unlock()
 	sw.Hasher.size += len(section)
 	return sw.writeSection(sw.Hasher.cursor, section)
 }
@@ -540,8 +546,7 @@ func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 		sw.all = true
 		return len(section), nil
 	}
-	sw.mtx.Lock()
-	defer sw.mtx.Unlock()
+	//sw.mtx.Lock()
 	t := sw.getTree()
 	// cursor keeps track of the rightmost section written so far
 	// if index is lower than cursor then just write non-final section as is
