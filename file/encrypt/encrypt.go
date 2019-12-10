@@ -17,6 +17,7 @@ type Encrypt struct {
 	e       encryption.Encryption
 	w       param.SectionWriter
 	length  int
+	span    int
 	keyHash hash.Hash
 	errFunc func(error)
 }
@@ -74,6 +75,11 @@ func (e *Encrypt) Reset() {
 func (e *Encrypt) SetLength(length int) {
 	e.length = length
 	e.w.SetLength(length)
+}
+
+func (e *Encrypt) SetSpan(length int) {
+	e.span = length
+	e.w.SetSpan(length)
 }
 
 func (e *Encrypt) Sum(b []byte) []byte {

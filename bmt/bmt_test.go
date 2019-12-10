@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
@@ -322,7 +321,7 @@ func TestBMTWriterBuffers(t *testing.T) {
 						return fmt.Errorf("incorrect read. expected %v bytes, got %v", buflen, read)
 					}
 				}
-				bmt.SetLength(0)
+				bmt.SetSpan(0)
 				hash := bmt.Sum(nil)
 				if !bytes.Equal(hash, expHash) {
 					return fmt.Errorf("hash mismatch. expected %x, got %x", hash, expHash)
@@ -365,7 +364,6 @@ func testHasherCorrectness(bmt *Hasher, hasher BaseHasherFunc, d []byte, n, coun
 	data := d[:n]
 	rbmt := NewRefHasher(hasher, count)
 	var exp []byte
-	log.Trace("correct", "n", n, "count", count, "depth", bmt.pool.Depth)
 	if n == 0 {
 		exp = bmt.pool.zerohashes[bmt.pool.Depth]
 	} else {
@@ -542,7 +540,7 @@ func benchmarkRefHasher(t *testing.B, n int) {
 // Hash hashes the data and the span using the bmt hasher
 func syncHash(h *Hasher, spanLength int, data []byte) []byte {
 	h.Reset()
-	h.SetLength(spanLength)
+	h.SetSpan(spanLength)
 	h.Write(data)
 	return h.Sum(nil)
 }
@@ -581,14 +579,14 @@ func asyncHashRandom(bmt param.SectionWriter, spanLength int, data []byte, wh wh
 func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
 	bmt.Reset()
 	if l == 0 {
-		bmt.SetLength(spanLength)
-		bmt.(*AsyncHasher).Hasher.jobSize = l
+		bmt.SetLength(l)
+		bmt.SetSpan(spanLength)
 		return bmt.Sum(nil)
 	}
 	c := make(chan []byte, 1)
 	hashf := func() {
-		bmt.SetLength(spanLength)
-		bmt.(*AsyncHasher).Hasher.jobSize = l
+		bmt.SetLength(l)
+		bmt.SetSpan(spanLength)
 		c <- bmt.Sum(nil)
 	}
 	maxsize := len(idxs)
@@ -604,100 +602,28 @@ func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs
 		}
 	}
 	if wh == last {
-		bmt.SetLength(spanLength)
-		bmt.(*AsyncHasher).Hasher.jobSize = l
+		bmt.SetLength(l)
+		bmt.SetSpan(spanLength)
 		return bmt.Sum(nil)
 	}
 	return <-c
 }
 
-// TestHashSpanCases verifies that span and size is set automatically even if SetLength() is not explicitly called
-func TestHashSpanCases(t *testing.T) {
+// TestUseSyncAsOrdinaryHasher verifies that the bmt.Hasher can be used with the hash.Hash interface
+func TestUseSyncAsOrdinaryHasher(t *testing.T) {
 	hasher := sha3.NewLegacyKeccak256
-	pool := NewTreePool(hasher, 128, PoolSize)
-	zeroHash := pool.zerohashes[7]
-	refRes := zeroHash
-
-	// check that SetLength(0) is equivalent to no Write() in all cases
-	h := New(pool)
-	res := h.Sum(nil)
-	if !bytes.Equal(refRes, res) {
-		t.Fatalf("nilspan vs zerohash; expected %x, got %x", refRes, res)
-	}
-	h.Reset()
-	h.SetLength(0)
-	res = h.Sum(nil)
-	if !bytes.Equal(refRes, res) {
-		t.Fatalf("length 0 vs zerohash; expected %x, got %x", refRes, res)
-	}
-	h.Reset()
-	h.Write([]byte("foo"))
-	h.SetLength(0)
-	res = h.Sum(nil)
+	pool := NewTreePool(hasher, segmentCount, PoolSize)
+	bmt := New(pool)
+	bmt.Write([]byte("foo"))
+	res := bmt.Sum(nil)
 	refh := NewRefHasher(hasher, 128)
 	resh := refh.Hash([]byte("foo"))
 	hsub := hasher()
-	hsub.Write(zeroSpan)
-	hsub.Write(resh)
-	refRes = hsub.Sum(nil)
-	if !bytes.Equal(refRes, res) {
-		t.Fatalf("length 0 overwrite vs zerohash; expected %x, got %x", refRes, res)
-	}
-
-	// span and length is automatically set if SetLength() is not called
-	h.Reset()
-	h.Write([]byte("foo"))
-	resNoLength := h.Sum(nil)
-
-	h.Reset()
-	h.Write([]byte("foo"))
-	h.SetLength(3)
-	resLength := h.Sum(nil)
-
-	if !bytes.Equal(resLength, resNoLength) {
-		t.Fatalf("foo length %d, expected %x, got %x", 3, resLength, resNoLength)
-	}
-
-	h.Reset()
-	h.Write([]byte("foo"))
-	h.SetLength(4)
-	resLength = h.Sum(nil)
-	if bytes.Equal(resLength, resNoLength) {
-		t.Fatalf("foo length %d; unexpected %x == %x", 4, resLength, resNoLength)
-	}
-
-	// correct length is calculated when span exceeds size of bottom tree level
-	h.Reset()
-	h.Write([]byte("foo"))
-	h.SetLength(4096 + 3)
-	res = h.Sum(nil)
-	refh = NewRefHasher(hasher, 128)
-	resh = refh.Hash([]byte("foo"))
-	hsub = hasher()
-	span := make([]byte, 8)
-	binary.LittleEndian.PutUint64(span, 4096+3)
+	span := LengthToSpan(3)
 	hsub.Write(span)
 	hsub.Write(resh)
-	refRes = hsub.Sum(nil)
-
-	if !bytes.Equal(refRes, res) {
-		t.Fatalf("foo length %d, expected %x, got %x", 4096+3, refRes, res)
-	}
-
-	h.Reset()
-	h.Write([]byte("foo"))
-	h.SetLength(4096 + 4)
-	res = h.Sum(nil)
-	refh = NewRefHasher(hasher, 128)
-	resh = refh.Hash([]byte("foo"))
-	hsub = hasher()
-	span = make([]byte, 8)
-	binary.LittleEndian.PutUint64(span, 4096+4)
-	hsub.Write(span)
-	hsub.Write(resh)
-	refRes = hsub.Sum(nil)
-
-	if !bytes.Equal(refRes, res) {
-		t.Fatalf("foo length %d; expected %x, got %x", 4096+4, refRes, res)
+	refRes := hsub.Sum(nil)
+	if !bytes.Equal(res, refRes) {
+		t.Fatalf("normalhash; expected %x, got %x", refRes, res)
 	}
 }

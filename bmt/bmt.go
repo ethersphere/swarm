@@ -84,11 +84,10 @@ type BaseHasherFunc func() hash.Hash
 //   the tree and itself in a state reusable for hashing a new chunk
 // - generates and verifies segment inclusion proofs (TODO:)
 type Hasher struct {
-	pool    *TreePool // BMT resource pool
-	bmt     *tree     // prebuilt BMT resource for flowcontrol and proofs
-	size    int       // bytes written to Hasher since last Reset()
-	jobSize int       // size of data written in current session
-	cursor  int       // cursor to write to on next Write() call
+	pool   *TreePool // BMT resource pool
+	bmt    *tree     // prebuilt BMT resource for flowcontrol and proofs
+	size   int       // bytes written to Hasher since last Reset()
+	cursor int       // cursor to write to on next Write() call
 }
 
 // New creates a reusable BMT Hasher that
@@ -300,12 +299,10 @@ func (h *Hasher) SectionSize() int {
 }
 
 func (h *Hasher) SetLength(length int) {
-	h.jobSize = length //(length-1)%h.pool.Size + 1
 }
 
 func (h *Hasher) SetSpan(length int) {
 	span := LengthToSpan(length)
-	log.Trace("setlength", "span", span, "length", length)
 	h.getTree().span = span
 }
 
@@ -353,17 +350,16 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 	// wait for the result
 	s = <-t.result
 	if t.span == nil {
-		t.span = make([]byte, 8)
-		binary.LittleEndian.PutUint64(t.span, uint64(h.size))
+		t.span = LengthToSpan(h.size)
 	}
 	span := t.span
 	// release the tree resource back to the pool
 	h.releaseTree()
 	// b + sha3(span + BMT(pure_chunk))
 	//if len(span) == 0 {
-	if span == nil {
-		return append(b, s...)
-	}
+	//if span == nil {
+	//	return append(b, s...)
+	//}
 	return doSum(h.pool.hasher(), b, span, s)
 }
 
@@ -421,7 +417,6 @@ func (h *Hasher) Write(b []byte) (int, error) {
 func (h *Hasher) Reset() {
 	h.cursor = 0
 	h.size = 0
-	h.jobSize = 0
 	h.releaseTree()
 }
 
@@ -466,6 +461,7 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 		secsize:  secsize,
 		seccount: seccount,
 		write:    write,
+		jobSize:  0,
 	}
 }
 
@@ -491,6 +487,7 @@ type AsyncHasher struct {
 	seccount int        // base section count
 	write    func(i int, section []byte, final bool)
 	all      bool // if all written in one go, temporary workaround
+	jobSize  int
 }
 
 // Implements param.SectionWriter
@@ -499,8 +496,13 @@ func (sw *AsyncHasher) Init(_ context.Context, errFunc func(error)) {
 
 // Implements param.SectionWriter
 func (sw *AsyncHasher) Reset() {
+	sw.jobSize = 0
 	sw.all = false
 	sw.Hasher.Reset()
+}
+
+func (sw *AsyncHasher) SetLength(length int) {
+	sw.jobSize = length
 }
 
 // Implements param.SectionWriter
@@ -598,10 +600,11 @@ func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	}
 	sw.mtx.Lock()
 	t := sw.getTree()
-	length := int(sw.Hasher.jobSize)
+	length := sw.jobSize
 	if length == 0 {
 		sw.mtx.Unlock()
 		s = sw.pool.zerohashes[sw.pool.Depth]
+		return
 	} else {
 		// for non-zero input the rightmost section is written to the tree asynchronously
 		// if the actual last section has been written (t.cursor == length/t.secsize)
