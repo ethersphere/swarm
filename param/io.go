@@ -9,11 +9,11 @@ type SectionWriterFunc func(ctx context.Context) SectionWriter
 
 type SectionWriter interface {
 	hash.Hash
-	SetWriter(hashFunc SectionWriterFunc) SectionWriter
-	SeekSection(section int)
-	Init(ctx context.Context, errFunc func(error)) // errFunc is used for asynchronous components to signal error and termination
-	SetLength(length int)
-	SetSpan(length int)
-	SectionSize() int // size of the async section unit to use
-	Branches() int
+	Init(ctx context.Context, errFunc func(error))      // errFunc is used for asynchronous components to signal error and termination
+	SetWriter(hashFunc SectionWriterFunc) SectionWriter // chain another SectionWriter the current instance
+	SeekSection(section int)                            // sets cursor that next Write() will write to
+	SetLength(length int)                               // set total number of bytes that will be written to SectionWriter
+	SetSpan(length int)                                 // set data span of chunk
+	SectionSize() int                                   // section size of this SectionWriter
+	Branches() int                                      // branch factor of this SectionWriter
 }

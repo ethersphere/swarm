@@ -20,6 +20,7 @@ package bmt
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 	"strings"
@@ -310,7 +311,9 @@ func (h *Hasher) SetSpan(length int) {
 
 // Implements storage.SwarmHash
 func (h *Hasher) SetSpanBytes(b []byte) {
-
+	t := h.getTree()
+	t.span = make([]byte, 8)
+	copy(t.span, b)
 }
 
 // Implements param.SectionWriter
@@ -345,7 +348,6 @@ func (h *Hasher) BlockSize() int {
 // data before it calculates and returns the hash of the chunk
 // caller must make sure Sum is not called concurrently with Write, writeSection
 // Implements hash.Hash in param.SectionWriter
-// TODO: if span is nil return the zero-hash
 func (h *Hasher) Sum(b []byte) (s []byte) {
 	t := h.getTree()
 	if h.size == 0 && t.offset == 0 {
@@ -362,11 +364,6 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 	span := t.span
 	// release the tree resource back to the pool
 	h.releaseTree()
-	// b + sha3(span + BMT(pure_chunk))
-	//if len(span) == 0 {
-	//if span == nil {
-	//	return append(b, s...)
-	//}
 	return doSum(h.pool.hasher(), b, span, s)
 }
 
@@ -469,6 +466,7 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 		seccount: seccount,
 		write:    write,
 		jobSize:  0,
+		sought:   true,
 	}
 }
 
@@ -493,16 +491,21 @@ type AsyncHasher struct {
 	secsize  int        // size of base section (size of hash or double)
 	seccount int        // base section count
 	write    func(i int, section []byte, final bool)
+	errFunc  func(error)
 	all      bool // if all written in one go, temporary workaround
+	sought   bool
 	jobSize  int
 }
 
 // Implements param.SectionWriter
+// TODO context should be implemented all across (ie original TODO  in TreePool.reserve())
 func (sw *AsyncHasher) Init(_ context.Context, errFunc func(error)) {
+	sw.errFunc = errFunc
 }
 
 // Implements param.SectionWriter
 func (sw *AsyncHasher) Reset() {
+	sw.sought = true
 	sw.jobSize = 0
 	sw.all = false
 	sw.Hasher.Reset()
@@ -514,7 +517,7 @@ func (sw *AsyncHasher) SetLength(length int) {
 
 // Implements param.SectionWriter
 func (sw *AsyncHasher) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
-	log.Warn("Asynchasher does not currently support SectionWriter chaining")
+	sw.errFunc(errors.New("Asynchasher does not currently support SectionWriter chaining"))
 	return sw
 }
 
@@ -530,20 +533,22 @@ func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
+// SeekSection sets the cursor where the next Write() will write
+// It locks the cursor until Write() is called; if no Write() is called, it will hang.
+// Implements param.SectionWriter
 func (sw *AsyncHasher) SeekSection(offset int) {
 	sw.mtx.Lock()
 	sw.Hasher.SeekSection(offset)
 }
 
 // Write writes to the current position cursor of the Hasher
-// The cursor must be manually set with SeekSection().
+// The cursor must first be manually set with SeekSection()
 // The method will NOT advance the cursor.
-//
 // Implements hash.hash in param.SectionWriter
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
 	defer sw.mtx.Unlock()
 	sw.Hasher.size += len(section)
-	return sw.writeSection(sw.Hasher.cursor, section)
+	c, err := sw.writeSection(sw.Hasher.cursor, section)
 }
 
 // Write writes the i-th section of the BMT base
@@ -559,7 +564,8 @@ func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 		sw.all = true
 		return len(section), nil
 	}
-	//sw.mtx.Lock()
+	//sw.mtx.Lock() // this lock is now set in SeekSection
+	// defer sw.mtk.Unlock() // this unlock is still left in Write()
 	t := sw.getTree()
 	// cursor keeps track of the rightmost section written so far
 	// if index is lower than cursor then just write non-final section as is
@@ -609,6 +615,7 @@ func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	t := sw.getTree()
 	length := sw.jobSize
 	if length == 0 {
+		sw.releaseTree()
 		sw.mtx.Unlock()
 		s = sw.pool.zerohashes[sw.pool.Depth]
 		return
@@ -803,7 +810,6 @@ func calculateDepthFor(n int) (d int) {
 
 // creates a binary span size representation
 // to pass to bmt.SectionWriter
-// TODO: move to bmt.SectionWriter, which is the object for which this is actually relevant
 func LengthToSpan(length int) []byte {
 	spanBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(spanBytes, uint64(length))
