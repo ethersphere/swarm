@@ -295,7 +295,6 @@ func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Con
 		select {
 		case done <- nil:
 		default:
-			fmt.Println("nil inside")
 		}
 	}
 }
@@ -331,7 +330,6 @@ func (p *Peer) stop(err error, done chan error) {
 	select {
 	case done <- err:
 	default:
-		fmt.Println("stopping already stopped channel")
 	}
 }
 
