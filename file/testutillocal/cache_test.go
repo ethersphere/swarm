@@ -37,7 +37,7 @@ func TestCacheLink(t *testing.T) {
 	c.Init(context.Background(), func(error) {})
 	c.SetWriter(hashFunc)
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	c.Seek(-1, 0)
+	c.SeekSection(-1)
 	c.Write(data)
 	ref := c.Sum(nil)
 	refHex := hexutil.Encode(ref)

@@ -127,9 +127,8 @@ func (d *dummySectionWriter) SetWriter(_ param.SectionWriterFunc) param.SectionW
 }
 
 // implements param.SectionWriter
-func (d *dummySectionWriter) Seek(offset int64, whence int) (int64, error) {
-	d.index = int(offset)
-	return offset, nil
+func (d *dummySectionWriter) SeekSection(offset int) {
+	d.index = offset
 }
 
 // implements param.SectionWriter
@@ -222,9 +221,9 @@ func TestDummySectionWriter(t *testing.T) {
 
 	_, data := testutil.SerialData(sectionSize*2, 255, 0)
 
-	w.Seek(int64(branches), 0)
+	w.SeekSection(branches)
 	w.Write(data[:sectionSize])
-	w.Seek(int64(branches+1), 0)
+	w.SeekSection(branches + 1)
 	w.Write(data[sectionSize:])
 	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
 		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
@@ -239,7 +238,7 @@ func TestDummySectionWriter(t *testing.T) {
 
 	w = newDummySectionWriter(chunkSize*2, sectionSize*2, sectionSize*2, branches/2)
 	w.Reset()
-	w.Seek(int64(branches/2), 0)
+	w.SeekSection(branches)
 	w.Write(data)
 	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
 		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)

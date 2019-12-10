@@ -165,7 +165,7 @@ OUTER:
 				idx := entry.index + i
 				data := entry.data[offset : offset+jb.writer.SectionSize()]
 				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", oldProcessCount+i, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
-				jb.writer.Seek(int64(idx*jb.writer.SectionSize()), 0)
+				jb.writer.SeekSection(idx)
 				jb.writer.Write(data)
 				offset += jb.writer.SectionSize()
 			}

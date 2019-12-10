@@ -39,9 +39,9 @@ func (s *Splitter) Split() ([]byte, error) {
 			return nil, err
 		}
 		log.Trace("split read", "c", c, "wc", c, "l", l)
-		s.w.Write(wc, d)
+		s.w.Write(d)
 		wc++
 		l += c
 	}
-	return s.w.Sum(nil, 0, nil), nil
+	return s.w.Sum(nil), nil
 }

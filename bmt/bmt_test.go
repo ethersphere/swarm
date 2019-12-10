@@ -597,7 +597,7 @@ func asyncHash(bmt param.SectionWriter, spanLength int, l int, wh whenHash, idxs
 		r = rand.Intn(maxsize)
 	}
 	for i, idx := range idxs {
-		bmt.Seek(int64(idx*bmt.SectionSize()), 0)
+		bmt.SeekSection(idx)
 		bmt.Write(segments[idx])
 		if (wh == first || wh == random) && i == r {
 			go hashf()

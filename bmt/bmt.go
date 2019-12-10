@@ -20,7 +20,6 @@ package bmt
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash"
 	"strings"
@@ -321,22 +320,9 @@ func (h *Hasher) Size() int {
 	return h.pool.SegmentSize
 }
 
-// TODO: Rework seek to work for AsyncHasher transparently when asynchasher doesn't have "double" anymore
-// TODO: performant offset to cursor calculation - or consider sectionwise Seek
-// TODO: whence
 // Seek sets the section that will be written to on the next Write()
-// Implements io.Seeker in param.SectionWriter
-func (h *Hasher) Seek(offset int64, whence int) (int64, error) {
-	if whence > 0 {
-		return 0, errors.New("whence is not currently implemented")
-	}
-	cursor := int(offset) / h.pool.SegmentSize
-	h.seek(cursor)
-	return int64(cursor), nil
-}
-
-func (h *Hasher) seek(cursor int) {
-	h.cursor = cursor
+func (h *Hasher) SeekSection(offset int) {
+	h.cursor = offset
 }
 
 // BlockSize returns the block size
@@ -531,25 +517,8 @@ func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
-// Seek is a temporary override for Hasher.Seek() to handle double sections from AsyncHasher
-// Implements io.Seeker in param.SectionWriter
-func (sw *AsyncHasher) Seek(offset int64, whence int) (int64, error) {
-	if whence > 0 {
-		return 0, errors.New("whence is not currently implemented")
-	}
-	var cursor int
-	if offset < 0 {
-		cursor = int(offset)
-	} else {
-		cursor = int(offset) / sw.secsize
-	}
-	log.Trace("async seek", "offset", offset, "cursor", cursor)
-	sw.Hasher.seek(cursor)
-	return int64(cursor), nil
-}
-
 // Write writes to the current position cursor of the Hasher
-// The cursor must be manually set with Seek().
+// The cursor must be manually set with SeekSection().
 // The method will NOT advance the cursor.
 //
 // Implements hash.hash in param.SectionWriter

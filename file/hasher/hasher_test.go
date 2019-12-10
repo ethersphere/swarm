@@ -24,7 +24,6 @@ func TestHasherJobTopHash(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
-		h.Seek(int64(i*h.SectionSize()), 0)
 		h.Write(data[i : i+chunkSize])
 	}
 	h.Sum(nil)
@@ -47,7 +46,6 @@ func TestHasherOneFullChunk(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches; i += chunkSize {
-		h.Seek(int64(i*h.SectionSize()), 0)
 		h.Write(data[i : i+chunkSize])
 	}
 	ref := h.Sum(nil)
@@ -69,7 +67,6 @@ func TestHasherJobChange(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	jobs := make(map[string]int)
 	for i := 0; i < chunkSize*branches*branches; i += chunkSize {
-		h.Seek(int64(i*h.SectionSize()), 0)
 		h.Write(data[i : i+chunkSize])
 		jobs[h.job.String()]++
 	}
@@ -96,7 +93,6 @@ func TestHasherOneFullLevelOneChunk(t *testing.T) {
 	h.Init(ctx, logErrFunc)
 	var i int
 	for i = 0; i < chunkSize*branches*branches; i += chunkSize {
-		h.Seek(int64(i*h.SectionSize()), 0)
 		h.Write(data[i : i+chunkSize])
 	}
 	ref := h.Sum(nil)
@@ -124,7 +120,6 @@ func TestHasherVector(t *testing.T) {
 			if dataLength-j < chunkSize {
 				size = dataLength - j
 			}
-			h.Seek(int64(j*h.SectionSize()), 0)
 			h.Write(data[j : j+size])
 		}
 		ref := h.Sum(nil)
@@ -169,7 +164,6 @@ func benchmarkHasher(b *testing.B) {
 			if dataLength-i < chunkSize {
 				size = dataLength - i
 			}
-			h.Seek(int64(i*h.SectionSize()), 0)
 			h.Write(data[i : i+size])
 		}
 		h.Sum(nil)

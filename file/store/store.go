@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 
+	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/param"
@@ -17,6 +18,7 @@ type FileStore struct {
 	w          param.SectionWriter
 	ctx        context.Context
 	data       [][]byte
+	length     int
 	errFunc    func(error)
 }
 
@@ -29,7 +31,7 @@ func New(chunkStore chunk.Store, writerFunc param.SectionWriterFunc) *FileStore 
 	return f
 }
 
-func (f *FileStore) Connect(hashFunc param.SectionWriterFunc) param.SectionWriter {
+func (f *FileStore) SetWriter(hashFunc param.SectionWriterFunc) param.SectionWriter {
 	f.w = hashFunc(f.ctx)
 	return f
 }
@@ -41,23 +43,29 @@ func (f *FileStore) Init(ctx context.Context, errFunc func(error)) {
 }
 
 // Reset implements param.SectionWriter
-func (f *FileStore) Reset(ctx context.Context) {
-	f.ctx = ctx
+func (f *FileStore) Reset() {
+	f.length = 0
+	f.data = [][]byte{}
+	f.w.Reset()
+}
+
+func (f *FileStore) SeekSection(index int) {
+	f.w.SeekSection(index)
 }
 
 // Write implements param.SectionWriter
 // it asynchronously writes to the underlying writer while caching the data slice
-func (f *FileStore) Write(index int, b []byte) {
-	f.w.Write(index, b)
+func (f *FileStore) Write(b []byte) (int, error) {
 	f.data = append(f.data, b)
+	return f.w.Write(b)
 }
 
 // Sum implements param.SectionWriter
 // calls underlying writer's Sum and sends the result with data as a chunk to chunk.Store
-func (f *FileStore) Sum(b []byte, length int, span []byte) []byte {
-	ref := f.w.Sum(b, length, span)
+func (f *FileStore) Sum(b []byte) []byte {
+	ref := f.w.Sum(b)
 	go func(ref []byte) {
-		b = span
+		b = bmt.LengthToSpan(f.length)
 		for _, data := range f.data {
 			b = append(b, data...)
 		}
@@ -71,14 +79,24 @@ func (f *FileStore) Sum(b []byte, length int, span []byte) []byte {
 	return ref
 }
 
+func (f *FileStore) SetLength(length int) {
+	f.length = length
+	f.w.SetLength(length)
+}
+
+// SectionSize implements param.SectionWriter
+func (f *FileStore) BlockSize() int {
+	return f.w.BlockSize()
+}
+
 // SectionSize implements param.SectionWriter
 func (f *FileStore) SectionSize() int {
 	return f.w.SectionSize()
 }
 
 // DigestSize implements param.SectionWriter
-func (f *FileStore) DigestSize() int {
-	return f.w.DigestSize()
+func (f *FileStore) Size() int {
+	return f.w.Size()
 }
 
 // Branches implements param.SectionWriter

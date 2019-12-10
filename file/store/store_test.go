@@ -65,9 +65,11 @@ func TestStoreWithHasher(t *testing.T) {
 	span := bmt.LengthToSpan(chunkSize)
 	go func() {
 		for i := 0; i < chunkSize; i += sectionSize {
-			h.Write(i/sectionSize, data[i:i+sectionSize])
+			h.SeekSection(i / sectionSize)
+			h.Write(data[i : i+sectionSize])
 		}
-		h.Sum(nil, chunkSize, span)
+		h.SetLength(chunkSize)
+		h.Sum(nil)
 	}()
 
 	// capture chunk and verify contents

@@ -2,7 +2,6 @@ package testutillocal
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ethersphere/swarm/param"
 )
@@ -39,15 +38,11 @@ func (c *Cache) SetLength(length int) {
 
 }
 
-func (c *Cache) Seek(offset int64, whence int) (int64, error) {
-	if whence > 0 {
-		return 0, errors.New("whence for Cache.Seek not implemented")
-	}
-	c.index = int(offset) / c.SectionSize()
+func (c *Cache) SeekSection(offset int) {
+	c.index = offset
 	if c.w != nil {
-		return c.w.Seek(offset, whence)
+		c.w.SeekSection(offset)
 	}
-	return int64(c.index), nil
 }
 
 func (c *Cache) Write(b []byte) (int, error) {

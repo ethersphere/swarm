@@ -59,7 +59,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	}
 	go func(i int, jb *job) {
 		hasher := h.params.GetWriter()
-		hasher.Seek(-1, 0)
+		hasher.SeekSection(-1)
 		hasher.Write(b)
 		l := len(b)
 		log.Trace("data write", "count", i, "size", l)
@@ -91,8 +91,8 @@ func (h *Hasher) SetLength(length int) {
 }
 
 // Seek implements io.Seeker in param.SectionWriter
-func (h *Hasher) Seek(offset int64, whence int) (int64, error) {
-	return int64(h.size), errors.New("Hasher cannot seek")
+func (h *Hasher) SeekSection(offset int) {
+	h.errFunc(errors.New("Hasher cannot seek"))
 }
 
 // Reset implements param.SectionWriter

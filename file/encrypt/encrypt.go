@@ -16,6 +16,7 @@ type Encrypt struct {
 	key     []byte
 	e       encryption.Encryption
 	w       param.SectionWriter
+	length  int
 	keyHash hash.Hash
 	errFunc func(error)
 }
@@ -42,7 +43,7 @@ func New(key []byte, initCtr uint32, hashFunc param.SectionWriterFunc) (*Encrypt
 	return e, nil
 }
 
-func (e *Encrypt) Connect(hashFunc param.SectionWriterFunc) param.SectionWriter {
+func (e *Encrypt) SetWriter(hashFunc param.SectionWriterFunc) param.SectionWriter {
 	e.w = hashFunc(nil)
 	return e
 
@@ -52,21 +53,30 @@ func (e *Encrypt) Init(_ context.Context, errFunc func(error)) {
 	e.errFunc = errFunc
 }
 
-func (e *Encrypt) Write(index int, b []byte) {
+func (e *Encrypt) SeekSection(offset int) {
+	e.w.SeekSection(offset)
+}
+
+func (e *Encrypt) Write(b []byte) (int, error) {
 	cipherText, err := e.e.Encrypt(b)
 	if err != nil {
 		e.errFunc(err)
-		return
+		return 0, err
 	}
-	e.w.Write(index, cipherText)
+	return e.w.Write(cipherText)
 }
 
-func (e *Encrypt) Reset(ctx context.Context) {
+func (e *Encrypt) Reset() {
 	e.e.Reset()
-	e.w.Reset(ctx)
+	e.w.Reset()
 }
 
-func (e *Encrypt) Sum(b []byte, length int, span []byte) []byte {
+func (e *Encrypt) SetLength(length int) {
+	e.length = length
+	e.w.SetLength(length)
+}
+
+func (e *Encrypt) Sum(b []byte) []byte {
 	// derive new key
 	oldKey := make([]byte, encryption.KeyLength)
 	copy(oldKey, e.key)
@@ -74,15 +84,20 @@ func (e *Encrypt) Sum(b []byte, length int, span []byte) []byte {
 	e.keyHash.Write(e.key)
 	newKey := e.keyHash.Sum(nil)
 	copy(e.key, newKey)
-	s := e.w.Sum(b, length, span)
+	s := e.w.Sum(b)
 	log.Trace("key", "key", oldKey, "ekey", e.key, "newkey", newKey)
 	return append(oldKey, s...)
 }
 
 // DigestSize implements param.SectionWriter
+func (e *Encrypt) BlockSize() int {
+	return e.Size()
+}
+
+// DigestSize implements param.SectionWriter
 // TODO: cache these calculations
-func (e *Encrypt) DigestSize() int {
-	return e.w.DigestSize() + encryption.KeyLength
+func (e *Encrypt) Size() int {
+	return e.w.Size() + encryption.KeyLength
 }
 
 // SectionSize implements param.SectionWriter
@@ -91,6 +106,7 @@ func (e *Encrypt) SectionSize() int {
 }
 
 // Branches implements param.SectionWriter
+// TODO: cache these calculations
 func (e *Encrypt) Branches() int {
-	return e.w.Branches() / (e.DigestSize() / e.w.SectionSize())
+	return e.w.Branches() / (e.Size() / e.w.SectionSize())
 }

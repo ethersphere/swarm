@@ -58,12 +58,12 @@ func TestKey(t *testing.T) {
 	if !bytes.Equal(testKey, e.key) {
 		t.Fatalf("key seed; expected %x, got %x", testKey, e.key)
 	}
-	e.Connect(cacheFunc)
+	e.SetWriter(cacheFunc)
 
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	e.Write(0, data)
-	span := bmt.LengthToSpan(chunkSize)
-	doubleRef := e.Sum(nil, chunkSize, span)
+	e.Write(data) // 0
+	e.SetLength(chunkSize)
+	doubleRef := e.Sum(nil)
 	refKey := doubleRef[:encryption.KeyLength]
 	if !bytes.Equal(refKey, testKey) {
 		t.Fatalf("returned ref key, expected %x, got %x", testKey, refKey)
@@ -86,7 +86,7 @@ func TestEncryptOneChunk(t *testing.T) {
 
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cache.Connect(hashFunc)
+	cache.SetWriter(hashFunc)
 	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
@@ -96,7 +96,7 @@ func TestEncryptOneChunk(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		eFunc.Connect(cacheFunc)
+		eFunc.SetWriter(cacheFunc)
 		eFunc.Init(ctx, errFunc)
 		return eFunc
 	}
@@ -104,8 +104,8 @@ func TestEncryptOneChunk(t *testing.T) {
 	_, data := testutil.SerialData(chunkSize, 255, 0)
 	h := hasher.New(encryptFunc)
 	h.Init(ctx, func(error) {})
-	h.Write(0, data)
-	doubleRef := h.Sum(nil, 0, nil)
+	h.Write(data) //0
+	doubleRef := h.Sum(nil)
 
 	enc := encryption.New(testKey, 0, 42, sha3.NewLegacyKeccak256)
 	cipherText, err := enc.Encrypt(data)
@@ -120,8 +120,8 @@ func TestEncryptOneChunk(t *testing.T) {
 
 	bmtTreePool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
 	hc := bmt.New(bmtTreePool)
-	span := bmt.LengthToSpan(len(cipherText))
-	hc.ResetWithLength(span)
+	hc.Reset()
+	hc.SetLength(len(cipherText))
 	hc.Write(cipherText)
 	cipherRef := hc.Sum(nil)
 	dataRef := doubleRef[encryption.KeyLength:]
@@ -139,7 +139,7 @@ func TestEncryptChunkWholeAndSections(t *testing.T) {
 
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cache.Connect(hashFunc)
+	cache.SetWriter(hashFunc)
 	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
@@ -151,9 +151,9 @@ func TestEncryptChunkWholeAndSections(t *testing.T) {
 	e.Init(ctx, errFunc)
 
 	_, data := testutil.SerialData(chunkSize, 255, 0)
-	e.Write(0, data)
-	span := bmt.LengthToSpan(chunkSize)
-	e.Sum(nil, chunkSize, span)
+	e.Write(data) // 0
+	e.SetLength(chunkSize)
+	e.Sum(nil)
 
 	cacheCopy := make([]byte, chunkSize)
 	copy(cacheCopy, cache.Get(0))
@@ -166,9 +166,11 @@ func TestEncryptChunkWholeAndSections(t *testing.T) {
 	e.Init(ctx, errFunc)
 
 	for i := 0; i < chunkSize; i += sectionSize {
-		e.Write(i/sectionSize, data[i:i+sectionSize])
+		e.SeekSection(i / sectionSize)
+		e.Write(data[i : i+sectionSize])
 	}
-	e.Sum(nil, chunkSize, span)
+	e.SetLength(chunkSize)
+	e.Sum(nil)
 
 	for i := 0; i < chunkSize; i += sectionSize {
 		chunked := cacheCopy[i : i+sectionSize]
@@ -191,7 +193,7 @@ func TestEncryptIntermediateChunk(t *testing.T) {
 
 	cache := testutillocal.NewCache()
 	cache.Init(ctx, errFunc)
-	cache.Connect(hashFunc)
+	cache.SetWriter(hashFunc)
 	cacheFunc := func(_ context.Context) param.SectionWriter {
 		return cache
 	}
@@ -209,10 +211,11 @@ func TestEncryptIntermediateChunk(t *testing.T) {
 
 	_, data := testutil.SerialData(chunkSize*branches, 255, 0)
 	for i := 0; i < chunkSize*branches; i += chunkSize {
-		h.Write(i/chunkSize, data[i:i+chunkSize])
+		h.SeekSection(i / chunkSize)
+		h.Write(data[i : i+chunkSize])
 	}
-	span := bmt.LengthToSpan(chunkSize * branches)
-	ref := h.Sum(nil, chunkSize*branches, span)
+	h.SetLength(chunkSize * branches)
+	ref := h.Sum(nil)
 	select {
 	case <-ctx.Done():
 		t.Fatalf("ctx done: %v", ctx.Err())
