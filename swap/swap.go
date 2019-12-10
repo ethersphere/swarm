@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
@@ -390,11 +391,15 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	err = p.updateBalance(-int64(cheque.Honey))
+	honeyAmountInt64 := int64(cheque.Honey)
+	err = p.updateBalance(-honeyAmountInt64)
 	if err != nil {
 		log.Error("error updating balance", "err", err)
 		return err
 	}
+
+	metrics.GetOrRegisterCounter("swap.cheques.received.num", nil).Inc(1)
+	metrics.GetOrRegisterCounter("swap.cheques.received.total", nil).Inc(honeyAmountInt64)
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
