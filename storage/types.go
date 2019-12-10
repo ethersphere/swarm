@@ -92,8 +92,9 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 	hasher := MakeHashFunc(DefaultHash)()
 	sdata := make([]byte, dataSize+8)
 	rand.Read(sdata[8:])
+	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
 	hasher.Reset()
-	hasher.SetLength(int(dataSize))
+	hasher.SetSpanBytes(sdata[:8])
 	hasher.Write(sdata[8:])
 	return NewChunk(hasher.Sum(nil), sdata)
 }
@@ -203,8 +204,7 @@ func (v *ContentAddressValidator) Validate(ch Chunk) bool {
 
 	hasher := v.Hasher()
 	hasher.Reset()
-	lengthNumber := int(binary.LittleEndian.Uint64(data[8:]))
-	hasher.SetLength(lengthNumber)
+	hasher.SetSpanBytes(data[:8])
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 

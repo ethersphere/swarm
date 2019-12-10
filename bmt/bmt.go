@@ -298,12 +298,19 @@ func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize
 }
 
+// Implements param.SectionWriter
 func (h *Hasher) SetLength(length int) {
 }
 
+// Implements param.SectionWriter
 func (h *Hasher) SetSpan(length int) {
 	span := LengthToSpan(length)
 	h.getTree().span = span
+}
+
+// Implements storage.SwarmHash
+func (h *Hasher) SetSpanBytes(b []byte) {
+
 }
 
 // Implements param.SectionWriter

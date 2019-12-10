@@ -18,8 +18,6 @@ package storage
 
 import (
 	"hash"
-
-	"github.com/ethersphere/swarm/bmt"
 )
 
 const (
@@ -30,20 +28,14 @@ const (
 
 type SwarmHash interface {
 	hash.Hash
-	//ResetWithLength([]byte)
-	SetLength(int)
+	SetSpanBytes([]byte)
 }
 
 type HashWithLength struct {
 	hash.Hash
 }
 
-//func (h *HashWithLength) ResetWithLength(length []byte) {
-//	h.Reset()
-//	h.Write(length)
-//}
-func (h *HashWithLength) SetLength(length int) {
+func (h *HashWithLength) SetSpanBytes(length []byte) {
 	h.Reset()
-	span := bmt.LengthToSpan(length)
-	h.Write(span)
+	h.Write(length)
 }
