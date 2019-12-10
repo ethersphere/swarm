@@ -34,7 +34,7 @@ func newTreeParams(hashFunc param.SectionWriterFunc) *treeParams {
 	log.Trace("new tree params", "sectionsize", p.SectionSize, "branches", p.Branches, "chunksize", p.ChunkSize)
 	p.writerPool.New = func() interface{} {
 		hf := p.hashFunc(p.ctx)
-		log.Trace("param new hasher", "h", hf)
+		//log.Trace("param new hasher", "h", hf)
 		return hf
 	}
 	p.Spans = generateSpanSizes(p.Branches, 9)

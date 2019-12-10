@@ -122,6 +122,7 @@ func TestHasherVector(t *testing.T) {
 			}
 			h.Write(data[j : j+size])
 		}
+		//h.SetLength(dataLength)
 		ref := h.Sum(nil)
 		correctRefHex := "0x" + expected[i]
 		refHex := hexutil.Encode(ref)

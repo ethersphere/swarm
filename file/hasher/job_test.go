@@ -260,10 +260,10 @@ func TestJobWriteTwoAndFinish(t *testing.T) {
 	defer cancel()
 	select {
 	case ref := <-tgt.Done():
-		correctRefHex := "0x002030bde3d4cf89919649775cd71875c4d0ab1708a380e03fefc3a28aa24831"
+		correctRefHex := "0xe1553e1a3a6b73f96e6fc48318895e401e7db2972962ee934633fa8b3eaaf78b"
 		refHex := hexutil.Encode(ref)
 		if refHex != correctRefHex {
-			t.Fatalf("job write full: expected %s, got %s", correctRefHex, refHex)
+			t.Fatalf("job write two and finish: expected %s, got %s", correctRefHex, refHex)
 		}
 	case <-ctx.Done():
 		t.Fatalf("timeout: %v", ctx.Err())
@@ -333,7 +333,7 @@ func TestJobWriteParentSection(t *testing.T) {
 	if jbnp.count() != 1 {
 		t.Fatalf("parent count: expected %d, got %d", 1, jbnp.count())
 	}
-	correctRefHex := "0x002030bde3d4cf89919649775cd71875c4d0ab1708a380e03fefc3a28aa24831"
+	correctRefHex := "0xe1553e1a3a6b73f96e6fc48318895e401e7db2972962ee934633fa8b3eaaf78b"
 
 	// extract data in section 2 from the writer
 	// TODO: overload writer to provide a get method to extract data to improve clarity

@@ -3,6 +3,7 @@ package hasher
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"hash"
 	"sync"
 	"testing"
@@ -100,6 +101,7 @@ type dummySectionWriter struct {
 	data        []byte
 	digest      []byte
 	size        int
+	span        []byte
 	summed      bool
 	index       int
 	writer      hash.Hash
@@ -128,12 +130,13 @@ func (d *dummySectionWriter) SetWriter(_ param.SectionWriterFunc) param.SectionW
 
 // implements param.SectionWriter
 func (d *dummySectionWriter) SeekSection(offset int) {
-	d.index = offset
+	d.index = offset * d.SectionSize()
 }
 
 // implements param.SectionWriter
 func (d *dummySectionWriter) SetLength(length int) {
-	d.size = length
+	d.span = make([]byte, 8)
+	binary.LittleEndian.PutUint64(d.span, uint64(length))
 }
 
 // implements param.SectionWriter
@@ -169,6 +172,8 @@ func (d *dummySectionWriter) Sum(_ []byte) []byte {
 func (d *dummySectionWriter) sum() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.writer.Write(d.span)
+	log.Trace("dummy sum writing span", "span", d.span)
 	for i := 0; i < d.size; i += d.writer.Size() {
 		sectionData := d.data[i : i+d.writer.Size()]
 		log.Trace("dummy sum write", "i", i/d.writer.Size(), "data", hexutil.Encode(sectionData), "size", d.size)
@@ -186,6 +191,7 @@ func (d *dummySectionWriter) Reset() {
 	d.digest = make([]byte, d.digestSize)
 	d.size = 0
 	d.summed = false
+	d.span = nil
 	d.writer.Reset()
 }
 
@@ -226,10 +232,11 @@ func TestDummySectionWriter(t *testing.T) {
 	w.SeekSection(branches + 1)
 	w.Write(data[sectionSize:])
 	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
-		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
+		t.Fatalf("Write double pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
 	}
 
 	correctDigestHex := "0xfbc16f6db3534b456cb257d00148127f69909000c89f8ce5bc6183493ef01da1"
+	w.SetLength(chunkSize * 2)
 	digest := w.Sum(nil)
 	digestHex := hexutil.Encode(digest)
 	if digestHex != correctDigestHex {
@@ -238,13 +245,14 @@ func TestDummySectionWriter(t *testing.T) {
 
 	w = newDummySectionWriter(chunkSize*2, sectionSize*2, sectionSize*2, branches/2)
 	w.Reset()
-	w.SeekSection(branches)
+	w.SeekSection(branches / 2)
 	w.Write(data)
 	if !bytes.Equal(w.data[chunkSize:chunkSize+sectionSize*2], data) {
-		t.Fatalf("Write pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
+		t.Fatalf("Write double pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
 	}
 
 	correctDigestHex += zeroHex
+	w.SetLength(chunkSize * 2)
 	digest = w.Sum(nil)
 	digestHex = hexutil.Encode(digest)
 	if digestHex != correctDigestHex {
