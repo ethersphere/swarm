@@ -224,7 +224,8 @@ func (jb *job) sum() {
 	size := jb.size()
 	//span := bmt.LengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	jb.writer.SetLength(size)
+	jb.writer.SetLength(refSize)
+	jb.writer.SetSpan(size)
 	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
 	ref := jb.writer.Sum(nil)
 

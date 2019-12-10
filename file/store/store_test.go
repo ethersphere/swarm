@@ -68,6 +68,7 @@ func TestStoreWithHasher(t *testing.T) {
 			h.SeekSection(i / sectionSize)
 			h.Write(data[i : i+sectionSize])
 		}
+		h.SetSpan(chunkSize)
 		h.SetLength(chunkSize)
 		h.Sum(nil)
 	}()

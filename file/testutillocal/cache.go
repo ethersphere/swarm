@@ -31,11 +31,16 @@ func (c *Cache) SetWriter(writeFunc param.SectionWriterFunc) param.SectionWriter
 	return c
 }
 
+func (c *Cache) SetSpan(length int) {
+	if c.w != nil {
+		c.w.SetSpan(length)
+	}
+}
+
 func (c *Cache) SetLength(length int) {
 	if c.w != nil {
 		c.w.SetLength(length)
 	}
-
 }
 
 func (c *Cache) SeekSection(offset int) {

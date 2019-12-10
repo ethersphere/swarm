@@ -300,8 +300,12 @@ func (h *Hasher) SectionSize() int {
 }
 
 func (h *Hasher) SetLength(length int) {
-	h.jobSize = (length-1)%h.pool.Size + 1
+	h.jobSize = length //(length-1)%h.pool.Size + 1
+}
+
+func (h *Hasher) SetSpan(length int) {
 	span := LengthToSpan(length)
+	log.Trace("setlength", "span", span, "length", length)
 	h.getTree().span = span
 }
 

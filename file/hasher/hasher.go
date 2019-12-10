@@ -86,6 +86,9 @@ func (h *Hasher) Sum(b []byte) []byte {
 	return append(b, ref...)
 }
 
+func (h *Hasher) SetSpan(length int) {
+}
+
 func (h *Hasher) SetLength(length int) {
 	h.size = length
 }

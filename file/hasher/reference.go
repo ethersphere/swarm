@@ -68,7 +68,7 @@ func (r *ReferenceHasher) sum(lvl int) []byte {
 	toSumSize := r.cursors[lvl] - r.cursors[lvl+1]
 
 	r.hasher.Reset()
-	r.hasher.SetLength(span)
+	r.hasher.SetSpan(span)
 	r.hasher.Write(r.buffer[r.cursors[lvl+1] : r.cursors[lvl+1]+toSumSize])
 	ref := r.hasher.Sum(nil)
 	return ref

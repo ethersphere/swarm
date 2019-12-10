@@ -18,7 +18,7 @@ type FileStore struct {
 	w          param.SectionWriter
 	ctx        context.Context
 	data       [][]byte
-	length     int
+	span       int
 	errFunc    func(error)
 }
 
@@ -44,7 +44,7 @@ func (f *FileStore) Init(ctx context.Context, errFunc func(error)) {
 
 // Reset implements param.SectionWriter
 func (f *FileStore) Reset() {
-	f.length = 0
+	f.span = 0
 	f.data = [][]byte{}
 	f.w.Reset()
 }
@@ -65,7 +65,7 @@ func (f *FileStore) Write(b []byte) (int, error) {
 func (f *FileStore) Sum(b []byte) []byte {
 	ref := f.w.Sum(b)
 	go func(ref []byte) {
-		b = bmt.LengthToSpan(f.length)
+		b = bmt.LengthToSpan(f.span)
 		for _, data := range f.data {
 			b = append(b, data...)
 		}
@@ -79,8 +79,12 @@ func (f *FileStore) Sum(b []byte) []byte {
 	return ref
 }
 
+func (f *FileStore) SetSpan(length int) {
+	f.span = length
+	f.w.SetSpan(length)
+}
+
 func (f *FileStore) SetLength(length int) {
-	f.length = length
 	f.w.SetLength(length)
 }
 

@@ -35,7 +35,7 @@ func TestManualDanglingChunk(t *testing.T) {
 	_, levels[0] = testutil.SerialData(chunkSize*branches+chunkSize, 255, 0)
 	for i := 0; i < chunkSize*branches; i += chunkSize {
 		h.Reset()
-		h.SetLength(chunkSize)
+		h.SetSpan(chunkSize)
 		h.Write(levels[0][i : i+chunkSize])
 		copy(levels[1][i/branches:], h.Sum(nil))
 	}
@@ -48,7 +48,7 @@ func TestManualDanglingChunk(t *testing.T) {
 	// write the dangling chunk
 	// hash it and write the reference on the second section of level 2
 	h.Reset()
-	h.SetLength(chunkSize)
+	h.SetSpan(chunkSize)
 	h.Write(levels[0][chunkSize*branches:])
 	copy(levels[2][sectionSize:], h.Sum(nil))
 	refHex = hexutil.Encode(levels[2][sectionSize:])
@@ -59,7 +59,7 @@ func TestManualDanglingChunk(t *testing.T) {
 
 	// hash the chunk on level 1 and write into the first section of level 2
 	h.Reset()
-	h.SetLength(chunkSize * branches)
+	h.SetSpan(chunkSize * branches)
 	h.Write(levels[1])
 	copy(levels[2], h.Sum(nil))
 	refHex = hexutil.Encode(levels[2][:sectionSize])
@@ -70,7 +70,7 @@ func TestManualDanglingChunk(t *testing.T) {
 
 	// hash the two sections on level 2 to obtain the root hash
 	h.Reset()
-	h.SetLength(chunkSize*branches + chunkSize)
+	h.SetSpan(chunkSize*branches + chunkSize)
 	h.Write(levels[2])
 	ref := h.Sum(nil)
 	refHex = hexutil.Encode(ref)

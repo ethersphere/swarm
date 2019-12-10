@@ -135,6 +135,11 @@ func (d *dummySectionWriter) SeekSection(offset int) {
 
 // implements param.SectionWriter
 func (d *dummySectionWriter) SetLength(length int) {
+	d.size = length
+}
+
+// implements param.SectionWriter
+func (d *dummySectionWriter) SetSpan(length int) {
 	d.span = make([]byte, 8)
 	binary.LittleEndian.PutUint64(d.span, uint64(length))
 }
@@ -235,8 +240,9 @@ func TestDummySectionWriter(t *testing.T) {
 		t.Fatalf("Write double pos %d: expected %x, got %x", chunkSize, w.data[chunkSize:chunkSize+sectionSize*2], data)
 	}
 
-	correctDigestHex := "0xfbc16f6db3534b456cb257d00148127f69909000c89f8ce5bc6183493ef01da1"
+	correctDigestHex := "0x52eefd0c37895a8845d4a6cf6c6b56980e448376e55eb45717663ab7b3fc8d53"
 	w.SetLength(chunkSize * 2)
+	w.SetSpan(chunkSize * 2)
 	digest := w.Sum(nil)
 	digestHex := hexutil.Encode(digest)
 	if digestHex != correctDigestHex {
@@ -253,6 +259,7 @@ func TestDummySectionWriter(t *testing.T) {
 
 	correctDigestHex += zeroHex
 	w.SetLength(chunkSize * 2)
+	w.SetSpan(chunkSize * 2)
 	digest = w.Sum(nil)
 	digestHex = hexutil.Encode(digest)
 	if digestHex != correctDigestHex {
