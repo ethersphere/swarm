@@ -68,7 +68,6 @@ func (e *Encrypt) Write(b []byte) (int, error) {
 }
 
 func (e *Encrypt) Reset() {
-	e.e.Reset()
 	e.w.Reset()
 }
 

@@ -77,7 +77,6 @@ func TestSplitWithDataFileStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(time.Second)
 	refHex := hexutil.Encode(ref)
 	correctRefHex := "0xc10090961e7682a10890c334d759a28426647141213abda93b096b892824d2ef"
 	if refHex != correctRefHex {

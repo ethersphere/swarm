@@ -548,7 +548,7 @@ func (sw *AsyncHasher) SeekSection(offset int) {
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
 	defer sw.mtx.Unlock()
 	sw.Hasher.size += len(section)
-	c, err := sw.writeSection(sw.Hasher.cursor, section)
+	return sw.writeSection(sw.Hasher.cursor, section)
 }
 
 // Write writes the i-th section of the BMT base
