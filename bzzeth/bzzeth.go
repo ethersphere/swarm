@@ -136,7 +136,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
 	if err != nil {
 		log.Error("Error checking hashesh in store", "Reason", err)
-		return err
+		return nil
 	}
 
 	// collect the hashes of block headers we want
@@ -161,7 +161,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	req, err := p.getBlockHeaders(ctx, hashes, deliveries)
 	if err != nil {
 		p.logger.Error("Error sending GetBlockHeader message", "Reason", err)
-		return err
+		return nil
 	}
 	defer req.cancel()
 
@@ -174,7 +174,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 			if !ok {
 				p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt)
 				// todo: introduce better errors
-				return errors.New("bzzeth.handleNewBlockHeaders error")
+				return nil
 			}
 			ch := newChunk(hdr)
 			deliveredCnt++

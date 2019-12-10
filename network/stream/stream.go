@@ -290,7 +290,6 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 		provider := r.getProvider(s.Stream)
 		if provider == nil {
 			// at this point of the message exchange unsupported providers are illegal. drop peer
-			// todo: handle errors nicely
 			return errors.New("peer requested unsupported provider. illegal, dropping peer")
 		}
 
@@ -320,7 +319,7 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 				// fetch everything from beginning till s.Cursor
 				go func() {
 					err := r.clientRequestStreamRange(ctx, p, provider, s.Stream, s.Cursor)
-					// todo: there was a go routine here, check if needed
+					// todo: investigate if we can handle this better
 					if err != nil {
 						p.Drop("had an error sending initial GetRange for historical stream: %s")
 					}
@@ -332,7 +331,7 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 				//constantly fetch the head of the stream
 				p.logger.Debug("asking for live stream", "stream", s.Stream, "cursor", s.Cursor)
 
-				// todo: there was a go routine here, check if needed
+				// todo: investigate if we can handle this better
 				// ask the tip (cursor + 1)
 				go func() {
 					err := r.clientRequestStreamHead(ctx, p, s.Stream, s.Cursor+1)
@@ -617,16 +616,15 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		p.mtx.Unlock()
 
 		// todo: this should happen because of the returned error anyway
-		//// if the stream is wanted and has timed out
-		//// then drop the peer. this safeguards the edge
-		//// case that a batch times out when a kademlia
-		//// depth change occurs between the call to
-		//// clientSealBatch and a subsequent chunk delivery
-		//// message
-		//if provider.WantStream(p, w.stream) {
-		//	p.Drop("batch has timed out")
-		//}
-		return errors.New("batch has timed out")
+		// if the stream is wanted and has timed out
+		// then drop the peer. this safeguards the edge
+		// case that a batch times out when a kademlia
+		// depth change occurs between the call to
+		// clientSealBatch and a subsequent chunk delivery
+		// message
+		if provider.WantStream(p, w.stream) {
+			return errors.New("batch has timed out")
+		}
 	case <-r.quit:
 		return nil
 	case <-p.quit:
