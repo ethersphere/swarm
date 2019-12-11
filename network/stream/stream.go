@@ -250,7 +250,7 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 		if err != nil {
 			// todo:
 			//p.logger.Error("error getting cursor for stream key", "name", v.Name, "key", v.Key, "err", err)
-			return fmt.Errorf("error getting cursor for stream key: %s", err)
+			return fmt.Errorf("error getting cursor for stream key: %w", err)
 		}
 		descriptor := StreamDescriptor{
 			Stream:  v,
@@ -275,7 +275,7 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 		// todo:
 		//p.logger.Error("failed to send StreamInfoRes to peer", "err", err)
 		//p.Drop("failed to send StreamInfoRes")
-		return fmt.Errorf("failed to send StreamInfoRes to peer: %s", err)
+		return fmt.Errorf("failed to send StreamInfoRes to peer: %w", err)
 	}
 
 	return nil
@@ -417,7 +417,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 
 	key, err := provider.ParseKey(msg.Stream.Key)
 	if err != nil {
-		return fmt.Errorf("erroring parsing stream key: %s", err)
+		return fmt.Errorf("erroring parsing stream key: %w", err)
 	}
 
 	// get hashes from the data source for this batch. to is 0 to denote we want whatever comes out of SubscribePull
@@ -427,7 +427,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	}
 	h, _, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, to)
 	if err != nil {
-		return fmt.Errorf("erroring getting live batch for stream: %s", err)
+		return fmt.Errorf("erroring getting live batch for stream: %w", err)
 	}
 
 	if e {
@@ -483,7 +483,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		p.mtx.Lock()
 		delete(p.openOffers, msg.Ruid)
 		p.mtx.Unlock()
-		return fmt.Errorf("error sending offered hashes: %s", err)
+		return fmt.Errorf("error sending offered hashes: %w", err)
 	}
 
 	return nil
@@ -517,7 +517,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	if lenHashes == 0 {
 		if err := p.sealWant(w); err != nil {
 			p.logger.Error("error persisting interval", "from", w.from, "to", w.to, "err", err)
-			return fmt.Errorf("error persisting interval: %s", err)
+			return fmt.Errorf("error persisting interval: %w", err)
 		}
 		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 	}
@@ -532,14 +532,14 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	if !provider.WantStream(p, w.stream) {
 		wantedHashesMsg.BitVector = []byte{}
 		if err := p.Send(ctx, wantedHashesMsg); err != nil {
-			return fmt.Errorf("error sending empty wanted hashes: %s", err)
+			return fmt.Errorf("error sending empty wanted hashes: %w", err)
 		}
 		return nil
 	}
 
 	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
-		return fmt.Errorf("error initialising bitvector: %s", err)
+		return fmt.Errorf("error initialising bitvector: %w", err)
 	}
 
 	for i := 0; i < lenHashes; i += HashSize {
@@ -560,7 +560,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			}
 		}
 	} else {
-		return fmt.Errorf("multi need data returned an error, dropping peer: %s", err)
+		return fmt.Errorf("multi need data returned an error, dropping peer: %w", err)
 	}
 
 	providerNeedDataTimer.UpdateSince(startNeed)
@@ -574,7 +574,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		streamEmptyWantedHashes.Inc(1)
 		wantedHashesMsg.BitVector = []byte{} // set the bitvector value to an empty slice, this is to signal the server we dont want any hashes
 		if err := p.sealWant(w); err != nil {
-			return fmt.Errorf("error persisting interval: %s", err)
+			return fmt.Errorf("error persisting interval: %w", err)
 		}
 	} else {
 		// we want some hashes
@@ -585,7 +585,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	}
 
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
-		return fmt.Errorf("error sending wanted hashes: %s", err)
+		return fmt.Errorf("error sending wanted hashes: %w", err)
 	}
 	if ctr == 0 {
 		// request the next range in case no chunks wanted
@@ -601,12 +601,12 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	case err := <-errc:
 		if err != nil {
 			streamBatchFail.Inc(1)
-			fmt.Errorf("got an error while sealing batch: %s", err)
+			fmt.Errorf("got an error while sealing batch: %w", err)
 		}
 
 		// seal the interval
 		if err := p.sealWant(w); err != nil {
-			fmt.Errorf("error persisting interval: %s", err)
+			fmt.Errorf("error persisting interval: %w", err)
 		}
 	case <-time.After(timeouts.SyncBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
@@ -663,13 +663,13 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		// set all chunks as synced
 		if err := provider.Set(ctx, allHashes...); err != nil {
 			// todo: handle errors in this function as well
-			return fmt.Errorf("error setting chunk as synced: %s", err.Error())
+			return fmt.Errorf("error setting chunk as synced: %w", err)
 		}
 		return nil
 	}
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
-		return fmt.Errorf("error initialising bitvector: %s", err.Error())
+		return fmt.Errorf("error initialising bitvector: %w", err)
 	}
 
 	maxFrame := MinFrameSize
@@ -691,7 +691,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	// get the chunks from the provider
 	chunks, err := provider.Get(ctx, wantHashes...)
 	if err != nil {
-		return fmt.Errorf("error while trying to call provider.Get: %s", err.Error())
+		return fmt.Errorf("error while trying to call provider.Get: %w", err)
 
 	}
 
@@ -717,7 +717,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 
 			//send the batch and reset chunk delivery message
 			if err := p.Send(ctx, cd); err != nil {
-				return fmt.Errorf("error sending chunk delivery frame: %s", err.Error())
+				return fmt.Errorf("error sending chunk delivery frame: %w", err)
 
 			}
 			cd = &ChunkDelivery{
@@ -739,7 +739,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	// set the chunks as synced
 	err = provider.Set(ctx, allHashes...)
 	if err != nil {
-		return fmt.Errorf("error sending chunk as synced: %s", err.Error())
+		return fmt.Errorf("error sending chunk as synced: %w", err)
 
 	}
 	providerSetTimer.UpdateSince(startSet)
@@ -775,7 +775,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	if err != nil {
 		if err == storage.ErrChunkInvalid {
 			streamChunkDeliveryFail.Inc(1)
-			return fmt.Errorf("error on provider.Put: %s", err.Error())
+			return fmt.Errorf("error on provider.Put: %w", err)
 		}
 		p.logger.Error("clientHandleChunkDelivery error putting chunk", "err", err)
 		return nil
@@ -944,12 +944,12 @@ func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider
 	if w.head {
 		if err := r.clientRequestStreamHead(ctx, p, w.stream, lastIndex+1); err != nil {
 			streamRequestNextIntervalFail.Inc(1)
-			return fmt.Errorf("error requesting next interval from peer: %s", err)
+			return fmt.Errorf("error requesting next interval from peer: %w", err)
 		}
 	} else {
 		if err := r.clientRequestStreamRange(ctx, p, provider, w.stream, cur); err != nil {
 			streamRequestNextIntervalFail.Inc(1)
-			return fmt.Errorf("error requesting next interval from peer: %s", err)
+			return fmt.Errorf("error requesting next interval from peer: %w", err)
 		}
 	}
 

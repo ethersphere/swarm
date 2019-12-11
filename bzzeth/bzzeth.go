@@ -233,7 +233,7 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	req, ok := p.requests.get(msg.Rid)
 	if !ok {
 		p.logger.Warn("", "id", msg.Rid)
-		return errors.New(fmt.Sprintf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid))
+		return fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid)
 
 	}
 
@@ -246,7 +246,7 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	err := b.deliverAndStoreAll(ctx, req, headers)
 	if err != nil {
 		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.Rid, "err", err)
-		return errors.New(fmt.Sprintf("bzzeth.handleBlockHeaders: fatal dropping peer, id: %d err: %s", msg.Rid, err.Error()))
+		return fmt.Errorf("bzzeth.handleBlockHeaders: fatal dropping peer, id: %d err: %w", msg.Rid, err)
 
 	}
 
