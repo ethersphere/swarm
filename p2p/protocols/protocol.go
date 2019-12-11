@@ -278,7 +278,6 @@ func (p *Peer) setRunning(isRunning bool) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	p.running = isRunning
-	return
 }
 
 func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Context, msg interface{}) error, done chan error) {
@@ -293,8 +292,6 @@ func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Con
 			if err != nil {
 				p.stop(err, done)
 			}
-
-			return
 		})()
 	}
 }
@@ -341,6 +338,7 @@ func (p *Peer) Shutdown(timeout time.Duration) error {
 func (p *Peer) stop(err error, done chan error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
+	p.running = false
 
 	select {
 	case done <- err:
