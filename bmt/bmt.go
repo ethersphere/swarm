@@ -85,10 +85,12 @@ type BaseHasherFunc func() hash.Hash
 //   the tree and itself in a state reusable for hashing a new chunk
 // - generates and verifies segment inclusion proofs (TODO:)
 type Hasher struct {
-	pool   *TreePool // BMT resource pool
-	bmt    *tree     // prebuilt BMT resource for flowcontrol and proofs
-	size   int       // bytes written to Hasher since last Reset()
-	cursor int       // cursor to write to on next Write() call
+	pool    *TreePool // BMT resource pool
+	bmt     *tree     // prebuilt BMT resource for flowcontrol and proofs
+	size    int       // bytes written to Hasher since last Reset()
+	cursor  int       // cursor to write to on next Write() call
+	errFunc func(error)
+	ctx     context.Context
 }
 
 // New creates a reusable BMT Hasher that
@@ -322,7 +324,9 @@ func (h *Hasher) Branches() int {
 }
 
 // Implements param.SectionWriter
-func (h *Hasher) Init(_ context.Context, _ func(error)) {
+func (h *Hasher) Init(ctx context.Context, errFunc func(error)) {
+	h.errFunc = errFunc
+	h.ctx = ctx
 }
 
 // Size returns the digest size
@@ -466,7 +470,6 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 		seccount: seccount,
 		write:    write,
 		jobSize:  0,
-		sought:   true,
 	}
 }
 
@@ -493,19 +496,11 @@ type AsyncHasher struct {
 	write    func(i int, section []byte, final bool)
 	errFunc  func(error)
 	all      bool // if all written in one go, temporary workaround
-	sought   bool
 	jobSize  int
 }
 
 // Implements param.SectionWriter
-// TODO context should be implemented all across (ie original TODO  in TreePool.reserve())
-func (sw *AsyncHasher) Init(_ context.Context, errFunc func(error)) {
-	sw.errFunc = errFunc
-}
-
-// Implements param.SectionWriter
 func (sw *AsyncHasher) Reset() {
-	sw.sought = true
 	sw.jobSize = 0
 	sw.all = false
 	sw.Hasher.Reset()
