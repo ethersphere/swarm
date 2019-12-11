@@ -30,13 +30,14 @@ package protocols
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
+	"runtime/pprof"
 	"sync"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -200,15 +201,16 @@ func (s *Spec) NewMsg(code uint64) (interface{}, bool) {
 // Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
-	*p2p.Peer                   // the p2p.Peer object representing the remote
-	rw        p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
-	spec      *Spec
-	encode    func(context.Context, interface{}) (interface{}, int, error)
-	decode    func(p2p.Msg) (context.Context, []byte, error)
-	eg        *errgroup.Group // error group used for executing handlers asynchronously
-	running   bool
-	mtx       sync.RWMutex // guards running
-	//shutdown  chan error
+	*p2p.Peer                      // the p2p.Peer object representing the remote
+	rw           p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
+	spec         *Spec
+	encode       func(context.Context, interface{}) (interface{}, int, error)
+	decode       func(p2p.Msg) (context.Context, []byte, error)
+	wg           sync.WaitGroup
+	running      bool
+	mtx          sync.RWMutex // guards running
+	shutdown     chan struct{}
+	shutdownOnce sync.Once // protects shutdown channel from multiple Shutdown calls
 }
 
 // NewPeer constructs a new peer
@@ -223,12 +225,12 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 		decode = decodeWithoutContext
 	}
 	return &Peer{
-		Peer:   peer,
-		rw:     rw,
-		spec:   spec,
-		encode: encode,
-		decode: decode,
-		eg:     &errgroup.Group{},
+		Peer:     peer,
+		rw:       rw,
+		spec:     spec,
+		encode:   encode,
+		decode:   decode,
+		shutdown: make(chan struct{}),
 	}
 }
 
@@ -263,14 +265,13 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 		}
 	}()
 
-	return <-done
+	select {
+	case err := <-done:
+		return err
+	case <-p.shutdown:
+	}
 
-	//select {
-	//case err := <-done:
-	//	return err
-	//case err := <-p.shutdown:
-	//	return err
-	//}
+	return nil
 }
 
 func (p *Peer) setRunning(isRunning bool) {
@@ -285,19 +286,16 @@ func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Con
 	defer p.mtx.RUnlock()
 
 	if p.running {
-		p.eg.Go(func() error {
+		p.wg.Add(1)
+		go (func() {
+			defer p.wg.Done()
 			err := p.handleMsg(msg, handler)
 			if err != nil {
 				p.stop(err, done)
 			}
 
-			return err
-		})
-	} else {
-		select {
-		case done <- nil:
-		default:
-		}
+			return
+		})()
 	}
 }
 
@@ -309,19 +307,34 @@ func (p *Peer) Drop(reason string) {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
-//Shutdown waits for async go routines to finish and returns.
-func (p *Peer) Shutdown() {
+// Shutdown stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
+// Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
+func (p *Peer) Shutdown(timeout time.Duration) error {
 	p.mtx.Lock()
 	p.running = false
 	p.mtx.Unlock()
 
-	p.eg.Wait()
+	done := make(chan bool)
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
 
-	// todo: should break the loop here but at the moment there seems to be a part of the code in localstore that expects the loop to still work
-	//select {
-	//case p.shutdown <- nil:
-	//default:
-	//}
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		log.Debug("peer shutdown with still active handlers: {}", p)
+		// Print a full goroutine dump to debug blocking.
+		// TODO: use a logger to write a goroutine profile
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
+		return errors.New("shutdown timeout reached")
+	}
+
+	p.shutdownOnce.Do(func() {
+		close(p.shutdown)
+	})
+
+	return nil
 }
 
 // Stop drops the peer and stops the event loop.

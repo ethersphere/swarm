@@ -22,12 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
-	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -1098,31 +1098,19 @@ func (r *Registry) Stop() error {
 	log.Debug("stream registry stopping")
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
-
 	close(r.quit)
 
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, peer := range r.peers {
-		wg.Add(1)
-		go func(peer *Peer) {
-			defer wg.Done()
-			peer.Shutdown()
-		}(peer)
+		peer := peer
+		eg.Go(func() error {
+			return peer.Shutdown(5 * time.Second)
+		})
 	}
 
-	done := make(chan bool)
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
+	err := eg.Wait()
+	if err != nil {
 		r.logger.Error("stream closed with still active handlers")
-		// Print a full goroutine dump to debug blocking.
-		// TODO: use a logger to write a goroutine profile
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 	}
 
 	for _, v := range r.providers {
