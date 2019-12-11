@@ -601,12 +601,12 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	case err := <-errc:
 		if err != nil {
 			streamBatchFail.Inc(1)
-			fmt.Errorf("got an error while sealing batch: %w", err)
+			return fmt.Errorf("got an error while sealing batch: %w", err)
 		}
 
 		// seal the interval
 		if err := p.sealWant(w); err != nil {
-			fmt.Errorf("error persisting interval: %w", err)
+			return fmt.Errorf("error persisting interval: %w", err)
 		}
 	case <-time.After(timeouts.SyncBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
