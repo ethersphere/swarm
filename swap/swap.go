@@ -474,12 +474,14 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 		return
 	}
 
+	metrics.GetOrRegisterCounter("swap.cheques.cashed.honey", nil).Inc(result.TotalPayout.Int64())
 	if result.Bounced {
 		swapLog.Warn("cheque bounced", "tx", receipt.TxHash)
 		return
 		// TODO: do something here
 	}
 
+	metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
 	swapLog.Debug("cash tx mined", "receipt", receipt)
 }
 
