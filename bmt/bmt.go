@@ -296,61 +296,56 @@ func (h *Hasher) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
 	return h
 }
 
-// Implements param.SectionWriter
+// SectionSize implements param.SectionWriter
 func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize
 }
 
-// Implements param.SectionWriter
+// SetLength implements param.SectionWriter
 func (h *Hasher) SetLength(length int) {
 }
 
-// Implements param.SectionWriter
+// SetSpan implements param.SectionWriter
 func (h *Hasher) SetSpan(length int) {
 	span := LengthToSpan(length)
 	h.getTree().span = span
 }
 
-// Implements storage.SwarmHash
+// SetSpanBytes implements storage.SwarmHash
 func (h *Hasher) SetSpanBytes(b []byte) {
 	t := h.getTree()
 	t.span = make([]byte, 8)
 	copy(t.span, b)
 }
 
-// Implements param.SectionWriter
+// Branches implements param.SectionWriter
 func (h *Hasher) Branches() int {
 	return h.pool.SegmentCount
 }
 
-// Implements param.SectionWriter
+// Init implements param.SectionWriter
 func (h *Hasher) Init(ctx context.Context, errFunc func(error)) {
 	h.errFunc = errFunc
 	h.ctx = ctx
 }
 
-// Size returns the digest size
-// Implements hash.Hash in param.SectionWriter
+// Size implements hash.Hash and param.SectionWriter
 func (h *Hasher) Size() int {
 	return h.pool.SegmentSize
 }
 
-// Seek sets the section that will be written to on the next Write()
+// SeekSection implements param.SectionWriter
 func (h *Hasher) SeekSection(offset int) {
 	h.cursor = offset
 }
 
-// BlockSize returns the block size
-// Implements hash.Hash in param.SectionWriter
+// BlockSize implements hash.Hash and param.SectionWriter
 func (h *Hasher) BlockSize() int {
 	return 2 * h.pool.SegmentSize
 }
 
 // Sum returns the BMT root hash of the buffer
 // using Sum presupposes sequential synchronous writes (io.Writer interface)
-// hash.Hash interface Sum method appends the byte slice to the underlying
-// data before it calculates and returns the hash of the chunk
-// caller must make sure Sum is not called concurrently with Write, writeSection
 // Implements hash.Hash in param.SectionWriter
 func (h *Hasher) Sum(b []byte) (s []byte) {
 	t := h.getTree()
@@ -373,7 +368,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 
 // Write calls sequentially add to the buffer to be hashed,
 // with every full segment calls writeSection in a go routine
-// Implements hash.Hash (io.Writer) in param.SectionWriter
+// Implements hash.Hash and param.SectionWriter
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
 	if l == 0 || l > h.pool.Size {
@@ -420,8 +415,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	return l, nil
 }
 
-// Reset needs to be called before writing to the hasher
-// Implements hash.Hash in param.SectionWriter
+// Reset implements hash.Hash and param.SectionWriter
 func (h *Hasher) Reset() {
 	h.cursor = 0
 	h.size = 0
@@ -474,8 +468,9 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 }
 
 // AsyncHasher extends BMT Hasher with an asynchronous segment/section writer interface
-// AsyncHasher is unsafe and does not check indexes and section data lengths
-// it must be used with the right indexes and length and the right number of sections
+// AsyncHasher cannot be used as with a hash.Hash interface: It must be used with the
+// right indexes and length and the right number of sections
+// It is unsafe and does not check indexes and section data lengths
 //
 // behaviour is undefined if
 // * non-final sections are shorter or longer than secsize
@@ -499,37 +494,35 @@ type AsyncHasher struct {
 	jobSize  int
 }
 
-// Implements param.SectionWriter
+// Reset implements param.SectionWriter
 func (sw *AsyncHasher) Reset() {
 	sw.jobSize = 0
 	sw.all = false
 	sw.Hasher.Reset()
 }
 
+// SetLength implements param.SectionWriter
 func (sw *AsyncHasher) SetLength(length int) {
 	sw.jobSize = length
 }
 
-// Implements param.SectionWriter
+// SetWriter implements param.SectionWriter
 func (sw *AsyncHasher) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
 	sw.errFunc(errors.New("Asynchasher does not currently support SectionWriter chaining"))
 	return sw
 }
 
-// SectionSize returns the size of async section unit to use
-// Implements param.SectionWriter
+// SectionSize implements param.SectionWriter
 func (sw *AsyncHasher) SectionSize() int {
 	return sw.secsize
 }
 
-// DigestSize returns the branching factor, which is equivalent to the size of the BMT input
-// Implements param.SectionWriter
+// Branches implements param.SectionWriter
 func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
-// SeekSection sets the cursor where the next Write() will write
-// It locks the cursor until Write() is called; if no Write() is called, it will hang.
+// SeekSection locks the cursor until Write() is called; if no Write() is called, it will hang.
 // Implements param.SectionWriter
 func (sw *AsyncHasher) SeekSection(offset int) {
 	sw.mtx.Lock()
@@ -539,17 +532,17 @@ func (sw *AsyncHasher) SeekSection(offset int) {
 // Write writes to the current position cursor of the Hasher
 // The cursor must first be manually set with SeekSection()
 // The method will NOT advance the cursor.
-// Implements hash.hash in param.SectionWriter
+// Implements param.SectionWriter
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
 	defer sw.mtx.Unlock()
 	sw.Hasher.size += len(section)
-	return sw.writeSection(sw.Hasher.cursor, section)
+	return sw.WriteSection(sw.Hasher.cursor, section)
 }
 
-// Write writes the i-th section of the BMT base
+// WriteSection writes the i-th section of the BMT base
 // this function can and is meant to be called concurrently
 // it sets max segment threadsafely
-func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
+func (sw *AsyncHasher) WriteSection(i int, section []byte) (int, error) {
 	// TODO: Temporary workaround for chunkwise write
 	if i < 0 {
 		sw.Hasher.cursor = 0
@@ -601,7 +594,7 @@ func (sw *AsyncHasher) writeSection(i int, section []byte) (int, error) {
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
 //
-// Implements hash.hash in param.SectionWriter
+// Implements param.SectionWriter
 func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	if sw.all {
 		return sw.Hasher.Sum(nil)
@@ -803,8 +796,8 @@ func calculateDepthFor(n int) (d int) {
 	return d + 1
 }
 
-// creates a binary span size representation
-// to pass to bmt.SectionWriter
+// LengthToSpan creates a binary data span size representation
+// It is required for calculating the BMT hash
 func LengthToSpan(length int) []byte {
 	spanBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(spanBytes, uint64(length))
