@@ -391,15 +391,15 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	honeyAmountInt64 := int64(cheque.Honey)
-	err = p.updateBalance(-honeyAmountInt64)
+	honeyAmount := int64(cheque.Honey)
+	err = p.updateBalance(-honeyAmount)
 	if err != nil {
 		log.Error("error updating balance", "err", err)
 		return err
 	}
 
 	metrics.GetOrRegisterCounter("swap.cheques.received.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.received.total", nil).Inc(honeyAmountInt64)
+	metrics.GetOrRegisterCounter("swap.cheques.received.honey", nil).Inc(honeyAmount)
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,

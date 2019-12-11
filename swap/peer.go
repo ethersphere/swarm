@@ -203,14 +203,14 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
-	honeyAmountInt64 := int64(cheque.Honey)
-	err = p.updateBalance(honeyAmountInt64)
+	honeyAmount := int64(cheque.Honey)
+	err = p.updateBalance(honeyAmount)
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.emitted.total", nil).Inc(honeyAmountInt64)
+	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(honeyAmount)
 
 	p.logger.Info("sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
