@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -377,6 +379,72 @@ func TestNoHook(t *testing.T) {
 	}
 }
 
+func TestPeer_Receive(t *testing.T) {
+	t.Run("OK", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			assert.Equal(t, "test content", msg.(*perBytesMsgReceiverPays).Content)
+			return nil
+		}
+
+		if err := peer.Receive(handler); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("ERROR - invalid message", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content   string
+			TestField string
+		}{
+			"test content",
+			"test field",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			t.Fatal("should not enter here")
+			return nil
+		}
+
+		if err := peer.Receive(handler); err != nil {
+			assert.EqualError(t, err, "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays")
+		}
+	})
+
+	t.Run("ERROR - handler error", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			assert.Equal(t, "test content", msg.(*perBytesMsgReceiverPays).Content)
+			return errors.New("test error")
+		}
+
+		if err := peer.Receive(handler); err != nil {
+			assert.EqualError(t, err, errorf(ErrHandler, "(msg code %v): %v", 0, errors.New("test error")).Error())
+		}
+	})
+
+}
+
+func TestPeer_Run(t *testing.T) {
+	// todo:
+}
+
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
 	runProtoHandshake(t, &protoHandshake{41, "420"}, errorf(ErrHandshake, errorf(ErrHandler, "(msg code 0): 41 (!= 42)").Error()))
 }
@@ -598,6 +666,7 @@ func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 }
 
 func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+
 	r, err := rlp.EncodeToBytes(d.msg)
 	if err != nil {
 		return p2p.Msg{}, err

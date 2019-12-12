@@ -45,6 +45,7 @@ require (
 	github.com/rnsdomains/rns-go-lib v0.0.0-20191114120302-3505575b0b8f
 	github.com/robertkrimen/otto v0.0.0-20170205013659-6a77b7cbc37d // indirect
 	github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00
+	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20190318030020-c3a204f8e965
 	github.com/tilinna/clock v1.0.2
 	github.com/uber-go/atomic v1.4.0 // indirect
