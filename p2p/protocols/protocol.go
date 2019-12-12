@@ -246,13 +246,8 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 	done := make(chan error, 1)
 	go func() {
 		for {
-			msg, err := p.rw.ReadMsg()
+			msg, err := p.readMsg()
 			if err != nil {
-				if err != io.EOF {
-					metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
-					log.Error("peer.handleIncoming", "err", err)
-				}
-
 				select {
 				case done <- err:
 				default:
@@ -261,7 +256,7 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 				return
 			}
 
-			p.dispatchAsyncHandleMsg(&msg, handler, done)
+			p.dispatchAsyncHandleMsg(msg, handler, done)
 		}
 	}()
 
@@ -272,6 +267,17 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 	}
 
 	return nil
+}
+
+func (p *Peer) readMsg() (*p2p.Msg, error) {
+	msg, err := p.rw.ReadMsg()
+	if err != nil {
+		if err != io.EOF {
+			metrics.GetOrRegisterCounter("peer.readMsg.error", nil).Inc(1)
+			log.Error("peer.readMsg", "err", err)
+		}
+	}
+	return &msg, err
 }
 
 func (p *Peer) setRunning(isRunning bool) {
@@ -386,12 +392,12 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 // Receive(code) is a sync call that handles incoming message with provided message handler
 func (p *Peer) Receive(handler func(ctx context.Context, msg interface{}) error) error {
-	msg, err := p.rw.ReadMsg()
+	msg, err := p.readMsg()
 	if err != nil {
 		return err
 	}
 
-	return p.handleMsg(&msg, handler)
+	return p.handleMsg(msg, handler)
 }
 
 // handleMsg is handling message with provided handler. It:
