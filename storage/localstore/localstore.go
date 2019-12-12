@@ -226,7 +226,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		if err != nil {
 			return nil, err
 		}
-		db.data, err = fcds.NewStore(
+		db.data, err = fcds.New(
 			filepath.Join(path, "data"),
 			chunk.DefaultSize+8, // chunk data has additional 8 bytes prepended
 			metaStore,
@@ -237,7 +237,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		}
 	} else {
 		// Mock store is provided, use mock FCDS.
-		db.data = fcdsmock.NewStore(o.MockStore)
+		db.data = fcdsmock.New(o.MockStore)
 	}
 	// Index storing bin id, store and access timestamp for a particular address.
 	// It is needed in order to update gc index keys for iteration order.

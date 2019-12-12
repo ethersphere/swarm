@@ -297,7 +297,7 @@ func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.
 		t.Fatal(err)
 	}
 
-	s, err = fcds.NewStore(path, chunk.DefaultSize, metaStore, !*noCacheFlag)
+	s, err = fcds.New(path, chunk.DefaultSize, metaStore, !*noCacheFlag)
 	if err != nil {
 		os.RemoveAll(path)
 		t.Fatal(err)

@@ -52,32 +52,30 @@ var ErrDBClosed = errors.New("closed database")
 // Store is the main FCDS implementation. It stores chunk data into
 // a number of files partitioned by the last byte of the chunk address.
 type Store struct {
-	shards       map[uint8]*os.File    // relations with shard id and a shard file
-	shardsMu     map[uint8]*sync.Mutex // mutex for every shard file
-	meta         MetaStore             // stores chunk offsets
-	free         map[uint8]struct{}    // which shards have free offsets
-	freeMu       sync.RWMutex          // protects free field
-	freeCache    *offsetCache          // optional cache of free offset values
-	wg           sync.WaitGroup        // blocks Close until all other method calls are done
-	maxChunkSize int                   // maximal chunk data size
-	quit         chan struct{}         // quit disables all operations after Close is called
-	quitOnce     sync.Once             // protects close channel from multiple Close calls
+	shards       []shard        // relations with shard id and a shard file and their mutexes
+	meta         MetaStore      // stores chunk offsets
+	free         []bool         // which shards have free offsets
+	freeMu       sync.RWMutex   // protects free field
+	freeCache    *offsetCache   // optional cache of free offset values
+	wg           sync.WaitGroup // blocks Close until all other method calls are done
+	maxChunkSize int            // maximal chunk data size
+	quit         chan struct{}  // quit disables all operations after Close is called
+	quitOnce     sync.Once      // protects quit channel from multiple Close calls
 }
 
-// NewStore constructs a new Store with files at path, with specified max chunk size.
+// New constructs a new Store with files at path, with specified max chunk size.
 // Argument withCache enables in memory cache of free chunk data positions in files.
-func NewStore(path string, maxChunkSize int, metaStore MetaStore, withCache bool) (s *Store, err error) {
+func New(path string, maxChunkSize int, metaStore MetaStore, withCache bool) (s *Store, err error) {
 	if err := os.MkdirAll(path, 0777); err != nil {
 		return nil, err
 	}
-	shards := make(map[byte]*os.File, shardCount)
-	shardsMu := make(map[uint8]*sync.Mutex)
+	shards := make([]shard, shardCount)
 	for i := byte(0); i < shardCount; i++ {
-		shards[i], err = os.OpenFile(filepath.Join(path, fmt.Sprintf("chunks-%v.db", i)), os.O_CREATE|os.O_RDWR, 0666)
+		shards[i].f, err = os.OpenFile(filepath.Join(path, fmt.Sprintf("chunks-%v.db", i)), os.O_CREATE|os.O_RDWR, 0666)
 		if err != nil {
 			return nil, err
 		}
-		shardsMu[i] = new(sync.Mutex)
+		shards[i].mu = new(sync.Mutex)
 	}
 	var freeCache *offsetCache
 	if withCache {
@@ -85,10 +83,9 @@ func NewStore(path string, maxChunkSize int, metaStore MetaStore, withCache bool
 	}
 	return &Store{
 		shards:       shards,
-		shardsMu:     shardsMu,
 		meta:         metaStore,
 		freeCache:    freeCache,
-		free:         make(map[uint8]struct{}),
+		free:         make([]bool, shardCount),
 		maxChunkSize: maxChunkSize,
 		quit:         make(chan struct{}),
 	}, nil
@@ -102,16 +99,16 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	}
 	defer done()
 
-	mu := s.shardsMu[getShard(addr)]
-	mu.Lock()
-	defer mu.Unlock()
+	sh := s.shards[getShard(addr)]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return nil, err
 	}
 	data := make([]byte, m.Size)
-	n, err := s.shards[getShard(addr)].ReadAt(data, m.Offset)
+	n, err := sh.f.ReadAt(data, m.Offset)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -129,7 +126,7 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	}
 	defer done()
 
-	mu := s.shardsMu[getShard(addr)]
+	mu := s.shards[getShard(addr)].mu
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -152,72 +149,74 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	defer done()
 
 	addr := ch.Address()
-	shard := getShard(addr)
-	f := s.shards[shard]
 	data := ch.Data()
+
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	s.freeMu.RLock()
-	_, hasFree := s.free[shard]
-	s.freeMu.RUnlock()
+	shard := getShard(addr)
+	sh := s.shards[shard]
 
-	var offset int64
-	var reclaimed bool
-	mu := s.shardsMu[shard]
-	mu.Lock()
-	if hasFree {
-		var freeOffset int64 = -1
-		if s.freeCache != nil {
-			freeOffset = s.freeCache.get(shard)
-		}
-		if freeOffset < 0 {
-			freeOffset, err = s.meta.FreeOffset(shard)
-			if err != nil {
-				return err
-			}
-		}
-		if freeOffset < 0 {
-			offset, err = f.Seek(0, io.SeekEnd)
-			if err != nil {
-				mu.Unlock()
-				return err
-			}
-			s.freeMu.Lock()
-			delete(s.free, shard)
-			s.freeMu.Unlock()
-		} else {
-			offset, err = f.Seek(freeOffset, io.SeekStart)
-			if err != nil {
-				mu.Unlock()
-				return err
-			}
-			reclaimed = true
-		}
-	} else {
-		offset, err = f.Seek(0, io.SeekEnd)
-		if err != nil {
-			mu.Unlock()
-			return err
-		}
-	}
-	_, err = f.Write(section)
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
+	offset, reclaimed, err := s.getOffset(shard)
 	if err != nil {
-		mu.Unlock()
 		return err
 	}
-	if reclaimed {
-		if s.freeCache != nil {
-			s.freeCache.remove(shard, offset)
-		}
-		defer mu.Unlock()
+
+	if offset < 0 {
+		offset, err = sh.f.Seek(0, io.SeekEnd)
 	} else {
-		mu.Unlock()
+		_, err = sh.f.Seek(offset, io.SeekStart)
+	}
+	if err != nil {
+		return err
+	}
+
+	if _, err = sh.f.Write(section); err != nil {
+		return err
+	}
+	if reclaimed && s.freeCache != nil {
+		s.freeCache.remove(shard, offset)
 	}
 	return s.meta.Set(addr, shard, reclaimed, &Meta{
 		Size:   uint16(len(data)),
 		Offset: offset,
 	})
+}
+
+// getOffset returns an offset where chunk data can be written to
+// and a flag if the offset is reclaimed from a previously removed chunk.
+// If offset is less then 0, no free offsets are available.
+func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
+	if !s.shardHasFreeOffsets(shard) {
+		// shard does not have free offset
+		return -1, false, err
+	}
+
+	offset = -1 // negative offset denotes no available free offset
+	if s.freeCache != nil {
+		// check if local cache has an offset
+		offset = s.freeCache.get(shard)
+	}
+
+	if offset < 0 {
+		// free cache did not return a free offset,
+		// check the meta store for one
+		offset, err = s.meta.FreeOffset(shard)
+		if err != nil {
+			return 0, false, err
+		}
+	}
+	if offset < 0 {
+		// meta store did not return a free offset,
+		// mark this shard that has no free offsets
+		s.markShardWithFreeOffsets(shard, false)
+		return -1, false, nil
+	}
+
+	return offset, true, nil
 }
 
 // Delete removes chunk data.
@@ -229,11 +228,9 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	defer done()
 
 	shard := getShard(addr)
-	s.freeMu.Lock()
-	s.free[shard] = struct{}{}
-	s.freeMu.Unlock()
+	s.markShardWithFreeOffsets(shard, true)
 
-	mu := s.shardsMu[shard]
+	mu := s.shards[shard].mu
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -260,18 +257,18 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	}
 	defer done()
 
-	for _, mu := range s.shardsMu {
-		mu.Lock()
+	for _, sh := range s.shards {
+		sh.mu.Lock()
 	}
 	defer func() {
-		for _, mu := range s.shardsMu {
-			mu.Unlock()
+		for _, sh := range s.shards {
+			sh.mu.Unlock()
 		}
 	}()
 
 	return s.meta.Iterate(func(addr chunk.Address, m *Meta) (stop bool, err error) {
 		data := make([]byte, m.Size)
-		_, err = s.shards[getShard(addr)].ReadAt(data, m.Offset)
+		_, err = s.shards[getShard(addr)].f.ReadAt(data, m.Offset)
 		if err != nil {
 			return true, err
 		}
@@ -298,8 +295,8 @@ func (s *Store) Close() (err error) {
 	case <-time.After(15 * time.Second):
 	}
 
-	for _, f := range s.shards {
-		if err := f.Close(); err != nil {
+	for _, sh := range s.shards {
+		if err := sh.f.Close(); err != nil {
 			return err
 		}
 	}
@@ -327,7 +324,25 @@ func (s *Store) getMeta(addr chunk.Address) (m *Meta, err error) {
 	return s.meta.Get(addr)
 }
 
+func (s *Store) markShardWithFreeOffsets(shard uint8, has bool) {
+	s.freeMu.Lock()
+	s.free[shard] = has
+	s.freeMu.Unlock()
+}
+
+func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
+	s.freeMu.RLock()
+	has = s.free[shard]
+	s.freeMu.RUnlock()
+	return has
+}
+
 // getShard returns a shard number for the chunk address.
 func getShard(addr chunk.Address) (shard uint8) {
 	return addr[len(addr)-1] % shardCount
+}
+
+type shard struct {
+	f  *os.File
+	mu *sync.Mutex
 }

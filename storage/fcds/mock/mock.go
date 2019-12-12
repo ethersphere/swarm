@@ -30,9 +30,9 @@ type Store struct {
 	m *mock.NodeStore
 }
 
-// NewStore returns a new store with mock NodeStore
+// New returns a new store with mock NodeStore
 // for storing Chunk data.
-func NewStore(m *mock.NodeStore) (s *Store) {
+func New(m *mock.NodeStore) (s *Store) {
 	return &Store{
 		m: m,
 	}

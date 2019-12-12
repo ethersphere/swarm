@@ -120,7 +120,6 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		metrics.GetOrRegisterGauge(metricName+".accessts", nil).Update(item.AccessTimestamp)
 
 		// delete from retrieve, pull, gc
-		//db.retrievalDataIndex.DeleteInBatch(batch, item)
 		addrs = append(addrs, item.Address)
 		db.metaIndex.DeleteInBatch(batch, item)
 		db.pullIndex.DeleteInBatch(batch, item)
