@@ -192,7 +192,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
 	if !s.shardHasFreeOffsets(shard) {
 		// shard does not have free offset
-		return -1, false, err
+		return -1, false, nil
 	}
 
 	offset = -1 // negative offset denotes no available free offset
