@@ -25,8 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -390,7 +388,9 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		handler := func(ctx context.Context, msg interface{}) error {
-			assert.Equal(t, "test content", msg.(*perBytesMsgReceiverPays).Content)
+			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
+				t.Fatal("rw.msg in handler was wrong")
+			}
 			return nil
 		}
 
@@ -416,7 +416,9 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		if err := peer.Receive(handler); err != nil {
-			assert.EqualError(t, err, "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays")
+			if err.Error() != "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
+				t.Fatal("error returned from handler is not good")
+			}
 		}
 	})
 
@@ -430,19 +432,113 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		handler := func(ctx context.Context, msg interface{}) error {
-			assert.Equal(t, "test content", msg.(*perBytesMsgReceiverPays).Content)
+			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
+				t.Fatal("rw.msg in handler was wrong")
+			}
 			return errors.New("test error")
 		}
 
 		if err := peer.Receive(handler); err != nil {
-			assert.EqualError(t, err, errorf(ErrHandler, "(msg code %v): %v", 0, errors.New("test error")).Error())
+			if err.Error() != errorf(ErrHandler, "(msg code %v): %v", 0, errors.New("test error")).Error() {
+				t.Fatal("error returned from handler is not good")
+			}
 		}
 	})
-
 }
 
 func TestPeer_Run(t *testing.T) {
-	// todo:
+	t.Run("OK", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
+				t.Fatal("rw.msg in handler was wrong")
+			}
+			return nil
+		}
+
+		var wg sync.WaitGroup
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			if err := peer.Run(handler); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		time.Sleep(300 * time.Microsecond)
+		if err := peer.Shutdown(3 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		select {
+		case <-c:
+		case <-time.After(1 * time.Second):
+			t.Fatal("run did not finis -  timeout")
+		}
+	})
+
+	t.Run("ERROR - handler error", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		errc := make(chan struct{})
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
+				t.Fatal("rw.msg in handler was wrong")
+			}
+
+			select {
+			case <-errc:
+				return errors.New("test error")
+			default:
+			}
+			return nil
+		}
+
+		var wg sync.WaitGroup
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			if err := peer.Run(handler); err != nil {
+				if err.Error() != "Message handler error: (msg code 0): test error" {
+					t.Fatal(err)
+				}
+			}
+		}()
+
+		time.Sleep(300 * time.Microsecond)
+		close(errc)
+
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		select {
+		case <-c:
+		case <-time.After(1 * time.Second):
+			t.Fatal("run did not finis -  timeout")
+		}
+	})
+
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {

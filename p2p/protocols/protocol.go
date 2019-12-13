@@ -238,8 +238,6 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // The handler argument is a function which is called for each message received
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
-// there can be only one run loop per peer.
-// It returns the error that caused the loop to exit.
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
 	p.setRunning(true)
 
@@ -390,7 +388,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	return p2p.Send(p.rw, code, wmsg)
 }
 
-// Receive(code) is a sync call that handles incoming message with provided message handler
+// Receive is a sync call that handles incoming message with provided message handler
 func (p *Peer) Receive(handler func(ctx context.Context, msg interface{}) error) error {
 	msg, err := p.readMsg()
 	if err != nil {
