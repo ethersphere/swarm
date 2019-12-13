@@ -63,32 +63,44 @@ type Store struct {
 	quitOnce     sync.Once      // protects quit channel from multiple Close calls
 }
 
-// New constructs a new Store with files at path, with specified max chunk size.
-// Argument withCache enables in memory cache of free chunk data positions in files.
-func New(path string, maxChunkSize int, metaStore MetaStore, withCache bool) (s *Store, err error) {
-	if err := os.MkdirAll(path, 0777); err != nil {
-		return nil, err
-	}
-	shards := make([]shard, shardCount)
-	for i := byte(0); i < shardCount; i++ {
-		shards[i].f, err = os.OpenFile(filepath.Join(path, fmt.Sprintf("chunks-%v.db", i)), os.O_CREATE|os.O_RDWR, 0666)
-		if err != nil {
-			return nil, err
+// Option is an optional argument passed to New.
+type Option func(*Store)
+
+// WithCache is an optional argument to New constructor that enables
+// in memory cache of free chunk data positions in files
+func WithCache(yes bool) Option {
+	return func(s *Store) {
+		if yes {
+			s.freeCache = newOffsetCache(shardCount)
+		} else {
+			s.freeCache = nil
 		}
-		shards[i].mu = new(sync.Mutex)
 	}
-	var freeCache *offsetCache
-	if withCache {
-		freeCache = newOffsetCache(shardCount)
-	}
-	return &Store{
-		shards:       shards,
+}
+
+// New constructs a new Store with files at path, with specified max chunk size.
+func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s *Store, err error) {
+	s = &Store{
+		shards:       make([]shard, shardCount),
 		meta:         metaStore,
-		freeCache:    freeCache,
 		free:         make([]bool, shardCount),
 		maxChunkSize: maxChunkSize,
 		quit:         make(chan struct{}),
-	}, nil
+	}
+	for _, o := range opts {
+		o(s)
+	}
+	if err := os.MkdirAll(path, 0777); err != nil {
+		return nil, err
+	}
+	for i := byte(0); i < shardCount; i++ {
+		s.shards[i].f, err = os.OpenFile(filepath.Join(path, fmt.Sprintf("chunks-%v.db", i)), os.O_CREATE|os.O_RDWR, 0666)
+		if err != nil {
+			return nil, err
+		}
+		s.shards[i].mu = new(sync.Mutex)
+	}
+	return s, nil
 }
 
 // Get returns a chunk with data.
