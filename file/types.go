@@ -9,7 +9,6 @@ type SectionWriterFunc func(ctx context.Context) SectionWriter
 
 type SectionWriter interface {
 	hash.Hash                                           // Write,Sum,Reset,Size,BlockSize
-	Init(ctx context.Context, errFunc func(error))      // errFunc is used for asynchronous components to signal error and termination
 	SetWriter(hashFunc SectionWriterFunc) SectionWriter // chain another SectionWriter the current instance
 	SeekSection(section int)                            // sets cursor that next Write() will write to
 	SetLength(length int)                               // set total number of bytes that will be written to SectionWriter

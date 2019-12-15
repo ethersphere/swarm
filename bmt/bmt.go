@@ -323,12 +323,6 @@ func (h *Hasher) Branches() int {
 	return h.pool.SegmentCount
 }
 
-// Init implements param.SectionWriter
-func (h *Hasher) Init(ctx context.Context, errFunc func(error)) {
-	h.errFunc = errFunc
-	h.ctx = ctx
-}
-
 // Size implements hash.Hash and param.SectionWriter
 func (h *Hasher) Size() int {
 	return h.pool.SegmentSize
