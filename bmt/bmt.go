@@ -27,8 +27,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethersphere/swarm/file"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/param"
 )
 
 /*
@@ -290,22 +290,22 @@ func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
 	}
 }
 
-// Implements param.SectionWriter
-func (h *Hasher) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
+// Implements file.SectionWriter
+func (h *Hasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
 	log.Warn("Synchasher does not currently support SectionWriter chaining")
 	return h
 }
 
-// SectionSize implements param.SectionWriter
+// SectionSize implements file.SectionWriter
 func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize
 }
 
-// SetLength implements param.SectionWriter
+// SetLength implements file.SectionWriter
 func (h *Hasher) SetLength(length int) {
 }
 
-// SetSpan implements param.SectionWriter
+// SetSpan implements file.SectionWriter
 func (h *Hasher) SetSpan(length int) {
 	span := LengthToSpan(length)
 	h.getTree().span = span
@@ -318,29 +318,29 @@ func (h *Hasher) SetSpanBytes(b []byte) {
 	copy(t.span, b)
 }
 
-// Branches implements param.SectionWriter
+// Branches implements file.SectionWriter
 func (h *Hasher) Branches() int {
 	return h.pool.SegmentCount
 }
 
-// Size implements hash.Hash and param.SectionWriter
+// Size implements hash.Hash and file.SectionWriter
 func (h *Hasher) Size() int {
 	return h.pool.SegmentSize
 }
 
-// SeekSection implements param.SectionWriter
+// SeekSection implements file.SectionWriter
 func (h *Hasher) SeekSection(offset int) {
 	h.cursor = offset
 }
 
-// BlockSize implements hash.Hash and param.SectionWriter
+// BlockSize implements hash.Hash and file.SectionWriter
 func (h *Hasher) BlockSize() int {
 	return 2 * h.pool.SegmentSize
 }
 
 // Sum returns the BMT root hash of the buffer
 // using Sum presupposes sequential synchronous writes (io.Writer interface)
-// Implements hash.Hash in param.SectionWriter
+// Implements hash.Hash in file.SectionWriter
 func (h *Hasher) Sum(b []byte) (s []byte) {
 	t := h.getTree()
 	if h.size == 0 && t.offset == 0 {
@@ -362,7 +362,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 
 // Write calls sequentially add to the buffer to be hashed,
 // with every full segment calls writeSection in a go routine
-// Implements hash.Hash and param.SectionWriter
+// Implements hash.Hash and file.SectionWriter
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
 	if l == 0 || l > h.pool.Size {
@@ -409,7 +409,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	return l, nil
 }
 
-// Reset implements hash.Hash and param.SectionWriter
+// Reset implements hash.Hash and file.SectionWriter
 func (h *Hasher) Reset() {
 	h.cursor = 0
 	h.size = 0
@@ -488,36 +488,36 @@ type AsyncHasher struct {
 	jobSize  int
 }
 
-// Reset implements param.SectionWriter
+// Reset implements file.SectionWriter
 func (sw *AsyncHasher) Reset() {
 	sw.jobSize = 0
 	sw.all = false
 	sw.Hasher.Reset()
 }
 
-// SetLength implements param.SectionWriter
+// SetLength implements file.SectionWriter
 func (sw *AsyncHasher) SetLength(length int) {
 	sw.jobSize = length
 }
 
-// SetWriter implements param.SectionWriter
-func (sw *AsyncHasher) SetWriter(_ param.SectionWriterFunc) param.SectionWriter {
+// SetWriter implements file.SectionWriter
+func (sw *AsyncHasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
 	sw.errFunc(errors.New("Asynchasher does not currently support SectionWriter chaining"))
 	return sw
 }
 
-// SectionSize implements param.SectionWriter
+// SectionSize implements file.SectionWriter
 func (sw *AsyncHasher) SectionSize() int {
 	return sw.secsize
 }
 
-// Branches implements param.SectionWriter
+// Branches implements file.SectionWriter
 func (sw *AsyncHasher) Branches() int {
 	return sw.seccount
 }
 
 // SeekSection locks the cursor until Write() is called; if no Write() is called, it will hang.
-// Implements param.SectionWriter
+// Implements file.SectionWriter
 func (sw *AsyncHasher) SeekSection(offset int) {
 	sw.mtx.Lock()
 	sw.Hasher.SeekSection(offset)
@@ -526,7 +526,7 @@ func (sw *AsyncHasher) SeekSection(offset int) {
 // Write writes to the current position cursor of the Hasher
 // The cursor must first be manually set with SeekSection()
 // The method will NOT advance the cursor.
-// Implements param.SectionWriter
+// Implements file.SectionWriter
 func (sw *AsyncHasher) Write(section []byte) (int, error) {
 	defer sw.mtx.Unlock()
 	sw.Hasher.size += len(section)
@@ -588,7 +588,7 @@ func (sw *AsyncHasher) WriteSection(i int, section []byte) (int, error) {
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
 //
-// Implements param.SectionWriter
+// Implements file.SectionWriter
 func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
 	if sw.all {
 		return sw.Hasher.Sum(nil)
