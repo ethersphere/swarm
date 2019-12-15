@@ -102,7 +102,7 @@ func (sw *AsyncHasher) WriteToIndex(i int, section []byte) (int, error) {
 	// if index is lower than cursor then just write non-final section as is
 	if i < sw.Hasher.GetCursor() {
 		// if index is not the rightmost, safe to write section
-		go sw.write(i, section, false)
+		go sw.WriteSection(i, section, sw.double, false)
 		return len(section), nil
 	}
 	// if there is a previous rightmost.GetSection() safe to write section
@@ -120,7 +120,7 @@ func (sw *AsyncHasher) WriteToIndex(i int, section []byte) (int, error) {
 			return len(section), nil
 		}
 		// the rightmost.GetSection() just changed, so we write the previous one as non-final
-		go sw.write(sw.Hasher.GetCursor(), t.GetSection(), false)
+		go sw.WriteSection(sw.Hasher.GetCursor(), t.GetSection(), sw.double, false)
 	}
 	// set i as the index of the righmost.GetSection() written so far
 	// set t.GetOffset() to cursor*secsize+1

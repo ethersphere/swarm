@@ -114,8 +114,7 @@ func asyncHash(bmtobj *AsyncHasher, spanLength int, l int, wh whenHash, idxs []i
 		r = rand.Intn(maxsize)
 	}
 	for i, idx := range idxs {
-		bmtobj.SeekSection(idx)
-		bmtobj.Write(segments[idx])
+		bmtobj.WriteToIndex(idx, segments[idx])
 		if (wh == first || wh == random) && i == r {
 			go hashf()
 		}

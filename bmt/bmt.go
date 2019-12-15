@@ -327,11 +327,6 @@ func (h *Hasher) Size() int {
 	return h.pool.SegmentSize
 }
 
-// SeekSection implements file.SectionWriter
-func (h *Hasher) SeekSection(offset int) {
-	h.cursor = offset
-}
-
 // BlockSize implements hash.Hash and file.SectionWriter
 func (h *Hasher) BlockSize() int {
 	return 2 * h.pool.SegmentSize

@@ -497,6 +497,7 @@ func TestUseSyncAsOrdinaryHasher(t *testing.T) {
 	hasher := sha3.NewLegacyKeccak256
 	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	bmt := New(pool)
+	bmt.SetSpan(3)
 	bmt.Write([]byte("foo"))
 	res := bmt.Sum(nil)
 	refh := NewRefHasher(hasher, 128)
