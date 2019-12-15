@@ -6,14 +6,14 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethersphere/swarm/file"
+	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
 
 // tests order-neutral concurrent writes with entire max size written in one go
 func TestAsyncCorrectness(t *testing.T) {
-	data := testutil.RandomBytes(1, BufferSize)
+	data := testutil.RandomBytes(1, bufferSize)
 	hasher := sha3.NewLegacyKeccak256
 	size := hasher().Size()
 	whs := []whenHash{first, last, random}
@@ -25,23 +25,23 @@ func TestAsyncCorrectness(t *testing.T) {
 					max := count * size
 					var incr int
 					capacity := 1
-					pool := NewTreePool(hasher, count, capacity)
+					pool := bmt.NewTreePool(hasher, count, capacity)
 					defer pool.Drain(0)
 					for n := 1; n <= max; n += incr {
 						incr = 1 + rand.Intn(5)
-						bmt := New(pool)
+						bmtobj := bmt.New(pool)
 						d := data[:n]
-						rbmt := NewRefHasher(hasher, count)
-						expNoMeta := rbmt.Hash(d)
+						rbmtobj := bmt.NewRefHasher(hasher, count)
+						expNoMeta := rbmtobj.Hash(d)
 						h := hasher()
-						h.Write(zeroSpan)
+						h.Write(bmt.ZeroSpan)
 						h.Write(expNoMeta)
 						exp := h.Sum(nil)
-						got := syncHash(bmt, 0, d)
+						got := syncHash(bmtobj, 0, d)
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong sync hash (syncpart) for datalength %v: expected %x (ref), got %x", n, exp, got)
 						}
-						sw := bmt.NewAsyncWriter(double)
+						sw := NewAsyncWriter(bmtobj, double)
 						got = asyncHashRandom(sw, 0, d, wh)
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong async hash (asyncpart) for datalength %v: expected %x, got %x", n, exp, got)
@@ -70,9 +70,10 @@ func BenchmarkBMTAsync(t *testing.B) {
 func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 	data := testutil.RandomBytes(1, n)
 	hasher := sha3.NewLegacyKeccak256
-	pool := NewTreePool(hasher, segmentCount, PoolSize)
-	bmt := New(pool).NewAsyncWriter(double)
-	idxs, segments := splitAndShuffle(bmt.SectionSize(), data)
+	pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
+	bmth := bmt.New(pool)
+	bmtobj := NewAsyncWriter(bmth, double)
+	idxs, segments := splitAndShuffle(bmtobj.SectionSize(), data)
 	rand.Shuffle(len(idxs), func(i int, j int) {
 		idxs[i], idxs[j] = idxs[j], idxs[i]
 	})
@@ -80,32 +81,32 @@ func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 	t.ReportAllocs()
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		asyncHash(bmt, 0, n, wh, idxs, segments)
+		asyncHash(bmtobj, 0, n, wh, idxs, segments)
 	}
 }
 
 // splits the input data performs a random shuffle to mock async section writes
-func asyncHashRandom(bmt file.SectionWriter, spanLength int, data []byte, wh whenHash) (s []byte) {
-	idxs, segments := splitAndShuffle(bmt.SectionSize(), data)
-	return asyncHash(bmt, spanLength, len(data), wh, idxs, segments)
+func asyncHashRandom(bmtobj *AsyncHasher, spanLength int, data []byte, wh whenHash) (s []byte) {
+	idxs, segments := splitAndShuffle(bmtobj.SectionSize(), data)
+	return asyncHash(bmtobj, spanLength, len(data), wh, idxs, segments)
 }
 
 // mock for async section writes for file.SectionWriter
 // requires a permutation (a random shuffle) of list of all indexes of segments
 // and writes them in order to the appropriate section
 // the Sum function is called according to the wh parameter (first, last, random [relative to segment writes])
-func asyncHash(bmt file.SectionWriter, spanLength int, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
-	bmt.Reset()
+func asyncHash(bmtobj *AsyncHasher, spanLength int, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
+	bmtobj.Reset()
 	if l == 0 {
-		bmt.SetLength(l)
-		bmt.SetSpan(spanLength)
-		return bmt.Sum(nil)
+		bmtobj.SetLength(l)
+		bmtobj.SetSpan(spanLength)
+		return bmtobj.Sum(nil)
 	}
 	c := make(chan []byte, 1)
 	hashf := func() {
-		bmt.SetLength(l)
-		bmt.SetSpan(spanLength)
-		c <- bmt.Sum(nil)
+		bmtobj.SetLength(l)
+		bmtobj.SetSpan(spanLength)
+		c <- bmtobj.Sum(nil)
 	}
 	maxsize := len(idxs)
 	var r int
@@ -113,16 +114,67 @@ func asyncHash(bmt file.SectionWriter, spanLength int, l int, wh whenHash, idxs 
 		r = rand.Intn(maxsize)
 	}
 	for i, idx := range idxs {
-		bmt.SeekSection(idx)
-		bmt.Write(segments[idx])
+		bmtobj.SeekSection(idx)
+		bmtobj.Write(segments[idx])
 		if (wh == first || wh == random) && i == r {
 			go hashf()
 		}
 	}
 	if wh == last {
-		bmt.SetLength(l)
-		bmt.SetSpan(spanLength)
-		return bmt.Sum(nil)
+		bmtobj.SetLength(l)
+		bmtobj.SetSpan(spanLength)
+		return bmtobj.Sum(nil)
 	}
 	return <-c
 }
+
+// COPIED FROM bmt test package
+// MERGE LATER
+
+// Hash hashes the data and the span using the bmt hasher
+func syncHash(h *bmt.Hasher, spanLength int, data []byte) []byte {
+	h.Reset()
+	h.SetSpan(spanLength)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+func splitAndShuffle(secsize int, data []byte) (idxs []int, segments [][]byte) {
+	l := len(data)
+	n := l / secsize
+	if l%secsize > 0 {
+		n++
+	}
+	for i := 0; i < n; i++ {
+		idxs = append(idxs, i)
+		end := (i + 1) * secsize
+		if end > l {
+			end = l
+		}
+		section := data[i*secsize : end]
+		segments = append(segments, section)
+	}
+	rand.Shuffle(n, func(i int, j int) {
+		idxs[i], idxs[j] = idxs[j], idxs[i]
+	})
+	return idxs, segments
+}
+
+const (
+	// segmentCount is the maximum number of segments of the underlying chunk
+	// Should be equal to max-chunk-data-size / hash-size
+	// Currently set to 128 == 4096 (default chunk size) / 32 (sha3.keccak256 size)
+	segmentCount = 128
+)
+
+const bufferSize = 4128
+
+type whenHash = int
+
+const (
+	first whenHash = iota
+	last
+	random
+)
+
+var counts = []int{1, 2, 3, 4, 5, 8, 9, 15, 16, 17, 32, 37, 42, 53, 63, 64, 65, 111, 127, 128}

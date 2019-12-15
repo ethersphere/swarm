@@ -35,7 +35,7 @@ func init() {
 }
 
 // the actual data length generated (could be longer than max datalength of the BMT)
-const BufferSize = 4128
+const bufferSize = 4128
 
 const (
 	// segmentCount is the maximum number of segments of the underlying chunk
@@ -156,7 +156,7 @@ func TestHasherEmptyData(t *testing.T) {
 
 // tests sequential write with entire max size written in one go
 func TestSyncHasherCorrectness(t *testing.T) {
-	data := testutil.RandomBytes(1, BufferSize)
+	data := testutil.RandomBytes(1, bufferSize)
 	hasher := sha3.NewLegacyKeccak256
 	size := hasher().Size()
 
@@ -198,7 +198,7 @@ func testHasherReuse(poolsize int, t *testing.T) {
 	bmt := New(pool)
 
 	for i := 0; i < 100; i++ {
-		data := testutil.RandomBytes(1, BufferSize)
+		data := testutil.RandomBytes(1, bufferSize)
 		n := rand.Intn(bmt.Size())
 		err := testHasherCorrectness(bmt, hasher, data, n, segmentCount)
 		if err != nil {
@@ -218,7 +218,7 @@ func TestBMTConcurrentUse(t *testing.T) {
 	for i := 0; i < cycles; i++ {
 		go func() {
 			bmt := New(pool)
-			data := testutil.RandomBytes(1, BufferSize)
+			data := testutil.RandomBytes(1, bufferSize)
 			n := rand.Intn(bmt.Size())
 			errc <- testHasherCorrectness(bmt, hasher, data, n, 128)
 		}()
@@ -256,7 +256,7 @@ func TestBMTWriterBuffers(t *testing.T) {
 			rbmt := NewRefHasher(hasher, count)
 			refNoMetaHash := rbmt.Hash(data)
 			h := hasher()
-			h.Write(zeroSpan)
+			h.Write(ZeroSpan)
 			h.Write(refNoMetaHash)
 			refHash := h.Sum(nil)
 			expHash := syncHash(bmt, 0, data)

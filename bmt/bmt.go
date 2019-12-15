@@ -66,7 +66,7 @@ const (
 )
 
 var (
-	zeroSpan = make([]byte, 8)
+	ZeroSpan = make([]byte, 8)
 )
 
 // BaseHasherFunc is a hash.Hash constructor function used for the base hash of the BMT.
@@ -347,7 +347,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 		return h.pool.zerohashes[h.pool.Depth]
 	}
 	// write the last section with final flag set to true
-	go h.writeSection(t.cursor, t.section, true, true)
+	go h.WriteSection(t.cursor, t.section, true, true)
 	// wait for the result
 	s = <-t.result
 	if t.span == nil {
@@ -360,7 +360,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 }
 
 // Write calls sequentially add to the buffer to be hashed,
-// with every full segment calls writeSection in a go routine
+// with every full segment calls WriteSection in a go routine
 // Implements hash.Hash and file.SectionWriter
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
@@ -394,7 +394,7 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	// read full sections and the last possibly partial section from the input buffer
 	for smax < l {
 		// section complete; push to tree asynchronously
-		go h.writeSection(t.cursor, t.section, true, false)
+		go h.WriteSection(t.cursor, t.section, true, false)
 		// reset section
 		t.section = make([]byte, secsize)
 		// copy from input buffer at smax to right half of section
@@ -434,6 +434,11 @@ func (h *Hasher) releaseTree() {
 		}
 		h.pool.release(t)
 	}()
+}
+
+func (h *Hasher) WriteSection(i int, section []byte, double bool, final bool) {
+	h.size += len(section)
+	h.writeSection(i, section, double, final)
 }
 
 // writeSection writes the hash of i-th section into level 1 node of the BMT tree
@@ -609,4 +614,55 @@ func LengthToSpan(length int) []byte {
 	spanBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(spanBytes, uint64(length))
 	return spanBytes
+}
+
+// ASYNCHASHER ACCESSORS
+
+// GetHasher returns a new instance of the underlying hasher
+func (h *Hasher) GetHasher() hash.Hash {
+	return h.pool.hasher()
+}
+
+func (h *Hasher) GetZeroHash() []byte {
+	return h.pool.zerohashes[h.pool.Depth]
+}
+
+func (h *Hasher) GetTree() *tree {
+	return h.getTree()
+}
+
+func (h *Hasher) ReleaseTree() {
+	h.releaseTree()
+}
+
+func (h *Hasher) GetCursor() int {
+	return h.cursor
+}
+
+func (h *Hasher) SetCursor(c int) {
+	h.cursor = c
+}
+
+func (t *tree) GetOffset() int {
+	return t.offset
+}
+
+func (t *tree) SetOffset(offset int) {
+	t.offset = offset
+}
+
+func (t *tree) GetSection() []byte {
+	return t.section
+}
+
+func (t *tree) SetSection(b []byte) {
+	t.section = b
+}
+
+func (t *tree) GetResult() <-chan []byte {
+	return t.result
+}
+
+func (t *tree) GetSpan() []byte {
+	return t.span
 }
