@@ -2,6 +2,7 @@ package hasher
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -41,7 +42,9 @@ func TestAsyncCorrectness(t *testing.T) {
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong sync hash (syncpart) for datalength %v: expected %x (ref), got %x", n, exp, got)
 						}
-						sw := NewAsyncWriter(bmtobj, double)
+						ctx, cancel := context.WithCancel(context.Background())
+						defer cancel()
+						sw := NewAsyncWriter(ctx, bmtobj, double, nil)
 						got = asyncHashRandom(sw, 0, d, wh)
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong async hash (asyncpart) for datalength %v: expected %x, got %x", n, exp, got)
@@ -72,7 +75,9 @@ func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 	hasher := sha3.NewLegacyKeccak256
 	pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 	bmth := bmt.New(pool)
-	bmtobj := NewAsyncWriter(bmth, double)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	bmtobj := NewAsyncWriter(ctx, bmth, double, nil)
 	idxs, segments := splitAndShuffle(bmtobj.SectionSize(), data)
 	rand.Shuffle(len(idxs), func(i int, j int) {
 		idxs[i], idxs[j] = idxs[j], idxs[i]

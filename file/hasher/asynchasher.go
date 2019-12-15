@@ -1,6 +1,7 @@
 package hasher
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -10,7 +11,7 @@ import (
 
 // NewAsyncWriter extends Hasher with an interface for concurrent segment.GetSection() writes
 // TODO: Instead of explicitly setting double size of segment should be dynamic and chunked internally. If not, we have to keep different bmt hashers generation functions for different purposes in the same instance, or cope with added complexity of bmt hasher generation functions having to receive parameters
-func NewAsyncWriter(h *bmt.Hasher, double bool) *AsyncHasher {
+func NewAsyncWriter(ctx context.Context, h *bmt.Hasher, double bool, errFunc func(error)) *AsyncHasher {
 	secsize := h.SectionSize()
 	if double {
 		secsize *= 2
@@ -25,6 +26,8 @@ func NewAsyncWriter(h *bmt.Hasher, double bool) *AsyncHasher {
 		secsize:  secsize,
 		seccount: seccount,
 		jobSize:  0,
+		ctx:      ctx,
+		errFunc:  errFunc,
 	}
 }
 
@@ -51,8 +54,15 @@ type AsyncHasher struct {
 	seccount    int        // base section count
 	write       func(i int, section []byte, final bool)
 	errFunc     func(error)
+	ctx         context.Context
 	all         bool // if all written in one go, temporary workaround
 	jobSize     int
+}
+
+func (sw *AsyncHasher) raiseError(err string) {
+	if sw.errFunc != nil {
+		sw.errFunc(errors.New(err))
+	}
 }
 
 // Reset implements file.SectionWriter
@@ -69,7 +79,7 @@ func (sw *AsyncHasher) SetLength(length int) {
 
 // SetWriter implements file.SectionWriter
 func (sw *AsyncHasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
-	sw.errFunc(errors.New("Asynchasher does not currently support SectionWriter chaining"))
+	sw.raiseError("Asynchasher does not currently support SectionWriter chaining")
 	return sw
 }
 
