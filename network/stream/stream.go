@@ -156,11 +156,6 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 		case *StreamInfoReq:
 			return r.serverHandleStreamInfoReq(ctx, p, msg)
 		case *StreamInfoRes:
-			if len(msg.Streams) == 0 {
-				// todo: better error handling
-				return errors.New("message stream was empty")
-			}
-
 			return r.clientHandleStreamInfoRes(ctx, p, msg)
 		case *GetRange:
 			provider := r.getProvider(msg.Stream)
@@ -271,18 +266,15 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 	default:
 	}
 
-	if err := p.Send(ctx, streamRes); err != nil {
-		// todo:
-		//p.logger.Error("failed to send StreamInfoRes to peer", "err", err)
-		//p.Drop("failed to send StreamInfoRes")
-		return fmt.Errorf("failed to send StreamInfoRes to peer: %w", err)
-	}
-
-	return nil
+	return p.Send(ctx, streamRes)
 }
 
 // clientHandleStreamInfoRes handles the StreamInfoRes message (Peer is the server)
 func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *StreamInfoRes) error {
+	if len(msg.Streams) == 0 {
+		return errors.New("message stream was empty")
+	}
+
 	for _, s := range msg.Streams {
 		s := s
 
@@ -450,11 +442,9 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 				LastIndex: lastIdx,
 				Hashes:    []byte{},
 			}
-			if err := p.Send(ctx, offered); err != nil {
-				// todo: should we return an error here?
-				p.logger.Error("erroring sending empty live offered hashes", "ruid", msg.Ruid, "err", err)
-			}
-			return nil
+
+			return p.Send(ctx, offered)
+
 		}
 	}
 
@@ -531,10 +521,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	// the upstream peer in order to mitigate a leak on `offer`s
 	if !provider.WantStream(p, w.stream) {
 		wantedHashesMsg.BitVector = []byte{}
-		if err := p.Send(ctx, wantedHashesMsg); err != nil {
-			return fmt.Errorf("error sending empty wanted hashes: %w", err)
-		}
-		return nil
+		return p.Send(ctx, wantedHashesMsg)
 	}
 
 	want, err := bv.New(lenHashes / HashSize)
@@ -551,16 +538,17 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	startNeed := time.Now()
 
 	// check which hashes we want
-	if wants, err := provider.NeedData(ctx, addresses...); err == nil {
-		for i, wantChunk := range wants {
-			if wantChunk {
-				ctr++                                     // increment number of wanted chunks
-				want.Set(i)                               // set the bitvector
-				w.hashes[addresses[i].Hex()] = struct{}{} // set unsolicited chunks guard
-			}
+	wants, err := provider.NeedData(ctx, addresses...)
+	if err != nil {
+		return err
+	}
+
+	for i, wantChunk := range wants {
+		if wantChunk {
+			ctr++                                     // increment number of wanted chunks
+			want.Set(i)                               // set the bitvector
+			w.hashes[addresses[i].Hex()] = struct{}{} // set unsolicited chunks guard
 		}
-	} else {
-		return fmt.Errorf("multi need data returned an error, dropping peer: %w", err)
 	}
 
 	providerNeedDataTimer.UpdateSince(startNeed)
@@ -661,11 +649,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 			allHashes[i] = o.hashes[i*HashSize : (i+1)*HashSize]
 		}
 		// set all chunks as synced
-		if err := provider.Set(ctx, allHashes...); err != nil {
-			// todo: handle errors in this function as well
-			return fmt.Errorf("error setting chunk as synced: %w", err)
-		}
-		return nil
+		return provider.Set(ctx, allHashes...)
 	}
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
@@ -692,7 +676,6 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	chunks, err := provider.Get(ctx, wantHashes...)
 	if err != nil {
 		return fmt.Errorf("error while trying to call provider.Get: %w", err)
-
 	}
 
 	providerGetTimer.UpdateSince(startGet) // measure how long we spend on getting the chunks
@@ -729,8 +712,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	// send anything that we might have left in the batch
 	if len(cd.Chunks) > 0 {
 		if err := p.Send(ctx, cd); err != nil {
-			p.logger.Error("error sending chunk delivery frame", "ruid", msg.Ruid, "error", err)
-			p.Drop("error sending chunk delivery frame if anything left in the batch")
+			return err
 		}
 	}
 

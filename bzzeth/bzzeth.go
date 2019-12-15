@@ -232,7 +232,6 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	// retrieve the request for this id
 	req, ok := p.requests.get(msg.Rid)
 	if !ok {
-		p.logger.Warn("", "id", msg.Rid)
 		return fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid)
 
 	}
@@ -243,14 +242,7 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 		headers[i] = h
 	}
 
-	err := b.deliverAndStoreAll(ctx, req, headers)
-	if err != nil {
-		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.Rid, "err", err)
-		return fmt.Errorf("bzzeth.handleBlockHeaders: fatal dropping peer, id: %d err: %w", msg.Rid, err)
-
-	}
-
-	return nil
+	return b.deliverAndStoreAll(ctx, req, headers)
 }
 
 // Validates and headers asynchronously and stores the valid chunks in one go

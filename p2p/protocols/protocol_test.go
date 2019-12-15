@@ -372,7 +372,7 @@ func TestNoHook(t *testing.T) {
 		return nil
 	}
 
-	if err := peer.Receive(handler); err != nil {
+	if err := peer.receive(handler); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -394,7 +394,7 @@ func TestPeer_Receive(t *testing.T) {
 			return nil
 		}
 
-		if err := peer.Receive(handler); err != nil {
+		if err := peer.receive(handler); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -415,7 +415,7 @@ func TestPeer_Receive(t *testing.T) {
 			return nil
 		}
 
-		if err := peer.Receive(handler); err != nil {
+		if err := peer.receive(handler); err != nil {
 			if err.Error() != "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
 				t.Fatal("error returned from handler is not good")
 			}
@@ -438,7 +438,7 @@ func TestPeer_Receive(t *testing.T) {
 			return errors.New("test error")
 		}
 
-		if err := peer.Receive(handler); err != nil {
+		if err := peer.receive(handler); err != nil {
 			if err.Error() != errorf(ErrHandler, "(msg code %v): %v", 0, errors.New("test error")).Error() {
 				t.Fatal("error returned from handler is not good")
 			}

@@ -388,8 +388,8 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	return p2p.Send(p.rw, code, wmsg)
 }
 
-// Receive is a sync call that handles incoming message with provided message handler
-func (p *Peer) Receive(handler func(ctx context.Context, msg interface{}) error) error {
+// receive is a sync call that handles incoming message with provided message handler
+func (p *Peer) receive(handler func(ctx context.Context, msg interface{}) error) error {
 	msg, err := p.readMsg()
 	if err != nil {
 		return err
@@ -404,29 +404,25 @@ func (p *Peer) Receive(handler func(ctx context.Context, msg interface{}) error)
 // * handles decoding with reflection,
 // * call handlers as callbacks
 func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg interface{}) error) error {
-	// make sure that the payload has been fully consume
+	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
 	if msg.Size > p.spec.MaxMsgSize {
-		err := errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
-		return err
+		return errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
-		err := errorf(ErrInvalidMsgCode, "%v", msg.Code)
-		return err
+		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 
 	ctx, msgBytes, err := p.decode(*msg)
 	if err != nil {
-		err := errorf(ErrDecode, "%v err=%v", msg.Code, err)
-		return err
+		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		err := errorf(ErrDecode, "<= %v: %v", msg, err)
-		return err
+		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
@@ -442,8 +438,7 @@ func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg inte
 	// it is entirely safe not to check the cast in the handler since the handler is
 	// chosen based on the proper type in the first place
 	if err := handle(ctx, val); err != nil {
-		err = errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
-		return err
+		return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
 	}
 
 	return nil
@@ -468,7 +463,7 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 
 	send := func() { errc <- p.Send(ctx, hs) }
 	receive := func() {
-		errc <- p.Receive(func(ctx context.Context, msg interface{}) error {
+		errc <- p.receive(func(ctx context.Context, msg interface{}) error {
 			rhs = msg
 			if verify != nil {
 				return verify(rhs)
