@@ -201,16 +201,16 @@ func (s *Spec) NewMsg(code uint64) (interface{}, bool) {
 // Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
-	*p2p.Peer                      // the p2p.Peer object representing the remote
-	rw           p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
-	spec         *Spec
-	encode       func(context.Context, interface{}) (interface{}, int, error)
-	decode       func(p2p.Msg) (context.Context, []byte, error)
-	wg           sync.WaitGroup
-	running      bool
-	mtx          sync.RWMutex // guards running
-	shutdown     chan struct{}
-	shutdownOnce sync.Once // protects shutdown channel from multiple Shutdown calls
+	*p2p.Peer                   // the p2p.Peer object representing the remote
+	rw        p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
+	spec      *Spec
+	encode    func(context.Context, interface{}) (interface{}, int, error)
+	decode    func(p2p.Msg) (context.Context, []byte, error)
+	wg        sync.WaitGroup
+	running   bool          // if running is true async go routines are dispatched in the event loop
+	mtx       sync.RWMutex  // guards running
+	done      chan struct{} // broadcast that event loop is done and will not be executing async jobs anymore
+	doneOnce  sync.Once
 }
 
 // NewPeer constructs a new peer
@@ -225,12 +225,12 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 		decode = decodeWithoutContext
 	}
 	return &Peer{
-		Peer:     peer,
-		rw:       rw,
-		spec:     spec,
-		encode:   encode,
-		decode:   decode,
-		shutdown: make(chan struct{}),
+		Peer:   peer,
+		rw:     rw,
+		spec:   spec,
+		encode: encode,
+		decode: decode,
+		done:   make(chan struct{}),
 	}
 }
 
@@ -239,29 +239,54 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
-	p.setRunning(true)
+	p.mtx.Lock()
+	p.running = true
+	p.mtx.Unlock()
 
-	done := make(chan error, 1)
+	errc := make(chan error, 1)
 	go func() {
 		for {
 			msg, err := p.readMsg()
 			if err != nil {
 				select {
-				case done <- err:
+				case errc <- err:
 				default:
 				}
 
 				return
 			}
 
-			p.dispatchAsyncHandleMsg(msg, handler, done)
+			p.mtx.RLock()
+			// if loop has been stopped, we don't dispatch any more async routines and stop the loop
+			if !p.running {
+				p.mtx.RUnlock()
+				return
+			}
+
+			p.wg.Add(1)
+			go func() {
+				defer p.wg.Done()
+				err := p.handleMsg(msg, handler)
+				if err != nil {
+					p.mtx.Lock()
+					p.running = false
+					p.mtx.Unlock()
+
+					select {
+					case errc <- err:
+					default:
+					}
+				}
+			}()
+
+			p.mtx.RUnlock()
 		}
 	}()
 
 	select {
-	case err := <-done:
+	case err := <-errc:
 		return err
-	case <-p.shutdown:
+	case <-p.done:
 	}
 
 	return nil
@@ -278,28 +303,6 @@ func (p *Peer) readMsg() (*p2p.Msg, error) {
 	return &msg, err
 }
 
-func (p *Peer) setRunning(isRunning bool) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-	p.running = isRunning
-}
-
-func (p *Peer) dispatchAsyncHandleMsg(msg *p2p.Msg, handler func(ctx context.Context, msg interface{}) error, done chan error) {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-
-	if p.running {
-		p.wg.Add(1)
-		go (func() {
-			defer p.wg.Done()
-			err := p.handleMsg(msg, handler)
-			if err != nil {
-				p.stop(err, done)
-			}
-		})()
-	}
-}
-
 // Drop disconnects a peer
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
@@ -311,6 +314,10 @@ func (p *Peer) Drop(reason string) {
 // Shutdown stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
 func (p *Peer) Shutdown(timeout time.Duration) error {
+	defer p.doneOnce.Do(func() {
+		close(p.done)
+	})
+
 	p.mtx.Lock()
 	p.running = false
 	p.mtx.Unlock()
@@ -331,23 +338,7 @@ func (p *Peer) Shutdown(timeout time.Duration) error {
 		return errors.New("shutdown timeout reached")
 	}
 
-	p.shutdownOnce.Do(func() {
-		close(p.shutdown)
-	})
-
 	return nil
-}
-
-// Stop drops the peer and stops the event loop.
-func (p *Peer) stop(err error, done chan error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-	p.running = false
-
-	select {
-	case done <- err:
-	default:
-	}
 }
 
 // Send takes a message, encodes it in RLP, finds the right message code and sends the

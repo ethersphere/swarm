@@ -538,7 +538,6 @@ func TestPeer_Run(t *testing.T) {
 			t.Fatal("run did not finis -  timeout")
 		}
 	})
-
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
