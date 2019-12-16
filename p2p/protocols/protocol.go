@@ -259,10 +259,12 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) {
 		}
 
 		p.mtx.RLock()
-		// if loop has been stopped, we don't dispatch any more async routines and stop the loop
+		// if loop has been stopped, we don't dispatch any more async routines but continue the loop
+		// so the loop does not exit before shutdown is finished
+		// todo: change this if/when shutdown logic is rewritten
 		if !p.running {
 			p.mtx.RUnlock()
-			return
+			continue
 		}
 
 		p.wg.Add(1)
