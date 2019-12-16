@@ -476,17 +476,6 @@ func TestPeer_Run(t *testing.T) {
 		if err := peer.Stop(3 * time.Second); err != nil {
 			t.Fatal(err)
 		}
-
-		c := make(chan struct{})
-		go func() {
-			defer close(c)
-			wg.Wait()
-		}()
-		select {
-		case <-c:
-		case <-time.After(1 * time.Second):
-			t.Fatal("run did not finis -  timeout")
-		}
 	})
 
 	t.Run("ERROR - handler error", func(t *testing.T) {

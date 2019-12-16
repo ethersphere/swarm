@@ -209,7 +209,6 @@ type Peer struct {
 	wg        sync.WaitGroup
 	running   bool         // if running is true async go routines are dispatched in the event loop
 	mtx       sync.RWMutex // guards running
-	done      chan error   // broadcast that event loop is done and will not be executing async jobs anymore
 }
 
 // NewPeer constructs a new peer
@@ -229,7 +228,6 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 		spec:   spec,
 		encode: encode,
 		decode: decode,
-		done:   make(chan error),
 	}
 }
 
@@ -238,51 +236,58 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
-	go p.run(handler)
-	return <-p.done
+	wait := p.run(handler)
+	return wait()
 }
 
-func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) {
+// run receives messages from the peer and dispatches async routines to handle the messages
+func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) func() error {
 	p.mtx.Lock()
 	p.running = true
 	p.mtx.Unlock()
 
-	for {
-		msg, err := p.readMsg()
-		if err != nil {
-			select {
-			case p.done <- err:
-			default:
-			}
-
-			return
-		}
-
-		p.mtx.RLock()
-		// if loop has been stopped, we don't dispatch any more async routines but continue the loop
-		// so the loop does not exit before shutdown is finished
-		if !p.running {
-			p.mtx.RUnlock()
-			continue
-		}
-
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			err := p.handleMsg(msg, handler)
+	errc := make(chan error)
+	go func() {
+		for {
+			msg, err := p.readMsg()
 			if err != nil {
-				p.mtx.Lock()
-				p.running = false
-				p.mtx.Unlock()
-
 				select {
-				case p.done <- err:
+				case errc <- err:
 				default:
 				}
-			}
-		}()
 
-		p.mtx.RUnlock()
+				return
+			}
+
+			p.mtx.RLock()
+			// if loop has been stopped, we don't dispatch any more async routines
+			if !p.running {
+				p.mtx.RUnlock()
+				continue
+			}
+
+			p.wg.Add(1)
+			go func() {
+				defer p.wg.Done()
+				err := p.handleMsg(msg, handler)
+				if err != nil {
+					p.mtx.Lock()
+					p.running = false
+					p.mtx.Unlock()
+
+					select {
+					case errc <- err:
+					default:
+					}
+				}
+			}()
+
+			p.mtx.RUnlock()
+		}
+	}()
+
+	return func() error {
+		return <-errc
 	}
 }
 
@@ -308,13 +313,6 @@ func (p *Peer) Drop(reason string) {
 // Stop stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
 func (p *Peer) Stop(timeout time.Duration) error {
-	defer func() {
-		select {
-		case p.done <- nil:
-		default:
-		}
-	}()
-
 	p.mtx.Lock()
 	p.running = false
 	p.mtx.Unlock()
