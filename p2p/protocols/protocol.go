@@ -307,10 +307,12 @@ func (p *Peer) Drop(reason string) {
 // Shutdown stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
 func (p *Peer) Shutdown(timeout time.Duration) error {
-	select {
-	case p.done <- nil:
-	default:
-	}
+	defer func() {
+		select {
+		case p.done <- nil:
+		default:
+		}
+	}()
 
 	p.mtx.Lock()
 	p.running = false
