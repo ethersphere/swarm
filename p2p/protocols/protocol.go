@@ -277,15 +277,18 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 		}
 		size = len(r)
 	}
+
+	err = p2p.Send(p.rw, code, wmsg)
+	if err != nil {
+		return nil
+	}
+
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
 		err = p.spec.Hook.Send(p, uint32(size), msg)
-		if err != nil {
-			return err
-		}
 	}
 
-	return p2p.Send(p.rw, code, wmsg)
+	return err
 }
 
 // handleIncoming(code)
