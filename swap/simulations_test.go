@@ -478,7 +478,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
 			t.Fatal(err)
 		}
-		lastCount += 1
+		lastCount++
 		expectedPayout += DefaultPaymentThreshold + 1
 	}
 
