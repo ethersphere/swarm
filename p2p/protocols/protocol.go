@@ -305,9 +305,9 @@ func (p *Peer) Drop(reason string) {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
-// Shutdown stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
+// Stop stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
-func (p *Peer) Shutdown(timeout time.Duration) error {
+func (p *Peer) Stop(timeout time.Duration) error {
 	defer func() {
 		select {
 		case p.done <- nil:

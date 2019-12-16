@@ -473,7 +473,7 @@ func TestPeer_Run(t *testing.T) {
 		}()
 
 		time.Sleep(300 * time.Millisecond)
-		if err := peer.Shutdown(3 * time.Second); err != nil {
+		if err := peer.Stop(3 * time.Second); err != nil {
 			t.Fatal(err)
 		}
 

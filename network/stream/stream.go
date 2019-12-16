@@ -1086,7 +1086,7 @@ func (r *Registry) Stop() error {
 	for _, peer := range r.peers {
 		peer := peer
 		eg.Go(func() error {
-			return peer.Shutdown(5 * time.Second)
+			return peer.Stop(5 * time.Second)
 		})
 	}
 
