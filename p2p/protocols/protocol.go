@@ -280,7 +280,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	err = p2p.Send(p.rw, code, wmsg)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// if the accounting hook is set, call it
