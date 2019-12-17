@@ -27,7 +27,7 @@ type SessionContext struct {
 	Address         []byte
 }
 
-func newSessionContext(capabilityIndex string, sessionId int, addr []byte) *SessionContext {
+func NewSessionContext(sessionId int, capabilityIndex string, addr []byte) *SessionContext {
 	return &SessionContext{
 		CapabilityIndex: capabilityIndex,
 		SessionId:       sessionId,

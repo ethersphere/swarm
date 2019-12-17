@@ -46,6 +46,43 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestManagerContext(t *testing.T) {
+	addr := make([]byte, 32)
+	addr[31] = 0x01
+	kadParams := network.NewKadParams()
+	kad := network.NewKademlia(addr, kadParams)
+
+	mgr := NewSessionManager()
+	_ = mgr.New(kad, "", nil)
+	fwdOne := mgr.New(kad, "", nil)
+	sctx := NewSessionContext(fwdOne.id, "", nil)
+	fwdRetrieved, err := mgr.FromContext(sctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fwdRetrieved != fwdOne {
+		t.Fatalf("fromcontext; expected %p, got %p", fwdOne, fwdRetrieved)
+	}
+
+	newAddr := make([]byte, 32)
+	newAddr[31] = 0x02
+	fwdTwo := mgr.New(kad, "foo", newAddr)
+	sctx, err = mgr.ToContext(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fwdTwo.id != sctx.SessionId {
+		t.Fatalf("to context id; expected %d, got %d", fwdTwo.id, sctx.SessionId)
+	}
+	if fwdTwo.capabilityIndex != sctx.CapabilityIndex {
+		t.Fatalf("to context id; expected %s, got %s", fwdTwo.capabilityIndex, sctx.CapabilityIndex)
+	}
+	if !bytes.Equal(fwdTwo.pivot, sctx.Address) {
+		t.Fatalf("to context id; expected %x, got %x", fwdTwo.pivot, sctx.Address)
+	}
+
+}
+
 //func TestGet() {
 //addr := make([]byte, 32)
 //	kadParams := network.NewKadParams()

@@ -1,6 +1,7 @@
 package forward
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/ethersphere/swarm/network"
@@ -43,27 +44,43 @@ func (m *SessionManager) New(kad *network.Kademlia, capabilityIndex string, pivo
 	return m.add(s)
 }
 
-//func NewFromContext(sctx *SessionContext, kad *network.Kademlia) *Session {
-//	s := &Session{
-//		kademlia: kad,
-//	}
-//
-//	s.id = sctx.Value("id").(int)
-//
-//	addr := sctx.Value("address")
-//	if addr == nil {
-//		s.pivot = kad.BaseAddr()
-//	} else {
-//		s.pivot = addr.([]byte)
-//	}
-//
-//	capabilityIndex := sctx.Value("capability")
-//	if capabilityIndex != nil {
-//		s.capabilityIndex = capabilityIndex.(string)
-//	}
-//
-//	return s
-//}
+func (m *SessionManager) ToContext(id int) (*SessionContext, error) {
+	if id >= len(m.sessions) {
+		return nil, fmt.Errorf("No such session %d (max %d)", id, len(m.sessions))
+	}
+	s := m.sessions[id]
+	return &SessionContext{
+		CapabilityIndex: s.capabilityIndex,
+		SessionId:       s.id,
+		Address:         s.pivot,
+	}, nil
+}
+
+func (m *SessionManager) FromContext(sctx *SessionContext) (*Session, error) {
+
+	sessionId := sctx.Value("id")
+	if sessionId != nil {
+		id := sessionId.(int)
+		if id < len(m.sessions) {
+			return m.sessions[id], nil
+		}
+	}
+	return nil, nil
+	//
+	//	addr := sctx.Value("address")
+	//	if addr == nil {
+	//		s.pivot = kad.BaseAddr()
+	//	} else {
+	//		s.pivot = addr.([]byte)
+	//	}
+	//
+	//	capabilityIndex := sctx.Value("capability")
+	//	if capabilityIndex != nil {
+	//		s.capabilityIndex = capabilityIndex.(string)
+	//	}
+	//
+	//	return s
+}
 
 func (s *Session) Get(numPeers int) ([]ForwardPeer, error) {
 	var result []ForwardPeer
