@@ -313,7 +313,7 @@ func (r *Registry) clientHandleStreamInfoRes(ctx context.Context, p *Peer, msg *
 					err := r.clientRequestStreamRange(ctx, p, provider, s.Stream, s.Cursor)
 					// todo: investigate if we can handle this better
 					if err != nil {
-						p.Drop("had an error sending initial GetRange for historical stream: %s")
+						p.Drop("had an error sending initial GetRange for historical stream")
 					}
 				}()
 			}
@@ -581,8 +581,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	}
 
 	if errc == nil {
-		// todo: handle this?
-		return errors.New("internal server error")
+		return nil
 	}
 
 	select {

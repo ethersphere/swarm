@@ -266,23 +266,18 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 				continue
 			}
 
+			p.mtx.RUnlock()
 			p.wg.Add(1)
 			go func() {
 				defer p.wg.Done()
 				err := p.handleMsg(msg, handler)
 				if err != nil {
-					p.mtx.Lock()
-					p.running = false
-					p.mtx.Unlock()
-
 					select {
 					case errc <- err:
 					default:
 					}
 				}
 			}()
-
-			p.mtx.RUnlock()
 		}
 	}()
 
@@ -291,7 +286,7 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 	}
 }
 
-func (p *Peer) readMsg() (*p2p.Msg, error) {
+func (p *Peer) readMsg() (p2p.Msg, error) {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		if err != io.EOF {
@@ -299,7 +294,7 @@ func (p *Peer) readMsg() (*p2p.Msg, error) {
 			log.Error("peer.readMsg", "err", err)
 		}
 	}
-	return &msg, err
+	return msg, err
 }
 
 // Drop disconnects a peer
@@ -389,7 +384,7 @@ func (p *Peer) receive(handler func(ctx context.Context, msg interface{}) error)
 // * checks for out-of-range message codes,
 // * handles decoding with reflection,
 // * call handlers as callbacks
-func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg interface{}) error) error {
+func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg interface{}) error) error {
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
@@ -402,7 +397,7 @@ func (p *Peer) handleMsg(msg *p2p.Msg, handle func(ctx context.Context, msg inte
 		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 
-	ctx, msgBytes, err := p.decode(*msg)
+	ctx, msgBytes, err := p.decode(msg)
 	if err != nil {
 		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
 	}
