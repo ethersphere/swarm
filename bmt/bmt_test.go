@@ -18,6 +18,7 @@ package bmt
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -177,6 +178,50 @@ func TestSyncHasherCorrectness(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// tests order-neutral concurrent writes with entire max size written in one go
+func TestAsyncCorrectness(t *testing.T) {
+	data := testutil.RandomBytes(1, bufferSize)
+	hasher := sha3.NewLegacyKeccak256
+	size := hasher().Size()
+	whs := []whenHash{first, last, random}
+
+	for _, double := range []bool{false, true} {
+		for _, wh := range whs {
+			for _, count := range counts {
+				t.Run(fmt.Sprintf("double_%v_hash_when_%v_segments_%v", double, wh, count), func(t *testing.T) {
+					max := count * size
+					var incr int
+					capacity := 1
+					pool := NewTreePool(hasher, count, capacity)
+					defer pool.Drain(0)
+					for n := 1; n <= max; n += incr {
+						incr = 1 + rand.Intn(5)
+						bmtobj := New(pool)
+						d := data[:n]
+						rbmtobj := NewRefHasher(hasher, count)
+						expNoMeta := rbmtobj.Hash(d)
+						h := hasher()
+						h.Write(ZeroSpan)
+						h.Write(expNoMeta)
+						exp := h.Sum(nil)
+						got := syncHash(bmtobj, 0, d)
+						if !bytes.Equal(got, exp) {
+							t.Fatalf("wrong sync hash (syncpart) for datalength %v: expected %x (ref), got %x", n, exp, got)
+						}
+						ctx, cancel := context.WithCancel(context.Background())
+						defer cancel()
+						sw := NewAsyncHasher(ctx, bmtobj, double, nil)
+						got = asyncHashRandom(sw, 0, d, wh)
+						if !bytes.Equal(got, exp) {
+							t.Fatalf("wrong async hash (asyncpart) for datalength %v: expected %x, got %x", n, exp, got)
+						}
+					}
+				})
+			}
+		}
 	}
 }
 
@@ -359,6 +404,19 @@ const (
 	random
 )
 
+func BenchmarkBMTAsync(t *testing.B) {
+	whs := []whenHash{first, last, random}
+	for size := 4096; size >= 128; size /= 2 {
+		for _, wh := range whs {
+			for _, double := range []bool{false, true} {
+				t.Run(fmt.Sprintf("double_%v_hash_when_%v_size_%v", double, wh, size), func(t *testing.B) {
+					benchmarkBMTAsync(t, size, wh, double)
+				})
+			}
+		}
+	}
+}
+
 func BenchmarkPool(t *testing.B) {
 	caps := []int{1, PoolSize}
 	for size := 4096; size >= 128; size /= 2 {
@@ -427,6 +485,27 @@ func benchmarkBMT(t *testing.B, n int) {
 	}
 }
 
+// benchmarks BMT hasher with asynchronous concurrent segment/section writes
+func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
+	data := testutil.RandomBytes(1, n)
+	hasher := sha3.NewLegacyKeccak256
+	pool := NewTreePool(hasher, segmentCount, PoolSize)
+	bmth := New(pool)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	bmtobj := NewAsyncHasher(ctx, bmth, double, nil)
+	idxs, segments := splitAndShuffle(bmtobj.SectionSize(), data)
+	rand.Shuffle(len(idxs), func(i int, j int) {
+		idxs[i], idxs[j] = idxs[j], idxs[i]
+	})
+
+	t.ReportAllocs()
+	t.ResetTimer()
+	for i := 0; i < t.N; i++ {
+		asyncHash(bmtobj, 0, n, wh, idxs, segments)
+	}
+}
+
 // benchmarks 100 concurrent bmt hashes with pool capacity
 func benchmarkPool(t *testing.B, poolsize, n int) {
 	data := testutil.RandomBytes(1, n)
@@ -492,6 +571,48 @@ func splitAndShuffle(secsize int, data []byte) (idxs []int, segments [][]byte) {
 	return idxs, segments
 }
 
+// splits the input data performs a random shuffle to mock async section writes
+func asyncHashRandom(bmtobj *AsyncHasher, spanLength int, data []byte, wh whenHash) (s []byte) {
+	idxs, segments := splitAndShuffle(bmtobj.SectionSize(), data)
+	return asyncHash(bmtobj, spanLength, len(data), wh, idxs, segments)
+}
+
+// mock for async section writes for file.SectionWriter
+// requires a permutation (a random shuffle) of list of all indexes of segments
+// and writes them in order to the appropriate section
+// the Sum function is called according to the wh parameter (first, last, random [relative to segment writes])
+func asyncHash(bmtobj *AsyncHasher, spanLength int, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
+	bmtobj.Reset()
+	if l == 0 {
+		bmtobj.SetLength(l)
+		bmtobj.SetSpan(spanLength)
+		return bmtobj.SumIndexed(nil)
+	}
+	c := make(chan []byte, 1)
+	hashf := func() {
+		bmtobj.SetLength(l)
+		bmtobj.SetSpan(spanLength)
+		c <- bmtobj.SumIndexed(nil)
+	}
+	maxsize := len(idxs)
+	var r int
+	if wh == random {
+		r = rand.Intn(maxsize)
+	}
+	for i, idx := range idxs {
+		bmtobj.WriteIndexed(idx, segments[idx])
+		if (wh == first || wh == random) && i == r {
+			go hashf()
+		}
+	}
+	if wh == last {
+		bmtobj.SetLength(l)
+		bmtobj.SetSpan(spanLength)
+		return bmtobj.SumIndexed(nil)
+	}
+	return <-c
+}
+
 // TestUseSyncAsOrdinaryHasher verifies that the bmt.Hasher can be used with the hash.Hash interface
 func TestUseSyncAsOrdinaryHasher(t *testing.T) {
 	hasher := sha3.NewLegacyKeccak256
@@ -500,6 +621,29 @@ func TestUseSyncAsOrdinaryHasher(t *testing.T) {
 	bmt.SetSpan(3)
 	bmt.Write([]byte("foo"))
 	res := bmt.Sum(nil)
+	refh := NewRefHasher(hasher, 128)
+	resh := refh.Hash([]byte("foo"))
+	hsub := hasher()
+	span := LengthToSpan(3)
+	hsub.Write(span)
+	hsub.Write(resh)
+	refRes := hsub.Sum(nil)
+	if !bytes.Equal(res, refRes) {
+		t.Fatalf("normalhash; expected %x, got %x", refRes, res)
+	}
+}
+
+// TestUseAsyncAsOrdinaryHasher verifies that the bmt.Hasher can be used with the hash.Hash interface
+func TestUseAsyncAsOrdinaryHasher(t *testing.T) {
+	hasher := sha3.NewLegacyKeccak256
+	pool := NewTreePool(hasher, segmentCount, PoolSize)
+	sbmt := New(pool)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	abmt := NewAsyncHasher(ctx, sbmt, false, nil)
+	abmt.SetSpan(3)
+	abmt.Write([]byte("foo"))
+	res := abmt.Sum(nil)
 	refh := NewRefHasher(hasher, 128)
 	resh := refh.Hash([]byte("foo"))
 	hsub := hasher()
