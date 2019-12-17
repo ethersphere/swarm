@@ -1,30 +1,35 @@
 package forward
 
 import (
-	"context"
-
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 )
 
 type Session struct {
-	sessionContext context.Context
-	kademlia       *network.Kademlia
-	pivot          []byte
+	kademlia        *network.Kademlia
+	pivot           []byte
+	id              int
+	capabilityIndex string
 }
 
-func New(sctx context.Context, kad *network.Kademlia) *Session {
+func NewFromContext(sctx *SessionContext, kad *network.Kademlia) *Session {
 	s := &Session{
-		sessionContext: sctx,
-		kademlia:       kad,
+		kademlia: kad,
 	}
+
+	s.id = sctx.Value("id").(int)
+
 	addr := sctx.Value("address")
-	log.Trace("addr", "addr", addr)
 	if addr == nil {
 		s.pivot = kad.BaseAddr()
 	} else {
 		s.pivot = addr.([]byte)
 	}
+
+	capabilityIndex := sctx.Value("capability")
+	if capabilityIndex != nil {
+		s.capabilityIndex = capabilityIndex.(string)
+	}
+
 	return s
 }
 

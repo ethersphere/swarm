@@ -65,6 +65,11 @@ func (c *SessionContext) Value(k interface{}) interface{} {
 			return nil
 		}
 		return c.Address
+	case "capability":
+		if c.CapabilityIndex == "" {
+			return nil
+		}
+		return c.CapabilityIndex
 	case "id":
 		return c.SessionId
 	}
@@ -73,4 +78,8 @@ func (c *SessionContext) Value(k interface{}) interface{} {
 
 func (c *SessionContext) SetAddress(addr []byte) {
 	c.Address = addr
+}
+
+func (c *SessionContext) SetCapability(capabilityIndex string) {
+	c.CapabilityIndex = capabilityIndex
 }

@@ -20,17 +20,31 @@ func TestNew(t *testing.T) {
 	kadParams := network.NewKadParams()
 	kad := network.NewKademlia(addr, kadParams)
 
+	sessionId = 42
 	sctx := NewSessionContext()
-	fwdBase := New(sctx, kad)
+	fwdBase := NewFromContext(sctx, kad)
 	if !bytes.Equal(fwdBase.pivot, addr) {
 		t.Fatalf("pivot base; expected %x, got %x", addr, fwdBase.pivot)
 	}
+	if fwdBase.id != 42 {
+		t.Fatalf("sessionId; expected %d, got %d", 42, fwdBase.id)
+	}
 
 	bytesNear := pot.NewAddressFromString("00000001")
+	capabilityIndex := "foo"
+	sctx = NewSessionContext()
+	sctx.SetCapability(capabilityIndex)
 	sctx.SetAddress(bytesNear)
-	fwdExplicit := New(sctx, kad)
+	fwdExplicit := NewFromContext(sctx, kad)
 	if !bytes.Equal(fwdExplicit.pivot, bytesNear) {
 		t.Fatalf("pivot explicit; expected %x, got %x", bytesNear, fwdExplicit.pivot)
+	}
+
+	if sctx.CapabilityIndex != capabilityIndex {
+		t.Fatalf("capability; expected %s, got %s", capabilityIndex, fwdExplicit.capabilityIndex)
+	}
+	if fwdExplicit.id != 43 {
+		t.Fatalf("sessionId; expected %d, got %d", 43, fwdExplicit.id)
 	}
 }
 
