@@ -1,12 +1,9 @@
 package forward
 
 import (
-	"github.com/ethersphere/swarm/network"
-)
+	"sync"
 
-var (
-	sessionId = 0
-	sessions  []*Session
+	"github.com/ethersphere/swarm/network"
 )
 
 type Session struct {
@@ -16,10 +13,26 @@ type Session struct {
 	capabilityIndex string
 }
 
-func New(kad *network.Kademlia, capabilityIndex string, pivot []byte) *Session {
+type SessionManager struct {
+	sessions []*Session
+	mu       sync.Mutex
+}
+
+func NewSessionManager() *SessionManager {
+	return &SessionManager{}
+}
+
+func (m *SessionManager) add(s *Session) *Session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s.id = len(m.sessions)
+	m.sessions = append(m.sessions, s)
+	return s
+}
+
+func (m *SessionManager) New(kad *network.Kademlia, capabilityIndex string, pivot []byte) *Session {
 	s := &Session{
 		kademlia:        kad,
-		id:              sessionId,
 		capabilityIndex: capabilityIndex,
 	}
 	if pivot == nil {
@@ -27,8 +40,7 @@ func New(kad *network.Kademlia, capabilityIndex string, pivot []byte) *Session {
 	} else {
 		s.pivot = pivot
 	}
-	sessionId++
-	return s
+	return m.add(s)
 }
 
 //func NewFromContext(sctx *SessionContext, kad *network.Kademlia) *Session {

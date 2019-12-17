@@ -27,11 +27,6 @@ type SessionContext struct {
 	Address         []byte
 }
 
-func NewSessionContext() *SessionContext {
-	sctx := newSessionContext("", sessionId, nil)
-	return sctx
-}
-
 func newSessionContext(capabilityIndex string, sessionId int, addr []byte) *SessionContext {
 	return &SessionContext{
 		CapabilityIndex: capabilityIndex,
