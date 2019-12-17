@@ -260,8 +260,9 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 			}
 
 			p.mtx.RLock()
-			// if loop has been stopped, we don't dispatch any more async routines
+			// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
 			if !p.running {
+				_ = msg.Discard()
 				p.mtx.RUnlock()
 				continue
 			}
