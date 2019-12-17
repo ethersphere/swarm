@@ -516,9 +516,9 @@ func TestPeer_Run(t *testing.T) {
 		}()
 		select {
 		case actualerr := <-c:
-			expectederr := errors.New("Message handler error: (msg code 0): test error")
-			if actualerr.Error() != expectederr.Error() {
-				t.Fatalf("wrong error returned from main, expected: %s, actual: %s", expectederr.Error(), actualerr.Error())
+			expectedStr := "Message handler error: (msg code 0): test error"
+			if actualerr.Error() != expectedStr {
+				t.Fatalf("wrong error returned from main, expected: %s, actual: %s", expectedStr, actualerr.Error())
 			}
 		case <-time.After(1 * time.Second):
 			t.Fatal("run did not finis -  timeout")
