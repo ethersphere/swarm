@@ -21,9 +21,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -457,24 +460,36 @@ func TestPeer_Run(t *testing.T) {
 		}
 
 		handler := func(ctx context.Context, msg interface{}) error {
-			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
-				t.Fatal("rw.msg in handler was wrong")
-			}
 			return nil
 		}
 
-		var wg sync.WaitGroup
-		go func() {
-			wg.Add(1)
-			defer wg.Done()
+		var eg errgroup.Group
+		eg.Go(func() error {
 			if err := peer.Run(handler); err != nil {
-				t.Fatal(err)
+				return err
 			}
-		}()
+
+			return nil
+		})
 
 		if err := peer.Stop(3 * time.Second); err != nil {
 			t.Fatal(err)
 		}
+
+		rw.eof = true
+		done := make(chan error)
+		go func() {
+			done <- eg.Wait()
+		}()
+		select {
+		case err := <-done:
+			if err != io.EOF {
+				t.Fatal("run returned error")
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("did not close run")
+		}
+
 	})
 
 	t.Run("ERROR - handler error", func(t *testing.T) {
@@ -486,41 +501,25 @@ func TestPeer_Run(t *testing.T) {
 			"test content",
 		}
 
-		errc := make(chan struct{})
-
 		handler := func(ctx context.Context, msg interface{}) error {
-			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
-				t.Fatal("rw.msg in handler was wrong")
-			}
-
-			select {
-			case <-errc:
-				return errors.New("test error")
-			default:
-			}
-			return nil
+			return errors.New("test error")
 		}
 
-		var wg sync.WaitGroup
-		go func() {
-			wg.Add(1)
-			defer wg.Done()
-			if err := peer.Run(handler); err != nil {
-				if err.Error() != "Message handler error: (msg code 0): test error" {
-					t.Fatal(err)
-				}
-			}
-		}()
+		var eg errgroup.Group
+		eg.Go(func() error {
+			return peer.Run(handler)
+		})
 
-		close(errc)
-
-		c := make(chan struct{})
+		c := make(chan error)
 		go func() {
-			defer close(c)
-			wg.Wait()
+			c <- eg.Wait()
 		}()
 		select {
-		case <-c:
+		case actualerr := <-c:
+			expectederr := errors.New("Message handler error: (msg code 0): test error")
+			if actualerr.Error() != expectederr.Error() {
+				t.Fatalf("wrong error returned from main, expected: %s, actual: %s", expectederr.Error(), actualerr.Error())
+			}
 		case <-time.After(1 * time.Second):
 			t.Fatal("run did not finis -  timeout")
 		}
@@ -741,6 +740,7 @@ type dummyRW struct {
 	msg  interface{}
 	size uint32
 	code uint64
+	eof  bool
 }
 
 func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
@@ -748,6 +748,9 @@ func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 }
 
 func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+	if d.eof {
+		return p2p.Msg{}, io.EOF
+	}
 
 	r, err := rlp.EncodeToBytes(d.msg)
 	if err != nil {
