@@ -4,6 +4,11 @@ import (
 	"github.com/ethersphere/swarm/network"
 )
 
+var (
+	sessionId = 0
+	sessions  []*Session
+)
+
 type Session struct {
 	kademlia        *network.Kademlia
 	pivot           []byte
@@ -11,27 +16,42 @@ type Session struct {
 	capabilityIndex string
 }
 
-func NewFromContext(sctx *SessionContext, kad *network.Kademlia) *Session {
+func New(kad *network.Kademlia, capabilityIndex string, pivot []byte) *Session {
 	s := &Session{
-		kademlia: kad,
+		kademlia:        kad,
+		id:              sessionId,
+		capabilityIndex: capabilityIndex,
 	}
-
-	s.id = sctx.Value("id").(int)
-
-	addr := sctx.Value("address")
-	if addr == nil {
+	if pivot == nil {
 		s.pivot = kad.BaseAddr()
 	} else {
-		s.pivot = addr.([]byte)
+		s.pivot = pivot
 	}
-
-	capabilityIndex := sctx.Value("capability")
-	if capabilityIndex != nil {
-		s.capabilityIndex = capabilityIndex.(string)
-	}
-
+	sessionId++
 	return s
 }
+
+//func NewFromContext(sctx *SessionContext, kad *network.Kademlia) *Session {
+//	s := &Session{
+//		kademlia: kad,
+//	}
+//
+//	s.id = sctx.Value("id").(int)
+//
+//	addr := sctx.Value("address")
+//	if addr == nil {
+//		s.pivot = kad.BaseAddr()
+//	} else {
+//		s.pivot = addr.([]byte)
+//	}
+//
+//	capabilityIndex := sctx.Value("capability")
+//	if capabilityIndex != nil {
+//		s.capabilityIndex = capabilityIndex.(string)
+//	}
+//
+//	return s
+//}
 
 func (s *Session) Get(numPeers int) ([]ForwardPeer, error) {
 	var result []ForwardPeer

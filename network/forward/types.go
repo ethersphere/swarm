@@ -7,8 +7,7 @@ import (
 )
 
 var (
-	sessionId = 0
-	zeroTime  = time.Unix(0, 0)
+	zeroTime = time.Unix(0, 0)
 )
 
 type ForwardPeer struct {
@@ -30,7 +29,6 @@ type SessionContext struct {
 
 func NewSessionContext() *SessionContext {
 	sctx := newSessionContext("", sessionId, nil)
-	sessionId++
 	return sctx
 }
 
