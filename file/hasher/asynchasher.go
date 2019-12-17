@@ -11,7 +11,7 @@ import (
 
 // NewAsyncWriter extends Hasher with an interface for concurrent segment.GetSection() writes
 // TODO: Instead of explicitly setting double size of segment should be dynamic and chunked internally. If not, we have to keep different bmt hashers generation functions for different purposes in the same instance, or cope with added complexity of bmt hasher generation functions having to receive parameters
-func NewAsyncWriter(ctx context.Context, h *bmt.Hasher, double bool, errFunc func(error)) *AsyncHasher {
+func NewAsyncHasher(ctx context.Context, h *bmt.Hasher, double bool, errFunc func(error)) *AsyncHasher {
 	secsize := h.SectionSize()
 	if double {
 		secsize *= 2
@@ -96,7 +96,7 @@ func (sw *AsyncHasher) Branches() int {
 // WriteSection writes the i-th section of the BMT base
 // this function can and is meant to be called concurrently
 // it sets max segment threadsafely
-func (sw *AsyncHasher) WriteToIndex(i int, section []byte) (int, error) {
+func (sw *AsyncHasher) WriteIndexed(i int, section []byte) (int, error) {
 	// TODO: Temporary workaround for chunkwise write
 	if i < 0 {
 		sw.Hasher.Reset()
@@ -154,7 +154,7 @@ func (sw *AsyncHasher) WriteToIndex(i int, section []byte) (int, error) {
 // length: known length of the input (unsafe; undefined if out of range)
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
-func (sw *AsyncHasher) Sum(b []byte) (s []byte) {
+func (sw *AsyncHasher) SumIndexed(b []byte) (s []byte) {
 	if sw.all {
 		return sw.Hasher.Sum(nil)
 	}
