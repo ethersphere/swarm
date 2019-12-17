@@ -71,7 +71,7 @@ type Price struct {
 // A protocol provides the message price in absolute value
 // This method then returns the correct signed amount,
 // depending on who pays, which is identified by the `payer` argument:
-// `Send` will pass a `Sender` payer, `Receive` will pass the `Receiver` argument.
+// Sending will pass a `Sender` payer, receiving will pass the `Receiver` argument.
 // Thus: If Sending and sender pays, amount negative, otherwise positive
 // If Receiving, and receiver pays, amount negative, otherwise positive
 func (p *Price) For(payer Payer, size uint32) int64 {
@@ -93,6 +93,10 @@ type Balance interface {
 	// positive amount = credit local node
 	// negative amount = debit local node
 	Add(amount int64, peer *Peer) error
+	// Check is a dry-run for the Add operation:
+	// As the accounting takes place **after** the actual send/receive operation happens,
+	// we want to make sure that that operation would not result in any problem
+	Check(amount int64, peer *Peer) error
 }
 
 // Accounting implements the Hook interface
@@ -119,18 +123,8 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *Accounti
 }
 
 // Send takes a peer, a size and a msg and
-//   - calculates the cost for the local node sending a msg of size to peer querying the message for its price
 //   - credits/debits local node using balance interface
-func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
-	// get the price for a message
-	var pricedMessage PricedMessage
-	var ok bool
-	// if the msg implements `Price`, it is an accounted message
-	if pricedMessage, ok = msg.(PricedMessage); !ok {
-		return nil
-	}
-	// evaluate the price for sending messages
-	costToLocalNode := pricedMessage.Price().For(Sender, size)
+func (ah *Accounting) Apply(peer *Peer, costToLocalNode int64, size uint32) error {
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
 	// record metrics: just increase counters for user-facing metrics
@@ -138,24 +132,24 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	return err
 }
 
-// Receive takes a peer, a size and a msg and
-//   - calculates the cost for the local node receiving a msg of size from peer querying the message for its price
-//   - credits/debits local node using balance interface
-func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
+//   - calculates the cost for the local node sending a msg of size to peer querying the message for its price
+func (ah *Accounting) Validate(peer *Peer, size uint32, msg interface{}, payer Payer) (int64, error) {
 	// get the price for a message (by querying the message type via the PricedMessage interface)
 	var pricedMessage PricedMessage
 	var ok bool
 	// if the msg implements `Price`, it is an accounted message
 	if pricedMessage, ok = msg.(PricedMessage); !ok {
-		return nil
+		return 0, nil
 	}
 	// evaluate the price for receiving messages
-	costToLocalNode := pricedMessage.Price().For(Receiver, size)
-	// do the accounting
-	err := ah.Add(costToLocalNode, peer)
-	// record metrics: just increase counters for user-facing metrics
-	ah.doMetrics(costToLocalNode, size, err)
-	return err
+	costToLocalNode := pricedMessage.Price().For(payer, size)
+	// check that the operation would perform correctly
+	err := ah.Check(costToLocalNode, peer)
+	if err != nil {
+		// signal to caller that the operation would fail
+		return 0, err
+	}
+	return costToLocalNode, nil
 }
 
 // record some metrics

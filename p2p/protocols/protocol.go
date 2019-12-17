@@ -115,10 +115,10 @@ func errorf(code int, format string, params ...interface{}) *Error {
 //To access this functionality, we provide a Hook interface which will call accounting methods
 //NOTE: there could be more such (horizontal) hooks in the future
 type Hook interface {
-	//A hook for sending messages
-	Send(peer *Peer, size uint32, msg interface{}) error
-	//A hook for receiving messages
-	Receive(peer *Peer, size uint32, msg interface{}) error
+	// A hook for applying accounting
+	Apply(peer *Peer, costToLocalNode int64, size uint32) error
+	// Run some validation before applying accounting
+	Validate(peer *Peer, size uint32, msg interface{}, payer Payer) (int64, error)
 }
 
 // Spec is a protocol specification including its name and version as well as
@@ -203,6 +203,7 @@ type Peer struct {
 	spec      *Spec
 	encode    func(context.Context, interface{}) (interface{}, int, error)
 	decode    func(p2p.Msg) (context.Context, []byte, error)
+	lock      sync.Mutex
 }
 
 // NewPeer constructs a new peer
@@ -278,14 +279,27 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 		size = len(r)
 	}
 
-	err = p2p.Send(p.rw, code, wmsg)
-	if err != nil {
-		return err
-	}
-
-	// if the accounting hook is set, call it
+	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		err = p.spec.Hook.Send(p, uint32(size), msg)
+
+		// let's lock, we want to avoid that after validating, a separate call might interfere
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		// validate that this operation would succeed...
+		costToLocalNode, err := p.spec.Hook.Validate(p, uint32(size), wmsg, Sender)
+		if err != nil {
+			// ...because if it would fail, we return and don't send the message
+			return err
+		}
+		// seems like accounting would succeed, thus send the message first...
+		err = p2p.Send(p.rw, code, wmsg)
+		if err != nil {
+			return err
+		}
+		// ...and finally apply (write) the accounting change
+		err = p.spec.Hook.Apply(p, costToLocalNode, uint32(size))
+	} else {
+		err = p2p.Send(p.rw, code, wmsg)
 	}
 
 	return err
@@ -325,23 +339,40 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
 
-	// if the accounting hook is set, call it
+	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
+
+		p.lock.Lock()
+		defer p.lock.Unlock()
+
+		size := uint32(len(msgBytes))
+
+		// validate that the accounting call would succeed...
+		costToLocalNode, err := p.spec.Hook.Validate(p, size, val, Receiver)
 		if err != nil {
+			// ...because if it would fail, we return and don't handle the message
 			return err
+		}
+
+		// seems like accounting would be fine, so handle the message
+		if err := handle(ctx, val); err != nil {
+			return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
+		}
+
+		// handling succeeded, finally apply accounting
+		err = p.spec.Hook.Apply(p, costToLocalNode, size)
+	} else {
+		// call the registered handler callbacks
+		// a registered callback take the decoded message as argument as an interface
+		// which the handler is supposed to cast to the appropriate type
+		// it is entirely safe not to check the cast in the handler since the handler is
+		// chosen based on the proper type in the first place
+		if err := handle(ctx, val); err != nil {
+			return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
 		}
 	}
 
-	// call the registered handler callbacks
-	// a registered callback take the decoded message as argument as an interface
-	// which the handler is supposed to cast to the appropriate type
-	// it is entirely safe not to check the cast in the handler since the handler is
-	// chosen based on the proper type in the first place
-	if err := handle(ctx, val); err != nil {
-		return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
-	}
-	return nil
+	return err
 }
 
 // Handshake negotiates a handshake on the peer connection

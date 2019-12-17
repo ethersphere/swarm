@@ -229,6 +229,10 @@ type testNode struct {
 	peerCount int
 }
 
+func (t *testNode) Check(a int64, p *Peer) error {
+	return nil
+}
+
 // do the accounting for the peer's test protocol
 // testNode implements protocols.Balance
 func (t *testNode) Add(a int64, p *Peer) error {

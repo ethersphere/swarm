@@ -96,6 +96,11 @@ func (m *zeroPriceMsg) Price() *Price {
 }
 
 //dummy accounting implementation, only stores values for later check
+func (d *dummyBalance) Check(amount int64, peer *Peer) error {
+	return nil
+}
+
+//dummy accounting implementation, only stores values for later check
 func (d *dummyBalance) Add(amount int64, peer *Peer) error {
 	d.amount = amount
 	d.peer = peer
@@ -174,10 +179,12 @@ func checkAccountingTestCases(t *testing.T, cases []testCase, acc *Accounting, p
 		//reset balance before every check
 		balance.amount = 0
 		if send {
-			err = acc.Send(peer, c.size, c.msg)
+			cost, _ := acc.Validate(peer, c.size, c.msg, Sender)
+			err = acc.Apply(peer, cost, c.size)
 			expectedResult = c.sendResult
 		} else {
-			err = acc.Receive(peer, c.size, c.msg)
+			cost, _ := acc.Validate(peer, c.size, c.msg, Receiver)
+			err = acc.Apply(peer, cost, c.size)
 			expectedResult = c.recvResult
 		}
 
