@@ -20,8 +20,8 @@ func TestNew(t *testing.T) {
 	kadParams := network.NewKadParams()
 	kad := network.NewKademlia(addr, kadParams)
 
-	mgr := NewSessionManager()
-	fwdBase := mgr.New(kad, "", nil)
+	mgr := NewSessionManager(kad)
+	fwdBase := mgr.New("", nil)
 	if !bytes.Equal(fwdBase.pivot, addr) {
 		t.Fatalf("pivot base; expected %x, got %x", addr, fwdBase.pivot)
 	}
@@ -31,7 +31,7 @@ func TestNew(t *testing.T) {
 
 	bytesNear := pot.NewAddressFromString("00000001")
 	capabilityIndex := "foo"
-	fwdExplicit := mgr.New(kad, capabilityIndex, bytesNear)
+	fwdExplicit := mgr.New(capabilityIndex, bytesNear)
 	if !bytes.Equal(fwdExplicit.pivot, bytesNear) {
 		t.Fatalf("pivot explicit; expected %x, got %x", bytesNear, fwdExplicit.pivot)
 	}
@@ -52,22 +52,20 @@ func TestManagerContext(t *testing.T) {
 	kadParams := network.NewKadParams()
 	kad := network.NewKademlia(addr, kadParams)
 
-	mgr := NewSessionManager()
-	_ = mgr.New(kad, "", nil)
-	fwdOne := mgr.New(kad, "", nil)
-	sctx := NewSessionContext(fwdOne.id, "", nil)
-	fwdRetrieved, err := mgr.FromContext(sctx)
-	if err != nil {
-		t.Fatal(err)
+	mgr := NewSessionManager(kad)
+	_ = mgr.New("", nil)       // id 1
+	fwdOne := mgr.New("", nil) // id 2
+	if len(mgr.sessions) != 2 {
+		t.Fatalf("mgr session length; expected 2, got %d", len(mgr.sessions))
 	}
-	if fwdRetrieved != fwdOne {
-		t.Fatalf("fromcontext; expected %p, got %p", fwdOne, fwdRetrieved)
+	if mgr.sessions[2] != fwdOne {
+		t.Fatalf("fromcontext; expected %p, got %p", fwdOne, mgr.sessions[2])
 	}
 
 	newAddr := make([]byte, 32)
 	newAddr[31] = 0x02
-	fwdTwo := mgr.New(kad, "foo", newAddr)
-	sctx, err = mgr.ToContext(2)
+	fwdTwo := mgr.New("foo", newAddr) // id 3
+	sctx, err := mgr.ToContext(3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +79,20 @@ func TestManagerContext(t *testing.T) {
 		t.Fatalf("to context id; expected %x, got %x", fwdTwo.pivot, sctx.Address)
 	}
 
+	sctx = NewSessionContext("bar", newAddr)
+	fwdThree, err := mgr.FromContext(sctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fwdThree.id != 3 {
+		t.Fatalf("from new context id; expected %d, got %d", 3, fwdThree.id)
+	}
+	if fwdThree.capabilityIndex != sctx.CapabilityIndex {
+		t.Fatalf("to context id; expected %s, got %s", fwdThree.capabilityIndex, sctx.CapabilityIndex)
+	}
+	if !bytes.Equal(fwdThree.pivot, sctx.Address) {
+		t.Fatalf("to context id; expected %x, got %x", fwdThree.pivot, sctx.Address)
+	}
 }
 
 //func TestGet() {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 )
 
@@ -15,29 +16,34 @@ type Session struct {
 }
 
 type SessionManager struct {
-	sessions []*Session
+	sessions map[int]*Session
+	kademlia *network.Kademlia
+	lastId   int // starts at 1 to make create from context easier
 	mu       sync.Mutex
 }
 
-func NewSessionManager() *SessionManager {
-	return &SessionManager{}
+func NewSessionManager(kademlia *network.Kademlia) *SessionManager {
+	return &SessionManager{
+		sessions: make(map[int]*Session),
+		kademlia: kademlia,
+	}
 }
 
 func (m *SessionManager) add(s *Session) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s.id = len(m.sessions)
-	m.sessions = append(m.sessions, s)
+	m.lastId++
+	log.Trace("adding session", "id", m.lastId)
+	m.sessions[m.lastId] = s
 	return s
 }
 
-func (m *SessionManager) New(kad *network.Kademlia, capabilityIndex string, pivot []byte) *Session {
+func (m *SessionManager) New(capabilityIndex string, pivot []byte) *Session {
 	s := &Session{
-		kademlia:        kad,
 		capabilityIndex: capabilityIndex,
 	}
 	if pivot == nil {
-		s.pivot = kad.BaseAddr()
+		s.pivot = m.kademlia.BaseAddr()
 	} else {
 		s.pivot = pivot
 	}
@@ -45,10 +51,10 @@ func (m *SessionManager) New(kad *network.Kademlia, capabilityIndex string, pivo
 }
 
 func (m *SessionManager) ToContext(id int) (*SessionContext, error) {
-	if id >= len(m.sessions) {
-		return nil, fmt.Errorf("No such session %d (max %d)", id, len(m.sessions))
+	s, ok := m.sessions[id]
+	if !ok {
+		return nil, fmt.Errorf("No such session %d", id)
 	}
-	s := m.sessions[id]
 	return &SessionContext{
 		CapabilityIndex: s.capabilityIndex,
 		SessionId:       s.id,
@@ -58,28 +64,18 @@ func (m *SessionManager) ToContext(id int) (*SessionContext, error) {
 
 func (m *SessionManager) FromContext(sctx *SessionContext) (*Session, error) {
 
-	sessionId := sctx.Value("id")
-	if sessionId != nil {
-		id := sessionId.(int)
-		if id < len(m.sessions) {
-			return m.sessions[id], nil
+	sessionId, ok := sctx.Value("id").(int)
+	if ok {
+		s, ok := m.sessions[sessionId]
+		if !ok {
+			return nil, fmt.Errorf("No such session %d", sessionId)
 		}
+		return s, nil
 	}
-	return nil, nil
-	//
-	//	addr := sctx.Value("address")
-	//	if addr == nil {
-	//		s.pivot = kad.BaseAddr()
-	//	} else {
-	//		s.pivot = addr.([]byte)
-	//	}
-	//
-	//	capabilityIndex := sctx.Value("capability")
-	//	if capabilityIndex != nil {
-	//		s.capabilityIndex = capabilityIndex.(string)
-	//	}
-	//
-	//	return s
+
+	addr, _ := sctx.Value("address").([]byte)
+	capabilityIndex, _ := sctx.Value("capability").(string)
+	return m.New(capabilityIndex, addr), nil
 }
 
 func (s *Session) Get(numPeers int) ([]ForwardPeer, error) {
