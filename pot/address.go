@@ -79,6 +79,10 @@ func (a Address) Bytes() []byte {
 	return a[:]
 }
 
+func (a Address) Address() []byte {
+	return a[:]
+}
+
 // Distance returns the distance between address x and address y as a (comparable) big integer using the distance metric defined in the swarm specification
 // Fails if not all addresses are of equal length
 func Distance(x, y []byte) (*big.Int, error) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
@@ -20,9 +21,12 @@ func TestNew(t *testing.T) {
 	addr[31] = 0x01
 	kadParams := network.NewKadParams()
 	kad := network.NewKademlia(addr, kadParams)
+	kadLB := network.NewKademliaLoadBalancer(kad, false)
+	defer kadLB.Stop()
 
-	mgr := NewSessionManager(kad)
+	mgr := NewSessionManager(kadLB)
 	fwdBase := mgr.New("", nil)
+	defer fwdBase.Close()
 	if !bytes.Equal(fwdBase.pivot, addr) {
 		t.Fatalf("pivot base; expected %x, got %x", addr, fwdBase.pivot)
 	}
@@ -52,10 +56,14 @@ func TestManagerContext(t *testing.T) {
 	addr[31] = 0x01
 	kadParams := network.NewKadParams()
 	kad := network.NewKademlia(addr, kadParams)
+	kadLB := network.NewKademliaLoadBalancer(kad, false)
+	defer kadLB.Stop()
 
-	mgr := NewSessionManager(kad)
-	_ = mgr.New("", nil)       // id 1
+	mgr := NewSessionManager(kadLB)
+	fwdVoid := mgr.New("", nil) // id 1
+	defer fwdVoid.Close()
 	fwdOne := mgr.New("", nil) // id 2
+	defer fwdOne.Close()
 	if len(mgr.sessions) != 2 {
 		t.Fatalf("mgr session length; expected 2, got %d", len(mgr.sessions))
 	}
@@ -66,6 +74,7 @@ func TestManagerContext(t *testing.T) {
 	newAddr := make([]byte, 32)
 	newAddr[31] = 0x02
 	fwdTwo := mgr.New("foo", newAddr) // id 3
+	defer fwdTwo.Close()
 	sctx, err := mgr.ToContext(3)
 	if err != nil {
 		t.Fatal(err)
@@ -95,6 +104,8 @@ func TestGet(t *testing.T) {
 	bytesOwn := pot.NewAddressFromString("00000000")
 	kadParams := network.NewKadParams()
 	kad := network.NewKademlia(bytesOwn, kadParams)
+	kadLB := network.NewKademliaLoadBalancer(kad, false)
+	defer kadLB.Stop()
 	cp := capability.NewCapability(4, 2)
 	kad.RegisterCapabilityIndex("foo", *cp)
 
@@ -111,7 +122,7 @@ func TestGet(t *testing.T) {
 	kad.On(peerFar)
 	kad.On(peerNear)
 
-	mgr := NewSessionManager(kad)
+	mgr := NewSessionManager(kadLB)
 	fwd := mgr.New("foo", nil)
 	p, err := fwd.Get(1)
 	if err != nil {
@@ -134,4 +145,7 @@ func TestGet(t *testing.T) {
 	if !bytes.Equal(p[0].Address(), bytesFar) {
 		t.Fatalf("get second address; expected %x, got %x", bytesFar, p[0].Address())
 	}
+	log.Trace("peer", "peer", p)
+
+	fwd.Close()
 }

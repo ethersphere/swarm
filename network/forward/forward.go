@@ -9,23 +9,22 @@ import (
 )
 
 type Session struct {
-	kademlia        *network.Kademlia
+	kademlia        *network.KademliaLoadBalancer
 	pivot           []byte
 	id              int
 	capabilityIndex string
-	loaded          bool
-	cache           []ForwardPeer
-	last            int
+	nextC           chan struct{}
+	getC            chan *ForwardPeer
 }
 
 type SessionManager struct {
 	sessions map[int]*Session
-	kademlia *network.Kademlia
+	kademlia *network.KademliaLoadBalancer
 	lastId   int // starts at 1 to make create from context easier
 	mu       sync.Mutex
 }
 
-func NewSessionManager(kademlia *network.Kademlia) *SessionManager {
+func NewSessionManager(kademlia *network.KademliaLoadBalancer) *SessionManager {
 	return &SessionManager{
 		sessions: make(map[int]*Session),
 		kademlia: kademlia,
@@ -46,13 +45,15 @@ func (m *SessionManager) New(capabilityIndex string, pivot []byte) *Session {
 	s := &Session{
 		capabilityIndex: capabilityIndex,
 		kademlia:        m.kademlia,
+		nextC:           make(chan struct{}),
+		getC:            make(chan *ForwardPeer),
 	}
 	if pivot == nil {
 		s.pivot = m.kademlia.BaseAddr()
 	} else {
 		s.pivot = pivot
 	}
-	_ = s.load() // handle error!
+	go s.load()
 	return m.add(s)
 }
 
@@ -86,22 +87,32 @@ func (m *SessionManager) FromContext(sctx *SessionContext) (*Session, error) {
 
 func (s *Session) Get(numPeers int) ([]*ForwardPeer, error) {
 	var result []*ForwardPeer
-	target := s.last + numPeers
-	if target > len(s.cache) {
-		target = len(s.cache)
-	}
-	for i := s.last; i < target; i++ {
-		result = append(result, &s.cache[i])
-		s.last++
+	for i := 0; i < numPeers; i++ {
+		s.nextC <- struct{}{}
+		p, ok := <-s.getC
+		if !ok {
+			break
+		}
+		result = append(result, p)
 	}
 	return result, nil
 }
 
 func (s *Session) load() error {
-	s.cache = []ForwardPeer{}
-	err := s.kademlia.EachConnFiltered(s.pivot, s.capabilityIndex, 255, func(p *network.Peer, po int) bool {
-		s.cache = append(s.cache, ForwardPeer{Peer: p})
+	err := s.kademlia.EachBinFiltered(s.pivot, s.capabilityIndex, func(bin network.LBBin) bool {
+		for _, p := range bin.LBPeers {
+			_, ok := <-s.nextC
+			if !ok {
+				return false
+			}
+			s.getC <- &ForwardPeer{Peer: p.Peer}
+		}
 		return true
 	})
+	close(s.getC)
 	return err
+}
+
+func (s *Session) Close() {
+	close(s.nextC)
 }
