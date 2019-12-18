@@ -16,35 +16,24 @@
 
 package fcds
 
-import (
-	"sync"
-	"time"
-)
+import "sync"
 
 // offsetCache is a simple cache of offset integers
 // by shard files.
 type offsetCache struct {
-	m        map[uint8]map[int64]time.Time
-	ttl      time.Duration
-	mu       sync.RWMutex
-	quit     chan struct{}
-	quitOnce sync.Once
+	m  map[uint8]map[int64]struct{}
+	mu sync.RWMutex
 }
 
 // newOffsetCache constructs offsetCache for a fixed number of shards.
-func newOffsetCache(shardCount uint8, ttl time.Duration) (c *offsetCache) {
-	m := make(map[uint8]map[int64]time.Time)
+func newOffsetCache(shardCount uint8) (c *offsetCache) {
+	m := make(map[uint8]map[int64]struct{})
 	for i := uint8(0); i < shardCount; i++ {
-		m[i] = make(map[int64]time.Time)
+		m[i] = make(map[int64]struct{})
 	}
-	c = &offsetCache{
-		m:    m,
-		quit: make(chan struct{}),
+	return &offsetCache{
+		m: m,
 	}
-	if ttl > 0 {
-		go c.cleanup(30 * time.Second)
-	}
-	return c
 }
 
 // get returns a free offset in a shard. If the returned
@@ -63,7 +52,7 @@ func (c *offsetCache) get(shard uint8) (offset int64) {
 // set sets a free offset for a shard file.
 func (c *offsetCache) set(shard uint8, offset int64) {
 	c.mu.Lock()
-	c.m[shard][offset] = time.Now().Add(c.ttl)
+	c.m[shard][offset] = struct{}{}
 	c.mu.Unlock()
 }
 
@@ -72,35 +61,4 @@ func (c *offsetCache) remove(shard uint8, offset int64) {
 	c.mu.Lock()
 	delete(c.m[shard], offset)
 	c.mu.Unlock()
-}
-
-// close stops parallel processing created
-// by offsetCache.
-func (c *offsetCache) close() {
-	c.quitOnce.Do(func() {
-		close(c.quit)
-	})
-}
-
-func (c *offsetCache) cleanup(period time.Duration) {
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			now := time.Now()
-			c.mu.Lock()
-			for _, s := range c.m {
-				for offset, expiration := range s {
-					if now.After(expiration) {
-						delete(s, offset)
-					}
-				}
-			}
-			c.mu.Unlock()
-		case <-c.quit:
-			return
-		}
-	}
 }

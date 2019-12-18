@@ -70,10 +70,10 @@ type Option func(*Store)
 
 // WithCache is an optional argument to New constructor that enables
 // in memory cache of free chunk data positions in files
-func WithCache(yes bool, ttl time.Duration) Option {
+func WithCache(yes bool) Option {
 	return func(s *Store) {
 		if yes {
-			s.freeCache = newOffsetCache(shardCount, ttl)
+			s.freeCache = newOffsetCache(shardCount)
 		} else {
 			s.freeCache = nil
 		}
