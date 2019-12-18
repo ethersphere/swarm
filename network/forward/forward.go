@@ -13,6 +13,9 @@ type Session struct {
 	pivot           []byte
 	id              int
 	capabilityIndex string
+	loaded          bool
+	cache           []ForwardPeer
+	last            int
 }
 
 type SessionManager struct {
@@ -49,6 +52,7 @@ func (m *SessionManager) New(capabilityIndex string, pivot []byte) *Session {
 	} else {
 		s.pivot = pivot
 	}
+	_ = s.load() // handle error!
 	return m.add(s)
 }
 
@@ -80,17 +84,24 @@ func (m *SessionManager) FromContext(sctx *SessionContext) (*Session, error) {
 	return m.New(capabilityIndex, addr), nil
 }
 
-func (s *Session) Get(numPeers int) ([]ForwardPeer, error) {
-	var result []ForwardPeer
+func (s *Session) Get(numPeers int) ([]*ForwardPeer, error) {
+	var result []*ForwardPeer
+	target := s.last + numPeers
+	if target > len(s.cache) {
+		target = len(s.cache)
+	}
+	for i := s.last; i < target; i++ {
+		result = append(result, &s.cache[i])
+		s.last++
+	}
+	return result, nil
+}
 
-	i := 0
+func (s *Session) load() error {
+	s.cache = []ForwardPeer{}
 	err := s.kademlia.EachConnFiltered(s.pivot, s.capabilityIndex, 255, func(p *network.Peer, po int) bool {
-		result = append(result, ForwardPeer{Peer: p})
-		i++
-		if i == numPeers {
-			return false
-		}
+		s.cache = append(s.cache, ForwardPeer{Peer: p})
 		return true
 	})
-	return result, err
+	return err
 }
