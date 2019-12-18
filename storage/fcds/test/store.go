@@ -25,6 +25,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/chunk"
 	chunktesting "github.com/ethersphere/swarm/chunk/testing"
@@ -297,7 +298,7 @@ func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.
 		t.Fatal(err)
 	}
 
-	s, err = fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(!*noCacheFlag))
+	s, err = fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(!*noCacheFlag, time.Hour))
 	if err != nil {
 		os.RemoveAll(path)
 		t.Fatal(err)
