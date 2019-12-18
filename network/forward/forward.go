@@ -16,11 +16,11 @@ var (
 // Session encapsulates one single peer iteration query
 type Session struct {
 	kademlia        *network.KademliaLoadBalancer // kademlia backend
-	base            []byte                        //
-	id              int
-	capabilityIndex string
-	nextC           chan struct{}
-	getC            chan *network.Peer
+	base            []byte                        // base address to use for iteration
+	id              int                           // id of session
+	capabilityIndex string                        // kademlia capabilityIndex in use
+	nextC           chan struct{}                 // triggered to output one single peer from iterator
+	getC            chan *network.Peer            // receives peer from iterator
 }
 
 // Id returns the session id
@@ -71,10 +71,10 @@ func (s *Session) destroy() {
 
 // SessionManager is the Session object factory
 type SessionManager struct {
-	sessions map[int]*Session
-	kademlia *network.KademliaLoadBalancer
-	lastId   int // starts at 1 to make create from context easier
-	mu       sync.Mutex
+	kademlia *network.KademliaLoadBalancer // underlying kademlia backend
+	sessions map[int]*Session              // index of active sessions, mapped by session id
+	lastId   int                           // last assigned id for session, starts at 1 to make create from context easier
+	mu       sync.Mutex                    // protects sessions map
 }
 
 // NewSessionManager is the SessionManager constructor
