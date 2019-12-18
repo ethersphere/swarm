@@ -301,10 +301,6 @@ func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize
 }
 
-// SetLength implements file.SectionWriter
-func (h *Hasher) SetLength(length int) {
-}
-
 // SetSpan implements file.SectionWriter
 func (h *Hasher) SetSpan(length int) {
 	span := LengthToSpan(length)
@@ -448,7 +444,6 @@ func NewAsyncHasher(ctx context.Context, h *Hasher, double bool, errFunc func(er
 		double:   double,
 		secsize:  secsize,
 		seccount: seccount,
-		jobSize:  0,
 		ctx:      ctx,
 		errFunc:  errFunc,
 	}
@@ -479,7 +474,6 @@ type AsyncHasher struct {
 	errFunc  func(error)
 	ctx      context.Context
 	all      bool // if all written in one go, temporary workaround
-	jobSize  int
 }
 
 func (sw *AsyncHasher) raiseError(err string) {
@@ -490,14 +484,8 @@ func (sw *AsyncHasher) raiseError(err string) {
 
 // Reset implements file.SectionWriter
 func (sw *AsyncHasher) Reset() {
-	sw.jobSize = 0
 	sw.all = false
 	sw.Hasher.Reset()
-}
-
-// SetLength implements file.SectionWriter
-func (sw *AsyncHasher) SetLength(length int) {
-	sw.jobSize = length
 }
 
 // SectionSize implements file.SectionWriter
@@ -560,13 +548,9 @@ func (sw *AsyncHasher) WriteIndexed(i int, section []byte) (int, error) {
 // length: known length of the input (unsafe; undefined if out of range)
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
-func (sw *AsyncHasher) SumIndexed(b []byte) (s []byte) {
-	if sw.all {
-		return sw.Hasher.Sum(nil)
-	}
+func (sw *AsyncHasher) SumIndexed(b []byte, length int) (s []byte) {
 	sw.mtx.Lock()
 	t := sw.GetTree()
-	length := sw.jobSize
 	if length == 0 {
 		sw.ReleaseTree()
 		sw.mtx.Unlock()

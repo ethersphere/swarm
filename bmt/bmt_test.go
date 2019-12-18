@@ -584,15 +584,13 @@ func asyncHashRandom(bmtobj *AsyncHasher, spanLength int, data []byte, wh whenHa
 func asyncHash(bmtobj *AsyncHasher, spanLength int, l int, wh whenHash, idxs []int, segments [][]byte) (s []byte) {
 	bmtobj.Reset()
 	if l == 0 {
-		bmtobj.SetLength(l)
 		bmtobj.SetSpan(spanLength)
-		return bmtobj.SumIndexed(nil)
+		return bmtobj.SumIndexed(nil, l)
 	}
 	c := make(chan []byte, 1)
 	hashf := func() {
-		bmtobj.SetLength(l)
 		bmtobj.SetSpan(spanLength)
-		c <- bmtobj.SumIndexed(nil)
+		c <- bmtobj.SumIndexed(nil, l)
 	}
 	maxsize := len(idxs)
 	var r int
@@ -606,9 +604,8 @@ func asyncHash(bmtobj *AsyncHasher, spanLength int, l int, wh whenHash, idxs []i
 		}
 	}
 	if wh == last {
-		bmtobj.SetLength(l)
 		bmtobj.SetSpan(spanLength)
-		return bmtobj.SumIndexed(nil)
+		return bmtobj.SumIndexed(nil, l)
 	}
 	return <-c
 }
