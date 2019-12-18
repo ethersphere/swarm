@@ -501,7 +501,7 @@ func (sw *AsyncHasher) Branches() int {
 // WriteSection writes the i-th section of the BMT base
 // this function can and is meant to be called concurrently
 // it sets max segment threadsafely
-func (sw *AsyncHasher) WriteIndexed(i int, section []byte) (int, error) {
+func (sw *AsyncHasher) WriteIndexed(i int, section []byte) {
 	sw.mtx.Lock()
 	defer sw.mtx.Unlock()
 	t := sw.GetTree()
@@ -510,7 +510,7 @@ func (sw *AsyncHasher) WriteIndexed(i int, section []byte) (int, error) {
 	if i < sw.Hasher.GetCursor() {
 		// if index is not the rightmost, safe to write section
 		go sw.WriteSection(i, section, sw.double, false)
-		return len(section), nil
+		return
 	}
 	// if there is a previous rightmost.GetSection() safe to write section
 	if t.GetOffset() > 0 {
@@ -524,7 +524,7 @@ func (sw *AsyncHasher) WriteIndexed(i int, section []byte) (int, error) {
 			copy(copySection, section)
 			t.SetSection(copySection)
 			go sw.Hasher.WriteSection(i, t.GetSection(), sw.double, true)
-			return len(section), nil
+			return
 		}
 		// the rightmost.GetSection() just changed, so we write the previous one as non-final
 		go sw.WriteSection(sw.Hasher.GetCursor(), t.GetSection(), sw.double, false)
@@ -536,7 +536,7 @@ func (sw *AsyncHasher) WriteIndexed(i int, section []byte) (int, error) {
 	copySection := make([]byte, sw.secsize)
 	copy(copySection, section)
 	t.SetSection(copySection)
-	return len(section), nil
+	return
 }
 
 // Sum can be called any time once the length and the span is known
@@ -589,7 +589,6 @@ func (h *Hasher) WriteSection(i int, section []byte, double bool, final bool) {
 }
 
 // writeSection writes the hash of i-th section into level 1 node of the BMT tree
-// TODO: h.size increases even on multiple writes to the same section of a section
 func (h *Hasher) writeSection(i int, section []byte, double bool, final bool) {
 	// select the leaf node for the section
 	var n *node
@@ -764,52 +763,65 @@ func LengthToSpan(length int) []byte {
 }
 
 // ASYNCHASHER ACCESSORS
+// All methods below here are exported to enable access for AsyncHasher
+//
 
 // GetHasher returns a new instance of the underlying hasher
 func (h *Hasher) GetHasher() hash.Hash {
 	return h.pool.hasher()
 }
 
+// GetZeroHash returns the zero hash of the full depth of the Hasher instance
 func (h *Hasher) GetZeroHash() []byte {
 	return h.pool.zerohashes[h.pool.Depth]
 }
 
+// GetTree gets the underlying tree in use by the Hasher
 func (h *Hasher) GetTree() *tree {
 	return h.getTree()
 }
 
+// GetTree releases the underlying tree in use by the Hasher
 func (h *Hasher) ReleaseTree() {
 	h.releaseTree()
 }
 
+// GetCursor returns the current write cursor for the Hasher
 func (h *Hasher) GetCursor() int {
 	return h.cursor
 }
 
+// GetCursor assigns the value of the current write cursor for the Hasher
 func (h *Hasher) SetCursor(c int) {
 	h.cursor = c
 }
 
+// GetOffset returns the write offset within the current section of the Hasher
 func (t *tree) GetOffset() int {
 	return t.offset
 }
 
+// GetOffset assigns the value of the write offset within the current section of the Hasher
 func (t *tree) SetOffset(offset int) {
 	t.offset = offset
 }
 
+// GetSection returns the current section Hasher is operating on
 func (t *tree) GetSection() []byte {
 	return t.section
 }
 
+// SetSection assigns the current section Hasher is operating on
 func (t *tree) SetSection(b []byte) {
 	t.section = b
 }
 
+// GetResult returns the result channel of the Hasher
 func (t *tree) GetResult() <-chan []byte {
 	return t.result
 }
 
+// GetSpan returns the span set by SetSpan
 func (t *tree) GetSpan() []byte {
 	return t.span
 }
