@@ -10,42 +10,43 @@ var (
 	zeroTime = time.Unix(0, 0)
 )
 
-type ForwardPeer struct {
-	*network.Peer
-}
-
+// SessionInterface provides an interface for an individual session object
 type SessionInterface interface {
-	Subscribe() <-chan ForwardPeer
-	Get(numberOfPeers int) ([]ForwardPeer, error)
-	Close()
+	Subscribe() <-chan *network.Peer
+	Get(numberOfPeers int) ([]*network.Peer, error)
 }
 
-// also implements context.Context
+// SessionContext is a context.Context that can be used to reference existing sessions or create new sessions
 type SessionContext struct {
 	CapabilityIndex string
 	SessionId       int
 	Address         []byte
 }
 
-func NewSessionContext(capabilityIndex string, addr []byte) *SessionContext {
+// NewSessionContext creates a new SessionContext with the provided capabilityIndex and base address
+func NewSessionContext(capabilityIndex string, base []byte) *SessionContext {
 	return &SessionContext{
 		CapabilityIndex: capabilityIndex,
-		Address:         addr,
+		Address:         base,
 	}
 }
 
+// Deadline implements context.Context
 func (c *SessionContext) Deadline() (time.Time, bool) {
 	return zeroTime, false
 }
 
+// Done implements context.Context
 func (c *SessionContext) Done() <-chan struct{} {
 	return nil
 }
 
+// Err implements context.Context
 func (c *SessionContext) Err() error {
 	return nil
 }
 
+// Value implements context.Context
 func (c *SessionContext) Value(k interface{}) interface{} {
 	ks, ok := k.(string)
 	if !ok {
@@ -66,12 +67,4 @@ func (c *SessionContext) Value(k interface{}) interface{} {
 		return c.SessionId
 	}
 	return nil
-}
-
-func (c *SessionContext) SetAddress(addr []byte) {
-	c.Address = addr
-}
-
-func (c *SessionContext) SetCapability(capabilityIndex string) {
-	c.CapabilityIndex = capabilityIndex
 }

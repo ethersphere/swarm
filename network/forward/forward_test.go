@@ -15,8 +15,8 @@ func init() {
 	testutil.Init()
 }
 
+// TestNew tests that the SessionManager constructor creates Session object with expected values
 func TestNew(t *testing.T) {
-
 	addr := make([]byte, 32)
 	addr[31] = 0x01
 	kadParams := network.NewKadParams()
@@ -26,9 +26,9 @@ func TestNew(t *testing.T) {
 
 	mgr := NewSessionManager(kadLB)
 	fwdBase := mgr.New("", nil)
-	defer fwdBase.Close()
-	if !bytes.Equal(fwdBase.pivot, addr) {
-		t.Fatalf("pivot base; expected %x, got %x", addr, fwdBase.pivot)
+	defer mgr.Reap(fwdBase.Id())
+	if !bytes.Equal(fwdBase.base, addr) {
+		t.Fatalf("base base; expected %x, got %x", addr, fwdBase.base)
 	}
 	if fwdBase.id != 1 {
 		t.Fatalf("sessionId; expected %d, got %d", 1, fwdBase.id)
@@ -37,8 +37,8 @@ func TestNew(t *testing.T) {
 	bytesNear := pot.NewAddressFromString("00000001")
 	capabilityIndex := "foo"
 	fwdExplicit := mgr.New(capabilityIndex, bytesNear)
-	if !bytes.Equal(fwdExplicit.pivot, bytesNear) {
-		t.Fatalf("pivot explicit; expected %x, got %x", bytesNear, fwdExplicit.pivot)
+	if !bytes.Equal(fwdExplicit.base, bytesNear) {
+		t.Fatalf("base explicit; expected %x, got %x", bytesNear, fwdExplicit.base)
 	}
 	if fwdExplicit.id != 2 {
 		t.Fatalf("sessionId; expected %d, got %d", 2, fwdExplicit.id)
@@ -51,6 +51,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
+// TestManagerContext tests that the SessionManager's context translations creates Session objects with expected values, and retrieves existing matching Session objects
 func TestManagerContext(t *testing.T) {
 	addr := make([]byte, 32)
 	addr[31] = 0x01
@@ -61,9 +62,9 @@ func TestManagerContext(t *testing.T) {
 
 	mgr := NewSessionManager(kadLB)
 	fwdVoid := mgr.New("", nil) // id 1
-	defer fwdVoid.Close()
+	defer mgr.Reap(fwdVoid.Id())
 	fwdOne := mgr.New("", nil) // id 2
-	defer fwdOne.Close()
+	defer mgr.Reap(fwdOne.Id())
 	if len(mgr.sessions) != 2 {
 		t.Fatalf("mgr session length; expected 2, got %d", len(mgr.sessions))
 	}
@@ -74,7 +75,7 @@ func TestManagerContext(t *testing.T) {
 	newAddr := make([]byte, 32)
 	newAddr[31] = 0x02
 	fwdTwo := mgr.New("foo", newAddr) // id 3
-	defer fwdTwo.Close()
+	defer mgr.Reap(fwdTwo.Id())
 	sctx, err := mgr.ToContext(3)
 	if err != nil {
 		t.Fatal(err)
@@ -85,8 +86,8 @@ func TestManagerContext(t *testing.T) {
 	if fwdTwo.capabilityIndex != sctx.CapabilityIndex {
 		t.Fatalf("to context id; expected %s, got %s", fwdTwo.capabilityIndex, sctx.CapabilityIndex)
 	}
-	if !bytes.Equal(fwdTwo.pivot, sctx.Address) {
-		t.Fatalf("to context id; expected %x, got %x", fwdTwo.pivot, sctx.Address)
+	if !bytes.Equal(fwdTwo.base, sctx.Address) {
+		t.Fatalf("to context id; expected %x, got %x", fwdTwo.base, sctx.Address)
 	}
 
 	sctx = NewSessionContext("", nil)
@@ -100,6 +101,7 @@ func TestManagerContext(t *testing.T) {
 	}
 }
 
+// TestGet verifies that the synchronous Get method retrieves peers in the correct order
 func TestGet(t *testing.T) {
 	bytesOwn := pot.NewAddressFromString("00000000")
 	kadParams := network.NewKadParams()
@@ -124,6 +126,7 @@ func TestGet(t *testing.T) {
 
 	mgr := NewSessionManager(kadLB)
 	fwd := mgr.New("foo", nil)
+	defer mgr.Reap(fwd.Id())
 	p, err := fwd.Get(1)
 	if err != nil {
 		t.Fatal(err)
@@ -147,5 +150,4 @@ func TestGet(t *testing.T) {
 	}
 	log.Trace("peer", "peer", p)
 
-	fwd.Close()
 }
