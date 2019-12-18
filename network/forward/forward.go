@@ -34,6 +34,7 @@ func (m *SessionManager) add(s *Session) *Session {
 	defer m.mu.Unlock()
 	m.lastId++
 	log.Trace("adding session", "id", m.lastId)
+	s.id = m.lastId
 	m.sessions[m.lastId] = s
 	return s
 }
@@ -41,6 +42,7 @@ func (m *SessionManager) add(s *Session) *Session {
 func (m *SessionManager) New(capabilityIndex string, pivot []byte) *Session {
 	s := &Session{
 		capabilityIndex: capabilityIndex,
+		kademlia:        m.kademlia,
 	}
 	if pivot == nil {
 		s.pivot = m.kademlia.BaseAddr()
@@ -81,5 +83,14 @@ func (m *SessionManager) FromContext(sctx *SessionContext) (*Session, error) {
 func (s *Session) Get(numPeers int) ([]ForwardPeer, error) {
 	var result []ForwardPeer
 
-	return result, nil
+	i := 0
+	err := s.kademlia.EachConnFiltered(s.pivot, s.capabilityIndex, 255, func(p *network.Peer, po int) bool {
+		result = append(result, ForwardPeer{Peer: p})
+		i++
+		if i == numPeers {
+			return false
+		}
+		return true
+	})
+	return result, err
 }

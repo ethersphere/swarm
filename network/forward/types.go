@@ -11,7 +11,7 @@ var (
 )
 
 type ForwardPeer struct {
-	*network.BzzPeer
+	*network.Peer
 }
 
 type SessionInterface interface {

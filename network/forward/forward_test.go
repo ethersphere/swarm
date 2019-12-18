@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
 	"github.com/ethersphere/swarm/testutil"
 )
@@ -25,8 +26,8 @@ func TestNew(t *testing.T) {
 	if !bytes.Equal(fwdBase.pivot, addr) {
 		t.Fatalf("pivot base; expected %x, got %x", addr, fwdBase.pivot)
 	}
-	if fwdBase.id != 0 {
-		t.Fatalf("sessionId; expected %d, got %d", 42, fwdBase.id)
+	if fwdBase.id != 1 {
+		t.Fatalf("sessionId; expected %d, got %d", 1, fwdBase.id)
 	}
 
 	bytesNear := pot.NewAddressFromString("00000001")
@@ -35,8 +36,8 @@ func TestNew(t *testing.T) {
 	if !bytes.Equal(fwdExplicit.pivot, bytesNear) {
 		t.Fatalf("pivot explicit; expected %x, got %x", bytesNear, fwdExplicit.pivot)
 	}
-	if fwdExplicit.id != 1 {
-		t.Fatalf("sessionId; expected %d, got %d", 43, fwdExplicit.id)
+	if fwdExplicit.id != 2 {
+		t.Fatalf("sessionId; expected %d, got %d", 2, fwdExplicit.id)
 	}
 	if fwdExplicit.capabilityIndex != capabilityIndex {
 		t.Fatalf("capabilityindex, expected %s, got %s", capabilityIndex, fwdExplicit.capabilityIndex)
@@ -79,52 +80,58 @@ func TestManagerContext(t *testing.T) {
 		t.Fatalf("to context id; expected %x, got %x", fwdTwo.pivot, sctx.Address)
 	}
 
-	sctx = NewSessionContext("bar", newAddr)
+	sctx = NewSessionContext("", nil)
+	sctx.SessionId = 3
 	fwdThree, err := mgr.FromContext(sctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fwdThree.id != 3 {
-		t.Fatalf("from new context id; expected %d, got %d", 3, fwdThree.id)
-	}
-	if fwdThree.capabilityIndex != sctx.CapabilityIndex {
-		t.Fatalf("to context id; expected %s, got %s", fwdThree.capabilityIndex, sctx.CapabilityIndex)
-	}
-	if !bytes.Equal(fwdThree.pivot, sctx.Address) {
-		t.Fatalf("to context id; expected %x, got %x", fwdThree.pivot, sctx.Address)
+	if fwdThree != fwdTwo {
+		t.Fatalf("from new context; expected %p, got %p", fwdTwo, fwdThree)
 	}
 }
 
-//func TestGet() {
-//addr := make([]byte, 32)
-//	kadParams := network.NewKadParams()
-//	kad := network.NewKademlia(addr, kadParams)
-//	cp := capability.NewCapability(4, 2)
-//	kad.RegisterCapabilityIndex("foo", *cp)
-//
-//	bytesFar := pot.NewAddressFromString("10000000")
-//	bytesNear := pot.NewAddressFromString("00000001")
-//	addrFar := network.NewBzzAddr(bytesFar, []byte{})
-//	addrNear := network.NewBzzAddr(bytesNear, []byte{})
-//	addrFar.Capabilities.Add(cp)
-//	addrNear.Capabilities.Add(cp)
-//	peerFar := network.NewPeer(&network.BzzPeer{BzzAddr: addrFar}, kad)
-//	peerNear := network.NewPeer(&network.BzzPeer{BzzAddr: addrNear}, kad)
-//	kad.Register(addrFar)
-//	kad.Register(addrNear)
-//	kad.On(peerFar)
-//	kad.On(peerNear)
-//
-//
-//resultNear, err := fwdBase.Get(1)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	if len(resultNear) != 1 {
-//		t.Fatalf("peer missing, expected %d, got %d", 1, len(resultNear))
-//	}
-//	if !bytes.Equal(resultNear[0].Address(), addrNear.Address()) {
-//		t.Fatalf("peer mismatch, expected %x, got %x", addrNear.Address(), resultNear[0].Address())
-//	}
+func TestGet(t *testing.T) {
+	bytesOwn := pot.NewAddressFromString("00000000")
+	kadParams := network.NewKadParams()
+	kad := network.NewKademlia(bytesOwn, kadParams)
+	cp := capability.NewCapability(4, 2)
+	kad.RegisterCapabilityIndex("foo", *cp)
 
-//}
+	bytesFar := pot.NewAddressFromString("10000000")
+	bytesNear := pot.NewAddressFromString("00000001")
+	addrFar := network.NewBzzAddr(bytesFar, []byte{})
+	addrNear := network.NewBzzAddr(bytesNear, []byte{})
+	addrFar.Capabilities.Add(cp)
+	addrNear.Capabilities.Add(cp)
+	peerFar := network.NewPeer(&network.BzzPeer{BzzAddr: addrFar}, kad)
+	peerNear := network.NewPeer(&network.BzzPeer{BzzAddr: addrNear}, kad)
+	kad.Register(addrFar)
+	kad.Register(addrNear)
+	kad.On(peerFar)
+	kad.On(peerNear)
+
+	mgr := NewSessionManager(kad)
+	fwd := mgr.New("foo", nil)
+	p, err := fwd.Get(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p) != 1 {
+		t.Fatalf("get first count; expected 1, got %d", len(p))
+	}
+	if !bytes.Equal(p[0].Address(), bytesNear) {
+		t.Fatalf("get first address; expected %x, got %x", bytesNear, p[0].Address())
+	}
+
+	p, err = fwd.Get(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p) != 1 {
+		t.Fatalf("get peers count; expected 1, got %d", len(p))
+	}
+	if !bytes.Equal(p[0].Address(), bytesFar) {
+		t.Fatalf("get second address; expected %x, got %x", bytesFar, p[0].Address())
+	}
+}
