@@ -71,7 +71,6 @@ func TestAccountingSimulation(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	SetupAccountingMetrics(1*time.Second, filepath.Join(dir, "metrics.db"))
-	//define the node.Service for this test
 	services := adapters.Services{
 		"accounting": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			return bal.newNode(), nil
@@ -88,6 +87,10 @@ func TestAccountingSimulation(t *testing.T) {
 	go func() {
 		// wait for all of them to arrive
 		bal.wg.Wait()
+		// as now actual accounting happens **after** message handling, we need to
+		// wait a short bit to make sure that all messages have been accounted
+		// (not sleeping here results in a message off by one)
+		time.Sleep(50 * time.Millisecond)
 		// then trigger a check
 		// the selected node for the trigger is irrelevant,
 		// we just want to trigger the end of the simulation
