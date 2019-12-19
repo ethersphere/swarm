@@ -415,6 +415,5 @@ func (h *Hive) handleSubPeersMsg(ctx context.Context, d *Peer, msg *subPeersMsg)
 	if len(peers) > 0 {
 		go d.Send(ctx, &peersMsg{Peers: sortPeers(peers)})
 	}
-	d.sentPeers = true
 	return nil
 }
