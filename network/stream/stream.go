@@ -243,9 +243,7 @@ func (r *Registry) serverHandleStreamInfoReq(ctx context.Context, p *Peer, msg *
 		// get the current cursor from the data source
 		streamCursor, err := provider.Cursor(v.Key)
 		if err != nil {
-			// todo:
-			//p.logger.Error("error getting cursor for stream key", "name", v.Name, "key", v.Key, "err", err)
-			return fmt.Errorf("error getting cursor for stream key: %w", err)
+			return fmt.Errorf("error getting cursor for stream key: name %s, key %s, err %w", v.Name, v.Key, err)
 		}
 		descriptor := StreamDescriptor{
 			Stream:  v,
@@ -562,7 +560,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		streamEmptyWantedHashes.Inc(1)
 		wantedHashesMsg.BitVector = []byte{} // set the bitvector value to an empty slice, this is to signal the server we dont want any hashes
 		if err := p.sealWant(w); err != nil {
-			return fmt.Errorf("error persisting interval: %w", err)
+			return fmt.Errorf("error persisting interval: from %d, to %d, err %w", w.from, w.to, err)
 		}
 	} else {
 		// we want some hashes
