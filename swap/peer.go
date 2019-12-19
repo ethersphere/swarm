@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
@@ -202,10 +203,14 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
-	err = p.updateBalance(int64(cheque.Honey))
+	honeyAmount := int64(cheque.Honey)
+	err = p.updateBalance(honeyAmount)
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
+
+	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
+	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(honeyAmount)
 
 	p.logger.Info("sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
