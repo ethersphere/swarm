@@ -664,12 +664,14 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
+	testAmount := int64(DefaultPaymentThreshold + 42)
+
 	ctx := context.Background()
 	err := testDeploy(ctx, creditorSwap, big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold)+42))
+	err = testDeploy(ctx, debitorSwap, big.NewInt(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -689,7 +691,6 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	testAmount := int64(DefaultPaymentThreshold + 42)
 	debitor.setBalance(testAmount)
 	creditor.setBalance(-testAmount)
 
@@ -1550,8 +1551,10 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
+	testAmount := int64(DefaultPaymentThreshold + 42)
+
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap, big.NewInt(int64(DefaultPaymentThreshold)+42))
+	err = testDeploy(ctx, creditorSwap, big.NewInt(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1575,7 +1578,6 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	testAmount := int64(DefaultPaymentThreshold + 42)
 	debitor.setBalance(testAmount)
 	creditor.setBalance(-testAmount)
 

@@ -190,6 +190,8 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	alloc := core.GenesisAlloc{}
 	stores := make(map[int]*state.DBStore)
 
+	ethFundingAmount := big.NewInt(9000000000000000000)
+
 	// for each node, generate keys, a GenesisAccount and a state store
 	for i := 0; i < nodeCount; i++ {
 		key, err := crypto.GenerateKey()
@@ -198,7 +200,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		}
 		keys[i] = key
 		addrs[i] = crypto.PubkeyToAddress(key.PublicKey)
-		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(9000000000000000000)}
+		alloc[addrs[i]] = core.GenesisAccount{Balance: ethFundingAmount}
 		dir, err := ioutil.TempDir("", fmt.Sprintf("swap_test_store_%x", addrs[i].Hex()))
 		if err != nil {
 			return nil, err
@@ -211,7 +213,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		stores[i] = stateStore
 	}
 
-	alloc[ownerAddress] = core.GenesisAccount{Balance: big.NewInt(9000000000000000000)}
+	alloc[ownerAddress] = core.GenesisAccount{Balance: ethFundingAmount}
 
 	// then create the single SimulatedBackend
 	gasLimit := uint64(8000000000)
