@@ -16,8 +16,6 @@
 package main
 
 import (
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/tracing"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -123,14 +121,7 @@ func init() {
 		},
 	}
 
-	flags = append(flags, []cli.Flag{
-		utils.MetricsEnabledFlag,
-		swarmmetrics.MetricsInfluxDBEndpointFlag,
-		swarmmetrics.MetricsInfluxDBDatabaseFlag,
-		swarmmetrics.MetricsInfluxDBUsernameFlag,
-		swarmmetrics.MetricsInfluxDBPasswordFlag,
-		swarmmetrics.MetricsInfluxDBTagsFlag,
-	}...)
+	flags = append(flags, MetricsFlags...)
 
 	flags = append(flags, tracing.Flags...)
 

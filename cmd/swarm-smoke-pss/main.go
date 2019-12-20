@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 
 	"github.com/ethersphere/swarm/log"
-	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/tracing"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -105,14 +104,7 @@ func main() {
 		},
 	}
 
-	app.Flags = append(app.Flags, []cli.Flag{
-		utils.MetricsEnabledFlag,
-		swarmmetrics.MetricsInfluxDBEndpointFlag,
-		swarmmetrics.MetricsInfluxDBDatabaseFlag,
-		swarmmetrics.MetricsInfluxDBUsernameFlag,
-		swarmmetrics.MetricsInfluxDBPasswordFlag,
-		swarmmetrics.MetricsInfluxDBTagsFlag,
-	}...)
+	app.Flags = append(app.Flags, MetricsFlags...)
 
 	app.Flags = append(app.Flags, tracing.Flags...)
 
@@ -163,11 +155,11 @@ func main() {
 func emitMetrics(ctx *cli.Context) error {
 	if gethmetrics.Enabled {
 		var (
-			endpoint = ctx.GlobalString(swarmmetrics.MetricsInfluxDBEndpointFlag.Name)
-			database = ctx.GlobalString(swarmmetrics.MetricsInfluxDBDatabaseFlag.Name)
-			username = ctx.GlobalString(swarmmetrics.MetricsInfluxDBUsernameFlag.Name)
-			password = ctx.GlobalString(swarmmetrics.MetricsInfluxDBPasswordFlag.Name)
-			tags     = ctx.GlobalString(swarmmetrics.MetricsInfluxDBTagsFlag.Name)
+			endpoint = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
+			tags     = ctx.GlobalString(MetricsInfluxDBTagsFlag.Name)
 		)
 
 		tagsMap := utils.SplitTagsFlag(tags)
