@@ -17,6 +17,7 @@ package main
 
 import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	cliflags "github.com/ethersphere/swarm/internal/flags"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -131,6 +132,6 @@ func init() {
 		swarmmetrics.MetricsInfluxDBTagsFlag,
 	}...)
 
-	flags = append(flags, TracingFlags...)
+	flags = append(flags, cliflags.Tracing...)
 
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	cliflags "github.com/ethersphere/swarm/internal/flags"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/tracing"
 
@@ -74,9 +75,9 @@ func main() {
 
 	app.Before = func(ctx *cli.Context) error {
 		tracing.Setup(tracing.Options{
-			Enabled:  ctx.GlobalBool(TracingEnabledFlag.Name),
-			Endpoint: ctx.GlobalString(TracingEndpointFlag.Name),
-			Name:     ctx.GlobalString(TracingSvcFlag.Name),
+			Enabled:  ctx.GlobalBool(cliflags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(cliflags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(cliflags.TracingSvcFlag.Name),
 		})
 		return nil
 	}
