@@ -224,12 +224,24 @@ func init() {
 		utils.WSAllowedOriginsFlag,
 	}
 	app.Flags = append(app.Flags, rpcFlags...)
-	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, debugFlags...)
 	app.Flags = append(app.Flags, swarmmetrics.Flags...)
 	app.Flags = append(app.Flags, tracing.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx, ""); err != nil {
+		if err := debug.Setup(debug.Options{
+			Debug:            ctx.GlobalBool(debugFlag.Name),
+			Verbosity:        ctx.GlobalInt(verbosityFlag.Name),
+			Vmodule:          ctx.GlobalString(vmoduleFlag.Name),
+			BacktraceAt:      ctx.GlobalString(backtraceAtFlag.Name),
+			MemProfileRate:   ctx.GlobalInt(memprofilerateFlag.Name),
+			BlockProfileRate: ctx.GlobalInt(blockprofilerateFlag.Name),
+			TraceFile:        ctx.GlobalString(traceFlag.Name),
+			CPUProfileFile:   ctx.GlobalString(cpuprofileFlag.Name),
+			PprofEnabled:     ctx.GlobalBool(pprofFlag.Name),
+			PprofAddr:        ctx.GlobalString(pprofAddrFlag.Name),
+			PprofPort:        ctx.GlobalInt(pprofPortFlag.Name),
+		}); err != nil {
 			return err
 		}
 		swarmmetrics.Setup(ctx)
