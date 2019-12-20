@@ -118,15 +118,7 @@ func newTestBackend(t *testing.T) *swapTestBackend {
 
 	// deploy the ERC20-contract
 	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
-	tokenAddress, _, token, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defaultBackend.Commit()
-
-	// mint 1000000000000000000 ERC20-tokens
-	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
-	_, err = token.Mint(bind.NewKeyedTransactor(ownerKey), ownerAddress, big.NewInt(1000000000000000000))
+	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +491,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, big.NewInt(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -558,7 +550,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, big.NewInt(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -584,7 +576,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, big.NewInt(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -616,7 +608,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap)
+	testDeploy(context.Background(), swap, big.NewInt(0))
 
 	testPeer := newDummyPeer()
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
@@ -642,7 +634,7 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap)
+	testDeploy(context.Background(), swap, big.NewInt(int64(DefaultPaymentThreshold)))
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
@@ -673,11 +665,11 @@ func TestResetBalance(t *testing.T) {
 	defer clean2()
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap)
+	err := testDeploy(ctx, creditorSwap, big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold)+42))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1082,7 +1074,7 @@ func TestVerifyContract(t *testing.T) {
 	defer clean()
 
 	// deploy a new swap contract
-	err := testDeploy(context.TODO(), swap)
+	err := testDeploy(context.TODO(), swap, big.NewInt(0))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1174,15 +1166,15 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("deploy issuer swap")
 
+	cheque := newTestCheque()
+
 	ctx := context.TODO()
-	err := testDeploy(ctx, issuerSwap)
+	err := testDeploy(ctx, issuerSwap, big.NewInt(int64(cheque.CumulativePayout)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	log.Debug("deployed. signing cheque")
-
-	cheque := newTestCheque()
 	cheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
 	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
@@ -1265,7 +1257,7 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap) (err error) {
+func testDeploy(ctx context.Context, swap *Swap, depositAmount *big.Int) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = ctx
 
@@ -1290,18 +1282,26 @@ func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	stb.Commit()
 
 	// send money into the new chequebook
-	token, err := contractFactory.NewERC20(stb.tokenAddress, stb)
+	token, err := contractFactory.NewERC20Mintable(stb.tokenAddress, stb)
 	if err != nil {
 		return err
 	}
 
-	_, err = token.Transfer(opts, swap.contract.ContractParams().ContractAddress, big.NewInt(9000*int64(RetrieveRequestPrice)))
+	tx, err := token.Mint(bind.NewKeyedTransactor(ownerKey), swap.contract.ContractParams().ContractAddress, depositAmount)
 	if err != nil {
 		return err
 	}
 	stb.Commit()
+	receipt, err := stb.TransactionReceipt(ctx, tx.Hash())
+	if err != nil {
+		return err
+	}
 
-	return err
+	if receipt.Status != 1 {
+		return errors.New("token transfer reverted")
+	}
+
+	return nil
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
@@ -1551,11 +1551,11 @@ func TestSwapLogToFile(t *testing.T) {
 	defer clean()
 
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap)
+	err = testDeploy(ctx, creditorSwap, big.NewInt(int64(DefaultPaymentThreshold)+42))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1637,8 +1637,10 @@ func TestAvailableBalance(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
+	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
+
 	// deploy a chequebook
-	err := testDeploy(context.TODO(), swap)
+	err := testDeploy(context.TODO(), swap, depositAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1649,7 +1651,6 @@ func TestAvailableBalance(t *testing.T) {
 	}
 
 	// verify that available balance equals depositAmount (we deposit during deployment)
-	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
 	availableBalance, err := swap.AvailableBalance()
 	if err != nil {
 		t.Fatal(err)

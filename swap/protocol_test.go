@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -49,10 +50,10 @@ type swapTester struct {
 }
 
 // creates a new protocol tester for swap with a deployed chequebook
-func newSwapTester(t *testing.T, backend *swapTestBackend) (*swapTester, func(), error) {
+func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *big.Int) (*swapTester, func(), error) {
 	swap, clean := newTestSwap(t, ownerKey, backend)
 
-	err := testDeploy(context.Background(), swap)
+	err := testDeploy(context.Background(), swap, depositAmount)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -134,7 +135,7 @@ func correctSwapHandshakeMsg(swap *Swap) *HandshakeMsg {
 // TestHandshake tests the correct handshake scenario
 func TestHandshake(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil)
+	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +153,7 @@ func TestHandshake(t *testing.T) {
 // TestHandshakeInvalidChainID tests that a handshake with the wrong chain id is rejected
 func TestHandshakeInvalidChainID(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil)
+	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +175,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 // TestHandshakeEmptyContract tests that a handshake with an empty contract address is rejected
 func TestHandshakeEmptyContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil)
+	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +197,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 // TestHandshakeInvalidContract tests that a handshake with an address that's not a valid chequebook
 func TestHandshakeInvalidContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil)
+	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +222,8 @@ func TestHandshakeInvalidContract(t *testing.T) {
 // We send a EmitChequeMsg to the creditor which handles the cheque and sends a ConfirmChequeMsg
 func TestEmitCheque(t *testing.T) {
 	testBackend := newTestBackend(t)
-	protocolTester, clean, err := newSwapTester(t, testBackend)
+
+	protocolTester, clean, err := newSwapTester(t, testBackend, big.NewInt(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +240,14 @@ func TestEmitCheque(t *testing.T) {
 	testBackend.cashDone = make(chan struct{})
 
 	log.Debug("deploy to simulated backend")
-	if err := testDeploy(context.Background(), debitorSwap); err != nil {
+
+	// cashCheque cashes a cheque when the reward of doing so is twice the transaction costs.
+	// gasPrice on testBackend == 1
+	// estimated gas costs == 50000
+	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
+	balance := uint64(100001)
+
+	if err := testDeploy(context.Background(), debitorSwap, big.NewInt(int64(balance))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -250,11 +259,6 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
-	// cashCheque cashes a cheque when the reward of doing so is twice the transaction costs.
-	// gasPrice on testBackend == 1
-	// estimated gas costs == 50000
-	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	balance := uint64(100001)
 	// set balance artificially
 	if err = debitor.setBalance(int64(balance)); err != nil {
 		t.Fatal(err)
@@ -328,7 +332,7 @@ func TestEmitCheque(t *testing.T) {
 func TestTriggerPaymentThreshold(t *testing.T) {
 	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
-	protocolTester, clean, err := newSwapTester(t, testBackend)
+	protocolTester, clean, err := newSwapTester(t, testBackend, big.NewInt(int64(DefaultPaymentThreshold)*2))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)

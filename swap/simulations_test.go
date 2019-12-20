@@ -159,7 +159,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance)
+			err = testDeploy(context.Background(), balance, big.NewInt(100000*int64(RetrieveRequestPrice)))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -198,7 +198,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		}
 		keys[i] = key
 		addrs[i] = crypto.PubkeyToAddress(key.PublicKey)
-		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(10000 * int64(RetrieveRequestPrice))}
+		alloc[addrs[i]] = core.GenesisAccount{Balance: big.NewInt(9000000000000000000)}
 		dir, err := ioutil.TempDir("", fmt.Sprintf("swap_test_store_%x", addrs[i].Hex()))
 		if err != nil {
 			return nil, err
@@ -210,24 +210,19 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		params.dirs[i] = dir
 		stores[i] = stateStore
 	}
+
+	alloc[ownerAddress] = core.GenesisAccount{Balance: big.NewInt(9000000000000000000)}
+
 	// then create the single SimulatedBackend
 	gasLimit := uint64(8000000000)
 	defaultBackend := backends.NewSimulatedBackend(alloc, gasLimit)
 	defaultBackend.Commit()
 
-	tokenAddress, _, token, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(keys[0]), defaultBackend)
+	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
 	if err != nil {
 		return nil, err
 	}
 	defaultBackend.Commit()
-
-	for i := 0; i < nodeCount; i++ {
-		_, err = token.Mint(bind.NewKeyedTransactor(keys[0]), addrs[i], big.NewInt(10000*int64(RetrieveRequestPrice)))
-		if err != nil {
-			return nil, err
-		}
-		defaultBackend.Commit()
-	}
 
 	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(keys[0]), defaultBackend, tokenAddress)
 	if err != nil {
@@ -235,7 +230,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	}
 	defaultBackend.Commit()
 
-	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend, factoryAddress: factoryAddress}
+	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend, factoryAddress: factoryAddress, tokenAddress: tokenAddress}
 	// finally, create all Swap instances for each node, which share the same backend
 	var owner *Owner
 	defParams := newDefaultParams(t)
