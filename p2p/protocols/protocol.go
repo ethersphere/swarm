@@ -33,9 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
-	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -325,7 +323,7 @@ func (p *Peer) Stop(timeout time.Duration) error {
 		log.Debug("peer shutdown with still active handlers: {}", p)
 		// Print a full goroutine dump to debug blocking.
 		// TODO: use a logger to write a goroutine profile
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
+		//pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 		return errors.New("shutdown timeout reached")
 	}
 
