@@ -112,6 +112,16 @@ func errorf(code int, format string, params ...interface{}) *Error {
 	}
 }
 
+// Used to pause any message handling in tests for
+// synchronizing desired states.
+var HandleMsgPauser Pauser
+
+type Pauser interface {
+	Pause()
+	Resume()
+	Wait()
+}
+
 //For accounting, the design is to allow the Spec to describe which and how its messages are priced
 //To access this functionality, we provide a Hook interface which will call accounting methods
 //NOTE: there could be more such (horizontal) hooks in the future
@@ -199,14 +209,15 @@ func (s *Spec) NewMsg(code uint64) (interface{}, bool) {
 // Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
-	*p2p.Peer                   // the p2p.Peer object representing the remote
-	rw        p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
-	spec      *Spec
-	encode    func(context.Context, interface{}) (interface{}, int, error)
-	decode    func(p2p.Msg) (context.Context, []byte, error)
-	wg        sync.WaitGroup
-	running   bool         // if running is true async go routines are dispatched in the event loop
-	mtx       sync.RWMutex // guards running
+	*p2p.Peer                          // the p2p.Peer object representing the remote
+	rw               p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
+	spec             *Spec
+	encode           func(context.Context, interface{}) (interface{}, int, error)
+	decode           func(p2p.Msg) (context.Context, []byte, error)
+	wg               sync.WaitGroup
+	running          bool         // if running is true async go routines are dispatched in the event loop
+	mtx              sync.RWMutex // guards running
+	MsgPauserEnabled bool         // enables message message pauser, use only in tests
 }
 
 // NewPeer constructs a new peer
@@ -255,6 +266,16 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 				}
 
 				return
+			}
+
+			// handleMsgPauser should not be nil only in tests.
+			// It does not use mutex lock protection and because of that
+			// it must be set before the Registry is constructed and
+			// reset when it is closed, in tests.
+			// Production performance impact can be considered as
+			// neglectable as nil check is a ns order operation.
+			if HandleMsgPauser != nil && p.MsgPauserEnabled {
+				HandleMsgPauser.Wait()
 			}
 
 			p.mtx.RLock()

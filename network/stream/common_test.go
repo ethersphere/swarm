@@ -275,7 +275,7 @@ type syncPauser struct {
 	mu  sync.RWMutex
 }
 
-func (p *syncPauser) pause() {
+func (p *syncPauser) Pause() {
 	p.mu.Lock()
 	if p.c == nil {
 		p.c = sync.NewCond(&p.cMu)
@@ -283,7 +283,7 @@ func (p *syncPauser) pause() {
 	p.mu.Unlock()
 }
 
-func (p *syncPauser) resume() {
+func (p *syncPauser) Resume() {
 	p.c.L.Lock()
 	p.c.Broadcast()
 	p.c.L.Unlock()
@@ -292,7 +292,7 @@ func (p *syncPauser) resume() {
 	p.mu.Unlock()
 }
 
-func (p *syncPauser) wait() {
+func (p *syncPauser) Wait() {
 	p.mu.RLock()
 	if p.c != nil {
 		p.c.L.Lock()

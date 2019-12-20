@@ -131,6 +131,7 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 // Run is being dispatched when 2 nodes connect
 func (r *Registry) Run(bp *network.BzzPeer) error {
 	sp := newPeer(bp, r.address, r.intervalsStore, r.providers)
+	sp.Peer.MsgPauserEnabled = true
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
@@ -142,16 +143,6 @@ func (r *Registry) Run(bp *network.BzzPeer) error {
 // HandleMsg is the main message handler for the stream protocol
 func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		// handleMsgPauser should not be nil only in tests.
-		// It does not use mutex lock protection and because of that
-		// it must be set before the Registry is constructed and
-		// reset when it is closed, in tests.
-		// Production performance impact can be considered as
-		// neglectable as nil check is a ns order operation.
-		if handleMsgPauser != nil {
-			handleMsgPauser.wait()
-		}
-
 		switch msg := msg.(type) {
 		case *StreamInfoReq:
 			return r.serverHandleStreamInfoReq(ctx, p, msg)
@@ -211,16 +202,6 @@ func (r *Registry) HandleMsg(p *Peer) func(context.Context, interface{}) error {
 			return nil
 		}
 	}
-}
-
-// Used to pause any message handling in tests for
-// synchronizing desired states.
-var handleMsgPauser pauser
-
-type pauser interface {
-	pause()
-	resume()
-	wait()
 }
 
 // serverHandleStreamInfoReq handles the StreamInfoReq message on the server side (Peer is the client)
