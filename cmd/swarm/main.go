@@ -44,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm"
 	bzzapi "github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/internal/debug"
+	"github.com/ethersphere/swarm/internal/flags"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage/mock"
@@ -225,7 +226,7 @@ func init() {
 	}
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, MetricsFlags...)
+	app.Flags = append(app.Flags, flags.Metrics...)
 	app.Flags = append(app.Flags, tracing.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -233,13 +234,13 @@ func init() {
 			return err
 		}
 		swarmmetrics.Setup(swarmmetrics.Options{
-			Endoint:       ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name),
-			Database:      ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name),
-			Username:      ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name),
-			Password:      ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name),
-			EnableExport:  ctx.GlobalBool(MetricsEnableInfluxDBExportFlag.Name),
+			Endoint:       ctx.GlobalString(flags.MetricsInfluxDBEndpointFlag.Name),
+			Database:      ctx.GlobalString(flags.MetricsInfluxDBDatabaseFlag.Name),
+			Username:      ctx.GlobalString(flags.MetricsInfluxDBUsernameFlag.Name),
+			Password:      ctx.GlobalString(flags.MetricsInfluxDBPasswordFlag.Name),
+			EnableExport:  ctx.GlobalBool(flags.MetricsEnableInfluxDBExportFlag.Name),
 			DataDirectory: ctx.GlobalString(utils.DataDirFlag.Name),
-			InfluxDBTags:  ctx.GlobalString(MetricsInfluxDBTagsFlag.Name),
+			InfluxDBTags:  ctx.GlobalString(flags.MetricsInfluxDBTagsFlag.Name),
 		})
 		tracing.Setup(ctx)
 		return nil

@@ -25,6 +25,7 @@ import (
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 
+	"github.com/ethersphere/swarm/internal/flags"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/tracing"
 
@@ -104,7 +105,7 @@ func main() {
 		},
 	}
 
-	app.Flags = append(app.Flags, MetricsFlags...)
+	app.Flags = append(app.Flags, flags.Metrics...)
 
 	app.Flags = append(app.Flags, tracing.Flags...)
 
@@ -155,11 +156,11 @@ func main() {
 func emitMetrics(ctx *cli.Context) error {
 	if gethmetrics.Enabled {
 		var (
-			endpoint = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
-			database = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
-			username = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
-			password = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
-			tags     = ctx.GlobalString(MetricsInfluxDBTagsFlag.Name)
+			endpoint = ctx.GlobalString(flags.MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.GlobalString(flags.MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.GlobalString(flags.MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.GlobalString(flags.MetricsInfluxDBPasswordFlag.Name)
+			tags     = ctx.GlobalString(flags.MetricsInfluxDBTagsFlag.Name)
 		)
 
 		tagsMap := utils.SplitTagsFlag(tags)

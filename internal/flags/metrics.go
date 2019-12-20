@@ -1,25 +1,36 @@
-// Copyright 2019 The The Swarm Authors
-// This file is part of The Swarm.
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The Swarm is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The Swarm is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with The Swarm. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package flags
 
 import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
+
+// Metrics holds all command-line flags required for metrics collection.
+var Metrics = []cli.Flag{
+	utils.MetricsEnabledFlag,
+	MetricsEnableInfluxDBExportFlag,
+	MetricsInfluxDBEndpointFlag,
+	MetricsInfluxDBDatabaseFlag,
+	MetricsInfluxDBUsernameFlag,
+	MetricsInfluxDBPasswordFlag,
+	MetricsInfluxDBTagsFlag,
+}
 
 var (
 	MetricsEnableInfluxDBExportFlag = cli.BoolFlag{
@@ -56,14 +67,3 @@ var (
 		Value: "host=localhost",
 	}
 )
-
-// MetricsFlags holds all command-line flags required for metrics collection.
-var MetricsFlags = []cli.Flag{
-	utils.MetricsEnabledFlag,
-	MetricsEnableInfluxDBExportFlag,
-	MetricsInfluxDBEndpointFlag,
-	MetricsInfluxDBDatabaseFlag,
-	MetricsInfluxDBUsernameFlag,
-	MetricsInfluxDBPasswordFlag,
-	MetricsInfluxDBTagsFlag,
-}
