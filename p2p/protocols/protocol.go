@@ -268,6 +268,16 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 				return
 			}
 
+			p.mtx.RLock()
+			// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
+			if !p.running {
+				_ = msg.Discard()
+				p.mtx.RUnlock()
+				continue
+			}
+
+			p.mtx.RUnlock()
+
 			// handleMsgPauser should not be nil only in tests.
 			// It does not use mutex lock protection and because of that
 			// it must be set before the Registry is constructed and
@@ -278,15 +288,6 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 				HandleMsgPauser.Wait()
 			}
 
-			p.mtx.RLock()
-			// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
-			if !p.running {
-				_ = msg.Discard()
-				p.mtx.RUnlock()
-				continue
-			}
-
-			p.mtx.RUnlock()
 			p.wg.Add(1)
 			go func() {
 				defer p.wg.Done()
