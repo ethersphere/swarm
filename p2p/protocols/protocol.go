@@ -298,7 +298,6 @@ func (p *Peer) readMsg() (p2p.Msg, error) {
 
 // Drop disconnects a peer
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
-// if they are useful for other protocols
 func (p *Peer) Drop(reason string) {
 	log.Info("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
