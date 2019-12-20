@@ -114,7 +114,7 @@ func main() {
 		swarmmetrics.MetricsInfluxDBTagsFlag,
 	}...)
 
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, TracingFlags...)
 
 	app.Commands = []cli.Command{
 		{
@@ -145,7 +145,11 @@ func main() {
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Before = func(ctx *cli.Context) error {
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(TracingSvcFlag.Name),
+		})
 		return nil
 	}
 

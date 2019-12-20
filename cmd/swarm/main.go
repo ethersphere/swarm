@@ -226,14 +226,18 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, swarmmetrics.Flags...)
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, TracingFlags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 		if err := debug.Setup(ctx, ""); err != nil {
 			return err
 		}
 		swarmmetrics.Setup(ctx)
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(TracingSvcFlag.Name),
+		})
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {

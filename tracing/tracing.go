@@ -3,8 +3,6 @@ package tracing
 import (
 	"context"
 	"io"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,7 +12,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	jaeger "github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
-	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -24,9 +21,6 @@ var (
 )
 
 const (
-	// TracingEnabledFlag is the CLI flag name to use to enable trace collections.
-	TracingEnabledFlag = "tracing"
-
 	// StoreLabelId is the context value key of the name of the span to be saved
 	StoreLabelId = "span_save_id"
 
@@ -39,48 +33,17 @@ var (
 	Closer io.Closer
 )
 
-var (
-	TracingFlag = cli.BoolFlag{
-		Name:  TracingEnabledFlag,
-		Usage: "Enable tracing",
-	}
-	TracingEndpointFlag = cli.StringFlag{
-		Name:  "tracing.endpoint",
-		Usage: "Tracing endpoint",
-		Value: "0.0.0.0:6831",
-	}
-	TracingSvcFlag = cli.StringFlag{
-		Name:  "tracing.svc",
-		Usage: "Tracing service name",
-		Value: "swarm",
-	}
-)
-
-// Flags holds all command-line flags required for tracing collection.
-var Flags = []cli.Flag{
-	TracingFlag,
-	TracingEndpointFlag,
-	TracingSvcFlag,
+type Options struct {
+	Enabled  bool
+	Endpoint string
+	Name     string
 }
 
-// Init enables or disables the open tracing system.
-func init() {
-	for _, arg := range os.Args {
-		if flag := strings.TrimLeft(arg, "-"); flag == TracingEnabledFlag {
-			Enabled = true
-		}
-	}
-}
-
-func Setup(ctx *cli.Context) {
-	if Enabled {
+func Setup(o Options) {
+	if !o.Enabled {
 		log.Info("Enabling opentracing")
-		var (
-			endpoint = ctx.GlobalString(TracingEndpointFlag.Name)
-			svc      = ctx.GlobalString(TracingSvcFlag.Name)
-		)
-
-		Closer = initTracer(endpoint, svc)
+		Enabled = true
+		Closer = initTracer(o.Endpoint, o.Name)
 	}
 }
 
