@@ -217,7 +217,7 @@ type Peer struct {
 	wg               sync.WaitGroup
 	running          bool         // if running is true async go routines are dispatched in the event loop
 	mtx              sync.RWMutex // guards running
-	MsgPauserEnabled bool         // enables message message pauser, use only in tests
+	msgPauserEnabled bool         // enables message message pauser, set to true only in tests if needed
 }
 
 // NewPeer constructs a new peer
@@ -274,7 +274,7 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 			// reset when it is closed, in tests.
 			// Production performance impact can be considered as
 			// neglectable as nil check is a ns order operation.
-			if HandleMsgPauser != nil && p.MsgPauserEnabled {
+			if HandleMsgPauser != nil && p.msgPauserEnabled {
 				HandleMsgPauser.Wait()
 			}
 
@@ -386,6 +386,12 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	}
 
 	return p2p.Send(p.rw, code, wmsg)
+}
+
+// EnableMsgPauser enables message pausing for this peer
+// IMPORTANT: to be used only for testing
+func (p *Peer) EnableMsgPauser() {
+	p.msgPauserEnabled = true
 }
 
 // receive is a sync call that handles incoming message with provided message handler

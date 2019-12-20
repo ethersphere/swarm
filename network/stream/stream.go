@@ -131,7 +131,8 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 // Run is being dispatched when 2 nodes connect
 func (r *Registry) Run(bp *network.BzzPeer) error {
 	sp := newPeer(bp, r.address, r.intervalsStore, r.providers)
-	sp.Peer.MsgPauserEnabled = true
+	// enable msg pauser for stream protocol, this is used only in tests
+	sp.Peer.EnableMsgPauser()
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
