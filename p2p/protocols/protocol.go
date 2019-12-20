@@ -112,11 +112,9 @@ func errorf(code int, format string, params ...interface{}) *Error {
 	}
 }
 
-// Used to pause any message handling in tests for
-// synchronizing desired states.
-var HandleMsgPauser Pauser
-
-type Pauser interface {
+// TestMsgPauser can be used to pause run execution
+// IMPORTANT: should be used only for tests
+type TestMsgPauser interface {
 	Pause()
 	Resume()
 	Wait()
@@ -209,15 +207,15 @@ func (s *Spec) NewMsg(code uint64) (interface{}, bool) {
 // Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
-	*p2p.Peer                          // the p2p.Peer object representing the remote
-	rw               p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
-	spec             *Spec
-	encode           func(context.Context, interface{}) (interface{}, int, error)
-	decode           func(p2p.Msg) (context.Context, []byte, error)
-	wg               sync.WaitGroup
-	running          bool         // if running is true async go routines are dispatched in the event loop
-	mtx              sync.RWMutex // guards running
-	msgPauserEnabled bool         // enables message message pauser, set to true only in tests if needed
+	*p2p.Peer                         // the p2p.Peer object representing the remote
+	rw              p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
+	spec            *Spec
+	encode          func(context.Context, interface{}) (interface{}, int, error)
+	decode          func(p2p.Msg) (context.Context, []byte, error)
+	wg              sync.WaitGroup
+	running         bool          // if running is true async go routines are dispatched in the event loop
+	mtx             sync.RWMutex  // guards running
+	handleMsgPauser TestMsgPauser //  message pauser, should be used only in tests
 }
 
 // NewPeer constructs a new peer
@@ -275,7 +273,6 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 				p.mtx.RUnlock()
 				continue
 			}
-
 			p.mtx.RUnlock()
 
 			// handleMsgPauser should not be nil only in tests.
@@ -284,8 +281,8 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 			// reset when it is closed, in tests.
 			// Production performance impact can be considered as
 			// neglectable as nil check is a ns order operation.
-			if HandleMsgPauser != nil && p.msgPauserEnabled {
-				HandleMsgPauser.Wait()
+			if p.handleMsgPauser != nil {
+				p.handleMsgPauser.Wait()
 			}
 
 			p.wg.Add(1)
@@ -389,10 +386,10 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	return p2p.Send(p.rw, code, wmsg)
 }
 
-// EnableMsgPauser enables message pausing for this peer
+// SetMsgPauser sets message pauser for this peer
 // IMPORTANT: to be used only for testing
-func (p *Peer) EnableMsgPauser() {
-	p.msgPauserEnabled = true
+func (p *Peer) SetMsgPauser(pauser TestMsgPauser) {
+	p.handleMsgPauser = pauser
 }
 
 // receive is a sync call that handles incoming message with provided message handler

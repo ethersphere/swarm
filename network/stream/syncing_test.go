@@ -47,9 +47,8 @@ var timeout = 90 * time.Second
 func TestTwoNodesSyncWithGaps(t *testing.T) {
 	// construct a pauser before simulation is started and reset it to nil after all streams are closed
 	// to avoid the need for protecting handleMsgPauser with a lock in production code.
-	protocols.HandleMsgPauser = new(syncPauser)
-	defer func() { protocols.HandleMsgPauser = nil }()
-
+	MessagePauser = new(syncPauser)
+	defer func() { MessagePauser = nil }()
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
 		t.Helper()
 
@@ -199,14 +198,14 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			if tc.liveChunkCount > 0 {
 				// pause syncing so that the chunks in the live gap
 				// are not synced before they are removed
-				protocols.HandleMsgPauser.Pause()
+				MessagePauser.Pause()
 
 				chunks = append(chunks, mustUploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
 
 				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
 
 				// resume syncing
-				protocols.HandleMsgPauser.Resume()
+				MessagePauser.Resume()
 
 				err = waitChunks(syncStore, tc.chunkCount+tc.liveChunkCount-removedCount, time.Minute)
 				if err != nil {

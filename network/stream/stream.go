@@ -92,6 +92,9 @@ var (
 			WantedHashes{},
 		},
 	}
+
+	// pause the msgHandler execution, used only for tests
+	MessagePauser protocols.TestMsgPauser = nil
 )
 
 // Registry is the base type that handles all client/server operations on a node
@@ -132,7 +135,7 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 func (r *Registry) Run(bp *network.BzzPeer) error {
 	sp := newPeer(bp, r.address, r.intervalsStore, r.providers)
 	// enable msg pauser for stream protocol, this is used only in tests
-	sp.Peer.EnableMsgPauser()
+	sp.Peer.SetMsgPauser(MessagePauser)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
