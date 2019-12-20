@@ -112,9 +112,9 @@ func errorf(code int, format string, params ...interface{}) *Error {
 	}
 }
 
-// TestMsgPauser can be used to pause run execution
+// MsgPauser can be used to pause run execution
 // IMPORTANT: should be used only for tests
-type TestMsgPauser interface {
+type MsgPauser interface {
 	Pause()
 	Resume()
 	Wait()
@@ -213,9 +213,9 @@ type Peer struct {
 	encode          func(context.Context, interface{}) (interface{}, int, error)
 	decode          func(p2p.Msg) (context.Context, []byte, error)
 	wg              sync.WaitGroup
-	running         bool          // if running is true async go routines are dispatched in the event loop
-	mtx             sync.RWMutex  // guards running
-	handleMsgPauser TestMsgPauser //  message pauser, should be used only in tests
+	running         bool         // if running is true async go routines are dispatched in the event loop
+	mtx             sync.RWMutex // guards running
+	handleMsgPauser MsgPauser    //  message pauser, should be used only in tests
 }
 
 // NewPeer constructs a new peer
@@ -388,7 +388,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 // SetMsgPauser sets message pauser for this peer
 // IMPORTANT: to be used only for testing
-func (p *Peer) SetMsgPauser(pauser TestMsgPauser) {
+func (p *Peer) SetMsgPauser(pauser MsgPauser) {
 	p.handleMsgPauser = pauser
 }
 
