@@ -134,32 +134,29 @@ type want struct {
 	closeC    chan error          // signal polling goroutine to terminate due to empty batch or timeout
 }
 
-// getOfferOrDrop gets on open offer for the requested ruid
-// in case the offer is not found - the peer is dropped
-func (p *Peer) getOfferOrDrop(ruid uint) (o offer, shouldBreak bool) {
+// getOffer gets on open offer for the requested ruid
+// in case the offer is not found - error is returned
+func (p *Peer) getOffer(ruid uint) (o offer, err error) {
 	p.mtx.RLock()
 	o, ok := p.openOffers[ruid]
 	p.mtx.RUnlock()
 	if !ok {
-		p.logger.Error("ruid not found, dropping peer", "ruid", ruid)
-		p.Drop("ruid not found")
-		return o, true
+		return o, fmt.Errorf("ruid not found, dropping peer: %d", ruid)
+
 	}
-	return o, false
+	return o, nil
 }
 
-// getWantOrDrop gets on open want for the requested ruid
-// in case the want is not found - the peer is dropped
-func (p *Peer) getWantOrDrop(ruid uint) (w *want, shouldBreak bool) {
+// getWant gets on open want for the requested ruid
+// in case the want is not found the error is returned
+func (p *Peer) getWant(ruid uint) (w *want, err error) {
 	p.mtx.RLock()
 	w, ok := p.openWants[ruid]
 	p.mtx.RUnlock()
 	if !ok {
-		p.logger.Error("ruid not found, dropping peer", "ruid", ruid)
-		p.Drop("ruid not found")
-		return nil, true
+		return nil, fmt.Errorf("ruid not found, dropping peer: %d", ruid)
 	}
-	return w, false
+	return w, nil
 }
 
 func (p *Peer) addInterval(stream ID, start, end uint64) (err error) {
