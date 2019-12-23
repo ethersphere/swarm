@@ -161,7 +161,7 @@ func (s *Swap) Cheques() (map[enode.ID]*PeerCheques, error) {
 	// get peer cheques from memory
 	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
-		//swapPeer.lock.Lock() //temporary
+		swapPeer.lock.Lock()
 		pendingCheque := swapPeer.getPendingCheque()
 		sentCheque := swapPeer.getLastSentCheque()
 		receivedCheque := swapPeer.getLastReceivedCheque()
@@ -169,7 +169,7 @@ func (s *Swap) Cheques() (map[enode.ID]*PeerCheques, error) {
 		if sentCheque != nil || receivedCheque != nil || pendingCheque != nil {
 			cheques[peer] = &PeerCheques{pendingCheque, sentCheque, receivedCheque}
 		}
-		//swapPeer.lock.Unlock() //temporary
+		swapPeer.lock.Unlock()
 	}
 	s.peersLock.Unlock()
 
