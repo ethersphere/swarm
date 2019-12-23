@@ -423,17 +423,13 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 // generic peer-specific handler for incoming messages
 // calls pss msg handler asynchronously
 func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
-	go func() {
-		pssmsg, ok := msg.(*message.Message)
-		if !ok {
-			log.Error("invalid message type", "msg", msg)
-			peer.Drop("invalid message type")
-		}
-		if err := p.handlePssMsg(ctx, pssmsg); err != nil {
-			log.Warn("handler error", "err", err)
-			peer.Drop(fmt.Sprintf("handler error %s", err))
-		}
-	}()
+	pssmsg, ok := msg.(*message.Message)
+	if !ok {
+		return fmt.Errorf("invalid message type: %s", msg)
+	}
+	if err := p.handlePssMsg(ctx, pssmsg); err != nil {
+		return fmt.Errorf("handler error: %w", err)
+	}
 	return nil
 }
 
