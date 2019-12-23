@@ -344,7 +344,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts1.swap.peers[p2], expectedPayout1); err != nil {
 				t.Fatal(err)
 			}
-			lastCount += 1
+			lastCount++
 			expectedPayout1 += DefaultPaymentThreshold + 1
 		} else {
 			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
@@ -353,7 +353,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts2.swap.peers[p1], expectedPayout2); err != nil {
 				t.Fatal(err)
 			}
-			lastCount += 1
+			lastCount++
 			expectedPayout2 += DefaultPaymentThreshold + 1
 		}
 	}
