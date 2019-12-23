@@ -25,6 +25,7 @@ import (
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 
+	"github.com/ethersphere/swarm/internal/flags"
 	"github.com/ethersphere/swarm/log"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/tracing"
@@ -114,7 +115,7 @@ func main() {
 		swarmmetrics.MetricsInfluxDBTagsFlag,
 	}...)
 
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, flags.Tracing...)
 
 	app.Commands = []cli.Command{
 		{
@@ -145,7 +146,11 @@ func main() {
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Before = func(ctx *cli.Context) error {
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(flags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(flags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(flags.TracingSvcFlag.Name),
+		})
 		return nil
 	}
 
