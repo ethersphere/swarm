@@ -1554,11 +1554,11 @@ func TestSwapLogToFile(t *testing.T) {
 	testAmount := int64(DefaultPaymentThreshold + 42)
 
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap, big.NewInt(testAmount))
+	err = testDeploy(ctx, creditorSwap, big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, big.NewInt(0))
+	err = testDeploy(ctx, debitorSwap, big.NewInt(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1586,7 +1586,10 @@ func TestSwapLogToFile(t *testing.T) {
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
+	err = creditor.sendCheque()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
