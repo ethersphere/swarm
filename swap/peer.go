@@ -204,7 +204,7 @@ func (p *Peer) sendCheque() error {
 	}
 
 	chequeAmount := uint64(-p.getBalance())
-	if availableBalance < chequeAmount && false {
+	if availableBalance < chequeAmount {
 		return fmt.Errorf("cannot send created cheque, amount %d is greater than chequebook available balance %d", chequeAmount, availableBalance)
 	}
 
