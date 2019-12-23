@@ -17,7 +17,6 @@ package main
 
 import (
 	cliflags "github.com/ethersphere/swarm/internal/flags"
-	"github.com/ethersphere/swarm/tracing"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -124,6 +123,6 @@ func init() {
 
 	flags = append(flags, cliflags.Metrics...)
 
-	flags = append(flags, tracing.Flags...)
+	flags = append(flags, cliflags.Tracing...)
 
 }

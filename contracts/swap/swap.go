@@ -106,7 +106,7 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, amount *big.Int) (*typ
 	if err != nil {
 		return nil, err
 	}
-	return WaitFunc(auth, s.backend, tx)
+	return WaitFunc(auth.Context, s.backend, tx)
 }
 
 // Deposit sends an amount in ERC20 token to the chequebook and blocks until the transaction is mined
@@ -136,7 +136,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	if err != nil {
 		return nil, err
 	}
-	return WaitFunc(auth, s.backend, tx)
+	return WaitFunc(auth.Context, s.backend, tx)
 }
 
 // CashChequeBeneficiary cashes the cheque on the blockchain and blocks until the transaction is mined.
@@ -145,7 +145,7 @@ func (s simpleContract) CashChequeBeneficiary(opts *bind.TransactOpts, beneficia
 	if err != nil {
 		return nil, nil, err
 	}
-	receipt, err := WaitFunc(opts, s.backend, tx)
+	receipt, err := WaitFunc(opts.Context, s.backend, tx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,9 +225,9 @@ func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.
 var WaitFunc = waitForTx
 
 // waitForTx waits for transaction to be mined and returns the receipt
-func waitForTx(auth *bind.TransactOpts, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
+func waitForTx(ctx context.Context, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
 	// it blocks here until tx is mined
-	receipt, err := bind.WaitMined(auth.Context, backend, tx)
+	receipt, err := bind.WaitMined(ctx, backend, tx)
 	if err != nil {
 		return nil, err
 	}

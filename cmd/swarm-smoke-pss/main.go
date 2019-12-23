@@ -107,7 +107,7 @@ func main() {
 
 	app.Flags = append(app.Flags, flags.Metrics...)
 
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, flags.Tracing...)
 
 	app.Commands = []cli.Command{
 		{
@@ -138,7 +138,11 @@ func main() {
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Before = func(ctx *cli.Context) error {
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(flags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(flags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(flags.TracingSvcFlag.Name),
+		})
 		return nil
 	}
 

@@ -227,7 +227,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, flags.Metrics...)
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, flags.Tracing...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 		if err := debug.Setup(ctx, ""); err != nil {
@@ -242,7 +242,11 @@ func init() {
 			DataDirectory: ctx.GlobalString(utils.DataDirFlag.Name),
 			InfluxDBTags:  ctx.GlobalString(flags.MetricsInfluxDBTagsFlag.Name),
 		})
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(flags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(flags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(flags.TracingSvcFlag.Name),
+		})
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {

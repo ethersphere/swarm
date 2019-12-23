@@ -73,7 +73,11 @@ func main() {
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Before = func(ctx *cli.Context) error {
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(cliflags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(cliflags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(cliflags.TracingSvcFlag.Name),
+		})
 		return nil
 	}
 
