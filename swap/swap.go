@@ -353,9 +353,9 @@ func (s *Swap) handleMsg(p *Peer) func(ctx context.Context, msg interface{}) err
 	return func(ctx context.Context, msg interface{}) error {
 		switch msg := msg.(type) {
 		case *EmitChequeMsg:
-			go s.handleEmitChequeMsg(ctx, p, msg)
+			return s.handleEmitChequeMsg(ctx, p, msg)
 		case *ConfirmChequeMsg:
-			go s.handleConfirmChequeMsg(ctx, p, msg)
+			return s.handleConfirmChequeMsg(ctx, p, msg)
 		}
 		return nil
 	}
@@ -381,8 +381,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		log.Error("error processing and verifying received cheque", "err", err)
-		return err
+		return fmt.Errorf("error processing and verifying received cheque: %w", err)
 	}
 
 	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
@@ -392,8 +391,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	err = p.updateBalance(-int64(cheque.Honey))
 	if err != nil {
-		log.Error("error updating balance", "err", err)
-		return err
+		return fmt.Errorf("error updating balance: %w", err)
 	}
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
@@ -405,17 +403,18 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
-		log.Error("error getting contract", "err", err)
-		return err
+		return fmt.Errorf("error getting contract: %w", err)
 	}
 
 	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
 	if err != nil {
-		return err
+		// todo: handle nil error
+		return nil
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
 	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
 	if err != nil {
+		// todo: handle nil error
 		return err
 	}
 	// do a payout transaction if we get 2 times the gas costs
@@ -426,35 +425,37 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		go defaultCashCheque(s, otherSwap, opts, cheque)
 	}
 
-	return err
+	// todo: handle nil error
+	return nil
 }
 
-func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *ConfirmChequeMsg) {
+func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *ConfirmChequeMsg) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	cheque := msg.Cheque
 
 	if p.getPendingCheque() == nil {
+		// todo: handle nil error
 		p.logger.Warn("ignoring confirm msg, no pending cheque", "confirm message cheque", cheque)
-		return
+		return nil
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {
 		p.logger.Warn("ignoring confirm msg, unexpected cheque", "confirm message cheque", cheque, "expected", p.getPendingCheque())
-		return
+		return nil
 	}
 
 	err := p.setLastSentCheque(cheque)
 	if err != nil {
-		p.Drop(fmt.Sprintf("persistence error: %v", err))
-		return
+		return fmt.Errorf("persistence error: %w", err)
 	}
 
 	err = p.setPendingCheque(nil)
 	if err != nil {
-		p.Drop(fmt.Sprintf("persistence error: %v", err))
-		return
+		return fmt.Errorf("persistence error: %w", err)
 	}
+
+	return nil
 }
 
 // cashCheque should be called async as it blocks until the transaction(s) are mined
