@@ -226,7 +226,7 @@ func init() {
 	}
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debugFlags...)
-	app.Flags = append(app.Flags, swarmmetrics.Flags...)
+	app.Flags = append(app.Flags, flags.Metrics...)
 	app.Flags = append(app.Flags, flags.Tracing...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -245,7 +245,15 @@ func init() {
 		}); err != nil {
 			return err
 		}
-		swarmmetrics.Setup(ctx)
+		swarmmetrics.Setup(swarmmetrics.Options{
+			Endoint:       ctx.GlobalString(flags.MetricsInfluxDBEndpointFlag.Name),
+			Database:      ctx.GlobalString(flags.MetricsInfluxDBDatabaseFlag.Name),
+			Username:      ctx.GlobalString(flags.MetricsInfluxDBUsernameFlag.Name),
+			Password:      ctx.GlobalString(flags.MetricsInfluxDBPasswordFlag.Name),
+			EnableExport:  ctx.GlobalBool(flags.MetricsEnableInfluxDBExportFlag.Name),
+			DataDirectory: ctx.GlobalString(utils.DataDirFlag.Name),
+			InfluxDBTags:  ctx.GlobalString(flags.MetricsInfluxDBTagsFlag.Name),
+		})
 		tracing.Setup(tracing.Options{
 			Enabled:  ctx.GlobalBool(flags.TracingEnabledFlag.Name),
 			Endpoint: ctx.GlobalString(flags.TracingEndpointFlag.Name),
