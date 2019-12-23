@@ -173,17 +173,24 @@ func TestBalance(t *testing.T) {
 }
 
 func checkAccountingTestCases(t *testing.T, cases []testCase, acc *Accounting, peer *Peer, balance *dummyBalance, send bool) {
+	t.Helper()
 	for _, c := range cases {
 		var err error
-		var expectedResult int64
+		var expectedResult, cost int64
 		//reset balance before every check
 		balance.amount = 0
 		if send {
-			cost, _ := acc.Validate(peer, c.size, c.msg, Sender)
+			cost, err = acc.Validate(peer, c.size, c.msg, Sender)
+			if err != nil {
+				t.Fatal(err)
+			}
 			err = acc.Apply(peer, cost, c.size)
 			expectedResult = c.sendResult
 		} else {
-			cost, _ := acc.Validate(peer, c.size, c.msg, Receiver)
+			cost, err = acc.Validate(peer, c.size, c.msg, Receiver)
+			if err != nil {
+				t.Fatal(err)
+			}
 			err = acc.Apply(peer, cost, c.size)
 			expectedResult = c.recvResult
 		}

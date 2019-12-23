@@ -200,9 +200,8 @@ func (m *matrix) symmetric() error {
 type balances struct {
 	i int
 	*matrix
-	id2n    map[enode.ID]int
-	wg      *sync.WaitGroup
-	allMsgs int
+	id2n map[enode.ID]int
+	wg   *sync.WaitGroup
 }
 
 func newBalances(n int) *balances {

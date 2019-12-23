@@ -122,8 +122,7 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *Accounti
 	return NewAccountingMetrics(metrics.AccountingRegistry, reportInterval, path)
 }
 
-// Send takes a peer, a size and a msg and
-//   - credits/debits local node using balance interface
+// Apply takes a peer, the signed cost for the local node and the msg size and credits/debits local node using balance interface
 func (ah *Accounting) Apply(peer *Peer, costToLocalNode int64, size uint32) error {
 	// do the accounting
 	err := ah.Add(costToLocalNode, peer)
@@ -132,7 +131,9 @@ func (ah *Accounting) Apply(peer *Peer, costToLocalNode int64, size uint32) erro
 	return err
 }
 
-//   - calculates the cost for the local node sending a msg of size to peer querying the message for its price
+// Validate calculates the cost for the local node sending or receiving a msg to/from a peer querying the message for its price.
+// It returns either the signed cost for the local node as int64 or an error, signaling that the accounting operation would fail
+// (no change has been applied at this point)
 func (ah *Accounting) Validate(peer *Peer, size uint32, msg interface{}, payer Payer) (int64, error) {
 	// get the price for a message (by querying the message type via the PricedMessage interface)
 	var pricedMessage PricedMessage
