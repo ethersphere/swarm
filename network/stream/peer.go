@@ -141,7 +141,7 @@ func (p *Peer) getOffer(ruid uint) (o offer, err error) {
 	o, ok := p.openOffers[ruid]
 	p.mtx.RUnlock()
 	if !ok {
-		return o, fmt.Errorf("ruid not found, dropping peer: %d", ruid)
+		return o, fmt.Errorf("ruid not found: %d", ruid)
 
 	}
 	return o, nil
@@ -154,7 +154,7 @@ func (p *Peer) getWant(ruid uint) (w *want, err error) {
 	w, ok := p.openWants[ruid]
 	p.mtx.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("ruid not found, dropping peer: %d", ruid)
+		return nil, fmt.Errorf("ruid not found: %d", ruid)
 	}
 	return w, nil
 }

@@ -445,7 +445,7 @@ func TestNewSwapFailure(t *testing.T) {
 					config.deposit,
 					config.factoryAddress,
 				)
-				if !strings.Contains(err.Error(), "error connecting to Ethereum API") {
+				if !strings.Contains(err.Error(), "connecting to Ethereum API") {
 					t.Fatal("invalid backendURL, but created SWAP", err)
 				}
 			},

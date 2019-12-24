@@ -167,7 +167,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	// initialize the balances store
 	var stateStore state.Store
 	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
-		return nil, fmt.Errorf("error while initializing statestore: %v", err)
+		return nil, fmt.Errorf("initializing statestore failed. err: %w", err)
 	}
 	if params.DisconnectThreshold <= params.PaymentThreshold {
 		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
@@ -175,12 +175,12 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	// connect to the backend
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to Ethereum API %s: %v", backendURL, err)
+		return nil, fmt.Errorf("connecting to Ethereum API failed. url %s: err: %w", backendURL, err)
 	}
 	// get the chainID of the backend
 	var chainID *big.Int
 	if chainID, err = backend.ChainID(context.TODO()); err != nil {
-		return nil, fmt.Errorf("error retrieving chainID from backendURL: %v", err)
+		return nil, fmt.Errorf("retrieving chainID from backendURL failed. err: %v", err)
 	}
 	// verify that we have not used SWAP before on a different chainID
 	if err := checkChainID(chainID.Uint64(), stateStore); err != nil {
@@ -267,7 +267,7 @@ func checkChainID(currentChainID uint64, s state.Store) (err error) {
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
-		return fmt.Errorf("error querying usedBeforeAtNetwork from statestore: %v", err)
+		return fmt.Errorf("querying usedBeforeAtNetwork from statestore. err: %w", err)
 	}
 	// initialized before, but on a different chainID
 	if err != state.ErrNotFound && connectedBlockchain != currentChainID {
@@ -381,7 +381,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		return fmt.Errorf("error processing and verifying received cheque: %w", err)
+		return fmt.Errorf("processing and verifying received cheque failed. err: %w", err)
 	}
 
 	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
@@ -391,7 +391,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	err = p.updateBalance(-int64(cheque.Honey))
 	if err != nil {
-		return fmt.Errorf("error updating balance: %w", err)
+		return fmt.Errorf("updating balance failed. err: %w", err)
 	}
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
@@ -403,19 +403,21 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
-		return fmt.Errorf("error getting contract: %w", err)
+		return fmt.Errorf("getting contract failed. err: %w", err)
 	}
 
 	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
 	if err != nil {
-		// todo: handle nil error
+		// todo: DropError - return standard error
+		log.Error("Suggest gas price failed.", "Err", err)
 		return nil
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
 	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
 	if err != nil {
-		// todo: handle nil error
-		return err
+		// todo: DropError - return standard error
+		log.Error("Fetching total paid amount for given address failed.", "Err", err)
+		return nil
 	}
 	// do a payout transaction if we get 2 times the gas costs
 	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
@@ -425,7 +427,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		go defaultCashCheque(s, otherSwap, opts, cheque)
 	}
 
-	// todo: handle nil error
+	// todo: DropError - return standard error
 	return nil
 }
 
@@ -435,7 +437,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	cheque := msg.Cheque
 
 	if p.getPendingCheque() == nil {
-		// todo: handle nil error
+		// todo: DropError - return standard error
 		p.logger.Warn("ignoring confirm msg, no pending cheque", "confirm message cheque", cheque)
 		return nil
 	}
@@ -447,12 +449,12 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 
 	err := p.setLastSentCheque(cheque)
 	if err != nil {
-		return fmt.Errorf("persistence error: %w", err)
+		return fmt.Errorf("setLastSentCheque failed. err: %w", err)
 	}
 
 	err = p.setPendingCheque(nil)
 	if err != nil {
-		return fmt.Errorf("persistence error: %w", err)
+		return fmt.Errorf("setPendingCheque failed. err: %w", err)
 	}
 
 	return nil
@@ -466,7 +468,7 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		swapLog.Error("error cashing cheque", "err", err)
+		swapLog.Error("cashing cheque failed.", "err", err)
 		return
 	}
 
@@ -624,7 +626,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	val, err := strconv.ParseInt(input, 10, 64)
 	if err != nil {
 		// maybe we should provide a fallback here? A bad input results in stopping the boot
-		return &big.Int{}, fmt.Errorf("Conversion error while reading user input: %v", err)
+		return &big.Int{}, fmt.Errorf("Conversion failed while reading user input: %w", err)
 	}
 	return big.NewInt(val), nil
 }
@@ -634,7 +636,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract cont
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
-		return nil, fmt.Errorf("Error reading previously used chequebook: %s", err)
+		return nil, fmt.Errorf("reading previously used chequebook failed. err: %w", err)
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
