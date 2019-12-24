@@ -92,7 +92,7 @@ func (u *Uint256) Add(addend *big.Int) error {
 	return u.Set(summand)
 }
 
-// Sub attempts to subtract the given subtrahend to an unsigned 256-bit integer
+// Sub attempts to subtract the given subtrahend from an unsigned 256-bit integer
 func (u *Uint256) Sub(subtrahend *big.Int) error {
 	var difference *big.Int
 	difference.Sub(u.Value(), subtrahend)
