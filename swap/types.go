@@ -17,6 +17,7 @@
 package swap
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -57,16 +58,25 @@ type Uint256 struct {
 	value big.Int
 }
 
-func (u *Uint256) min() *big.Int {
+func (u *Uint256) Set(value *big.Int) error {
+	if value.Cmp(u.Max()) == 1 {
+		return errors.New("overflow")
+	}
+	if value.Cmp(u.Min()) == -1 {
+		return errors.New("underflow")
+	}
+	return nil
+}
+
+func (u *Uint256) Min() *big.Int {
 	return big.NewInt(0)
 }
 
-func (u *Uint256) max() *big.Int {
+func (u *Uint256) Max() *big.Int {
 	max := new(big.Int)
-	max, success := max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
+	max, success := max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 -1
 	if success {
 		return max
-	} else {
-		return new(big.Int)
 	}
+	return new(big.Int)
 }
