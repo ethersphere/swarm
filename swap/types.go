@@ -17,6 +17,8 @@
 package swap
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -48,4 +50,23 @@ type EmitChequeMsg struct {
 // ConfirmChequeMsg is sent from the creditor to the debitor with the cheque to confirm successful processing
 type ConfirmChequeMsg struct {
 	Cheque *Cheque
+}
+
+// Uint256 represents an unsigned integer of 256 bits
+type Uint256 struct {
+	value big.Int
+}
+
+func (u *Uint256) min() *big.Int {
+	return big.NewInt(0)
+}
+
+func (u *Uint256) max() *big.Int {
+	max := new(big.Int)
+	max, success := max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
+	if success {
+		return max
+	} else {
+		return new(big.Int)
+	}
 }
