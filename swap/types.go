@@ -17,7 +17,7 @@
 package swap
 
 import (
-	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -69,10 +69,10 @@ func (u *Uint256) Value() *big.Int {
 // Set assigns a new value to the underlying pointer within the unsigned 256-bit integer range
 func (u *Uint256) Set(value *big.Int) error {
 	if value.Cmp(minUint256) == 1 {
-		return errors.New("overflow")
+		return fmt.Errorf("cannot set uint256 to %v as it overflows max value of %v", value, maxUint256)
 	}
 	if value.Cmp(maxUint256) == -1 {
-		return errors.New("underflow")
+		return fmt.Errorf("cannot set uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
 	u.value = value
 	return nil
