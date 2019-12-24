@@ -55,28 +55,25 @@ type ConfirmChequeMsg struct {
 
 // Uint256 represents an unsigned integer of 256 bits
 type Uint256 struct {
-	value big.Int
+	value *big.Int
 }
 
+var minUint256 = big.NewInt(0)
+var maxUint256, _ = new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 -1
+
+// Value returns the underlying big int pointer for the Uint256 struct
+func (u *Uint256) Value() *big.Int {
+	return u.value
+}
+
+// Set assigns a new value to the underlying pointer within the unsigned 256-bit integer range
 func (u *Uint256) Set(value *big.Int) error {
-	if value.Cmp(u.Max()) == 1 {
+	if value.Cmp(minUint256) == 1 {
 		return errors.New("overflow")
 	}
-	if value.Cmp(u.Min()) == -1 {
+	if value.Cmp(maxUint256) == -1 {
 		return errors.New("underflow")
 	}
+	u.value = value
 	return nil
-}
-
-func (u *Uint256) Min() *big.Int {
-	return big.NewInt(0)
-}
-
-func (u *Uint256) Max() *big.Int {
-	max := new(big.Int)
-	max, success := max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 -1
-	if success {
-		return max
-	}
-	return new(big.Int)
 }
