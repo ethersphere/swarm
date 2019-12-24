@@ -59,7 +59,7 @@ type Uint256 struct {
 }
 
 var minUint256 = big.NewInt(0)
-var maxUint256, _ = new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 -1
+var maxUint256, _ = new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1 (base 10)
 
 // Value returns the underlying big int pointer for the Uint256 struct
 func (u *Uint256) Value() *big.Int {
@@ -76,4 +76,18 @@ func (u *Uint256) Set(value *big.Int) error {
 	}
 	u.value = value
 	return nil
+}
+
+// Add attempts to add the given addend to an unsigned 256-bit integer
+func (u *Uint256) Add(addend *big.Int) error {
+	var summand *big.Int
+	summand.Add(u.Value(), addend)
+	return u.Set(summand)
+}
+
+// Sub attempts to subtract the given subtrahend to an unsigned 256-bit integer
+func (u *Uint256) Sub(subtrahend *big.Int) error {
+	var difference *big.Int
+	difference.Sub(u.Value(), subtrahend)
+	return u.Set(difference)
 }
