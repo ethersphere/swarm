@@ -135,8 +135,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	}
 	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
 	if err != nil {
-		log.Error("Error checking hashesh in store", "Reason", err)
-		return nil
+		return fmt.Errorf("Error checking hashesh in store, Reason: %w", err)
 	}
 
 	// collect the hashes of block headers we want
@@ -160,8 +159,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	deliveries := make(chan []byte)
 	req, err := p.getBlockHeaders(ctx, hashes, deliveries)
 	if err != nil {
-		p.logger.Error("Error sending GetBlockHeader message", "Reason", err)
-		return nil
+		return fmt.Errorf("Error sending GetBlockHeader message, Reason: %w", err)
 	}
 	defer req.cancel()
 
@@ -232,7 +230,7 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	// retrieve the request for this id
 	req, ok := p.requests.get(msg.Rid)
 	if !ok {
-		return fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid)
+		return protocols.BreakError(fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid))
 
 	}
 
@@ -277,11 +275,11 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 	// Store all the valid header chunks in one shot
 	storeErr := b.storeChunks(ctx, chunks)
 	if storeErr != nil {
-		return storeErr
+		return protocols.BreakError(storeErr)
 	}
 
 	// Pass on the error if any from the validation error group above storage
-	return err
+	return protocols.BreakError(err)
 }
 
 func (b *BzzEth) storeChunks(ctx context.Context, chunks []chunk.Chunk) error {
@@ -418,7 +416,7 @@ DELIVERY:
 	if err == nil && deliveredCnt < total {
 		err := p.Send(ctx, &BlockHeaders{Rid: uint32(msg.Rid)})
 		if err != nil {
-			p.logger.Error("could not send empty BlockHeader", "err", err)
+			return fmt.Errorf("could not send empty BlockHeader, err: %w", err)
 		}
 	}
 	p.logger.Debug("bzzeth.handleGetBlockHeaders: sent all headers", "id", msg.Rid)
