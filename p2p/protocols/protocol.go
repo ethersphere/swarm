@@ -44,74 +44,6 @@ import (
 	"github.com/ethersphere/swarm/tracing"
 )
 
-// error codes used by this  protocol scheme
-const (
-	ErrMsgTooLong = iota
-	ErrDecode
-	ErrWrite
-	ErrInvalidMsgCode
-	ErrInvalidMsgType
-	ErrHandshake
-	ErrNoHandler
-	ErrHandler
-)
-
-// error description strings associated with the codes
-var errorToString = map[int]string{
-	ErrMsgTooLong:     "Message too long",
-	ErrDecode:         "Invalid message (RLP error)",
-	ErrWrite:          "Error sending message",
-	ErrInvalidMsgCode: "Invalid message code",
-	ErrInvalidMsgType: "Invalid message type",
-	ErrHandshake:      "Handshake error",
-	ErrNoHandler:      "No handler registered error",
-	ErrHandler:        "Message handler error",
-}
-
-/*
-Error implements the standard go error interface.
-Use:
-
-  errorf(code, format, params ...interface{})
-
-Prints as:
-
- <description>: <details>
-
-where description is given by code in errorToString
-and details is fmt.Sprintf(format, params...)
-
-exported field Code can be checked
-*/
-type Error struct {
-	Code    int
-	message string
-	format  string
-	params  []interface{}
-}
-
-func (e Error) Error() (message string) {
-	if len(e.message) == 0 {
-		name, ok := errorToString[e.Code]
-		if !ok {
-			panic("invalid message code")
-		}
-		e.message = name
-		if e.format != "" {
-			e.message += ": " + fmt.Sprintf(e.format, e.params...)
-		}
-	}
-	return e.message
-}
-
-func errorf(code int, format string, params ...interface{}) *Error {
-	return &Error{
-		Code:   code,
-		format: format,
-		params: params,
-	}
-}
-
 // MsgPauser can be used to pause run execution
 // IMPORTANT: should be used only for tests
 type MsgPauser interface {
@@ -295,9 +227,15 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) fun
 				defer p.wg.Done()
 				err := p.handleMsg(msg, handler)
 				if err != nil {
-					select {
-					case errc <- err:
-					default:
+					var e *breakError
+					if errors.As(err, &e) {
+						select {
+						case errc <- err:
+						default:
+						}
+					} else {
+						// todo: what to do with errors that are not breaking the loop?
+						log.Debug("%s", err)
 					}
 				}
 			}()
@@ -361,7 +299,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	code, found := p.spec.GetCode(msg)
 	if !found {
-		return errorf(ErrInvalidMsgType, "%v", code)
+		return fmt.Errorf("Invalid message type %v ", code)
 	}
 
 	wmsg, size, err := p.encode(ctx, msg)
@@ -414,27 +352,26 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	defer msg.Discard()
 
 	if msg.Size > p.spec.MaxMsgSize {
-		return errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
+		return BreakError(fmt.Errorf("Message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
-		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
+		return BreakError(fmt.Errorf("Invalid message code: %v", msg.Code))
 	}
 
 	ctx, msgBytes, err := p.decode(msg)
 	if err != nil {
-		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
+		return BreakError(fmt.Errorf("Invalid message (RLP error): %v err=%w", msg.Code, err))
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		return errorf(ErrDecode, "<= %v: %v", msg, err)
+		return BreakError(fmt.Errorf("Invalid message (RLP error): <= %v: %w", msg, err))
 	}
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
-		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
-		if err != nil {
-			return err
+		if err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val); err != nil {
+			return BreakError(err)
 		}
 	}
 
@@ -444,7 +381,7 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	// it is entirely safe not to check the cast in the handler since the handler is
 	// chosen based on the proper type in the first place
 	if err := handle(ctx, val); err != nil {
-		return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
+		return fmt.Errorf("Message handler error: (msg code %v): %w", msg.Code, err)
 	}
 
 	return nil
@@ -461,7 +398,7 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 // returns the remote handshake and an error
 func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interface{}) error) (interface{}, error) {
 	if _, ok := p.spec.GetCode(hs); !ok {
-		return nil, errorf(ErrHandshake, "unknown handshake message type: %T", hs)
+		return nil, fmt.Errorf("unknown handshake message type: %T", hs)
 	}
 
 	var rhs interface{}
@@ -496,7 +433,7 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 			err = ctx.Err()
 		}
 		if err != nil {
-			return nil, errorf(ErrHandshake, err.Error())
+			return nil, fmt.Errorf("%w", err)
 		}
 	}
 	return rhs, nil
