@@ -54,17 +54,17 @@ func NewAPI(s *Swap) *API {
 
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
 func (s *Swap) AvailableBalance() (*Uint256, error) {
-	var liquidBalance, zero *Uint256
+	var liquidBalance *Uint256
 	// get the LiquidBalance of the chequebook
 	contractLiquidBalance, err := s.contract.LiquidBalance(nil)
 	if err != nil {
-		return zero, err
+		return &Uint256{}, err
 	}
 
 	// get all cheques
 	cheques, err := s.Cheques()
 	if err != nil {
-		return zero, err
+		return &Uint256{}, err
 	}
 
 	// Compute the total worth of cheques sent and how much of of this is cashed
@@ -82,7 +82,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 		sentChequesWorth.Add(sentChequesWorth, sentCheque.ChequeParams.CumulativePayout.Value())
 		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
 		if err != nil {
-			return zero, err
+			return &Uint256{}, err
 		}
 		cashedChequesWorth.Add(cashedChequesWorth, paidOut)
 	}
@@ -93,7 +93,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 
 	err = liquidBalance.Set(tentativeLiquidBalance)
 	if err != nil {
-		return zero, err
+		return &Uint256{}, err
 	}
 	return liquidBalance, nil
 }

@@ -80,15 +80,13 @@ func (u *Uint256) Set(value *big.Int) error {
 
 // Add attempts to add the given unsigned 256-bit integer to another
 func (u *Uint256) Add(addend *Uint256) error {
-	var summand *big.Int
-	summand.Add(u.Value(), addend.Value()) // any uint256 is good enough for a big.Int
-	return u.Set(summand)
+	sum := new(big.Int).Add(u.Value(), addend.Value())
+	return u.Set(sum)
 }
 
 // Sub attempts to subtract the given unsigned 256-bit integer from another
 func (u *Uint256) Sub(subtrahend *Uint256) error {
-	var difference *big.Int
-	difference.Sub(u.Value(), subtrahend.Value()) // any uint256 is good enough for a big.Int
+	difference := new(big.Int).Sub(u.Value(), subtrahend.Value())
 	return u.Set(difference)
 }
 
