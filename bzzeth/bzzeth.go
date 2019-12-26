@@ -79,6 +79,7 @@ func (b *BzzEth) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	// perform handshake and register if peer serves headers
 	handshake, err := bp.Handshake(context.TODO(), Handshake{ServeHeaders: true}, nil)
 	if err != nil {
+		log.Error("Shutting down bzzeth protocol.", "peer", bp, "reason", err)
 		return err
 	}
 	bp.serveHeaders = handshake.(*Handshake).ServeHeaders
@@ -90,10 +91,17 @@ func (b *BzzEth) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	// This protocol is all about interaction between an Eth node and a Swarm Node.
 	// If another swarm node tries to connect then the protocol goes into idle
 	if isSwarmNodeFunc(bp) {
-		return peer.Run(b.handleMsgFromSwarmNode(bp))
+		err = peer.Run(b.handleMsgFromSwarmNode(bp))
 	}
 
-	return peer.Run(b.handleMsg(bp))
+	err = peer.Run(b.handleMsg(bp))
+	if err != nil {
+		log.Error("Shutting down bzzeth protocol.", "peer", bp, "reason", err)
+		return err
+	}
+
+	log.Info("Shutting down bzzeth protocol gracefully.", "peer", bp)
+	return nil
 }
 
 // handleMsg is the message handler that delegates incoming messages

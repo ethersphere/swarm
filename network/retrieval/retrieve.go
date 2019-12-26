@@ -147,7 +147,13 @@ func (r *Retrieval) Run(bp *network.BzzPeer) error {
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
-	return sp.Peer.Run(r.handleMsg(sp))
+	if err := sp.Peer.Run(r.handleMsg(sp)); err != nil {
+		log.Error("Shutting down retrieve protocol.", "peer", sp.ShortString(), "reason", err)
+		return err
+	}
+
+	log.Info("Shutting down retrieve protocol gracefully", "peer", sp.ShortString())
+	return nil
 }
 
 func (r *Retrieval) handleMsg(p *Peer) func(context.Context, interface{}) error {

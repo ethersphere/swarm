@@ -176,12 +176,11 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // resulting in disconnection of the protocol
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
 	wait := p.run(handler)
-	err := wait()
-	if err != io.EOF {
-		log.Error(err.Error())
+	if err := wait(); err != nil && err != io.EOF {
+		return err
 	}
 
-	return err
+	return nil
 }
 
 // run receives messages from the peer and dispatches async routines to handle the messages
@@ -255,6 +254,7 @@ func (p *Peer) readMsg() (p2p.Msg, error) {
 			return msg, fmt.Errorf("peer.readMsg, err: %w", err)
 		}
 	}
+
 	return msg, err
 }
 
@@ -269,6 +269,10 @@ func (p *Peer) Drop(reason string) {
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
 func (p *Peer) Stop(timeout time.Duration) error {
 	p.mtx.Lock()
+	if p.running != true {
+		return nil
+	}
+
 	p.running = false
 	p.mtx.Unlock()
 

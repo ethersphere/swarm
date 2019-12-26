@@ -472,10 +472,6 @@ func TestPeer_Run(t *testing.T) {
 			return nil
 		})
 
-		if err := peer.Stop(3 * time.Second); err != nil {
-			t.Fatal(err)
-		}
-
 		rw.eof = true
 		done := make(chan error)
 		go func() {
@@ -483,8 +479,9 @@ func TestPeer_Run(t *testing.T) {
 		}()
 		select {
 		case err := <-done:
-			if err != io.EOF {
-				t.Fatal("run returned error")
+			fmt.Println("in done")
+			if err != nil {
+				t.Fatal("run returned error", err)
 			}
 		case <-time.After(3 * time.Second):
 			t.Fatal("did not close run")

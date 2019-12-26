@@ -263,7 +263,14 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	handle := func(ctx context.Context, msg interface{}) error {
 		return p.handle(ctx, pp, msg)
 	}
-	return pp.Run(handle)
+
+	if err := pp.Run(handle); err != nil {
+		log.Error("Shutting down pss protocol.", "peer", pp, "reason", err)
+		return err
+	}
+
+	log.Info("Shutting down pss protocol gracefully.")
+	return nil
 }
 
 func (p *Pss) getPeer(peer *protocols.Peer) (pp *protocols.Peer, ok bool) {
