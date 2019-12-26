@@ -3,6 +3,7 @@ package swap
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -23,7 +24,7 @@ func (s *Swap) APIs() []rpc.API {
 }
 
 type swapAPI interface {
-	AvailableBalance() (uint64, error)
+	AvailableBalance() (*Uint256, error)
 	PeerBalance(peer enode.ID) (int64, error)
 	Balances() (map[enode.ID]int64, error)
 	PeerCheques(peer enode.ID) (PeerCheques, error)
@@ -52,22 +53,23 @@ func NewAPI(s *Swap) *API {
 }
 
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
-func (s *Swap) AvailableBalance() (uint64, error) {
+func (s *Swap) AvailableBalance() (*Uint256, error) {
+	var liquidBalance, zero *Uint256
 	// get the LiquidBalance of the chequebook
-	liquidBalance, err := s.contract.LiquidBalance(nil)
+	contractLiquidBalance, err := s.contract.LiquidBalance(nil)
 	if err != nil {
-		return 0, err
+		return zero, err
 	}
 
 	// get all cheques
 	cheques, err := s.Cheques()
 	if err != nil {
-		return 0, err
+		return zero, err
 	}
 
 	// Compute the total worth of cheques sent and how much of of this is cashed
-	var sentChequesWorth uint64
-	var cashedChequesWorth uint64
+	var sentChequesWorth *big.Int
+	var cashedChequesWorth *big.Int
 	for _, peerCheques := range cheques {
 		var sentCheque *Cheque
 		if peerCheques.PendingCheque != nil {
@@ -77,14 +79,23 @@ func (s *Swap) AvailableBalance() (uint64, error) {
 		} else {
 			continue
 		}
-		sentChequesWorth += sentCheque.ChequeParams.CumulativePayout
+		sentChequesWorth.Add(sentChequesWorth, sentCheque.ChequeParams.CumulativePayout.Value())
 		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
 		if err != nil {
-			return 0, err
+			return zero, err
 		}
-		cashedChequesWorth += paidOut.Uint64()
+		cashedChequesWorth.Add(cashedChequesWorth, paidOut)
 	}
-	return liquidBalance.Uint64() + cashedChequesWorth - sentChequesWorth, nil
+
+	var totalChequesWorth, tentativeLiquidBalance *big.Int
+	totalChequesWorth.Sub(cashedChequesWorth, sentChequesWorth)
+	tentativeLiquidBalance.Add(contractLiquidBalance, totalChequesWorth)
+
+	err = liquidBalance.Set(tentativeLiquidBalance)
+	if err != nil {
+		return zero, err
+	}
+	return liquidBalance, nil
 }
 
 // PeerBalance returns the balance for a given peer

@@ -27,7 +27,7 @@ import (
 type ChequeParams struct {
 	Contract         common.Address // address of chequebook, needed to avoid cross-contract submission
 	Beneficiary      common.Address // address of the beneficiary, the contract which will redeem the cheque
-	CumulativePayout uint64         // cumulative amount of the cheque in currency
+	CumulativePayout *Uint256       // cumulative amount of the cheque in currency
 }
 
 // Cheque encapsulates the parameters and the signature
@@ -61,13 +61,6 @@ type Uint256 struct {
 var minUint256 = big.NewInt(0)
 var maxUint256, _ = new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1 (base 10)
 
-// NewUint256 returns a new Uint256 struct with a value based on the given uint64 param
-func NewUint256(i uint64) *Uint256 {
-	var u *Uint256
-	u.value = new(big.Int).SetUint64(i) // any uint64 is good enough for a uint256
-	return u
-}
-
 // Value returns the underlying big.Int pointer for the Uint256 struct
 func (u *Uint256) Value() *big.Int {
 	return u.value
@@ -85,16 +78,16 @@ func (u *Uint256) Set(value *big.Int) error {
 	return nil
 }
 
-// Add attempts to add the given addend to an unsigned 256-bit integer
-func (u *Uint256) Add(addend *big.Int) error {
+// Add attempts to add the given unsigned 256-bit integer to another
+func (u *Uint256) Add(addend *Uint256) error {
 	var summand *big.Int
-	summand.Add(u.Value(), addend)
+	summand.Add(u.Value(), addend.Value()) // any uint256 is good enough for a big.Int
 	return u.Set(summand)
 }
 
-// Sub attempts to subtract the given subtrahend from an unsigned 256-bit integer
-func (u *Uint256) Sub(subtrahend *big.Int) error {
+// Sub attempts to subtract the given unsigned 256-bit integer from another
+func (u *Uint256) Sub(subtrahend *Uint256) error {
 	var difference *big.Int
-	difference.Sub(u.Value(), subtrahend)
+	difference.Sub(u.Value(), subtrahend.Value()) // any uint256 is good enough for a big.Int
 	return u.Set(difference)
 }
