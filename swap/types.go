@@ -91,3 +91,8 @@ func (u *Uint256) Sub(subtrahend *Uint256) error {
 	difference.Sub(u.Value(), subtrahend.Value()) // any uint256 is good enough for a big.Int
 	return u.Set(difference)
 }
+
+// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct
+func (u *Uint256) Cmp(v *Uint256) (r int) {
+	return u.Value().Cmp(v.Value())
+}
