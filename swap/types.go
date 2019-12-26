@@ -59,7 +59,7 @@ type Uint256 struct {
 }
 
 var minUint256 = big.NewInt(0)
-var maxUint256, _ = new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1 (base 10)
+var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)) // 2^256 - 1
 
 // Value returns the underlying big.Int pointer for the Uint256 struct
 func (u *Uint256) Value() *big.Int {

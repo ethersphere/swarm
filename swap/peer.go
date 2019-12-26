@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"sync"
 
@@ -116,12 +117,12 @@ func (p *Peer) setPendingCheque(cheque *Cheque) error {
 
 // getLastSentCumulativePayout returns the cumulative payout of the last sent cheque or 0 if there is none
 // the caller is expected to hold p.lock
-func (p *Peer) getLastSentCumulativePayout() uint64 {
+func (p *Peer) getLastSentCumulativePayout() *Uint256 {
 	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
-	return 0
+	return &Uint256{}
 }
 
 // the caller is expected to hold p.lock
@@ -162,16 +163,26 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	// the balance should be negative here, we take the absolute value:
 	honey := uint64(-p.getBalance())
 
-	amount, err := p.swap.honeyPriceOracle.GetPrice(honey)
+	price, err := p.swap.honeyPriceOracle.GetPrice(honey)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
 
-	total := p.getLastSentCumulativePayout()
+	var amount *Uint256
+	err = amount.Set(new(big.Int).SetUint64(price)) // cast uint64 to big.Int and then fit into Uint256
+	if err != nil {
+		return nil, err
+	}
+
+	cumulativePayout := p.getLastSentCumulativePayout()
+	err = cumulativePayout.Add(amount)
+	if err != nil {
+		return nil, err
+	}
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
-			CumulativePayout: total + amount,
+			CumulativePayout: cumulativePayout,
 			Contract:         p.swap.GetParams().ContractAddress,
 			Beneficiary:      p.beneficiary,
 		},
