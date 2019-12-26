@@ -122,13 +122,7 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	}
 	defer s.removePeer(swapPeer)
 
-	if err := swapPeer.Run(s.handleMsg(swapPeer)); err != nil {
-		log.Error("Shutting down swap protocol.", "peer", swapPeer, "reason", err)
-		return err
-	}
-
-	log.Info("Shutting down swap protocol gracefully.")
-	return nil
+	return swapPeer.Run(s.handleMsg(swapPeer))
 }
 
 func (s *Swap) removePeer(p *Peer) {

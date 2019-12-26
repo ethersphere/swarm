@@ -345,7 +345,7 @@ func TestProtocolHook(t *testing.T) {
 	<-testHook.waitC
 
 	time.Sleep(100 * time.Millisecond)
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: testHook.err})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: errors.New("subprotocol error")})
 	if err != nil {
 		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
 	}
@@ -479,7 +479,6 @@ func TestPeer_Run(t *testing.T) {
 		}()
 		select {
 		case err := <-done:
-			fmt.Println("in done")
 			if err != nil {
 				t.Fatal("run returned error", err)
 			}
@@ -487,39 +486,6 @@ func TestPeer_Run(t *testing.T) {
 			t.Fatal("did not close run")
 		}
 
-	})
-
-	t.Run("ERROR - handler error", func(t *testing.T) {
-		rw := &dummyRW{}
-		peer := NewPeer(nil, rw, createTestSpec())
-		rw.msg = &struct {
-			Content string
-		}{
-			"test content",
-		}
-
-		handler := func(ctx context.Context, msg interface{}) error {
-			return BreakError(errors.New("test error"))
-		}
-
-		var eg errgroup.Group
-		eg.Go(func() error {
-			return peer.Run(handler)
-		})
-
-		c := make(chan error)
-		go func() {
-			c <- eg.Wait()
-		}()
-		select {
-		case actualerr := <-c:
-			expectedStr := "Message handler error: (msg code 0): test error"
-			if actualerr.Error() != expectedStr {
-				t.Fatalf("wrong error returned from main, expected: %s, actual: %s", expectedStr, actualerr.Error())
-			}
-		case <-time.After(1 * time.Second):
-			t.Fatal("run did not finis -  timeout")
-		}
 	})
 }
 
@@ -719,13 +685,13 @@ WAIT:
 func TestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("subprotocol error"),
-		fmt.Errorf("Message handler error: (msg code 3): dropped"),
+		fmt.Errorf("subprotocol error"),
 	)
 }
 
 func TestMultiplePeersDropOther(t *testing.T) {
 	runMultiplePeers(t, 1,
-		fmt.Errorf("Message handler error: (msg code 3): dropped"),
+		fmt.Errorf("subprotocol error"),
 		fmt.Errorf("subprotocol error"),
 	)
 }

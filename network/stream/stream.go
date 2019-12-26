@@ -138,17 +138,9 @@ func (r *Registry) Run(bp *network.BzzPeer) error {
 	sp.Peer.SetMsgPauser(handleMsgPauser)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
-
 	go sp.InitProviders()
 
-	// todo: log peer info appropriately
-	if err := sp.Peer.Run(r.HandleMsg(sp)); err != nil {
-		log.Error("Shutting down stream protocol.", "peer:", sp, "reason", err)
-		return err
-	}
-
-	log.Info("Shutting down stream protocol gracefully")
-	return nil
+	return sp.Peer.Run(r.HandleMsg(sp))
 }
 
 // HandleMsg is the main message handler for the stream protocol

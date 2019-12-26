@@ -175,8 +175,7 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
-	wait := p.run(handler)
-	if err := wait(); err != nil && err != io.EOF {
+	if err := p.run(handler); err != nil && err != io.EOF {
 		return err
 	}
 
@@ -184,65 +183,49 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 }
 
 // run receives messages from the peer and dispatches async routines to handle the messages
-func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) func() error {
+func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) error {
 	p.mtx.Lock()
 	p.running = true
 	p.mtx.Unlock()
 
-	errc := make(chan error)
-	go func() {
-		for {
-			msg, err := p.readMsg()
-			if err != nil {
-				select {
-				case errc <- err:
-				default:
-				}
-
-				return
-			}
-
-			p.mtx.RLock()
-			// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
-			if !p.running {
-				_ = msg.Discard()
-				p.mtx.RUnlock()
-				continue
-			}
-			p.mtx.RUnlock()
-
-			// handleMsgPauser should not be nil only in tests.
-			// It does not use mutex lock protection and because of that
-			// it must be set before the Registry is constructed and
-			// reset when it is closed, in tests.
-			// Production performance impact can be considered as
-			// neglectable as nil check is a ns order operation.
-			if p.handleMsgPauser != nil {
-				p.handleMsgPauser.Wait()
-			}
-
-			p.wg.Add(1)
-			go func() {
-				defer p.wg.Done()
-				err := p.handleMsg(msg, handler)
-				if err != nil {
-					var e *breakError
-					if errors.As(err, &e) {
-						select {
-						case errc <- err:
-						default:
-						}
-					} else {
-						// todo: what to do with errors that are not breaking the loop?
-						log.Debug("%s", err)
-					}
-				}
-			}()
+	for {
+		msg, err := p.readMsg()
+		if err != nil {
+			return err
 		}
-	}()
 
-	return func() error {
-		return <-errc
+		p.mtx.RLock()
+		// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
+		if !p.running {
+			_ = msg.Discard()
+			p.mtx.RUnlock()
+			continue
+		}
+		p.mtx.RUnlock()
+
+		// handleMsgPauser should not be nil only in tests.
+		// It does not use mutex lock protection and because of that
+		// it must be set before the Registry is constructed and
+		// reset when it is closed, in tests.
+		// Production performance impact can be considered as
+		// neglectable as nil check is a ns order operation.
+		if p.handleMsgPauser != nil {
+			p.handleMsgPauser.Wait()
+		}
+
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			err := p.handleMsg(msg, handler)
+			if err != nil {
+				var e *breakError
+				if errors.As(err, &e) {
+					p.Drop(err.Error())
+				} else {
+					log.Warn(err.Error())
+				}
+			}
+		}()
 	}
 }
 
