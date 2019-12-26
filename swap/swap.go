@@ -381,7 +381,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		return fmt.Errorf("processing and verifying received cheque failed. err: %w", err)
+		return protocols.BreakError(fmt.Errorf("processing and verifying received cheque failed. err: %w", err))
 	}
 
 	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
@@ -391,33 +391,29 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	err = p.updateBalance(-int64(cheque.Honey))
 	if err != nil {
-		return fmt.Errorf("updating balance failed. err: %w", err)
+		return protocols.BreakError(fmt.Errorf("updating balance failed. err: %w", err))
 	}
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
 	})
 	if err != nil {
-		return err
+		return protocols.BreakError(err)
 	}
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
-		return fmt.Errorf("getting contract failed. err: %w", err)
+		return protocols.BreakError(fmt.Errorf("getting contract failed. err: %w", err))
 	}
 
 	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
 	if err != nil {
-		// todo: DropError - return standard error
-		log.Error("Suggest gas price failed.", "Err", err)
-		return nil
+		return fmt.Errorf("Suggest gas price failed. err: %w", err)
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
 	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
 	if err != nil {
-		// todo: DropError - return standard error
-		log.Error("Fetching total paid amount for given address failed.", "Err", err)
-		return nil
+		return fmt.Errorf("Fetching total paid amount for given address failed. err: %w", err)
 	}
 	// do a payout transaction if we get 2 times the gas costs
 	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
@@ -427,7 +423,6 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		go defaultCashCheque(s, otherSwap, opts, cheque)
 	}
 
-	// todo: DropError - return standard error
 	return nil
 }
 
@@ -437,24 +432,21 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	cheque := msg.Cheque
 
 	if p.getPendingCheque() == nil {
-		// todo: DropError - return standard error
-		p.logger.Warn("ignoring confirm msg, no pending cheque", "confirm message cheque", cheque)
-		return nil
+		return fmt.Errorf("ignoring confirm msg, no pending cheque, confirm message cheque: %s", cheque)
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {
-		p.logger.Warn("ignoring confirm msg, unexpected cheque", "confirm message cheque", cheque, "expected", p.getPendingCheque())
-		return nil
+		return fmt.Errorf("ignoring confirm msg, unexpected cheque, confirm message cheque: %s, expected: %s", cheque, p.getPendingCheque())
 	}
 
 	err := p.setLastSentCheque(cheque)
 	if err != nil {
-		return fmt.Errorf("setLastSentCheque failed. err: %w", err)
+		return protocols.BreakError(fmt.Errorf("setLastSentCheque failed. err: %w", err))
 	}
 
 	err = p.setPendingCheque(nil)
 	if err != nil {
-		return fmt.Errorf("setPendingCheque failed. err: %w", err)
+		return protocols.BreakError(fmt.Errorf("setPendingCheque failed. err: %w", err))
 	}
 
 	return nil
