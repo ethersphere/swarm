@@ -66,10 +66,12 @@ func (u *Uint256) Value() *big.Int {
 	return u.value
 }
 
-// FromUint64 sets the value for an Uint256 based on the given uint64 param
-// any uint64 can be used as uint256
-func (u *Uint256) FromUint64(base uint64) {
+// Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
+// any uint64 is valid as a uint256
+func Uint64ToUint256(base uint64) *Uint256 {
+	var u *Uint256
 	u.value = new(big.Int).SetUint64(base)
+	return u
 }
 
 // Set assigns a new value to the underlying pointer within the unsigned 256-bit integer range
