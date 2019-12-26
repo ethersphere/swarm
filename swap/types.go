@@ -61,7 +61,7 @@ type Uint256 struct {
 var minUint256 = big.NewInt(0)
 var maxUint256, _ = new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1 (base 10)
 
-// NewUint256 returns a new Uint256 struct with a value of the given param
+// NewUint256 returns a new Uint256 struct with a value based on the given uint64 param
 func NewUint256(i uint64) *Uint256 {
 	var u *Uint256
 	u.value = new(big.Int).SetUint64(i) // any uint64 is good enough for a uint256
