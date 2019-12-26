@@ -238,7 +238,11 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 		headers[i] = h
 	}
 
-	return b.deliverAndStoreAll(ctx, req, headers)
+	if err := b.deliverAndStoreAll(ctx, req, headers); err != nil {
+		return protocols.BreakError(err)
+	}
+
+	return nil
 }
 
 // Validates and headers asynchronously and stores the valid chunks in one go
@@ -273,11 +277,11 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 	// Store all the valid header chunks in one shot
 	storeErr := b.storeChunks(ctx, chunks)
 	if storeErr != nil {
-		return protocols.BreakError(storeErr)
+		return storeErr
 	}
 
 	// Pass on the error if any from the validation error group above storage
-	return protocols.BreakError(err)
+	return err
 }
 
 func (b *BzzEth) storeChunks(ctx context.Context, chunks []chunk.Chunk) error {

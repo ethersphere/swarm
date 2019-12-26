@@ -744,7 +744,6 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 		}
 
 		return fmt.Errorf("clientHandleChunkDelivery putting chunk failed. err: %w", err)
-
 	}
 
 	providerPutTimer.UpdateSince(startPut)
@@ -779,7 +778,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 // if an unsolicited chunk is received it drops the peer
 func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan error {
 	p.logger.Debug("clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
-	done := make(chan struct{})
+	errc := make(chan error)
 	go func() {
 		start := time.Now()
 		defer func(start time.Time) {
@@ -805,7 +804,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				v := atomic.AddUint64(&w.remaining, ^uint64(0))
 				if v == 0 {
 					p.logger.Trace("done receiving chunks for open want", "ruid", w.ruid)
-					close(done)
+					close(errc)
 					return
 				}
 			case <-p.quit:
@@ -821,8 +820,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 		}
 	}()
 
-	<-done
-	return nil
+	return errc
 }
 
 // serverCollectBatch collects a batch of hashes in response for a GetRange message

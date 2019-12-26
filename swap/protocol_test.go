@@ -163,7 +163,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 		newSwapHandshakeMsg(protocolTester.swap.GetParams().ContractAddress, 1234),
 		&p2ptest.Disconnect{
 			Peer:  protocolTester.Nodes[0].ID(),
-			Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): %v", ErrDifferentChainID),
+			Error: fmt.Errorf("Message handler error: (msg code 0): %v", ErrDifferentChainID),
 		},
 	)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 		newSwapHandshakeMsg(common.Address{}, 1234),
 		&p2ptest.Disconnect{
 			Peer:  protocolTester.Nodes[0].ID(),
-			Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): %v", ErrEmptyAddressInSignature),
+			Error: fmt.Errorf("Message handler error: (msg code 0): %v", ErrEmptyAddressInSignature),
 		},
 	)
 	if err != nil {
@@ -207,7 +207,7 @@ func TestHandshakeInvalidContract(t *testing.T) {
 		newSwapHandshakeMsg(ownerAddress, protocolTester.swap.chainID),
 		&p2ptest.Disconnect{
 			Peer:  protocolTester.Nodes[0].ID(),
-			Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): %v", contract.ErrNotDeployedByFactory),
+			Error: fmt.Errorf("Message handler error: (msg code 0): %v", contract.ErrNotDeployedByFactory),
 		},
 	)
 	if err != nil {
