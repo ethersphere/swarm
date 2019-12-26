@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"strconv"
 	"sync"
 
@@ -169,10 +168,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	}
 
 	var amount *Uint256
-	err = amount.Set(new(big.Int).SetUint64(price)) // cast uint64 to big.Int and then fit into Uint256
-	if err != nil {
-		return nil, err
-	}
+	amount.FromUint64(price)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
 	err = cumulativePayout.Add(amount)
