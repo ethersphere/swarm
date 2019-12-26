@@ -144,6 +144,7 @@ func (r *Registry) Run(bp *network.BzzPeer) error {
 	// todo: log peer info appropriately
 	if err := sp.Peer.Run(r.HandleMsg(sp)); err != nil {
 		log.Error("Shutting down stream protocol.", "peer:", sp, "reason", err)
+		return err
 	}
 
 	log.Info("Shutting down stream protocol gracefully")
