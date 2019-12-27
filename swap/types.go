@@ -74,37 +74,41 @@ func Uint64ToUint256(base uint64) *Uint256 {
 	return u
 }
 
-// Set assigns a new value to the underlying pointer within the unsigned 256-bit integer range
-func (u *Uint256) Set(value *big.Int) error {
+// Set creates a new Uint256 pointer and assignes the given param to its underlying value before returning it
+// returns an error when the result falls outside of the unsigned 256-bit integer range
+func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
 	if value.Cmp(minUint256) == 1 {
-		return fmt.Errorf("cannot set uint256 to %v as it overflows max value of %v", value, maxUint256)
+		return &Uint256{}, fmt.Errorf("cannot set uint256 to %v as it overflows max value of %v", value, maxUint256)
 	}
 	if value.Cmp(maxUint256) == -1 {
-		return fmt.Errorf("cannot set uint256 to %v as it underflows min value of %v", value, minUint256)
+		return &Uint256{}, fmt.Errorf("cannot set uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
 	u.value = value
-	return nil
+	return u, nil
 }
 
-// Add attempts to add the given unsigned 256-bit integer to another
-func (u *Uint256) Add(addend *Uint256) error {
-	sum := new(big.Int).Add(u.Value(), addend.Value())
+// Add sets u to augend + addend and returns u as the sum
+// returns an error when the result falls outside of the unsigned 256-bit integer range
+func (u *Uint256) Add(augend, addend *Uint256) (*Uint256, error) {
+	sum := new(big.Int).Add(augend.Value(), addend.Value())
 	return u.Set(sum)
 }
 
-// Sub attempts to subtract the given unsigned 256-bit integer from another
-func (u *Uint256) Sub(subtrahend *Uint256) error {
-	difference := new(big.Int).Sub(u.Value(), subtrahend.Value())
+// Sub sets u to minuend - subtrahend and returns u as the difference
+// returns an error when the result falls outside of the unsigned 256-bit integer range
+func (u *Uint256) Sub(minuend, subtrahend *Uint256) (*Uint256, error) {
+	difference := new(big.Int).Sub(minuend.Value(), subtrahend.Value())
 	return u.Set(difference)
 }
 
-// Mul attempts to multiply an unsigned 256-bit integer by another (given) one
-func (u *Uint256) Mul(multiplier *Uint256) error {
-	product := new(big.Int).Mul(u.Value(), multiplier.Value())
+// Mul sets u to multiplicand * multiplier and returns u as the product
+// returns an error when the result falls outside of the unsigned 256-bit integer range
+func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
+	product := new(big.Int).Mul(multiplicand.Value(), multiplier.Value())
 	return u.Set(product)
 }
 
-// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct
-func (u *Uint256) Cmp(v *Uint256) (r int) {
+// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
+func (u *Uint256) Cmp(v *Uint256) int {
 	return u.Value().Cmp(v.Value())
 }
