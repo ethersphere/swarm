@@ -68,8 +68,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 	}
 
 	// Compute the total worth of cheques sent and how much of of this is cashed
-	var sentChequesWorth *big.Int
-	var cashedChequesWorth *big.Int
+	var sentChequesWorth, cashedChequesWorth *big.Int
 	for _, peerCheques := range cheques {
 		var sentCheque *Cheque
 		if peerCheques.PendingCheque != nil {
@@ -87,9 +86,8 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 		cashedChequesWorth.Add(cashedChequesWorth, paidOut)
 	}
 
-	var totalChequesWorth, tentativeLiquidBalance *big.Int
-	totalChequesWorth.Sub(cashedChequesWorth, sentChequesWorth)
-	tentativeLiquidBalance.Add(contractLiquidBalance, totalChequesWorth)
+	totalChequesWorth := new(big.Int).Sub(cashedChequesWorth, sentChequesWorth)
+	tentativeLiquidBalance := new(big.Int).Add(contractLiquidBalance, totalChequesWorth)
 
 	err = liquidBalance.Set(tentativeLiquidBalance)
 	if err != nil {
