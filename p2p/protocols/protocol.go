@@ -286,7 +286,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	code, found := p.spec.GetCode(msg)
 	if !found {
-		return fmt.Errorf("Invalid message type %v ", code)
+		return fmt.Errorf("invalid message type %v ", code)
 	}
 
 	wmsg, size, err := p.encode(ctx, msg)
@@ -339,21 +339,21 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	defer msg.Discard()
 
 	if msg.Size > p.spec.MaxMsgSize {
-		return Break(fmt.Errorf("Message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
+		return Break(fmt.Errorf("message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
-		return Break(fmt.Errorf("Invalid message code: %v", msg.Code))
+		return Break(fmt.Errorf("invalid message code: %v", msg.Code))
 	}
 
 	ctx, msgBytes, err := p.decode(msg)
 	if err != nil {
-		return Break(fmt.Errorf("Invalid message (RLP error): %v err=%w", msg.Code, err))
+		return Break(fmt.Errorf("invalid message (RLP error): %v err=%w", msg.Code, err))
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		return Break(fmt.Errorf("Invalid message (RLP error): <= %v: %w", msg, err))
+		return Break(fmt.Errorf("invalid message (RLP error): <= %v: %w", msg, err))
 	}
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
@@ -368,7 +368,7 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	// it is entirely safe not to check the cast in the handler since the handler is
 	// chosen based on the proper type in the first place
 	if err := handle(ctx, val); err != nil {
-		return fmt.Errorf("Message handler error: (msg code %v): %w", msg.Code, err)
+		return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
 	}
 
 	return nil

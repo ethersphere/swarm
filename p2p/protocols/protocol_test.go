@@ -419,7 +419,7 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		if err := peer.receive(handler); err != nil {
-			if err.Error() != "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
+			if err.Error() != "invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
 				t.Fatal("error returned from handler is not good. got:", err.Error())
 			}
 		}
@@ -442,7 +442,7 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		if err := peer.receive(handler); err != nil {
-			if err.Error() != fmt.Errorf("Message handler error: (msg code %v): %w", 0, errors.New("test error")).Error() {
+			if err.Error() != fmt.Errorf("message handler: (msg code %v): %w", 0, errors.New("test error")).Error() {
 				t.Fatal("error returned from handler is not good. got:", err.Error())
 			}
 		}
@@ -490,11 +490,11 @@ func TestPeer_Run(t *testing.T) {
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
-	runProtoHandshake(t, &protoHandshake{41, "420"}, fmt.Errorf("Message handler error: (msg code 0): 41 (!= 42)"))
+	runProtoHandshake(t, &protoHandshake{41, "420"}, fmt.Errorf("message handler: (msg code 0): 41 (!= 42)"))
 }
 
 func TestProtoHandshakeNetworkIDMismatch(t *testing.T) {
-	runProtoHandshake(t, &protoHandshake{42, "421"}, fmt.Errorf("Message handler error: (msg code 0): 421 (!= 420)"))
+	runProtoHandshake(t, &protoHandshake{42, "421"}, fmt.Errorf("message handler: (msg code 0): 421 (!= 420)"))
 }
 
 func TestProtoHandshakeSuccess(t *testing.T) {
