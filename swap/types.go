@@ -111,3 +111,22 @@ func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
 func (u *Uint256) Cmp(v *Uint256) int {
 	return u.Value().Cmp(v.Value())
 }
+
+//source: https://stackoverflow.com/questions/53991835/how-to-marshal-and-unmarshal-big-int-in-json
+
+func (b Uint256) MarshalJSON() ([]byte, error) {
+	return []byte(b.Value().String()), nil
+}
+
+func (b *Uint256) UnmarshalJSON(p []byte) error {
+	if string(p) == "null" {
+		return nil
+	}
+	var z big.Int
+	_, ok := z.SetString(string(p), 10)
+	if !ok {
+		return fmt.Errorf("not a valid big integer: %s", p)
+	}
+	b.value = &z
+	return nil
+}
