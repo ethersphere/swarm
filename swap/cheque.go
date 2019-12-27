@@ -19,7 +19,6 @@ package swap
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,7 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	binary.BigEndian.PutUint64(cumulativePayoutBytes[24:], cheque.CumulativePayout)
+	copy(cumulativePayoutBytes[:32], cheque.CumulativePayout.Value().Bytes())
 	// construct the actual cheque
 	input := cheque.Contract.Bytes()
 	input = append(input, cheque.Beneficiary.Bytes()...)
