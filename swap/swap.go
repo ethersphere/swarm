@@ -460,7 +460,7 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
-		swapLog.Error("cashing cheque failed.", "err", err)
+		swapLog.Error("cashing cheque:", err)
 		return
 	}
 
@@ -628,7 +628,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract cont
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
-		return nil, fmt.Errorf("reading previously used chequebook failed: %w", err)
+		return nil, fmt.Errorf("reading previously used chequebook: %w", err)
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
