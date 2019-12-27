@@ -368,10 +368,10 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	}
 
 	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
-	if ch1.CumulativePayout != expected {
+	if ch1.CumulativePayout.Cmp((&Uint256{}).FromUint64(expected)) != 0 {
 		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
 	}
-	if ch2.CumulativePayout != expected {
+	if ch2.CumulativePayout.Cmp((&Uint256{}).FromUint64(expected)) != 0 {
 		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch2.CumulativePayout)
 	}
 
@@ -509,7 +509,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	// check also the actual expected amount
 	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
-	if cheque2.CumulativePayout != expectedPayout {
+	if cheque2.CumulativePayout.Cmp((&Uint256{}).FromUint64(expectedPayout)) != 0 {
 		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
 	}
 
@@ -745,7 +745,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if lastPayout != expectedLastPayout {
+				if lastPayout.Cmp((&Uint256{}).FromUint64(expectedLastPayout)) != 0 {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {

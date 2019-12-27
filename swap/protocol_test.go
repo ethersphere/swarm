@@ -245,9 +245,10 @@ func TestEmitCheque(t *testing.T) {
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	balance := uint64(100001)
+	var balance *Uint256
+	balance.FromUint64(uint64(100001))
 
-	if err := testDeploy(context.Background(), debitorSwap, big.NewInt(int64(balance))); err != nil {
+	if err := testDeploy(context.Background(), debitorSwap, balance.Value()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,7 +261,7 @@ func TestEmitCheque(t *testing.T) {
 
 	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
 	// set balance artificially
-	if err = debitor.setBalance(int64(balance)); err != nil {
+	if err = debitor.setBalance(balance.Value().Int64()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,7 +276,7 @@ func TestEmitCheque(t *testing.T) {
 			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: balance,
 		},
-		Honey: balance,
+		Honey: balance.Value().Uint64(),
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {
@@ -380,7 +381,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal("Expected pending cheque")
 	}
 
-	if pending.CumulativePayout != expectedAmount {
+	if pending.CumulativePayout.Cmp((&Uint256{}).FromUint64(expectedAmount)) != 0 {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, pending.CumulativePayout)
 	}
 
