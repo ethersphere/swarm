@@ -98,6 +98,12 @@ func (u *Uint256) Sub(subtrahend *Uint256) error {
 	return u.Set(difference)
 }
 
+// Mul attempts to multiply an unsigned 256-bit integer by another (given) one
+func (u *Uint256) Mul(multiplier *Uint256) error {
+	product := new(big.Int).Mul(u.Value(), multiplier.Value())
+	return u.Set(product)
+}
+
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct
 func (u *Uint256) Cmp(v *Uint256) (r int) {
 	return u.Value().Cmp(v.Value())
