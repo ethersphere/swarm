@@ -419,30 +419,31 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
-	costsMultiplier := Uint64ToUint256(uint64(2)) // 2 as uint256
-	gasCosts := Uint64ToUint256(transactionCosts)
-	err = gasCosts.Mul(costsMultiplier)
+	castedTransactionCosts := (&Uint256{}).FromUint64(transactionCosts)
+	costsMultiplier := (&Uint256{}).FromUint64(uint64(2)) // 2 as uint256
+
+	costThreshold, err := (&Uint256{}).Mul(castedTransactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
 
-	swapPaidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
-	if err != nil {
-		return err
-	}
-	var paidOut *Uint256
-	err = paidOut.Set(swapPaidOut)
+	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
 	if err != nil {
 		return err
 	}
 
-	err = cheque.CumulativePayout.Sub(paidOut)
+	castedPaidOut, err := (&Uint256{}).Set(paidOut)
+	if err != nil {
+		return err
+	}
+
+	transactionProfit, err := (&Uint256{}).Sub(cheque.CumulativePayout, castedPaidOut)
 	if err != nil {
 		return err
 	}
 
 	// do a payout transaction if we get 2 times the gas costs
-	if cheque.CumulativePayout.Cmp(gasCosts) >= 1 {
+	if transactionProfit.Cmp(costThreshold) >= 1 {
 		opts := bind.NewKeyedTransactor(s.owner.privateKey)
 		opts.Context = ctx
 		// cash cheque in async, otherwise this blocks here until the TX is mined
@@ -519,7 +520,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*Uint256, error)
 		return &Uint256{}, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, Uint64ToUint256(expectedAmount))
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, (&Uint256{}).FromUint64(expectedAmount))
 	if err != nil {
 		return &Uint256{}, err
 	}

@@ -166,11 +166,10 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
-
-	amount := Uint64ToUint256(price)
+	castedPrice := (&Uint256{}).FromUint64(price)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
-	err = cumulativePayout.Add(amount)
+	_, err = cumulativePayout.Add(cumulativePayout, castedPrice)
 	if err != nil {
 		return nil, err
 	}

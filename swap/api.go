@@ -54,7 +54,6 @@ func NewAPI(s *Swap) *API {
 
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
 func (s *Swap) AvailableBalance() (*Uint256, error) {
-	var liquidBalance *Uint256
 	// get the LiquidBalance of the chequebook
 	contractLiquidBalance, err := s.contract.LiquidBalance(nil)
 	if err != nil {
@@ -89,11 +88,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 	totalChequesWorth := new(big.Int).Sub(cashedChequesWorth, sentChequesWorth)
 	tentativeLiquidBalance := new(big.Int).Add(contractLiquidBalance, totalChequesWorth)
 
-	err = liquidBalance.Set(tentativeLiquidBalance)
-	if err != nil {
-		return &Uint256{}, err
-	}
-	return liquidBalance, nil
+	return (&Uint256{}).Set(tentativeLiquidBalance)
 }
 
 // PeerBalance returns the balance for a given peer
