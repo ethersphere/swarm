@@ -492,7 +492,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			name: "with pass in and save",
 			configure: func(config *chequebookConfig) {
 				config.passIn = testChequeContract
-				config.expectedError = fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
+				config.expectedError = fmt.Errorf("attempting to connect to provided chequebook, but different chequebook used before")
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
@@ -511,7 +511,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				// try to connect with a different address
 				_, err = swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
-					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
+					t.Fatal(fmt.Errorf("expected error not equal to actual error. Expected: %v Actual: %v", config.expectedError, err))
 				}
 			},
 		},
@@ -519,7 +519,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			name: "with wrong pass in",
 			configure: func(config *chequebookConfig) {
 				config.passIn = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8370000000000") // address without deployed chequebook
-				config.expectedError = fmt.Errorf("contract validation for %v failed: %v", config.passIn.Hex(), swap.ErrNotDeployedByFactory)
+				config.expectedError = fmt.Errorf("contract validation for %v: %w", config.passIn.Hex(), swap.ErrNotDeployedByFactory)
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
@@ -528,7 +528,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				// try to connect with an address not containing a chequebook instance
 				_, err := swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
-					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
+					t.Fatal(fmt.Errorf("expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
 			},
 		},

@@ -167,7 +167,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	// initialize the balances store
 	var stateStore state.Store
 	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
-		return nil, fmt.Errorf("initializing statestore failed. err: %w", err)
+		return nil, fmt.Errorf("initializing statestore: %w", err)
 	}
 	if params.DisconnectThreshold <= params.PaymentThreshold {
 		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
@@ -175,12 +175,12 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	// connect to the backend
 	backend, err := ethclient.Dial(backendURL)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to Ethereum API failed. url %s: err: %w", backendURL, err)
+		return nil, fmt.Errorf("connecting to Ethereum API, url %s: %w", backendURL, err)
 	}
 	// get the chainID of the backend
 	var chainID *big.Int
 	if chainID, err = backend.ChainID(context.TODO()); err != nil {
-		return nil, fmt.Errorf("retrieving chainID from backendURL failed. err: %v", err)
+		return nil, fmt.Errorf("retrieving chainID from backendURL: %v", err)
 	}
 	// verify that we have not used SWAP before on a different chainID
 	if err := checkChainID(chainID.Uint64(), stateStore); err != nil {
@@ -267,7 +267,7 @@ func checkChainID(currentChainID uint64, s state.Store) (err error) {
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
 	if err != nil && err != state.ErrNotFound {
-		return fmt.Errorf("querying usedBeforeAtNetwork from statestore. err: %w", err)
+		return fmt.Errorf("querying usedBeforeAtNetwork from statestore: %w", err)
 	}
 	// initialized before, but on a different chainID
 	if err != state.ErrNotFound && connectedBlockchain != currentChainID {
@@ -381,7 +381,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	_, err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
-		return protocols.BreakError(fmt.Errorf("processing and verifying received cheque failed. err: %w", err))
+		return protocols.Break(fmt.Errorf("processing and verifying received cheque: %w", err))
 	}
 
 	p.logger.Debug("processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
@@ -391,29 +391,29 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	err = p.updateBalance(-int64(cheque.Honey))
 	if err != nil {
-		return protocols.BreakError(fmt.Errorf("updating balance failed. err: %w", err))
+		return protocols.Break(fmt.Errorf("updating balance: %w", err))
 	}
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
 	})
 	if err != nil {
-		return protocols.BreakError(err)
+		return protocols.Break(err)
 	}
 
 	otherSwap, err := contract.InstanceAt(cheque.Contract, s.backend)
 	if err != nil {
-		return protocols.BreakError(fmt.Errorf("getting contract failed. err: %w", err))
+		return protocols.Break(fmt.Errorf("getting contract: %w", err))
 	}
 
 	gasPrice, err := s.backend.SuggestGasPrice(context.TODO())
 	if err != nil {
-		return fmt.Errorf("Suggest gas price failed. err: %w", err)
+		return fmt.Errorf("suggest gas price: %w", err)
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
 	paidOut, err := otherSwap.PaidOut(nil, cheque.Beneficiary)
 	if err != nil {
-		return fmt.Errorf("Fetching total paid amount for given address failed. err: %w", err)
+		return fmt.Errorf("fetching total paid amount for given address: %w", err)
 	}
 	// do a payout transaction if we get 2 times the gas costs
 	if (cheque.CumulativePayout - paidOut.Uint64()) > 2*transactionCosts {
@@ -432,21 +432,21 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	cheque := msg.Cheque
 
 	if p.getPendingCheque() == nil {
-		return fmt.Errorf("ignoring confirm msg, no pending cheque, confirm message cheque: %s", cheque)
+		return fmt.Errorf("ignoring confirm msg, no pending cheque, confirm message cheque %s", cheque)
 	}
 
 	if !cheque.Equal(p.getPendingCheque()) {
-		return fmt.Errorf("ignoring confirm msg, unexpected cheque, confirm message cheque: %s, expected: %s", cheque, p.getPendingCheque())
+		return fmt.Errorf("ignoring confirm msg, unexpected cheque, confirm message cheque %s, expected %s", cheque, p.getPendingCheque())
 	}
 
 	err := p.setLastSentCheque(cheque)
 	if err != nil {
-		return protocols.BreakError(fmt.Errorf("setLastSentCheque failed. err: %w", err))
+		return protocols.Break(fmt.Errorf("setLastSentCheque failed: %w", err))
 	}
 
 	err = p.setPendingCheque(nil)
 	if err != nil {
-		return protocols.BreakError(fmt.Errorf("setPendingCheque failed. err: %w", err))
+		return protocols.Break(fmt.Errorf("setPendingCheque failed: %w", err))
 	}
 
 	return nil
@@ -618,7 +618,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	val, err := strconv.ParseInt(input, 10, 64)
 	if err != nil {
 		// maybe we should provide a fallback here? A bad input results in stopping the boot
-		return &big.Int{}, fmt.Errorf("Conversion failed while reading user input: %w", err)
+		return &big.Int{}, fmt.Errorf("conversion failed while reading user input: %w", err)
 	}
 	return big.NewInt(val), nil
 }
@@ -628,11 +628,11 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract cont
 	previouslyUsedChequebook, err := s.loadChequebook()
 	// error reading from disk
 	if err != nil && err != state.ErrNotFound {
-		return nil, fmt.Errorf("reading previously used chequebook failed. err: %w", err)
+		return nil, fmt.Errorf("reading previously used chequebook failed: %w", err)
 	}
 	// read from state, but provided flag is not the same
 	if err == nil && (chequebookAddrFlag != common.Address{} && chequebookAddrFlag != previouslyUsedChequebook) {
-		return nil, fmt.Errorf("Attempting to connect to provided chequebook, but different chequebook used before")
+		return nil, fmt.Errorf("attempting to connect to provided chequebook, but different chequebook used before")
 	}
 	// nothing written to state disk before, no flag provided: deploying new chequebook
 	if err == state.ErrNotFound && chequebookAddrFlag == (common.Address{}) {
@@ -658,7 +658,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract cont
 func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, error) {
 	// validate whether address is a chequebook
 	if err := s.chequebookFactory.VerifyContract(address); err != nil {
-		return nil, fmt.Errorf("contract validation for %v failed: %v", address.Hex(), err)
+		return nil, fmt.Errorf("contract validation for %v: %w", address.Hex(), err)
 	}
 	swapLog.Info("bound to chequebook", "chequebookAddr", address)
 	// get the instance
@@ -672,7 +672,7 @@ func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 	swapLog.Info("Deploying new swap", "owner", opts.From.Hex())
 	chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy chequebook: %v", err)
+		return nil, fmt.Errorf("failed to deploy chequebook: %w", err)
 	}
 	return chequebook, nil
 }

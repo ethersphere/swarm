@@ -426,12 +426,9 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
 	pssmsg, ok := msg.(*message.Message)
 	if !ok {
-		return fmt.Errorf("invalid message type: %s", msg)
+		return fmt.Errorf("invalid message type %s", msg)
 	}
-	if err := p.handlePssMsg(ctx, pssmsg); err != nil {
-		return fmt.Errorf("handler error: %w", err)
-	}
-	return nil
+	return p.handlePssMsg(ctx, pssmsg)
 }
 
 // Filters incoming messages for processing or forwarding.

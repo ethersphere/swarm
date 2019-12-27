@@ -115,12 +115,12 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 			switch msg := msg.(type) {
 
 			case *protoHandshake:
-				return BreakError(errors.New("duplicate handshake"))
+				return Break(errors.New("duplicate handshake"))
 
 			case *hs0:
 				rhs := msg
 				if rhs.C > lhs.C {
-					return BreakError(fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C))
+					return Break(fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C))
 				}
 				lhs.C += rhs.C
 				return peer.Send(ctx, lhs)
@@ -133,10 +133,10 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 
 			case *drop:
 				// for testing we can trigger self induced disconnect upon receiving drop message
-				return BreakError(errors.New("dropped"))
+				return Break(errors.New("dropped"))
 
 			default:
-				return BreakError(fmt.Errorf("unknown message type: %T", msg))
+				return Break(fmt.Errorf("unknown message type: %T", msg))
 			}
 		}
 

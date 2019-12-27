@@ -117,8 +117,7 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 // If any message is received in this case, the peer needs to be dropped
 func (b *BzzEth) handleMsgFromSwarmNode(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		p.logger.Warn("bzzeth.handleMsgFromSwarmNode")
-		return protocols.BreakError(errRcvdMsgFromSwarmNode)
+		return protocols.Break(errRcvdMsgFromSwarmNode)
 	}
 }
 
@@ -135,7 +134,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	}
 	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
 	if err != nil {
-		return fmt.Errorf("error checking hashesh in store. Reason: %w", err)
+		return fmt.Errorf("checking hashesh in store: %w", err)
 	}
 
 	// collect the hashes of block headers we want
@@ -159,7 +158,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	deliveries := make(chan []byte)
 	req, err := p.getBlockHeaders(ctx, hashes, deliveries)
 	if err != nil {
-		return fmt.Errorf("error sending GetBlockHeader message. Reason: %w", err)
+		return fmt.Errorf("sending GetBlockHeader message: %w", err)
 	}
 	defer req.cancel()
 
@@ -229,7 +228,7 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	// retrieve the request for this id
 	req, ok := p.requests.get(msg.Rid)
 	if !ok {
-		return protocols.BreakError(fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid))
+		return protocols.Break(fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid))
 	}
 
 	// convert rlp.RawValue to bytes
@@ -239,7 +238,7 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 	}
 
 	if err := b.deliverAndStoreAll(ctx, req, headers); err != nil {
-		return protocols.BreakError(err)
+		return protocols.Break(err)
 	}
 
 	return nil
@@ -418,11 +417,11 @@ DELIVERY:
 	if err == nil && deliveredCnt < total {
 		err := p.Send(ctx, &BlockHeaders{Rid: uint32(msg.Rid)})
 		if err != nil {
-			p.logger.Error("could not send empty BlockHeader", "err", err)
+			return fmt.Errorf("could not send empty BlockHeader: %w", err)
 		}
 	}
-	p.logger.Debug("bzzeth.handleGetBlockHeaders: sent all headers", "id", msg.Rid)
 
+	p.logger.Debug("bzzeth.handleGetBlockHeaders: sent all headers", "id", msg.Rid)
 	return nil
 }
 

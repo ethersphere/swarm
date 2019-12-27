@@ -339,26 +339,26 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	defer msg.Discard()
 
 	if msg.Size > p.spec.MaxMsgSize {
-		return BreakError(fmt.Errorf("Message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
+		return Break(fmt.Errorf("Message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
-		return BreakError(fmt.Errorf("Invalid message code: %v", msg.Code))
+		return Break(fmt.Errorf("Invalid message code: %v", msg.Code))
 	}
 
 	ctx, msgBytes, err := p.decode(msg)
 	if err != nil {
-		return BreakError(fmt.Errorf("Invalid message (RLP error): %v err=%w", msg.Code, err))
+		return Break(fmt.Errorf("Invalid message (RLP error): %v err=%w", msg.Code, err))
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		return BreakError(fmt.Errorf("Invalid message (RLP error): <= %v: %w", msg, err))
+		return Break(fmt.Errorf("Invalid message (RLP error): <= %v: %w", msg, err))
 	}
 	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
 		if err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val); err != nil {
-			return BreakError(err)
+			return Break(err)
 		}
 	}
 
@@ -420,7 +420,7 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 			err = ctx.Err()
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w", err)
+			return nil, err
 		}
 	}
 	return rhs, nil
