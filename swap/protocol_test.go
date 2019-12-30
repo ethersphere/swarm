@@ -245,8 +245,7 @@ func TestEmitCheque(t *testing.T) {
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	var balance *Uint256
-	balance.FromUint64(uint64(100001))
+	balance := (&Uint256{}).FromUint64(uint64(100001))
 
 	if err := testDeploy(context.Background(), debitorSwap, balance.Value()); err != nil {
 		t.Fatal(err)
