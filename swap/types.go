@@ -69,7 +69,7 @@ func (u *Uint256) Value() *big.Int {
 // NewUint256 creates a Uint256 struct with an initial underlying value of 0
 // no Uint256 should have a nil pointer as its value field
 func NewUint256() *Uint256 {
-	u := &Uint256{}
+	u := new(Uint256)
 	u.value = big.NewInt(0)
 	return u
 }
@@ -121,21 +121,23 @@ func (u *Uint256) Cmp(v *Uint256) int {
 	return u.Value().Cmp(v.Value())
 }
 
-//source: https://stackoverflow.com/questions/53991835/how-to-marshal-and-unmarshal-big-int-in-json
-
-func (b Uint256) MarshalJSON() ([]byte, error) {
-	return []byte(b.Value().String()), nil
+// MarshalJSON specifies how to marshal a Uint256 struct so that it can be written to disk
+func (u Uint256) MarshalJSON() ([]byte, error) {
+	// take the underliyng big.Int value, cast it to string and return the resulting byte array
+	return []byte(u.Value().String()), nil
 }
 
-func (b *Uint256) UnmarshalJSON(p []byte) error {
-	if string(p) == "null" {
+// UnmarshalJSON specifies how to unmarshal a Uint256 struct so that it can be recovered from disk
+func (u *Uint256) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
 		return nil
 	}
-	var z big.Int
-	_, ok := z.SetString(string(p), 10)
+
+	var value big.Int
+	_, ok := value.SetString(string(b), 10)
 	if !ok {
-		return fmt.Errorf("not a valid big integer: %s", p)
+		return fmt.Errorf("not a valid integer value: %s", b)
 	}
-	b.value = &z
+	u.value = &value
 	return nil
 }
