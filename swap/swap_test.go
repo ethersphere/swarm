@@ -1210,7 +1210,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	castedResult, err := (&Uint256{}).Set(result)
+	castedResult, err := NewUint256().Set(result)
 	if err != nil {
 		t.Fatal(err)
 	}

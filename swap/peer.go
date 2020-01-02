@@ -121,7 +121,7 @@ func (p *Peer) getLastSentCumulativePayout() *Uint256 {
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
-	return &Uint256{}
+	return NewUint256()
 }
 
 // the caller is expected to hold p.lock

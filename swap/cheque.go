@@ -137,14 +137,14 @@ func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount
 
 	if lastCheque != nil {
 		if cheque.CumulativePayout.Cmp(lastCheque.CumulativePayout) < 1 {
-			return &Uint256{}, fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %d, was: %d", lastCheque.CumulativePayout, cheque.CumulativePayout)
+			return NewUint256(), fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %d, was: %d", lastCheque.CumulativePayout, cheque.CumulativePayout)
 		}
 
 		actualAmount.Sub(actualAmount, lastCheque.CumulativePayout)
 	}
 
 	if expectedAmount != actualAmount {
-		return &Uint256{}, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+		return NewUint256(), fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
 	}
 
 	return actualAmount, nil

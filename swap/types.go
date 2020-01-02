@@ -66,10 +66,16 @@ func (u *Uint256) Value() *big.Int {
 	return u.value
 }
 
+func NewUint256() *Uint256 {
+	u := &Uint256{}
+	u.value = big.NewInt(0)
+	return u
+}
+
 // Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
 // any uint64 is valid as a uint256
 func Uint64ToUint256(base uint64) *Uint256 {
-	u := &Uint256{}
+	u := NewUint256()
 	u.value = new(big.Int).SetUint64(base)
 	return u
 }
@@ -77,11 +83,11 @@ func Uint64ToUint256(base uint64) *Uint256 {
 // Set creates a new Uint256 pointer and assignes the given param to its underlying value before returning it
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
-	if value.Cmp(minUint256) == 1 {
-		return &Uint256{}, fmt.Errorf("cannot set uint256 to %v as it overflows max value of %v", value, maxUint256)
+	if value.Cmp(maxUint256) == 1 {
+		return NewUint256(), fmt.Errorf("cannot set uint256 to %v as it overflows max value of %v", value, maxUint256)
 	}
-	if value.Cmp(maxUint256) == -1 {
-		return &Uint256{}, fmt.Errorf("cannot set uint256 to %v as it underflows min value of %v", value, minUint256)
+	if value.Cmp(minUint256) == -1 {
+		return NewUint256(), fmt.Errorf("cannot set uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
 	u.value = value
 	return u, nil

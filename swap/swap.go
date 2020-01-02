@@ -422,7 +422,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	castedTransactionCosts := Uint64ToUint256(transactionCosts)
 	costsMultiplier := Uint64ToUint256(2) // 2 as uint256
 
-	costThreshold, err := (&Uint256{}).Mul(castedTransactionCosts, costsMultiplier)
+	costThreshold, err := NewUint256().Mul(castedTransactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
@@ -432,12 +432,12 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return err
 	}
 
-	castedPaidOut, err := (&Uint256{}).Set(paidOut)
+	castedPaidOut, err := NewUint256().Set(paidOut)
 	if err != nil {
 		return err
 	}
 
-	transactionProfit, err := (&Uint256{}).Sub(cheque.CumulativePayout, castedPaidOut)
+	transactionProfit, err := NewUint256().Sub(cheque.CumulativePayout, castedPaidOut)
 	if err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 // if the cheque is valid it will also be saved as the new last cheque
 func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
-		return &Uint256{}, err
+		return NewUint256(), err
 	}
 
 	lastCheque := p.getLastReceivedCheque()
@@ -517,12 +517,12 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*Uint256, error)
 	// TODO: there should probably be a lock here?
 	expectedAmount, err := s.honeyPriceOracle.GetPrice(cheque.Honey)
 	if err != nil {
-		return &Uint256{}, err
+		return NewUint256(), err
 	}
 
 	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, Uint64ToUint256(expectedAmount))
 	if err != nil {
-		return &Uint256{}, err
+		return NewUint256(), err
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
