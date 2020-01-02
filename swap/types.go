@@ -66,6 +66,8 @@ func (u *Uint256) Value() *big.Int {
 	return u.value
 }
 
+// NewUint256 creates a Uint256 struct with an initial underlying value of 0
+// no Uint256 should have a nil pointer as its value field
 func NewUint256() *Uint256 {
 	u := &Uint256{}
 	u.value = big.NewInt(0)
