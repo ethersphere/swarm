@@ -953,7 +953,7 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: Uint64ToUint256(uint64(42)),
+			CumulativePayout: Uint64ToUint256(42),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
@@ -1408,7 +1408,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
-	increase := Uint64ToUint256(uint64(10))
+	increase := Uint64ToUint256(10)
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
@@ -1429,7 +1429,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
-	increase := Uint64ToUint256(uint64(10))
+	increase := Uint64ToUint256(10)
 
 	// cheque with same or lower amount
 	oldCheque := newTestCheque()
@@ -1442,7 +1442,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	_, err := increase.Add(increase, Uint64ToUint256(uint64(5)))
+	_, err := increase.Add(increase, Uint64ToUint256(5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1530,7 +1530,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// invalid cheque because amount is lower
 	otherCheque := newTestCheque()
-	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, Uint64ToUint256(uint64(10)))
+	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, Uint64ToUint256(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1641,7 +1641,7 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	if peer.getLastSentCumulativePayout().Cmp(Uint64ToUint256(uint64(0))) != 0 {
+	if peer.getLastSentCumulativePayout().Cmp(Uint64ToUint256(0)) != 0 {
 		t.Fatalf("last cumulative payout should be 0 in the beginning, was %d", peer.getLastSentCumulativePayout())
 	}
 

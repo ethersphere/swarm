@@ -420,7 +420,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
 	castedTransactionCosts := Uint64ToUint256(transactionCosts)
-	costsMultiplier := Uint64ToUint256(uint64(2)) // 2 as uint256
+	costsMultiplier := Uint64ToUint256(2) // 2 as uint256
 
 	costThreshold, err := (&Uint256{}).Mul(castedTransactionCosts, costsMultiplier)
 	if err != nil {
