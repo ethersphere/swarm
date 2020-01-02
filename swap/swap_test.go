@@ -643,7 +643,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if cheque.CumulativePayout.Cmp((&Uint256{}).FromUint64(DefaultPaymentThreshold)) != 0 {
+	if cheque.CumulativePayout.Cmp(Uint64ToUint256(DefaultPaymentThreshold)) != 0 {
 		t.Fatal()
 	}
 }
@@ -953,7 +953,7 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: (&Uint256{}).FromUint64(uint64(42)),
+			CumulativePayout: Uint64ToUint256(uint64(42)),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
@@ -969,7 +969,7 @@ func newRandomTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: (&Uint256{}).FromUint64(uint64(amount)),
+			CumulativePayout: Uint64ToUint256(uint64(amount)),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(amount),
@@ -1222,7 +1222,7 @@ func TestContractIntegration(t *testing.T) {
 	// create a cheque that will bounce
 	bouncingCheque := newTestCheque()
 	bouncingCheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
-	_, err = bouncingCheque.CumulativePayout.Add(bouncingCheque.CumulativePayout, (&Uint256{}).FromUint64(10000*RetrieveRequestPrice))
+	_, err = bouncingCheque.CumulativePayout.Add(bouncingCheque.CumulativePayout, Uint64ToUint256(10000*RetrieveRequestPrice))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1408,7 +1408,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
-	increase := (&Uint256{}).FromUint64(uint64(10))
+	increase := Uint64ToUint256(uint64(10))
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
@@ -1429,7 +1429,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
-	increase := (&Uint256{}).FromUint64(uint64(10))
+	increase := Uint64ToUint256(uint64(10))
 
 	// cheque with same or lower amount
 	oldCheque := newTestCheque()
@@ -1442,7 +1442,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	_, err := increase.Add(increase, (&Uint256{}).FromUint64(uint64(5)))
+	_, err := increase.Add(increase, Uint64ToUint256(uint64(5)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1482,7 +1482,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 
 	// create another cheque with higher amount
 	otherCheque := newTestCheque()
-	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, (&Uint256{}).FromUint64(10))
+	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, Uint64ToUint256(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1530,7 +1530,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// invalid cheque because amount is lower
 	otherCheque := newTestCheque()
-	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, (&Uint256{}).FromUint64(uint64(10)))
+	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, Uint64ToUint256(uint64(10)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1641,7 +1641,7 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	if peer.getLastSentCumulativePayout().Cmp((&Uint256{}).FromUint64(uint64(0))) != 0 {
+	if peer.getLastSentCumulativePayout().Cmp(Uint64ToUint256(uint64(0))) != 0 {
 		t.Fatalf("last cumulative payout should be 0 in the beginning, was %d", peer.getLastSentCumulativePayout())
 	}
 
@@ -1681,7 +1681,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance.Cmp((&Uint256{}).FromUint64(depositAmount.Uint64())) != 0 {
+	if availableBalance.Cmp(Uint64ToUint256(depositAmount.Uint64())) != 0 {
 		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount)
 	}
 	// withdraw 50
@@ -1702,7 +1702,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance.Cmp((&Uint256{}).FromUint64(netDeposit)) != 0 {
+	if availableBalance.Cmp(Uint64ToUint256(netDeposit)) != 0 {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
@@ -1720,7 +1720,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// verify available balance
 	expectedBalance := netDeposit - uint64(chequeAmount)
-	if availableBalance.Cmp((&Uint256{}).FromUint64(expectedBalance)) != 0 {
+	if availableBalance.Cmp(Uint64ToUint256(expectedBalance)) != 0 {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
