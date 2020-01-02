@@ -369,10 +369,10 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
 	if ch1.CumulativePayout.Cmp(Uint64ToUint256(expected)) != 0 {
-		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
+		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch1.CumulativePayout)
 	}
 	if ch2.CumulativePayout.Cmp(Uint64ToUint256(expected)) != 0 {
-		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch2.CumulativePayout)
+		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch2.CumulativePayout)
 	}
 
 	log.Info("Simulation ended")
@@ -503,14 +503,14 @@ func TestMultiChequeSimulation(t *testing.T) {
 
 	// both cheques (at issuer and beneficiary) should have same cumulative value
 	if cheque1.CumulativePayout != cheque2.CumulativePayout {
-		t.Fatalf("Expected symmetric cheques payout, but they are not: %d vs %d", cheque1.CumulativePayout, cheque2.CumulativePayout)
+		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
 
 	// check also the actual expected amount
 	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
 	if cheque2.CumulativePayout.Cmp(Uint64ToUint256(expectedPayout)) != 0 {
-		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
+		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
 	log.Info("Simulation ended")

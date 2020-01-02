@@ -121,6 +121,10 @@ func (u *Uint256) Cmp(v *Uint256) int {
 	return u.Value().Cmp(v.Value())
 }
 
+func (u *Uint256) String() string {
+	return u.Value().String()
+}
+
 // MarshalJSON specifies how to marshal a Uint256 struct so that it can be written to disk
 func (u Uint256) MarshalJSON() ([]byte, error) {
 	// take the underliyng big.Int value, cast it to string and return the resulting byte array
