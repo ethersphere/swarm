@@ -69,7 +69,7 @@ func (u *Uint256) Value() *big.Int {
 // Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
 // any uint64 is valid as a uint256
 func Uint64ToUint256(base uint64) *Uint256 {
-	var u *Uint256
+	u := &Uint256{}
 	u.value = new(big.Int).SetUint64(base)
 	return u
 }
