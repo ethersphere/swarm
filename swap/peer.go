@@ -169,14 +169,14 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	castedPrice := Uint64ToUint256(price)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
-	_, err = cumulativePayout.Add(cumulativePayout, castedPrice)
+	newCumulativePayout, err := NewUint256().Add(cumulativePayout, castedPrice)
 	if err != nil {
 		return nil, err
 	}
 
 	cheque = &Cheque{
 		ChequeParams: ChequeParams{
-			CumulativePayout: cumulativePayout,
+			CumulativePayout: newCumulativePayout,
 			Contract:         p.swap.GetParams().ContractAddress,
 			Beneficiary:      p.beneficiary,
 		},
