@@ -643,7 +643,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if cheque.CumulativePayout.Cmp(Uint64ToUint256(DefaultPaymentThreshold)) != 0 {
+	if !cheque.CumulativePayout.Equals(Uint64ToUint256(DefaultPaymentThreshold)) {
 		t.Fatal()
 	}
 }
@@ -1214,7 +1214,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if castedResult.Cmp(cheque.CumulativePayout) != 0 {
+	if !castedResult.Equals(cheque.CumulativePayout) {
 		t.Fatalf("Wrong cumulative payout %d", result)
 	}
 	log.Debug("cheques result", "result", result)
@@ -1422,7 +1422,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
 	}
 
-	if actualAmount.Cmp(increase) != 0 {
+	if !actualAmount.Equals(increase) {
 		t.Fatalf("wrong actual amount, expected: %v, was: %v", increase, actualAmount)
 	}
 }
@@ -1641,7 +1641,7 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	if peer.getLastSentCumulativePayout().Cmp(Uint64ToUint256(0)) != 0 {
+	if !peer.getLastSentCumulativePayout().Equals(Uint64ToUint256(0)) {
 		t.Fatalf("last cumulative payout should be 0 in the beginning, was %v", peer.getLastSentCumulativePayout())
 	}
 
@@ -1681,7 +1681,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance.Cmp(Uint64ToUint256(depositAmount.Uint64())) != 0 {
+	if !availableBalance.Equals(Uint64ToUint256(depositAmount.Uint64())) {
 		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %v, depositAmount: %d", availableBalance, depositAmount)
 	}
 	// withdraw 50
@@ -1702,7 +1702,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance.Cmp(Uint64ToUint256(netDeposit)) != 0 {
+	if !availableBalance.Equals(Uint64ToUint256(netDeposit)) {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
@@ -1720,7 +1720,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// verify available balance
 	expectedBalance := netDeposit - uint64(chequeAmount)
-	if availableBalance.Cmp(Uint64ToUint256(expectedBalance)) != 0 {
+	if !availableBalance.Equals(Uint64ToUint256(expectedBalance)) {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 

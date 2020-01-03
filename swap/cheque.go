@@ -96,7 +96,7 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 		return false
 	}
 
-	if cheque.CumulativePayout != other.CumulativePayout {
+	if !cheque.CumulativePayout.Equals(other.CumulativePayout) {
 		return false
 	}
 
@@ -143,7 +143,7 @@ func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount
 		actualAmount.Sub(actualAmount, lastCheque.CumulativePayout)
 	}
 
-	if expectedAmount.Cmp(actualAmount) != 0 {
+	if !expectedAmount.Equals(actualAmount) {
 		return NewUint256(), fmt.Errorf("unexpected amount for honey, expected %v was %v", expectedAmount, actualAmount)
 	}
 

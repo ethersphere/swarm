@@ -116,6 +116,12 @@ func (u *Uint256) Cmp(v *Uint256) int {
 	return u.Value.Cmp(v.Value)
 }
 
+// Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
+func (u *Uint256) Equals(v *Uint256) bool {
+	return u.Cmp(v) == 0
+}
+
+// String returns the string representation for Uint256 structs
 func (u *Uint256) String() string {
 	return u.Value.String()
 }

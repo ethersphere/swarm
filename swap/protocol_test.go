@@ -380,7 +380,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal("Expected pending cheque")
 	}
 
-	if pending.CumulativePayout.Cmp(Uint64ToUint256(expectedAmount)) != 0 {
+	if !pending.CumulativePayout.Equals(Uint64ToUint256(expectedAmount)) {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %v", expectedAmount, pending.CumulativePayout)
 	}
 
