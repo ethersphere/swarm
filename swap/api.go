@@ -67,7 +67,8 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 	}
 
 	// Compute the total worth of cheques sent and how much of of this is cashed
-	var sentChequesWorth, cashedChequesWorth *big.Int
+	sentChequesWorth := new(big.Int)
+	cashedChequesWorth := new(big.Int)
 	for _, peerCheques := range cheques {
 		var sentCheque *Cheque
 		if peerCheques.PendingCheque != nil {
