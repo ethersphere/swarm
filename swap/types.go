@@ -77,6 +77,13 @@ func Uint64ToUint256(base uint64) *Uint256 {
 	return u
 }
 
+// Copy creates a Uint256 struct with the same underlying value as the given param
+func (u *Uint256) Copy(v *Uint256) *Uint256 {
+	valueCopy := new(big.Int).Set(v.Value)
+	u.Value = valueCopy
+	return u
+}
+
 // Set creates a new Uint256 pointer and assignes the given param to its underlying value before returning it
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Set(value *big.Int) (*Uint256, error) {

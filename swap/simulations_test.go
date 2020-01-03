@@ -502,7 +502,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// both cheques (at issuer and beneficiary) should have same cumulative value
-	if cheque1.CumulativePayout != cheque2.CumulativePayout {
+	if !cheque1.CumulativePayout.Equals(cheque2.CumulativePayout) {
 		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
 
