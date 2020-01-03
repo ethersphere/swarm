@@ -1471,12 +1471,12 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if actualAmount != cheque.CumulativePayout {
+	if !actualAmount.Equals(cheque.CumulativePayout) {
 		t.Fatalf("computed wrong actual amount: was %v, expected: %v", actualAmount, cheque.CumulativePayout)
 	}
 
 	// verify that it was indeed saved
-	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
+	if !peer.getLastReceivedCheque().CumulativePayout.Equals(cheque.CumulativePayout) {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
@@ -1494,7 +1494,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if peer.getLastReceivedCheque().CumulativePayout != otherCheque.CumulativePayout {
+	if !peer.getLastReceivedCheque().CumulativePayout.Equals(otherCheque.CumulativePayout) {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, otherCheque.CumulativePayout)
 	}
 }
