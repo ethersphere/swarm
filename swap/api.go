@@ -77,7 +77,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 		} else {
 			continue
 		}
-		sentChequesWorth.Add(sentChequesWorth, sentCheque.ChequeParams.CumulativePayout.Value())
+		sentChequesWorth.Add(sentChequesWorth, sentCheque.ChequeParams.CumulativePayout.Value)
 		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
 		if err != nil {
 			return NewUint256(), err

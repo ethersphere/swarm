@@ -30,8 +30,8 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	if cheque.CumulativePayout.Value() != nil {
-		chequePayoutBytes := cheque.CumulativePayout.Value().Bytes()
+	if cheque.CumulativePayout.Value != nil {
+		chequePayoutBytes := cheque.CumulativePayout.Value.Bytes()
 		copy(cumulativePayoutBytes[32-len(chequePayoutBytes):], chequePayoutBytes)
 	}
 	// construct the actual cheque
@@ -143,7 +143,7 @@ func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount
 		actualAmount.Sub(actualAmount, lastCheque.CumulativePayout)
 	}
 
-	if expectedAmount != actualAmount {
+	if expectedAmount.Cmp(actualAmount) != 0 {
 		return NewUint256(), fmt.Errorf("unexpected amount for honey, expected %v was %v", expectedAmount, actualAmount)
 	}
 
