@@ -2,8 +2,11 @@ package swap
 
 import (
 	"crypto/rand"
+	"io/ioutil"
 	"math/big"
 	"testing"
+
+	"github.com/ethersphere/swarm/state"
 )
 
 type Uint256TestCase struct {
@@ -83,27 +86,62 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 }
 
 func TestCopyUint256(t *testing.T) {
-	t.Helper()
-
-	r, err := rand.Int(rand.Reader, new(big.Int).Sub(maxUint256, minUint256)) // base for random
+	r, err := randomUint256()
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	c := NewUint256().Copy(r)
+
+	if !c.Equals(r) {
+		t.Fatalf("copy of uint256 %v has an unequal value of %v", r, c)
+	}
+
+	if c == r {
+		t.Fatalf("copy of uint256 %v shares memory with its base", r)
+	}
+}
+
+func randomUint256() (*Uint256, error) {
+	r, err := rand.Int(rand.Reader, new(big.Int).Sub(maxUint256, minUint256)) // base for random
+	if err != nil {
+		return nil, err
 	}
 
 	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
 
 	u, err := NewUint256().Set(randomUint256)
+	return u, err
+}
+
+func TestUint256Store(t *testing.T) {
+	testDir, err := ioutil.TempDir("", "uint256_test_store")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c := NewUint256().Copy(u)
-
-	if c.Cmp(u) != 0 {
-		t.Fatalf("copy of uint256 %v has an unequal value of %v", u, c)
+	stateStore, err := state.NewDBStore(testDir)
+	defer stateStore.Close()
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if c == u {
-		t.Fatalf("copy of uint256 %v shares memory with its base", u)
+	r, err := randomUint256()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	k := r.String()
+
+	stateStore.Put(k, r)
+
+	var u *Uint256
+	err = stateStore.Get(k, &u)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !u.Equals(r) {
+		t.Fatalf("retrieved uint256 %v has an unequal balance to the original uint256 %v", u, r)
 	}
 }
