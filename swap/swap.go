@@ -509,7 +509,7 @@ func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, c
 // if the cheque is valid it will also be saved as the new last cheque
 func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
-		return NewUint256(), err
+		return nil, err
 	}
 
 	lastCheque := p.getLastReceivedCheque()
@@ -517,12 +517,12 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*Uint256, error)
 	// TODO: there should probably be a lock here?
 	expectedAmount, err := s.honeyPriceOracle.GetPrice(cheque.Honey)
 	if err != nil {
-		return NewUint256(), err
+		return nil, err
 	}
 
 	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, Uint64ToUint256(expectedAmount))
 	if err != nil {
-		return NewUint256(), err
+		return nil, err
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
