@@ -62,6 +62,11 @@ func TestSetUint256(t *testing.T) {
 			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
 			expectsError: true,
 		},
+		{
+			name:         "base 2^512",
+			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(1)),
+			expectsError: true,
+		},
 	}
 
 	testSetUint256(t, testCases)
@@ -72,12 +77,17 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewUint256().Set(tc.baseInteger)
+			result, err := NewUint256().Set(tc.baseInteger)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
-			if !tc.expectsError && err != nil {
-				t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+			if !tc.expectsError {
+				if err != nil {
+					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+				}
+				if result.Value.Cmp(tc.baseInteger) != 0 {
+					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.Value)
+				}
 			}
 		})
 	}
@@ -109,6 +119,5 @@ func randomUint256() (*Uint256, error) {
 
 	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
 
-	u, err := NewUint256().Set(randomUint256)
-	return u, err
+	return NewUint256().Set(randomUint256)
 }
