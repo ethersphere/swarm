@@ -18,19 +18,46 @@ func TestNewUint256(t *testing.T) {
 			baseInteger:  big.NewInt(0),
 			expectsError: false,
 		},
+		// negative numbers
 		{
 			name:         "base -1",
 			baseInteger:  big.NewInt(-1),
 			expectsError: true,
 		},
 		{
-			name:         "base -256",
-			baseInteger:  big.NewInt(-256),
+			name:         "base -1 * 2^8",
+			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil), big.NewInt(-1)),
 			expectsError: true,
 		},
 		{
-			name:         "base -2,147,483,648",
-			baseInteger:  big.NewInt(-2147483648),
+			name:         "base -1 * 2^64",
+			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil), big.NewInt(-1)),
+			expectsError: true,
+		},
+		// positive numbers
+		{
+			name:         "base 1",
+			baseInteger:  big.NewInt(1),
+			expectsError: false,
+		},
+		{
+			name:         "base 2^8",
+			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
+			expectsError: false,
+		},
+		{
+			name:         "base 2^128",
+			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
+			expectsError: false,
+		},
+		{
+			name:         "base 2^256 - 1",
+			baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
+			expectsError: false,
+		},
+		{
+			name:         "base 2^256",
+			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
 			expectsError: true,
 		},
 	}
