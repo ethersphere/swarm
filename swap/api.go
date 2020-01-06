@@ -57,13 +57,13 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 	// get the LiquidBalance of the chequebook
 	contractLiquidBalance, err := s.contract.LiquidBalance(nil)
 	if err != nil {
-		return NewUint256(), err
+		return nil, err
 	}
 
 	// get all cheques
 	cheques, err := s.Cheques()
 	if err != nil {
-		return NewUint256(), err
+		return nil, err
 	}
 
 	// Compute the total worth of cheques sent and how much of of this is cashed
@@ -81,7 +81,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 		sentChequesWorth.Add(sentChequesWorth, sentCheque.ChequeParams.CumulativePayout.Value)
 		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
 		if err != nil {
-			return NewUint256(), err
+			return nil, err
 		}
 		cashedChequesWorth.Add(cashedChequesWorth, paidOut)
 	}
