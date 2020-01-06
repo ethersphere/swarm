@@ -65,7 +65,7 @@ var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256
 // no Uint256 should have a nil pointer as its value field
 func NewUint256() *Uint256 {
 	u := new(Uint256)
-	u.Value = big.NewInt(0)
+	u.Value = minUint256
 	return u
 }
 
@@ -81,10 +81,10 @@ func Uint64ToUint256(base uint64) *Uint256 {
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
 	if value.Cmp(maxUint256) == 1 {
-		return NewUint256(), fmt.Errorf("cannot set Uint256 to %v as it overflows max value of %v", value, maxUint256)
+		return nil, fmt.Errorf("cannot set Uint256 to %v as it overflows max value of %v", value, maxUint256)
 	}
 	if value.Cmp(minUint256) == -1 {
-		return NewUint256(), fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
+		return nil, fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
 	u.Value = value
 	return u, nil
