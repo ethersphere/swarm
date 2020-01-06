@@ -578,10 +578,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 	}
 
-	if errc == nil {
-		return nil
-	}
-
 	select {
 	case err := <-errc:
 		if err != nil {

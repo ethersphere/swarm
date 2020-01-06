@@ -297,7 +297,6 @@ func (p *Peer) readMsg() (p2p.Msg, error) {
 }
 
 // Drop disconnects a peer
-// TODO: may need to implement protocol drop only? don't want to kick off the peer
 func (p *Peer) Drop(reason string) {
 	log.Info("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
@@ -319,7 +318,7 @@ func (p *Peer) Stop(timeout time.Duration) error {
 	select {
 	case <-done:
 	case <-time.After(timeout):
-		log.Debug("peer shutdown with still active handlers: {}", p)
+		log.Debug("shutting down peer with active handlers", p)
 		return errors.New("shutdown timeout reached")
 	}
 

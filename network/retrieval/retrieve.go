@@ -355,7 +355,6 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	err := p.checkRequest(msg.Ruid, msg.Addr)
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
-		p.logger.Error("unsolicited chunk delivery from peer", "ruid", msg.Ruid, "addr", msg.Addr, "err", err)
 		return fmt.Errorf("unsolicited chunk delivery from peer: %s", err)
 	}
 	var osp opentracing.Span
