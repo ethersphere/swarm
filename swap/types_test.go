@@ -1,8 +1,9 @@
 package swap
 
-import "testing"
-
-import "math/big"
+import (
+	"math/big"
+	"testing"
+)
 
 type Uint256TestCase struct {
 	name         string
@@ -16,6 +17,21 @@ func TestNewUint256(t *testing.T) {
 			name:         "base 0",
 			baseInteger:  big.NewInt(0),
 			expectsError: false,
+		},
+		{
+			name:         "base -1",
+			baseInteger:  big.NewInt(-1),
+			expectsError: true,
+		},
+		{
+			name:         "base -256",
+			baseInteger:  big.NewInt(-256),
+			expectsError: true,
+		},
+		{
+			name:         "base -2,147,483,648",
+			baseInteger:  big.NewInt(-2147483648),
+			expectsError: true,
 		},
 	}
 
