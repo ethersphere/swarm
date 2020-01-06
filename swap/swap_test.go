@@ -1170,7 +1170,7 @@ func TestContractIntegration(t *testing.T) {
 	cheque := newTestCheque()
 
 	ctx := context.TODO()
-	err := testDeploy(ctx, issuerSwap, cheque.CumulativePayout.Value)
+	err := testDeploy(ctx, issuerSwap, &cheque.CumulativePayout.Value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1193,7 +1193,7 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("cash-in the cheque")
 
-	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, cheque.CumulativePayout.Value, cheque.Signature)
+	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, &cheque.CumulativePayout.Value, cheque.Signature)
 
 	if err != nil {
 		t.Fatal(err)
@@ -1232,7 +1232,7 @@ func TestContractIntegration(t *testing.T) {
 	}
 
 	log.Debug("try to cash-in the bouncing cheque")
-	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, bouncingCheque.CumulativePayout.Value, bouncingCheque.Signature)
+	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, &bouncingCheque.CumulativePayout.Value, bouncingCheque.Signature)
 	if err != nil {
 		t.Fatal(err)
 	}

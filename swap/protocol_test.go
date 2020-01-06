@@ -247,7 +247,7 @@ func TestEmitCheque(t *testing.T) {
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
 	balance := Uint64ToUint256(100001)
 
-	if err := testDeploy(context.Background(), debitorSwap, balance.Value); err != nil {
+	if err := testDeploy(context.Background(), debitorSwap, &balance.Value); err != nil {
 		t.Fatal(err)
 	}
 
