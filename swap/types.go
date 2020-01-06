@@ -132,23 +132,3 @@ func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
 func (u *Uint256) String() string {
 	return u.Value.String()
 }
-
-// MarshalJSON specifies how to marshal a Uint256 struct so that it can be written to disk
-func (u Uint256) MarshalJSON() ([]byte, error) {
-	return []byte(u.Value.String()), nil
-}
-
-// UnmarshalJSON specifies how to unmarshal a Uint256 struct so that it can be reconstructed from disk
-func (u *Uint256) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var value big.Int
-	_, ok := value.SetString(string(b), 10)
-	if !ok {
-		return fmt.Errorf("not a valid integer value: %s", b)
-	}
-	u.Value = &value
-	return nil
-}

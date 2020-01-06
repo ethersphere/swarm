@@ -2,11 +2,8 @@ package swap
 
 import (
 	"crypto/rand"
-	"io/ioutil"
 	"math/big"
 	"testing"
-
-	"github.com/ethersphere/swarm/state"
 )
 
 type Uint256TestCase struct {
@@ -15,6 +12,7 @@ type Uint256TestCase struct {
 	expectsError bool
 }
 
+// TestSetUint256 tests the creation of valid and invalid Uint256 structs by calling the Set function
 func TestSetUint256(t *testing.T) {
 	testCases := []Uint256TestCase{
 		{
@@ -85,6 +83,7 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 	}
 }
 
+// TestCopyUint256 tests the duplication of an existing Uint256 variable
 func TestCopyUint256(t *testing.T) {
 	r, err := randomUint256()
 	if err != nil {
@@ -112,36 +111,4 @@ func randomUint256() (*Uint256, error) {
 
 	u, err := NewUint256().Set(randomUint256)
 	return u, err
-}
-
-func TestUint256Store(t *testing.T) {
-	testDir, err := ioutil.TempDir("", "uint256_test_store")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stateStore, err := state.NewDBStore(testDir)
-	defer stateStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r, err := randomUint256()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	k := r.String()
-
-	stateStore.Put(k, r)
-
-	var u *Uint256
-	err = stateStore.Get(k, &u)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !u.Equals(r) {
-		t.Fatalf("retrieved uint256 %v has an unequal balance to the original uint256 %v", u, r)
-	}
 }
