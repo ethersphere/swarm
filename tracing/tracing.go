@@ -41,10 +41,12 @@ type Options struct {
 
 func Setup(o Options) {
 	if !o.Enabled {
-		log.Info("Enabling opentracing")
-		Enabled = true
-		Closer = initTracer(o.Endpoint, o.Name)
+		return
 	}
+
+	log.Info("Enabling opentracing")
+	Enabled = true
+	Closer = initTracer(o.Endpoint, o.Name)
 }
 
 func initTracer(endpoint, svc string) (closer io.Closer) {
