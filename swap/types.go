@@ -70,31 +70,41 @@ func NewUint256() *Uint256 {
 }
 
 // Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
-// any uint64 is valid as a uint256
+// any uint64 is valid as a Uint256
 func Uint64ToUint256(base uint64) *Uint256 {
 	u := NewUint256()
 	u.Value = new(big.Int).SetUint64(base)
 	return u
 }
 
-// Copy creates a Uint256 struct with the same underlying value as the given param
+// Set assigns the underlying value of the given Uint256 param to u, and returns the modified receiver struct
+// returns an error when the result falls outside of the unsigned 256-bit integer range
+func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
+	if value.Cmp(maxUint256) == 1 {
+		return NewUint256(), fmt.Errorf("cannot set Uint256 to %v as it overflows max value of %v", value, maxUint256)
+	}
+	if value.Cmp(minUint256) == -1 {
+		return NewUint256(), fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
+	}
+	u.Value = value
+	return u, nil
+}
+
+// Copy sets the underlying value of u to a copy of the given Uint256 param, and returns the modified receiver struct
 func (u *Uint256) Copy(v *Uint256) *Uint256 {
 	valueCopy := new(big.Int).Set(v.Value)
 	u.Value = valueCopy
 	return u
 }
 
-// Set creates a new Uint256 pointer and assignes the given param to its underlying value before returning it
-// returns an error when the result falls outside of the unsigned 256-bit integer range
-func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
-	if value.Cmp(maxUint256) == 1 {
-		return NewUint256(), fmt.Errorf("cannot set uint256 to %v as it overflows max value of %v", value, maxUint256)
-	}
-	if value.Cmp(minUint256) == -1 {
-		return NewUint256(), fmt.Errorf("cannot set uint256 to %v as it underflows min value of %v", value, minUint256)
-	}
-	u.Value = value
-	return u, nil
+// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
+func (u *Uint256) Cmp(v *Uint256) int {
+	return u.Value.Cmp(v.Value)
+}
+
+// Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
+func (u *Uint256) Equals(v *Uint256) bool {
+	return u.Cmp(v) == 0
 }
 
 // Add sets u to augend + addend and returns u as the sum
@@ -118,16 +128,6 @@ func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
 	return u.Set(product)
 }
 
-// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
-func (u *Uint256) Cmp(v *Uint256) int {
-	return u.Value.Cmp(v.Value)
-}
-
-// Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
-func (u *Uint256) Equals(v *Uint256) bool {
-	return u.Cmp(v) == 0
-}
-
 // String returns the string representation for Uint256 structs
 func (u *Uint256) String() string {
 	return u.Value.String()
@@ -139,7 +139,7 @@ func (u Uint256) MarshalJSON() ([]byte, error) {
 	return []byte(u.Value.String()), nil
 }
 
-// UnmarshalJSON specifies how to unmarshal a Uint256 struct so that it can be recovered from disk
+// UnmarshalJSON specifies how to unmarshal a Uint256 struct so that it can be reconstructed from disk
 func (u *Uint256) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
