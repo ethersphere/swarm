@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -57,37 +56,35 @@ type Config struct {
 	SwapEnabled             bool           // whether SWAP incentives are enabled
 	SwapPaymentThreshold    uint64         // honey amount at which a payment is triggered
 	SwapDisconnectThreshold uint64         // honey amount at which a peer disconnects
-	SwapInitialDeposit      uint64         // initial deposit amount to the chequebook
+	SwapSkipDeposit         bool           // do not ask the user to deposit during boot sequence
+	SwapDepositAmount       uint64         // deposit amount to the chequebook
 	SwapLogPath             string         // dir to swap related audit logs
 	Contract                common.Address // address of the chequebook contract
 	SwapChequebookFactory   common.Address // address of the chequebook factory contract
 	// end of Swap configs
 
 	*network.HiveParams
-	Pss                  *pss.Params
-	EnsRoot              common.Address
-	EnsAPIs              []string
-	Path                 string
-	ListenAddr           string
-	Port                 string
-	PublicKey            string
-	BzzKey               string
-	Enode                *enode.Node `toml:"-"`
-	NetworkID            uint64
-	SyncEnabled          bool
-	PushSyncEnabled      bool
-	SyncingSkipCheck     bool
-	DeliverySkipCheck    bool
-	MaxStreamPeerServers int
-	LightNodeEnabled     bool
-	BootnodeMode         bool
-	DisableAutoConnect   bool
-	EnablePinning        bool
-	SyncUpdateDelay      time.Duration
-	Cors                 string
-	BzzAccount           string
-	GlobalStoreAPI       string
-	privateKey           *ecdsa.PrivateKey
+	Pss                *pss.Params
+	EnsRoot            common.Address
+	EnsAPIs            []string
+	RnsAPI             string
+	Path               string
+	ListenAddr         string
+	Port               string
+	PublicKey          string
+	BzzKey             string
+	Enode              *enode.Node `toml:"-"`
+	NetworkID          uint64
+	SyncEnabled        bool
+	PushSyncEnabled    bool
+	LightNodeEnabled   bool
+	BootnodeMode       bool
+	DisableAutoConnect bool
+	EnablePinning      bool
+	Cors               string
+	BzzAccount         string
+	GlobalStoreAPI     string
+	privateKey         *ecdsa.PrivateKey
 }
 
 //NewConfig creates a default config with all parameters to set to defaults
@@ -96,7 +93,8 @@ func NewConfig() *Config {
 		FileStoreParams:         storage.NewFileStoreParams(),
 		SwapBackendURL:          "",
 		SwapEnabled:             false,
-		SwapInitialDeposit:      swap.DefaultInitialDepositAmount,
+		SwapSkipDeposit:         false,
+		SwapDepositAmount:       swap.DefaultDepositAmount,
 		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
 		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 		SwapLogPath:             "",
@@ -104,16 +102,13 @@ func NewConfig() *Config {
 		Pss:                     pss.NewParams(),
 		EnsRoot:                 ens.TestNetAddress,
 		EnsAPIs:                 nil,
+		RnsAPI:                  "",
 		Path:                    node.DefaultDataDir(),
 		ListenAddr:              DefaultHTTPListenAddr,
 		Port:                    DefaultHTTPPort,
 		NetworkID:               network.DefaultNetworkID,
 		SyncEnabled:             true,
-		PushSyncEnabled:         false,
-		SyncingSkipCheck:        false,
-		DeliverySkipCheck:       true,
-		MaxStreamPeerServers:    10000,
-		SyncUpdateDelay:         15 * time.Second,
+		PushSyncEnabled:         true,
 		EnablePinning:           false,
 	}
 }

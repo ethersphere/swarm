@@ -30,7 +30,10 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 )
 
-var TagUidFunc = rand.Uint32
+var (
+	TagUidFunc     = rand.Uint32
+	TagNotFoundErr = errors.New("tag not found")
+)
 
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
@@ -72,7 +75,7 @@ func (ts *Tags) All() (t []*Tag) {
 func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	t, ok := ts.tags.Load(uid)
 	if !ok {
-		return nil, errors.New("tag not found")
+		return nil, TagNotFoundErr
 	}
 	return t.(*Tag), nil
 }
@@ -119,7 +122,12 @@ func (ts *Tags) MarshalJSON() (out []byte, err error) {
 	m := make(map[string]*Tag)
 	ts.Range(func(k, v interface{}) bool {
 		key := fmt.Sprintf("%d", k)
-		m[key] = v.(*Tag)
+		val := v.(*Tag)
+
+		// don't persist tags which were already done
+		if !val.Done(StateSynced) {
+			m[key] = val
+		}
 		return true
 	})
 	return json.Marshal(m)
@@ -136,6 +144,11 @@ func (ts *Tags) UnmarshalJSON(value []byte) error {
 		if err != nil {
 			return err
 		}
+
+		// prevent a condition where a chunk was sent before shutdown
+		// and the node was turned off before the receipt was received
+		v.Sent = v.Synced
+
 		ts.tags.Store(key, v)
 	}
 

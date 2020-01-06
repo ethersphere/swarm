@@ -186,7 +186,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 	// setup netstore
-	netStore := storage.NewNetStore(lstore, addr.Over(), n.ID())
+	netStore := storage.NewNetStore(lstore, addr)
 
 	// setup pss
 	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
@@ -201,10 +201,10 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 
 	bucket.Store(bucketKeyNetStore, netStore)
 
-	r := retrieval.New(kad, netStore, kad.BaseAddr(), nil)
+	r := retrieval.New(kad, netStore, addr, nil)
 	netStore.RemoteGet = r.RequestFromPeers
 
-	pubSub := pss.NewPubSub(ps)
+	pubSub := pss.NewPubSub(ps, 1*time.Second)
 	// setup pusher
 	p := NewPusher(lstore, pubSub, tags)
 	bucket.Store(bucketKeyPushSyncer, p)

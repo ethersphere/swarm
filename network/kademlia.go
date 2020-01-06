@@ -100,8 +100,7 @@ type Kademlia struct {
 	nDepthMu        sync.RWMutex                // protects neighbourhood depth nDepth
 	nDepthSig       []chan struct{}             // signals when neighbourhood depth nDepth is changed
 
-	newPeerPubSub     *pubsubchannel.PubSubChannel
-	removedPeerPubSub *pubsubchannel.PubSubChannel
+	onOffPeerPubSub *pubsubchannel.PubSubChannel // signals on and off peers in the table
 }
 
 type KademliaInfo struct {
@@ -124,21 +123,21 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		params.Capabilities = capability.NewCapabilities()
 	}
 	k := &Kademlia{
-		base:              addr,
-		KadParams:         params,
-		capabilityIndex:   make(map[string]*capabilityIndex),
-		defaultIndex:      NewDefaultIndex(),
-		newPeerPubSub:     pubsubchannel.New(),
-		removedPeerPubSub: pubsubchannel.New(),
+		base:            addr,
+		KadParams:       params,
+		capabilityIndex: make(map[string]*capabilityIndex),
+		defaultIndex:    NewDefaultIndex(),
+		onOffPeerPubSub: pubsubchannel.New(100),
 	}
 	k.RegisterCapabilityIndex("full", *fullCapability)
 	k.RegisterCapabilityIndex("light", *lightCapability)
 	return k
 }
 
-type newPeerSignal struct {
+type onOffPeerSignal struct {
 	peer *Peer
 	po   int
+	on   bool
 }
 
 // RegisterCapabilityIndex adds an entry to the capability index of the kademlia
@@ -521,7 +520,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	})
 	k.addToCapabilityIndex(p)
 	// notify subscribers asynchronously
-	k.newPeerPubSub.Publish(newPeerSignal{peer: p, po: po})
+	k.onOffPeerPubSub.Publish(onOffPeerSignal{peer: p, po: po, on: true})
 
 	if ins {
 		a := newEntryFromBzzAddress(p.BzzAddr)
@@ -629,10 +628,8 @@ func (k *Kademlia) SubscribeToNeighbourhoodDepthChange() (c <-chan struct{}, uns
 // when a new Peer is added or removed from the table. Returned function unsubscribes
 // the channel from signaling and releases the resources. Returned function is safe
 // to be called multiple times.
-func (k *Kademlia) SubscribeToPeerChanges() (addedSub *pubsubchannel.Subscription, removedPeerSub *pubsubchannel.Subscription) {
-	addedSub = k.newPeerPubSub.Subscribe()
-	removedPeerSub = k.removedPeerPubSub.Subscribe()
-	return
+func (k *Kademlia) SubscribeToPeerChanges() *pubsubchannel.Subscription {
+	return k.onOffPeerPubSub.Subscribe()
 }
 
 // Off removes a peer from among live peers
@@ -654,7 +651,7 @@ func (k *Kademlia) Off(p *Peer) {
 	})
 	k.removeFromCapabilityIndex(p, true)
 	k.setNeighbourhoodDepth()
-	k.removedPeerPubSub.Publish(p)
+	k.onOffPeerPubSub.Publish(onOffPeerSignal{peer: p, po: -1, on: false})
 }
 
 // EachConnFiltered performs the same action as EachConn
@@ -912,6 +909,15 @@ func (k *Kademlia) IsClosestTo(addr []byte, filter func(*BzzPeer) bool) (closest
 		return true
 	})
 	return closest
+}
+
+// IsWithinDepth checks whether a given address falls within
+// this node's saturation depth
+func (k *Kademlia) IsWithinDepth(addr []byte) bool {
+	depth := k.NeighbourhoodDepth()
+
+	po, _ := Pof(addr, k.base, 0)
+	return po >= depth
 }
 
 // BaseAddr return the kademlia base address

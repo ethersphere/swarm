@@ -61,7 +61,9 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 	// stop subscription when until chunk descriptor is reached
 	var errStopSubscription = errors.New("stop subscription")
 
+	db.subscritionsWG.Add(1)
 	go func() {
+		defer db.subscritionsWG.Done()
 		defer metrics.GetOrRegisterCounter(metricName+".stop", nil).Inc(1)
 		// close the returned chunk.Descriptor channel at the end to
 		// signal that the subscription is done
@@ -201,12 +203,12 @@ func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
 // this function should be called.
 func (db *DB) triggerPullSubscriptions(bin uint8) {
 	db.pullTriggersMu.RLock()
+	defer db.pullTriggersMu.RUnlock()
+
 	triggers, ok := db.pullTriggers[bin]
-	db.pullTriggersMu.RUnlock()
 	if !ok {
 		return
 	}
-
 	for _, t := range triggers {
 		select {
 		case t <- struct{}{}:

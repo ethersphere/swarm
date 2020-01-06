@@ -49,7 +49,9 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 	stopChan := make(chan struct{})
 	var stopChanOnce sync.Once
 
+	db.subscritionsWG.Add(1)
 	go func() {
+		defer db.subscritionsWG.Done()
 		defer metrics.GetOrRegisterCounter(metricName+".done", nil).Inc(1)
 		// close the returned chunkInfo channel at the end to
 		// signal that the subscription is done
@@ -76,7 +78,7 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 					}
 
 					select {
-					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data).WithTagID(dataItem.Tag):
+					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data).WithTagID(item.Tag):
 						count++
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
@@ -150,10 +152,9 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 // this function should be called.
 func (db *DB) triggerPushSubscriptions() {
 	db.pushTriggersMu.RLock()
-	triggers := db.pushTriggers
-	db.pushTriggersMu.RUnlock()
+	defer db.pushTriggersMu.RUnlock()
 
-	for _, t := range triggers {
+	for _, t := range db.pushTriggers {
 		select {
 		case t <- struct{}{}:
 		default:

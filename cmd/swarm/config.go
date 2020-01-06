@@ -66,18 +66,17 @@ const (
 	SwarmEnvNetworkID               = "SWARM_NETWORK_ID"
 	SwarmEnvChequebookAddr          = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvChequebookFactoryAddr   = "SWARM_SWAP_CHEQUEBOOK_FACTORY_ADDR"
-	SwarmEnvInitialDeposit          = "SWARM_INITIAL_DEPOSIT"
+	SwarmEnvSwapSkipDeposit         = "SWARM_SWAP_SKIP_DEPOSIT"
+	SwarmEnvSwapDepositAmount       = "SWARM_SWAP_DEPOSIT_AMOUNT"
 	SwarmEnvSwapEnable              = "SWARM_SWAP_ENABLE"
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
-	SwarmSyncMode                   = "SWARM_SYNC_MODE"
+	SwarmNoSync                     = "SWARM_NO_SYNC"
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
-	SwarmEnvSyncUpdateDelay         = "SWARM_ENV_SYNC_UPDATE_DELAY"
-	SwarmEnvMaxStreamPeerServers    = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
-	SwarmEnvDeliverySkipCheck       = "SWARM_DELIVERY_SKIP_CHECK"
 	SwarmEnvENSAPI                  = "SWARM_ENS_API"
+	SwarmEnvRNSAPI                  = "SWARM_RNS_API"
 	SwarmEnvENSAddr                 = "SWARM_ENS_ADDR"
 	SwarmEnvCORS                    = "SWARM_CORS"
 	SwarmEnvBootnodes               = "SWARM_BOOTNODES"
@@ -212,8 +211,12 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
 		currentConfig.SwapLogPath = swapLogPath
 	}
-	if initialDepo := ctx.GlobalUint64(SwarmSwapInitialDepositFlag.Name); initialDepo != 0 {
-		currentConfig.SwapInitialDeposit = initialDepo
+
+	if skipDeposit := ctx.GlobalBool(SwarmSwapSkipDepositFlag.Name); skipDeposit {
+		currentConfig.SwapSkipDeposit = true
+	}
+	if deposit := ctx.GlobalUint64(SwarmSwapDepositAmountFlag.Name); deposit != 0 {
+		currentConfig.SwapDepositAmount = deposit
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
 		currentConfig.SwapPaymentThreshold = paymentThreshold
@@ -221,19 +224,12 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
-	if ctx.GlobalIsSet(SwarmSyncModeFlag.Name) {
-		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = syncModeParse(ctx.GlobalString(SwarmSyncModeFlag.Name))
+	if ctx.GlobalIsSet(SwarmNoSyncFlag.Name) {
+		val := !ctx.GlobalBool(SwarmNoSyncFlag.Name)
+		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = val, val // if the flag is set (true) - push and pull sync should be disabled
 	}
-	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
-		currentConfig.SyncUpdateDelay = d
-	}
-	// any value including 0 is acceptable
-	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
-	}
-	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
-		currentConfig.DeliverySkipCheck = true
 	}
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {
 		ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)
@@ -245,6 +241,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 			ensAPIs[i] = expandPath(ensAPIs[i])
 		}
 		currentConfig.EnsAPIs = ensAPIs
+	}
+	if rns := ctx.GlobalString(RnsAPIFlag.Name); rns != "" {
+		currentConfig.RnsAPI = rns
 	}
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
@@ -271,22 +270,6 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.EnablePinning = true
 	}
 	return currentConfig
-}
-
-func syncModeParse(s string) (pullSync, pushSync bool) {
-	switch s {
-	case "pull":
-		return true, false
-	case "push":
-		return false, true
-	case "all":
-		return true, true
-	case "none":
-		return false, false
-	default:
-		utils.Fatalf("unknown cli flag %s value: %v", SwarmSyncModeFlag.Name, s)
-		return
-	}
 }
 
 // dumpConfig is the dumpconfig command.

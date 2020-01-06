@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,9 +34,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
+	swarmlog "github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	bv "github.com/ethersphere/swarm/network/bitvector"
 	"github.com/ethersphere/swarm/network/stream/intervals"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -42,7 +46,7 @@ import (
 
 const (
 	HashSize     = 32
-	BatchSize    = 128
+	BatchSize    = 64
 	MinFrameSize = 16
 )
 
@@ -73,8 +77,6 @@ var (
 	providerSetTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_set.total-time", nil)
 	providerNeedDataTimer    = metrics.GetOrRegisterResettingTimer("network.stream.provider_need_data.total-time", nil)
 
-	activeBatchTimeout = 20 * time.Second
-
 	// Protocol spec
 	Spec = &protocols.Spec{
 		Name:       "bzz-stream",
@@ -98,7 +100,7 @@ type Registry struct {
 	mtx                     sync.RWMutex
 	intervalsStore          state.Store               // store intervals for all peers
 	peers                   map[enode.ID]*Peer        // peers
-	baseKey                 []byte                    // this node's base address
+	address                 *network.BzzAddr          // this node's base address
 	providers               map[string]StreamProvider // stream providers by name of stream
 	spec                    *protocols.Spec           // this protocol's spec
 	handlersWg              sync.WaitGroup            // waits for all handlers to finish in Close method
@@ -109,14 +111,14 @@ type Registry struct {
 }
 
 // New creates a new stream protocol handler
-func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider) *Registry {
+func New(intervalsStore state.Store, address *network.BzzAddr, providers ...StreamProvider) *Registry {
 	r := &Registry{
 		intervalsStore: intervalsStore,
 		peers:          make(map[enode.ID]*Peer),
 		providers:      make(map[string]StreamProvider),
 		quit:           make(chan struct{}),
-		baseKey:        baseKey,
-		logger:         log.New("base", hex.EncodeToString(baseKey)[:16]),
+		address:        address,
+		logger:         swarmlog.NewBaseAddressLogger(address.ShortString()),
 		spec:           Spec,
 	}
 	for _, p := range providers {
@@ -128,7 +130,7 @@ func New(intervalsStore state.Store, baseKey []byte, providers ...StreamProvider
 
 // Run is being dispatched when 2 nodes connect
 func (r *Registry) Run(bp *network.BzzPeer) error {
-	sp := NewPeer(bp, r.baseKey, r.intervalsStore, r.providers)
+	sp := newPeer(bp, r.address, r.intervalsStore, r.providers)
 	r.addPeer(sp)
 	defer r.removePeer(sp)
 
@@ -541,6 +543,22 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		return
 	}
 
+	// we no longer want this stream. send an empty wanted
+	// hashes to upstream peer to not deliver the batch
+	// it is important that this case is handled after the `lenHashes==0`
+	// block above, since the case above is a special case where the
+	// upstream peer already deleted the `offer` object associated with
+	// the Ruid, while in this case we must send an empty message back to
+	// the upstream peer in order to mitigate a leak on `offer`s
+	if !provider.WantStream(p, w.stream) {
+		wantedHashesMsg.BitVector = []byte{}
+		if err := p.Send(ctx, wantedHashesMsg); err != nil {
+			p.logger.Error("error sending empty wanted hashes", "err", err)
+			p.Drop("error sending empty wanted hashes")
+		}
+		return
+	}
+
 	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
 		p.logger.Error("error initialising bitvector", "len", lenHashes/HashSize, "ruid", msg.Ruid, "err", err)
@@ -551,6 +569,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := msg.Hashes[i : i+HashSize]
 		addresses[i/HashSize] = hash
+		p.logger.Trace("clientHandleOfferedHashes peer offered hash", "ruid", msg.Ruid, "stream", w.stream, "chunk", addresses[i/HashSize])
 	}
 
 	startNeed := time.Now()
@@ -618,13 +637,22 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			p.Drop("error persisting interval")
 			return
 		}
-	case <-time.After(activeBatchTimeout):
+	case <-time.After(timeouts.SyncBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
 		close(w.closeC) // signal the polling goroutine to terminate
 		p.mtx.Lock()
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
-		p.Drop("batch has timed out")
+
+		// if the stream is wanted and has timed out
+		// then drop the peer. this safeguards the edge
+		// case that a batch times out when a kademlia
+		// depth change occurs between the call to
+		// clientSealBatch and a subsequent chunk delivery
+		// message
+		if provider.WantStream(p, w.stream) {
+			p.Drop("batch has timed out")
+		}
 		return
 	case <-r.quit:
 		return
@@ -659,7 +687,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	if len(msg.BitVector) == 0 {
 		p.logger.Debug("peer does not want any hashes in this range", "ruid", o.ruid)
 		for i := 0; i < l; i++ {
-			allHashes = append(allHashes, o.hashes[i*HashSize:(i+1)*HashSize])
+			allHashes[i] = o.hashes[i*HashSize : (i+1)*HashSize]
 		}
 		// set all chunks as synced
 		if err := provider.Set(ctx, allHashes...); err != nil {
@@ -755,6 +783,12 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 // clientHandleChunkDelivery handles chunk delivery messages
 func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *ChunkDelivery, w *want, provider StreamProvider) {
 	p.logger.Debug("clientHandleChunkDelivery", "ruid", msg.Ruid)
+
+	// don't process this message if we're no longer
+	// interested in this stream
+	if !provider.WantStream(p, w.stream) {
+		return
+	}
 	processReceivedChunksMsgCount.Inc(1)
 	r.setLastReceivedChunkTime() // needed for IsPullSyncing
 
@@ -826,7 +860,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				processReceivedChunksCount.Inc(1)
 				p.mtx.Lock()
 				if _, ok := w.hashes[c.Hex()]; !ok {
-					p.logger.Error("got an unsolicited chunk from peer", "peer", p.ID(), "caddr", c)
+					p.logger.Error("got an unsolicited chunk from peer", "peer", p.ShortString(), "caddr", c)
 					streamChunkDeliveryFail.Inc(1)
 					p.Drop("got an unsolicited chunk from peer")
 					p.mtx.Unlock()
@@ -859,8 +893,6 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 // it will block until at least one hash is received from the provider
 func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
 	p.logger.Debug("serverCollectBatch", "from", from, "to", to)
-
-	const batchTimeout = 1 * time.Second
 
 	var (
 		batch        []byte
@@ -905,12 +937,12 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 				metrics.GetOrRegisterCounter("network.stream.server_collect_batch.full-batch", nil).Inc(1)
 			}
 			if timer == nil {
-				timer = time.NewTimer(batchTimeout)
+				timer = time.NewTimer(timeouts.BatchTimeout)
 			} else {
 				if !timer.Stop() {
 					<-timer.C
 				}
-				timer.Reset(batchTimeout)
+				timer.Reset(timeouts.BatchTimeout)
 			}
 			timerC = timer.C
 		case <-timerC:
@@ -1010,7 +1042,7 @@ type PeerState struct {
 // peer cursors and intervals are returned
 func (r *Registry) PeerInfo() (*PeerInfo, error) {
 	info := &PeerInfo{
-		Base:    hex.EncodeToString(r.baseKey)[:16],
+		Base:    r.address.ShortUnder(),
 		Cursors: make(map[string]map[string]uint64),
 	}
 	for name, p := range r.providers {
@@ -1111,7 +1143,10 @@ func (r *Registry) Stop() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		log.Error("stream closed with still active handlers")
+		r.logger.Error("stream closed with still active handlers")
+		// Print a full goroutine dump to debug blocking.
+		// TODO: use a logger to write a goroutine profile
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 	}
 
 	for _, v := range r.providers {

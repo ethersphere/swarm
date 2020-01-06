@@ -16,6 +16,8 @@
 package network
 
 import (
+	"bytes"
+
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/pubsubchannel"
 	"github.com/ethersphere/swarm/network/resourceusestats"
@@ -23,7 +25,7 @@ import (
 
 // KademliaBackend is the required interface of KademliaLoadBalancer.
 type KademliaBackend interface {
-	SubscribeToPeerChanges() (addedSub *pubsubchannel.Subscription, removedPeerSub *pubsubchannel.Subscription)
+	SubscribeToPeerChanges() *pubsubchannel.Subscription
 	BaseAddr() []byte
 	EachBinDesc(base []byte, minProximityOrder int, consumer PeerBinConsumer)
 	EachBinDescFiltered(base []byte, capKey string, minProximityOrder int, consumer PeerBinConsumer) error
@@ -35,13 +37,12 @@ type KademliaBackend interface {
 // If not, least used peer use count in same bin as new peer will be used. It is not clear which one is better, when
 // this load balancer would be used in several use cases we could do take some decision.
 func NewKademliaLoadBalancer(kademlia KademliaBackend, useNearestNeighbourInit bool) *KademliaLoadBalancer {
-	onPeerSub, offPeerSub := kademlia.SubscribeToPeerChanges()
+	onOffPeerSub := kademlia.SubscribeToPeerChanges()
 	quitC := make(chan struct{})
 	klb := &KademliaLoadBalancer{
 		kademlia:         kademlia,
 		resourceUseStats: resourceusestats.NewResourceUseStats(quitC),
-		onPeerSub:        onPeerSub,
-		offPeerSub:       offPeerSub,
+		onOffPeerSub:     onOffPeerSub,
 		quitC:            quitC,
 	}
 	if useNearestNeighbourInit {
@@ -50,8 +51,7 @@ func NewKademliaLoadBalancer(kademlia KademliaBackend, useNearestNeighbourInit b
 		klb.initCountFunc = klb.leastUsedCountInBin
 	}
 
-	go klb.listenNewPeers()
-	go klb.listenOffPeers()
+	go klb.listenOnOffPeers()
 	return klb
 }
 
@@ -67,7 +67,7 @@ type LBPeer struct {
 }
 
 // AddUseCount is called to account a use for these peer. Should be called if the peer is actually used.
-func (lbPeer LBPeer) AddUseCount() {
+func (lbPeer *LBPeer) AddUseCount() {
 	lbPeer.stats.AddUse(lbPeer.Peer)
 }
 
@@ -88,8 +88,7 @@ type LBBinConsumer func(bin LBBin) bool
 type KademliaLoadBalancer struct {
 	kademlia         KademliaBackend                    // kademlia to obtain bins of peers
 	resourceUseStats *resourceusestats.ResourceUseStats // a resourceUseStats to count uses
-	onPeerSub        *pubsubchannel.Subscription        // a pubsub channel to be notified of new peers in kademlia
-	offPeerSub       *pubsubchannel.Subscription        // a pubsub channel to be notified of removed peers in kademlia
+	onOffPeerSub     *pubsubchannel.Subscription        // a pubsub channel to be notified of on/off peers in kademlia
 	quitC            chan struct{}
 
 	initCountFunc func(peer *Peer, po int) int //Function to use for initializing a new peer count
@@ -97,8 +96,7 @@ type KademliaLoadBalancer struct {
 
 // Stop unsubscribe from notifiers
 func (klb *KademliaLoadBalancer) Stop() {
-	klb.onPeerSub.Unsubscribe()
-	klb.offPeerSub.Unsubscribe()
+	klb.onOffPeerSub.Unsubscribe()
 	close(klb.quitC)
 }
 
@@ -143,42 +141,27 @@ func (klb *KademliaLoadBalancer) resourcesToLbPeers(resources []resourceusestats
 	return peers
 }
 
-func (klb *KademliaLoadBalancer) listenNewPeers() {
+func (klb *KademliaLoadBalancer) listenOnOffPeers() {
 	for {
 		select {
 		case <-klb.quitC:
 			return
-		case msg, ok := <-klb.onPeerSub.ReceiveChannel():
+		case msg, ok := <-klb.onOffPeerSub.ReceiveChannel():
 			if !ok {
-				log.Warn("listenNewPeers closed channel, finishing subscriber to new peer")
+				log.Debug("listenOnOffPeers closed channel, finishing subscriber to on/off peers")
 				return
 			}
-			signal, ok := msg.(newPeerSignal)
+			signal, ok := msg.(onOffPeerSignal)
 			if !ok {
-				log.Warn("listenNewPeers received message is not a new peer signal")
+				log.Warn("listenOnOffPeers received message is not a on/off peer signal!")
 				continue
 			}
-			klb.addedPeer(signal.peer, signal.po)
-		}
-	}
-}
-
-func (klb *KademliaLoadBalancer) listenOffPeers() {
-	for {
-		select {
-		case <-klb.quitC:
-			return
-		case msg := <-klb.offPeerSub.ReceiveChannel():
-			peer, ok := msg.(*Peer)
-			if peer == nil {
-				log.Warn("nil peer received listening for off peers. Ignoring.")
-				continue
+			//log.Warn("OnOff peer", "key", signal.peer.Key(), "on", signal.on)
+			if signal.on {
+				klb.addedPeer(signal.peer, signal.po)
+			} else {
+				klb.resourceUseStats.RemoveResource(signal.peer)
 			}
-			if !ok {
-				log.Warn("unexpected message received listening for off peers. Ignoring.")
-				continue
-			}
-			klb.removedPeer(peer)
 		}
 	}
 }
@@ -196,16 +179,14 @@ func (klb *KademliaLoadBalancer) addedPeer(peer *Peer, po int) {
 func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) int {
 	addr := klb.kademlia.BaseAddr()
 	peersInSamePo := klb.getPeersForPo(addr, po)
-	idx := 0
 	leastUsedCount := 0
-	for idx < len(peersInSamePo) {
-		leastUsed := peersInSamePo[idx]
+	for i := 0; i < len(peersInSamePo); i++ {
+		leastUsed := peersInSamePo[i]
 		if leastUsed.Peer.Key() != excludePeer.Key() {
 			leastUsedCount = klb.resourceUseStats.GetUses(leastUsed.Peer)
 			log.Debug("Least used peer is", "peer", leastUsed.Peer.Label(), "leastUsedCount", leastUsedCount)
 			break
 		}
-		idx++
 	}
 	return leastUsedCount
 }
@@ -214,7 +195,7 @@ func (klb *KademliaLoadBalancer) leastUsedCountInBin(excludePeer *Peer, po int) 
 func (klb *KademliaLoadBalancer) nearestNeighbourUseCount(newPeer *Peer, _ int) int {
 	var count int
 	klb.kademlia.EachConn(newPeer.Address(), 255, func(peer *Peer, po int) bool {
-		if peer != newPeer {
+		if !bytes.Equal(peer.OAddr, newPeer.OAddr) {
 			count = klb.resourceUseStats.GetUses(peer)
 			log.Debug("Nearest neighbour is", "peer", peer.Label(), "count", count)
 			return false
@@ -222,10 +203,6 @@ func (klb *KademliaLoadBalancer) nearestNeighbourUseCount(newPeer *Peer, _ int) 
 		return true
 	})
 	return count
-}
-
-func (klb *KademliaLoadBalancer) removedPeer(peer *Peer) {
-	klb.resourceUseStats.RemoveResource(peer)
 }
 
 func (klb *KademliaLoadBalancer) toLBPeers(resources []resourceusestats.Resource) []LBPeer {

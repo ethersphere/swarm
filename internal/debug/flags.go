@@ -30,70 +30,9 @@ import (
 	"github.com/fjl/memsize/memsizeui"
 	colorable "github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var Memsize memsizeui.Handler
-
-var (
-	verbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
-		Value: 3,
-	}
-	vmoduleFlag = cli.StringFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
-		Value: "",
-	}
-	backtraceAtFlag = cli.StringFlag{
-		Name:  "backtrace",
-		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: "",
-	}
-	debugFlag = cli.BoolFlag{
-		Name:  "debug",
-		Usage: "Prepends log messages with call-site location (file and line number)",
-	}
-	pprofFlag = cli.BoolFlag{
-		Name:  "pprof",
-		Usage: "Enable the pprof HTTP server",
-	}
-	pprofPortFlag = cli.IntFlag{
-		Name:  "pprofport",
-		Usage: "pprof HTTP server listening port",
-		Value: 6060,
-	}
-	pprofAddrFlag = cli.StringFlag{
-		Name:  "pprofaddr",
-		Usage: "pprof HTTP server listening interface",
-		Value: "127.0.0.1",
-	}
-	memprofilerateFlag = cli.IntFlag{
-		Name:  "memprofilerate",
-		Usage: "Turn on memory profiling with the given rate",
-		Value: runtime.MemProfileRate,
-	}
-	blockprofilerateFlag = cli.IntFlag{
-		Name:  "blockprofilerate",
-		Usage: "Turn on block profiling with the given rate",
-	}
-	cpuprofileFlag = cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "Write CPU profile to the given file",
-	}
-	traceFlag = cli.StringFlag{
-		Name:  "trace",
-		Usage: "Write execution trace to the given file",
-	}
-)
-
-// Flags holds all command-line flags required for debugging.
-var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
-	pprofFlag, pprofAddrFlag, pprofPortFlag,
-	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
-}
 
 var (
 	ostream log.Handler
@@ -120,40 +59,55 @@ func rotatingFileHandler(logdir string) (log.Handler, error) {
 	)
 }
 
+type Options struct {
+	Debug            bool
+	Verbosity        int
+	Vmodule          string
+	BacktraceAt      string
+	LogDirectory     string
+	MemProfileRate   int
+	BlockProfileRate int
+	TraceFile        string
+	CPUProfileFile   string
+	PprofEnabled     bool
+	PprofAddr        string
+	PprofPort        int
+}
+
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context, logdir string) error {
+func Setup(o Options) error {
 	// logging
-	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	if logdir != "" {
-		rfh, err := rotatingFileHandler(logdir)
+	log.PrintOrigins(o.Debug)
+	if o.LogDirectory != "" {
+		rfh, err := rotatingFileHandler(o.LogDirectory)
 		if err != nil {
 			return err
 		}
 		glogger.SetHandler(log.MultiHandler(ostream, rfh))
 	}
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
-	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
-	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
+	glogger.Verbosity(log.Lvl(o.Verbosity))
+	glogger.Vmodule(o.Vmodule)
+	glogger.BacktraceAt(o.BacktraceAt)
 	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
-	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
-	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
-	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
-		if err := Handler.StartGoTrace(traceFile); err != nil {
+	runtime.MemProfileRate = o.MemProfileRate
+	Handler.SetBlockProfileRate(o.BlockProfileRate)
+	if o.TraceFile != "" {
+		if err := Handler.StartGoTrace(o.TraceFile); err != nil {
 			return err
 		}
 	}
-	if cpuFile := ctx.GlobalString(cpuprofileFlag.Name); cpuFile != "" {
-		if err := Handler.StartCPUProfile(cpuFile); err != nil {
+	if o.CPUProfileFile != "" {
+		if err := Handler.StartCPUProfile(o.CPUProfileFile); err != nil {
 			return err
 		}
 	}
 
 	// pprof server
-	if ctx.GlobalBool(pprofFlag.Name) {
-		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
+	if o.PprofEnabled {
+		address := fmt.Sprintf("%s:%d", o.PprofAddr, o.PprofPort)
 		StartPProf(address)
 	}
 	return nil

@@ -19,8 +19,6 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-
-	"github.com/ethersphere/swarm/log"
 )
 
 // ResourceUseStats can be used to count uses of resources. A Resource is anything with a Key()
@@ -83,6 +81,8 @@ func (lb *ResourceUseStats) DumpAllUses() map[string]int {
 }
 
 func (lb *ResourceUseStats) getAllUseCounts(resources []Resource) []ResourceCount {
+	lb.lock.RLock()
+	defer lb.lock.RUnlock()
 	peerUses := make([]ResourceCount, len(resources))
 	for i, resource := range resources {
 		peerUses[i] = ResourceCount{
@@ -109,7 +109,6 @@ func (lb *ResourceUseStats) AddUse(resource Resource) int {
 	key := resource.Key()
 	prevCount := lb.resourceUses[key]
 	lb.resourceUses[key] = prevCount + 1
-	log.Debug("Added use", "key", resource.Label(), "prevCount", prevCount, "newCount", lb.resourceUses[key])
 	return lb.resourceUses[key]
 }
 

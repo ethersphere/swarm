@@ -24,15 +24,16 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -53,11 +54,12 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		nodeCount  = 2
 		chunkCount = 1000
 	)
+	opts := &SyncSimServiceOptions{
+		InitialChunkCount: chunkCount,
+	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
-			InitialChunkCount: chunkCount,
-		}),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	}, false)
 	defer sim.Close()
 
@@ -101,34 +103,36 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		nodeCount  = 6
 		chunkCount = 500
 	)
+	binZeroPeers := 0
+
+	opts := &SyncSimServiceOptions{
+		InitialChunkCount: chunkCount,
+	}
 
 	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
-		serviceNameStream: newSyncSimServiceFunc(&SyncSimServiceOptions{
-			InitialChunkCount: chunkCount,
-		}),
+		serviceNameStream: newSyncSimServiceFunc(opts),
 	}, false)
 	defer sim.Close()
 
-	_, err := sim.AddNodesAndConnectStar(2)
+	idPivot, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	nodeIDs := sim.UpNodeIDs()
-	if len(nodeIDs) != 2 {
-		t.Fatal("not enough nodes up")
+	if len(sim.UpNodeIDs()) != 1 {
+		t.Fatal("node not started")
 	}
 
-	waitForCursors(t, sim, nodeIDs[0], nodeIDs[1], true)
-	waitForCursors(t, sim, nodeIDs[1], nodeIDs[0], true)
+	pivotKademlia := nodeKademlia(sim, idPivot)
+	pivotSyncer := nodeRegistry(sim, idPivot)
 
-	for j := 2; j <= nodeCount; j++ {
+	for j := 1; j <= nodeCount; j++ {
 		// append a node to the simulation
-		id, err := sim.AddNodes(1)
+		id, err := sim.AddNode()
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+		err = sim.Net.ConnectNodesStar([]enode.ID{id}, idPivot)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,26 +140,43 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		if len(nodeIDs) != j+1 {
 			t.Fatalf("not enough nodes up. got %d, want %d", len(nodeIDs), j+1)
 		}
-		idPivot := nodeIDs[0]
 
-		waitForCursors(t, sim, idPivot, nodeIDs[j], true)
-		waitForCursors(t, sim, nodeIDs[j], idPivot, true)
+		otherKad := sim.MustNodeItem(id, simulation.BucketKeyKademlia).(*network.Kademlia)
+		po := chunk.Proximity(otherKad.BaseAddr(), pivotKademlia.BaseAddr())
+		if po == 0 {
+			binZeroPeers++
+			if binZeroPeers <= maxBinZeroSyncPeers {
+				waitForCursors(t, sim, idPivot, nodeIDs[j], true)
+				waitForCursors(t, sim, nodeIDs[j], idPivot, true)
+			} else {
+				// wait for the peer to get created in the protocol
+				waitForPeer(t, sim, idPivot, id)
+			}
+		} else {
+			waitForCursors(t, sim, idPivot, nodeIDs[j], true)
+			waitForCursors(t, sim, nodeIDs[j], idPivot, true)
+		}
 
-		pivotSyncer := nodeRegistry(sim, idPivot)
-		pivotKademlia := nodeKademlia(sim, idPivot)
-		pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
-
-		for i := 1; i < j; i++ {
+		binZeroRun := 0
+		for i := 1; i < len(nodeIDs); i++ {
 			idOther := nodeIDs[i]
 			otherKademlia := sim.MustNodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
+
 			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 			pivotCursors := pivotSyncer.getPeer(idOther).getCursorsCopy()
+			pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
+			if po == 0 {
+				binZeroRun++
+				if binZeroRun > maxBinZeroSyncPeers {
+					continue
+				}
+			}
 
 			// check that the pivot node is interested just in bins >= depth
 			if po >= int(pivotDepth) {
 				othersBins := nodeInitialBinIndexes(sim, idOther)
 				if err := compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth); err != nil {
-					t.Error(err)
+					t.Error(i, j, po, err)
 				}
 			}
 		}
@@ -351,6 +372,20 @@ func setupReestablishCursorsSimulation(t *testing.T, tagetPO int) (sim *simulati
 	return
 }
 
+func waitForPeer(t *testing.T, sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID) {
+	for i := 0; i < 1000; i++ { // 10s total wait
+		time.Sleep(5 * time.Millisecond)
+		s, ok := sim.Service(serviceNameStream, pivotEnode).(*Registry)
+		if !ok {
+			continue
+		}
+		p := s.getPeer(lookupEnode)
+		if p == nil {
+			continue
+		}
+	}
+}
+
 // waitForCursors checks if the pivot node has some cursors or not
 // by periodically checking for them.
 func waitForCursors(t *testing.T, sim *simulation.Simulation, pivotEnode, lookupEnode enode.ID, wantSome bool) {
@@ -466,10 +501,14 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		bogusNodes = append(bogusNodes[:i], bogusNodes[i+1:]...)
 		return elem
 	}
+
 	streamInfoRes := []*StreamInfoRes{}
+	var streamInfoMtx sync.Mutex
 	infoReqHook := func(msg *StreamInfoReq) {
 		log.Trace("mock got StreamInfoReq msg", "msg", msg)
 
+		streamInfoMtx.Lock()
+		defer streamInfoMtx.Unlock()
 		//create the response
 		res := &StreamInfoRes{}
 		for _, v := range msg.Streams {
@@ -487,6 +526,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		streamInfoRes = append(streamInfoRes, res)
 	}
 
+	// streamInfoMtx is expected to be held by caller
 	popRandomResponse := func() *StreamInfoRes {
 		log.Debug("responses array length", "len", len(streamInfoRes))
 		i := rand.Intn(len(streamInfoRes))
@@ -495,7 +535,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		return elem
 	}
 	opts := &SyncSimServiceOptions{
-		StreamConstructorFunc: func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+		StreamConstructorFunc: func(s state.Store, b *network.BzzAddr, p ...StreamProvider) node.Service {
 			return New(s, b, p...)
 		},
 	}
@@ -511,7 +551,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 	}
 
 	// second node should start with the mock protocol
-	opts.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+	opts.StreamConstructorFunc = func(s state.Store, b *network.BzzAddr, p ...StreamProvider) node.Service {
 		return newMock(infoReqHook)
 	}
 
@@ -543,7 +583,7 @@ func TestCorrectCursorsExchangeRace(t *testing.T) {
 		peerAddr := pot.RandomAddressAt(pivotAddr, i)
 		bzzPeer := &network.BzzPeer{
 			Peer:    protoPeer,
-			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), []byte(fmt.Sprintf("%x", peerAddr[:]))),
+			BzzAddr: network.NewBzzAddr(peerAddr.Bytes(), nil),
 		}
 		peer := network.NewPeer(bzzPeer, pivotKad)
 		pivotKad.On(peer)
@@ -556,10 +596,15 @@ CHECKSTREAMS:
 	sub, qui := syncSubscriptionsDiff(po, -1, pivotDepth, pivotKad.MaxProxDisplay, false) //s.syncBinsOnlyWithinDepth)
 	log.Debug("got desired pivot cursor state", "depth", pivotDepth, "subs", sub, "quits", qui)
 
-	for i := len(streamInfoRes); i > 0; i-- {
+	streamInfoMtx.Lock()
+	for {
+		if len(streamInfoRes) == 0 {
+			break
+		}
 		v := popRandomResponse()
 		pivotStream.clientHandleStreamInfoRes(context.Background(), otherPeer, v)
 	}
+	streamInfoMtx.Unlock()
 
 	//get the pivot cursors for peer, assert equal to what is in `sub`
 	for _, stream := range getAllSyncStreams() {

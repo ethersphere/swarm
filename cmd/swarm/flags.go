@@ -54,10 +54,15 @@ var (
 		Value:  network.DefaultNetworkID,
 		EnvVar: SwarmEnvNetworkID,
 	}
-	SwarmSwapInitialDepositFlag = cli.StringFlag{
-		Name:   "swap-initial-deposit",
-		Usage:  "Initial deposit amount for swap chequebook",
-		EnvVar: SwarmEnvInitialDeposit,
+	SwarmSwapDepositAmountFlag = cli.StringFlag{
+		Name:   "swap-deposit-amount",
+		Usage:  "Deposit amount for swap chequebook",
+		EnvVar: SwarmEnvSwapDepositAmount,
+	}
+	SwarmSwapSkipDepositFlag = cli.BoolFlag{
+		Name:   "swap-skip-deposit",
+		Usage:  "Don't deposit during boot sequence",
+		EnvVar: SwarmEnvSwapSkipDeposit,
 	}
 	SwarmSwapChequebookAddrFlag = cli.StringFlag{
 		Name:   "swap-chequebook",
@@ -89,42 +94,30 @@ var (
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
-	SwarmSyncModeFlag = cli.StringFlag{
-		Name:   "sync-mode",
-		Usage:  "Syncing mode (available modes: pull, push, all, none)",
-		EnvVar: SwarmSyncMode,
-		Value:  "pull",
+	SwarmNoSyncFlag = cli.BoolFlag{
+		Name:   "no-sync",
+		Usage:  "disable syncing",
+		EnvVar: SwarmNoSync,
 	}
 	SwarmSwapLogPathFlag = cli.StringFlag{
 		Name:   "swap-audit-logpath",
 		Usage:  "Write execution logs of swap audit to the given directory",
 		EnvVar: SwarmEnvSwapLogPath,
 	}
-	SwarmSyncUpdateDelay = cli.DurationFlag{
-		Name:   "sync-update-delay",
-		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
-		EnvVar: SwarmEnvSyncUpdateDelay,
-	}
-	SwarmMaxStreamPeerServersFlag = cli.IntFlag{
-		Name:   "max-stream-peer-servers",
-		Usage:  "Limit of Stream peer servers, 0 denotes unlimited",
-		EnvVar: SwarmEnvMaxStreamPeerServers,
-		Value:  10000, // A very large default value is possible as stream servers have very small memory footprint
-	}
 	SwarmLightNodeEnabled = cli.BoolFlag{
 		Name:   "lightnode",
 		Usage:  "Enable Swarm LightNode (default false)",
 		EnvVar: SwarmEnvLightNodeEnable,
 	}
-	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
-		Name:   "delivery-skip-check",
-		Usage:  "Skip chunk delivery check (default false)",
-		EnvVar: SwarmEnvDeliverySkipCheck,
-	}
 	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 		EnvVar: SwarmEnvENSAPI,
+	}
+	RnsAPIFlag = cli.StringFlag{
+		Name:   "rns-api",
+		Usage:  "RNS API endpoint for RKS domains contract address, format [contract-addr@]url",
+		EnvVar: SwarmEnvRNSAPI,
 	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",
@@ -249,5 +242,13 @@ var (
 	SwarmVerboseFlag = cli.BoolFlag{
 		Name:  "verbose",
 		Usage: "Display more verbose output",
+	}
+	SwarmMutexProfileFlag = cli.BoolFlag{
+		Name:  "mutex-profile",
+		Usage: "Enable pprof mutex profile",
+	}
+	SwarmBlockProfileFlag = cli.BoolFlag{
+		Name:  "block-profile",
+		Usage: "Enable pprof block profile",
 	}
 )

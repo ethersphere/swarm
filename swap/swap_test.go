@@ -37,6 +37,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethersphere/swarm/network"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -48,7 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-1-1/simpleswapfactory"
+	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
 	"github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -79,6 +81,7 @@ type booking struct {
 type swapTestBackend struct {
 	*backends.SimulatedBackend
 	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
+	tokenAddress   common.Address // address of the token in the simulated network
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
 }
@@ -108,392 +111,61 @@ var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
 }, 8000000)
 
 // newTestBackend creates a new test backend instance
-func newTestBackend() *swapTestBackend {
+func newTestBackend(t *testing.T) *swapTestBackend {
+	t.Helper()
 	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
 	defaultBackend.Commit()
 
+	// deploy the ERC20-contract
+	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
+	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultBackend.Commit()
+
 	// deploy a SimpleSwapFactoy
-	factoryAddress, _, _, _ := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend)
+	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
+	// ignore factory instance, because the address is all we need at this point
+	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend, tokenAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defaultBackend.Commit()
 
 	return &swapTestBackend{
 		SimulatedBackend: defaultBackend,
 		factoryAddress:   factoryAddress,
+		tokenAddress:     tokenAddress,
 	}
 }
 
-// Test getting a peer's balance
-func TestPeerBalance(t *testing.T) {
-	// create a test swap account
-	swap, testPeer, clean := newTestSwapAndPeer(t, ownerKey)
-	defer clean()
-
-	// test for correct value
-	testPeer.setBalance(888)
-	b, err := swap.Balance(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != 888 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
-	}
-
-	// test for inexistent node
-	id := adapters.RandomNodeConfig().ID
-	_, err = swap.Balance(id)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-
-	// test for disconnected node
-	testPeer2 := newDummyPeer().Peer
-	swap.saveBalance(testPeer2.ID(), 333)
-	b, err = swap.Balance(testPeer2.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b != 333 {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", 333, b)
-	}
-}
-
-// Test getting balances for all known peers
-func TestAllBalances(t *testing.T) {
-	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, nil)
-	defer clean()
-
-	balances, err := swap.Balances()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(balances) != 0 {
-		t.Fatalf("Expected balances to be empty, but are %v", balances)
-	}
-
-	// test balance addition for peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testPeer.setBalance(808)
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808})
-
-	// test successive balance addition for peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testPeer2.setBalance(909)
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 808, testPeer2.ID(): 909})
-
-	// test balance change for peer
-	testPeer.setBalance(303)
-	testBalances(t, swap, map[enode.ID]int64{testPeer.ID(): 303, testPeer2.ID(): 909})
-}
-
-func testBalances(t *testing.T, swap *Swap, expectedBalances map[enode.ID]int64) {
-	t.Helper()
-	balances, err := swap.Balances()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(balances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, balances)
-	}
-}
-
-// TestSentCheque verifies that sent cheques data is correctly obtained
-func TestSentCheque(t *testing.T) {
-	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, nil)
-	defer clean()
-
-	// test cheque addition for peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sentCheque, err := swap.SentCheque(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sentCheque != nil {
-		t.Fatalf("Expected sent cheque to be nil, but is %v", sentCheque)
-	}
-
-	// generate a random cheque as sent
-	generatedCheque := newRandomTestCheque()
-	err = testPeer.setLastSentCheque(generatedCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sentCheque, err = swap.SentCheque(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sentCheque != generatedCheque {
-		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
-	}
-
-	// test cheque addition for another peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	generatedCheque2 := newRandomTestCheque()
-	err = testPeer2.setLastSentCheque(generatedCheque2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sentCheque2, err := swap.SentCheque(testPeer2.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sentCheque2 != generatedCheque2 {
-		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque2, sentCheque2)
-	}
-
-	// check previous cheque is still correct
-	sentCheque, err = swap.SentCheque(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sentCheque != generatedCheque {
-		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque, sentCheque)
-	}
-
-	// test sent cheque for invalid peer
-	randomID := adapters.RandomNodeConfig().ID
-	_, err = swap.SentCheque(randomID)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-
-	// test sent cheque for disconnected node
-	testPeer3 := newDummyPeer().Peer
-	generatedCheque3 := newRandomTestCheque()
-	err = swap.saveLastSentCheque(testPeer3.ID(), generatedCheque3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sentCheque3, err := swap.SentCheque(testPeer3.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(sentCheque3, generatedCheque3) {
-		t.Fatalf("Expected sent cheque to be %v, but is %v", generatedCheque3, sentCheque3)
-	}
-}
-
-// TestReceivedCheque verifies that received cheques data is correctly obtained
-func TestReceivedCheque(t *testing.T) {
-	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, nil)
-	defer clean()
-
-	// test cheque addition for peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	receivedCheque, err := swap.ReceivedCheque(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receivedCheque != nil {
-		t.Fatalf("Expected received cheque to be nil, but is %v", receivedCheque)
-	}
-
-	// generate a random cheque as sent
-	generatedCheque := newRandomTestCheque()
-	err = testPeer.setLastReceivedCheque(generatedCheque)
-	if err != nil {
-		t.Fatal(err)
-	}
-	receivedCheque, err = swap.ReceivedCheque(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receivedCheque != generatedCheque {
-		t.Fatalf("Expected received cheque to be %v, but is %v", generatedCheque, receivedCheque)
-	}
-
-	// test cheque addition for another peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	generatedCheque2 := newRandomTestCheque()
-	err = testPeer2.setLastReceivedCheque(generatedCheque2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	receivedCheque2, err := swap.ReceivedCheque(testPeer2.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receivedCheque2 != generatedCheque2 {
-		t.Fatalf("Expected received cheque to be %v, but is %v", generatedCheque2, receivedCheque2)
-	}
-
-	// check previous cheque is still correct
-	receivedCheque, err = swap.ReceivedCheque(testPeer.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receivedCheque != generatedCheque {
-		t.Fatalf("Expected received cheque to be %v, but is %v", generatedCheque, receivedCheque)
-	}
-
-	// test received cheque for invalid peer
-	randomID := adapters.RandomNodeConfig().ID
-	_, err = swap.ReceivedCheque(randomID)
-	if err == nil {
-		t.Fatal("Expected call to fail, but it didn't!")
-	}
-	if err != state.ErrNotFound {
-		t.Fatalf("Expected test to fail with %s, but is %s", "ErrorNotFound", err.Error())
-	}
-
-	// test received cheque for disconnected node
-	testPeer3 := newDummyPeer().Peer
-	generatedCheque3 := newRandomTestCheque()
-	err = swap.saveLastReceivedCheque(testPeer3.ID(), generatedCheque3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	receivedCheque3, err := swap.ReceivedCheque(testPeer3.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(receivedCheque3, generatedCheque3) {
-		t.Fatalf("Expected received cheque to be %v, but is %v", generatedCheque3, receivedCheque3)
-	}
-}
-
-// Test getting cheques for all known peers
-func TestAllCheques(t *testing.T) {
-	// create a test swap account
-	swap, clean := newTestSwap(t, ownerKey, nil)
-	defer clean()
-
-	sentCheques, err := swap.SentCheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(sentCheques) != 0 {
-		t.Fatalf("Expected sent cheques to be empty, but are %v", sentCheques)
-	}
-
-	receivedCheques, err := swap.ReceivedCheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(receivedCheques) != 0 {
-		t.Fatalf("Expected received cheques to be empty, but are %v", receivedCheques)
-	}
-
-	// test cheque addition for peer
-	testPeer, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// generate a random cheque as received
-	receivedCheque := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(receivedCheque)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque})
-	// generate a random cheque as sent for the same peer
-	sentCheque := newRandomTestCheque()
-	testPeer.setLastSentCheque(sentCheque)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque})
-
-	// test successive cheque addition for peer
-	testPeer2, err := swap.addPeer(newDummyPeer().Peer, common.Address{}, common.Address{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	receivedCheque2 := newRandomTestCheque()
-	testPeer2.setLastReceivedCheque(receivedCheque2)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque, testPeer2.ID(): receivedCheque2})
-
-	// test cheque change for peer
-	receivedCheque3 := newRandomTestCheque()
-	testPeer.setLastReceivedCheque(receivedCheque3)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
-
-	// test cheque change for peer
-	sentCheque2 := newRandomTestCheque()
-	testPeer.setLastSentCheque(sentCheque2)
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
-
-	// test cheques for disconnected peers
-	testPeer3 := newDummyPeer().Peer
-	sentCheque3 := newRandomTestCheque()
-	err = swap.saveLastSentCheque(testPeer3.ID(), sentCheque3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil, testPeer3.ID(): sentCheque3}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2})
-
-	receivedCheque4 := newRandomTestCheque()
-	err = swap.saveLastReceivedCheque(testPeer3.ID(), receivedCheque4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testCheques(t, swap, map[enode.ID]*Cheque{testPeer.ID(): sentCheque2, testPeer2.ID(): nil, testPeer3.ID(): sentCheque3}, map[enode.ID]*Cheque{testPeer.ID(): receivedCheque3, testPeer2.ID(): receivedCheque2, testPeer3.ID(): receivedCheque4})
-}
-
-func testCheques(t *testing.T, swap *Swap, expectedSentCheques map[enode.ID]*Cheque, expectedReceivedCheques map[enode.ID]*Cheque) {
-	t.Helper()
-	sentCheques, err := swap.SentCheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(sentCheques, expectedSentCheques) {
-		t.Fatalf("Expected node's sent cheques to be %v, but are %v", expectedSentCheques, sentCheques)
-	}
-	receivedCheques, err := swap.ReceivedCheques()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(receivedCheques, expectedReceivedCheques) {
-		t.Fatalf("Expected node's received cheques to be %v, but are %v", expectedReceivedCheques, receivedCheques)
-	}
-}
-
-type storeKeysTestCases struct {
+type storeKeysTestCase struct {
 	nodeID                    enode.ID
 	expectedBalanceKey        string
 	expectedSentChequeKey     string
 	expectedReceivedChequeKey string
+	expectedPendingChequeKey  string
 	expectedUsedChequebookKey string
 }
 
 // Test the getting balance and cheques store keys based on a node ID, and the reverse process as well
 func TestStoreKeys(t *testing.T) {
-	testCases := []storeKeysTestCases{
-		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "connected_chequebook"},
-		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "connected_chequebook"},
-		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "connected_chequebook"},
+	testCases := []storeKeysTestCase{
+		{enode.HexID("f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56"), "balance_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "sent_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "received_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "pending_cheque_f6876a1f73947b0495d36e648aeb74f952220c3b03e66a1cc786863f6104fa56", "connected_chequebook"},
+		{enode.HexID("93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c"), "balance_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "sent_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "received_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "pending_cheque_93a3309412ff6204ec9b9469200742f62061932009e744def79ef96492673e6c", "connected_chequebook"},
+		{enode.HexID("c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44"), "balance_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "sent_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "received_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "pending_cheque_c19ecf22f02f77f4bb320b865d3f37c6c592d32a1c9b898efb552a5161a1ee44", "connected_chequebook"},
 	}
 	testStoreKeys(t, testCases)
 }
 
-func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
+func testStoreKeys(t *testing.T, testCases []storeKeysTestCase) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprint(testCase.nodeID), func(t *testing.T) {
 			actualBalanceKey := balanceKey(testCase.nodeID)
 			actualSentChequeKey := sentChequeKey(testCase.nodeID)
 			actualReceivedChequeKey := receivedChequeKey(testCase.nodeID)
+			actualPendingChequeKey := pendingChequeKey(testCase.nodeID)
 			actualUsedChequebookKey := connectedChequebookKey
 
 			if actualBalanceKey != testCase.expectedBalanceKey {
@@ -506,9 +178,12 @@ func testStoreKeys(t *testing.T, testCases []storeKeysTestCases) {
 				t.Fatalf("Expected received cheque key to be %s, but is %s instead.", testCase.expectedReceivedChequeKey, actualReceivedChequeKey)
 			}
 
+			if actualPendingChequeKey != testCase.expectedPendingChequeKey {
+				t.Fatalf("Expected pending cheque key to be %s, but is %s instead.", testCase.expectedPendingChequeKey, actualPendingChequeKey)
+			}
+
 			if actualUsedChequebookKey != testCase.expectedUsedChequebookKey {
 				t.Fatalf("Expected used chequebook key to be %s, but is %s instead.", testCase.expectedUsedChequebookKey, actualUsedChequebookKey)
-
 			}
 
 			nodeID := keyToID(actualBalanceKey, balancePrefix)
@@ -612,7 +287,7 @@ func TestRepeatedBookings(t *testing.T) {
 
 //TestNewSwapFailure attempts to initialze SWAP with (a combination of) parameters which are not allowed. The test checks whether there are indeed failures
 func TestNewSwapFailure(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 	dir, err := ioutil.TempDir("", "swarmSwap")
 	if err != nil {
@@ -643,7 +318,7 @@ func TestNewSwapFailure(t *testing.T) {
 
 	params := newDefaultParams(t)
 	chequebookAddress := testChequeContract
-	InitialDeposit := uint64(1)
+	Deposit := uint64(1)
 
 	type testSwapConfig struct {
 		dbPath            string
@@ -651,7 +326,8 @@ func TestNewSwapFailure(t *testing.T) {
 		backendURL        string
 		params            *Params
 		chequebookAddress common.Address
-		initialDeposit    uint64
+		skipDeposit       bool
+		deposit           uint64
 		factoryAddress    common.Address
 	}
 
@@ -670,18 +346,18 @@ func TestNewSwapFailure(t *testing.T) {
 				config.backendURL = ""
 				config.params = params
 				config.chequebookAddress = chequebookAddress
-				config.initialDeposit = InitialDeposit
+				config.deposit = Deposit
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
-				defer os.RemoveAll(config.dbPath)
 				_, err := New(
 					config.dbPath,
 					config.prvkey,
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.initialDeposit,
+					config.skipDeposit,
+					config.deposit,
 					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "no backend URL given") {
@@ -705,7 +381,8 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.initialDeposit,
+					config.skipDeposit,
+					config.deposit,
 					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "disconnect threshold lower or at payment threshold") {
@@ -714,11 +391,12 @@ func TestNewSwapFailure(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid backendURL",
+			name: "no deposit and given deposit amount",
 			configure: func(config *testSwapConfig) {
-				config.prvkey = prvKey
-				config.backendURL = "invalid backendURL"
-				params.PaymentThreshold = int64(DefaultPaymentThreshold)
+				config.params = newDefaultParams(t)
+				config.chequebookAddress = chequebookAddress
+				config.skipDeposit = true
+				config.deposit = Deposit
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
@@ -729,7 +407,34 @@ func TestNewSwapFailure(t *testing.T) {
 					config.backendURL,
 					config.params,
 					config.chequebookAddress,
-					config.initialDeposit,
+					config.skipDeposit,
+					config.deposit,
+					config.factoryAddress,
+				)
+				if !strings.Contains(err.Error(), ErrSkipDeposit.Error()) {
+					t.Fatal("skipDeposit true and non-zero depositAmount, but created SWAP", err)
+				}
+			},
+		},
+		{
+			name: "invalid backendURL",
+			configure: func(config *testSwapConfig) {
+				config.prvkey = prvKey
+				config.backendURL = "invalid backendURL"
+				params.PaymentThreshold = int64(DefaultPaymentThreshold)
+				config.skipDeposit = false
+				config.factoryAddress = testBackend.factoryAddress
+			},
+			check: func(t *testing.T, config *testSwapConfig) {
+				defer os.RemoveAll(config.dbPath)
+				_, err := New(
+					config.dbPath,
+					config.prvkey,
+					config.backendURL,
+					config.params,
+					config.chequebookAddress,
+					config.skipDeposit,
+					config.deposit,
 					config.factoryAddress,
 				)
 				if !strings.Contains(err.Error(), "error connecting to Ethereum API") {
@@ -786,7 +491,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, big.NewInt(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -796,7 +501,7 @@ func TestStartChequebookFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				// try to connect with a different address
-				_, err = swap.StartChequebook(config.passIn, 0)
+				_, err = swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -813,7 +518,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// try to connect with an address not containing a chequebook instance
-				_, err := swap.StartChequebook(config.passIn, 0)
+				_, err := swap.StartChequebook(config.passIn)
 				if err.Error() != config.expectedError.Error() {
 					t.Fatal(fmt.Errorf("Expected error not equal to actual error. Expected: %v. Actual: %v", config.expectedError, err))
 				}
@@ -821,7 +526,7 @@ func TestStartChequebookFailure(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			testBackend := newTestBackend()
+			testBackend := newTestBackend(t)
 			defer testBackend.Close()
 			tc.configure(&config)
 			config.testBackend = testBackend
@@ -845,7 +550,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, big.NewInt(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -857,7 +562,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				}
 
 				// start chequebook with same pass in as deployed
-				_, err = swap.StartChequebook(swap.GetParams().ContractAddress, 0)
+				_, err = swap.StartChequebook(swap.GetParams().ContractAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -871,13 +576,13 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap)
+				err := testDeploy(context.TODO(), swap, big.NewInt(0))
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				// start chequebook with same pass in as deployed
-				_, err = swap.StartChequebook(swap.GetParams().ContractAddress, 0)
+				_, err = swap.StartChequebook(swap.GetParams().ContractAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -890,7 +595,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			testBackend := newTestBackend()
+			testBackend := newTestBackend(t)
 			defer testBackend.Close()
 			if tc.check != nil {
 				tc.check(t, testBackend)
@@ -903,13 +608,25 @@ func TestStartChequebookSuccess(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
+	testDeploy(context.Background(), swap, big.NewInt(0))
+
 	testPeer := newDummyPeer()
-	testDeploy(context.Background(), swap)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
+
+	// leave balance exactly at disconnect threshold
 	swap.Add(int64(DefaultDisconnectThreshold), testPeer.Peer)
+	// account for traffic which increases debt
 	err := swap.Add(1, testPeer.Peer)
+	if err == nil {
+		t.Fatal("expected accounting operation to fail, but it didn't")
+	}
 	if !strings.Contains(err.Error(), "disconnect threshold") {
 		t.Fatal(err)
+	}
+	// account for traffic which reduces debt, which should be allowed even when over the threshold
+	err = swap.Add(-1, testPeer.Peer)
+	if err != nil {
+		t.Fatalf("expected accounting operation to succeed, but it failed with %v", err)
 	}
 }
 
@@ -917,7 +634,7 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap)
+	testDeploy(context.Background(), swap, big.NewInt(int64(DefaultPaymentThreshold)))
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
@@ -925,7 +642,7 @@ func TestPaymentThreshold(t *testing.T) {
 	}
 
 	var cheque *Cheque
-	_ = swap.store.Get(sentChequeKey(testPeer.Peer.ID()), &cheque)
+	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
 	if cheque.CumulativePayout != DefaultPaymentThreshold {
 		t.Fatal()
 	}
@@ -939,7 +656,7 @@ func TestPaymentThreshold(t *testing.T) {
 // `handleEmitChequeMsg` in order to simulate a roundtrip
 // and see that both have reset the balance correctly
 func TestResetBalance(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 	// create both test swap accounts
 	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey, testBackend)
@@ -947,12 +664,14 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
+	testAmount := int64(DefaultPaymentThreshold + 42)
+
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap)
+	err := testDeploy(ctx, creditorSwap, big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, big.NewInt(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -972,7 +691,6 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	testAmount := int64(DefaultPaymentThreshold + 42)
 	debitor.setBalance(testAmount)
 	creditor.setBalance(-testAmount)
 
@@ -982,6 +700,10 @@ func TestResetBalance(t *testing.T) {
 
 	// now simulate sending the cheque to the creditor from the debitor
 	creditor.sendCheque()
+
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
 	// the debitor should have already reset its balance
 	if creditor.getBalance() != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
@@ -1019,12 +741,12 @@ func TestResetBalance(t *testing.T) {
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
 // append generated bookings to slice pointer
-func testPeerBookings(t *testing.T, swap *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
+func testPeerBookings(t *testing.T, s *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
 	t.Helper()
 	peerBookings := generateBookings(bookingAmount, bookingQuantity, peer)
 	*bookings = append(*bookings, peerBookings...)
-	addBookings(swap, peerBookings)
-	verifyBookings(t, swap, *bookings)
+	addBookings(s, peerBookings)
+	verifyBookings(t, s, *bookings)
 }
 
 // generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
@@ -1044,10 +766,10 @@ func addBookings(swap *Swap, bookings []booking) {
 }
 
 // take a Swap struct and a list of bookings, and verify the resulting balances are as expected
-func verifyBookings(t *testing.T, swap *Swap, bookings []booking) {
+func verifyBookings(t *testing.T, s *Swap, bookings []booking) {
 	t.Helper()
-	expectedBalances := calculateExpectedBalances(swap, bookings)
-	realBalances, err := swap.Balances()
+	expectedBalances := calculateExpectedBalances(s, bookings)
+	realBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1074,8 +796,8 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 		booking := bookings[i]
 		peerID := booking.peer.ID()
 		peerBalance := expectedBalances[peerID]
-		// balance is not expected to be affected once past the disconnect threshold
-		if peerBalance < swap.params.DisconnectThreshold {
+		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
+		if peerBalance < swap.params.DisconnectThreshold || booking.amount < 0 {
 			peerBalance += booking.amount
 		}
 		expectedBalances[peerID] = peerBalance
@@ -1090,7 +812,7 @@ func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int6
 // Then we re-open the state store and check that
 // the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 
 	// create a test swap account
@@ -1149,7 +871,7 @@ func newDefaultParams(t *testing.T) *Params {
 		t.Fatal(err)
 	}
 	return &Params{
-		OverlayAddr:         baseKey,
+		BaseAddrs:           network.NewBzzAddr(baseKey, nil),
 		LogPath:             "",
 		PaymentThreshold:    int64(DefaultPaymentThreshold),
 		DisconnectThreshold: int64(DefaultDisconnectThreshold),
@@ -1169,12 +891,12 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	}
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
-	swapLog = newSwapLogger(params.LogPath, params.OverlayAddr)
+	swapLog = newSwapLogger(params.LogPath, params.BaseAddrs)
 	factory, err := cswap.FactoryAt(backend.factoryAddress, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := newSwapInstance(stateStore, owner, backend, params, factory)
+	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory)
 	return swap, dir
 }
 
@@ -1192,7 +914,7 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) 
 	t.Helper()
 	usedBackend := backend
 	if backend == nil {
-		usedBackend = newTestBackend()
+		usedBackend = newTestBackend(t)
 	}
 	swap, dir := newBaseTestSwap(t, key, usedBackend)
 	clean := func() {
@@ -1353,7 +1075,7 @@ func TestVerifyContract(t *testing.T) {
 	defer clean()
 
 	// deploy a new swap contract
-	err := testDeploy(context.TODO(), swap)
+	err := testDeploy(context.TODO(), swap, big.NewInt(0))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1370,7 +1092,7 @@ func TestVerifyContractNotDeployedByFactory(t *testing.T) {
 
 	opts := bind.NewKeyedTransactor(ownerKey)
 
-	addr, _, _, err := contractFactory.DeploySimpleSwap(opts, swap.backend, ownerAddress, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
+	addr, _, _, err := contractFactory.DeployERC20SimpleSwap(opts, swap.backend, ownerAddress, common.Address{}, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1417,7 +1139,7 @@ func TestFactoryAddressForNetwork(t *testing.T) {
 // TestFactoryVerifySelf tests that it returns no error for a real factory
 // and expects errors for a different contract or no contract
 func TestFactoryVerifySelf(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 
 	factory, err := cswap.FactoryAt(testBackend.factoryAddress, testBackend)
@@ -1425,20 +1147,6 @@ func TestFactoryVerifySelf(t *testing.T) {
 		t.Fatal(err)
 	}
 	if factory.VerifySelf() != nil {
-		t.Fatal(err)
-	}
-
-	addr, _, _, err := contractFactory.DeployECDSA(bind.NewKeyedTransactor(ownerKey), testBackend)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testBackend.Commit()
-
-	if _, err = cswap.FactoryAt(addr, testBackend); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err = cswap.FactoryAt(common.Address{}, testBackend); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1459,15 +1167,15 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("deploy issuer swap")
 
+	cheque := newTestCheque()
+
 	ctx := context.TODO()
-	err := testDeploy(ctx, issuerSwap)
+	err := testDeploy(ctx, issuerSwap, big.NewInt(int64(cheque.CumulativePayout)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	log.Debug("deployed. signing cheque")
-
-	cheque := newTestCheque()
 	cheque.ChequeParams.Contract = issuerSwap.GetParams().ContractAddress
 	cheque.Signature, err = cheque.Sign(issuerSwap.owner.privateKey)
 	if err != nil {
@@ -1530,7 +1238,7 @@ func TestContractIntegration(t *testing.T) {
 }
 
 // when testing, we don't need to wait for a transaction to be mined
-func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
+func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
 
 	var stb *swapTestBackend
 	var ok bool
@@ -1539,7 +1247,7 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 	}
 	stb.Commit()
 
-	receipt, err := backend.TransactionReceipt(context.TODO(), tx.Hash())
+	receipt, err := backend.TransactionReceipt(ctx, tx.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -1550,9 +1258,8 @@ func testWaitForTx(auth *bind.TransactOpts, backend cswap.Backend, tx *types.Tra
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap) (err error) {
+func testDeploy(ctx context.Context, swap *Swap, depositAmount *big.Int) (err error) {
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Value = big.NewInt(9000 * int64(RetrieveRequestPrice))
 	opts.Context = ctx
 
 	var stb *swapTestBackend
@@ -1569,15 +1276,33 @@ func testDeploy(ctx context.Context, swap *Swap) (err error) {
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
-
 	swap.contract, err = factory.DeploySimpleSwap(opts, swap.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		return err
 	}
-
 	stb.Commit()
 
-	return err
+	// send money into the new chequebook
+	token, err := contractFactory.NewERC20Mintable(stb.tokenAddress, stb)
+	if err != nil {
+		return err
+	}
+
+	tx, err := token.Mint(bind.NewKeyedTransactor(ownerKey), swap.contract.ContractParams().ContractAddress, depositAmount)
+	if err != nil {
+		return err
+	}
+	stb.Commit()
+	receipt, err := stb.TransactionReceipt(ctx, tx.Hash())
+	if err != nil {
+		return err
+	}
+
+	if receipt.Status != 1 {
+		return errors.New("token transfer reverted")
+	}
+
+	return nil
 }
 
 // newTestSwapAndPeer is a helper function to create a swap and a peer instance that fit together
@@ -1811,7 +1536,7 @@ func TestSwapLogToFile(t *testing.T) {
 	params := newDefaultParams(t)
 	params.LogPath = logDirDebitor
 
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 	// create both test swap accounts
 	creditorSwap, storeDirCreditor := newBaseTestSwap(t, beneficiaryKey, testBackend)
@@ -1826,12 +1551,14 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
+	testAmount := int64(DefaultPaymentThreshold + 42)
+
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap)
+	err = testDeploy(ctx, creditorSwap, big.NewInt(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap)
+	err = testDeploy(ctx, debitorSwap, big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1851,7 +1578,6 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	testAmount := int64(DefaultPaymentThreshold + 42)
 	debitor.setBalance(testAmount)
 	creditor.setBalance(-testAmount)
 
@@ -1906,15 +1632,17 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 }
 
 func TestAvailableBalance(t *testing.T) {
-	testBackend := newTestBackend()
+	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
 	cleanup := setupContractTest()
 	defer cleanup()
 
+	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
+
 	// deploy a chequebook
-	err := testDeploy(context.TODO(), swap)
+	err := testDeploy(context.TODO(), swap, depositAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1925,7 +1653,6 @@ func TestAvailableBalance(t *testing.T) {
 	}
 
 	// verify that available balance equals depositAmount (we deposit during deployment)
-	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
 	availableBalance, err := swap.AvailableBalance()
 	if err != nil {
 		t.Fatal(err)
@@ -1938,7 +1665,7 @@ func TestAvailableBalance(t *testing.T) {
 	netDeposit := depositAmount.Uint64() - withdrawAmount.Uint64()
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
-	rec, err := swap.contract.Withdraw(opts, swap.backend, withdrawAmount)
+	rec, err := swap.contract.Withdraw(opts, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
 	}

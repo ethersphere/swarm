@@ -94,7 +94,8 @@ func nodeBinIndexes(t *testing.T, store interface {
 type SyncSimServiceOptions struct {
 	InitialChunkCount     uint64
 	SyncOnlyWithinDepth   bool
-	StreamConstructorFunc func(state.Store, []byte, ...StreamProvider) node.Service
+	Autostart             bool
+	StreamConstructorFunc func(state.Store, *network.BzzAddr, ...StreamProvider) node.Service
 }
 
 func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -102,7 +103,7 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		o = new(SyncSimServiceOptions)
 	}
 	if o.StreamConstructorFunc == nil {
-		o.StreamConstructorFunc = func(s state.Store, b []byte, p ...StreamProvider) node.Service {
+		o.StreamConstructorFunc = func(s state.Store, b *network.BzzAddr, p ...StreamProvider) node.Service {
 			return New(s, b, p...)
 		}
 	}
@@ -119,13 +120,13 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 		kad := k.(*network.Kademlia)
 
-		netStore := storage.NewNetStore(localStore, kad.BaseAddr(), n.ID())
+		netStore := storage.NewNetStore(localStore, addr)
 		lnetStore := storage.NewLNetStore(netStore)
 		fileStore := storage.NewFileStore(lnetStore, lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 		bucket.Store(bucketKeyFileStore, fileStore)
 		bucket.Store(bucketKeyLocalStore, localStore)
 
-		ret := retrieval.New(kad, netStore, kad.BaseAddr(), nil)
+		ret := retrieval.New(kad, netStore, addr, nil)
 		netStore.RemoteGet = ret.RequestFromPeers
 
 		if o.InitialChunkCount > 0 {
@@ -154,9 +155,8 @@ func newSyncSimServiceFunc(o *SyncSimServiceOptions) func(ctx *adapters.ServiceC
 		if err != nil {
 			return nil, nil, err
 		}
-
-		sp := NewSyncProvider(netStore, kad, true, o.SyncOnlyWithinDepth)
-		ss := o.StreamConstructorFunc(store, addr.Over(), sp)
+		sp := NewSyncProvider(netStore, kad, addr, o.Autostart, o.SyncOnlyWithinDepth)
+		ss := o.StreamConstructorFunc(store, addr, sp)
 
 		cleanup = func() {
 			//ss.Stop() // wait for handlers to finish before closing localstore
