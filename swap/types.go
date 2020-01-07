@@ -106,7 +106,7 @@ func (u *Uint256) Copy(v *Uint256) *Uint256 {
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
 func (u *Uint256) Cmp(v *Uint256) int {
-	return u.value.Cmp(v.Value())
+	return u.Value().Cmp(v.Value())
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
@@ -137,7 +137,7 @@ func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
 
 // String returns the string representation for Uint256 structs
 func (u *Uint256) String() string {
-	return u.value.String()
+	return u.Value().String()
 }
 
 // MarshalJSON implements the json.Marshaler interface
