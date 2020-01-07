@@ -55,7 +55,7 @@ type ConfirmChequeMsg struct {
 
 // Uint256 represents an unsigned integer of 256 bits
 type Uint256 struct {
-	Value big.Int
+	value big.Int
 }
 
 var minUint256 = big.NewInt(0)
@@ -65,7 +65,7 @@ var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256
 // no Uint256 should have a nil pointer as its value field
 func NewUint256() *Uint256 {
 	u := new(Uint256)
-	u.Value = *minUint256
+	u.value = *minUint256
 	return u
 }
 
@@ -73,8 +73,13 @@ func NewUint256() *Uint256 {
 // any uint64 is valid as a Uint256
 func Uint64ToUint256(base uint64) *Uint256 {
 	u := NewUint256()
-	u.Value = *new(big.Int).SetUint64(base)
+	u.value = *new(big.Int).SetUint64(base)
 	return u
+}
+
+// Value returns the underlying private value for a Uint256 struct
+func (u *Uint256) Value() *big.Int {
+	return &u.value
 }
 
 // Set assigns the underlying value of the given Uint256 param to u, and returns the modified receiver struct
@@ -86,20 +91,20 @@ func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
 	if value.Cmp(minUint256) == -1 {
 		return nil, fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
-	u.Value = *value
+	u.value = *value
 	return u, nil
 }
 
 // Copy sets the underlying value of u to a copy of the given Uint256 param, and returns the modified receiver struct
 func (u *Uint256) Copy(v *Uint256) *Uint256 {
-	valueCopy := new(big.Int).Set(&v.Value)
-	u.Value = *valueCopy
+	valueCopy := new(big.Int).Set(v.Value())
+	u.value = *valueCopy
 	return u
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
 func (u *Uint256) Cmp(v *Uint256) int {
-	return u.Value.Cmp(&v.Value)
+	return u.value.Cmp(v.Value())
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
@@ -110,25 +115,25 @@ func (u *Uint256) Equals(v *Uint256) bool {
 // Add sets u to augend + addend and returns u as the sum
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Add(augend, addend *Uint256) (*Uint256, error) {
-	sum := new(big.Int).Add(&augend.Value, &addend.Value)
+	sum := new(big.Int).Add(augend.Value(), addend.Value())
 	return u.Set(sum)
 }
 
 // Sub sets u to minuend - subtrahend and returns u as the difference
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Sub(minuend, subtrahend *Uint256) (*Uint256, error) {
-	difference := new(big.Int).Sub(&minuend.Value, &subtrahend.Value)
+	difference := new(big.Int).Sub(minuend.Value(), subtrahend.Value())
 	return u.Set(difference)
 }
 
 // Mul sets u to multiplicand * multiplier and returns u as the product
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
-	product := new(big.Int).Mul(&multiplicand.Value, &multiplier.Value)
+	product := new(big.Int).Mul(multiplicand.Value(), multiplier.Value())
 	return u.Set(product)
 }
 
 // String returns the string representation for Uint256 structs
 func (u *Uint256) String() string {
-	return u.Value.String()
+	return u.value.String()
 }

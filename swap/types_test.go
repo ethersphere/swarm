@@ -85,8 +85,8 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
-				if result.Value.Cmp(tc.baseInteger) != 0 {
-					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.Value)
+				if result.Value().Cmp(tc.baseInteger) != 0 {
+					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.value)
 				}
 			}
 		})

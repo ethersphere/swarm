@@ -485,7 +485,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, otherSwap contract.Contract, opts *bind.TransactOpts, cheque *Cheque) {
 	// blocks here, as we are waiting for the transaction to be mined
-	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.GetParams().ContractAddress, &cheque.CumulativePayout.Value, cheque.Signature)
+	result, receipt, err := otherSwap.CashChequeBeneficiary(opts, s.GetParams().ContractAddress, cheque.CumulativePayout.Value(), cheque.Signature)
 	if err != nil {
 		// TODO: do something with the error
 		// and we actually need to log this error as we are in an async routine; nobody is handling this error for now
