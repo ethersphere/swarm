@@ -140,12 +140,14 @@ func (u *Uint256) String() string {
 	return u.value.String()
 }
 
-// MarshalJSON specifies how to marshal a Uint256 struct so that it can be written to disk
+// MarshalJSON implements the json.Marshaler interface
+// it specifies how to marshal a Uint256 struct so that it can be written to disk
 func (u Uint256) MarshalJSON() ([]byte, error) {
 	return []byte(u.Value().String()), nil
 }
 
-// UnmarshalJSON specifies how to unmarshal a Uint256 struct so that it can be reconstructed from disk
+// UnmarshalJSON implements the json.Unmarshaler interface
+// it specifies how to unmarshal a Uint256 struct so that it can be reconstructed from disk
 func (u *Uint256) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -160,10 +162,14 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// EncodeRLP implements the rlp.Encoder interface
+// it makes sure the `value` field is encoded even though it is private
 func (u *Uint256) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &u.value)
 }
 
+// DecodeRLP implements the rlp.Decoder interface
+// it makes sure the `value` field is decoded even though it is private
 func (u *Uint256) DecodeRLP(s *rlp.Stream) error {
 	return s.Decode(&u.value)
 }
