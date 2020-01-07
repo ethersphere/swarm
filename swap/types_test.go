@@ -2,8 +2,11 @@ package swap
 
 import (
 	"crypto/rand"
+	"io/ioutil"
 	"math/big"
 	"testing"
+
+	"github.com/ethersphere/swarm/state"
 )
 
 type Uint256TestCase struct {
@@ -120,4 +123,36 @@ func randomUint256() (*Uint256, error) {
 	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
 
 	return NewUint256().Set(randomUint256)
+}
+
+func TestUint256Store(t *testing.T) {
+	testDir, err := ioutil.TempDir("", "uint256_test_store")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stateStore, err := state.NewDBStore(testDir)
+	defer stateStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := randomUint256()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	k := r.String()
+
+	stateStore.Put(k, r)
+
+	var u *Uint256
+	err = stateStore.Get(k, &u)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !u.Equals(r) {
+		t.Fatalf("retrieved uint256 %v has an unequal balance to the original uint256 %v", u, r)
+	}
 }
