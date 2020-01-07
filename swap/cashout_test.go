@@ -124,6 +124,7 @@ func TestContractIntegration(t *testing.T) {
 
 }
 
+// TestCashCheque creates a valid cheque and feeds it to cashoutProcessor.cashCheque
 func TestCashCheque(t *testing.T) {
 	backend := newTestBackend(t)
 	reset := setupContractTest()
@@ -160,6 +161,7 @@ func TestCashCheque(t *testing.T) {
 	}
 }
 
+// TestEstimatePayout creates a valid cheque and feeds it to cashoutProcessor.estimatePayout
 func TestEstimatePayout(t *testing.T) {
 	backend := newTestBackend(t)
 	reset := setupContractTest()
