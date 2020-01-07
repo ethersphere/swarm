@@ -1,0 +1,118 @@
+package swap
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/metrics"
+	contract "github.com/ethersphere/swarm/contracts/swap"
+)
+
+// CashoutProcessor holds all relevant fields needed for processing cashouts
+type CashoutProcessor struct {
+	backend    contract.Backend  // ethereum backend to use
+	privateKey *ecdsa.PrivateKey // private key to use
+}
+
+// CashoutRequest represents a request for a cashout operation
+type CashoutRequest struct {
+	Cheque      Cheque         // cheque to be cashed
+	Destination common.Address // destination for the payout
+}
+
+// ActiveCashout stores the necessary information for a cashout in progess
+type ActiveCashout struct {
+	Request         CashoutRequest // the request that caused this cashout
+	TransactionHash common.Hash    // the hash of the current transaction for this request
+}
+
+// newCashoutProcessor creates a new instance of CashoutLoop
+func newCashoutProcessor(backend contract.Backend, privateKey *ecdsa.PrivateKey) *CashoutProcessor {
+	return &CashoutProcessor{
+		backend:    backend,
+		privateKey: privateKey,
+	}
+}
+
+// cashCheque tries to cash the cheque specified in the request
+// after the transaction is sent it waits on its success
+func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutRequest) error {
+	cheque := request.Cheque
+	opts := bind.NewKeyedTransactor(c.privateKey)
+	opts.Context = ctx
+
+	otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
+	if err != nil {
+		return err
+	}
+
+	tx, err := otherSwap.CashChequeBeneficiaryStart(opts, request.Destination, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	if err != nil {
+		return err
+	}
+
+	// this blocks until the cashout has been successfully processed
+	return c.waitForAndProcessActiveCashout(&ActiveCashout{
+		Request:         *request,
+		TransactionHash: tx.Hash(),
+	})
+}
+
+// estimatePayout estimates the payout for a given cheque as well as the transaction cost
+func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (uint64, uint64, error) {
+	otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	paidOut, err := otherSwap.PaidOut(&bind.CallOpts{Context: ctx}, cheque.Beneficiary)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	gasPrice, err := c.backend.SuggestGasPrice(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
+
+	if paidOut.Cmp(big.NewInt(int64(cheque.CumulativePayout))) > 0 {
+		return 0, transactionCosts, nil
+	}
+
+	expectedPayout := cheque.CumulativePayout - paidOut.Uint64()
+
+	return expectedPayout, transactionCosts, nil
+}
+
+// waitForAndProcessActiveCashout waits for activeCashout to complete
+func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveCashout) error {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTransactionTimeout)
+	defer cancel()
+
+	receipt, err := contract.WaitForTransactionByHash(ctx, c.backend, activeCashout.TransactionHash)
+	if err != nil {
+		return err
+	}
+
+	otherSwap, err := contract.InstanceAt(activeCashout.Request.Cheque.Contract, c.backend)
+	if err != nil {
+		return err
+	}
+
+	result := otherSwap.CashChequeBeneficiaryResult(receipt)
+
+	metrics.GetOrRegisterCounter("swap.cheques.cashed.honey", nil).Inc(result.TotalPayout.Int64())
+
+	if result.Bounced {
+		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
+		swapLog.Warn("cheque bounced", "tx", receipt.TxHash)
+	}
+
+	swapLog.Info("cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
+	return nil
+}

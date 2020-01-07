@@ -52,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
 	"github.com/ethersphere/swarm/contracts/swap"
+	contract "github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -852,8 +853,8 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 // During tests, because the cashing in of cheques is async, we should wait for the function to be returned
 // Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
 // causing subsequent TX to possibly fail due to nonce mismatch
-func testCashCheque(s *Swap, otherSwap cswap.Contract, opts *bind.TransactOpts, cheque *Cheque) {
-	cashCheque(s, otherSwap, opts, cheque)
+func testCashCheque(s *Swap, cheque *Cheque) {
+	cashCheque(s, cheque)
 	// send to the channel, signals to clients that this function actually finished
 	if stb, ok := s.backend.(*swapTestBackend); ok {
 		if stb.cashDone != nil {
@@ -1193,11 +1194,17 @@ func TestContractIntegration(t *testing.T) {
 
 	log.Debug("cash-in the cheque")
 
-	cashResult, receipt, err := issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
-
+	tx, err := issuerSwap.contract.CashChequeBeneficiaryStart(opts, beneficiaryAddress, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	receipt, err := contract.WaitForTransactionByHash(ctx, issuerSwap.backend, tx.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cashResult := issuerSwap.contract.CashChequeBeneficiaryResult(receipt)
 	if receipt.Status != 1 {
 		t.Fatalf("Bad status %d", receipt.Status)
 	}
@@ -1225,13 +1232,20 @@ func TestContractIntegration(t *testing.T) {
 	}
 
 	log.Debug("try to cash-in the bouncing cheque")
-	cashResult, receipt, err = issuerSwap.contract.CashChequeBeneficiary(opts, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
+	tx, err = issuerSwap.contract.CashChequeBeneficiaryStart(opts, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receipt, err = contract.WaitForTransactionByHash(ctx, issuerSwap.backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if receipt.Status != 1 {
 		t.Fatalf("Bad status %d", receipt.Status)
 	}
+
+	cashResult = issuerSwap.contract.CashChequeBeneficiaryResult(receipt)
 	if !cashResult.Bounced {
 		t.Fatal("cheque did not bounce")
 	}
