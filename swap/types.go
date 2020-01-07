@@ -18,9 +18,11 @@ package swap
 
 import (
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ChequeParams encapsulate all cheque parameters
@@ -156,4 +158,12 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 	}
 	u.value = value
 	return nil
+}
+
+func (u *Uint256) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &u.value)
+}
+
+func (u *Uint256) DecodeRLP(s *rlp.Stream) error {
+	return s.Decode(&u.value)
 }
