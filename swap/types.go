@@ -98,8 +98,7 @@ func (u *Uint256) Set(value big.Int) (*Uint256, error) {
 
 // Copy sets the underlying value of u to a copy of the given Uint256 param, and returns the modified receiver struct
 func (u *Uint256) Copy(v *Uint256) *Uint256 {
-	valueCopy := new(big.Int).Set(&v.value)
-	u.value = *valueCopy
+	u.value = v.value
 	return u
 }
 
