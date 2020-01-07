@@ -80,7 +80,7 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256().Set(tc.baseInteger)
+			result, err := NewUint256().Set(*tc.baseInteger)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
@@ -88,7 +88,8 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
-				if result.Value().Cmp(tc.baseInteger) != 0 {
+				resultValue := result.Value()
+				if (&resultValue).Cmp(tc.baseInteger) != 0 {
 					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.value)
 				}
 			}
@@ -122,7 +123,7 @@ func randomUint256() (*Uint256, error) {
 
 	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
 
-	return NewUint256().Set(randomUint256)
+	return NewUint256().Set(*randomUint256)
 }
 
 // TestUint256Store indirectly tests the marshaling and unmarshaling of a random Uint256 variable
