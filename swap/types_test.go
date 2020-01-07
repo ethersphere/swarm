@@ -106,11 +106,11 @@ func TestCopyUint256(t *testing.T) {
 	c := NewUint256().Copy(r)
 
 	if !c.Equals(r) {
-		t.Fatalf("copy of uint256 %v has an unequal value of %v", r, c)
+		t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
 	}
 
 	if c == r {
-		t.Fatalf("copy of uint256 %v shares memory with its base", r)
+		t.Fatalf("copy of Uint256 %v shares memory with its base", r)
 	}
 }
 
@@ -125,6 +125,7 @@ func randomUint256() (*Uint256, error) {
 	return NewUint256().Set(randomUint256)
 }
 
+// TestUint256Store indirectly tests the marshaling and unmarshaling of a random Uint256 variable
 func TestUint256Store(t *testing.T) {
 	testDir, err := ioutil.TempDir("", "uint256_test_store")
 	if err != nil {
@@ -153,6 +154,6 @@ func TestUint256Store(t *testing.T) {
 	}
 
 	if !u.Equals(r) {
-		t.Fatalf("retrieved uint256 %v has an unequal balance to the original uint256 %v", u, r)
+		t.Fatalf("retrieved Uint256 %v has an unequal balance to the original Uint256 %v", u, r)
 	}
 }
