@@ -314,17 +314,12 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	}
 }
 
-// checkBalance checks that the amount would not result in crossing the disconnection threshold
-func (s *Swap) checkBalance(amount int64, peer *protocols.Peer) (err error) {
-	swapPeer := s.getPeer(peer.ID())
-	if swapPeer == nil {
-		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
-	}
-
+// modifyBalanceOk checks that the amount would not result in crossing the disconnection threshold
+func (s *Swap) modifyBalanceOk(amount int64, swapPeer *Peer) (err error) {
 	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
 	balance := swapPeer.getBalance()
 	if balance >= s.params.DisconnectThreshold && amount > 0 {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
 	}
 
 	return nil
@@ -342,7 +337,7 @@ func (s *Swap) Check(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer.lock.Lock()
 	defer swapPeer.lock.Unlock()
 	// currently this is the only real check needed:
-	return s.checkBalance(amount, peer)
+	return s.modifyBalanceOk(amount, swapPeer)
 }
 
 // Add is the (sole) accounting function
@@ -356,7 +351,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer.lock.Lock()
 	defer swapPeer.lock.Unlock()
 	// we should probably check here again:
-	if err = s.checkBalance(amount, peer); err != nil {
+	if err = s.modifyBalanceOk(amount, swapPeer); err != nil {
 		return err
 	}
 
