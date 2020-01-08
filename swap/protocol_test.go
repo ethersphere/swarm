@@ -246,8 +246,9 @@ func TestEmitCheque(t *testing.T) {
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
 	balance := Uint64ToUint256(100001)
+	balanceValue := balance.Value()
 
-	if err := testDeploy(context.Background(), debitorSwap, balance.Value); err != nil {
+	if err := testDeploy(context.Background(), debitorSwap, &balanceValue); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,7 +261,7 @@ func TestEmitCheque(t *testing.T) {
 
 	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
 	// set balance artificially
-	if err = debitor.setBalance(balance.Value.Int64()); err != nil {
+	if err = debitor.setBalance(balanceValue.Int64()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,7 +276,7 @@ func TestEmitCheque(t *testing.T) {
 			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: balance,
 		},
-		Honey: balance.Value.Uint64(),
+		Honey: balanceValue.Uint64(),
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {

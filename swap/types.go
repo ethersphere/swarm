@@ -18,9 +18,11 @@ package swap
 
 import (
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ChequeParams encapsulate all cheque parameters
@@ -55,17 +57,16 @@ type ConfirmChequeMsg struct {
 
 // Uint256 represents an unsigned integer of 256 bits
 type Uint256 struct {
-	Value *big.Int
+	value big.Int
 }
 
 var minUint256 = big.NewInt(0)
 var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)) // 2^256 - 1
 
-// NewUint256 creates a Uint256 struct with an initial underlying value of 0
-// no Uint256 should have a nil pointer as its value field
+// NewUint256 creates a Uint256 struct with a minimum initial underlying value
 func NewUint256() *Uint256 {
 	u := new(Uint256)
-	u.Value = minUint256
+	u.value = *minUint256
 	return u
 }
 
@@ -73,33 +74,37 @@ func NewUint256() *Uint256 {
 // any uint64 is valid as a Uint256
 func Uint64ToUint256(base uint64) *Uint256 {
 	u := NewUint256()
-	u.Value = new(big.Int).SetUint64(base)
+	u.value = *new(big.Int).SetUint64(base)
 	return u
+}
+
+// Value returns the underlying private value for a Uint256 struct
+func (u *Uint256) Value() big.Int {
+	return u.value
 }
 
 // Set assigns the underlying value of the given Uint256 param to u, and returns the modified receiver struct
 // returns an error when the result falls outside of the unsigned 256-bit integer range
-func (u *Uint256) Set(value *big.Int) (*Uint256, error) {
+func (u *Uint256) Set(value big.Int) (*Uint256, error) {
 	if value.Cmp(maxUint256) == 1 {
 		return nil, fmt.Errorf("cannot set Uint256 to %v as it overflows max value of %v", value, maxUint256)
 	}
 	if value.Cmp(minUint256) == -1 {
 		return nil, fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
-	u.Value = value
+	u.value = value
 	return u, nil
 }
 
 // Copy sets the underlying value of u to a copy of the given Uint256 param, and returns the modified receiver struct
 func (u *Uint256) Copy(v *Uint256) *Uint256 {
-	valueCopy := new(big.Int).Set(v.Value)
-	u.Value = valueCopy
+	u.value = v.value
 	return u
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
 func (u *Uint256) Cmp(v *Uint256) int {
-	return u.Value.Cmp(v.Value)
+	return u.value.Cmp(&v.value)
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
@@ -110,25 +115,59 @@ func (u *Uint256) Equals(v *Uint256) bool {
 // Add sets u to augend + addend and returns u as the sum
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Add(augend, addend *Uint256) (*Uint256, error) {
-	sum := new(big.Int).Add(augend.Value, addend.Value)
-	return u.Set(sum)
+	sum := new(big.Int).Add(&augend.value, &addend.value)
+	return u.Set(*sum)
 }
 
 // Sub sets u to minuend - subtrahend and returns u as the difference
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Sub(minuend, subtrahend *Uint256) (*Uint256, error) {
-	difference := new(big.Int).Sub(minuend.Value, subtrahend.Value)
-	return u.Set(difference)
+	difference := new(big.Int).Sub(&minuend.value, &subtrahend.value)
+	return u.Set(*difference)
 }
 
 // Mul sets u to multiplicand * multiplier and returns u as the product
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
-	product := new(big.Int).Mul(multiplicand.Value, multiplier.Value)
-	return u.Set(product)
+	product := new(big.Int).Mul(&multiplicand.value, &multiplier.value)
+	return u.Set(*product)
 }
 
 // String returns the string representation for Uint256 structs
 func (u *Uint256) String() string {
-	return u.Value.String()
+	return u.value.String()
+}
+
+// MarshalJSON implements the json.Marshaler interface
+// it specifies how to marshal a Uint256 struct so that it can be written to disk
+func (u Uint256) MarshalJSON() ([]byte, error) {
+	return []byte(u.value.String()), nil
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface
+// it specifies how to unmarshal a Uint256 struct so that it can be reconstructed from disk
+func (u *Uint256) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var value big.Int
+	_, ok := value.SetString(string(b), 10)
+	if !ok {
+		return fmt.Errorf("not a valid integer value: %s", b)
+	}
+	u.value = value
+	return nil
+}
+
+// EncodeRLP implements the rlp.Encoder interface
+// it makes sure the `value` field is encoded even though it is private
+func (u *Uint256) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &u.value)
+}
+
+// DecodeRLP implements the rlp.Decoder interface
+// it makes sure the `value` field is decoded even though it is private
+func (u *Uint256) DecodeRLP(s *rlp.Stream) error {
+	return s.Decode(&u.value)
 }

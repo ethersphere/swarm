@@ -2,8 +2,11 @@ package swap
 
 import (
 	"crypto/rand"
+	"io/ioutil"
 	"math/big"
 	"testing"
+
+	"github.com/ethersphere/swarm/state"
 )
 
 type Uint256TestCase struct {
@@ -77,7 +80,7 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256().Set(tc.baseInteger)
+			result, err := NewUint256().Set(*tc.baseInteger)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
@@ -85,8 +88,9 @@ func testSetUint256(t *testing.T, testCases []Uint256TestCase) {
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
-				if result.Value.Cmp(tc.baseInteger) != 0 {
-					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.Value)
+				resultValue := result.Value()
+				if (&resultValue).Cmp(tc.baseInteger) != 0 {
+					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.value)
 				}
 			}
 		})
@@ -103,11 +107,11 @@ func TestCopyUint256(t *testing.T) {
 	c := NewUint256().Copy(r)
 
 	if !c.Equals(r) {
-		t.Fatalf("copy of uint256 %v has an unequal value of %v", r, c)
+		t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
 	}
 
 	if c == r {
-		t.Fatalf("copy of uint256 %v shares memory with its base", r)
+		t.Fatalf("copy of Uint256 %v shares memory with its base", r)
 	}
 }
 
@@ -119,5 +123,38 @@ func randomUint256() (*Uint256, error) {
 
 	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
 
-	return NewUint256().Set(randomUint256)
+	return NewUint256().Set(*randomUint256)
+}
+
+// TestUint256Store indirectly tests the marshaling and unmarshaling of a random Uint256 variable
+func TestUint256Store(t *testing.T) {
+	testDir, err := ioutil.TempDir("", "uint256_test_store")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stateStore, err := state.NewDBStore(testDir)
+	defer stateStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := randomUint256()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	k := r.String()
+
+	stateStore.Put(k, r)
+
+	var u *Uint256
+	err = stateStore.Get(k, &u)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !u.Equals(r) {
+		t.Fatalf("retrieved Uint256 %v has an unequal balance to the original Uint256 %v", u, r)
+	}
 }
