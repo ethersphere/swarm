@@ -71,7 +71,6 @@ func TestAccountingSimulation(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	SetupAccountingMetrics(1*time.Second, filepath.Join(dir, "metrics.db"))
-	//define the node.Service for this test
 	services := adapters.Services{
 		"accounting": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			return bal.newNode(), nil
@@ -82,8 +81,9 @@ func TestAccountingSimulation(t *testing.T) {
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{DefaultService: "accounting"})
 	defer net.Shutdown()
 
-	// we send msgs messages per node, wait for all messages to arrive
-	bal.wg.Add(*nodes * *msgs)
+	// we send msgs messages per node, wait for all messages to have been accounted
+	// (Add runs for each send and receive, so we need double the amount)
+	bal.wg.Add(*nodes * *msgs * 2)
 	trigger := make(chan enode.ID)
 	go func() {
 		// wait for all of them to arrive
@@ -168,13 +168,14 @@ func newMatrix(n int) *matrix {
 }
 
 // called from the testBalance's Add accounting function: register balance change
-func (m *matrix) add(i, j int, v int64) error {
+func (m *matrix) add(i, j int, v int64, wg *sync.WaitGroup) error {
 	// index for the balance of local node i with remote nodde j is
 	// i * number of nodes + remote node
 	mi := i*m.n + j
 	// register that balance
 	m.lock.Lock()
 	m.m[mi] += v
+	wg.Done()
 	m.lock.Unlock()
 	return nil
 }
@@ -229,13 +230,17 @@ type testNode struct {
 	peerCount int
 }
 
+func (t *testNode) Check(a int64, p *Peer) error {
+	return nil
+}
+
 // do the accounting for the peer's test protocol
 // testNode implements protocols.Balance
 func (t *testNode) Add(a int64, p *Peer) error {
 	//get the index for the remote peer
 	remote := t.bal.id2n[p.ID()]
 	log.Debug("add", "local", t.i, "remote", remote, "amount", a)
-	return t.bal.add(t.i, remote, a)
+	return t.bal.add(t.i, remote, a, t.bal.wg)
 }
 
 //run the p2p protocol
@@ -260,7 +265,6 @@ func (t *testNode) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // p2p message receive handler function
 func (tp *testPeer) handle(ctx context.Context, msg interface{}) error {
-	tp.wg.Done()
 	log.Debug("receive", "from", tp.remote, "to", tp.local, "type", reflect.TypeOf(msg), "msg", msg)
 	return nil
 }
