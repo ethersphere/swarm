@@ -465,11 +465,7 @@ func TestPeer_Run(t *testing.T) {
 
 		var eg errgroup.Group
 		eg.Go(func() error {
-			if err := peer.Run(handler); err != nil {
-				return err
-			}
-
-			return nil
+			return peer.Run(handler)
 		})
 
 		rw.eof = true
