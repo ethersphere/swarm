@@ -112,8 +112,6 @@ func TestAddedNodesNearestNeighbour(t *testing.T) {
 
 }
 
-var testCount = 0
-
 // TestEachBinBaseUses tests that EachBinDesc returns first the least used peer in its bin
 // We will create 3 bins with two peers each. We will call EachBinDesc 6 times twice with an address
 // on each bin, so at the end all peers should have 1 use (because the address in each bin is equidistant to
@@ -121,8 +119,6 @@ var testCount = 0
 // Then we will use an address in a bin that is nearer to one of the peers and we will check that that peer is always
 // returned first.
 func TestEachBinBaseUses(t *testing.T) {
-	myCount := testCount
-	testCount++
 	tk := newTestKademlia(t, "11111111")
 	klb := NewKademliaLoadBalancer(tk, false)
 	tk.On("01010101") //Peer 1 dec 85 hex 55
@@ -150,9 +146,9 @@ func TestEachBinBaseUses(t *testing.T) {
 			peerLogLines = append(peerLogLines, peerLogLine)
 		}
 
-		log.Debug("peers for address in bin", "peers", peerLogLines, "po", bin.ProximityOrder, "count", myCount)
+		log.Debug("peers for address in bin", "peers", peerLogLines, "po", bin.ProximityOrder)
 		chosen := bin.LBPeers[0]
-		log.Debug("Chosen peer is", "chosen", chosen.Peer.Label(), "uses", klb.resourceUseStats.GetUses(chosen.Peer), "count", myCount)
+		log.Debug("Chosen peer is", "chosen", chosen.Peer.Label(), "uses", klb.resourceUseStats.GetUses(chosen.Peer))
 		chosen.AddUseCount()
 		return false
 	}
@@ -206,6 +202,54 @@ func TestEachBinBaseUses(t *testing.T) {
 	if count != 3 {
 		t.Errorf("Expected 3 uses of 10010001 but got %v", count)
 	}
+}
+
+// TestEachBinOffPeers is identical to TestEachBinBaseUses, just that it tests
+// that peers don't get chosen when they're OFF
+func TestEachBinOffPeers(t *testing.T) {
+	tk := newTestKademlia(t, "11111111")
+	klb := NewKademliaLoadBalancer(tk, false)
+	tk.On("01010101") //Peer 1 dec 85 hex 55
+	tk.On("01010100") // 2 dec 84 hex 54
+	tk.On("10010100") // 3 dec 148 hex 94
+	tk.On("10010001") // 4 dec 145 hex 91
+	tk.On("11010100") // 5 dec 212 hex d4
+	tk.On("11010101") // 6 dec 213 hex d5
+
+	//Waiting for all peers to be registered
+	resources := klb.resourceUseStats.Len()
+	for resources != 6 {
+		time.Sleep(10 * time.Millisecond)
+		resources = klb.resourceUseStats.Len()
+	}
+
+	pivotAddressBin0 := pot.NewAddressFromString("00000000") // Two nearest peers (1,2) hex 00
+	pivotAddressBin1 := pot.NewAddressFromString("10000000") // Two nearest peers (3,4) hex 80
+	pivotAddressBin2 := pot.NewAddressFromString("11000000") // Two nearest peers (5,6) hex c0
+	countUse := func(bin LBBin) bool {
+		t.Errorf("callback should not have been called")
+		return false
+	}
+
+	tk.Off("01010101") //Peer 1 dec 85 hex 55
+	tk.Off("01010100") // 2 dec 84 hex 54
+	tk.Off("10010100") // 3 dec 148 hex 94
+	tk.Off("10010001") // 4 dec 145 hex 91
+	tk.Off("11010100") // 5 dec 212 hex d4
+	tk.Off("11010101") // 6 dec 213 hex d5
+
+	klb.EachBinDesc(pivotAddressBin0, countUse)
+	klb.EachBinDesc(pivotAddressBin0, countUse)
+	klb.EachBinDesc(pivotAddressBin1, countUse)
+	klb.EachBinDesc(pivotAddressBin1, countUse)
+	klb.EachBinDesc(pivotAddressBin2, countUse)
+	klb.EachBinDesc(pivotAddressBin2, countUse)
+
+	//Now a message that is nearer 10010001 than 10010100 in its bin. It will be taken always regardless of uses
+	pivotAddressBin3 := pot.NewAddressFromString("10010011") // Nearer 4 hex 93
+
+	klb.EachBinDesc(pivotAddressBin3, countUse)
+	klb.EachBinDesc(pivotAddressBin3, countUse)
 }
 
 // TestEachBinFiltered checks that when load balancing peers, only those with the provided capabilities are chosen.
@@ -267,7 +311,6 @@ func TestEachBinFiltered(t *testing.T) {
 	if secondCount-secondCountStart != 2 {
 		t.Errorf("Expected 2 uses of second capability peer but got %v", secondCount-secondCountStart)
 	}
-
 }
 
 // TestResourceUseStats checks that on and off messages are delivered in order
