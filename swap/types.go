@@ -66,7 +66,7 @@ var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256
 // NewUint256 creates a Uint256 struct with a minimum initial underlying value
 func NewUint256() *Uint256 {
 	u := new(Uint256)
-	u.value = *minUint256
+	u.value = *new(big.Int).Set(minUint256)
 	return u
 }
 
@@ -92,13 +92,13 @@ func (u *Uint256) Set(value big.Int) (*Uint256, error) {
 	if value.Cmp(minUint256) == -1 {
 		return nil, fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
-	u.value = value
+	u.value = *new(big.Int).Set(&value)
 	return u, nil
 }
 
 // Copy sets the underlying value of u to a copy of the given Uint256 param, and returns the modified receiver struct
 func (u *Uint256) Copy(v *Uint256) *Uint256 {
-	u.value = v.value
+	u.value = *new(big.Int).Set(&v.value)
 	return u
 }
 
