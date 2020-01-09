@@ -391,12 +391,14 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 			return err
 		}
 		// ...and finally apply (write) the accounting change
-		err = p.spec.Hook.Apply(p, costToLocalNode, uint32(size))
+		if err := p.spec.Hook.Apply(p, costToLocalNode, uint32(size)); err != nil {
+			return err
+		}
 	} else {
 		err = p2p.Send(p.rw, code, wmsg)
 	}
 
-	return err
+	return nil
 }
 
 // SetMsgPauser sets message pauser for this peer
