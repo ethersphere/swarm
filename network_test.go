@@ -352,17 +352,18 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 				time.Sleep(1 * time.Second)
 			}
 
-		RETRIEVE:
-			// File retrieval check is repeated until all uploaded files are retrieved from all nodes
-			// or until the timeout is reached.
-			if missing := retrieveF(t, sim, files); missing == 0 {
-				return nil
-			} else {
-				t.Logf("retry retrieve. missing %d", missing)
-				log.Error("retrying retrieve", "missing", missing, "files", len(files))
-				time.Sleep(1 * time.Second)
-				goto RETRIEVE
+			for {
+				// File retrieval check is repeated until all uploaded files are retrieved from all nodes
+				// or until the timeout is reached.
+				if missing := retrieveF(t, sim, files); missing == 0 {
+					return nil
+				} else {
+					t.Logf("retry retrieve. missing %d", missing)
+					log.Error("retrying retrieve", "missing", missing, "files", len(files))
+					time.Sleep(1 * time.Second)
+				}
 			}
+			return nil
 		})
 
 		if result.Error != nil {
