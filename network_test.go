@@ -307,6 +307,15 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			continue
 		}
 
+		for {
+			ids := sim.UpNodeIDs()
+			if len(ids) == step.nodeCount {
+				break
+			}
+			log.Info("test run waiting for node count to normalise. sleeping 1 second", "count", len(ids), "want", step.nodeCount)
+			time.Sleep(1 * time.Second)
+		}
+
 		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 			nodeIDs := sim.UpNodeIDs()
 			rand.Shuffle(len(nodeIDs), func(i, j int) {
@@ -332,12 +341,15 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 				})
 			}
 
-		CHECK:
-			for _, id := range nodeIDs {
-				if sim.MustNodeItem(id, bucketKeyInspector).(*api.Inspector).IsPullSyncing() {
-					time.Sleep(1 * time.Second)
-					goto CHECK
+			for syncing := true; syncing; {
+				syncing = false
+				for _, id := range nodeIDs {
+					if sim.MustNodeItem(id, bucketKeyInspector).(*api.Inspector).IsPullSyncing() {
+						syncing = true
+					}
 				}
+
+				time.Sleep(1 * time.Second)
 			}
 
 		RETRIEVE:
@@ -396,37 +408,39 @@ func retrieveF(
 	nodeIDs := sim.UpNodeIDs()
 
 	for _, id := range nodeIDs {
+		swarm := sim.Service("swarm", id).(*Swarm)
+		log.Debug("printing kademlias", "node", id.String())
+		fmt.Println(swarm.bzz.Hive.String())
+	}
+
+	for _, id := range nodeIDs {
 		missing := 0
 
 		swarm := sim.Service("swarm", id).(*Swarm)
 
-	FILES:
 		for _, f := range files {
 			log.Debug("api get: check file", "node", id.String(), "key", f.addr.String())
 
 			r, _, _, _, err := swarm.api.Get(context.TODO(), api.NOOPDecrypt, f.addr, "/")
 			if err != nil {
-				t.Logf("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+				t.Logf("api get - node cannot get key: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
 				missing++
-				continue FILES
+				continue
 			}
 			d, err := ioutil.ReadAll(r)
 			if err != nil {
-				t.Logf("api get: read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+				t.Logf("api get - error read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
 				missing++
-				continue FILES
+				continue
 			}
 			data := string(d)
 			if data != f.data {
 				missing++
-				t.Logf("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
-				continue FILES
+				t.Logf("api get - file content missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
+				continue
 			}
-			//log.Info("api get: file found", "node", id.String(), "key", f.addr.String(), "content", data, "files found", atomic.LoadUint64(&foundCount))
 		}
-
 	}
-	//log.Info("check stats", "total check count", totalCheckCount, "total files found", atomic.LoadUint64(totalFoundCount), "total errors", errCount)
 
 	return missing
 }
