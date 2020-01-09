@@ -532,7 +532,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	}
 
 	// calculate tentative new balance after cheque is processed
-	newBalance := p.getBalance() - int64(actualAmount)
+	newBalance := p.getBalance() - int64(cheque.Honey)
 	// check if this new balance would put creditor into debt
 	if newBalance < -int64(ChequeDebtTolerance) {
 		return 0, fmt.Errorf("received cheque would result in balance %d which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
