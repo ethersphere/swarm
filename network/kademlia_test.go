@@ -219,7 +219,7 @@ func TestHighMinBinSize(t *testing.T) {
 // Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
 
-	// base address is all ones
+	// base address is all zeros
 	// no peers
 	// unhealthy (and lonely)
 	tk := newTestKademlia(t, "11111111")
@@ -376,147 +376,81 @@ func binStr(a *BzzAddr) string {
 	return pot.ToBin(a.Address())[:8]
 }
 
-//Tests peer suggestion. Depends on expectedMinBinSize implementation
-func TestSuggestPeers(t *testing.T) {
-	base := "00000000"
-	tk := newTestKademlia(t, base)
-
-	//Add peers to bin 2 and 3 in order to be able to have depth 2
+func TestSuggestPeerFindPeers(t *testing.T) {
+	tk := newTestKademlia(t, "00000000")
 	tk.On("00100000")
+	tk.checkSuggestPeer("<nil>", 0, false)
+
 	tk.On("00010000")
-
-	//No unconnected peers
 	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//We add some addresses that fall in bin0 and bin1
-	tk.Register("11111000")
-	tk.Register("01110000")
-
-	//Bins should fill from  most empty to least empty and shallower to deeper
-	//first suggestion should be for bin 0
-	tk.checkSuggestPeer("11111000", 0, false)
-	tk.On("11111000")
-
-	//Since we now have 1 peer in bin0 and none in bin1, next suggested peer should be for bin1
-	tk.checkSuggestPeer("01110000", 0, false)
-	tk.On("01110000")
-
-	tk.Register("11110000")
-	tk.Register("01100000")
-
-	//Both bins 0 and 1 have at least 1 peer, so next suggested peer should be for 0 (shallower)
-	tk.checkSuggestPeer("11110000", 0, false)
-	tk.On("11110000")
-
-	//Bin0 has 2 peers, bin1 has 1 peer, should recommend peer for bin 1
-	tk.checkSuggestPeer("01100000", 0, false)
-	tk.On("01100000")
-
-	tk.Register("11100000")
-	tk.Register("01100011")
-
-	//Bin1 should be saturated now
-	//Next suggestion should  be bin0 peers
-	tk.checkSuggestPeer("11100000", 0, false)
-	tk.On("11100000")
-
-	//Bin0 should also  be saturated now
-	//All bins saturated, shouldn't suggest more peers
-	tk.Register("11000000")
+	tk.On("10000000", "10000001")
 	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//Depth is 2
-	//Since depth is 2, bins >= 2 aren't considered saturated if peers left to connect
-	//We add addresses that fall in bin2 and bin3
-	tk.Register("00111000")
-	tk.Register("00011100")
+	tk.On("01000000")
+	tk.Off("10000001")
+	tk.checkSuggestPeer("10000001", 0, true)
 
-	tk.checkSuggestPeer("00111000", 0, false)
-	tk.On("00110000")
-	tk.checkSuggestPeer("00011100", 0, false)
-	tk.On("00011100")
+	tk.On("00100001")
+	tk.Off("01000000")
+	tk.checkSuggestPeer("01000000", 0, false)
 
-	//Now depth has changed to 3 since bin3 and deeper include neighbourSize peers (2)
-	//Bin0 and Bin1 not saturated, Bin2 saturated
-	tk.Register("11000000")
-
-	tk.checkSuggestPeer("01100011", 0, false)
-	tk.On("01100011")
-	tk.checkSuggestPeer("11000000", 0, false)
-	tk.On("11000000")
-
-	//All bins saturated again
-	tk.Register("11111110")
-	tk.Register("01010100")
+	// second time disconnected peer not callable
+	// with reasonably set Interval
 	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//If bin in neighbour (bin3), should keep adding peers even if size >== expectedSize
-	tk.Register("00011111")
-	tk.checkSuggestPeer("00011111", 0, false)
-	tk.On("00011111")
+	// on and off again, peer callable again
+	tk.On("01000000")
+	tk.Off("01000000")
+	tk.checkSuggestPeer("01000000", 0, false)
+
+	tk.On("01000000", "10000001")
+	tk.checkSuggestPeer("<nil>", 0, false)
+
 	tk.Register("00010001")
 	tk.checkSuggestPeer("00010001", 0, false)
+
 	tk.On("00010001")
-
-	//No more peers left in unsaturated bins
-	tk.checkSuggestPeer("<nil>", 0, false)
-}
-
-//Tests change of saturationDepth returned by suggestPeers
-func TestSuggestPeersSaturationDepthChange(t *testing.T) {
-
-	base := "00000000"
-	tk := newTestKademlia(t, base)
-	tk.On("10000000", "11000000", "11100000", "01000000", "01100000", "00100000", "00010000")
-
-	//Saturation depth is 2
-	if tk.saturationDepth != 2 {
-		t.Fatalf("Saturation depth should be 2, got %d", tk.saturationDepth)
-	}
 	tk.Off("01000000")
-	//Saturation depth should have fallen to 1
-	tk.checkSuggestPeer("01000000", 1, true)
+	tk.checkSuggestPeer("01000000", 0, false)
+
 	tk.On("01000000")
+	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//Saturation depth is 2 again
-	if tk.saturationDepth != 2 {
-		t.Fatalf("Saturation depth should be 2, got %d", tk.saturationDepth)
-	}
-	tk.Off("10000000")
-	//Saturation depth should have fallen to 0
-	tk.checkSuggestPeer("10000000", 0, true)
-	tk.On("10000000")
+	tk.Register("01000001")
+	tk.checkSuggestPeer("01000001", 0, false)
 
-	tk.On("10101010", "01101010", "00101010", "00010001")
-	//Saturation depth is now 3
-	if tk.saturationDepth != 3 {
-		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
-	}
-	//We remove all connections from closest bin (PO=3)
-	tk.Off("00010000")
-	tk.Off("00010001")
-	//Saturation depth should have fallen to 2
-	tk.checkSuggestPeer("00010001", 2, true)
+	tk.On("01000001")
+	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//We bring saturation depth back to 3
-	tk.On("00010000")
-	tk.On("00010001")
-	if tk.saturationDepth != 3 {
-		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
-	}
+	tk.Register("10000010", "01000010", "00100010")
+	tk.checkSuggestPeer("<nil>", 0, false)
 
-	//We add more connections to bin 3 (closest bin) so that BinSize > expectedMinBinSize
-	tk.On("00010011")
-	tk.On("00011011")
-	//Saturation depth shouldn't have changed
-	if tk.saturationDepth != 3 {
-		t.Fatalf("Saturation depth should be 3, got %d", tk.saturationDepth)
-	}
+	tk.Register("00010010")
+	tk.checkSuggestPeer("00010010", 0, false)
 
-	//We disconnect one peer from bin 3
-	tk.Off("00010011")
-	//Saturation depth shouldn't have changed
-	tk.checkSuggestPeer("00010011", 0, false)
+	tk.Off("00100001")
+	tk.checkSuggestPeer("00100010", 2, true)
+
+	tk.Off("01000001")
+	tk.checkSuggestPeer("01000010", 1, true)
+
+	tk.checkSuggestPeer("01000001", 0, false)
+	tk.checkSuggestPeer("00100001", 0, false)
+	tk.checkSuggestPeer("<nil>", 0, false)
+
+	tk.On("01000001", "00100001")
+	tk.Register("10000100", "01000100", "00100100")
+	tk.Register("00000100", "00000101", "00000110")
+	tk.Register("00000010", "00000011", "00000001")
+
+	tk.checkSuggestPeer("00000110", 0, false)
+	tk.checkSuggestPeer("00000101", 0, false)
+	tk.checkSuggestPeer("00000100", 0, false)
+	tk.checkSuggestPeer("00000011", 0, false)
+	tk.checkSuggestPeer("00000010", 0, false)
+	tk.checkSuggestPeer("00000001", 0, false)
+	tk.checkSuggestPeer("<nil>", 0, false)
 
 }
 
@@ -589,7 +523,7 @@ func TestKademliaHiveString(t *testing.T) {
 	tk.Register("10000000", "10000001")
 	tk.MaxProxDisplay = 8
 	h := tk.String()
-	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 0000000000000000000000000000000000000000000000000000000000000000\npopulation: 2 (4), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 16\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
+	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 0000000000000000000000000000000000000000000000000000000000000000\npopulation: 2 (4), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
 	if expH[104:] != h[104:] {
 		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
 	}
