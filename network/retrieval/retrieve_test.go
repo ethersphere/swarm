@@ -172,7 +172,7 @@ func TestUnsolicitedChunkDelivery(t *testing.T) {
 		})
 
 	// expect peer disconnection
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("Message handler error: (msg code 0): unsolicited chunk delivery from peer: cannot find ruid")})
 
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +246,7 @@ func TestUnsolicitedChunkDeliveryFaultyAddr(t *testing.T) {
 	}
 
 	// expect disconnection
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("Message handler error: (msg code 0): unsolicited chunk delivery from peer: retrieve request found but address does not match")})
 
 	if err != nil {
 		t.Fatal(err)
@@ -334,7 +334,7 @@ func TestUnsolicitedChunkDeliveryDouble(t *testing.T) {
 	}
 
 	// expect disconnection
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("subprotocol error")})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: errors.New("Message handler error: (msg code 0): unsolicited chunk delivery from peer: cannot find ruid")})
 
 	if err != nil {
 		t.Fatal(err)
@@ -452,7 +452,7 @@ func TestRequestFromPeers(t *testing.T) {
 	s := New(to, nil, addr, nil)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
-	id, err := s.findPeer(context.Background(), req)
+	id, err := s.findPeerLB(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -304,7 +304,7 @@ func keyToID(key string, prefix string) enode.ID {
 	return enode.HexID(key[len(prefix):])
 }
 
-// createOwner assings keys and addresses
+// createOwner assigns keys and addresses
 func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	pubkey := &prvkey.PublicKey
 	return &Owner{
@@ -314,6 +314,32 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	}
 }
 
+// modifyBalanceOk checks that the amount would not result in crossing the disconnection threshold
+func (s *Swap) modifyBalanceOk(amount int64, swapPeer *Peer) (err error) {
+	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
+	balance := swapPeer.getBalance()
+	if balance >= s.params.DisconnectThreshold && amount > 0 {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
+	}
+
+	return nil
+}
+
+// Check is called as a *dry run* before applying the actual accounting to an operation.
+// It only checks that performing a given accounting operation would not incur in an error.
+// If it returns no error, this signals to the caller that the operation is safe
+func (s *Swap) Check(amount int64, peer *protocols.Peer) (err error) {
+	swapPeer := s.getPeer(peer.ID())
+	if swapPeer == nil {
+		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
+	}
+
+	swapPeer.lock.Lock()
+	defer swapPeer.lock.Unlock()
+	// currently this is the only real check needed:
+	return s.modifyBalanceOk(amount, swapPeer)
+}
+
 // Add is the (sole) accounting function
 // Swap implements the protocols.Balance interface
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
@@ -321,13 +347,12 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if swapPeer == nil {
 		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
 	}
+
 	swapPeer.lock.Lock()
 	defer swapPeer.lock.Unlock()
-
-	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
-	balance := swapPeer.getBalance()
-	if balance >= s.params.DisconnectThreshold && amount > 0 {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", peer.ID().String(), s.params.DisconnectThreshold)
+	// we should probably check here again:
+	if err = s.modifyBalanceOk(amount, swapPeer); err != nil {
+		return err
 	}
 
 	if err = swapPeer.updateBalance(amount); err != nil {
