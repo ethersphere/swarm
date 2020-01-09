@@ -109,10 +109,6 @@ func TestCopyUint256(t *testing.T) {
 	if !c.Equals(r) {
 		t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
 	}
-
-	if c == r {
-		t.Fatalf("copy of Uint256 %v shares memory with its base", r)
-	}
 }
 
 func randomUint256() (*Uint256, error) {
