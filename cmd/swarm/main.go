@@ -44,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm"
 	bzzapi "github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/internal/debug"
+	"github.com/ethersphere/swarm/internal/flags"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage/mock"
@@ -224,16 +225,40 @@ func init() {
 		utils.WSAllowedOriginsFlag,
 	}
 	app.Flags = append(app.Flags, rpcFlags...)
-	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, swarmmetrics.Flags...)
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, debugFlags...)
+	app.Flags = append(app.Flags, flags.Metrics...)
+	app.Flags = append(app.Flags, flags.Tracing...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx, ""); err != nil {
+		if err := debug.Setup(debug.Options{
+			Debug:            ctx.GlobalBool(debugFlag.Name),
+			Verbosity:        ctx.GlobalInt(verbosityFlag.Name),
+			Vmodule:          ctx.GlobalString(vmoduleFlag.Name),
+			BacktraceAt:      ctx.GlobalString(backtraceAtFlag.Name),
+			MemProfileRate:   ctx.GlobalInt(memprofilerateFlag.Name),
+			BlockProfileRate: ctx.GlobalInt(blockprofilerateFlag.Name),
+			TraceFile:        ctx.GlobalString(traceFlag.Name),
+			CPUProfileFile:   ctx.GlobalString(cpuprofileFlag.Name),
+			PprofEnabled:     ctx.GlobalBool(pprofFlag.Name),
+			PprofAddr:        ctx.GlobalString(pprofAddrFlag.Name),
+			PprofPort:        ctx.GlobalInt(pprofPortFlag.Name),
+		}); err != nil {
 			return err
 		}
-		swarmmetrics.Setup(ctx)
-		tracing.Setup(ctx)
+		swarmmetrics.Setup(swarmmetrics.Options{
+			Endoint:       ctx.GlobalString(flags.MetricsInfluxDBEndpointFlag.Name),
+			Database:      ctx.GlobalString(flags.MetricsInfluxDBDatabaseFlag.Name),
+			Username:      ctx.GlobalString(flags.MetricsInfluxDBUsernameFlag.Name),
+			Password:      ctx.GlobalString(flags.MetricsInfluxDBPasswordFlag.Name),
+			EnableExport:  ctx.GlobalBool(flags.MetricsEnableInfluxDBExportFlag.Name),
+			DataDirectory: ctx.GlobalString(utils.DataDirFlag.Name),
+			InfluxDBTags:  ctx.GlobalString(flags.MetricsInfluxDBTagsFlag.Name),
+		})
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(flags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(flags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(flags.TracingSvcFlag.Name),
+		})
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {

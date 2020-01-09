@@ -452,7 +452,7 @@ func TestRequestFromPeers(t *testing.T) {
 	s := New(to, nil, addr, nil)
 
 	req := storage.NewRequest(storage.Address(hash0[:]))
-	id, err := s.findPeer(context.Background(), req)
+	id, err := s.findPeerLB(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -113,11 +113,11 @@ func accessNewPass(ctx *cli.Context) {
 		dryRun    = ctx.Bool(SwarmDryRunFlag.Name)
 		toPin     = ctx.Bool(SwarmPinFlag.Name)
 	)
-	accessKey, ae, err = api.DoPassword(ctx, password, salt)
+	accessKey, ae, err = api.DoPassword(password, salt)
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
-	m, err := api.GenerateAccessControlManifest(ctx, ref, accessKey, ae)
+	m, err := api.GenerateAccessControlManifest(ref, accessKey, ae)
 	if err != nil {
 		utils.Fatalf("had an error generating the manifest: %v", err)
 	}
@@ -150,11 +150,11 @@ func accessNewPK(ctx *cli.Context) {
 		dryRun           = ctx.Bool(SwarmDryRunFlag.Name)
 		toPin            = ctx.Bool(SwarmPinFlag.Name)
 	)
-	sessionKey, ae, err = api.DoPK(ctx, privateKey, granteePublicKey, salt)
+	sessionKey, ae, err = api.DoPK(privateKey, granteePublicKey, salt)
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
-	m, err := api.GenerateAccessControlManifest(ctx, ref, sessionKey, ae)
+	m, err := api.GenerateAccessControlManifest(ref, sessionKey, ae)
 	if err != nil {
 		utils.Fatalf("had an error generating the manifest: %v", err)
 	}
@@ -210,7 +210,7 @@ func accessNewACT(ctx *cli.Context) {
 		}
 		passGrantees = strings.Split(strings.Trim(string(bytes), "\n"), "\n")
 	}
-	accessKey, ae, actManifest, err = api.DoACT(ctx, privateKey, salt, pkGrantees, passGrantees)
+	accessKey, ae, actManifest, err = api.DoACT(privateKey, salt, pkGrantees, passGrantees)
 	if err != nil {
 		utils.Fatalf("error generating ACT manifest: %v", err)
 	}
@@ -218,7 +218,7 @@ func accessNewACT(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
-	m, err := api.GenerateAccessControlManifest(ctx, ref, accessKey, ae)
+	m, err := api.GenerateAccessControlManifest(ref, accessKey, ae)
 	if err != nil {
 		utils.Fatalf("error generating root access manifest: %v", err)
 	}

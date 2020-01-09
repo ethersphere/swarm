@@ -26,21 +26,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
+
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/swap"
-	opentracing "github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 var (
@@ -95,6 +96,7 @@ type Retrieval struct {
 	netStore    *storage.NetStore
 	baseAddress *network.BzzAddr
 	kad         *network.Kademlia
+	kademliaLB  *network.KademliaLoadBalancer
 	mtx         sync.RWMutex       // protect peer map
 	peers       map[enode.ID]*Peer // compatible peers
 	spec        *protocols.Spec    // protocol spec
@@ -106,11 +108,12 @@ type Retrieval struct {
 func New(kad *network.Kademlia, ns *storage.NetStore, baseKey *network.BzzAddr, balance protocols.Balance) *Retrieval {
 	r := &Retrieval{
 		netStore:    ns,
+		baseAddress: baseKey,
 		kad:         kad,
+		kademliaLB:  network.NewKademliaLoadBalancer(kad, false),
 		peers:       make(map[enode.ID]*Peer),
 		spec:        spec,
-		logger:      log.New("base", baseKey.ShortString()),
-		baseAddress: baseKey,
+		logger:      log.NewBaseAddressLogger("base", baseKey.ShortString()),
 		quit:        make(chan struct{}),
 	}
 	if balance != nil && !reflect.ValueOf(balance).IsNil() {
@@ -186,8 +189,8 @@ func (r *Retrieval) getOriginPo(req *storage.Request) int {
 	return originPo
 }
 
-// findPeer finds a peer we need to ask for a specific chunk from according to our kademlia
-func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer *network.Peer, err error) {
+// findPeerLB finds a peer we need to ask for a specific chunk from according to our kademlia load balancer
+func (r *Retrieval) findPeerLB(ctx context.Context, req *storage.Request) (retPeer *network.Peer, err error) {
 	r.logger.Trace("retrieval.findPeer", "req.Addr", req.Addr)
 	osp, _ := ctx.Value("remote.fetch").(opentracing.Span)
 
@@ -212,73 +215,64 @@ func (r *Retrieval) findPeer(ctx context.Context, req *storage.Request) (retPeer
 		return nil, errors.New("not forwarding request, origin node is closer to chunk than this node")
 	}
 
-	r.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
-		id := p.ID()
+	r.kademliaLB.EachBinDesc(req.Addr, func(bin network.LBBin) bool {
+		for _, lbPeer := range bin.LBPeers {
+			id := lbPeer.Peer.ID()
 
-		if !p.HasCap(r.spec.Name) {
-			return true
-		}
-
-		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
-		if bytes.Equal(req.Origin.Bytes(), id.Bytes()) {
-			return true
-		}
-
-		// skip peers that we have already tried
-		if req.SkipPeer(id.String()) {
-			r.logger.Trace("findpeer skip peer", "peer", p.ShortString(), "ref", req.Addr.String())
-			return true
-		}
-
-		if myPo < depth { //  chunk is NOT within the neighbourhood
-			if po <= myPo { // always choose a peer strictly closer to chunk than us
-				r.logger.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
-				return false
-			} else {
-				r.logger.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			// skip peer that does not support retrieval
+			if !lbPeer.Peer.HasCap(r.spec.Name) {
+				continue
 			}
-		} else { // chunk IS WITHIN neighbourhood
-			if po < depth { // do not select peer outside the neighbourhood. But allows peers further from the chunk than us
-				r.logger.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+
+			// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
+			if bytes.Equal(req.Origin.Bytes(), id.Bytes()) {
+				continue
+			}
+
+			// skip peers that we have already tried
+			if req.SkipPeer(id.String()) {
+				continue
+			}
+
+			if myPo < depth { //  chunk is NOT within the neighbourhood
+				if bin.ProximityOrder <= myPo { // always choose a peer strictly closer to chunk than us
+					return false
+				}
+			} else { // chunk IS WITHIN neighbourhood
+				if bin.ProximityOrder < depth { // do not select peer outside the neighbourhood. But allows peers further from the chunk than us
+					return false
+				} else if bin.ProximityOrder <= originPo { // avoid loop in neighbourhood, so not forward when a request comes from the neighbourhood
+					return false
+				}
+			}
+
+			// if selected peer is not in the depth (2nd condition; if depth <= po, then peer is in nearest neighbourhood)
+			// and they have a lower po than ours, return error
+			if bin.ProximityOrder < myPo && depth > bin.ProximityOrder {
+				err = fmt.Errorf("not asking peers further away from origin; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, bin.ProximityOrder, depth, myPo)
 				return false
-			} else if po <= originPo { // avoid loop in neighbourhood, so not forward when a request comes from the neighbourhood
-				r.logger.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			}
+
+			// if chunk falls in our nearest neighbourhood (1st condition), but suggested peer is not in
+			// the nearest neighbourhood (2nd condition), don't forward the request to suggested peer
+			if depth <= myPo && depth > bin.ProximityOrder {
+				err = fmt.Errorf("not going outside of depth; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, bin.ProximityOrder, depth, myPo)
 				return false
-			} else {
-				r.logger.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			}
+
+			retPeer = lbPeer.Peer
+
+			// sp could be nil, if we encountered a peer that is not registered for delivery, i.e. doesn't support the `stream` protocol
+			// if sp is not nil, then we have selected the next peer and we stop iterating
+			// if sp is nil, we continue iterating
+			if retPeer != nil {
+				selectedPeerPo = bin.ProximityOrder
+				lbPeer.AddUseCount()
+
+				return false
 			}
 		}
 
-		// if selected peer is not in the depth (2nd condition; if depth <= po, then peer is in nearest neighbourhood)
-		// and they have a lower po than ours, return error
-		if po < myPo && depth > po {
-			r.logger.Trace("findpeer4 skip peer because origin was closer", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
-
-			err = fmt.Errorf("not asking peers further away from origin; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
-			return false
-		}
-
-		// if chunk falls in our nearest neighbourhood (1st condition), but suggested peer is not in
-		// the nearest neighbourhood (2nd condition), don't forward the request to suggested peer
-		if depth <= myPo && depth > po {
-			r.logger.Trace("findpeer5 skip peer because depth", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
-
-			err = fmt.Errorf("not going outside of depth; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
-			return false
-		}
-
-		retPeer = p
-
-		// sp could be nil, if we encountered a peer that is not registered for delivery, i.e. doesn't support the `stream` protocol
-		// if sp is not nil, then we have selected the next peer and we stop iterating
-		// if sp is nil, we continue iterating
-		if retPeer != nil {
-			selectedPeerPo = po
-
-			return false
-		}
-
-		// continue iterating
 		return true
 	})
 
@@ -402,7 +396,7 @@ func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, 
 	retries := 0
 
 FINDPEER:
-	sp, err := r.findPeer(ctx, req)
+	sp, err := r.findPeerLB(ctx, req)
 	if err != nil {
 		r.logger.Trace(err.Error())
 		return nil, err
@@ -445,6 +439,7 @@ func (r *Retrieval) Start(server *p2p.Server) error {
 func (r *Retrieval) Stop() error {
 	r.logger.Info("shutting down bzz-retrieve")
 	close(r.quit)
+	r.kademliaLB.Stop()
 	return nil
 }
 
