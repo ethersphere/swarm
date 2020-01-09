@@ -327,6 +327,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 					return err
 				}
 			}
+			time.Sleep(5 * time.Second)
 
 			for _, id := range nodeIDs {
 				key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
@@ -363,7 +364,6 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 					time.Sleep(1 * time.Second)
 				}
 			}
-			return nil
 		})
 
 		if result.Error != nil {
