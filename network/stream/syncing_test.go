@@ -49,7 +49,6 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 	// to avoid the need for protecting handleMsgPauser with a lock in production code.
 	handleMsgPauser = new(syncPauser)
 	defer func() { handleMsgPauser = nil }()
-
 	removeChunks := func(t *testing.T, ctx context.Context, store chunk.Store, gaps [][2]uint64, chunks []chunk.Address) (removedCount uint64) {
 		t.Helper()
 
@@ -199,14 +198,14 @@ func TestTwoNodesSyncWithGaps(t *testing.T) {
 			if tc.liveChunkCount > 0 {
 				// pause syncing so that the chunks in the live gap
 				// are not synced before they are removed
-				handleMsgPauser.pause()
+				handleMsgPauser.Pause()
 
 				chunks = append(chunks, mustUploadChunks(ctx, t, uploadStore, tc.liveChunkCount)...)
 
 				removedCount += removeChunks(t, ctx, uploadStore, tc.liveGaps, chunks)
 
 				// resume syncing
-				handleMsgPauser.resume()
+				handleMsgPauser.Resume()
 
 				err = waitChunks(syncStore, tc.chunkCount+tc.liveChunkCount-removedCount, time.Minute)
 				if err != nil {

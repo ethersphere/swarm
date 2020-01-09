@@ -21,9 +21,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -371,9 +374,155 @@ func TestNoHook(t *testing.T) {
 		return nil
 	}
 
-	if err := peer.handleIncoming(handler); err != nil {
+	if err := peer.receive(handler); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestPeer_Receive(t *testing.T) {
+	t.Run("OK", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
+				t.Fatal("rw.msg in handler was wrong")
+			}
+			return nil
+		}
+
+		if err := peer.receive(handler); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("ERROR - invalid message", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content   string
+			TestField string
+		}{
+			"test content",
+			"test field",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			t.Fatal("should not enter here")
+			return nil
+		}
+
+		if err := peer.receive(handler); err != nil {
+			if err.Error() != "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
+				t.Fatal("error returned from handler is not good")
+			}
+		}
+	})
+
+	t.Run("ERROR - handler error", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			if msg.(*perBytesMsgReceiverPays).Content != "test content" {
+				t.Fatal("rw.msg in handler was wrong")
+			}
+			return errors.New("test error")
+		}
+
+		if err := peer.receive(handler); err != nil {
+			if err.Error() != errorf(ErrHandler, "(msg code %v): %v", 0, errors.New("test error")).Error() {
+				t.Fatal("error returned from handler is not good")
+			}
+		}
+	})
+}
+
+func TestPeer_Run(t *testing.T) {
+	t.Run("OK", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			return nil
+		}
+
+		var eg errgroup.Group
+		eg.Go(func() error {
+			if err := peer.Run(handler); err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err := peer.Stop(3 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+
+		rw.eof = true
+		done := make(chan error)
+		go func() {
+			done <- eg.Wait()
+		}()
+		select {
+		case err := <-done:
+			if err != io.EOF {
+				t.Fatal("run returned error")
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("did not close run")
+		}
+
+	})
+
+	t.Run("ERROR - handler error", func(t *testing.T) {
+		rw := &dummyRW{}
+		peer := NewPeer(nil, rw, createTestSpec())
+		rw.msg = &struct {
+			Content string
+		}{
+			"test content",
+		}
+
+		handler := func(ctx context.Context, msg interface{}) error {
+			return errors.New("test error")
+		}
+
+		var eg errgroup.Group
+		eg.Go(func() error {
+			return peer.Run(handler)
+		})
+
+		c := make(chan error)
+		go func() {
+			c <- eg.Wait()
+		}()
+		select {
+		case actualerr := <-c:
+			expectedStr := "Message handler error: (msg code 0): test error"
+			if actualerr.Error() != expectedStr {
+				t.Fatalf("wrong error returned from main, expected: %s, actual: %s", expectedStr, actualerr.Error())
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("run did not finis -  timeout")
+		}
+	})
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
@@ -590,6 +739,7 @@ type dummyRW struct {
 	msg  interface{}
 	size uint32
 	code uint64
+	eof  bool
 }
 
 func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
@@ -597,6 +747,10 @@ func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 }
 
 func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+	if d.eof {
+		return p2p.Msg{}, io.EOF
+	}
+
 	r, err := rlp.EncodeToBytes(d.msg)
 	if err != nil {
 		return p2p.Msg{}, err
