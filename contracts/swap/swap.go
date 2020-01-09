@@ -142,7 +142,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	return WaitFunc(auth.Context, s.backend, tx)
 }
 
-// CashChequeBeneficiaryStart sends the transaction to a cash a cheque as the beneficiary
+// CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
 func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Transaction, error) {
 	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, cumulativePayout, ownerSig)
 	if err != nil {

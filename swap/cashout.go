@@ -44,7 +44,7 @@ type ActiveCashout struct {
 	TransactionHash common.Hash    // the hash of the current transaction for this request
 }
 
-// newCashoutProcessor creates a new instance of CashoutLoop
+// newCashoutProcessor creates a new instance of CashoutProcessor
 func newCashoutProcessor(backend contract.Backend, privateKey *ecdsa.PrivateKey) *CashoutProcessor {
 	return &CashoutProcessor{
 		backend:    backend,
@@ -77,7 +77,7 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 }
 
 // estimatePayout estimates the payout for a given cheque as well as the transaction cost
-func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (uint64, uint64, error) {
+func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout uint64, transactionCosts uint64, err error) {
 	otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
 	if err != nil {
 		return 0, 0, err
@@ -93,13 +93,13 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return 0, 0, err
 	}
 
-	transactionCosts := gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
+	transactionCosts = gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
 
 	if paidOut.Cmp(big.NewInt(int64(cheque.CumulativePayout))) > 0 {
 		return 0, transactionCosts, nil
 	}
 
-	expectedPayout := cheque.CumulativePayout - paidOut.Uint64()
+	expectedPayout = cheque.CumulativePayout - paidOut.Uint64()
 
 	return expectedPayout, transactionCosts, nil
 }

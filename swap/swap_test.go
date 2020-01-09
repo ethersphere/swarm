@@ -51,8 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
-	"github.com/ethersphere/swarm/contracts/swap"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -512,7 +510,7 @@ func TestStartChequebookFailure(t *testing.T) {
 			name: "with wrong pass in",
 			configure: func(config *chequebookConfig) {
 				config.passIn = common.HexToAddress("0x4405415b2B8c9F9aA83E151637B8370000000000") // address without deployed chequebook
-				config.expectedError = fmt.Errorf("contract validation for %v failed: %v", config.passIn.Hex(), swap.ErrNotDeployedByFactory)
+				config.expectedError = fmt.Errorf("contract validation for %v failed: %v", config.passIn.Hex(), cswap.ErrNotDeployedByFactory)
 			},
 			check: func(t *testing.T, config *chequebookConfig) {
 				// create SWAP
@@ -1173,7 +1171,7 @@ func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *types.Transac
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeployWithPrivateKey(ctx context.Context, backend swap.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *big.Int) (contract.Contract, error) {
+func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *big.Int) (cswap.Contract, error) {
 	opts := bind.NewKeyedTransactor(privateKey)
 	opts.Context = ctx
 
