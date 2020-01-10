@@ -113,7 +113,7 @@ func New(kad *network.Kademlia, ns *storage.NetStore, baseKey *network.BzzAddr, 
 		kademliaLB:  network.NewKademliaLoadBalancer(kad, false),
 		peers:       make(map[enode.ID]*Peer),
 		spec:        spec,
-		logger:      log.NewBaseAddressLogger("base", baseKey.ShortString()),
+		logger:      log.NewBaseAddressLogger(baseKey.ShortString()),
 		quit:        make(chan struct{}),
 	}
 	if balance != nil && !reflect.ValueOf(balance).IsNil() {
