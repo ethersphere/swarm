@@ -21,11 +21,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
