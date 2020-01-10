@@ -41,6 +41,7 @@ import (
 )
 
 var (
+	printKademlia      = flag.Bool("print-kademlia", false, "prints kademlia tables before test step starts")
 	waitKademlia       = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
 	bucketKeyInspector = "inspector"
 )
@@ -67,23 +68,23 @@ func TestSwarmNetwork(t *testing.T) {
 				Timeout: 45 * time.Second,
 			},
 		},
-		//{
-		//name: "dec_inc_node_count",
-		//steps: []testSwarmNetworkStep{
-		//{
-		//nodeCount: 3,
-		//},
-		//{
-		//nodeCount: 1,
-		//},
-		//{
-		//nodeCount: 5,
-		//},
-		//},
-		//options: &testSwarmNetworkOptions{
-		//Timeout: 90 * time.Second,
-		//},
-		//},
+		{
+			name: "dec_inc_node_count",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 3,
+				},
+				{
+					nodeCount: 1,
+				},
+				{
+					nodeCount: 5,
+				},
+			},
+			options: &testSwarmNetworkOptions{
+				Timeout: 90 * time.Second,
+			},
+		},
 	}
 
 	if *testutil.Longrunning {
@@ -327,7 +328,14 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 					return err
 				}
 			}
-			time.Sleep(5 * time.Second)
+
+			if *printKademlia {
+				for _, id := range nodeIDs {
+					swarm := sim.Service("swarm", id).(*Swarm)
+					log.Debug("node kademlias", "node", id.String())
+					fmt.Println(swarm.bzz.Hive.String())
+				}
+			}
 
 			for _, id := range nodeIDs {
 				key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
@@ -408,12 +416,6 @@ func retrieveF(
 	})
 
 	nodeIDs := sim.UpNodeIDs()
-
-	for _, id := range nodeIDs {
-		swarm := sim.Service("swarm", id).(*Swarm)
-		log.Debug("printing kademlias", "node", id.String())
-		fmt.Println(swarm.bzz.Hive.String())
-	}
 
 	for _, id := range nodeIDs {
 		missing := 0
