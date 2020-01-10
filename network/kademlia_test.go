@@ -795,7 +795,7 @@ func testCapabilityIndexRegister(t *testing.T) {
 		return true
 	})
 	if c != 4 {
-		t.Fatalf("EachAddr expected 3 peers, got %d", c)
+		t.Fatalf("EachAddr expected 4 peers, got %d", c)
 	}
 
 	// match capability 42:101
@@ -812,14 +812,14 @@ func testCapabilityIndexRegister(t *testing.T) {
 		t.Fatalf("EachAddrFiltered 'full' expected 2 peer, got %d", c)
 	}
 
-	// Match capability 42:101 and 42:001
+	// Match capability 42:001
 	c = 0
 	k.EachAddrFiltered(k.BaseAddr(), "42:001", 255, func(a *BzzAddr, _ int) bool {
 		c++
 		return true
 	})
-	if c != 3 {
-		t.Fatalf("EachAddrFiltered '42:001' expected 2 peers, got %d", c)
+	if c != 1 {
+		t.Fatalf("EachAddrFiltered '42:001' expected 1 peers, got %d", c)
 	}
 
 	// Match no capability
@@ -907,6 +907,25 @@ func testCapabilityIndexConnect(t *testing.T) {
 	if c != 1 {
 		t.Fatalf("EachConnFiltered 'more' expected 1 peer, got %d", c)
 	}
+
+	// check that "42:101" does not show up in "42:001"
+	// since "42:001" is a subset of "42:101" (101 implements 001)
+	// this is a regression test where full nodes be registered as
+	// light nodes
+	c = 0
+	k.EachConnFiltered(k.BaseAddr(), "42:001", 255, func(p *Peer, _ int) bool {
+		c++
+		cp := p.Capabilities.Get(42)
+		if cp.Match(caps["42:101"]) {
+			t.Error("EachConnFiltered got '42:101' on '42:001' index")
+		}
+		return true
+	})
+
+	if c != 1 {
+		t.Errorf("EachConnFiltered 'more' expected 1 peer, got %d", c)
+	}
+
 }
 
 // test indices after disconnecting peers
@@ -986,14 +1005,10 @@ func testCapabilityIndexRemove(t *testing.T) {
 	c = 0
 	k.EachAddrFiltered(k.BaseAddr(), "42:001", 255, func(p *BzzAddr, _ int) bool {
 		c++
-		cp := p.Capabilities.Get(42)
-		if !cp.Match(caps["42:101"]) {
-			t.Fatalf("EachConnFiltered '42:001' should now return only capability '42:101': %v", caps["42:101"])
-		}
 		return true
 	})
-	if c != 2 {
-		t.Fatalf("EachAddrFiltered '42:001' expected 2 peer, got %d", c)
+	if c > 0 {
+		t.Fatalf("EachAddrFiltered '42:001' expected 0 peer, got %d", c)
 	}
 
 	// Remove "42:101,666:101" from known peers list (pruning only)
