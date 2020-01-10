@@ -789,7 +789,7 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// set asymmetric balance and attempt to send cheque
-	err = creditor.setBalance(-1 * int64(DefaultPaymentThreshold))
+	err = creditor.setBalance(-int64(DefaultPaymentThreshold))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -813,12 +813,8 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// now send an admissible cheque
-	err = debitor.setBalance(int64(ChequeDebtTolerance))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = creditor.setBalance(-1 * int64(ChequeDebtTolerance))
+	// set asymmetric balances to send a (barely) admissible cheque
+	err = creditor.setBalance(-int64(ChequeDebtTolerance))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -827,21 +823,9 @@ func TestDebtCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cheque := creditor.getPendingCheque()
 
-	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
-		Cheque: creditor.getPendingCheque(),
-	})
-
-	// the debitor should have already reset its balance
-	if creditor.getBalance() != 0 {
-		t.Fatalf("expected balance to be 0 for peer %v, but it is %d", creditor.ID(), creditor.getBalance())
-	}
-
-	cheque := creditor.getLastSentCheque()
-	if cheque == nil {
-		t.Fatalf("expected pending cheque for peer %v, but found none", creditor.ID())
-	}
-
+	// simulate cheque handling
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, &EmitChequeMsg{
 		Cheque: cheque,
 	})
@@ -849,8 +833,26 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// simulate cheque confirmation
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
+
+	// balance should be 0 according to the debitor
+	if creditor.getBalance() != 0 {
+		t.Fatalf("expected balance to be 0 for peer %v, but it is %d", creditor.ID(), creditor.getBalance())
+	}
+	// balance should be -ChequeDebtTolerance according to the debitor
+	if debitor.getBalance() != -int64(ChequeDebtTolerance) {
+		t.Fatalf("expected balance to be %d for peer %v, but it is %d", -int64(ChequeDebtTolerance), debitor.ID(), debitor.getBalance())
+	}
+	// no cheque should be pending
 	if creditor.getPendingCheque() != nil {
 		t.Fatalf("expected no pending cheque for peer %v, but found %d", creditor.ID(), creditor.getPendingCheque())
+	}
+	// verify last received cheque
+	if debitor.getLastReceivedCheque() != cheque {
+		t.Fatalf("expected last received cheque from peer %v to be %v, but found %v", debitor.ID(), cheque, creditor.getLastReceivedCheque())
 	}
 }
 
