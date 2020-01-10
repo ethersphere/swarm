@@ -183,6 +183,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 				req.lock.RUnlock()
 				return nil
 			}
+			req.lock.RUnlock()
 		case <-ctx.Done():
 			p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt, "err", err)
 			return nil
