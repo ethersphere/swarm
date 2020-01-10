@@ -83,7 +83,7 @@ func (sf simpleSwapFactory) DeploySimpleSwap(auth *bind.TransactOpts, issuer com
 		return nil, err
 	}
 
-	receipt, err := WaitFunc(auth, sf.backend, tx)
+	receipt, err := WaitFunc(auth.Context, sf.backend, tx)
 	if err != nil {
 		return nil, err
 	}

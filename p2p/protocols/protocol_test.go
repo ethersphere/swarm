@@ -21,12 +21,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -212,26 +211,25 @@ type dummyMsg struct {
 	Content string
 }
 
-func (d *dummyHook) Send(peer *Peer, size uint32, msg interface{}) error {
+func (d *dummyHook) Validate(peer *Peer, size uint32, msg interface{}, payer Payer) (int64, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
 	d.peer = peer
 	d.size = size
 	d.msg = msg
-	d.send = true
-	return d.err
+	if payer == Sender {
+		d.send = true
+	} else {
+		d.send = false
+		d.waitC <- struct{}{}
+	}
+	return 0, d.err
 }
 
-func (d *dummyHook) Receive(peer *Peer, size uint32, msg interface{}) error {
+func (d *dummyHook) Apply(peer *Peer, cost int64, size uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.peer = peer
-	d.size = size
-	d.msg = msg
-	d.send = false
-	d.waitC <- struct{}{}
 	return d.err
 }
 

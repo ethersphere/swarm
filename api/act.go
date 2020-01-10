@@ -20,7 +20,6 @@ import (
 	"github.com/ethersphere/swarm/storage"
 	"golang.org/x/crypto/scrypt"
 	"golang.org/x/crypto/sha3"
-	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -362,7 +361,7 @@ func (a *API) getACTDecryptionKey(ctx context.Context, actManifestAddress storag
 	return false, nil, nil, nil
 }
 
-func GenerateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byte, ae *AccessEntry) (*Manifest, error) {
+func GenerateAccessControlManifest(ref string, accessKey []byte, ae *AccessEntry) (*Manifest, error) {
 	refBytes, err := hex.DecodeString(ref)
 	if err != nil {
 		return nil, err
@@ -390,7 +389,7 @@ func GenerateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 
 // DoPK is a helper function to the CLI API that handles the entire business logic for
 // creating a session key and access entry given the cli context, ec keys and salt
-func DoPK(ctx *cli.Context, privateKey *ecdsa.PrivateKey, granteePublicKey string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
+func DoPK(privateKey *ecdsa.PrivateKey, granteePublicKey string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
 	if granteePublicKey == "" {
 		return nil, nil, errors.New("need a grantee Public Key")
 	}
@@ -423,7 +422,7 @@ func DoPK(ctx *cli.Context, privateKey *ecdsa.PrivateKey, granteePublicKey strin
 
 // DoACT is a helper function to the CLI API that handles the entire business logic for
 // creating a access key, access entry and ACT manifest (including uploading it) given the cli context, ec keys, password grantees and salt
-func DoACT(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees []string, encryptPasswords []string) (accessKey []byte, ae *AccessEntry, actManifest *Manifest, err error) {
+func DoACT(privateKey *ecdsa.PrivateKey, salt []byte, grantees []string, encryptPasswords []string) (accessKey []byte, ae *AccessEntry, actManifest *Manifest, err error) {
 	if len(grantees) == 0 && len(encryptPasswords) == 0 {
 		return nil, nil, nil, errors.New("did not get any grantee public keys or any encryption passwords")
 	}
@@ -522,9 +521,9 @@ func DoACT(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees
 }
 
 // DoPassword is a helper function to the CLI API that handles the entire business logic for
-// creating a session key and an access entry given the cli context, password and salt.
+// creating a session key and an access entry given the password and salt.
 // By default - DefaultKdfParams are used as the scrypt params
-func DoPassword(ctx *cli.Context, password string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
+func DoPassword(password string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
 	ae, err = NewAccessEntryPassword(salt, DefaultKdfParams)
 	if err != nil {
 		return nil, nil, err

@@ -25,8 +25,8 @@ import (
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 
+	"github.com/ethersphere/swarm/internal/flags"
 	"github.com/ethersphere/swarm/log"
-	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/tracing"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -105,16 +105,9 @@ func main() {
 		},
 	}
 
-	app.Flags = append(app.Flags, []cli.Flag{
-		utils.MetricsEnabledFlag,
-		swarmmetrics.MetricsInfluxDBEndpointFlag,
-		swarmmetrics.MetricsInfluxDBDatabaseFlag,
-		swarmmetrics.MetricsInfluxDBUsernameFlag,
-		swarmmetrics.MetricsInfluxDBPasswordFlag,
-		swarmmetrics.MetricsInfluxDBTagsFlag,
-	}...)
+	app.Flags = append(app.Flags, flags.Metrics...)
 
-	app.Flags = append(app.Flags, tracing.Flags...)
+	app.Flags = append(app.Flags, flags.Tracing...)
 
 	app.Commands = []cli.Command{
 		{
@@ -145,7 +138,11 @@ func main() {
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Before = func(ctx *cli.Context) error {
-		tracing.Setup(ctx)
+		tracing.Setup(tracing.Options{
+			Enabled:  ctx.GlobalBool(flags.TracingEnabledFlag.Name),
+			Endpoint: ctx.GlobalString(flags.TracingEndpointFlag.Name),
+			Name:     ctx.GlobalString(flags.TracingSvcFlag.Name),
+		})
 		return nil
 	}
 
@@ -163,11 +160,11 @@ func main() {
 func emitMetrics(ctx *cli.Context) error {
 	if gethmetrics.Enabled {
 		var (
-			endpoint = ctx.GlobalString(swarmmetrics.MetricsInfluxDBEndpointFlag.Name)
-			database = ctx.GlobalString(swarmmetrics.MetricsInfluxDBDatabaseFlag.Name)
-			username = ctx.GlobalString(swarmmetrics.MetricsInfluxDBUsernameFlag.Name)
-			password = ctx.GlobalString(swarmmetrics.MetricsInfluxDBPasswordFlag.Name)
-			tags     = ctx.GlobalString(swarmmetrics.MetricsInfluxDBTagsFlag.Name)
+			endpoint = ctx.GlobalString(flags.MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.GlobalString(flags.MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.GlobalString(flags.MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.GlobalString(flags.MetricsInfluxDBPasswordFlag.Name)
+			tags     = ctx.GlobalString(flags.MetricsInfluxDBTagsFlag.Name)
 		)
 
 		tagsMap := utils.SplitTagsFlag(tags)

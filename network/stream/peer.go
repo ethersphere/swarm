@@ -23,8 +23,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/stream/intervals"
 	"github.com/ethersphere/swarm/state"
@@ -57,7 +56,7 @@ func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store,
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
 		quit:           make(chan struct{}),
-		logger:         log.New("base", baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
+		logger:         log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
 	return p
 }

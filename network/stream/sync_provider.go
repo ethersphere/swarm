@@ -24,14 +24,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/storage"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -84,7 +85,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, baseAddr *netw
 		quit:                    make(chan struct{}),
 		cache:                   c,
 		setCache:                sc,
-		logger:                  log.New("base", baseAddr.ShortString()),
+		logger:                  log.NewBaseAddressLogger(baseAddr.ShortString()),
 		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
 	}
 }

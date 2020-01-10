@@ -56,10 +56,10 @@ type MsgPauser interface {
 //To access this functionality, we provide a Hook interface which will call accounting methods
 //NOTE: there could be more such (horizontal) hooks in the future
 type Hook interface {
-	//A hook for sending messages
-	Send(peer *Peer, size uint32, msg interface{}) error
-	//A hook for receiving messages
-	Receive(peer *Peer, size uint32, msg interface{}) error
+	// A hook for applying accounting
+	Apply(peer *Peer, costToLocalNode int64, size uint32) error
+	// Run some validation before applying accounting
+	Validate(peer *Peer, size uint32, msg interface{}, payer Payer) (int64, error)
 }
 
 // Spec is a protocol specification including its name and version as well as
@@ -148,6 +148,7 @@ type Peer struct {
 	running         bool         // if running is true async go routines are dispatched in the event loop
 	mtx             sync.RWMutex // guards running
 	handleMsgPauser MsgPauser    //  message pauser, should be used only in tests
+	lock            sync.Mutex
 }
 
 // NewPeer constructs a new peer
@@ -244,7 +245,7 @@ func (p *Peer) readMsg() (p2p.Msg, error) {
 // Drop disconnects a peer
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 func (p *Peer) Drop(reason string) {
-	log.Info("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
+	log.Error("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
@@ -302,15 +303,32 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 		}
 		size = len(r)
 	}
-	// if the accounting hook is set, call it
+
+	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		err = p.spec.Hook.Send(p, uint32(size), msg)
+		// let's lock, we want to avoid that after validating, a separate call might interfere
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		// validate that this operation would succeed...
+		costToLocalNode, err := p.spec.Hook.Validate(p, uint32(size), wmsg, Sender)
+		if err != nil {
+			// ...because if it would fail, we return and don't send the message
+			return err
+		}
+		// seems like accounting would succeed, thus send the message first...
+		err = p2p.Send(p.rw, code, wmsg)
 		if err != nil {
 			return err
 		}
+		// ...and finally apply (write) the accounting change
+		if err := p.spec.Hook.Apply(p, costToLocalNode, uint32(size)); err != nil {
+			return err
+		}
+	} else {
+		err = p2p.Send(p.rw, code, wmsg)
 	}
 
-	return p2p.Send(p.rw, code, wmsg)
+	return nil
 }
 
 // SetMsgPauser sets message pauser for this peer
@@ -355,20 +373,38 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
 		return Break(fmt.Errorf("invalid message (RLP error): <= %v: %w", msg, err))
 	}
-	// if the accounting hook is set, call it
+
+	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		if err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val); err != nil {
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		size := uint32(len(msgBytes))
+
+		// validate that the accounting call would succeed...
+		costToLocalNode, err := p.spec.Hook.Validate(p, size, val, Receiver)
+		if err != nil {
+			// ...because if it would fail, we return and don't handle the message
 			return Break(err)
 		}
-	}
 
-	// call the registered handler callbacks
-	// a registered callback take the decoded message as argument as an interface
-	// which the handler is supposed to cast to the appropriate type
-	// it is entirely safe not to check the cast in the handler since the handler is
-	// chosen based on the proper type in the first place
-	if err := handle(ctx, val); err != nil {
-		return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
+		// seems like accounting would be fine, so handle the message
+		if err := handle(ctx, val); err != nil {
+			return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
+		}
+
+		// handling succeeded, finally apply accounting
+		if err:= p.spec.Hook.Apply(p, costToLocalNode, size); err != nil {
+			return Break(err)
+		}
+	} else {
+		// call the registered handler callbacks
+		// a registered callback take the decoded message as argument as an interface
+		// which the handler is supposed to cast to the appropriate type
+		// it is entirely safe not to check the cast in the handler since the handler is
+		// chosen based on the proper type in the first place
+		if err := handle(ctx, val); err != nil {
+			return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
+		}
 	}
 
 	return nil
