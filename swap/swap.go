@@ -485,6 +485,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 	})
 
 	if err != nil {
+		metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
 		swapLog.Error(err.Error())
 	}
 }
