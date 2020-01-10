@@ -357,6 +357,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 				// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 				// or until the timeout is reached.
 				if missing := retrieveF(t, sim, files); missing == 0 {
+					log.Debug("test step finished with no files missing")
 					return nil
 				} else {
 					t.Logf("retry retrieve. missing %d", missing)
