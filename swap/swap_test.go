@@ -757,12 +757,10 @@ func TestDebtCheques(t *testing.T) {
 	defer dClean()
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap, big.NewInt(0))
-	if err != nil {
+	if err := testDeploy(ctx, creditorSwap, big.NewInt(0)); err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold*2)))
-	if err != nil {
+	if err := testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold*2))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -794,13 +792,11 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// set asymmetric balance and attempt to send cheque
-	err = creditor.setBalance(-int64(DefaultPaymentThreshold))
-	if err != nil {
+	if err = creditor.setBalance(-int64(DefaultPaymentThreshold)); err != nil {
 		t.Fatal(err)
 	}
 	// now simulate sending the cheque to the creditor from the debitor
-	err = creditor.sendCheque()
-	if err != nil {
+	if err = creditor.sendCheque(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -813,19 +809,16 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// clear pending cheque to start over
-	err = creditor.setPendingCheque(nil)
-	if err != nil {
+	if err = creditor.setPendingCheque(nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// set asymmetric balances to send a (barely) admissible cheque
-	err = creditor.setBalance(-int64(ChequeDebtTolerance))
-	if err != nil {
+	if err = creditor.setBalance(-int64(ChequeDebtTolerance)); err != nil {
 		t.Fatal(err)
 	}
 
-	err = creditor.sendCheque()
-	if err != nil {
+	if err = creditor.sendCheque(); err != nil {
 		t.Fatal(err)
 	}
 	cheque := creditor.getPendingCheque()
@@ -945,8 +938,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testPeer.setBalance(-8888)
-	if err != nil {
+	if err = testPeer.setBalance(-8888); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1623,12 +1615,10 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	err = debitor.setBalance(testAmount)
-	if err != nil {
+	if err = debitor.setBalance(testAmount); err != nil {
 		t.Fatal(err)
 	}
-	err = creditor.setBalance(-testAmount)
-	if err != nil {
+	if err = creditor.setBalance(-testAmount); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1637,8 +1627,7 @@ func TestSwapLogToFile(t *testing.T) {
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	err = creditor.sendCheque()
-	if err != nil {
+	if err = creditor.sendCheque(); err != nil {
 		t.Fatal(err)
 	}
 
