@@ -49,7 +49,7 @@ type Contract interface {
 	Withdraw(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error)
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
 	Deposit(auth *bind.TransactOpts, amout *big.Int) (*types.Receipt, error)
-	// CashChequeBeneficiaryStart sends the transaction to a cash a cheque as the beneficiary
+	// CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
 	CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Transaction, error)
 	// CashChequeBeneficiaryResult processes the receipt from a CashChequeBeneficiary transaction
 	CashChequeBeneficiaryResult(receipt *types.Receipt) *CashChequeResult

@@ -26,6 +26,9 @@ import (
 	contract "github.com/ethersphere/swarm/contracts/swap"
 )
 
+// CashChequeBeneficiaryTransactionCost is the expected gas cost of a CashChequeBeneficiary transaction
+const CashChequeBeneficiaryTransactionCost = 50000
+
 // CashoutProcessor holds all relevant fields needed for processing cashouts
 type CashoutProcessor struct {
 	backend    contract.Backend  // ethereum backend to use
@@ -93,7 +96,7 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return 0, 0, err
 	}
 
-	transactionCosts = gasPrice.Uint64() * 50000 // cashing a cheque is approximately 50000 gas
+	transactionCosts = gasPrice.Uint64() * CashChequeBeneficiaryTransactionCost
 
 	if paidOut.Cmp(big.NewInt(int64(cheque.CumulativePayout))) > 0 {
 		return 0, transactionCosts, nil
