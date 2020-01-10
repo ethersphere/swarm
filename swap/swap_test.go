@@ -699,7 +699,10 @@ func TestResetBalance(t *testing.T) {
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
+	err = creditor.sendCheque()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
 		Cheque: creditor.getPendingCheque(),
@@ -786,13 +789,24 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// set asymmetric balance and attempt to send cheque
-	debitor.setBalance(int64(DefaultPaymentThreshold) + 10)
+	creditor.setBalance(-1 * (int64(DefaultPaymentThreshold) + 10))
 	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
+	err = creditor.sendCheque()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+	creditorSwap.handleEmitChequeMsg(ctx, creditor, &EmitChequeMsg{
 		Cheque: creditor.getPendingCheque(),
 	})
+
+	// cheque should not have gone through as it would put the creditor in debt
+	if creditor.getLastSentCheque() != nil {
+		t.Fatalf("expected no cheque sent to peer %v, but it is %d", creditor.ID(), creditor.getLastSentCheque())
+	}
+	if creditor.getPendingCheque() == nil {
+		t.Fatalf("expected pending cheque to be sent to peer %v, but found none", creditor.ID())
+	}
 }
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
