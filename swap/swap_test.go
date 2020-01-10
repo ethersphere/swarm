@@ -691,8 +691,14 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	debitor.setBalance(testAmount)
-	creditor.setBalance(-testAmount)
+	err = debitor.setBalance(testAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = creditor.setBalance(-testAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
@@ -940,7 +946,10 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testPeer.setBalance(-8888)
+	err = testPeer.setBalance(-8888)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tmpBalance := testPeer.getBalance()
 	swap.store.Put(testPeer.ID().String(), &tmpBalance)
@@ -1695,15 +1704,24 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	debitor.setBalance(testAmount)
-	creditor.setBalance(-testAmount)
+	err = debitor.setBalance(testAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = creditor.setBalance(-testAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
+	err = creditor.sendCheque()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
@@ -1802,7 +1820,10 @@ func TestAvailableBalance(t *testing.T) {
 	// send a cheque worth 42
 	chequeAmount := int64(42)
 	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
-	peer.setBalance(-chequeAmount)
+	err = peer.setBalance(-chequeAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err = peer.sendCheque(); err != nil {
 		t.Fatal(err)
 	}
