@@ -776,6 +776,14 @@ func TestDebtCheques(t *testing.T) {
 	if dPeer.getBalance() != 0 {
 		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", dPeer.ID(), dPeer.getBalance())
 	}
+
+	// no cheques should be present at this point
+	if cPeer.getLastSentCheque() != nil {
+		t.Fatalf("expected no cheque sent to peer %v, but it is %d", cPeer.ID(), cPeer.getLastSentCheque())
+	}
+	if dPeer.getLastReceivedCheque() != nil {
+		t.Fatalf("expected no cheque sent to peer %v, but it is %d", dPeer.ID(), dPeer.getLastReceivedCheque())
+	}
 }
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
