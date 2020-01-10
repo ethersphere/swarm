@@ -739,6 +739,45 @@ func TestResetBalance(t *testing.T) {
 	}
 }
 
+func TestDebtCheques(t *testing.T) {
+	testBackend := newTestBackend(t)
+	defer testBackend.Close()
+
+	creditorSwap, cClean := newTestSwap(t, beneficiaryKey, testBackend)
+	debitorSwap, dClean := newTestSwap(t, ownerKey, testBackend)
+	defer cClean()
+	defer dClean()
+
+	ctx := context.Background()
+	err := testDeploy(ctx, creditorSwap, big.NewInt(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold*2)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cDummyPeer := newDummyPeerWithSpec(Spec)
+	dDummyPeer := newDummyPeerWithSpec(Spec)
+	cPeer, err := debitorSwap.addPeer(cDummyPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dPeer, err := creditorSwap.addPeer(dDummyPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// the creditor and debitor should start out with a balance of 0
+	if cPeer.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", cPeer.ID(), cPeer.getBalance())
+	}
+	if dPeer.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", dPeer.ID(), dPeer.getBalance())
+	}
+}
+
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
 // append generated bookings to slice pointer
 func testPeerBookings(t *testing.T, s *Swap, bookings *[]booking, bookingAmount int64, bookingQuantity int, peer *protocols.Peer) {
