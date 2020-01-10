@@ -327,6 +327,7 @@ func TestEmitCheque(t *testing.T) {
 
 func TestDebtChequeTolerance(t *testing.T) {
 	testBackend := newTestBackend(t)
+
 	protocolTester, clean, err := newSwapTester(t, testBackend, big.NewInt(int64(DefaultPaymentThreshold)*2))
 	defer clean()
 	if err != nil {
@@ -352,6 +353,11 @@ func TestDebtChequeTolerance(t *testing.T) {
 	// no cheques should be present by this point
 	if creditorPeer.getLastSentCheque() != nil {
 		t.Fatalf("Expected no cheques yet, but there is %v:", creditorPeer.getLastSentCheque())
+	}
+
+	// balance should be 0 for both peers
+	if creditorPeer.getBalance() != 0 {
+		t.Fatalf("Expected creditor Swap balance to be 0, but is %d", creditorPeer.getBalance())
 	}
 }
 
