@@ -760,30 +760,39 @@ func TestDebtCheques(t *testing.T) {
 
 	cDummyPeer := newDummyPeerWithSpec(Spec)
 	dDummyPeer := newDummyPeerWithSpec(Spec)
-	cPeer, err := debitorSwap.addPeer(cDummyPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	creditor, err := debitorSwap.addPeer(cDummyPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dPeer, err := creditorSwap.addPeer(dDummyPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	debitor, err := creditorSwap.addPeer(dDummyPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// the creditor and debitor should start out with a balance of 0
-	if cPeer.getBalance() != 0 {
-		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", cPeer.ID(), cPeer.getBalance())
+	if creditor.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", creditor.ID(), creditor.getBalance())
 	}
-	if dPeer.getBalance() != 0 {
-		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", dPeer.ID(), dPeer.getBalance())
+	if debitor.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0 for peer %v, but it is %d", debitor.ID(), debitor.getBalance())
 	}
 
 	// no cheques should be present at this point
-	if cPeer.getLastSentCheque() != nil {
-		t.Fatalf("expected no cheque sent to peer %v, but it is %d", cPeer.ID(), cPeer.getLastSentCheque())
+	if creditor.getLastSentCheque() != nil {
+		t.Fatalf("expected no cheque sent to peer %v, but it is %d", creditor.ID(), creditor.getLastSentCheque())
 	}
-	if dPeer.getLastReceivedCheque() != nil {
-		t.Fatalf("expected no cheque sent to peer %v, but it is %d", dPeer.ID(), dPeer.getLastReceivedCheque())
+	if debitor.getLastReceivedCheque() != nil {
+		t.Fatalf("expected no cheque sent to peer %v, but it is %d", debitor.ID(), debitor.getLastReceivedCheque())
 	}
+
+	// set asymmetric balance and attempt to send cheque
+	debitor.setBalance(int64(DefaultPaymentThreshold) + 10)
+	// now simulate sending the cheque to the creditor from the debitor
+	creditor.sendCheque()
+
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
 }
 
 // generate bookings based on parameters, apply them to a Swap struct and verify the result
