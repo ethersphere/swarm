@@ -253,7 +253,7 @@ func (p *Peer) Drop(reason string) {
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
 func (p *Peer) Stop(timeout time.Duration) error {
 	p.mtx.Lock()
-	if p.running != true {
+	if !p.running {
 		return nil
 	}
 
@@ -393,7 +393,7 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 		}
 
 		// handling succeeded, finally apply accounting
-		if err:= p.spec.Hook.Apply(p, costToLocalNode, size); err != nil {
+		if err := p.spec.Hook.Apply(p, costToLocalNode, size); err != nil {
 			return Break(err)
 		}
 	} else {
