@@ -325,42 +325,6 @@ func TestEmitCheque(t *testing.T) {
 	}
 }
 
-func TestDebtChequeTolerance(t *testing.T) {
-	testBackend := newTestBackend(t)
-
-	protocolTester, clean, err := newSwapTester(t, testBackend, big.NewInt(int64(DefaultPaymentThreshold)*2))
-	defer clean()
-	if err != nil {
-		t.Fatal(err)
-	}
-	debitorSwap := protocolTester.swap
-
-	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
-
-	if err = protocolTester.testHandshake(
-		correctSwapHandshakeMsg(debitorSwap),
-		correctSwapHandshakeMsg(debitorSwap),
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	creditorPeer := debitorSwap.getPeer(protocolTester.Nodes[0].ID())
-
-	// no cheques should be present by this point
-	if creditorPeer.getLastSentCheque() != nil {
-		t.Fatalf("Expected no cheques yet, but there is %v:", creditorPeer.getLastSentCheque())
-	}
-
-	// balance should be 0 for both peers
-	if creditorPeer.getBalance() != 0 {
-		t.Fatalf("Expected creditor Swap balance to be 0, but is %d", creditorPeer.getBalance())
-	}
-}
-
 // TestTriggerPaymentThreshold is to test that the whole cheque protocol is triggered
 // when we reach the payment threshold
 // One protocol tester is created and then Add with a value above the payment threshold is called for another node
