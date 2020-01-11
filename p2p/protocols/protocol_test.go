@@ -115,12 +115,12 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 			switch msg := msg.(type) {
 
 			case *protoHandshake:
-				return errors.New("duplicate handshake")
+				return Break(errors.New("duplicate handshake"))
 
 			case *hs0:
 				rhs := msg
 				if rhs.C > lhs.C {
-					return fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C)
+					return Break(fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C))
 				}
 				lhs.C += rhs.C
 				return peer.Send(ctx, lhs)
@@ -133,10 +133,10 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 
 			case *drop:
 				// for testing we can trigger self induced disconnect upon receiving drop message
-				return errors.New("dropped")
+				return Break(errors.New("dropped"))
 
 			default:
-				return fmt.Errorf("unknown message type: %T", msg)
+				return Break(fmt.Errorf("unknown message type: %T", msg))
 			}
 		}
 
@@ -344,7 +344,7 @@ func TestProtocolHook(t *testing.T) {
 	<-testHook.waitC
 
 	time.Sleep(100 * time.Millisecond)
-	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: testHook.err})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: errors.New("subprotocol error")})
 	if err != nil {
 		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
 	}
@@ -418,8 +418,8 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		if err := peer.receive(handler); err != nil {
-			if err.Error() != "Invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
-				t.Fatal("error returned from handler is not good")
+			if err.Error() != "invalid message (RLP error): <= msg #0 (0 bytes): rlp: input list has too many elements for protocols.perBytesMsgReceiverPays" {
+				t.Fatal("error returned from handler is not good. got:", err.Error())
 			}
 		}
 	})
@@ -441,8 +441,8 @@ func TestPeer_Receive(t *testing.T) {
 		}
 
 		if err := peer.receive(handler); err != nil {
-			if err.Error() != errorf(ErrHandler, "(msg code %v): %v", 0, errors.New("test error")).Error() {
-				t.Fatal("error returned from handler is not good")
+			if err.Error() != fmt.Errorf("message handler: (msg code %v): %w", 0, errors.New("test error")).Error() {
+				t.Fatal("error returned from handler is not good. got:", err.Error())
 			}
 		}
 	})
@@ -464,16 +464,8 @@ func TestPeer_Run(t *testing.T) {
 
 		var eg errgroup.Group
 		eg.Go(func() error {
-			if err := peer.Run(handler); err != nil {
-				return err
-			}
-
-			return nil
+			return peer.Run(handler)
 		})
-
-		if err := peer.Stop(3 * time.Second); err != nil {
-			t.Fatal(err)
-		}
 
 		rw.eof = true
 		done := make(chan error)
@@ -482,55 +474,22 @@ func TestPeer_Run(t *testing.T) {
 		}()
 		select {
 		case err := <-done:
-			if err != io.EOF {
-				t.Fatal("run returned error")
+			if err != nil {
+				t.Fatal("run returned error", err)
 			}
 		case <-time.After(3 * time.Second):
 			t.Fatal("did not close run")
 		}
 
 	})
-
-	t.Run("ERROR - handler error", func(t *testing.T) {
-		rw := &dummyRW{}
-		peer := NewPeer(nil, rw, createTestSpec())
-		rw.msg = &struct {
-			Content string
-		}{
-			"test content",
-		}
-
-		handler := func(ctx context.Context, msg interface{}) error {
-			return errors.New("test error")
-		}
-
-		var eg errgroup.Group
-		eg.Go(func() error {
-			return peer.Run(handler)
-		})
-
-		c := make(chan error)
-		go func() {
-			c <- eg.Wait()
-		}()
-		select {
-		case actualerr := <-c:
-			expectedStr := "Message handler error: (msg code 0): test error"
-			if actualerr.Error() != expectedStr {
-				t.Fatalf("wrong error returned from main, expected: %s, actual: %s", expectedStr, actualerr.Error())
-			}
-		case <-time.After(1 * time.Second):
-			t.Fatal("run did not finis -  timeout")
-		}
-	})
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
-	runProtoHandshake(t, &protoHandshake{41, "420"}, errorf(ErrHandshake, errorf(ErrHandler, "(msg code 0): 41 (!= 42)").Error()))
+	runProtoHandshake(t, &protoHandshake{41, "420"}, fmt.Errorf("message handler: (msg code 0): 41 (!= 42)"))
 }
 
 func TestProtoHandshakeNetworkIDMismatch(t *testing.T) {
-	runProtoHandshake(t, &protoHandshake{42, "421"}, errorf(ErrHandshake, errorf(ErrHandler, "(msg code 0): 421 (!= 420)").Error()))
+	runProtoHandshake(t, &protoHandshake{42, "421"}, fmt.Errorf("message handler: (msg code 0): 421 (!= 420)"))
 }
 
 func TestProtoHandshakeSuccess(t *testing.T) {
@@ -721,13 +680,13 @@ WAIT:
 func TestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("subprotocol error"),
-		fmt.Errorf("Message handler error: (msg code 3): dropped"),
+		fmt.Errorf("subprotocol error"),
 	)
 }
 
 func TestMultiplePeersDropOther(t *testing.T) {
 	runMultiplePeers(t, 1,
-		fmt.Errorf("Message handler error: (msg code 3): dropped"),
+		fmt.Errorf("subprotocol error"),
 		fmt.Errorf("subprotocol error"),
 	)
 }
