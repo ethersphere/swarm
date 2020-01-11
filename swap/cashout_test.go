@@ -18,33 +18,13 @@ package swap
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 )
-
-func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress common.Address, cumulativePayout *big.Int, signingKey *ecdsa.PrivateKey) (*Cheque, error) {
-	cheque := &Cheque{
-		ChequeParams: ChequeParams{
-			Contract:         testChequeContract,
-			CumulativePayout: cumulativePayout.Uint64(),
-			Beneficiary:      beneficiaryAddress,
-		},
-		Honey: cumulativePayout.Uint64(),
-	}
-
-	sig, err := cheque.Sign(signingKey)
-	if err != nil {
-		return nil, err
-	}
-	cheque.Signature = sig
-	return cheque, nil
-}
 
 // TestContractIntegration tests a end-to-end cheque interaction.
 // First a simulated backend is created, then we deploy the issuer's swap contract.
