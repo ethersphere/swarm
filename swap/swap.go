@@ -448,9 +448,6 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 
 	// do a payout transaction if we get 2 times the gas costs
 	if payout.Cmp(costThreshold) == 1 {
-		opts := bind.NewKeyedTransactor(s.owner.privateKey)
-		opts.Context = ctx
-		// cash cheque in async, otherwise this blocks here until the TX is mined
 		go defaultCashCheque(s, cheque)
 	}
 
