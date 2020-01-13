@@ -352,13 +352,14 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 
 			for syncing := true; syncing; {
 				syncing = false
+				time.Sleep(1 * time.Second)
+
 				for _, id := range nodeIDs {
 					if sim.MustNodeItem(id, bucketKeyInspector).(*api.Inspector).IsPullSyncing() {
 						syncing = true
+						break
 					}
 				}
-
-				time.Sleep(1 * time.Second)
 			}
 
 			for {
