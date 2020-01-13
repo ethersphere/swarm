@@ -687,6 +687,8 @@ func TestResetBalance(t *testing.T) {
 	}
 }
 
+// TestDebtCheques verifies that cheques that would put a node in debt past the defined tolerance are rejected
+// and that ones within the tolerance are accepted
 func TestDebtCheques(t *testing.T) {
 	testBackend := newTestBackend(t)
 	defer testBackend.Close()
@@ -732,7 +734,7 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// set asymmetric balance and attempt to send cheque
-	if err = creditor.setBalance(-int64(DefaultPaymentThreshold)); err != nil {
+	if err = creditor.setBalance(-int64(ChequeDebtTolerance + 1)); err != nil {
 		t.Fatal(err)
 	}
 	// now simulate sending the cheque to the creditor from the debitor
@@ -773,7 +775,7 @@ func TestDebtCheques(t *testing.T) {
 
 	// simulate cheque confirmation
 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
-		Cheque: creditor.getPendingCheque(),
+		Cheque: cheque,
 	})
 
 	// balance should be 0 according to the debitor
