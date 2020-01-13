@@ -113,7 +113,7 @@ func New(kad *network.Kademlia, ns *storage.NetStore, baseKey *network.BzzAddr, 
 		kademliaLB:  network.NewKademliaLoadBalancer(kad, false),
 		peers:       make(map[enode.ID]*Peer),
 		spec:        spec,
-		logger:      log.NewBaseAddressLogger("base", baseKey.ShortString()),
+		logger:      log.NewBaseAddressLogger(baseKey.ShortString()),
 		quit:        make(chan struct{}),
 	}
 	if balance != nil && !reflect.ValueOf(balance).IsNil() {
@@ -316,9 +316,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		p.logger.Trace("netstore.Get can not retrieve chunk", "ref", msg.Addr, "err", err)
-		// continue in event loop
-		return nil
+		return fmt.Errorf("netstore.Get can not retrieve chunk for ref %s: %w", msg.Addr, err)
 	}
 
 	p.logger.Trace("retrieval.handleRetrieveRequest - delivery", "ref", msg.Addr)
@@ -331,10 +329,7 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 
 	err = p.Send(ctx, deliveryMsg)
 	if err != nil {
-		p.logger.Error("retrieval.handleRetrieveRequest - peer delivery failed", "ref", msg.Addr, "err", err)
-		osp.LogFields(olog.Bool("delivered", false))
-		// continue in event loop
-		return nil
+		return fmt.Errorf("retrieval.handleRetrieveRequest - peer delivery for ref %s: %w", msg.Addr, err)
 	}
 	osp.LogFields(olog.Bool("delivered", true))
 
@@ -349,7 +344,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	err := p.checkRequest(msg.Ruid, msg.Addr)
 	if err != nil {
 		unsolicitedChunkDelivery.Inc(1)
-		return fmt.Errorf("unsolicited chunk delivery from peer: %s", err)
+		return protocols.Break(fmt.Errorf("unsolicited chunk delivery from peer, ruid %d, addr %s: %w", msg.Ruid, msg.Addr, err))
 	}
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
@@ -378,10 +373,11 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 
 	_, err = r.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 	if err != nil {
-		p.logger.Error("netstore error putting chunk to localstore", "err", err)
 		if err == storage.ErrChunkInvalid {
-			return fmt.Errorf("netstore error putting chunk to localstore: %s", err)
+			return protocols.Break(fmt.Errorf("netstore putting chunk to localstore: %w", err))
 		}
+
+		return fmt.Errorf("netstore putting chunk to localstore: %w", err)
 	}
 
 	return nil

@@ -44,74 +44,6 @@ import (
 	"github.com/ethersphere/swarm/tracing"
 )
 
-// error codes used by this  protocol scheme
-const (
-	ErrMsgTooLong = iota
-	ErrDecode
-	ErrWrite
-	ErrInvalidMsgCode
-	ErrInvalidMsgType
-	ErrHandshake
-	ErrNoHandler
-	ErrHandler
-)
-
-// error description strings associated with the codes
-var errorToString = map[int]string{
-	ErrMsgTooLong:     "Message too long",
-	ErrDecode:         "Invalid message (RLP error)",
-	ErrWrite:          "Error sending message",
-	ErrInvalidMsgCode: "Invalid message code",
-	ErrInvalidMsgType: "Invalid message type",
-	ErrHandshake:      "Handshake error",
-	ErrNoHandler:      "No handler registered error",
-	ErrHandler:        "Message handler error",
-}
-
-/*
-Error implements the standard go error interface.
-Use:
-
-  errorf(code, format, params ...interface{})
-
-Prints as:
-
- <description>: <details>
-
-where description is given by code in errorToString
-and details is fmt.Sprintf(format, params...)
-
-exported field Code can be checked
-*/
-type Error struct {
-	Code    int
-	message string
-	format  string
-	params  []interface{}
-}
-
-func (e Error) Error() (message string) {
-	if len(e.message) == 0 {
-		name, ok := errorToString[e.Code]
-		if !ok {
-			panic("invalid message code")
-		}
-		e.message = name
-		if e.format != "" {
-			e.message += ": " + fmt.Sprintf(e.format, e.params...)
-		}
-	}
-	return e.message
-}
-
-func errorf(code int, format string, params ...interface{}) *Error {
-	return &Error{
-		Code:   code,
-		format: format,
-		params: params,
-	}
-}
-
 // MsgPauser can be used to pause run execution
 // IMPORTANT: should be used only for tests
 type MsgPauser interface {
@@ -244,64 +176,57 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // from the remote peer, a returned error causes the loop to exit
 // resulting in disconnection of the protocol
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
-	wait := p.run(handler)
-	return wait()
+	if err := p.run(handler); err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
 }
 
 // run receives messages from the peer and dispatches async routines to handle the messages
-func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) func() error {
+func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) error {
 	p.mtx.Lock()
 	p.running = true
 	p.mtx.Unlock()
 
-	errc := make(chan error)
-	go func() {
-		for {
-			msg, err := p.readMsg()
-			if err != nil {
-				select {
-				case errc <- err:
-				default:
-				}
-
-				return
-			}
-
-			p.mtx.RLock()
-			// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
-			if !p.running {
-				_ = msg.Discard()
-				p.mtx.RUnlock()
-				continue
-			}
-			p.mtx.RUnlock()
-
-			// handleMsgPauser should not be nil only in tests.
-			// It does not use mutex lock protection and because of that
-			// it must be set before the Registry is constructed and
-			// reset when it is closed, in tests.
-			// Production performance impact can be considered as
-			// neglectable as nil check is a ns order operation.
-			if p.handleMsgPauser != nil {
-				p.handleMsgPauser.Wait()
-			}
-
-			p.wg.Add(1)
-			go func() {
-				defer p.wg.Done()
-				err := p.handleMsg(msg, handler)
-				if err != nil {
-					select {
-					case errc <- err:
-					default:
-					}
-				}
-			}()
+	for {
+		msg, err := p.readMsg()
+		if err != nil {
+			return err
 		}
-	}()
 
-	return func() error {
-		return <-errc
+		p.mtx.RLock()
+		// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
+		if !p.running {
+			_ = msg.Discard()
+			p.mtx.RUnlock()
+			continue
+		}
+		p.mtx.RUnlock()
+
+		// handleMsgPauser should not be nil only in tests.
+		// It does not use mutex lock protection and because of that
+		// it must be set before the Registry is constructed and
+		// reset when it is closed, in tests.
+		// Production performance impact can be considered as
+		// neglectable as nil check is a ns order operation.
+		if p.handleMsgPauser != nil {
+			p.handleMsgPauser.Wait()
+		}
+
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			err := p.handleMsg(msg, handler)
+			if err != nil {
+				var e *breakError
+				if errors.As(err, &e) {
+					p.Drop(err.Error())
+				} else {
+					log.Warn(err.Error())
+				}
+			}
+		}()
 	}
 }
 
@@ -310,15 +235,17 @@ func (p *Peer) readMsg() (p2p.Msg, error) {
 	if err != nil {
 		if err != io.EOF {
 			metrics.GetOrRegisterCounter("peer.readMsg.error", nil).Inc(1)
-			log.Error("peer.readMsg", "err", err)
+			return msg, fmt.Errorf("peer.readMsg, err: %w", err)
 		}
 	}
+
 	return msg, err
 }
 
 // Drop disconnects a peer
+// TODO: may need to implement protocol drop only? don't want to kick off the peer
 func (p *Peer) Drop(reason string) {
-	log.Info("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
+	log.Error("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
@@ -326,6 +253,10 @@ func (p *Peer) Drop(reason string) {
 // Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
 func (p *Peer) Stop(timeout time.Duration) error {
 	p.mtx.Lock()
+	if !p.running {
+		return nil
+	}
+
 	p.running = false
 	p.mtx.Unlock()
 
@@ -338,7 +269,7 @@ func (p *Peer) Stop(timeout time.Duration) error {
 	select {
 	case <-done:
 	case <-time.After(timeout):
-		log.Debug("shutting down peer with active handlers", p)
+		log.Debug("peer shutdown with still active handlers: {}", p)
 		return errors.New("shutdown timeout reached")
 	}
 
@@ -356,7 +287,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	code, found := p.spec.GetCode(msg)
 	if !found {
-		return errorf(ErrInvalidMsgType, "%v", code)
+		return fmt.Errorf("invalid message type %v ", code)
 	}
 
 	wmsg, size, err := p.encode(ctx, msg)
@@ -375,7 +306,6 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-
 		// let's lock, we want to avoid that after validating, a separate call might interfere
 		p.lock.Lock()
 		defer p.lock.Unlock()
@@ -427,45 +357,45 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 	defer msg.Discard()
 
 	if msg.Size > p.spec.MaxMsgSize {
-		return errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
+		return Break(fmt.Errorf("message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
-		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
+		return Break(fmt.Errorf("invalid message code: %v", msg.Code))
 	}
 
 	ctx, msgBytes, err := p.decode(msg)
 	if err != nil {
-		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
+		return Break(fmt.Errorf("invalid message (RLP error): %v err=%w", msg.Code, err))
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		return errorf(ErrDecode, "<= %v: %v", msg, err)
+		return Break(fmt.Errorf("invalid message (RLP error): <= %v: %w", msg, err))
 	}
 
 	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-
 		p.lock.Lock()
 		defer p.lock.Unlock()
-
 		size := uint32(len(msgBytes))
 
 		// validate that the accounting call would succeed...
 		costToLocalNode, err := p.spec.Hook.Validate(p, size, val, Receiver)
 		if err != nil {
 			// ...because if it would fail, we return and don't handle the message
-			return err
+			return Break(err)
 		}
 
 		// seems like accounting would be fine, so handle the message
 		if err := handle(ctx, val); err != nil {
-			return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
+			return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
 		}
 
 		// handling succeeded, finally apply accounting
-		err = p.spec.Hook.Apply(p, costToLocalNode, size)
+		if err := p.spec.Hook.Apply(p, costToLocalNode, size); err != nil {
+			return Break(err)
+		}
 	} else {
 		// call the registered handler callbacks
 		// a registered callback take the decoded message as argument as an interface
@@ -473,11 +403,11 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 		// it is entirely safe not to check the cast in the handler since the handler is
 		// chosen based on the proper type in the first place
 		if err := handle(ctx, val); err != nil {
-			return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
+			return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
 		}
 	}
 
-	return err
+	return nil
 }
 
 // Handshake negotiates a handshake on the peer connection
@@ -491,7 +421,7 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 // returns the remote handshake and an error
 func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interface{}) error) (interface{}, error) {
 	if _, ok := p.spec.GetCode(hs); !ok {
-		return nil, errorf(ErrHandshake, "unknown handshake message type: %T", hs)
+		return nil, fmt.Errorf("unknown handshake message type: %T", hs)
 	}
 
 	var rhs interface{}
@@ -526,7 +456,7 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 			err = ctx.Err()
 		}
 		if err != nil {
-			return nil, errorf(ErrHandshake, err.Error())
+			return nil, err
 		}
 	}
 	return rhs, nil

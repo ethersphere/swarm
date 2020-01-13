@@ -279,7 +279,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		newBzzHandshakeMsg(TestProtocolVersion, 321, NewBzzAddrFromEnode(node), false),
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("message handler: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
 	)
 
 	if err != nil {
@@ -303,7 +303,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		newBzzHandshakeMsg(0, TestProtocolNetworkID, NewBzzAddrFromEnode(node), false),
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("message handler: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
 	)
 
 	if err != nil {
@@ -331,7 +331,7 @@ func TestBzzHandshakeInvalidCapabilities(t *testing.T) {
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		msg,
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): invalid capabilities setting: %s", msg.Addr.Capabilities)},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("message handler: (msg code 0): invalid capabilities setting: %s", msg.Addr.Capabilities)},
 	)
 
 	if err != nil {
