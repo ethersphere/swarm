@@ -85,7 +85,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, baseAddr *netw
 		quit:                    make(chan struct{}),
 		cache:                   c,
 		setCache:                sc,
-		logger:                  log.NewBaseAddressLogger("base", baseAddr.ShortString()),
+		logger:                  log.NewBaseAddressLogger(baseAddr.ShortString()),
 		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
 	}
 }

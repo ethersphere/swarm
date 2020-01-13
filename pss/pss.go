@@ -263,6 +263,7 @@ func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	handle := func(ctx context.Context, msg interface{}) error {
 		return p.handle(ctx, pp, msg)
 	}
+
 	return pp.Run(handle)
 }
 
@@ -423,18 +424,11 @@ func (p *Pss) deregister(topic *message.Topic, hndlr *handler) {
 // generic peer-specific handler for incoming messages
 // calls pss msg handler asynchronously
 func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{}) error {
-	go func() {
-		pssmsg, ok := msg.(*message.Message)
-		if !ok {
-			log.Error("invalid message type", "msg", msg)
-			peer.Drop("invalid message type")
-		}
-		if err := p.handlePssMsg(ctx, pssmsg); err != nil {
-			log.Warn("handler error", "err", err)
-			peer.Drop(fmt.Sprintf("handler error %s", err))
-		}
-	}()
-	return nil
+	pssmsg, ok := msg.(*message.Message)
+	if !ok {
+		return fmt.Errorf("invalid message type %s", msg)
+	}
+	return p.handlePssMsg(ctx, pssmsg)
 }
 
 // Filters incoming messages for processing or forwarding.

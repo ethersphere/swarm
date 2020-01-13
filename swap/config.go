@@ -34,5 +34,6 @@ const (
 	// The smart-contract allows for setting this variable differently per beneficiary
 	defaultHarddepositTimeoutDuration = 24 * time.Hour
 	// Until we deploy swap officially, it's only allowed to be enabled under a specific network ID (use the --bzznetworkid flag to set it)
-	AllowedNetworkID = 5
+	AllowedNetworkID          = 5
+	DefaultTransactionTimeout = 10 * time.Minute
 )

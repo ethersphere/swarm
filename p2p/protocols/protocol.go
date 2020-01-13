@@ -30,6 +30,7 @@ package protocols
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -43,82 +44,22 @@ import (
 	"github.com/ethersphere/swarm/tracing"
 )
 
-// error codes used by this  protocol scheme
-const (
-	ErrMsgTooLong = iota
-	ErrDecode
-	ErrWrite
-	ErrInvalidMsgCode
-	ErrInvalidMsgType
-	ErrHandshake
-	ErrNoHandler
-	ErrHandler
-)
-
-// error description strings associated with the codes
-var errorToString = map[int]string{
-	ErrMsgTooLong:     "Message too long",
-	ErrDecode:         "Invalid message (RLP error)",
-	ErrWrite:          "Error sending message",
-	ErrInvalidMsgCode: "Invalid message code",
-	ErrInvalidMsgType: "Invalid message type",
-	ErrHandshake:      "Handshake error",
-	ErrNoHandler:      "No handler registered error",
-	ErrHandler:        "Message handler error",
-}
-
-/*
-Error implements the standard go error interface.
-Use:
-
-  errorf(code, format, params ...interface{})
-
-Prints as:
-
- <description>: <details>
-
-where description is given by code in errorToString
-and details is fmt.Sprintf(format, params...)
-
-exported field Code can be checked
-*/
-type Error struct {
-	Code    int
-	message string
-	format  string
-	params  []interface{}
-}
-
-func (e Error) Error() (message string) {
-	if len(e.message) == 0 {
-		name, ok := errorToString[e.Code]
-		if !ok {
-			panic("invalid message code")
-		}
-		e.message = name
-		if e.format != "" {
-			e.message += ": " + fmt.Sprintf(e.format, e.params...)
-		}
-	}
-	return e.message
-}
-
-func errorf(code int, format string, params ...interface{}) *Error {
-	return &Error{
-		Code:   code,
-		format: format,
-		params: params,
-	}
+// MsgPauser can be used to pause run execution
+// IMPORTANT: should be used only for tests
+type MsgPauser interface {
+	Pause()
+	Resume()
+	Wait()
 }
 
 //For accounting, the design is to allow the Spec to describe which and how its messages are priced
 //To access this functionality, we provide a Hook interface which will call accounting methods
 //NOTE: there could be more such (horizontal) hooks in the future
 type Hook interface {
-	//A hook for sending messages
-	Send(peer *Peer, size uint32, msg interface{}) error
-	//A hook for receiving messages
-	Receive(peer *Peer, size uint32, msg interface{}) error
+	// A hook for applying accounting
+	Apply(peer *Peer, costToLocalNode int64, size uint32) error
+	// Run some validation before applying accounting
+	Validate(peer *Peer, size uint32, msg interface{}, payer Payer) (int64, error)
 }
 
 // Spec is a protocol specification including its name and version as well as
@@ -198,11 +139,16 @@ func (s *Spec) NewMsg(code uint64) (interface{}, bool) {
 // Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
-	*p2p.Peer                   // the p2p.Peer object representing the remote
-	rw        p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
-	spec      *Spec
-	encode    func(context.Context, interface{}) (interface{}, int, error)
-	decode    func(p2p.Msg) (context.Context, []byte, error)
+	*p2p.Peer                         // the p2p.Peer object representing the remote
+	rw              p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
+	spec            *Spec
+	encode          func(context.Context, interface{}) (interface{}, int, error)
+	decode          func(p2p.Msg) (context.Context, []byte, error)
+	wg              sync.WaitGroup
+	running         bool         // if running is true async go routines are dispatched in the event loop
+	mtx             sync.RWMutex // guards running
+	handleMsgPauser MsgPauser    //  message pauser, should be used only in tests
+	lock            sync.Mutex
 }
 
 // NewPeer constructs a new peer
@@ -225,29 +171,109 @@ func NewPeer(peer *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	}
 }
 
-// Run starts the forever loop that handles incoming messages
-// called within the p2p.Protocol#Run function
-// the handler argument is a function which is called for each message received
+// Run starts the forever loop that handles incoming messages.
+// The handler argument is a function which is called for each message received
 // from the remote peer, a returned error causes the loop to exit
-// resulting in disconnection
+// resulting in disconnection of the protocol
 func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) error {
+	if err := p.run(handler); err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
+}
+
+// run receives messages from the peer and dispatches async routines to handle the messages
+func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) error {
+	p.mtx.Lock()
+	p.running = true
+	p.mtx.Unlock()
+
 	for {
-		if err := p.handleIncoming(handler); err != nil {
-			if err != io.EOF {
-				metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
-				log.Error("peer.handleIncoming", "err", err)
-			}
+		msg, err := p.readMsg()
+		if err != nil {
 			return err
 		}
+
+		p.mtx.RLock()
+		// if loop has been stopped, we don't dispatch any more async routines and discard (consume) the message
+		if !p.running {
+			_ = msg.Discard()
+			p.mtx.RUnlock()
+			continue
+		}
+		p.mtx.RUnlock()
+
+		// handleMsgPauser should not be nil only in tests.
+		// It does not use mutex lock protection and because of that
+		// it must be set before the Registry is constructed and
+		// reset when it is closed, in tests.
+		// Production performance impact can be considered as
+		// neglectable as nil check is a ns order operation.
+		if p.handleMsgPauser != nil {
+			p.handleMsgPauser.Wait()
+		}
+
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			err := p.handleMsg(msg, handler)
+			if err != nil {
+				var e *breakError
+				if errors.As(err, &e) {
+					p.Drop(err.Error())
+				} else {
+					log.Warn(err.Error())
+				}
+			}
+		}()
 	}
 }
 
-// Drop disconnects a peer.
+func (p *Peer) readMsg() (p2p.Msg, error) {
+	msg, err := p.rw.ReadMsg()
+	if err != nil {
+		if err != io.EOF {
+			metrics.GetOrRegisterCounter("peer.readMsg.error", nil).Inc(1)
+			return msg, fmt.Errorf("peer.readMsg, err: %w", err)
+		}
+	}
+
+	return msg, err
+}
+
+// Drop disconnects a peer
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
-// if they are useful for other protocols
 func (p *Peer) Drop(reason string) {
 	log.Error("dropping peer with DiscSubprotocolError", "peer", p.ID(), "reason", reason)
 	p.Disconnect(p2p.DiscSubprotocolError)
+}
+
+// Stop stops the execution of new async jobs, and blocks until active jobs are finished or provided timeout passes.
+// Returns nil if the active jobs are finished within the timeout duration, or error otherwise.
+func (p *Peer) Stop(timeout time.Duration) error {
+	p.mtx.Lock()
+	if !p.running {
+		return nil
+	}
+
+	p.running = false
+	p.mtx.Unlock()
+
+	done := make(chan bool)
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		log.Debug("peer shutdown with still active handlers: {}", p)
+		return errors.New("shutdown timeout reached")
+	}
+
+	return nil
 }
 
 // Send takes a message, encodes it in RLP, finds the right message code and sends the
@@ -261,7 +287,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	code, found := p.spec.GetCode(msg)
 	if !found {
-		return errorf(ErrInvalidMsgType, "%v", code)
+		return fmt.Errorf("invalid message type %v ", code)
 	}
 
 	wmsg, size, err := p.encode(ctx, msg)
@@ -277,67 +303,110 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 		}
 		size = len(r)
 	}
-	// if the accounting hook is set, call it
+
+	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		err = p.spec.Hook.Send(p, uint32(size), msg)
+		// let's lock, we want to avoid that after validating, a separate call might interfere
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		// validate that this operation would succeed...
+		costToLocalNode, err := p.spec.Hook.Validate(p, uint32(size), wmsg, Sender)
+		if err != nil {
+			// ...because if it would fail, we return and don't send the message
+			return err
+		}
+		// seems like accounting would succeed, thus send the message first...
+		err = p2p.Send(p.rw, code, wmsg)
 		if err != nil {
 			return err
 		}
+		// ...and finally apply (write) the accounting change
+		if err := p.spec.Hook.Apply(p, costToLocalNode, uint32(size)); err != nil {
+			return err
+		}
+	} else {
+		err = p2p.Send(p.rw, code, wmsg)
 	}
 
-	return p2p.Send(p.rw, code, wmsg)
+	return nil
 }
 
-// handleIncoming(code)
-// is called each cycle of the main forever loop that dispatches incoming messages
-// if this returns an error the loop returns and the peer is disconnected with the error
-// this generic handler
+// SetMsgPauser sets message pauser for this peer
+// IMPORTANT: to be used only for testing
+func (p *Peer) SetMsgPauser(pauser MsgPauser) {
+	p.handleMsgPauser = pauser
+}
+
+// receive is a sync call that handles incoming message with provided message handler
+func (p *Peer) receive(handler func(ctx context.Context, msg interface{}) error) error {
+	msg, err := p.readMsg()
+	if err != nil {
+		return err
+	}
+
+	return p.handleMsg(msg, handler)
+}
+
+// handleMsg is handling message with provided handler. It:
 // * checks message size,
 // * checks for out-of-range message codes,
 // * handles decoding with reflection,
 // * call handlers as callbacks
-func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) error) error {
-	msg, err := p.rw.ReadMsg()
-	if err != nil {
-		return err
-	}
+func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg interface{}) error) error {
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
 	if msg.Size > p.spec.MaxMsgSize {
-		return errorf(ErrMsgTooLong, "%v > %v", msg.Size, p.spec.MaxMsgSize)
+		return Break(fmt.Errorf("message too long: %v > %v", msg.Size, p.spec.MaxMsgSize))
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
-		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
+		return Break(fmt.Errorf("invalid message code: %v", msg.Code))
 	}
 
 	ctx, msgBytes, err := p.decode(msg)
 	if err != nil {
-		return errorf(ErrDecode, "%v err=%v", msg.Code, err)
+		return Break(fmt.Errorf("invalid message (RLP error): %v err=%w", msg.Code, err))
 	}
 
 	if err := rlp.DecodeBytes(msgBytes, val); err != nil {
-		return errorf(ErrDecode, "<= %v: %v", msg, err)
+		return Break(fmt.Errorf("invalid message (RLP error): <= %v: %w", msg, err))
 	}
 
-	// if the accounting hook is set, call it
+	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		err := p.spec.Hook.Receive(p, uint32(len(msgBytes)), val)
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		size := uint32(len(msgBytes))
+
+		// validate that the accounting call would succeed...
+		costToLocalNode, err := p.spec.Hook.Validate(p, size, val, Receiver)
 		if err != nil {
-			return err
+			// ...because if it would fail, we return and don't handle the message
+			return Break(err)
+		}
+
+		// seems like accounting would be fine, so handle the message
+		if err := handle(ctx, val); err != nil {
+			return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
+		}
+
+		// handling succeeded, finally apply accounting
+		if err := p.spec.Hook.Apply(p, costToLocalNode, size); err != nil {
+			return Break(err)
+		}
+	} else {
+		// call the registered handler callbacks
+		// a registered callback take the decoded message as argument as an interface
+		// which the handler is supposed to cast to the appropriate type
+		// it is entirely safe not to check the cast in the handler since the handler is
+		// chosen based on the proper type in the first place
+		if err := handle(ctx, val); err != nil {
+			return fmt.Errorf("message handler: (msg code %v): %w", msg.Code, err)
 		}
 	}
 
-	// call the registered handler callbacks
-	// a registered callback take the decoded message as argument as an interface
-	// which the handler is supposed to cast to the appropriate type
-	// it is entirely safe not to check the cast in the handler since the handler is
-	// chosen based on the proper type in the first place
-	if err := handle(ctx, val); err != nil {
-		return errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)
-	}
 	return nil
 }
 
@@ -352,20 +421,22 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 // returns the remote handshake and an error
 func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interface{}) error) (interface{}, error) {
 	if _, ok := p.spec.GetCode(hs); !ok {
-		return nil, errorf(ErrHandshake, "unknown handshake message type: %T", hs)
+		return nil, fmt.Errorf("unknown handshake message type: %T", hs)
 	}
 
 	var rhs interface{}
 	errc := make(chan error, 2)
-	handle := func(ctx context.Context, msg interface{}) error {
-		rhs = msg
-		if verify != nil {
-			return verify(rhs)
-		}
-		return nil
-	}
+
 	send := func() { errc <- p.Send(ctx, hs) }
-	receive := func() { errc <- p.handleIncoming(handle) }
+	receive := func() {
+		errc <- p.receive(func(ctx context.Context, msg interface{}) error {
+			rhs = msg
+			if verify != nil {
+				return verify(rhs)
+			}
+			return nil
+		})
+	}
 
 	go func() {
 		if p.Inbound() {
@@ -385,7 +456,7 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 			err = ctx.Err()
 		}
 		if err != nil {
-			return nil, errorf(ErrHandshake, err.Error())
+			return nil, err
 		}
 	}
 	return rhs, nil

@@ -109,7 +109,7 @@ func NewNetStore(store chunk.Store, baseAddr *network.BzzAddr) *NetStore {
 		fetchers: fetchers,
 		Store:    store,
 		LocalID:  baseAddr.ID(),
-		logger:   log.NewBaseAddressLogger("base", baseAddr.ShortString()),
+		logger:   log.NewBaseAddressLogger(baseAddr.ShortString()),
 	}
 }
 

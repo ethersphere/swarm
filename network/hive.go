@@ -390,24 +390,30 @@ func (h *Hive) handlePeersMsg(d *Peer, msg *peersMsg) error {
 func (h *Hive) handleSubPeersMsg(ctx context.Context, d *Peer, msg *subPeersMsg) error {
 	d.setDepth(msg.Depth)
 	// only send peers after the initial subPeersMsg
-	if !d.sentPeers {
-		var peers []*BzzAddr
-		// iterate connection in ascending order of disctance from the remote address
-		h.EachConn(d.Over(), 255, func(p *Peer, po int) bool {
-			// terminate if we are beyond the radius
-			if uint8(po) < msg.Depth {
-				return false
-			}
-			if !d.seen(p.BzzAddr) { // here just records the peer sent
-				peers = append(peers, p.BzzAddr)
-			}
-			return true
-		})
-		// if useful  peers are found, send them over
-		if len(peers) > 0 {
-			go d.Send(ctx, &peersMsg{Peers: sortPeers(peers)})
-		}
+	h.lock.Lock()
+	if d.sentPeers {
+		h.lock.Unlock()
+		return nil
 	}
+
 	d.sentPeers = true
+	h.lock.Unlock()
+
+	var peers []*BzzAddr
+	// iterate connection in ascending order of distance from the remote address
+	h.EachConn(d.Over(), 255, func(p *Peer, po int) bool {
+		// terminate if we are beyond the radius
+		if uint8(po) < msg.Depth {
+			return false
+		}
+		if !d.seen(p.BzzAddr) { // here just records the peer sent
+			peers = append(peers, p.BzzAddr)
+		}
+		return true
+	})
+	// if useful  peers are found, send them over
+	if len(peers) > 0 {
+		go d.Send(ctx, &peersMsg{Peers: sortPeers(peers)})
+	}
 	return nil
 }

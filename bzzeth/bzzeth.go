@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -102,11 +103,11 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 		p.logger.Trace("bzzeth.handleMsg")
 		switch msg := msg.(type) {
 		case *NewBlockHeaders:
-			go b.handleNewBlockHeaders(ctx, p, msg)
+			return b.handleNewBlockHeaders(ctx, p, msg)
 		case *BlockHeaders:
-			go b.handleBlockHeaders(ctx, p, msg)
+			return b.handleBlockHeaders(ctx, p, msg)
 		case *GetBlockHeaders:
-			go b.handleGetBlockHeaders(ctx, p, msg)
+			return b.handleGetBlockHeaders(ctx, p, msg)
 		}
 		return nil
 	}
@@ -116,14 +117,13 @@ func (b *BzzEth) handleMsg(p *Peer) func(context.Context, interface{}) error {
 // If any message is received in this case, the peer needs to be dropped
 func (b *BzzEth) handleMsgFromSwarmNode(p *Peer) func(context.Context, interface{}) error {
 	return func(ctx context.Context, msg interface{}) error {
-		p.logger.Warn("bzzeth.handleMsgFromSwarmNode")
-		return errRcvdMsgFromSwarmNode
+		return protocols.Break(errRcvdMsgFromSwarmNode)
 	}
 }
 
 // handleNewBlockHeaders handles new header hashes
 // only request headers that are in Kad Nearest Neighbourhood
-func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlockHeaders) {
+func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlockHeaders) error {
 	p.logger.Trace("bzzeth.handleNewBlockHeaders")
 
 	// collect the addresses of blocks that are not in our localstore
@@ -134,8 +134,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	}
 	yes, err := b.netStore.Store.HasMulti(ctx, addresses...)
 	if err != nil {
-		log.Error("Error checking hashesh in store", "Reason", err)
-		return
+		return fmt.Errorf("checking hashesh in store: %w", err)
 	}
 
 	// collect the hashes of block headers we want
@@ -159,8 +158,7 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 	deliveries := make(chan []byte)
 	req, err := p.getBlockHeaders(ctx, hashes, deliveries)
 	if err != nil {
-		p.logger.Error("Error sending GetBlockHeader message", "Reason", err)
-		return
+		return fmt.Errorf("sending GetBlockHeader message: %w", err)
 	}
 	defer req.cancel()
 
@@ -172,19 +170,23 @@ func (b *BzzEth) handleNewBlockHeaders(ctx context.Context, p *Peer, msg *NewBlo
 		case hdr, ok := <-deliveries:
 			if !ok {
 				p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt)
-				return
+				return nil
 			}
 			ch := newChunk(hdr)
 			deliveredCnt++
 			p.logger.Trace("bzzeth.handleNewBlockHeaders", "hash", ch.Address().Hex(), "delivered", deliveredCnt)
+
+			req.lock.RLock()
 			if deliveredCnt == len(req.hashes) {
 				p.logger.Debug("all headers delivered", "count", deliveredCnt)
 				finishDeliveryFunc(req.hashes)
-				return
+				req.lock.RUnlock()
+				return nil
 			}
+			req.lock.RUnlock()
 		case <-ctx.Done():
 			p.logger.Debug("bzzeth.handleNewBlockHeaders", "delivered", deliveredCnt, "err", err)
-			return
+			return nil
 		}
 	}
 }
@@ -220,15 +222,13 @@ func finishDelivery(hashes map[string]bool) {
 }
 
 // handleBlockHeaders handles block headers message
-func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHeaders) {
+func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHeaders) error {
 	p.logger.Debug("bzzeth.handleBlockHeaders", "id", msg.Rid)
 
 	// retrieve the request for this id
 	req, ok := p.requests.get(msg.Rid)
 	if !ok {
-		p.logger.Warn("bzzeth.handleBlockHeaders: nonexisting request id", "id", msg.Rid)
-		p.Drop("nonexisting request id")
-		return
+		return protocols.Break(fmt.Errorf("bzzeth.handleBlockHeaders: nonexisting request id %d", msg.Rid))
 	}
 
 	// convert rlp.RawValue to bytes
@@ -237,11 +237,11 @@ func (b *BzzEth) handleBlockHeaders(ctx context.Context, p *Peer, msg *BlockHead
 		headers[i] = h
 	}
 
-	err := b.deliverAndStoreAll(ctx, req, headers)
-	if err != nil {
-		p.logger.Warn("bzzeth.handleBlockHeaders: fatal dropping peer", "id", msg.Rid, "err", err)
-		p.Drop("error on deliverAndStoreAll")
+	if err := b.deliverAndStoreAll(ctx, req, headers); err != nil {
+		return protocols.Break(err)
 	}
+
+	return nil
 }
 
 // Validates and headers asynchronously and stores the valid chunks in one go
@@ -263,12 +263,13 @@ func (b *BzzEth) deliverAndStoreAll(ctx context.Context, req *request, headers [
 			return nil
 		})
 	}
-	// finish storage is used mostly in testing
-	// in normal scenario.. it just logs Trace
-	defer finishStorageFunc(chunks)
 
 	// wait for all validations to get over and close the channels
 	err := wg.Wait()
+
+	// finish storage is used mostly in testing
+	// in normal scenario.. it just logs Trace
+	defer finishStorageFunc(chunks)
 
 	// We want to store even if there is any validation error.
 	// since some headers may be valid in the batch.
@@ -354,7 +355,7 @@ func arrangeHeader(hashes []chunk.Address, headers []chunk.Address) []chunk.Addr
 
 // handles GetBlockHeader requests, in the protocol handler this call is asynchronous
 // so it is safe to have it run until delivery is finished
-func (b *BzzEth) handleGetBlockHeaders(ctx context.Context, p *Peer, msg *GetBlockHeaders) {
+func (b *BzzEth) handleGetBlockHeaders(ctx context.Context, p *Peer, msg *GetBlockHeaders) error {
 	p.logger.Debug("bzzeth.handleGetBlockHeaders", "id", msg.Rid)
 	total := len(msg.Hashes)
 	ctx, osp := spancontext.StartSpan(ctx, "bzzeth.handleGetBlockHeaders")
@@ -416,10 +417,12 @@ DELIVERY:
 	if err == nil && deliveredCnt < total {
 		err := p.Send(ctx, &BlockHeaders{Rid: uint32(msg.Rid)})
 		if err != nil {
-			p.logger.Error("could not send empty BlockHeader", "err", err)
+			return fmt.Errorf("could not send empty BlockHeader: %w", err)
 		}
 	}
+
 	p.logger.Debug("bzzeth.handleGetBlockHeaders: sent all headers", "id", msg.Rid)
+	return nil
 }
 
 var batchWait = 100 * time.Millisecond // time to wait for collecting headers in a batch
