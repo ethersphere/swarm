@@ -357,7 +357,9 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
 	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
-	creditor.setBalance(-int64(DefaultPaymentThreshold))
+	if err = creditor.setBalance(-int64(DefaultPaymentThreshold)); err != nil {
+		t.Fatal(err)
+	}
 
 	// we expect a cheque at the end of the test, but not yet
 	if creditor.getLastSentCheque() != nil {
@@ -492,7 +494,9 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	overDraft := 42
 	expectedBalance := int64(DefaultDisconnectThreshold)
 	// we don't expect any change after the test
-	debitor.setBalance(expectedBalance)
+	if err = debitor.setBalance(expectedBalance); err != nil {
+		t.Fatal(err)
+	}
 	// we also don't expect any cheques yet
 	if debitor.getPendingCheque() != nil {
 		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getPendingCheque())
