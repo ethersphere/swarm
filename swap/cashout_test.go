@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -110,7 +111,9 @@ func TestCashCheque(t *testing.T) {
 	reset := setupContractTest()
 	defer reset()
 
-	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
+	store, dir := newTestStateStore(t)
+	defer os.Remove(dir)
+	cashoutProcessor := newCashoutProcessor(store, backend, ownerKey)
 	payout := big.NewInt(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
@@ -147,7 +150,9 @@ func TestEstimatePayout(t *testing.T) {
 	reset := setupContractTest()
 	defer reset()
 
-	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
+	store, dir := newTestStateStore(t)
+	defer os.Remove(dir)
+	cashoutProcessor := newCashoutProcessor(store, backend, ownerKey)
 	payout := big.NewInt(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)

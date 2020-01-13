@@ -668,13 +668,15 @@ func TestResetBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
+
+	// we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
-	case <-testBackend.cashDone:
+	case <-creditorSwap.cashoutProcessor.cashed:
 		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
-		t.Fatalf("Timeout waiting for cash transactions to complete")
+		t.Fatalf("Timeout waiting for cash transaction to complete")
 	}
+
 	// finally check that the creditor also successfully reset the balances
 	if debitor.getBalance() != 0 {
 		t.Fatalf("unexpected balance to be 0, but it is %d", debitor.getBalance())

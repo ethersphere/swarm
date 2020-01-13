@@ -165,7 +165,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			}
 
 			cleanup = func() {
-				ts.swap.store.Close()
+				ts.swap.Close()
 				os.RemoveAll(dir)
 			}
 
@@ -243,6 +243,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 			t.Fatal(err)
 		}
 		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory)
+		go params.swaps[i].cashoutProcessor.start()
 	}
 
 	params.backend = testBackend
@@ -341,7 +342,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			if err := p2Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts1.swap.peers[p2], expectedPayout1); err != nil {
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts1.swap.peers[p2], ts2.swap.peers[p1], expectedPayout1); err != nil {
 				t.Fatal(err)
 			}
 			lastCount += 1
@@ -350,7 +351,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts2.swap.peers[p1], expectedPayout2); err != nil {
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts2.swap.peers[p1], ts1.swap.peers[p2], expectedPayout2); err != nil {
 				t.Fatal(err)
 			}
 			lastCount += 1
@@ -472,7 +473,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		// we need to wait a bit in order to give time for the cheque to be processed
-		if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
+		if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], creditorSvc.swap.peers[debitor], expectedPayout); err != nil {
 			t.Fatal(err)
 		}
 		lastCount += 1
@@ -702,7 +703,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metrics.Counter, lastCount int64, p *Peer, expectedLastPayout uint64) error {
+func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metrics.Counter, lastCount int64, p *Peer, pr *Peer, expectedLastPayout uint64) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -725,7 +726,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				lock.Unlock()
 				wg.Done()
 				return
-			case <-backend.cashDone:
+			case <-pr.swap.cashoutProcessor.cashed:
 				wg.Done()
 				return
 			}

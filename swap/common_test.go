@@ -92,6 +92,19 @@ func newDefaultParams(t *testing.T) *Params {
 	}
 }
 
+func newTestStateStore(t *testing.T) (*state.DBStore, string) {
+	t.Helper()
+	dir, err := ioutil.TempDir("", "swap_test_store")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateStore, err := state.NewDBStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stateStore, dir
+}
+
 // newBaseTestSwapWithParams creates a swap with the given params
 func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Params, backend *swapTestBackend) (*Swap, string) {
 	t.Helper()
@@ -111,6 +124,7 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 		t.Fatal(err)
 	}
 	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory)
+	swap.cashoutProcessor.start()
 	return swap, dir
 }
 
@@ -210,22 +224,8 @@ func newRandomTestCheque() *Cheque {
 	return cheque
 }
 
-// During tests, because the cashing in of cheques is async, we should wait for the function to be returned
-// Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
-// causing subsequent TX to possibly fail due to nonce mismatch
-func testCashCheque(s *Swap, cheque *Cheque) {
-	cashCheque(s, cheque)
-	// send to the channel, signals to clients that this function actually finished
-	if stb, ok := s.backend.(*swapTestBackend); ok {
-		if stb.cashDone != nil {
-			stb.cashDone <- struct{}{}
-		}
-	}
-}
-
 // when testing, we don't need to wait for a transaction to be mined
 func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
-
 	var stb *swapTestBackend
 	var ok bool
 	if stb, ok = backend.(*swapTestBackend); !ok {
@@ -249,15 +249,11 @@ func setupContractTest() func() {
 	// we overwrite the waitForTx function with one which the simulated backend
 	// immediately commits
 	currentWaitFunc := cswap.WaitFunc
-	// we also need to store the previous cashCheque function in case this is called multiple times
-	currentCashCheque := defaultCashCheque
-	defaultCashCheque = testCashCheque
 	// overwrite only for the duration of the test, so...
 	cswap.WaitFunc = testWaitForTx
 	return func() {
 		// ...we need to set it back to original when done
 		cswap.WaitFunc = currentWaitFunc
-		defaultCashCheque = currentCashCheque
 	}
 }
 

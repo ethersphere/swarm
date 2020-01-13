@@ -19,18 +19,30 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/state"
 )
 
 // CashChequeBeneficiaryTransactionCost is the expected gas cost of a CashChequeBeneficiary transaction
 const CashChequeBeneficiaryTransactionCost = 50000
 
-// CashoutProcessor holds all relevant fields needed for processing cashouts
+// CashoutProcessor holds all relevant fields needed for the cashout go routine
 type CashoutProcessor struct {
+	lock    sync.Mutex           // lock for the loop (used to prevent double-closing of channels)
+	queue   chan *CashoutRequest // channel for future cashout requests
+	context context.Context      // context used for the loop
+	cancel  context.CancelFunc   // cancel function of context
+	done    chan bool            // channel for signalling that the loop has terminated
+	cashed  chan *CashoutRequest // channel for successful cashouts
+
+	store      state.Store       // state store to save and load the active cashout from
 	backend    contract.Backend  // ethereum backend to use
 	privateKey *ecdsa.PrivateKey // private key to use
 }
@@ -38,6 +50,7 @@ type CashoutProcessor struct {
 // CashoutRequest represents a request for a cashout operation
 type CashoutRequest struct {
 	Cheque      Cheque         // cheque to be cashed
+	Peer        enode.ID       // peer this cheque is from
 	Destination common.Address // destination for the payout
 }
 
@@ -48,15 +61,85 @@ type ActiveCashout struct {
 }
 
 // newCashoutProcessor creates a new instance of CashoutProcessor
-func newCashoutProcessor(backend contract.Backend, privateKey *ecdsa.PrivateKey) *CashoutProcessor {
+func newCashoutProcessor(store state.Store, backend contract.Backend, privateKey *ecdsa.PrivateKey) *CashoutProcessor {
+	context, cancel := context.WithCancel(context.Background())
 	return &CashoutProcessor{
+		store:      store,
 		backend:    backend,
 		privateKey: privateKey,
+		done:       make(chan bool),
+		queue:      make(chan *CashoutRequest, 50),
+		cashed:     make(chan *CashoutRequest, 50),
+		context:    context,
+		cancel:     cancel,
 	}
+}
+
+// queueRequest attempts to add a request to the queue
+func (c *CashoutProcessor) queueRequest(cashoutRequest *CashoutRequest) {
+	select {
+	case c.queue <- cashoutRequest:
+	default:
+		swapLog.Warn("attempting to write cashout request to closed queue")
+	}
+}
+
+// start starts the loop go routine
+func (c *CashoutProcessor) start() {
+	go c.loop()
+}
+
+// stop cancels the loop by cancelling c.context and closing all the channels
+func (c *CashoutProcessor) stop() {
+	c.lock.Lock()
+	select {
+	case <-c.context.Done():
+		return
+	default:
+	}
+	c.cancel()
+	c.lock.Unlock()
+
+	close(c.queue)
+	<-c.done
+	close(c.done)
+}
+
+func (c *CashoutProcessor) loop() {
+	if err := c.continueActiveCashout(); err != nil {
+		swapLog.Error(err.Error()) // TODO: stop processing for now
+		return
+	}
+
+	for request := range c.queue {
+		ctx, cancel := context.WithTimeout(c.context, DefaultTransactionTimeout)
+		defer cancel()
+
+		estimatedPayout, transactionCosts, err := c.estimatePayout(ctx, &request.Cheque)
+		if err != nil {
+			swapLog.Error(err.Error())
+			continue
+		}
+
+		// do a payout transaction if we get 2 times the gas costs
+		if estimatedPayout > 2*transactionCosts {
+			if err = c.cashCheque(ctx, request); err != nil {
+				// if sending the transaction fails put the request back into the queue
+				swapLog.Error("failed to cash cheque", "err", err)
+				c.queueRequest(request)
+				continue
+			}
+
+			swapLog.Info("finished cashing cheque")
+		}
+	}
+
+	c.done <- true
 }
 
 // cashCheque tries to cash the cheque specified in the request
 // after the transaction is sent it waits on its success
+// if the transaction fails it is reentered into the queue
 func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutRequest) error {
 	cheque := request.Cheque
 	opts := bind.NewKeyedTransactor(c.privateKey)
@@ -72,11 +155,25 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 		return err
 	}
 
-	// this blocks until the cashout has been successfully processed
-	return c.waitForAndProcessActiveCashout(&ActiveCashout{
+	activeCashout := &ActiveCashout{
 		Request:         *request,
 		TransactionHash: tx.Hash(),
-	})
+	}
+
+	// before waiting save the request and transaction information to disk
+	err = c.saveActiveCashout(activeCashout)
+	if err != nil {
+		return err
+	}
+
+	// this blocks until the cashout has been successfully processed
+	err = c.processActiveCashout(activeCashout)
+	if err != nil {
+		return err
+	}
+
+	// delete the request and transaction information to disk
+	return c.saveActiveCashout(nil)
 }
 
 // estimatePayout estimates the payout for a given cheque as well as the transaction cost
@@ -107,9 +204,30 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 	return expectedPayout, transactionCosts, nil
 }
 
-// waitForAndProcessActiveCashout waits for activeCashout to complete
-func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveCashout) error {
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultTransactionTimeout)
+// continueActiveCashout checks if an active cashout was saved and if so processes that one
+// if the cashout fails it reenters the queue
+func (c *CashoutProcessor) continueActiveCashout() error {
+	activeCashout, err := c.loadActiveCashout()
+	if err != nil {
+		return err
+	}
+
+	if activeCashout != nil {
+		if err = c.processActiveCashout(activeCashout); err != nil {
+			c.queueRequest(&activeCashout.Request)
+			return err
+		}
+		if err = c.saveActiveCashout(nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// processActiveCashout waits for activeCashout to complete
+func (c *CashoutProcessor) processActiveCashout(activeCashout *ActiveCashout) error {
+	ctx, cancel := context.WithTimeout(c.context, DefaultTransactionTimeout)
 	defer cancel()
 
 	receipt, err := contract.WaitForTransactionByHash(ctx, c.backend, activeCashout.TransactionHash)
@@ -132,5 +250,29 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 	}
 
 	swapLog.Info("cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
+
+	select {
+	case c.cashed <- &activeCashout.Request:
+	default:
+		log.Error("cashed channel full")
+	}
+
 	return nil
+}
+
+// loadActiveCashout loads the activeCashout from the store
+func (c *CashoutProcessor) loadActiveCashout() (activeCashout *ActiveCashout, err error) {
+	err = c.store.Get("cashout_loop_active", &activeCashout)
+	if err == state.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return activeCashout, nil
+}
+
+// saveActiveCashout saves activeCashout to the store
+func (c *CashoutProcessor) saveActiveCashout(activeCashout *ActiveCashout) error {
+	return c.store.Put("cashout_loop_active", activeCashout)
 }
