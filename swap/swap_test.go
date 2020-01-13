@@ -690,12 +690,10 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	err = debitor.setBalance(testAmount)
-	if err != nil {
+	if err = debitor.setBalance(testAmount); err != nil {
 		t.Fatal(err)
 	}
-	err = creditor.setBalance(-testAmount)
-	if err != nil {
+	if err = creditor.setBalance(-testAmount); err != nil {
 		t.Fatal(err)
 	}
 
@@ -704,8 +702,7 @@ func TestResetBalance(t *testing.T) {
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	err = creditor.sendCheque()
-	if err != nil {
+	if err = creditor.sendCheque(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1728,8 +1725,7 @@ func TestAvailableBalance(t *testing.T) {
 	// send a cheque worth 42
 	chequeAmount := int64(42)
 	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
-	err = peer.setBalance(-chequeAmount)
-	if err != nil {
+	if err = peer.setBalance(-chequeAmount); err != nil {
 		t.Fatal(err)
 	}
 	if err = peer.sendCheque(); err != nil {
