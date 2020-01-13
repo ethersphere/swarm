@@ -751,7 +751,7 @@ func TestDebtCheques(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected invalid cheque reception to cause a failure, but got none")
 	}
-	// since the emission caused an error, the confirmation should not be simualted
+	// since the emission caused an error, the confirmation should not be simulated
 	// cheque should not be marked as sent, and should be pending
 	if creditor.getLastSentCheque() != nil {
 		t.Fatalf("expected no cheque sent to peer %v, but it is %d", creditor.ID(), creditor.getLastSentCheque())
