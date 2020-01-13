@@ -40,7 +40,7 @@ type Peer struct {
 func NewPeer(peer *network.BzzPeer, baseKey *network.BzzAddr) *Peer {
 	return &Peer{
 		BzzPeer:    peer,
-		logger:     log.NewBaseAddressLogger("base", baseKey.ShortString(), "peer", peer.BzzAddr.ShortString()),
+		logger:     log.NewBaseAddressLogger(baseKey.ShortString(), "peer", peer.BzzAddr.ShortString()),
 		retrievals: make(map[uint]chunk.Address),
 	}
 }

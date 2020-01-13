@@ -282,7 +282,7 @@ func TestAddressMatchProx(t *testing.T) {
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		ps.handle(ctx, nil, pssMsg)
+		go ps.handle(ctx, nil, pssMsg)
 		select {
 		case <-recvC:
 			if !expects[i] {
@@ -317,7 +317,7 @@ func TestAddressMatchProx(t *testing.T) {
 		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		ps.handle(ctx, nil, pssMsg)
+		go ps.handle(ctx, nil, pssMsg)
 		select {
 		case <-recvC:
 			if !expects[i] {
@@ -346,7 +346,7 @@ func TestAddressMatchProx(t *testing.T) {
 		log.Trace("noprox addrs", "local", localAddr, "remote", remoteAddr)
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		ps.handle(ctx, nil, pssMsg)
+		go ps.handle(ctx, nil, pssMsg)
 		select {
 		case <-recvC:
 			t.Fatalf("unexpected prox receive when distance %d recipient %v when no handler", distance, expects[i])
@@ -545,7 +545,7 @@ func TestRawAllow(t *testing.T) {
 	// create handler innards that increments every time a message hits it
 	recvC := make(chan struct{})
 	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-		log.Trace("in allowraw handler")
+		log.Trace("in allow raw handler")
 		recvC <- struct{}{}
 		return nil
 	}
@@ -567,7 +567,7 @@ func TestRawAllow(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	ps.handle(ctx, nil, pssMsg)
+	go ps.handle(ctx, nil, pssMsg)
 	select {
 	case <-recvC:
 		t.Fatalf("Expected handler not to be executed with raw cap off")
@@ -587,7 +587,7 @@ func TestRawAllow(t *testing.T) {
 	pssMsg.Payload = []byte("Raw Deal")
 	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	ps.handle(ctx, nil, pssMsg)
+	go ps.handle(ctx, nil, pssMsg)
 	select {
 	case <-recvC:
 	case <-ctx.Done():
@@ -601,7 +601,7 @@ func TestRawAllow(t *testing.T) {
 	pssMsg.Payload = []byte("Raw Trump")
 	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	ps.handle(ctx, nil, pssMsg)
+	go ps.handle(ctx, nil, pssMsg)
 	select {
 	case <-recvC:
 		t.Fatalf("Expected handler not to be executed with raw cap off")
