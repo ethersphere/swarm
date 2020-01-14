@@ -190,8 +190,8 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			if strings.HasPrefix(hdr.Name, tagsFilenamePrefix) {
 				// All chunks are put before tag files are iterated on
 				// because of tagsFilenamePrefix starts with "t"
-				// which is ordered later then hex characters of chunk
-				// addresses.
+				// which is ordered later in the tar file then
+				// hex characters of chunk addresses.
 				//
 				// Wait for chunks to be stored before continuing.
 				wg.Wait()
