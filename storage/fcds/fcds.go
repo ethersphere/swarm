@@ -177,8 +177,13 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	}
 
 	if offset < 0 {
+		// no free offsets found,
+		// append the chunk data by
+		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
 	} else {
+		// seek to the offset position
+		// to replace the chunk data at that position
 		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
 	if err != nil {
@@ -224,7 +229,7 @@ func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error)
 	return offset, true, nil
 }
 
-// Delete removes chunk data.
+// Delete makes the chunk unavailable.
 func (s *Store) Delete(addr chunk.Address) (err error) {
 	if err := s.protect(); err != nil {
 		return err
