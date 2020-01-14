@@ -1080,7 +1080,7 @@ func TestCapabilityNeighbourhoodDepth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if depth != 2 {
-		t.Fatalf("cap 'one' expected depth 2, was %d", depth)
+	if depth != 0 {
+		t.Fatalf("cap 'one' expected depth 0, was %d", depth)
 	}
 }
