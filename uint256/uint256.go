@@ -32,17 +32,17 @@ type Uint256 struct {
 var minUint256 = big.NewInt(0)
 var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)) // 2^256 - 1
 
-// NewUint256 creates a Uint256 struct with a minimum initial underlying value
-func NewUint256() *Uint256 {
+// New creates a Uint256 struct with a minimum initial underlying value
+func New() *Uint256 {
 	u := new(Uint256)
 	u.value = *new(big.Int).Set(minUint256)
 	return u
 }
 
-// Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
+// FromUint64 creates a Uint256 struct based on the given uint64 param
 // any uint64 is valid as a Uint256
-func Uint64ToUint256(base uint64) *Uint256 {
-	u := NewUint256()
+func FromUint64(base uint64) *Uint256 {
+	u := New()
 	u.value = *new(big.Int).SetUint64(base)
 	return u
 }

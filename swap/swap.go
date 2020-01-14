@@ -438,10 +438,10 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	payout := uint256.Uint64ToUint256(expectedPayout)
-	costs := uint256.Uint64ToUint256(transactionCosts)
-	costsMultiplier := uint256.Uint64ToUint256(2)
-	costThreshold, err := uint256.NewUint256().Mul(costs, costsMultiplier)
+	payout := uint256.FromUint64(expectedPayout)
+	costs := uint256.FromUint64(transactionCosts)
+	costsMultiplier := uint256.FromUint64(2)
+	costThreshold, err := uint256.New().Mul(costs, costsMultiplier)
 	if err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256
 		return nil, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, uint256.Uint64ToUint256(expectedAmount))
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, uint256.FromUint64(expectedAmount))
 	if err != nil {
 		return nil, err
 	}

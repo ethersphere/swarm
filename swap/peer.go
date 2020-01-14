@@ -122,7 +122,7 @@ func (p *Peer) getLastSentCumulativePayout() *uint256.Uint256 {
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
-	return uint256.NewUint256()
+	return uint256.New()
 }
 
 // the caller is expected to hold p.lock
@@ -167,10 +167,10 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
-	price := uint256.Uint64ToUint256(oraclePrice)
+	price := uint256.FromUint64(oraclePrice)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
-	newCumulativePayout, err := uint256.NewUint256().Add(cumulativePayout, price)
+	newCumulativePayout, err := uint256.New().Add(cumulativePayout, price)
 	if err != nil {
 		return nil, err
 	}
