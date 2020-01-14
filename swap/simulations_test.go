@@ -47,6 +47,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/types"
 )
 
 /*
@@ -368,10 +369,10 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	}
 
 	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
-	if !ch1.CumulativePayout.Equals(Uint64ToUint256(expected)) {
+	if !ch1.CumulativePayout.Equals(types.Uint64ToUint256(expected)) {
 		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch1.CumulativePayout)
 	}
-	if !ch2.CumulativePayout.Equals(Uint64ToUint256(expected)) {
+	if !ch2.CumulativePayout.Equals(types.Uint64ToUint256(expected)) {
 		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch2.CumulativePayout)
 	}
 
@@ -509,7 +510,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	// check also the actual expected amount
 	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
-	if !cheque2.CumulativePayout.Equals(Uint64ToUint256(expectedPayout)) {
+	if !cheque2.CumulativePayout.Equals(types.Uint64ToUint256(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
@@ -745,7 +746,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if !lastPayout.Equals(Uint64ToUint256(expectedLastPayout)) {
+				if !lastPayout.Equals(types.Uint64ToUint256(expectedLastPayout)) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {

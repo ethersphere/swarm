@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/types"
 )
 
 // APIs is a node.Service interface method
@@ -24,7 +25,7 @@ func (s *Swap) APIs() []rpc.API {
 }
 
 type swapAPI interface {
-	AvailableBalance() (*Uint256, error)
+	AvailableBalance() (*types.Uint256, error)
 	PeerBalance(peer enode.ID) (int64, error)
 	Balances() (map[enode.ID]int64, error)
 	PeerCheques(peer enode.ID) (PeerCheques, error)
@@ -53,7 +54,7 @@ func NewAPI(s *Swap) *API {
 }
 
 // AvailableBalance returns the total balance of the chequebook against which new cheques can be written
-func (s *Swap) AvailableBalance() (*Uint256, error) {
+func (s *Swap) AvailableBalance() (*types.Uint256, error) {
 	// get the LiquidBalance of the chequebook
 	contractLiquidBalance, err := s.contract.LiquidBalance(nil)
 	if err != nil {
@@ -90,7 +91,7 @@ func (s *Swap) AvailableBalance() (*Uint256, error) {
 	totalChequesWorth := new(big.Int).Sub(cashedChequesWorth, sentChequesWorth)
 	tentativeLiquidBalance := new(big.Int).Add(contractLiquidBalance, totalChequesWorth)
 
-	return NewUint256().Set(*tentativeLiquidBalance)
+	return types.NewUint256().Set(*tentativeLiquidBalance)
 }
 
 // PeerBalance returns the balance for a given peer
