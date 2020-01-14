@@ -162,6 +162,11 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	addr := ch.Address()
 	data := ch.Data()
 
+	size := len(data)
+	if size > s.maxChunkSize {
+		return fmt.Errorf("chunk data size %v exceeds %v bytes", size, s.maxChunkSize)
+	}
+
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
@@ -197,7 +202,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 		s.freeCache.remove(shard, offset)
 	}
 	return s.meta.Set(addr, shard, reclaimed, &Meta{
-		Size:   uint16(len(data)),
+		Size:   uint16(size),
 		Offset: offset,
 	})
 }
