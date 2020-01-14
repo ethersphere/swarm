@@ -1211,10 +1211,7 @@ func TestSwapLogToFile(t *testing.T) {
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	err = creditor.sendCheque()
-	if err != nil {
-		t.Fatal(err)
-	}
+	creditor.sendCheque()
 
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
