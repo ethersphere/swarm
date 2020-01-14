@@ -225,9 +225,9 @@ func migrateSanctuary(db *DB) error {
 
 func migrateDiwali(db *DB) error {
 	return NewBreakingMigrationError(fmt.Sprintf(`
-Swarm chunk storage layer is changed.
+Swarm chunk storage layer has changed.
 
-You can choose if you want to do a manual migration or to discard current data.
+You can choose either to manually migrate the data in your local store to the new data store or to discard the data altogether.
 
 Preserving data requires additional storage roughly the size of the data directory and may take longer time depending on storage performance.
 
