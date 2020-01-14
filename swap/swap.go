@@ -39,7 +39,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/types"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
@@ -438,10 +438,10 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	payout := types.Uint64ToUint256(expectedPayout)
-	costs := types.Uint64ToUint256(transactionCosts)
-	costsMultiplier := types.Uint64ToUint256(2)
-	costThreshold, err := types.NewUint256().Mul(costs, costsMultiplier)
+	payout := uint256.Uint64ToUint256(expectedPayout)
+	costs := uint256.Uint64ToUint256(transactionCosts)
+	costsMultiplier := uint256.Uint64ToUint256(2)
+	costThreshold, err := uint256.NewUint256().Mul(costs, costsMultiplier)
 	if err != nil {
 		return err
 	}
@@ -496,7 +496,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
-func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*types.Uint256, error) {
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
 		return nil, err
 	}
@@ -509,7 +509,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*types.Uint256, 
 		return nil, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, types.Uint64ToUint256(expectedAmount))
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, uint256.Uint64ToUint256(expectedAmount))
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
-	"github.com/ethersphere/swarm/types"
+	"github.com/ethersphere/swarm/uint256"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -246,7 +246,7 @@ func TestEmitCheque(t *testing.T) {
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	balance := types.Uint64ToUint256(100001)
+	balance := uint256.Uint64ToUint256(100001)
 	balanceValue := balance.Value()
 
 	if err := testDeploy(context.Background(), debitorSwap, &balanceValue); err != nil {
@@ -382,7 +382,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal("Expected pending cheque")
 	}
 
-	if !pending.CumulativePayout.Equals(types.Uint64ToUint256(expectedAmount)) {
+	if !pending.CumulativePayout.Equals(uint256.Uint64ToUint256(expectedAmount)) {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %v", expectedAmount, pending.CumulativePayout)
 	}
 

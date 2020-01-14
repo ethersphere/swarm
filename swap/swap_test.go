@@ -38,7 +38,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	etypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -48,7 +48,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
-	"github.com/ethersphere/swarm/types"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 var (
@@ -586,7 +586,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if !cheque.CumulativePayout.Equals(types.Uint64ToUint256(DefaultPaymentThreshold)) {
+	if !cheque.CumulativePayout.Equals(uint256.Uint64ToUint256(DefaultPaymentThreshold)) {
 		t.Fatal()
 	}
 }
@@ -1027,7 +1027,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
-	increase := types.Uint64ToUint256(10)
+	increase := uint256.Uint64ToUint256(10)
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
@@ -1048,7 +1048,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
-	increase := types.Uint64ToUint256(10)
+	increase := uint256.Uint64ToUint256(10)
 
 	// cheque with same or lower amount
 	oldCheque := newTestCheque()
@@ -1061,7 +1061,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	cumulativePayoutIncrease, err := types.NewUint256().Add(increase, types.Uint64ToUint256(5))
+	cumulativePayoutIncrease, err := uint256.NewUint256().Add(increase, uint256.Uint64ToUint256(5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1101,7 +1101,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 
 	// create another cheque with higher amount
 	otherCheque := newTestCheque()
-	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, types.Uint64ToUint256(10))
+	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, uint256.Uint64ToUint256(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1149,7 +1149,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// invalid cheque because amount is lower
 	otherCheque := newTestCheque()
-	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, types.Uint64ToUint256(10))
+	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, uint256.Uint64ToUint256(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1260,7 +1260,7 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	if !peer.getLastSentCumulativePayout().Equals(types.Uint64ToUint256(0)) {
+	if !peer.getLastSentCumulativePayout().Equals(uint256.Uint64ToUint256(0)) {
 		t.Fatalf("last cumulative payout should be 0 in the beginning, was %v", peer.getLastSentCumulativePayout())
 	}
 
@@ -1300,7 +1300,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !availableBalance.Equals(types.Uint64ToUint256(depositAmount.Uint64())) {
+	if !availableBalance.Equals(uint256.Uint64ToUint256(depositAmount.Uint64())) {
 		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %v, depositAmount: %d", availableBalance, depositAmount)
 	}
 	// withdraw 50
@@ -1312,7 +1312,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Status != etypes.ReceiptStatusSuccessful {
+	if rec.Status != types.ReceiptStatusSuccessful {
 		t.Fatal("Transaction reverted")
 	}
 
@@ -1321,7 +1321,7 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !availableBalance.Equals(types.Uint64ToUint256(netDeposit)) {
+	if !availableBalance.Equals(uint256.Uint64ToUint256(netDeposit)) {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
@@ -1339,7 +1339,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// verify available balance
 	expectedBalance := netDeposit - uint64(chequeAmount)
-	if !availableBalance.Equals(types.Uint64ToUint256(expectedBalance)) {
+	if !availableBalance.Equals(uint256.Uint64ToUint256(expectedBalance)) {
 		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 

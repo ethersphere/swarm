@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	etypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -24,7 +24,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/types"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // swapTestBackend encapsulates the SimulatedBackend and can offer
@@ -168,7 +168,7 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: types.Uint64ToUint256(42),
+			CumulativePayout: uint256.Uint64ToUint256(42),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
@@ -181,7 +181,7 @@ func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress c
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: types.Uint64ToUint256(cumulativePayout.Uint64()),
+			CumulativePayout: uint256.Uint64ToUint256(cumulativePayout.Uint64()),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: cumulativePayout.Uint64(),
@@ -202,7 +202,7 @@ func newRandomTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: types.Uint64ToUint256(amount),
+			CumulativePayout: uint256.Uint64ToUint256(amount),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: amount,
@@ -225,7 +225,7 @@ func testCashCheque(s *Swap, cheque *Cheque) {
 }
 
 // when testing, we don't need to wait for a transaction to be mined
-func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *etypes.Transaction) (*etypes.Receipt, error) {
+func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
 
 	var stb *swapTestBackend
 	var ok bool
@@ -238,7 +238,7 @@ func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *etypes.Transa
 	if err != nil {
 		return nil, err
 	}
-	if receipt.Status != etypes.ReceiptStatusSuccessful {
+	if receipt.Status != types.ReceiptStatusSuccessful {
 		return nil, cswap.ErrTransactionReverted
 	}
 	return receipt, nil
