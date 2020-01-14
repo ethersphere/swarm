@@ -171,7 +171,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				}
 				select {
 				case errC <- err:
+					return
 				case <-ctx.Done():
+					return
 				}
 			}
 			// get the export file format version
@@ -180,7 +182,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				if err != nil {
 					select {
 					case errC <- err:
+						return
 					case <-ctx.Done():
+						return
 					}
 				}
 				version = string(data)
@@ -206,7 +210,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 					if err := db.setPin(batch, addr, counter); err != nil {
 						select {
 						case errC <- err:
+							return
 						case <-ctx.Done():
+							return
 						}
 					}
 				}
@@ -214,14 +220,18 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				if err := scanner.Err(); err != nil {
 					select {
 					case errC <- err:
+						return
 					case <-ctx.Done():
+						return
 					}
 				}
 
 				if err := db.shed.WriteBatch(batch); err != nil {
 					select {
 					case errC <- err:
+						return
 					case <-ctx.Done():
+						return
 					}
 				}
 				continue
@@ -242,7 +252,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			if err != nil {
 				select {
 				case errC <- err:
+					return
 				case <-ctx.Done():
+					return
 				}
 			}
 			key := chunk.Address(keybytes)
