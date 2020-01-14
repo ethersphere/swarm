@@ -44,7 +44,7 @@ func Main(m *testing.M) {
 }
 
 // RunAll runs all available tests for a Store implementation.
-func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())) {
+func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 
 	t.Run("empty", func(t *testing.T) {
 		RunStore(t, &RunStoreOptions{
@@ -106,7 +106,7 @@ func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func(
 
 // RunStoreOptions define parameters for Store test function.
 type RunStoreOptions struct {
-	NewStoreFunc func(t *testing.T) (fcds.Interface, func())
+	NewStoreFunc func(t *testing.T) (fcds.Storer, func())
 	ChunkCount   int
 	DeleteSplit  int
 	Cleaned      bool
@@ -245,7 +245,7 @@ func RunStore(t *testing.T, o *RunStoreOptions) {
 }
 
 // RunIterator validates behaviour of Iterate and Count methods on a Store.
-func RunIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Interface, func())) {
+func RunIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	chunkCount := 1000
 
 	db, clean := newStoreFunc(t)

@@ -28,7 +28,7 @@ import (
 
 // TestFCDS runs a standard series of tests on mock Store implementation.
 func TestFCDS(t *testing.T) {
-	test.RunAll(t, func(t *testing.T) (fcds.Interface, func()) {
+	test.RunAll(t, func(t *testing.T) (fcds.Storer, func()) {
 		return mock.New(
 			mem.NewGlobalStore().NewNodeStore(
 				common.BytesToAddress(make([]byte, 20)),

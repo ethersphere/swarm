@@ -29,7 +29,7 @@ import (
 // TestFCDS runs a standard series of tests on main Store implementation
 // with LevelDB meta store.
 func TestFCDS(t *testing.T) {
-	test.RunAll(t, func(t *testing.T) (fcds.Interface, func()) {
+	test.RunAll(t, func(t *testing.T) (fcds.Storer, func()) {
 		path, err := ioutil.TempDir("", "swarm-fcds-")
 		if err != nil {
 			t.Fatal(err)

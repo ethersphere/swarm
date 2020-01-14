@@ -68,7 +68,7 @@ type DB struct {
 	schemaName shed.StringField
 
 	// chunk data storage
-	data fcds.Interface
+	data fcds.Storer
 	// bin index and timestamps index
 	metaIndex shed.Index
 	// legacy data index, used only in export for manual migration

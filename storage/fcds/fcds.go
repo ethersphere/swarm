@@ -30,10 +30,10 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 )
 
-// Interface specifies methods required for FCDS implementation.
+// Storer specifies methods required for FCDS implementation.
 // It can be used where alternative implementations are needed to
 // switch at runtime.
-type Interface interface {
+type Storer interface {
 	Get(addr chunk.Address) (ch chunk.Chunk, err error)
 	Has(addr chunk.Address) (yes bool, err error)
 	Put(ch chunk.Chunk) (err error)
@@ -43,7 +43,7 @@ type Interface interface {
 	Close() (err error)
 }
 
-var _ Interface = new(Store)
+var _ Storer = new(Store)
 
 // Number of files that store chunk data.
 const shardCount = 32

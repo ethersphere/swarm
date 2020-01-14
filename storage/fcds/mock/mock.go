@@ -22,7 +22,7 @@ import (
 	"github.com/ethersphere/swarm/storage/mock"
 )
 
-var _ fcds.Interface = new(Store)
+var _ fcds.Storer = new(Store)
 
 // Store implements FCDS Interface by using mock
 // store for persistence.
