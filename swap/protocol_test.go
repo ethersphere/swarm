@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	"github.com/ethersphere/swarm/uint256"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -245,9 +246,10 @@ func TestEmitCheque(t *testing.T) {
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	balance := uint64(100001)
+	balance := uint256.FromUint64(100001)
+	balanceValue := balance.Value()
 
-	if err := testDeploy(context.Background(), debitorSwap, big.NewInt(int64(balance))); err != nil {
+	if err := testDeploy(context.Background(), debitorSwap, &balanceValue); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,7 +262,7 @@ func TestEmitCheque(t *testing.T) {
 
 	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
 	// set balance artificially
-	if err = debitor.setBalance(int64(balance)); err != nil {
+	if err = debitor.setBalance(balanceValue.Int64()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,7 +277,7 @@ func TestEmitCheque(t *testing.T) {
 			Beneficiary:      creditorSwap.owner.address,
 			CumulativePayout: balance,
 		},
-		Honey: balance,
+		Honey: balanceValue.Uint64(),
 	}
 	cheque.Signature, err = cheque.Sign(debitorSwap.owner.privateKey)
 	if err != nil {
@@ -382,8 +384,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal("Expected pending cheque")
 	}
 
-	if pending.CumulativePayout != expectedAmount {
-		t.Fatalf("Expected cheque cumulative payout to be %d, but is %d", expectedAmount, pending.CumulativePayout)
+	if !pending.CumulativePayout.Equals(uint256.FromUint64(expectedAmount)) {
+		t.Fatalf("Expected cheque cumulative payout to be %d, but is %v", expectedAmount, pending.CumulativePayout)
 	}
 
 	if pending.Honey != expectedAmount {

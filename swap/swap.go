@@ -36,10 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
-
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
@@ -438,8 +438,16 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
+	payout := uint256.FromUint64(expectedPayout)
+	costs := uint256.FromUint64(transactionCosts)
+	costsMultiplier := uint256.FromUint64(2)
+	costThreshold, err := uint256.New().Mul(costs, costsMultiplier)
+	if err != nil {
+		return err
+	}
+
 	// do a payout transaction if we get 2 times the gas costs
-	if expectedPayout > 2*transactionCosts {
+	if payout.Cmp(costThreshold) == 1 {
 		go defaultCashCheque(s, cheque)
 	}
 
@@ -488,9 +496,9 @@ func cashCheque(s *Swap, cheque *Cheque) {
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
-func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	lastCheque := p.getLastReceivedCheque()
@@ -498,12 +506,12 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (uint64, error) {
 	// TODO: there should probably be a lock here?
 	expectedAmount, err := s.honeyPriceOracle.GetPrice(cheque.Honey)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, expectedAmount)
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, uint256.FromUint64(expectedAmount))
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// calculate tentative new balance after cheque is processed
