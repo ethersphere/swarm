@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // TestContractIntegration tests a end-to-end cheque interaction.
@@ -73,7 +74,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paidOut, err := NewUint256().Set(*result)
+	paidOut, err := uint256.New().Set(*result)
 	if err != nil {
 		t.Fatal(err)
 	}
