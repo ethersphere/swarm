@@ -340,7 +340,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// we will send just maxMsgs number of messages
-	maxMsgs := 150
+	maxMsgs := 160
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()
@@ -349,15 +349,16 @@ func TestMultiChequeSimulation(t *testing.T) {
 
 	// send maxMsgs number of msgs
 	for i := 0; i < maxMsgs; i++ {
-		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
-			t.Fatal(err)
-		}
 		debitorBalance, err := debitorSvc.swap.loadBalance(creditor)
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
+			t.Fatal(err)
+		}
 		// check if cheque should have been sent
-		if debitorBalance <= -debitorSvc.swap.params.PaymentThreshold {
+		if debitorBalance-int64(msgPrice) <= -debitorSvc.swap.params.PaymentThreshold {
 			// we need to wait a bit in order to give time for the cheque to be processed
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
 				t.Fatal(err)
