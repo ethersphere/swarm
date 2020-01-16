@@ -279,7 +279,7 @@ func (db *DB) updateGCQuantiles() (err error) {
 		if !found {
 			continue
 		}
-		newPosition := quantilePosition(gcSize, q.Numerator, q.Denominator)
+		newPosition := quantilePosition(gcSize, q.numerator, q.denominator)
 		diff := uint64Diff(position, newPosition)
 		if diff == 0 {
 			continue

@@ -313,7 +313,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		if err != nil {
 			return 0, err
 		}
-		position := quantilePosition(gcSize, f.Numerator, f.Denominator)
+		position := quantilePosition(gcSize, f.numerator, f.denominator)
 		var gcQuantiles quantiles
 		err = db.gcQuantiles.Get(&gcQuantiles)
 		if err != nil && err != leveldb.ErrNotFound {
