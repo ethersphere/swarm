@@ -352,10 +352,13 @@ func TestMultiChequeSimulation(t *testing.T) {
 		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
 			t.Fatal(err)
 		}
-		// // we need to wait a bit in order to give time for the cheque to be processed
-		// if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
-		// 	t.Fatal(err)
-		// }
+		if uint64(i+1)*msgPrice >= uint64(debitorSvc.swap.params.PaymentThreshold) {
+			// we need to wait a bit in order to give time for the cheque to be processed
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		lastCount += 1
 		expectedPayout += msgPrice
 	}
