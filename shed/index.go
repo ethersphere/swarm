@@ -76,7 +76,7 @@ func (i Item) Merge(i2 Item) (new Item) {
 
 // Index represents a set of LevelDB key value pairs that have common
 // prefix. It holds functions for encoding and decoding keys and values
-// to provide transparent actions on saved data which inclide:
+// to provide transparent actions on saved data which include:
 // - getting a particular Item
 // - saving a particular Item
 // - iterating over a sorted LevelDB keys
