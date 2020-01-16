@@ -75,6 +75,7 @@ type swapSimulationParams struct {
 type testMsgBySender struct{}
 type testMsgByReceiver struct{}
 type testMsgBigPrice struct{}
+type testMsgSmallPrice struct{}
 
 // create a test Spec; every node has its Spec and its accounting Hook
 func newTestSpec() *protocols.Spec {
@@ -86,6 +87,7 @@ func newTestSpec() *protocols.Spec {
 			testMsgBySender{},
 			testMsgByReceiver{},
 			testMsgBigPrice{},
+			testMsgSmallPrice{},
 		},
 	}
 }
@@ -109,6 +111,14 @@ func (m *testMsgByReceiver) Price() *protocols.Price {
 func (m *testMsgBigPrice) Price() *protocols.Price {
 	return &protocols.Price{
 		Value:   DefaultPaymentThreshold + 1,
+		PerByte: false,
+		Payer:   protocols.Sender,
+	}
+}
+
+func (m *testMsgSmallPrice) Price() *protocols.Price {
+	return &protocols.Price{
+		Value:   ChequeDebtTolerance / 10, // ensures that the message won't put nodes into debt
 		PerByte: false,
 		Payer:   protocols.Sender,
 	}
@@ -277,6 +287,8 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	log.Info("Initializing")
 
+	smallMessagePrice := ChequeDebtTolerance / 10
+
 	// we are going to use the metrics system to sync the test
 	// we are only going to continue with the next iteration after the message
 	// has been received on the other side
@@ -287,7 +299,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout1, expectedPayout2 := DefaultPaymentThreshold+1, DefaultPaymentThreshold+1
+	expectedPayout1, expectedPayout2 := smallMessagePrice, smallMessagePrice
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -339,23 +351,23 @@ func TestPingPongChequeSimulation(t *testing.T) {
 
 	for i := 0; i < maxCheques; i++ {
 		if i%2 == 0 {
-			if err := p2Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+			if err := p2Peer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts1.swap.peers[p2], expectedPayout1); err != nil {
 				t.Fatal(err)
 			}
 			lastCount += 1
-			expectedPayout1 += DefaultPaymentThreshold + 1
+			expectedPayout1 += smallMessagePrice
 		} else {
-			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+			if err := p1Peer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts2.swap.peers[p1], expectedPayout2); err != nil {
 				t.Fatal(err)
 			}
 			lastCount += 1
-			expectedPayout2 += DefaultPaymentThreshold + 1
+			expectedPayout2 += smallMessagePrice
 		}
 	}
 
