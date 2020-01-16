@@ -286,7 +286,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	defer sim.Close()
 
 	log.Info("Initializing")
-
+	msgPrice := (&testMsgSmallPrice{}).Price().Value
 	// we are going to use the metrics system to sync the test
 	// we are only going to continue with the next iteration after the message
 	// has been received on the other side
@@ -297,7 +297,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout := DefaultPaymentThreshold + 1
+	expectedPayout := msgPrice
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -339,27 +339,28 @@ func TestMultiChequeSimulation(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	// we will send just maxCheques number of cheques
-	maxCheques := 10
+	// we will send just maxMsgs number of messages
+	maxMsgs := 10
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()
 	creditorPeer := debitorSvc.peers[creditor]
 	debitorSvc.lock.Unlock()
 
-	// send maxCheques number of cheques
-	for i := 0; i < maxCheques; i++ {
-		// use a price which will trigger a cheque each time
-		if err := creditorPeer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+	// send maxMsgs number of msgs
+	for i := 0; i < maxMsgs; i++ {
+		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
 			t.Fatal(err)
 		}
-		// we need to wait a bit in order to give time for the cheque to be processed
-		if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
-			t.Fatal(err)
-		}
+		// // we need to wait a bit in order to give time for the cheque to be processed
+		// if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
+		// 	t.Fatal(err)
+		// }
 		lastCount += 1
-		expectedPayout += DefaultPaymentThreshold + 1
+		expectedPayout += msgPrice
 	}
+	// Give enough time for all messages to be processed
+	time.Sleep(5 * time.Millisecond)
 
 	// check balances:
 	b1, err := debitorSvc.swap.loadBalance(creditor)
@@ -389,7 +390,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// check also the actual expected amount
-	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
+	expectedPayout = uint64(maxMsgs) * (msgPrice)
 
 	if !cheque2.CumulativePayout.Equals(uint256.FromUint64(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
