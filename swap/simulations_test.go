@@ -297,7 +297,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout := msgPrice
+	var expectedPayout uint64
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -340,7 +340,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// we will send just maxMsgs number of messages
-	maxMsgs := 160
+	maxMsgs := 150
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()
@@ -358,15 +358,16 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		// check if cheque should have been sent
-		if debitorBalance-int64(msgPrice) <= -debitorSvc.swap.params.PaymentThreshold {
+		balanceAfterMessage := debitorBalance - int64(msgPrice)
+		if balanceAfterMessage <= -debitorSvc.swap.params.PaymentThreshold {
 			// we need to wait a bit in order to give time for the cheque to be processed
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
 				t.Fatal(err)
 			}
+			expectedPayout += uint64(-balanceAfterMessage)
 		}
 
 		lastCount += 1
-		expectedPayout += msgPrice
 	}
 	// give enough time for all messages to be processed
 	time.Sleep(5 * time.Millisecond)
@@ -397,9 +398,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 	if !cheque1.CumulativePayout.Equals(cheque2.CumulativePayout) {
 		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
-
-	// check also the actual expected amount
-	expectedPayout = uint64(maxMsgs) * (msgPrice)
 
 	if !cheque2.CumulativePayout.Equals(uint256.FromUint64(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
