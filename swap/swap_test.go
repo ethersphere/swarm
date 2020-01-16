@@ -728,10 +728,10 @@ func TestDebtCheques(t *testing.T) {
 
 	// no cheques should be present at this point
 	if creditor.getLastSentCheque() != nil {
-		t.Fatalf("expected no cheque sent to peer %v, but it is %d", creditor.ID(), creditor.getLastSentCheque())
+		t.Fatalf("expected no cheque sent to peer %v, but it is %v", creditor.ID(), creditor.getLastSentCheque())
 	}
 	if debitor.getLastReceivedCheque() != nil {
-		t.Fatalf("expected no cheque received from peer %v, but it is %d", debitor.ID(), debitor.getLastReceivedCheque())
+		t.Fatalf("expected no cheque received from peer %v, but it is %v", debitor.ID(), debitor.getLastReceivedCheque())
 	}
 
 	// set asymmetric balance and attempt to send cheque
@@ -755,7 +755,7 @@ func TestDebtCheques(t *testing.T) {
 	// since the emission caused an error, the confirmation should not be simulated
 	// cheque should not be marked as sent, and should be pending
 	if creditor.getLastSentCheque() != nil {
-		t.Fatalf("expected no cheque sent to peer %v, but it is %d", creditor.ID(), creditor.getLastSentCheque())
+		t.Fatalf("expected no cheque sent to peer %v, but it is %v", creditor.ID(), creditor.getLastSentCheque())
 	}
 	if creditor.getPendingCheque() != cheque {
 		t.Fatalf("expected pending cheque for peer %v to be %v, but is %v", creditor.ID(), cheque, creditor.getPendingCheque())
@@ -799,7 +799,7 @@ func TestDebtCheques(t *testing.T) {
 	}
 	// no cheque should be pending
 	if creditor.getPendingCheque() != nil {
-		t.Fatalf("expected no pending cheque for peer %v, but found %d", creditor.ID(), creditor.getPendingCheque())
+		t.Fatalf("expected no pending cheque for peer %v, but found %v", creditor.ID(), creditor.getPendingCheque())
 	}
 	// verify last received cheque
 	if debitor.getLastReceivedCheque() != cheque {
