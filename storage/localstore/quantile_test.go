@@ -83,7 +83,19 @@ func TestClosest(t *testing.T) {
 		f        fraction
 		expected *quantile
 	}{
-		{fraction{1, 2}, &data[0]},
+		{fraction{1, 2}, &data[0]},    // exact fraction
+		{fraction{4, 8}, &data[0]},    // almost same as above
+		{fraction{1, 3}, &data[1]},    // exact fraction
+		{fraction{3, 9}, &data[1]},    // almost same as above
+		{fraction{1, 4}, &data[2]},    // exact fraction
+		{fraction{1, 5}, &data[2]},    // smaller than any quantile
+		{fraction{2, 3}, &data[3]},    // exact fraction
+		{fraction{3, 4}, &data[4]},    // exact fraction
+		{fraction{4, 4}, &data[4]},    // greater than any quantile
+		{fraction{2, 1}, &data[4]},    // greater than any quantile
+		{fraction{4, 10}, &data[1]},   // 0.4 closest to 1/3 (0.33)
+		{fraction{42, 100}, &data[0]}, // 0.42 closest to 1/2 (0.5)
+		{fraction{7, 10}, &data[3]},   // 0.7 closest to 2/3 (0.66)
 	}
 
 	for _, check := range checks {
