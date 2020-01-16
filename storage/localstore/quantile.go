@@ -28,6 +28,7 @@ func (q quantiles) Len() int {
 }
 
 func (q quantiles) Less(i, j int) bool {
+	// TODO(tzdybal) - is it reasonable to use common denominator instead of Decimal() function?
 	return q[i].fraction.Decimal() < q[j].fraction.Decimal()
 }
 
@@ -45,12 +46,12 @@ func (q quantiles) Get(f fraction) (item shed.Item, position uint64, found bool)
 }
 
 func (q quantiles) Closest(f fraction) (closest *quantile) {
-	for _, x := range q {
+	for i, x := range q {
 		if x.fraction == f {
-			return &x
+			return &q[i]
 		}
 		if closest == nil || math.Abs(x.Decimal()-f.Decimal()) < math.Abs(closest.Decimal()-f.Decimal()) {
-			closest = &x
+			closest = &q[i]
 		}
 	}
 	return closest
