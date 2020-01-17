@@ -757,7 +757,7 @@ func TestDebtCheques(t *testing.T) {
 	if creditor.getLastSentCheque() != nil {
 		t.Fatalf("expected no cheque sent to peer %v, but it is %v", creditor.ID(), creditor.getLastSentCheque())
 	}
-	if creditor.getPendingCheque() != cheque {
+	if !creditor.getPendingCheque().Equal(cheque) {
 		t.Fatalf("expected pending cheque for peer %v to be %v, but is %v", creditor.ID(), cheque, creditor.getPendingCheque())
 	}
 
@@ -785,9 +785,9 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// simulate cheque confirmation
-	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+	/* 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
 		Cheque: cheque,
-	})
+	}) */
 
 	// balance should now be 0 according to the debitor
 	if creditor.getBalance() != 0 {
@@ -802,7 +802,7 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatalf("expected no pending cheque for peer %v, but found %v", creditor.ID(), creditor.getPendingCheque())
 	}
 	// verify last received cheque
-	if debitor.getLastReceivedCheque() != cheque {
+	if !debitor.getLastReceivedCheque().Equal(cheque) {
 		t.Fatalf("expected last received cheque from peer %v to be %v, but found %v", debitor.ID(), cheque, creditor.getLastReceivedCheque())
 	}
 }
