@@ -734,14 +734,7 @@ func TestDebtCheques(t *testing.T) {
 	})
 	// cheque should not have gone through as it would put the creditor in debt
 	if err == nil || !strings.Contains(err.Error(), "cause debt") {
-		t.Fatalf("expected invalid cheque reception to trigger debt cheque error, but got: %v", err)
-	}
-	// cheque should not be marked as sent, and should be pending
-	if creditor.getLastSentCheque() != nil {
-		t.Fatalf("expected no cheque sent to peer %v, but it is %v", creditor.ID(), creditor.getLastSentCheque())
-	}
-	if !creditor.getPendingCheque().Equal(cheque) {
-		t.Fatalf("expected pending cheque for peer %v to be %v, but is %v", creditor.ID(), cheque, creditor.getPendingCheque())
+		t.Fatalf("expected invalid cheque to trigger debt cheque error, but got: %v", err)
 	}
 
 	// clear pending cheque to start over
@@ -765,20 +758,6 @@ func TestDebtCheques(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	// simulate cheque confirmation
-	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
-		Cheque: cheque,
-	})
-
-	// balance should now be 0 according to the debitor
-	if creditor.getBalance() != 0 {
-		t.Fatalf("expected balance to be 0 for peer %v, but it is %d", creditor.ID(), creditor.getBalance())
-	}
-	// balance should now be -ChequeDebtTolerance according to the debitor
-	if debitor.getBalance() != -int64(ChequeDebtTolerance) {
-		t.Fatalf("expected balance to be %d for peer %v, but it is %d", -int64(ChequeDebtTolerance), debitor.ID(), debitor.getBalance())
 	}
 }
 
