@@ -29,7 +29,7 @@ const (
 	DefaultDisconnectThreshold = 20 * DefaultPaymentThreshold
 	// ChequeDebtTolerance is the lowest resulting balance a node is willing to accept when receiving a cheque
 	// the value is meant to be used below 0, as positive resulting balances should always be accepted when receiving cheques
-	ChequeDebtTolerance = DefaultPaymentThreshold / 10 // roughly 10% of the payment threshold
+	ChequeDebtTolerance = DefaultPaymentThreshold / 20 // roughly 20% of the payment threshold
 	// DefaultDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation
 	DefaultDepositAmount = 0

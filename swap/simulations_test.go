@@ -75,7 +75,6 @@ type swapSimulationParams struct {
 // define test message types
 type testMsgBySender struct{}
 type testMsgByReceiver struct{}
-type testMsgBigPrice struct{}
 type testMsgSmallPrice struct{}
 
 // create a test Spec; every node has its Spec and its accounting Hook
@@ -87,7 +86,6 @@ func newTestSpec() *protocols.Spec {
 		Messages: []interface{}{
 			testMsgBySender{},
 			testMsgByReceiver{},
-			testMsgBigPrice{},
 			testMsgSmallPrice{},
 		},
 	}
@@ -109,17 +107,9 @@ func (m *testMsgByReceiver) Price() *protocols.Price {
 	}
 }
 
-func (m *testMsgBigPrice) Price() *protocols.Price {
-	return &protocols.Price{
-		Value:   DefaultPaymentThreshold + 1,
-		PerByte: false,
-		Payer:   protocols.Sender,
-	}
-}
-
 func (m *testMsgSmallPrice) Price() *protocols.Price {
 	return &protocols.Price{
-		Value:   ChequeDebtTolerance / 10, // ensures that the message won't put nodes into debt
+		Value:   DefaultPaymentThreshold / 100, // ensures that the message won't put nodes into debt
 		PerByte: false,
 		Payer:   protocols.Sender,
 	}
@@ -292,7 +282,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	// we are only going to continue with the next iteration after the message
 	// has been received on the other side
 	metricsReg := metrics.AccountingRegistry
-	// testMsgBigPrice is paid by the sender, so the credit counter will only be
+	// testMsgSmallPrice is paid by the sender, so the credit counter will only be
 	// increased when receiving the message, which is what we want for this test
 	cter := metricsReg.Get("account.msg.credit")
 	counter := cter.(metrics.Counter)
@@ -380,7 +370,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		lastCount++
 	}
 	// give enough time for all messages to be processed
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// check balances:
 	b1, err := debitorSvc.swap.loadBalance(creditor)
