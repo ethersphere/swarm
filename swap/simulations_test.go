@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -339,16 +340,24 @@ func TestMultiChequeSimulation(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	// we will send just maxMsgs number of messages
-	maxMsgs := 150
+	paymentThreshold := debitorSvc.swap.params.PaymentThreshold
+
+	minCheques := 2
+	maxCheques := 5
+
+	msgsPerCheque := (uint64(paymentThreshold) / msgPrice) + 1 // +1 to round up without casting to float
+
+	minMsgs := msgsPerCheque * uint64(minCheques)
+	maxMsgs := msgsPerCheque * uint64(maxCheques)
+
+	msgAmount := rand.Intn(int(maxMsgs-minMsgs)) + int(minMsgs)
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()
 	creditorPeer := debitorSvc.peers[creditor]
 	debitorSvc.lock.Unlock()
 
-	// send maxMsgs number of msgs
-	for i := 0; i < maxMsgs; i++ {
+	for i := 0; i < msgAmount; i++ {
 		debitorBalance, err := debitorSvc.swap.loadBalance(creditor)
 		if err != nil {
 			t.Fatal(err)
@@ -357,9 +366,10 @@ func TestMultiChequeSimulation(t *testing.T) {
 		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
 			t.Fatal(err)
 		}
+
 		// check if cheque should have been sent
 		balanceAfterMessage := debitorBalance - int64(msgPrice)
-		if balanceAfterMessage <= -debitorSvc.swap.params.PaymentThreshold {
+		if balanceAfterMessage <= -paymentThreshold {
 			// we need to wait a bit in order to give time for the cheque to be processed
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
 				t.Fatal(err)
@@ -367,7 +377,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			expectedPayout += uint64(-balanceAfterMessage)
 		}
 
-		lastCount += 1
+		lastCount++
 	}
 	// give enough time for all messages to be processed
 	time.Sleep(5 * time.Millisecond)
