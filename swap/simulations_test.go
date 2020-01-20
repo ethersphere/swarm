@@ -306,7 +306,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	var debLen, credLen, debSwapLen, credSwapLen int
 	timeout := time.After(10 * time.Second)
 	for {
-		// let's always be nice and allow a time out to be catched
+		// let's always be nice and allow a time out to be caught
 		select {
 		case <-timeout:
 			t.Fatal("Timed out waiting for all swap peer connections to be established")
@@ -348,6 +348,27 @@ func TestMultiChequeSimulation(t *testing.T) {
 	creditorPeer := debitorSvc.peers[creditor]
 	debitorSvc.lock.Unlock()
 
+	allMessagesArrived := make(chan struct{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			// all messages have been received
+			if counter.Count() == int64(msgAmount) {
+				close(allMessagesArrived)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
 	for i := 0; i < msgAmount; i++ {
 		debitorBalance, err := debitorSvc.swap.loadBalance(creditor)
 		if err != nil {
@@ -371,7 +392,12 @@ func TestMultiChequeSimulation(t *testing.T) {
 		lastCount++
 	}
 	// give enough time for all messages to be processed
-	time.Sleep(10 * time.Millisecond)
+	select {
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for all messages to arrive, aborting")
+	case <-allMessagesArrived:
+	}
+	log.Debug("all messages arrived")
 
 	// check balances:
 	b1, err := debitorSvc.swap.loadBalance(creditor)
@@ -613,7 +639,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 			select {
 			case <-ctx.Done():
 				lock.Lock()
-				errs = append(errs, "Timed out waiting for cheque to have been cached")
+				errs = append(errs, "Timed out waiting for cheque to be cashed")
 				lock.Unlock()
 				wg.Done()
 				return
@@ -653,7 +679,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 			select {
 			case <-ctx.Done():
 				lock.Lock()
-				errs = append(errs, "Timed out waiting for peer to have processed accounted message")
+				errs = append(errs, "Timed out waiting for peer to process accounted message")
 				lock.Unlock()
 				wg.Done()
 				return
