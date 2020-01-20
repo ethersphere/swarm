@@ -341,6 +341,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	maxMsgs := msgsPerCheque * uint64(maxCheques)
 
 	msgAmount := rand.Intn(int(maxMsgs-minMsgs)) + int(minMsgs)
+	log.Debug("sending %d messages", msgAmount)
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()
@@ -383,6 +384,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	if b1 != -b2 {
+		fmt.Printf("balances")
 		t.Fatalf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
 	}
 	// check cheques
