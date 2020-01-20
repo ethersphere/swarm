@@ -44,7 +44,6 @@ import (
 	"github.com/ethersphere/swarm/bzzeth"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/ens"
-	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
@@ -85,7 +84,6 @@ type Swarm struct {
 	bzzEth            *bzzeth.BzzEth
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
-	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
 	pushSync          *pushsync.Pusher
 	storer            *pushsync.Storer
@@ -284,8 +282,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		// Instantiate the pinAPI object with the already opened localstore
 		self.pinAPI = pin.NewAPI(localStore, self.stateStore, self.config.FileStoreParams, self.tags, self.api)
 	}
-	self.sfs = fuse.NewSwarmFS(self.api)
-	log.Debug("Initialized FUSE filesystem")
+	//self.sfs = fuse.NewSwarmFS(self.api)
+	//log.Debug("Initialized FUSE filesystem")
 	self.inspector = api.NewInspector(self.api, self.bzz.Hive, self.netStore, self.streamer, localStore)
 
 	return self, nil
@@ -524,8 +522,8 @@ func (s *Swarm) Stop() error {
 	if s.netStore != nil {
 		s.netStore.Close()
 	}
-	s.sfs.Stop()
-	stopCounter.Inc(1)
+	//s.sfs.Stop()
+	//stopCounter.Inc(1)
 
 	err := s.bzzEth.Stop()
 	if err != nil {
@@ -583,12 +581,12 @@ func (s *Swarm) APIs() []rpc.API {
 			Service:   s.inspector,
 			Public:    false,
 		},
-		{
-			Namespace: "swarmfs",
-			Version:   fuse.SwarmFSVersion,
-			Service:   s.sfs,
-			Public:    false,
-		},
+		//{
+		//Namespace: "swarmfs",
+		//Version:   fuse.SwarmFSVersion,
+		//Service:   s.sfs,
+		//Public:    false,
+		//},
 		{
 			Namespace: "accounting",
 			Version:   protocols.AccountingVersion,

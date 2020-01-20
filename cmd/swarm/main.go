@@ -142,8 +142,6 @@ func init() {
 		downloadCommand,
 		// See manifest.go
 		manifestCommand,
-		// See fs.go
-		fsCommand,
 		// See db.go
 		dbCommand,
 		// See config.go
