@@ -287,8 +287,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	cter := metricsReg.Get("account.msg.credit")
 	counter := cter.(metrics.Counter)
 	counter.Clear()
-	var lastCount int64
-	var expectedPayout uint64
+	var lastCount, expectedPayout uint64
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -324,7 +323,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		creditorSvc.swap.peersLock.Unlock()
 
 		if debLen == 1 && credLen == 1 && debSwapLen == 1 && credSwapLen == 1 {
-			break
+			breakallMessagesArrived
 		}
 		// don't overheat the CPU...
 		time.Sleep(5 * time.Millisecond)
