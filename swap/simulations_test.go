@@ -410,7 +410,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	if b1 != -b2 {
-		fmt.Printf("balances")
 		t.Fatalf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
 	}
 	// check cheques
