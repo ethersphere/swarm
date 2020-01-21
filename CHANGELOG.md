@@ -1,14 +1,15 @@
-## v0.5.5 (Unreleased)
+## v0.5.5 (January 22, 2020)
 
 ### Notes
 
-- RNS resolution is now available in addition to the existing ENS resolution
+- RNS resolution is now available in addition to the existing ENS resolution. See more about RNS here: https://developers.rsk.co/rif/rns
 - Retrieve requests will now load balance across different peers in the address book
 - Retrieve request which were forwarded will now be answered without going through the local store, making retrievals faster
 - New peers will be suggested to connect to by address space gaps
 - Protocol handlers are now async by design
 
 ### Commits
+
 * [#2073](https://github.com/ethersphere/swarm/pull/2073) kademlia: use IsSameAs instead of Match for capability index comparison
 * [#2063](https://github.com/ethersphere/swarm/pull/2063) swap, uint256: unify variable types, pt. 1
 * [#2065](https://github.com/ethersphere/swarm/pull/2065) network: Suggest peer by address space gap
