@@ -47,6 +47,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 /*
@@ -368,11 +369,11 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	}
 
 	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
-	if ch1.CumulativePayout != expected {
-		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch1.CumulativePayout)
+	if !ch1.CumulativePayout.Equals(uint256.FromUint64(expected)) {
+		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch1.CumulativePayout)
 	}
-	if ch2.CumulativePayout != expected {
-		t.Fatalf("expected cumulative payout to be %d, but is %d", expected, ch2.CumulativePayout)
+	if !ch2.CumulativePayout.Equals(uint256.FromUint64(expected)) {
+		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch2.CumulativePayout)
 	}
 
 	log.Info("Simulation ended")
@@ -502,15 +503,15 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// both cheques (at issuer and beneficiary) should have same cumulative value
-	if cheque1.CumulativePayout != cheque2.CumulativePayout {
-		t.Fatalf("Expected symmetric cheques payout, but they are not: %d vs %d", cheque1.CumulativePayout, cheque2.CumulativePayout)
+	if !cheque1.CumulativePayout.Equals(cheque2.CumulativePayout) {
+		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
 
 	// check also the actual expected amount
 	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
-	if cheque2.CumulativePayout != expectedPayout {
-		t.Fatalf("Expected %d in cumulative payout, got %d", expectedPayout, cheque1.CumulativePayout)
+	if !cheque2.CumulativePayout.Equals(uint256.FromUint64(expectedPayout)) {
+		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
 	log.Info("Simulation ended")
@@ -745,7 +746,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if lastPayout != expectedLastPayout {
+				if !lastPayout.Equals(uint256.FromUint64(expectedLastPayout)) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {

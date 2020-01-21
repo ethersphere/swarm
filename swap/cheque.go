@@ -19,11 +19,11 @@ package swap
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // encodeForSignature encodes the cheque params in the format used in the signing procedure
@@ -31,7 +31,10 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	binary.BigEndian.PutUint64(cumulativePayoutBytes[24:], cheque.CumulativePayout)
+	cumulativePayout := cheque.CumulativePayout.Value()
+	chequePayoutBytes := (&cumulativePayout).Bytes()
+	copy(cumulativePayoutBytes[32-len(chequePayoutBytes):], chequePayoutBytes)
+
 	// construct the actual cheque
 	input := cheque.Contract.Bytes()
 	input = append(input, cheque.Beneficiary.Bytes()...)
@@ -94,7 +97,7 @@ func (cheque *Cheque) Equal(other *Cheque) bool {
 		return false
 	}
 
-	if cheque.CumulativePayout != other.CumulativePayout {
+	if !cheque.CumulativePayout.Equals(other.CumulativePayout) {
 		return false
 	}
 
@@ -130,24 +133,24 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 
 // verifyChequeAgainstLast verifies that the amount is higher than in the previous cheque and the increase is as expected
 // returns the actual amount received in this cheque
-func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount uint64) (uint64, error) {
-	actualAmount := cheque.CumulativePayout
+func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *uint256.Uint256) (*uint256.Uint256, error) {
+	actualAmount := uint256.New().Copy(cheque.CumulativePayout)
 
 	if lastCheque != nil {
-		if cheque.CumulativePayout <= lastCheque.CumulativePayout {
-			return 0, fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %d, was: %d", lastCheque.CumulativePayout, cheque.CumulativePayout)
+		if cheque.CumulativePayout.Cmp(lastCheque.CumulativePayout) < 1 {
+			return nil, fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %v, was: %v", lastCheque.CumulativePayout, cheque.CumulativePayout)
 		}
 
-		actualAmount -= lastCheque.CumulativePayout
+		actualAmount.Sub(actualAmount, lastCheque.CumulativePayout)
 	}
 
-	if expectedAmount != actualAmount {
-		return 0, fmt.Errorf("unexpected amount for honey, expected %d was %d", expectedAmount, actualAmount)
+	if !expectedAmount.Equals(actualAmount) {
+		return nil, fmt.Errorf("unexpected amount for honey, expected %v was %v", expectedAmount, actualAmount)
 	}
 
 	return actualAmount, nil
 }
 
 func (cheque *Cheque) String() string {
-	return fmt.Sprintf("Contract: %x Beneficiary: %x CumulativePayout: %d Honey: %d", cheque.Contract, cheque.Beneficiary, cheque.CumulativePayout, cheque.Honey)
+	return fmt.Sprintf("Contract: %x Beneficiary: %x CumulativePayout: %v Honey: %d", cheque.Contract, cheque.Beneficiary, cheque.CumulativePayout, cheque.Honey)
 }

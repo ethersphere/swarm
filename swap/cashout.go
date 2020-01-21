@@ -18,7 +18,6 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -67,7 +66,8 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 		return err
 	}
 
-	tx, err := otherSwap.CashChequeBeneficiaryStart(opts, request.Destination, big.NewInt(int64(cheque.CumulativePayout)), cheque.Signature)
+	cumulativePayout := cheque.CumulativePayout.Value()
+	tx, err := otherSwap.CashChequeBeneficiaryStart(opts, request.Destination, &cumulativePayout, cheque.Signature)
 	if err != nil {
 		return err
 	}
@@ -98,11 +98,12 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 
 	transactionCosts = gasPrice.Uint64() * CashChequeBeneficiaryTransactionCost
 
-	if paidOut.Cmp(big.NewInt(int64(cheque.CumulativePayout))) > 0 {
+	cumulativePayout := cheque.CumulativePayout.Value()
+	if paidOut.Cmp(&cumulativePayout) > 0 {
 		return 0, transactionCosts, nil
 	}
 
-	expectedPayout = cheque.CumulativePayout - paidOut.Uint64()
+	expectedPayout = (&cumulativePayout).Uint64() - paidOut.Uint64()
 
 	return expectedPayout, transactionCosts, nil
 }

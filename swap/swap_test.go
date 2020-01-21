@@ -48,6 +48,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 var (
@@ -585,7 +586,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if cheque.CumulativePayout != DefaultPaymentThreshold {
+	if !cheque.CumulativePayout.Equals(uint256.FromUint64(DefaultPaymentThreshold)) {
 		t.Fatal()
 	}
 }
@@ -1026,25 +1027,28 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
-	increase := uint64(10)
+	increase := uint256.FromUint64(10)
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
-	newCheque.CumulativePayout = oldCheque.CumulativePayout + increase
+	_, err := newCheque.CumulativePayout.Add(oldCheque.CumulativePayout, increase)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
 	if err != nil {
 		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
 	}
 
-	if actualAmount != increase {
-		t.Fatalf("wrong actual amount, expected: %d, was: %d", increase, actualAmount)
+	if !actualAmount.Equals(increase) {
+		t.Fatalf("wrong actual amount, expected: %v, was: %v", increase, actualAmount)
 	}
 }
 
 // TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
-	increase := uint64(10)
+	increase := uint256.FromUint64(10)
 
 	// cheque with same or lower amount
 	oldCheque := newTestCheque()
@@ -1057,7 +1061,15 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	newCheque.CumulativePayout = oldCheque.CumulativePayout + increase + 5
+	cumulativePayoutIncrease, err := uint256.New().Add(increase, uint256.FromUint64(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newCheque.CumulativePayout.Add(oldCheque.CumulativePayout, cumulativePayoutIncrease)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
@@ -1078,18 +1090,21 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
-	if actualAmount != cheque.CumulativePayout {
-		t.Fatalf("computed wrong actual amount: was %d, expected: %d", actualAmount, cheque.CumulativePayout)
+	if !actualAmount.Equals(cheque.CumulativePayout) {
+		t.Fatalf("computed wrong actual amount: was %v, expected: %v", actualAmount, cheque.CumulativePayout)
 	}
 
 	// verify that it was indeed saved
-	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
-		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
+	if !peer.getLastReceivedCheque().CumulativePayout.Equals(cheque.CumulativePayout) {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
 	// create another cheque with higher amount
 	otherCheque := newTestCheque()
-	otherCheque.CumulativePayout = cheque.CumulativePayout + 10
+	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, uint256.FromUint64(10))
+	if err != nil {
+		t.Fatal(err)
+	}
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
@@ -1098,8 +1113,8 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	}
 
 	// verify that it was indeed saved
-	if peer.getLastReceivedCheque().CumulativePayout != otherCheque.CumulativePayout {
-		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, otherCheque.CumulativePayout)
+	if !peer.getLastReceivedCheque().CumulativePayout.Equals(otherCheque.CumulativePayout) {
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, otherCheque.CumulativePayout)
 	}
 }
 
@@ -1129,12 +1144,15 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 
 	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
-		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
 	// invalid cheque because amount is lower
 	otherCheque := newTestCheque()
-	otherCheque.CumulativePayout = cheque.CumulativePayout - 10
+	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, uint256.FromUint64(10))
+	if err != nil {
+		t.Fatal(err)
+	}
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
@@ -1144,7 +1162,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// check that no invalid cheque was saved
 	if peer.getLastReceivedCheque().CumulativePayout != cheque.CumulativePayout {
-		t.Fatalf("last received cheque has wrong cumulative payout, was: %d, expected: %d", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
+		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 }
 
@@ -1242,8 +1260,8 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	if peer.getLastSentCumulativePayout() != 0 {
-		t.Fatalf("last cumulative payout should be 0 in the beginning, was %d", peer.getLastSentCumulativePayout())
+	if !peer.getLastSentCumulativePayout().Equals(uint256.FromUint64(0)) {
+		t.Fatalf("last cumulative payout should be 0 in the beginning, was %v", peer.getLastSentCumulativePayout())
 	}
 
 	cheque := newTestCheque()
@@ -1252,7 +1270,7 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	}
 
 	if peer.getLastSentCumulativePayout() != cheque.CumulativePayout {
-		t.Fatalf("last cumulative payout should be the payout of the last sent cheque, was: %d, expected %d", peer.getLastSentCumulativePayout(), cheque.CumulativePayout)
+		t.Fatalf("last cumulative payout should be the payout of the last sent cheque, was: %v, expected %v", peer.getLastSentCumulativePayout(), cheque.CumulativePayout)
 	}
 }
 
@@ -1282,8 +1300,8 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance != depositAmount.Uint64() {
-		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %d, depositAmount: %d", availableBalance, depositAmount)
+	if !availableBalance.Equals(uint256.FromUint64(depositAmount.Uint64())) {
+		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %v, depositAmount: %d", availableBalance, depositAmount)
 	}
 	// withdraw 50
 	withdrawAmount := big.NewInt(50)
@@ -1303,8 +1321,8 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if availableBalance != netDeposit {
-		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	if !availableBalance.Equals(uint256.FromUint64(netDeposit)) {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 
 	// send a cheque worth 42
@@ -1320,7 +1338,8 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// verify available balance
-	if availableBalance != (netDeposit - uint64(chequeAmount)) {
-		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %d, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	expectedBalance := netDeposit - uint64(chequeAmount)
+	if !availableBalance.Equals(uint256.FromUint64(expectedBalance)) {
+		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
 	}
 }

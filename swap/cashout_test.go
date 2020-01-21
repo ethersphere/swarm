@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // TestContractIntegration tests a end-to-end cheque interaction.
@@ -73,8 +74,13 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Uint64() != cheque.CumulativePayout {
-		t.Fatalf("Wrong cumulative payout %d", result)
+	paidOut, err := uint256.New().Set(*result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !cheque.CumulativePayout.Equals(paidOut) {
+		t.Fatalf("Wrong cumulative payout %v", paidOut)
 	}
 	log.Debug("cheques result", "result", result)
 
@@ -84,7 +90,8 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tx, err = chequebook.CashChequeBeneficiaryStart(opts, beneficiaryAddress, big.NewInt(int64(bouncingCheque.CumulativePayout)), bouncingCheque.Signature)
+	cumulativePayout := bouncingCheque.CumulativePayout.Value()
+	tx, err = chequebook.CashChequeBeneficiaryStart(opts, beneficiaryAddress, &cumulativePayout, bouncingCheque.Signature)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +143,8 @@ func TestCashCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if paidOut.Cmp(big.NewInt(int64(testCheque.CumulativePayout))) != 0 {
+	cumulativePayout := testCheque.CumulativePayout.Value()
+	if paidOut.Cmp(&cumulativePayout) != 0 {
 		t.Fatalf("paidOut does not equal the CumulativePayout: paidOut=%v expected=%v", paidOut, testCheque.CumulativePayout)
 	}
 }
