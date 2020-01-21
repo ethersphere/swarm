@@ -694,42 +694,34 @@ func TestDebtCheques(t *testing.T) {
 	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 
-	creditorSwap, cClean := newTestSwap(t, beneficiaryKey, testBackend)
-	debitorSwap, dClean := newTestSwap(t, ownerKey, testBackend)
-	defer cClean()
-	defer dClean()
+	creditorSwap, cleanup := newTestSwap(t, beneficiaryKey, testBackend)
+	defer cleanup()
 
 	ctx := context.Background()
 	if err := testDeploy(ctx, creditorSwap, big.NewInt(0)); err != nil {
 		t.Fatal(err)
 	}
-	if err := testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold*2))); err != nil {
-		t.Fatal(err)
-	}
 
-	cDummyPeer := newDummyPeerWithSpec(Spec)
-	dDummyPeer := newDummyPeerWithSpec(Spec)
-	creditor, err := debitorSwap.addPeer(cDummyPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	debitor, err := creditorSwap.addPeer(dDummyPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, big.NewInt(int64(DefaultPaymentThreshold*2)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// set asymmetric balance and attempt to send cheque
-	if err = creditor.setBalance(-int64(ChequeDebtTolerance * 2)); err != nil {
+	debitorDummyPeer := newDummyPeerWithSpec(Spec)
+	debitorPeer, err := creditorSwap.addPeer(debitorDummyPeer.Peer, ownerAddress, debitorChequebook.ContractParams().ContractAddress)
+	if err != nil {
 		t.Fatal(err)
 	}
-	// now simulate sending the cheque to the creditor from the debitor
-	if err = creditor.sendCheque(); err != nil {
+
+	// create debt cheque
+	chequeAmount := big.NewInt(int64(ChequeDebtTolerance * 2))
+	cheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
 		t.Fatal(err)
 	}
-	cheque := creditor.getPendingCheque()
 
 	// simulate cheque handling
-	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, &EmitChequeMsg{
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
 		Cheque: cheque,
 	})
 	// cheque should not have gone through as it would put the creditor in debt
@@ -737,25 +729,18 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatalf("expected invalid cheque to trigger debt cheque error, but got: %v", err)
 	}
 
-	// clear pending cheque to start over
-	if err = creditor.setPendingCheque(nil); err != nil {
+	// now create a (barely) admissible cheque
+	chequeAmount = big.NewInt(int64(ChequeDebtTolerance))
+	cheque, err = newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	// set asymmetric balances to send a (barely) admissible cheque
-	if err = creditor.setBalance(-int64(ChequeDebtTolerance)); err != nil {
-		t.Fatal(err)
-	}
-
-	if err = creditor.sendCheque(); err != nil {
-		t.Fatal(err)
-	}
-	cheque = creditor.getPendingCheque()
 
 	// simulate cheque handling
-	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, &EmitChequeMsg{
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
 		Cheque: cheque,
 	})
+	// cheque should have gone through
 	if err != nil {
 		t.Fatal(err)
 	}
