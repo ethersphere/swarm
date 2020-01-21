@@ -316,12 +316,15 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 	}
 }
 
-// modifyBalanceOk checks that the amount would not result in crossing the disconnection threshold
+// modifyBalanceOk checks that the amount would not result in crossing the disconnect and payment thresholds
 func (s *Swap) modifyBalanceOk(amount int64, swapPeer *Peer) (err error) {
-	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
 	balance := swapPeer.getBalance()
+
 	if balance >= s.params.DisconnectThreshold && amount > 0 {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
+		return fmt.Errorf("debt %d from peer %s is over the disconnect threshold %d and cannot increase, disconnecting", balance, swapPeer.ID().String(), s.params.DisconnectThreshold)
+	}
+	if balance <= -s.params.PaymentThreshold && amount < 0 {
+		return fmt.Errorf("debt %d to peer %s is over the payment threshold %d and a payment must be made before incurring more debt", balance, swapPeer.ID().String(), s.params.PaymentThreshold)
 	}
 
 	return nil
