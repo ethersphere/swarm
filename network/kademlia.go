@@ -170,7 +170,7 @@ func (k *Kademlia) addToCapabilityIndex(p interface{}) {
 			if idxItem.Id != vCap.Id {
 				continue
 			}
-			if vCap.Match(idxItem.Capability) {
+			if vCap.IsSameAs(idxItem.Capability) {
 				log.Trace("Added peer to capability index", "conn", ok, "s", s, "v", vCap, "p", p)
 				if ok {
 					k.capabilityIndex[s].conns, _, _ = pot.Add(idxItem.conns, newEntryFromPeer(ePeer), Pof)
