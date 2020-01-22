@@ -375,7 +375,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
+		if err := creditorPeer.Send(ctx, &testMsgSmallPrice{}); err != nil {
 			t.Fatal(err)
 		}
 
