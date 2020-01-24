@@ -439,9 +439,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 
 	payout := uint256.FromUint64(expectedPayout)
-	costs := uint256.FromUint64(transactionCosts)
 	costsMultiplier := uint256.FromUint64(2)
-	costThreshold, err := uint256.New().Mul(costs, costsMultiplier)
+	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}

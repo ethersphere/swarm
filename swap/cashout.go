@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 // CashChequeBeneficiaryTransactionCost is the expected gas cost of a CashChequeBeneficiary transaction
@@ -80,23 +81,31 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 }
 
 // estimatePayout estimates the payout for a given cheque as well as the transaction cost
-func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout uint64, transactionCosts uint64, err error) {
+func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout uint64, transactionCosts *uint256.Uint256, err error) {
 	otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
 	if err != nil {
-		return 0, 0, err
+		return 0, nil, err
 	}
 
 	paidOut, err := otherSwap.PaidOut(&bind.CallOpts{Context: ctx}, cheque.Beneficiary)
 	if err != nil {
-		return 0, 0, err
+		return 0, nil, err
 	}
 
-	gasPrice, err := c.backend.SuggestGasPrice(ctx)
+	suggestedGasPrice, err := c.backend.SuggestGasPrice(ctx)
 	if err != nil {
-		return 0, 0, err
+		return 0, nil, err
 	}
 
-	transactionCosts = gasPrice.Uint64() * CashChequeBeneficiaryTransactionCost
+	gasPrice, err := uint256.New().Set(*suggestedGasPrice)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	transactionCosts, err = uint256.New().Mul(gasPrice, uint256.FromUint64(CashChequeBeneficiaryTransactionCost))
+	if err != nil {
+		return 0, nil, err
+	}
 
 	cumulativePayout := cheque.CumulativePayout.Value()
 	if paidOut.Cmp(&cumulativePayout) > 0 {
