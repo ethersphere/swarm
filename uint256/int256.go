@@ -32,9 +32,9 @@ type Int256 struct {
 var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)) // -(2^255)
 var maxInt256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1))  // 2^255 - 1
 
-// New creates a Int256 struct with a minimum initial underlying value
-func (u *Int256) New() *Int256 {
-	u = new(Int256)
+// NewInt256 creates a Int256 struct with a minimum initial underlying value
+func NewInt256() *Int256 {
+	u := new(Int256)
 	u.value = *new(big.Int).Set(minInt256)
 	return u
 }
@@ -42,7 +42,6 @@ func (u *Int256) New() *Int256 {
 // FromUint64 creates a Int256 struct based on the given uint64 param
 // any uint64 is valid as a Int256
 func (u *Int256) FromUint64(base uint64) *Int256 {
-	u = u.New()
 	u.value = *new(big.Int).SetUint64(base)
 	return u
 }

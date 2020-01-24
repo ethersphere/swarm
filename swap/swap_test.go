@@ -1061,7 +1061,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	cumulativePayoutIncrease, err := uint256.New().Add(increase, uint256.FromUint64(5))
+	cumulativePayoutIncrease, err := uint256.NewUint256().Add(increase, uint256.FromUint64(5))
 	if err != nil {
 		t.Fatal(err)
 	}

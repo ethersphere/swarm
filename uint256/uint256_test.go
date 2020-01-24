@@ -96,7 +96,7 @@ func testSet(t *testing.T, testCases []Uint256TestCase) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := New().Set(*tc.baseInteger)
+			result, err := NewUint256().Set(*tc.baseInteger)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
@@ -120,7 +120,7 @@ func TestCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := New().Copy(r)
+	c := NewUint256().Copy(r)
 
 	if !c.Equals(r) {
 		t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
@@ -135,7 +135,7 @@ func randomUint256() (*Uint256, error) {
 
 	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
 
-	return New().Set(*randomUint256)
+	return NewUint256().Set(*randomUint256)
 }
 
 // TestStore indirectly tests the marshaling and unmarshaling of a random Uint256 variable

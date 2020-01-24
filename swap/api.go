@@ -91,7 +91,7 @@ func (s *Swap) AvailableBalance() (*uint256.Uint256, error) {
 	totalChequesWorth := new(big.Int).Sub(cashedChequesWorth, sentChequesWorth)
 	tentativeLiquidBalance := new(big.Int).Add(contractLiquidBalance, totalChequesWorth)
 
-	return uint256.New().Set(*tentativeLiquidBalance)
+	return uint256.NewUint256().Set(*tentativeLiquidBalance)
 }
 
 // PeerBalance returns the balance for a given peer
