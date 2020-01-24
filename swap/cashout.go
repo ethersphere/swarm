@@ -81,38 +81,46 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 }
 
 // estimatePayout estimates the payout for a given cheque as well as the transaction cost
-func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout uint64, transactionCosts *uint256.Uint256, err error) {
+func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout *uint256.Uint256, transactionCosts *uint256.Uint256, err error) {
 	otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
-	paidOut, err := otherSwap.PaidOut(&bind.CallOpts{Context: ctx}, cheque.Beneficiary)
+	po, err := otherSwap.PaidOut(&bind.CallOpts{Context: ctx}, cheque.Beneficiary)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
-	suggestedGasPrice, err := c.backend.SuggestGasPrice(ctx)
+	paidOut, err := uint256.New().Set(*po)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
-	gasPrice, err := uint256.New().Set(*suggestedGasPrice)
+	gp, err := c.backend.SuggestGasPrice(ctx)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
+	}
+
+	gasPrice, err := uint256.New().Set(*gp)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	transactionCosts, err = uint256.New().Mul(gasPrice, uint256.FromUint64(CashChequeBeneficiaryTransactionCost))
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
-	cumulativePayout := cheque.CumulativePayout.Value()
-	if paidOut.Cmp(&cumulativePayout) > 0 {
-		return 0, transactionCosts, nil
+	cumulativePayout := cheque.CumulativePayout
+	if paidOut.Cmp(cumulativePayout) > 0 {
+		return uint256.New(), transactionCosts, nil
 	}
 
-	expectedPayout = (&cumulativePayout).Uint64() - paidOut.Uint64()
+	expectedPayout, err = uint256.New().Sub(cumulativePayout, paidOut)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return expectedPayout, transactionCosts, nil
 }
