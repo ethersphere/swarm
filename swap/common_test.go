@@ -24,7 +24,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/boundedint"
 )
 
 // swapTestBackend encapsulates the SimulatedBackend and can offer
@@ -168,7 +168,7 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: uint256.FromUint64(42),
+			CumulativePayout: boundedint.FromUint64(42),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
@@ -181,7 +181,7 @@ func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress c
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: uint256.FromUint64(cumulativePayout.Uint64()),
+			CumulativePayout: boundedint.FromUint64(cumulativePayout.Uint64()),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: cumulativePayout.Uint64(),
@@ -202,7 +202,7 @@ func newRandomTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: uint256.FromUint64(amount),
+			CumulativePayout: boundedint.FromUint64(amount),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: amount,
