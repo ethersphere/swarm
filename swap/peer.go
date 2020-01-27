@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/boundedint"
+	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
 // ErrDontOwe indictates that no balance is actially owned

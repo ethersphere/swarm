@@ -22,8 +22,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/boundedint"
+	contract "github.com/ethersphere/swarm/contracts/swap"
 )
 
 // TestContractIntegration tests a end-to-end cheque interaction.
