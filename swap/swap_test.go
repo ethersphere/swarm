@@ -1301,7 +1301,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !availableBalance.Equals(depositAmount) {
-		t.Fatalf("availabl balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
+		t.Fatalf("available balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
 	}
 	// withdraw 50
 	withdrawAmount := uint256.FromUint64(50)
