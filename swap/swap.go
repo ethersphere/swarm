@@ -438,7 +438,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	costsMultiplier := boundedint.FromUint64(2)
+	costsMultiplier := boundedint.Uint64ToUint256(2)
 	costThreshold, err := boundedint.NewUint256().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
@@ -507,7 +507,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*boundedint.Uint
 		return nil, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, boundedint.FromUint64(expectedAmount))
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, boundedint.Uint64ToUint256(expectedAmount))
 	if err != nil {
 		return nil, err
 	}

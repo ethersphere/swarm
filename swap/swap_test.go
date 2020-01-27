@@ -434,7 +434,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap, boundedint.FromUint64(0))
+				err := testDeploy(context.TODO(), swap, boundedint.Uint64ToUint256(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -493,7 +493,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap, boundedint.FromUint64(0))
+				err := testDeploy(context.TODO(), swap, boundedint.Uint64ToUint256(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -519,7 +519,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap, boundedint.FromUint64(0))
+				err := testDeploy(context.TODO(), swap, boundedint.Uint64ToUint256(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -551,7 +551,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap, boundedint.FromUint64(0))
+	testDeploy(context.Background(), swap, boundedint.Uint64ToUint256(0))
 
 	testPeer := newDummyPeer()
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
@@ -577,7 +577,7 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap, boundedint.FromUint64(DefaultPaymentThreshold))
+	testDeploy(context.Background(), swap, boundedint.Uint64ToUint256(DefaultPaymentThreshold))
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
@@ -586,7 +586,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if !cheque.CumulativePayout.Equals(boundedint.FromUint64(DefaultPaymentThreshold)) {
+	if !cheque.CumulativePayout.Equals(boundedint.Uint64ToUint256(DefaultPaymentThreshold)) {
 		t.Fatal()
 	}
 }
@@ -610,11 +610,11 @@ func TestResetBalance(t *testing.T) {
 	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap, boundedint.FromUint64(0))
+	err := testDeploy(ctx, creditorSwap, boundedint.Uint64ToUint256(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, boundedint.FromUint64(testAmount))
+	err = testDeploy(ctx, debitorSwap, boundedint.Uint64ToUint256(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -889,7 +889,7 @@ func TestVerifyContract(t *testing.T) {
 	defer clean()
 
 	// deploy a new swap contract
-	err := testDeploy(context.TODO(), swap, boundedint.FromUint64(0))
+	err := testDeploy(context.TODO(), swap, boundedint.Uint64ToUint256(0))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1027,7 +1027,7 @@ func TestPeerVerifyChequePropertiesInvalidCheque(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLast tests that verifyChequeAgainstLast accepts a cheque with higher amount
 func TestPeerVerifyChequeAgainstLast(t *testing.T) {
-	increase := boundedint.FromUint64(10)
+	increase := boundedint.Uint64ToUint256(10)
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
@@ -1048,7 +1048,7 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 
 // TestPeerVerifyChequeAgainstLastInvalid tests that verifyChequeAgainstLast rejects cheques with lower amount or an unexpected value
 func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
-	increase := boundedint.FromUint64(10)
+	increase := boundedint.Uint64ToUint256(10)
 
 	// cheque with same or lower amount
 	oldCheque := newTestCheque()
@@ -1061,7 +1061,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	cumulativePayoutIncrease, err := boundedint.NewUint256().Add(increase, boundedint.FromUint64(5))
+	cumulativePayoutIncrease, err := boundedint.NewUint256().Add(increase, boundedint.Uint64ToUint256(5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1101,7 +1101,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 
 	// create another cheque with higher amount
 	otherCheque := newTestCheque()
-	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, boundedint.FromUint64(10))
+	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, boundedint.Uint64ToUint256(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1149,7 +1149,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 
 	// invalid cheque because amount is lower
 	otherCheque := newTestCheque()
-	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, boundedint.FromUint64(10))
+	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, boundedint.Uint64ToUint256(10))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1197,11 +1197,11 @@ func TestSwapLogToFile(t *testing.T) {
 	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap, boundedint.FromUint64(testAmount))
+	err = testDeploy(ctx, creditorSwap, boundedint.Uint64ToUint256(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, boundedint.FromUint64(0))
+	err = testDeploy(ctx, debitorSwap, boundedint.Uint64ToUint256(0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1260,7 +1260,7 @@ func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
 
-	if !peer.getLastSentCumulativePayout().Equals(boundedint.FromUint64(0)) {
+	if !peer.getLastSentCumulativePayout().Equals(boundedint.Uint64ToUint256(0)) {
 		t.Fatalf("last cumulative payout should be 0 in the beginning, was %v", peer.getLastSentCumulativePayout())
 	}
 
@@ -1282,7 +1282,7 @@ func TestAvailableBalance(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	depositAmount := boundedint.FromUint64(9000 * RetrieveRequestPrice)
+	depositAmount := boundedint.Uint64ToUint256(9000 * RetrieveRequestPrice)
 
 	// deploy a chequebook
 	err := testDeploy(context.TODO(), swap, depositAmount)
@@ -1304,7 +1304,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatalf("available balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
 	}
 	// withdraw 50
-	withdrawAmount := boundedint.FromUint64(50)
+	withdrawAmount := boundedint.Uint64ToUint256(50)
 	netDeposit, err := boundedint.NewUint256().Sub(depositAmount, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
@@ -1343,7 +1343,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// verify available balance
-	expectedBalance, err := boundedint.NewUint256().Sub(netDeposit, boundedint.FromUint64(chequeAmount))
+	expectedBalance, err := boundedint.NewUint256().Sub(netDeposit, boundedint.Uint64ToUint256(chequeAmount))
 	if err != nil {
 		t.Fatal(err)
 	}

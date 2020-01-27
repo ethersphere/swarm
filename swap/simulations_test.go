@@ -160,7 +160,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance, boundedint.FromUint64(100000*RetrieveRequestPrice))
+			err = testDeploy(context.Background(), balance, boundedint.Uint64ToUint256(100000*RetrieveRequestPrice))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -369,10 +369,10 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	}
 
 	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
-	if !ch1.CumulativePayout.Equals(boundedint.FromUint64(expected)) {
+	if !ch1.CumulativePayout.Equals(boundedint.Uint64ToUint256(expected)) {
 		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch1.CumulativePayout)
 	}
-	if !ch2.CumulativePayout.Equals(boundedint.FromUint64(expected)) {
+	if !ch2.CumulativePayout.Equals(boundedint.Uint64ToUint256(expected)) {
 		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch2.CumulativePayout)
 	}
 
@@ -510,7 +510,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	// check also the actual expected amount
 	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
-	if !cheque2.CumulativePayout.Equals(boundedint.FromUint64(expectedPayout)) {
+	if !cheque2.CumulativePayout.Equals(boundedint.Uint64ToUint256(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
@@ -746,7 +746,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if !lastPayout.Equals(boundedint.FromUint64(expectedLastPayout)) {
+				if !lastPayout.Equals(boundedint.Uint64ToUint256(expectedLastPayout)) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {
