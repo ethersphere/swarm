@@ -7,9 +7,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethersphere/swarm/boundedint"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/boundedint"
 )
 
 // APIs is a node.Service interface method

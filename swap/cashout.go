@@ -22,8 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/boundedint"
+	contract "github.com/ethersphere/swarm/contracts/swapint"
 )
 
 // CashChequeBeneficiaryTransactionCost is the expected gas cost of a CashChequeBeneficiary transaction
