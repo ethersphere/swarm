@@ -67,8 +67,7 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 		return err
 	}
 
-	cumulativePayout := cheque.CumulativePayout.Value()
-	tx, err := otherSwap.CashChequeBeneficiaryStart(opts, request.Destination, &cumulativePayout, cheque.Signature)
+	tx, err := otherSwap.CashChequeBeneficiaryStart(opts, request.Destination, cheque.CumulativePayout, cheque.Signature)
 	if err != nil {
 		return err
 	}

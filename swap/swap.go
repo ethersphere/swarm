@@ -438,7 +438,6 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	payout := uint256.FromUint64(expectedPayout)
 	costsMultiplier := uint256.FromUint64(2)
 	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
@@ -446,7 +445,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 
 	// do a payout transaction if we get 2 times the gas costs
-	if payout.Cmp(costThreshold) == 1 {
+	if expectedPayout.Cmp(costThreshold) == 1 {
 		go defaultCashCheque(s, cheque)
 	}
 
