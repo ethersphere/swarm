@@ -1344,6 +1344,9 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// verify available balance
 	expectedBalance, err := uint256.New().Sub(netDeposit, uint256.FromUint64(chequeAmount))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !availableBalance.Equals(expectedBalance) {
 		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
 	}
