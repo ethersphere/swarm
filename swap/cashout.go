@@ -111,12 +111,11 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	cumulativePayout := cheque.CumulativePayout
-	if paidOut.Cmp(cumulativePayout) > 0 {
+	if paidOut.Cmp(cheque.CumulativePayout) > 0 {
 		return uint256.New(), transactionCosts, nil
 	}
 
-	expectedPayout, err = uint256.New().Sub(cumulativePayout, paidOut)
+	expectedPayout, err = uint256.New().Sub(cheque.CumulativePayout, paidOut)
 	if err != nil {
 		return nil, nil, err
 	}
