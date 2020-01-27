@@ -182,6 +182,6 @@ func TestEstimatePayout(t *testing.T) {
 
 	// the gas price in the simulated backend is 1 therefore the total transactionCost should be 50000 * 1 = 50000
 	if !transactionCost.Equals(uint256.FromUint64(CashChequeBeneficiaryTransactionCost)) {
-		t.Fatalf("unexpected transactionCost: got %v, wanted: %d", transactionCost, 0)
+		t.Fatalf("unexpected transaction cost: got %v, wanted: %d", transactionCost, 0)
 	}
 }

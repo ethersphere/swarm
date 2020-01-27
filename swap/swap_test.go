@@ -1301,7 +1301,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !availableBalance.Equals(depositAmount) {
-		t.Fatalf("availableBalance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
+		t.Fatalf("availabl balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
 	}
 	// withdraw 50
 	withdrawAmount := uint256.FromUint64(50)
@@ -1327,7 +1327,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !availableBalance.Equals(netDeposit) {
-		t.Fatalf("availableBalance not equal to deposited minus withdraw. available balance: %v, deposit minus withdrawn: %v", availableBalance, netDeposit)
+		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, deposit minus withdrawn: %v", availableBalance, netDeposit)
 	}
 
 	// send a cheque worth 42
@@ -1345,7 +1345,7 @@ func TestAvailableBalance(t *testing.T) {
 	// verify available balance
 	expectedBalance, err := uint256.New().Sub(netDeposit, uint256.FromUint64(chequeAmount))
 	if !availableBalance.Equals(expectedBalance) {
-		t.Fatalf("availableBalance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
+		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
 	}
 
 }
