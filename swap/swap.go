@@ -438,16 +438,14 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	payout := boundedint.FromUint64(expectedPayout)
-	costs := boundedint.FromUint64(transactionCosts)
 	costsMultiplier := boundedint.FromUint64(2)
-	costThreshold, err := boundedint.NewUint256().Mul(costs, costsMultiplier)
+	costThreshold, err := boundedint.NewUint256().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
 
 	// do a payout transaction if we get 2 times the gas costs
-	if payout.Cmp(costThreshold) == 1 {
+	if expectedPayout.Cmp(costThreshold) == 1 {
 		go defaultCashCheque(s, cheque)
 	}
 
