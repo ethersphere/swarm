@@ -84,7 +84,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("cheques result", "result", result)
 
 	// create a cheque that will bounce
-	_, err = payout.Add(payout, uint256.FromUint64(uint64(10000*RetrieveRequestPrice)))
+	_, err = payout.Add(payout, uint256.FromUint64(10000*RetrieveRequestPrice))
 	if err != nil {
 		t.Fatal(err)
 	}

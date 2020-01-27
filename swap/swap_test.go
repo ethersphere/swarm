@@ -607,7 +607,7 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
-	testAmount := uint64(DefaultPaymentThreshold + 42)
+	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
 	err := testDeploy(ctx, creditorSwap, uint256.FromUint64(0))
@@ -1194,7 +1194,7 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
-	testAmount := uint64(DefaultPaymentThreshold + 42)
+	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
 	err = testDeploy(ctx, creditorSwap, uint256.FromUint64(testAmount))
@@ -1282,7 +1282,7 @@ func TestAvailableBalance(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	depositAmount := uint256.FromUint64(9000 * uint64(RetrieveRequestPrice))
+	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
 
 	// deploy a chequebook
 	err := testDeploy(context.TODO(), swap, depositAmount)
