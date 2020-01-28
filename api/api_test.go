@@ -251,10 +251,10 @@ func TestAPIResolve(t *testing.T) {
 			expectErr: errors.New(`no DNS to resolve name: "swarm.eth"`),
 		},
 		{
-			desc:   "DNS configured, hash address, hash resolves, returns resolved address",
+			desc:   "DNS not configured, hash address, hash resolves, returns hash",
 			dns:    doesResolve,
 			addr:   hashAddr,
-			result: resolvedAddr,
+			result: hashAddr,
 		},
 		{
 			desc:      "DNS configured, immutable hash address, hash resolves, returns hash address",
