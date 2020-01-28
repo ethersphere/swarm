@@ -1,4 +1,4 @@
-## v0.5.5 (January 22, 2020)
+## v0.5.5 (January 29, 2020)
 
 ### Notes
 
@@ -7,9 +7,11 @@
 - Retrieve request which were forwarded will now be answered without going through the local store, making retrievals faster
 - New peers will be suggested to connect to by address space gaps
 - Protocol handlers are now async by design
+- Fixes a bug where requested plain hashes would be redundantly sent to ENS resolver
 
 ### Commits
 
+* [#2081](https://github.com/ethersphere/swarm/pull/2081) api: do not try to resolve swarm hashes over ens
 * [#2073](https://github.com/ethersphere/swarm/pull/2073) kademlia: use IsSameAs instead of Match for capability index comparison
 * [#2063](https://github.com/ethersphere/swarm/pull/2063) swap, uint256: unify variable types, pt. 1
 * [#2065](https://github.com/ethersphere/swarm/pull/2065) network: Suggest peer by address space gap
