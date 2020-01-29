@@ -126,6 +126,9 @@ type DB struct {
 	// underlaying LevelDB to prevent possible panics from
 	// iterators
 	subscritionsWG sync.WaitGroup
+
+	setToGc map[string]struct{}
+	setMtx  sync.Mutex
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -146,6 +149,12 @@ type Options struct {
 	// to verify whether that chunk needs to be Set and added to
 	// garbage collection index too
 	PutToGCCheck func([]byte) bool
+}
+
+func (db *DB) SetToGc() map[string]struct{} {
+	db.setMtx.Lock()
+	defer db.setMtx.Unlock()
+	return db.setToGc
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -175,6 +184,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		close:                    make(chan struct{}),
 		collectGarbageWorkerDone: make(chan struct{}),
 		putToGCCheck:             o.PutToGCCheck,
+		setToGc:                  make(map[string]struct{}),
 	}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity

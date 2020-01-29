@@ -81,7 +81,10 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 
 	case chunk.ModeSetSyncPush, chunk.ModeSetSyncPull:
 		for _, addr := range addrs {
-			c, err := db.setSync(batch, addr, mode)
+			db.setMtx.Lock()
+			db.setToGc[addr.String()] = struct{}{}
+			db.setMtx.Unlock()
+			c, _ := db.setSync(batch, addr, mode)
 			if err != nil {
 				return err
 			}

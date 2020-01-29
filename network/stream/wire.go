@@ -34,7 +34,7 @@ import (
 // implementation of which streams to maintain with a certain peer and providing functionality
 // to expose, parse and encode values related to the string represntation of the stream
 type StreamProvider interface {
-
+	Out() map[string]string
 	// NeedData informs the caller whether a certain chunk needs to be fetched from another peer or not
 	NeedData(ctx context.Context, addr ...chunk.Address) ([]bool, error)
 
@@ -119,6 +119,7 @@ type OfferedHashes struct {
 type WantedHashes struct {
 	Ruid      uint
 	BitVector []byte
+	Hashes    []chunk.Address
 }
 
 // ChunkDelivery delivers a frame of chunks in response to a WantedHashes message

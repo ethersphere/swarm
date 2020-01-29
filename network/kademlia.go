@@ -915,8 +915,12 @@ func (k *Kademlia) IsClosestTo(addr []byte, filter func(*BzzPeer) bool) (closest
 // this node's saturation depth
 func (k *Kademlia) IsWithinDepth(addr []byte) bool {
 	depth := k.NeighbourhoodDepth()
+	pv := hex.EncodeToString(addr)
+	base := hex.EncodeToString(k.BaseAddr())
 
 	po, _ := Pof(addr, k.base, 0)
+	log.Debug("kademlia is within depth", "base", base, "chunkAddr", pv, "depth", depth, "po", po, "po>=depth", po >= depth)
+
 	return po >= depth
 }
 

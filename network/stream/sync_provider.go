@@ -60,7 +60,12 @@ type syncProvider struct {
 	setCache                *lru.Cache        // cache to reduce load on localstore to not set the same chunk as synced
 	logger                  log.Logger        // logger that appends the base address to loglines
 	binZeroSem              chan struct{}     // semaphore to limit number of syncing peers on bin 0
+
+	gets map[string]string
+	mtx  sync.Mutex
 }
+
+func (s *syncProvider) Out() map[string]string { return s.gets }
 
 // NewSyncProvider creates a new sync provider that is used by the stream protocol to sink data and control its behaviour
 // syncOnlyWithinDepth toggles stream establishment in reference to kademlia. When true - streams are
@@ -87,6 +92,7 @@ func NewSyncProvider(ns *storage.NetStore, kad *network.Kademlia, baseAddr *netw
 		setCache:                sc,
 		logger:                  log.NewBaseAddressLogger(baseAddr.ShortString()),
 		binZeroSem:              make(chan struct{}, maxBinZeroSyncPeers),
+		gets:                    make(map[string]string),
 	}
 }
 
@@ -181,6 +187,9 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 			indices = append(indices, i)
 			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachemiss", nil).Inc(1)
 		}
+		s.mtx.Lock()
+		s.gets[a.String()] = ""
+		s.mtx.Unlock()
 	}
 	s.cacheMtx.RUnlock()
 

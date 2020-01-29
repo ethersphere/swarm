@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -111,6 +112,10 @@ type Registry struct {
 	lastReceivedChunkTimeMu sync.RWMutex              // synchronize access to lastReceivedChunkTime
 	lastReceivedChunkTime   time.Time                 // last received chunk time
 	logger                  log.Logger                // the logger for the registry. appends base address to all logs
+	offered                 map[string]string
+	wanted                  map[string]string
+	offeredMsgs             int
+	wantedMsgs              int
 }
 
 // New creates a new stream protocol handler
@@ -123,6 +128,8 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 		address:        address,
 		logger:         log.New("base", address.ShortString()),
 		spec:           Spec,
+		offered:        make(map[string]string),
+		wanted:         make(map[string]string),
 	}
 	for _, p := range providers {
 		r.providers[p.StreamName()] = p
@@ -389,6 +396,9 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 				LastIndex: lastIdx,
 				Hashes:    []byte{},
 			}
+			r.mtx.Lock()
+			r.offeredMsgs++
+			r.mtx.Unlock()
 
 			if err := p.Send(ctx, offered); err != nil {
 				return protocols.Break(fmt.Errorf("sending empty live offered hashes, ruid %d: %w", msg.Ruid, err))
@@ -418,12 +428,22 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	} else {
 		batchSizeGauge.Update(int64(l))
 	}
+	for i := 0; i < len(h); i += HashSize {
+		hash := msg.Hashes[i : i+HashSize]
+		wantedHashesMsg.Hashes = append(wantedHashesMsg.Hashes, hash)
+		addresses[i/HashSize] = hash
+		p.logger.Trace("clientHandleOfferedHashes peer offered hash", "ruid", msg.Ruid, "stream", w.stream, "chunk", addresses[i/HashSize])
+	}
+
 	if err := p.Send(ctx, offered); err != nil {
 		p.mtx.Lock()
 		delete(p.openOffers, msg.Ruid)
 		p.mtx.Unlock()
 		return protocols.Break(fmt.Errorf("sending offered hashes, ruid %d: %w", msg.Ruid, err))
 	}
+	r.mtx.Lock()
+	r.offeredMsgs++
+	r.mtx.Unlock()
 
 	return nil
 }
@@ -490,6 +510,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := msg.Hashes[i : i+HashSize]
+		wantedHashesMsg.Hashes = append(wantedHashesMsg.Hashes, hash)
 		addresses[i/HashSize] = hash
 		p.logger.Trace("clientHandleOfferedHashes peer offered hash", "ruid", msg.Ruid, "stream", w.stream, "chunk", addresses[i/HashSize])
 	}
@@ -501,6 +522,12 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	if err != nil {
 		return protocols.Break(err)
 	}
+
+	for iii := 0; iii < len(wants); iii++ {
+		wants[iii] = true
+	}
+
+	spew.Dump("wtf", wants)
 
 	for i, wantChunk := range wants {
 		if wantChunk {
@@ -518,11 +545,17 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	// this handles the case that there are no hashes we are interested in
 	// we then seal the current interval and request the next batch
 	if ctr == 0 {
+		panic("wtf")
 		streamEmptyWantedHashes.Inc(1)
 		wantedHashesMsg.BitVector = []byte{} // set the bitvector value to an empty slice, this is to signal the server we dont want any hashes
 		if err := p.sealWant(w); err != nil {
 			return protocols.Break(fmt.Errorf("persisting interval from %d, to %d: %w", w.from, w.to, err))
 		}
+		if err := p.Send(ctx, wantedHashesMsg); err != nil {
+			return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
+		}
+		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
+
 	} else {
 		// we want some hashes
 		streamWantedHashes.Inc(1)
@@ -533,10 +566,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
-	}
-	if ctr == 0 {
-		// request the next range in case no chunks wanted
-		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 	}
 
 	if errc == nil {
@@ -583,6 +612,9 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 // the method is to ensure that all chunks in the requested batch is sent to the client
 func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes) error {
 	// get the existing offer for ruid from peer, otherwise drop
+	r.mtx.Lock()
+	r.wantedMsgs++
+	r.mtx.Unlock()
 	o, err := p.getOffer(msg.Ruid)
 	if err != nil {
 		return protocols.Break(err)
@@ -633,18 +665,39 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	}
 
 	// check which hashes to get from the localstore
+	if len(msg.Hashes) == 0 {
+		panic("w00t")
+	}
+	for i, v := range msg.Hashes {
+		wantHashes = append(wantHashes, v)
+		c := chunk.Address(v)
+		fmt.Println("chunk address w00t", c.String())
+		r.mtx.Lock()
+		r.wanted[c.String()] = ""
+		r.mtx.Unlock()
+		allHashes[i] = v
+
+	}
 	for i := 0; i < l; i++ {
-		hash := o.hashes[i*HashSize : (i+1)*HashSize]
+		//hash := o.hashes[i*HashSize : (i+1)*HashSize]
+		//hhh := msg.
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
-			wantHashes = append(wantHashes, hash)
+			//wantHashes = append(wantHashes, v)
+			//wantHashes = append(wantHashes, hash)
+
+			//c := chunk.Address(v)
+			//fmt.Println("chunk address w00t", c.String())
+			//r.mtx.Lock()
+			//r.wanted[c.String()] = ""
+			//r.mtx.Unlock()
 		}
-		allHashes[i] = hash
+		//allHashes[i] = hash
 	}
 	startGet := time.Now()
 
 	// get the chunks from the provider
-	chunks, err := provider.Get(ctx, wantHashes...)
+	chunks, err := provider.Get(ctx, allHashes...)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("get provider: %w", err))
 	}
@@ -857,6 +910,9 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 				iterate = false
 				break
 			}
+			r.mtx.Lock()
+			r.offered[d.Address.String()] = ""
+			r.mtx.Unlock()
 			batch = append(batch, d.Address[:]...)
 			batchSize++
 			if batchStartID == nil {
@@ -1083,4 +1139,16 @@ func (r *Registry) Stop() error {
 	}
 
 	return nil
+}
+
+//func (r *Registry) GetOutgoing() map[string]struct{} {
+func (r *Registry) GetOutgoing() map[string]string {
+	return r.providers["SYNC"].Out()
+	//return r.outgoing
+}
+
+func (r *Registry) Wanted() map[string]string  { return r.wanted }
+func (r *Registry) Offered() map[string]string { return r.offered }
+func (r *Registry) Stuff() (int, int) {
+	return r.offeredMsgs, r.wantedMsgs
 }

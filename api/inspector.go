@@ -32,7 +32,7 @@ import (
 	"github.com/ethersphere/swarm/storage/localstore"
 )
 
-const InspectorIsPullSyncingTolerance = 15 * time.Second
+const InspectorIsPullSyncingTolerance = 7 * time.Second
 
 type Inspector struct {
 	api      *API
@@ -130,4 +130,24 @@ func (i *Inspector) PeerStreams() (string, error) {
 
 func (i *Inspector) StorageIndices() (map[string]int, error) {
 	return i.ls.DebugIndices()
+}
+
+func (i *Inspector) Offered() map[string]string {
+	return i.stream.Offered()
+}
+
+func (i *Inspector) Wanted() map[string]string {
+	return i.stream.Wanted()
+}
+
+func (i *Inspector) OutgoingChunks() map[string]string {
+	return i.stream.GetOutgoing()
+}
+
+func (i *Inspector) SetToGc() map[string]struct{} {
+	return i.ls.SetToGc()
+}
+
+func (i *Inspector) OfferedWantedMsgs() (int, int) {
+	return i.stream.Stuff()
 }
