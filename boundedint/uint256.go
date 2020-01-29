@@ -39,9 +39,9 @@ func NewUint256() *Uint256 {
 	return u
 }
 
-// FromUint64 creates a Uint256 struct based on the given uint64 param
+// Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
 // any uint64 is valid as a Uint256
-func FromUint64(base uint64) *Uint256 {
+func Uint64ToUint256(base uint64) *Uint256 {
 	u := NewUint256()
 	u.value = *new(big.Int).SetUint64(base)
 	return u
