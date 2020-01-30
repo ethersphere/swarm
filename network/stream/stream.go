@@ -445,9 +445,9 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	r.mtx.Unlock()
 
 	if err := p.Send(ctx, offered); err != nil {
-		p.mtx.Lock()
-		delete(p.openOffers, msg.Ruid)
-		p.mtx.Unlock()
+		//p.mtx.Lock()
+		//delete(p.openOffers, msg.Ruid)
+		//p.mtx.Unlock()
 		return protocols.Break(fmt.Errorf("sending offered hashes, ruid %d: %w", msg.Ruid, err))
 	}
 	r.mtx.Lock()
@@ -593,9 +593,9 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	case <-time.After(timeouts.SyncBatchTimeout):
 		p.logger.Error("batch has timed out", "ruid", w.ruid)
 		close(w.closeC) // signal the polling goroutine to terminate
-		p.mtx.Lock()
-		delete(p.openWants, msg.Ruid)
-		p.mtx.Unlock()
+		//p.mtx.Lock()
+		//delete(p.openWants, msg.Ruid)
+		//p.mtx.Unlock()
 
 		// todo: this should happen because of the returned error anyway
 		// if the stream is wanted and has timed out
@@ -637,11 +637,11 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		metrics.GetOrRegisterResettingTimer("network.stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
 	}(start)
 
-	defer func() {
-		p.mtx.Lock()
-		delete(p.openOffers, msg.Ruid)
-		p.mtx.Unlock()
-	}()
+	//defer func() {
+	//p.mtx.Lock()
+	//delete(p.openOffers, msg.Ruid)
+	//p.mtx.Unlock()
+	//}()
 
 	var (
 		l          = len(o.hashes) / HashSize
@@ -678,7 +678,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	for i, v := range msg.Hashes {
 		wantHashes = append(wantHashes, v)
 		c := chunk.Address(v)
-		fmt.Println("chunk address w00t", c.String())
+		//fmt.Println("chunk address w00t", c.String())
 		r.mtx.Lock()
 		r.wanted[c.String()] = ""
 		r.mtx.Unlock()
@@ -918,12 +918,13 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 				break
 			}
 			r.mtx.Lock()
-			r.offered[d.Address.String()] = ""
+			r.offered[d.Address.String()] = "" // this yields the correct reading in the sense that the number of chunks which are collected from localstore make sense
+
 			r.mtx.Unlock()
 			vv := make([]byte, len(d.Address))
 			copy(vv, d.Address)
-			batch = append(batch, vv...)
-			hatches = append(hatches, vv) // d.Address[:])
+			batch = append(batch, vv...)  // this doesnt
+			hatches = append(hatches, vv) // this doesnt
 			batchSize++
 			if batchStartID == nil {
 				// set batch start id only if
@@ -967,9 +968,9 @@ func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider
 	if !ok {
 		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
 		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
-		p.mtx.Lock()
-		delete(p.openWants, w.ruid)
-		p.mtx.Unlock()
+		//p.mtx.Lock()
+		//delete(p.openWants, w.ruid)
+		//p.mtx.Unlock()
 		return nil
 	}
 	if w.head {

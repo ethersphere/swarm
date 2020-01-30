@@ -137,22 +137,31 @@ func TestSync(t *testing.T) {
 				}
 				fmt.Println("sync simulation binids", "iteration", i, "node", ni, "binids", string(binIDsjson))
 
-				outgoing := insp.OutgoingChunks()
+				outgoing := insp.OutgoingChunks() // the chunks that were actually requested on syncProvider.Get - the chunks that the clients marked that they want to have
 
-				setToGc := insp.SetToGc()
-				offered := insp.Offered()
-				offeredZwei := insp.OfferedZwei()
-				offeredDrei := insp.OfferedDrei()
-				d := make(map[string]string)
+				setToGc := insp.SetToGc()         // the number of chunks that were marked as Set by Pull/Push sync
+				offered := insp.Offered()         // the number of chunks that were registered in the serverCollectBatch
+				offeredZwei := insp.OfferedZwei() // the hashes that i see are offered to the client in the actual message
+				offeredDrei := insp.OfferedDrei() // the hashes offered from hatches (matches offeredZwei)
+				d := make(map[string]string)      // hash delta (offered - offeredZwei)
 				for k, _ := range offered {
 					if _, ok := offeredZwei[k]; !ok {
 						d[k] = ""
 					}
 				}
-				wanted := insp.Wanted()
-				o, w := insp.OfferedWantedMsgs()
+				wanted := insp.Wanted()          // which hashes the client wants
+				o, w := insp.OfferedWantedMsgs() // count of messages handled
 
-				fmt.Println("number of outgoing chunks on syncing", len(outgoing), "number set to gc", len(setToGc), "offered", len(offered), "offeredZwei", len(offeredZwei), "offeredDrei", len(offeredDrei), "wanted", len(wanted), "outgoing offered msgs", o, "incoming wanted msgs", w)
+				fmt.Println("number of outgoing chunks on syncing (number of chunks we actually GET from localstore)", len(outgoing),
+					"number set to gc", len(setToGc),
+					"offered", len(offered),
+					"offeredZwei", len(offeredZwei),
+					"offeredDrei", len(offeredDrei),
+					"wanted", len(wanted),
+					"outgoing offered msgs", o,
+					"incoming wanted msgs", w,
+				)
+
 				spew.Dump("o", offered)
 				spew.Dump("oZWEI", offeredZwei)
 				spew.Dump("delta", d)
