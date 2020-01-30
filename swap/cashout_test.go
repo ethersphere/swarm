@@ -18,7 +18,6 @@ package swap
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -37,7 +36,7 @@ func TestContractIntegration(t *testing.T) {
 	reset := setupContractTest()
 	defer reset()
 
-	payout := big.NewInt(42)
+	payout := uint256.FromUint64(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -85,13 +84,17 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("cheques result", "result", result)
 
 	// create a cheque that will bounce
-	bouncingCheque, err := newSignedTestCheque(chequebook.ContractParams().ContractAddress, beneficiaryAddress, payout.Add(payout, big.NewInt(int64(10000*RetrieveRequestPrice))), ownerKey)
+	_, err = payout.Add(payout, uint256.FromUint64(10000*RetrieveRequestPrice))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cumulativePayout := bouncingCheque.CumulativePayout.Value()
-	tx, err = chequebook.CashChequeBeneficiaryStart(opts, beneficiaryAddress, &cumulativePayout, bouncingCheque.Signature)
+	bouncingCheque, err := newSignedTestCheque(chequebook.ContractParams().ContractAddress, beneficiaryAddress, payout, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err = chequebook.CashChequeBeneficiaryStart(opts, beneficiaryAddress, bouncingCheque.CumulativePayout, bouncingCheque.Signature)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +121,7 @@ func TestCashCheque(t *testing.T) {
 	defer reset()
 
 	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := big.NewInt(42)
+	payout := uint256.FromUint64(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -156,7 +159,7 @@ func TestEstimatePayout(t *testing.T) {
 	defer reset()
 
 	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := big.NewInt(42)
+	payout := uint256.FromUint64(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -173,12 +176,12 @@ func TestEstimatePayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if expectedPayout != payout.Uint64() {
-		t.Fatalf("unexpected expectedPayout: got %d, wanted: %d", expectedPayout, payout.Uint64())
+	if !expectedPayout.Equals(payout) {
+		t.Fatalf("unexpected expectedPayout: got %v, wanted: %v", expectedPayout, payout)
 	}
 
 	// the gas price in the simulated backend is 1 therefore the total transactionCost should be 50000 * 1 = 50000
-	if transactionCost != CashChequeBeneficiaryTransactionCost {
-		t.Fatalf("unexpected transactionCost: got %d, wanted: %d", transactionCost, 0)
+	if !transactionCost.Equals(uint256.FromUint64(CashChequeBeneficiaryTransactionCost)) {
+		t.Fatalf("unexpected transaction cost: got %v, wanted: %d", transactionCost, 0)
 	}
 }
