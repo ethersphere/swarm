@@ -112,6 +112,7 @@ type OfferedHashes struct {
 	Ruid      uint
 	LastIndex uint64
 	Hashes    []byte
+	Hashi     []chunk.Address
 }
 
 // WantedHashes is a message sent from the downstream peer to the upstream peer in response

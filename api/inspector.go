@@ -136,6 +136,14 @@ func (i *Inspector) Offered() map[string]string {
 	return i.stream.Offered()
 }
 
+func (i *Inspector) OfferedZwei() map[string]string {
+	return i.stream.OfferedZwei()
+}
+
+func (i *Inspector) OfferedDrei() map[string]string {
+	return i.stream.OfferedDrei()
+}
+
 func (i *Inspector) Wanted() map[string]string {
 	return i.stream.Wanted()
 }

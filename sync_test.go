@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -137,16 +138,24 @@ func TestSync(t *testing.T) {
 				fmt.Println("sync simulation binids", "iteration", i, "node", ni, "binids", string(binIDsjson))
 
 				outgoing := insp.OutgoingChunks()
-				outjson, err := json.MarshalIndent(outgoing, "", "    ")
 
 				setToGc := insp.SetToGc()
 				offered := insp.Offered()
+				offeredZwei := insp.OfferedZwei()
+				offeredDrei := insp.OfferedDrei()
+				d := make(map[string]string)
+				for k, _ := range offered {
+					if _, ok := offeredZwei[k]; !ok {
+						d[k] = ""
+					}
+				}
 				wanted := insp.Wanted()
 				o, w := insp.OfferedWantedMsgs()
 
-				fmt.Println("number of outgoing chunks on syncing", len(outgoing), "number set to gc", len(setToGc), "offered", len(offered), "wanted", len(wanted), "outgoing offered msgs", o, "incoming wanted msgs", w)
-
-				fmt.Println("outgoing chunks", outjson)
+				fmt.Println("number of outgoing chunks on syncing", len(outgoing), "number set to gc", len(setToGc), "offered", len(offered), "offeredZwei", len(offeredZwei), "offeredDrei", len(offeredDrei), "wanted", len(wanted), "outgoing offered msgs", o, "incoming wanted msgs", w)
+				spew.Dump("o", offered)
+				spew.Dump("oZWEI", offeredZwei)
+				spew.Dump("delta", d)
 			}
 		}
 		fmt.Println("sync simulation retrieval", "iteration", i, "retrieval", time.Since(retrievalStart))

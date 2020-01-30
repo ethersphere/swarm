@@ -29,7 +29,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -113,6 +112,8 @@ type Registry struct {
 	lastReceivedChunkTime   time.Time                 // last received chunk time
 	logger                  log.Logger                // the logger for the registry. appends base address to all logs
 	offered                 map[string]string
+	offeredZwei             map[string]string
+	offeredDrei             map[string]string
 	wanted                  map[string]string
 	offeredMsgs             int
 	wantedMsgs              int
@@ -129,6 +130,8 @@ func New(intervalsStore state.Store, address *network.BzzAddr, providers ...Stre
 		logger:         log.New("base", address.ShortString()),
 		spec:           Spec,
 		offered:        make(map[string]string),
+		offeredZwei:    make(map[string]string),
+		offeredDrei:    make(map[string]string),
 		wanted:         make(map[string]string),
 	}
 	for _, p := range providers {
@@ -371,7 +374,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	if msg.To != nil {
 		to = *msg.To
 	}
-	h, _, t, e, err := r.serverCollectBatch(ctx, p, provider, key, msg.From, to)
+	h, _, t, e, err, hatches := r.serverCollectBatch(ctx, p, provider, key, msg.From, to)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("getting live batch for stream %s: %w", msg.Stream, err))
 	}
@@ -421,6 +424,7 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		Ruid:      msg.Ruid,
 		LastIndex: t,
 		Hashes:    h,
+		Hashi:     hatches,
 	}
 	l := len(h) / HashSize
 	if msg.To == nil {
@@ -428,12 +432,17 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	} else {
 		batchSizeGauge.Update(int64(l))
 	}
+	r.mtx.Lock()
 	for i := 0; i < len(h); i += HashSize {
-		hash := msg.Hashes[i : i+HashSize]
-		wantedHashesMsg.Hashes = append(wantedHashesMsg.Hashes, hash)
-		addresses[i/HashSize] = hash
-		p.logger.Trace("clientHandleOfferedHashes peer offered hash", "ruid", msg.Ruid, "stream", w.stream, "chunk", addresses[i/HashSize])
+		hash := h[i : i+HashSize]
+		cad := chunk.Address(hash)
+		r.offeredZwei[cad.String()] = ""
 	}
+
+	for _, v := range hatches {
+		r.offeredDrei[v.String()] = ""
+	}
+	r.mtx.Unlock()
 
 	if err := p.Send(ctx, offered); err != nil {
 		p.mtx.Lock()
@@ -526,8 +535,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	for iii := 0; iii < len(wants); iii++ {
 		wants[iii] = true
 	}
-
-	spew.Dump("wtf", wants)
 
 	for i, wantChunk := range wants {
 		if wantChunk {
@@ -877,7 +884,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 
 // serverCollectBatch collects a batch of hashes in response for a GetRange message
 // it will block until at least one hash is received from the provider
-func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error) {
+func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error, hatches []chunk.Address) {
 	p.logger.Debug("serverCollectBatch", "from", from, "to", to)
 
 	var (
@@ -913,7 +920,10 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 			r.mtx.Lock()
 			r.offered[d.Address.String()] = ""
 			r.mtx.Unlock()
-			batch = append(batch, d.Address[:]...)
+			vv := make([]byte, len(d.Address))
+			copy(vv, d.Address)
+			batch = append(batch, vv...)
+			hatches = append(hatches, vv) // d.Address[:])
 			batchSize++
 			if batchStartID == nil {
 				// set batch start id only if
@@ -946,9 +956,9 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	}
 	if batchStartID == nil {
 		// if batch start id is not set, it means we timed out
-		return nil, 0, 0, true, nil
+		return nil, 0, 0, true, nil, nil
 	}
-	return batch, *batchStartID, batchEndID, false, nil
+	return batch, *batchStartID, batchEndID, false, nil, hatches
 }
 
 // requestSubsequentRange checks the cursor for the current stream, and in case needed - requests the next range
@@ -1147,8 +1157,10 @@ func (r *Registry) GetOutgoing() map[string]string {
 	//return r.outgoing
 }
 
-func (r *Registry) Wanted() map[string]string  { return r.wanted }
-func (r *Registry) Offered() map[string]string { return r.offered }
+func (r *Registry) Wanted() map[string]string      { return r.wanted }
+func (r *Registry) Offered() map[string]string     { return r.offered }
+func (r *Registry) OfferedZwei() map[string]string { return r.offeredZwei }
+func (r *Registry) OfferedDrei() map[string]string { return r.offeredDrei }
 func (r *Registry) Stuff() (int, int) {
 	return r.offeredMsgs, r.wantedMsgs
 }
