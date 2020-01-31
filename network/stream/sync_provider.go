@@ -334,14 +334,14 @@ func (s *syncProvider) InitPeer(p *Peer) {
 	depth := s.kad.NeighbourhoodDepth()
 
 	if po == 0 {
-		select {
-		case s.binZeroSem <- struct{}{}:
-		case <-p.quit:
-			return
-		case <-s.quit:
-			return
-		}
-		defer func() { <-s.binZeroSem }()
+		//select {
+		//case s.binZeroSem <- struct{}{}:
+		//case <-p.quit:
+		//return
+		//case <-s.quit:
+		//return
+		//}
+		//defer func() { <-s.binZeroSem }()
 
 	}
 	p.logger.Debug("update syncing subscriptions: initial", "po", po, "depth", depth)

@@ -374,7 +374,10 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	if msg.To != nil {
 		to = *msg.To
 	}
-	h, _, t, e, err, hatches := r.serverCollectBatch(ctx, p, provider, key, msg.From, to)
+	//if to > 0 {
+	//ctx, _ = context.WithTimeout(ctx, 1*time.Second)
+	//}
+	h, _, t, e, err, hatches, hashmap := r.serverCollectBatch(ctx, p, provider, key, msg.From, to)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("getting live batch for stream %s: %w", msg.Stream, err))
 	}
@@ -409,6 +412,18 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 			return nil
 		}
 	}
+	r.mtx.Lock()
+	for i := 0; i < len(h); i += HashSize {
+		hash := h[i : i+HashSize]
+		cad := chunk.Address(hash)
+		r.offeredZwei[cad.String()] = ""
+	}
+
+	for k, _ := range hashmap {
+		//v ,err :=
+		r.offeredDrei[k] = ""
+	}
+	r.mtx.Unlock()
 
 	// store the offer for the peer
 	p.mtx.Lock()
@@ -432,17 +447,6 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	} else {
 		batchSizeGauge.Update(int64(l))
 	}
-	r.mtx.Lock()
-	for i := 0; i < len(h); i += HashSize {
-		hash := h[i : i+HashSize]
-		cad := chunk.Address(hash)
-		r.offeredZwei[cad.String()] = ""
-	}
-
-	for _, v := range hatches {
-		r.offeredDrei[v.String()] = ""
-	}
-	r.mtx.Unlock()
 
 	if err := p.Send(ctx, offered); err != nil {
 		//p.mtx.Lock()
@@ -570,12 +574,13 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 
 		errc = r.clientSealBatch(ctx, p, provider, w) // poll for the completion of the batch in a separate goroutine
 	}
-
+	startt := time.Now()
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
 	}
 
 	if errc == nil {
+		panic(123)
 		return nil
 	}
 
@@ -591,8 +596,9 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 			return protocols.Break(fmt.Errorf("persisting interval from %d, to %d: %w", w.from, w.to, err))
 		}
 	case <-time.After(timeouts.SyncBatchTimeout):
-		p.logger.Error("batch has timed out", "ruid", w.ruid)
+		p.logger.Error("batch has timed out", "ruid", w.ruid, "took", time.Since(startt), "head?", w.head, "f", w.from, "t", *w.to)
 		close(w.closeC) // signal the polling goroutine to terminate
+		return protocols.Break(errors.New("batch has timed out"))
 		//p.mtx.Lock()
 		//delete(p.openWants, msg.Ruid)
 		//p.mtx.Unlock()
@@ -619,9 +625,9 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 // the method is to ensure that all chunks in the requested batch is sent to the client
 func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *WantedHashes) error {
 	// get the existing offer for ruid from peer, otherwise drop
-	r.mtx.Lock()
-	r.wantedMsgs++
-	r.mtx.Unlock()
+	//r.mtx.Lock()
+	//r.wantedMsgs++
+	//r.mtx.Unlock()
 	o, err := p.getOffer(msg.Ruid)
 	if err != nil {
 		return protocols.Break(err)
@@ -651,6 +657,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	)
 
 	if len(msg.BitVector) == 0 {
+		//panic(0)
 		p.logger.Debug("peer does not want any hashes in this range", "ruid", o.ruid)
 		for i := 0; i < l; i++ {
 			allHashes[i] = o.hashes[i*HashSize : (i+1)*HashSize]
@@ -661,6 +668,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		}
 		return nil
 	}
+	p.logger.Debug("peer wants something in this range", "ruid", o.ruid)
 	want, err := bv.NewFromBytes(msg.BitVector, l)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("initialising bitvector, l %d, ll %d: %w", l, len(o.hashes), err))
@@ -670,11 +678,13 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	if v := BatchSize / 4; v > maxFrame {
 		maxFrame = v
 	}
+	maxFrame = BatchSize
 
 	// check which hashes to get from the localstore
 	if len(msg.Hashes) == 0 {
 		panic("w00t")
 	}
+
 	for i, v := range msg.Hashes {
 		wantHashes = append(wantHashes, v)
 		c := chunk.Address(v)
@@ -702,12 +712,14 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 		//allHashes[i] = hash
 	}
 	startGet := time.Now()
+	p.logger.Debug("getting chunks for peer", "chunks", len(allHashes), "ruid", o.ruid)
 
 	// get the chunks from the provider
 	chunks, err := provider.Get(ctx, allHashes...)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("get provider: %w", err))
 	}
+	p.logger.Debug("got chunks for peer", "took", time.Since(startGet), "ruid", o.ruid)
 
 	providerGetTimer.UpdateSince(startGet) // measure how long we spend on getting the chunks
 
@@ -730,6 +742,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 			}
 
 			//send the batch and reset chunk delivery message
+			p.logger.Debug("sending chunks to peer", "ruid", o.ruid)
 			if err := p.Send(ctx, cd); err != nil {
 				return protocols.Break(fmt.Errorf("sending chunk delivery frame, ruid %d: %w", msg.Ruid, err))
 
@@ -750,13 +763,15 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	startSet := time.Now()
 
 	// set the chunks as synced
+	p.logger.Debug("setting chunks", "ruid", o.ruid)
+
 	err = provider.Set(ctx, allHashes...)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("sending chunk as synced, addr: %s: %w", allHashes, err))
 
 	}
 	providerSetTimer.UpdateSince(startSet)
-
+	p.logger.Debug("done setting chunks for peer", "ruid", o.ruid)
 	return nil
 }
 
@@ -778,6 +793,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	// don't process this message if we're no longer
 	// interested in this stream
 	if !provider.WantStream(p, w.stream) {
+		p.logger.Debug("clientHandleChunkDelivery - stream no longer wanted", "stream", w.stream)
 		return nil
 	}
 	processReceivedChunksMsgCount.Inc(1)
@@ -793,6 +809,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	}
 
 	startPut := time.Now()
+	p.logger.Debug("clientHandleChunkDelivery - putting to store", "ruid", msg.Ruid)
 
 	// put the chunks to the local store
 	seen, err := provider.Put(ctx, chunks...)
@@ -804,6 +821,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 
 		return fmt.Errorf("clientHandleChunkDelivery putting chunk: %w", err)
 	}
+	p.logger.Debug("clientHandleChunkDelivery - done putting to store", "took", time.Since(startPut), "ruid", msg.Ruid)
 
 	providerPutTimer.UpdateSince(startPut)
 
@@ -817,6 +835,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	for _, dc := range chunks {
 		select {
 		case w.chunks <- dc.Address():
+			p.logger.Debug("clientHandleChunkDelivery - sent chunk down the pipe", dc.Address().String(), "ruid", msg.Ruid)
 			// send the chunk address to the goroutine polling end of batch (clientSealBatch)
 		case <-w.closeC:
 			// batch timeout
@@ -861,6 +880,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				delete(w.hashes, c.Hex())
 				p.mtx.Unlock()
 				v := atomic.AddUint64(&w.remaining, ^uint64(0))
+				p.logger.Debug("got chunk for request", "ruid", w.ruid, "remaining", v)
 				if v == 0 {
 					p.logger.Trace("done receiving chunks for open want", "ruid", w.ruid)
 					close(errc)
@@ -884,7 +904,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 
 // serverCollectBatch collects a batch of hashes in response for a GetRange message
 // it will block until at least one hash is received from the provider
-func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error, hatches []chunk.Address) {
+func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider StreamProvider, key interface{}, from, to uint64) (hashes []byte, f, t uint64, empty bool, err error, hatches []chunk.Address, hashmap map[string]struct{}) {
 	p.logger.Debug("serverCollectBatch", "from", from, "to", to)
 
 	var (
@@ -895,6 +915,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 		timer        *time.Timer
 		timerC       <-chan time.Time
 	)
+	hashmap = make(map[string]struct{})
 
 	defer func(start time.Time) {
 		if to == 0 {
@@ -919,7 +940,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 			}
 			r.mtx.Lock()
 			r.offered[d.Address.String()] = "" // this yields the correct reading in the sense that the number of chunks which are collected from localstore make sense
-
+			hashmap[d.Address.String()] = struct{}{}
 			r.mtx.Unlock()
 			vv := make([]byte, len(d.Address))
 			copy(vv, d.Address)
@@ -938,13 +959,9 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 			}
 			if timer == nil {
 				timer = time.NewTimer(timeouts.BatchTimeout)
-			} else {
-				if !timer.Stop() {
-					<-timer.C
-				}
-				timer.Reset(timeouts.BatchTimeout)
+				timerC = timer.C
 			}
-			timerC = timer.C
+
 		case <-timerC:
 			// return batch if new chunks are not received after some time
 			iterate = false
@@ -957,9 +974,9 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 	}
 	if batchStartID == nil {
 		// if batch start id is not set, it means we timed out
-		return nil, 0, 0, true, nil, nil
+		return nil, 0, 0, true, nil, nil, nil
 	}
-	return batch, *batchStartID, batchEndID, false, nil, hatches
+	return batch, *batchStartID, batchEndID, false, nil, hatches, hashmap
 }
 
 // requestSubsequentRange checks the cursor for the current stream, and in case needed - requests the next range

@@ -32,7 +32,7 @@ import (
 	"github.com/ethersphere/swarm/storage/localstore"
 )
 
-const InspectorIsPullSyncingTolerance = 7 * time.Second
+const InspectorIsPullSyncingTolerance = 15 * time.Second
 
 type Inspector struct {
 	api      *API

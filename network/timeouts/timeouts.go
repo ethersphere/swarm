@@ -24,4 +24,4 @@ var SyncBatchTimeout = 10 * time.Second
 
 // Within serverCollectBatch - If at least one chunk is added to the batch and no new chunks
 // are added in BatchTimeout period, the batch will be returned.
-var BatchTimeout = 2 * time.Second
+var BatchTimeout = 500 * time.Millisecond
