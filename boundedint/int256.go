@@ -39,6 +39,14 @@ func NewInt256() *Int256 {
 	return u
 }
 
+// Int64ToInt256 creates a Int256 struct based on the given int64 param
+// any int64 is valid as a Int256
+func Int64ToInt256(base int64) *Int256 {
+	u := NewInt256()
+	u.value = *new(big.Int).SetInt64(base)
+	return u
+}
+
 // Value returns the underlying private value for a Int256 struct
 func (u *Int256) Value() big.Int {
 	return u.value
