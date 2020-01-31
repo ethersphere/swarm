@@ -122,13 +122,13 @@ func (u *Int256) UnmarshalJSON(b []byte) error {
 }
 
 // EncodeRLP implements the rlp.Encoder interface
-// it makes sure the `value` field is encoded even though it is private
+// it makes sure the value field is encoded even though it is private
 func (u *Int256) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &u.value)
 }
 
 // DecodeRLP implements the rlp.Decoder interface
-// it makes sure the `value` field is decoded even though it is private
+// it makes sure the value field is decoded even though it is private
 func (u *Int256) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&u.value); err != nil {
 		return nil
