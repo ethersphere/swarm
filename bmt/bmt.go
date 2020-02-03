@@ -336,7 +336,8 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 	t := h.getTree()
 	if h.size == 0 && t.offset == 0 {
 		h.releaseTree()
-		return h.pool.zerohashes[h.pool.Depth]
+		//return h.pool.zerohashes[h.pool.Depth]
+		return h.GetZeroHash()
 	}
 	// write the last section with final flag set to true
 	go h.WriteSection(t.cursor, t.section, true, true)
@@ -526,7 +527,7 @@ func (sw *AsyncHasher) WriteIndexed(i int, section []byte) {
 			go sw.Hasher.WriteSection(i, t.GetSection(), sw.double, true)
 			return
 		}
-		// the rightmost.GetSection() just changed, so we write the previous one as non-final
+		// the rightmost section just changed, so we write the previous one as non-final
 		go sw.WriteSection(sw.Hasher.GetCursor(), t.GetSection(), sw.double, false)
 	}
 	// set i as the index of the righmost.GetSection() written so far
@@ -536,7 +537,6 @@ func (sw *AsyncHasher) WriteIndexed(i int, section []byte) {
 	copySection := make([]byte, sw.secsize)
 	copy(copySection, section)
 	t.SetSection(copySection)
-	return
 }
 
 // Sum can be called any time once the length and the span is known
@@ -583,6 +583,9 @@ func (sw *AsyncHasher) SumIndexed(b []byte, length int) (s []byte) {
 	return hsh.Sum(b)
 }
 
+// Writesection writes data to the data level in the section at index i.
+// Setting final to true tells the hasher no further data will be written and prepares the data for h.Sum()
+// TODO remove double as argument, push responsibility for handling data context to caller
 func (h *Hasher) WriteSection(i int, section []byte, double bool, final bool) {
 	h.size += len(section)
 	h.writeSection(i, section, double, final)
