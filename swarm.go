@@ -137,8 +137,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		swapParams := &swap.Params{
 			BaseAddrs:           bzzconfig.Address,
 			LogPath:             self.config.SwapLogPath,
-			DisconnectThreshold: int64(self.config.SwapDisconnectThreshold),
-			PaymentThreshold:    int64(self.config.SwapPaymentThreshold),
+			DisconnectThreshold: self.config.SwapDisconnectThreshold,
+			PaymentThreshold:    self.config.SwapPaymentThreshold,
 		}
 
 		// create the accounting objects

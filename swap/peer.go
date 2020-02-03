@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,13 +38,13 @@ type Peer struct {
 	*protocols.Peer
 	lock               sync.RWMutex
 	swap               *Swap
-	beneficiary        common.Address // address of the peers chequebook owner
-	contractAddress    common.Address // address of the peers chequebook
-	lastReceivedCheque *Cheque        // last cheque we received from the peer
-	lastSentCheque     *Cheque        // last cheque that was sent to peer that was confirmed
-	pendingCheque      *Cheque        // last cheque that was sent to peer but is not yet confirmed
-	balance            int64          // current balance of the peer
-	logger             log.Logger     // logger for swap related messages and audit trail with peer identifier
+	beneficiary        common.Address     // address of the peers chequebook owner
+	contractAddress    common.Address     // address of the peers chequebook
+	lastReceivedCheque *Cheque            // last cheque we received from the peer
+	lastSentCheque     *Cheque            // last cheque that was sent to peer that was confirmed
+	pendingCheque      *Cheque            // last cheque that was sent to peer but is not yet confirmed
+	balance            *boundedint.Int256 // current balance of the peer
+	logger             log.Logger         // logger for swap related messages and audit trail with peer identifier
 }
 
 // NewPeer creates a new swap Peer instance
@@ -126,26 +126,29 @@ func (p *Peer) getLastSentCumulativePayout() *boundedint.Uint256 {
 }
 
 // the caller is expected to hold p.lock
-func (p *Peer) setBalance(balance int64) error {
+func (p *Peer) setBalance(balance *boundedint.Int256) error {
 	p.balance = balance
 	return p.swap.saveBalance(p.ID(), balance)
 }
 
 // getBalance returns the current balance for this peer
 // the caller is expected to hold p.lock
-func (p *Peer) getBalance() int64 {
+func (p *Peer) getBalance() *boundedint.Int256 {
 	return p.balance
 }
 
 // the caller is expected to hold p.lock
-func (p *Peer) updateBalance(amount int64) error {
+func (p *Peer) updateBalance(amount *boundedint.Int256) error {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
-	newBalance := p.getBalance() + amount
+	newBalance, err := boundedint.NewInt256().Add(p.getBalance(), amount)
+	if err != nil {
+		return err
+	}
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	p.logger.Debug("updated balance", "balance", strconv.FormatInt(newBalance, 10))
+	p.logger.Debug("updated balance", "balance", newBalance)
 	return nil
 }
 
@@ -157,11 +160,13 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	if p.getBalance() >= 0 {
+	if p.getBalance().Cmp(boundedint.Int64ToInt256(0)) >= 0 {
 		return nil, fmt.Errorf("expected negative balance, found: %d", p.getBalance())
 	}
 	// the balance should be negative here, we take the absolute value:
-	honey := uint64(-p.getBalance())
+	b := p.getBalance().Value()
+	balance := new(big.Int).Mul(&b, big.NewInt(-1))
+	honey := balance.Uint64()
 
 	oraclePrice, err := p.swap.honeyPriceOracle.GetPrice(honey)
 	if err != nil {
@@ -209,14 +214,14 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
-	honeyAmount := int64(cheque.Honey)
+	honeyAmount := boundedint.Int64ToInt256(int64(cheque.Honey))
 	err = p.updateBalance(honeyAmount)
 	if err != nil {
 		return fmt.Errorf("error while creating cheque: %v", err)
 	}
 
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(int64(cheque.Honey))
 
 	p.logger.Info("sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{

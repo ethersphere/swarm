@@ -35,6 +35,7 @@ import (
 	"github.com/naoina/toml"
 
 	bzzapi "github.com/ethersphere/swarm/api"
+	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/network"
 )
 
@@ -219,10 +220,10 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.SwapDepositAmount = deposit
 	}
 	if paymentThreshold := ctx.GlobalUint64(SwarmSwapPaymentThresholdFlag.Name); paymentThreshold != 0 {
-		currentConfig.SwapPaymentThreshold = paymentThreshold
+		currentConfig.SwapPaymentThreshold = boundedint.Uint64ToUint256(paymentThreshold)
 	}
 	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
-		currentConfig.SwapDisconnectThreshold = disconnectThreshold
+		currentConfig.SwapDisconnectThreshold = boundedint.Uint64ToUint256(disconnectThreshold)
 	}
 	if ctx.GlobalIsSet(SwarmNoSyncFlag.Name) {
 		val := !ctx.GlobalBool(SwarmNoSyncFlag.Name)

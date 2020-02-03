@@ -72,12 +72,13 @@ func (u *Uint256) Copy(v *Uint256) *Uint256 {
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
-func (u *Uint256) Cmp(v *Uint256) int {
-	return u.value.Cmp(&v.value)
+func (u *Uint256) Cmp(v BoundedInt) int {
+	value := v.Value()
+	return u.value.Cmp(&value)
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
-func (u *Uint256) Equals(v *Uint256) bool {
+func (u *Uint256) Equals(v BoundedInt) bool {
 	return u.Cmp(v) == 0
 }
 
