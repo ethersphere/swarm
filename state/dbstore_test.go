@@ -86,6 +86,13 @@ func TestDBStore(t *testing.T) {
 	}
 
 	testStoreIterator(t, iteratedStore)
+
+	batchedStore, err := NewDBStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testStoreBatch(t, batchedStore)
 }
 
 func testStore(t *testing.T, store Store) {
@@ -173,5 +180,61 @@ func testStoreIterator(t *testing.T, store Store) {
 
 	if !reflect.DeepEqual(entries, expectedEntries) {
 		t.Fatalf("expected store entries to be %v, are %v instead", expectedEntries, entries)
+	}
+}
+
+func testStoreBatch(t *testing.T, store Store) {
+	defer store.Close()
+
+	batch := new(StoreBatch)
+
+	var val1 uint64 = 1
+	var val2 uint64 = 2
+
+	err := batch.Put("key1", val1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = batch.Put("key2", val2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.WriteBatch(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var result uint64
+	err = store.Get("key1", &result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result != val1 {
+		t.Fatalf("expected key1 to be %d, was %d instead", val1, result)
+	}
+
+	err = store.Get("key2", &result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result != val2 {
+		t.Fatalf("expected key1 to be %d, was %d instead", val2, result)
+	}
+
+	batch = new(StoreBatch)
+	batch.Delete("key1")
+
+	err = store.WriteBatch(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Get("key1", &result)
+	if err != ErrNotFound {
+		t.Fatal("expected key1 to be deleted")
 	}
 }

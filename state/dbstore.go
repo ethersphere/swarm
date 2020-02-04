@@ -36,6 +36,7 @@ type Store interface {
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
 	Iterate(prefix string, iterFunc iterFunction) (err error)
+	WriteBatch(batch *StoreBatch) (err error)
 	Close() error
 }
 
@@ -131,4 +132,36 @@ func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {
 // Close releases the resources used by the underlying LevelDB.
 func (s *DBStore) Close() error {
 	return s.db.Close()
+}
+
+// StoreBatch is a wrapper around a leveldb batch that takes care of the proper encoding
+type StoreBatch struct {
+	leveldb.Batch
+}
+
+// Put encodes the value and puts a corresponding Put operation into the underlying batch
+// This only returns an error if the encoding failed
+func (b *StoreBatch) Put(key string, i interface{}) (err error) {
+	var bytes []byte
+	if marshaler, ok := i.(encoding.BinaryMarshaler); ok {
+		if bytes, err = marshaler.MarshalBinary(); err != nil {
+			return err
+		}
+	} else {
+		if bytes, err = json.Marshal(i); err != nil {
+			return err
+		}
+	}
+	b.Batch.Put([]byte(key), bytes)
+	return nil
+}
+
+// Delete adds a delete operation to the underlying batch
+func (b *StoreBatch) Delete(key string) {
+	b.Batch.Delete([]byte(key))
+}
+
+// WriteBatch executes the batch on the underlying database
+func (s *DBStore) WriteBatch(batch *StoreBatch) error {
+	return s.db.Write(&batch.Batch, nil)
 }
