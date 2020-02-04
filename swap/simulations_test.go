@@ -106,9 +106,12 @@ func (m *testMsgByReceiver) Price() *protocols.Price {
 	}
 }
 
+var paymentThreshold = DefaultPaymentThreshold.Value()
+var paymentThresholdPrice = paymentThreshold.Uint64()
+
 func (m *testMsgBigPrice) Price() *protocols.Price {
 	return &protocols.Price{
-		Value:   DefaultPaymentThreshold + 1,
+		Value:   paymentThresholdPrice + 1,
 		PerByte: false,
 		Payer:   protocols.Sender,
 	}
@@ -287,7 +290,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout1, expectedPayout2 := DefaultPaymentThreshold+1, DefaultPaymentThreshold+1
+	expectedPayout1, expectedPayout2 := paymentThresholdPrice+1, paymentThresholdPrice+1
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -346,7 +349,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 				t.Fatal(err)
 			}
 			lastCount += 1
-			expectedPayout1 += DefaultPaymentThreshold + 1
+			expectedPayout1 += paymentThresholdPrice + 1
 		} else {
 			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
 				t.Fatal(err)
@@ -355,7 +358,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 				t.Fatal(err)
 			}
 			lastCount += 1
-			expectedPayout2 += DefaultPaymentThreshold + 1
+			expectedPayout2 += paymentThresholdPrice + 1
 		}
 	}
 
@@ -368,7 +371,7 @@ func TestPingPongChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
+	expected := uint64(maxCheques) / 2 * (paymentThresholdPrice + 1)
 	if !ch1.CumulativePayout.Equals(boundedint.Uint64ToUint256(expected)) {
 		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch1.CumulativePayout)
 	}
@@ -416,7 +419,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout := DefaultPaymentThreshold + 1
+	expectedPayout := paymentThresholdPrice + 1
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -477,7 +480,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		lastCount += 1
-		expectedPayout += DefaultPaymentThreshold + 1
+		expectedPayout += paymentThresholdPrice + 1
 	}
 
 	// check balances:
@@ -490,7 +493,12 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if b1 != -b2 {
+	b2, err = boundedint.NewInt256().Mul(b2, boundedint.Int64ToInt256(-1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !b1.Equals(b2) {
 		t.Fatalf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
 	}
 	// check cheques
@@ -508,7 +516,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	// check also the actual expected amount
-	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
+	expectedPayout = uint64(maxCheques) * (defaultPaymentThreshold + 1)
 
 	if !cheque2.CumulativePayout.Equals(boundedint.Uint64ToUint256(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
@@ -685,7 +693,11 @@ func TestBasicSwapSimulation(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("expected counter balance for node %v to be found, but not found", node)
 				}
-				if nodeBalanceWithP != -pBalanceWithNode {
+				pBalanceWithNode, err = boundedint.NewInt256().Mul(pBalanceWithNode, boundedint.Int64ToInt256(-1))
+				if err != nil {
+					return err
+				}
+				if !nodeBalanceWithP.Equals(pBalanceWithNode) {
 					return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", nodeBalanceWithP, pBalanceWithNode)
 				}
 			}
