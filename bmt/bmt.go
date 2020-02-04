@@ -85,10 +85,11 @@ type BaseHasherFunc func() hash.Hash
 //   the tree and itself in a state reusable for hashing a new chunk
 // - generates and verifies segment inclusion proofs (TODO:)
 type Hasher struct {
-	pool    *TreePool // BMT resource pool
-	bmt     *tree     // prebuilt BMT resource for flowcontrol and proofs
-	size    int       // bytes written to Hasher since last Reset()
-	cursor  int       // cursor to write to on next Write() call
+	mtx     sync.Mutex // protects Hasher.size increments (temporary solution)
+	pool    *TreePool  // BMT resource pool
+	bmt     *tree      // prebuilt BMT resource for flowcontrol and proofs
+	size    int        // bytes written to Hasher since last Reset()
+	cursor  int        // cursor to write to on next Write() call
 	errFunc func(error)
 	ctx     context.Context
 }
@@ -290,7 +291,7 @@ func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
 	}
 }
 
-// Implements file.SectionWriter
+// SetWriter implements file.SectionWriter
 func (h *Hasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
 	log.Warn("Synchasher does not currently support SectionWriter chaining")
 	return h
@@ -573,8 +574,8 @@ func (sw *AsyncHasher) SumIndexed(b []byte, length int) (s []byte) {
 		s = <-result
 	}
 	// relesase the tree back to the pool
-	sw.ReleaseTree()
 	meta := t.GetSpan()
+	sw.ReleaseTree()
 	// hash together meta and BMT root hash using the pools
 	hsh := sw.Hasher.GetHasher()
 	hsh.Reset()
@@ -587,7 +588,9 @@ func (sw *AsyncHasher) SumIndexed(b []byte, length int) (s []byte) {
 // Setting final to true tells the hasher no further data will be written and prepares the data for h.Sum()
 // TODO remove double as argument, push responsibility for handling data context to caller
 func (h *Hasher) WriteSection(i int, section []byte, double bool, final bool) {
+	h.mtx.Lock()
 	h.size += len(section)
+	h.mtx.Unlock()
 	h.writeSection(i, section, double, final)
 }
 

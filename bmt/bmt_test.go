@@ -207,14 +207,10 @@ func TestAsyncCorrectness(t *testing.T) {
 						h.Write(ZeroSpan)
 						h.Write(expNoMeta)
 						exp := h.Sum(nil)
-						got := syncHash(bmtobj, 0, d)
-						if !bytes.Equal(got, exp) {
-							t.Fatalf("wrong sync hash (syncpart) for datalength %v: expected %x (ref), got %x", n, exp, got)
-						}
 						ctx, cancel := context.WithCancel(context.Background())
 						defer cancel()
 						sw := NewAsyncHasher(ctx, bmtobj, double, nil)
-						got = asyncHashRandom(sw, 0, d, wh)
+						got := asyncHashRandom(sw, 0, d, wh)
 						if !bytes.Equal(got, exp) {
 							t.Fatalf("wrong async hash (asyncpart) for datalength %v: expected %x, got %x", n, exp, got)
 						}
