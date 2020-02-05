@@ -154,7 +154,7 @@ func TestSync(t *testing.T) {
 
 				fmt.Println("number of outgoing chunks on syncing (number of chunks we actually GET from localstore)", len(outgoing),
 					"number set to gc", len(setToGc),
-					"offered", len(offered),
+					"offered from ", len(offered),
 					"offeredZwei", len(offeredZwei),
 					"offeredDrei", len(offeredDrei),
 					"wanted", len(wanted),
