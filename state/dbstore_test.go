@@ -227,6 +227,7 @@ func testStoreBatch(t *testing.T, store Store) {
 
 	batch = new(StoreBatch)
 	batch.Delete("key1")
+	batch.Delete("key2")
 
 	err = store.WriteBatch(batch)
 	if err != nil {
@@ -236,5 +237,10 @@ func testStoreBatch(t *testing.T, store Store) {
 	err = store.Get("key1", &result)
 	if err != ErrNotFound {
 		t.Fatal("expected key1 to be deleted")
+	}
+
+	err = store.Get("key2", &result)
+	if err != ErrNotFound {
+		t.Fatal("expected key2 to be deleted")
 	}
 }

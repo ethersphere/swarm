@@ -134,13 +134,13 @@ func (s *DBStore) Close() error {
 	return s.db.Close()
 }
 
-// StoreBatch is a wrapper around a leveldb batch that takes care of the proper encoding
+// StoreBatch is a wrapper around a leveldb batch that takes care of the proper encoding.
 type StoreBatch struct {
 	leveldb.Batch
 }
 
-// Put encodes the value and puts a corresponding Put operation into the underlying batch
-// This only returns an error if the encoding failed
+// Put encodes the value and puts a corresponding Put operation into the underlying batch.
+// This only returns an error if the encoding failed.
 func (b *StoreBatch) Put(key string, i interface{}) (err error) {
 	var bytes []byte
 	if marshaler, ok := i.(encoding.BinaryMarshaler); ok {
@@ -156,12 +156,12 @@ func (b *StoreBatch) Put(key string, i interface{}) (err error) {
 	return nil
 }
 
-// Delete adds a delete operation to the underlying batch
+// Delete adds a delete operation to the underlying batch.
 func (b *StoreBatch) Delete(key string) {
 	b.Batch.Delete([]byte(key))
 }
 
-// WriteBatch executes the batch on the underlying database
+// WriteBatch executes the batch on the underlying database.
 func (s *DBStore) WriteBatch(batch *StoreBatch) error {
 	return s.db.Write(&batch.Batch, nil)
 }
