@@ -115,7 +115,7 @@ func TestHTTPMultipleRangeResponse(t *testing.T) {
 			for i := rand.Intn(5); i >= 0; i-- {
 				var beginning int
 				if l := len(ranges); l > 0 {
-					beginning = ranges[l-1][1]
+					beginning = ranges[l-1][1] + 1
 				}
 				if beginning >= dataSize {
 					break
