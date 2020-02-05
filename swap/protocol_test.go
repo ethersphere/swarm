@@ -309,7 +309,7 @@ func TestEmitCheque(t *testing.T) {
 
 	// check that the balance has been reset
 	if debitor.getBalance().Cmp(boundedint.Int64ToInt256(0)) != 0 {
-		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %d", 0, debitor.getBalance())
+		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %v", 0, debitor.getBalance())
 	}
 	recvCheque := debitor.getLastReceivedCheque()
 	log.Debug("expected cheque", "cheque", recvCheque)
@@ -389,7 +389,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// balance should be reset now
 	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %v", creditor.getBalance())
 	}
 
 	// pending cheque should now be set
@@ -399,12 +399,12 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	if !pending.CumulativePayout.Equals(expectedAmount) {
-		t.Fatalf("Expected cheque cumulative payout to be %d, but is %v", expectedAmount, pending.CumulativePayout)
+		t.Fatalf("Expected cheque cumulative payout to be %v, but is %v", expectedAmount, pending.CumulativePayout)
 	}
 
 	ea := expectedAmount.Value()
 	if pending.Honey != (&ea).Uint64() {
-		t.Fatalf("Expected cheque honey to be %d, but is %d", expectedAmount, pending.Honey)
+		t.Fatalf("Expected cheque honey to be %v, but is %v", expectedAmount, pending.Honey)
 	}
 
 	if pending.Beneficiary != creditor.beneficiary {
@@ -463,7 +463,7 @@ loop:
 
 	// because no other accounting took place in the meantime the balance should be exactly 0
 	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %v", creditor.getBalance())
 	}
 
 	// do some accounting again to trigger a second cheque
@@ -489,7 +489,7 @@ loop:
 	}
 
 	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("Expected debitorSwap balance to be 0, but is %d", creditor.getBalance())
+		t.Fatalf("Expected debitorSwap balance to be 0, but is %v", creditor.getBalance())
 	}
 }
 
@@ -528,7 +528,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	}
 	// no balance change expected
 	if debitor.getBalance() != expectedBalance {
-		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, debitor.getBalance())
+		t.Fatalf("Expected balance to be %v, but is %v", expectedBalance, debitor.getBalance())
 	}
 	// still no cheques expected
 	if debitor.getPendingCheque() != nil {
@@ -542,7 +542,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	}
 
 	if debitor.getBalance() != expectedBalance {
-		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, debitor.getBalance())
+		t.Fatalf("Expected balance to be %v, but is %v", expectedBalance, debitor.getBalance())
 	}
 
 	if debitor.getPendingCheque() != nil {
@@ -608,7 +608,7 @@ func TestSwapRPC(t *testing.T) {
 
 	// ...thus balance should be zero
 	if !balance.Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("Expected balance to be 0 but it is %d", balance)
+		t.Fatalf("Expected balance to be 0 but it is %v", balance)
 	}
 
 	peer1, err := swap.addPeer(dummyPeer1.Peer, common.Address{}, common.Address{})
@@ -636,7 +636,7 @@ func TestSwapRPC(t *testing.T) {
 	}
 	log.Debug("balance1", "balance1", balance)
 	if !balance.Equals(fakeBalance1) {
-		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance1)
+		t.Fatalf("Expected balance %v to be equal to fake balance %v, but it is not", balance, fakeBalance1)
 	}
 
 	err = rpcclient.Call(&balance, "swap_peerBalance", id2)
@@ -645,7 +645,7 @@ func TestSwapRPC(t *testing.T) {
 	}
 	log.Debug("balance2", "balance2", balance)
 	if !balance.Equals(fakeBalance2) {
-		t.Fatalf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fakeBalance2)
+		t.Fatalf("Expected balance %v to be equal to fake balance %v, but it is not", balance, fakeBalance2)
 	}
 
 	// now call all balances
@@ -667,7 +667,7 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !sum.Equals(fakeSum) {
-		t.Fatalf("Expected total balance to be %d, but it %d", fakeSum, sum)
+		t.Fatalf("Expected total balance to be %v, but it %v", fakeSum, sum)
 	}
 
 	balances, err := swap.Balances()

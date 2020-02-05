@@ -188,7 +188,7 @@ func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalanc
 		t.Error("Unexpected peer balance retrieval failure.")
 	}
 	if !peerBalance.Equals(expectedPeerBalance) {
-		t.Errorf("Expected peer store balance to be %d, but is %d instead.", expectedPeerBalance, peerBalance)
+		t.Errorf("Expected peer store balance to be %v, but is %v instead.", expectedPeerBalance, peerBalance)
 	}
 }
 
@@ -667,7 +667,7 @@ func TestResetBalance(t *testing.T) {
 	})
 	// the debitor should have already reset its balance
 	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
+		t.Fatalf("unexpected balance to be 0, but it is %v", creditor.getBalance())
 	}
 
 	// now load the cheque that the debitor created...
@@ -696,7 +696,7 @@ func TestResetBalance(t *testing.T) {
 	}
 	// finally check that the creditor also successfully reset the balances
 	if !debitor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("unexpected balance to be 0, but it is %d", debitor.getBalance())
+		t.Fatalf("unexpected balance to be 0, but it is %v", debitor.getBalance())
 	}
 }
 
@@ -807,7 +807,7 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 
 	// compare the balances
 	if !tmpBalance.Equals(newBalance) {
-		t.Fatalf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d", tmpBalance, newBalance)
+		t.Fatalf("Unexpected balance value after sending cheap message test. Expected balance: %v, balance is: %v", tmpBalance, newBalance)
 	}
 }
 

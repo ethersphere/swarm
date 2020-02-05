@@ -499,7 +499,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	if !b1.Equals(b2) {
-		t.Fatalf("Expected symmetric balances, but they are not: %d vs %d", b1, b2)
+		t.Fatalf("Expected symmetric balances, but they are not: %v vs %v", b1, b2)
 	}
 	// check cheques
 	var cheque1, cheque2 *Cheque
@@ -698,7 +698,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 					return err
 				}
 				if !nodeBalanceWithP.Equals(pBalanceWithNode) {
-					return fmt.Errorf("Expected symmetric balances, but they are not: %d vs %d", nodeBalanceWithP, pBalanceWithNode)
+					return fmt.Errorf("Expected symmetric balances, but they are not: %v vs %v", nodeBalanceWithP, pBalanceWithNode)
 				}
 			}
 		}

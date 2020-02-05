@@ -84,7 +84,7 @@ func testPeerBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance *bounde
 		t.Fatal(err)
 	}
 	if !b.Equals(expectedBalance) {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
+		t.Fatalf("Expected peer's balance to be %v, but is %v", expectedBalance, b)
 	}
 }
 
@@ -144,7 +144,7 @@ func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(actualBalances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, actualBalances)
+		t.Fatalf("Expected node's balances to be %v, but are %v", expectedBalances, actualBalances)
 	}
 }
 

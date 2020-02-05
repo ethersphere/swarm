@@ -173,7 +173,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, fmt.Errorf("initializing statestore: %w", err)
 	}
 	if params.DisconnectThreshold.Cmp(params.PaymentThreshold) < 1 {
-		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
+		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %v, PaymentThreshold: %v", params.DisconnectThreshold, params.PaymentThreshold)
 	}
 	// connect to the backend
 	backend, err := ethclient.Dial(backendURL)
@@ -321,7 +321,7 @@ func (s *Swap) modifyBalanceOk(amount *boundedint.Int256, swapPeer *Peer) (err e
 	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
 	balance := swapPeer.getBalance()
 	if balance.Cmp(s.params.DisconnectThreshold) >= 0 && amount.Cmp(boundedint.Int64ToInt256(0)) > 0 {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %v and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
 	}
 
 	return nil

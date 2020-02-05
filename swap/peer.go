@@ -161,7 +161,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	var err error
 
 	if p.getBalance().Cmp(boundedint.Int64ToInt256(0)) >= 0 {
-		return nil, fmt.Errorf("expected negative balance, found: %d", p.getBalance())
+		return nil, fmt.Errorf("expected negative balance, found: %v", p.getBalance())
 	}
 	// the balance should be negative here, we take the absolute value:
 	b := p.getBalance().Value()
