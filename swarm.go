@@ -18,12 +18,10 @@ package swarm
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -37,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
@@ -338,12 +335,7 @@ func newEnsClient(endpoint string, addr common.Address, config *api.Config, priv
 	if addr != (common.Address{}) {
 		ensRoot = addr
 	} else {
-		a, err := detectEnsAddr(client)
-		if err == nil {
-			ensRoot = a
-		} else {
-			log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", ensRoot), "err", err)
-		}
+		ensRoot = ens.Address
 	}
 	transactOpts := bind.NewKeyedTransactor(privkey)
 	dns, err := ens.NewENS(transactOpts, ensRoot, ethClient)
@@ -355,38 +347,6 @@ func newEnsClient(endpoint string, addr common.Address, config *api.Config, priv
 		ENS:    dns,
 		Client: ethClient,
 	}, err
-}
-
-// detectEnsAddr determines the ENS contract address by getting both the
-// version and genesis hash using the client and matching them to either
-// mainnet or testnet addresses
-func detectEnsAddr(client *rpc.Client) (common.Address, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var version string
-	if err := client.CallContext(ctx, &version, "net_version"); err != nil {
-		return common.Address{}, err
-	}
-
-	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	switch {
-
-	case version == "1" && block.Hash() == params.MainnetGenesisHash:
-		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
-		return ens.MainNetAddress, nil
-
-	case version == "3" && block.Hash() == params.TestnetGenesisHash:
-		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
-		return ens.TestNetAddress, nil
-
-	default:
-		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
-	}
 }
 
 /*
