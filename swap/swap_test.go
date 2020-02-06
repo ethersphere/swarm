@@ -730,7 +730,7 @@ func addBookings(swap *Swap, bookings []booking) {
 // take a Swap struct and a list of bookings, and verify the resulting balances are as expected
 func verifyBookings(t *testing.T, s *Swap, bookings []booking) {
 	t.Helper()
-	expectedBalances := calculateExpectedBalances(s, bookings)
+	expectedBalances := calculateExpectedBalances(t, s, bookings)
 	realBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
@@ -752,15 +752,20 @@ func stringifyBalance(balance map[enode.ID]*boundedint.Int256) string {
 // take a swap struct and a list of bookings, and calculate the expected balances.
 // the result is a map which stores the balance for all the peers present in the bookings,
 // from the perspective of the node that loaded the Swap struct.
-func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]*boundedint.Int256 {
+func calculateExpectedBalances(t *testing.T, swap *Swap, bookings []booking) map[enode.ID]*boundedint.Int256 {
 	expectedBalances := make(map[enode.ID]*boundedint.Int256)
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
 		peerID := booking.peer.ID()
-		peerBalance := expectedBalances[peerID]
+		peerBalance, ok := expectedBalances[peerID]
+		if !ok {
+			peerBalance = boundedint.NewInt256()
+		}
 		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
 		if peerBalance.Cmp(swap.params.DisconnectThreshold) < 0 || booking.amount.Cmp(boundedint.Int64ToInt256(0)) < 0 {
-			peerBalance.Add(peerBalance, booking.amount)
+			if _, err := peerBalance.Add(peerBalance, booking.amount); err != nil {
+				t.Fatal(err)
+			}
 		}
 		expectedBalances[peerID] = peerBalance
 	}

@@ -35,7 +35,7 @@ var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256
 // NewUint256 creates a Uint256 struct with a minimum initial underlying value
 func NewUint256() *Uint256 {
 	u := new(Uint256)
-	u.value = *new(big.Int).Set(minUint256)
+	u.value = *new(big.Int).Set(big.NewInt(0))
 	return u
 }
 

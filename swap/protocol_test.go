@@ -598,17 +598,17 @@ func TestSwapRPC(t *testing.T) {
 	fakeBalance2 := boundedint.Int64ToInt256(-100)
 
 	// query a first time, should give error
-	var balance *boundedint.Uint256
-	err = rpcclient.Call(&balance, "swap_peerBalance", id1)
+	balance := boundedint.NewInt256()
+	err = rpcclient.Call(balance, "swap_peerBalance", id1)
 	// at this point no balance should be there:  no peer registered with Swap
 	if err == nil {
 		t.Fatal("Expected error but no error received")
 	}
 	log.Debug("servicenode balance", "balance", balance)
 
-	// ...thus balance should be zero
-	if !balance.Equals(boundedint.Int64ToInt256(0)) {
-		t.Fatalf("Expected balance to be 0 but it is %v", balance)
+	// ...thus balance should be empty
+	if !balance.Equals(boundedint.NewInt256()) {
+		t.Fatalf("Expected balance to be empty but it is %v", balance)
 	}
 
 	peer1, err := swap.addPeer(dummyPeer1.Peer, common.Address{}, common.Address{})
@@ -630,7 +630,7 @@ func TestSwapRPC(t *testing.T) {
 	}
 
 	// query them, values should coincide
-	err = rpcclient.Call(&balance, "swap_peerBalance", id1)
+	err = rpcclient.Call(balance, "swap_peerBalance", id1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,7 +639,7 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatalf("Expected balance %v to be equal to fake balance %v, but it is not", balance, fakeBalance1)
 	}
 
-	err = rpcclient.Call(&balance, "swap_peerBalance", id2)
+	err = rpcclient.Call(balance, "swap_peerBalance", id2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -649,18 +649,17 @@ func TestSwapRPC(t *testing.T) {
 	}
 
 	// now call all balances
-	allBalances := make(map[enode.ID]int64)
+	allBalances := make(map[enode.ID]*boundedint.Int256)
 	err = rpcclient.Call(&allBalances, "swap_balances")
 	if err != nil {
 		t.Fatal(err)
 	}
 	log.Debug("received balances", "allBalances", allBalances)
 
-	var s int64
+	sum := boundedint.NewInt256()
 	for _, v := range allBalances {
-		s += v
+		sum.Add(sum, v)
 	}
-	sum := boundedint.Int64ToInt256(s)
 
 	fakeSum, err := boundedint.NewInt256().Add(fakeBalance1, fakeBalance2)
 	if err != nil {

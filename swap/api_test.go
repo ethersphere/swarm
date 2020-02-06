@@ -113,31 +113,35 @@ func TestBalances(t *testing.T) {
 	defer clean()
 
 	// test balances are empty
-	testBalances(t, swap, map[enode.ID]int64{})
+	testBalances(t, swap, map[enode.ID]*boundedint.Int256{})
 
 	// add peer
 	testPeer := addPeer(t, swap)
 	testPeerID := testPeer.ID()
 
 	// test balances with one peer
+	balancePeer := boundedint.Int64ToInt256(808)
 	setBalance(t, testPeer, boundedint.Int64ToInt256(808))
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808})
+	testBalances(t, swap, map[enode.ID]*boundedint.Int256{testPeerID: balancePeer})
 
 	// add second peer
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
 	// test balances with second peer
+	balancePeer2 := boundedint.Int64ToInt256(123)
 	setBalance(t, testPeer2, boundedint.Int64ToInt256(123))
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 123})
+	testBalances(t, swap, map[enode.ID]*boundedint.Int256{testPeerID: balancePeer, testPeer2ID: balancePeer2})
 
 	// test balances after balance change for peer
+	balancePeer = boundedint.Int64ToInt256(303)
+	balancePeer2 = boundedint.Int64ToInt256(123)
 	setBalance(t, testPeer, boundedint.Int64ToInt256(303))
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 123})
+	testBalances(t, swap, map[enode.ID]*boundedint.Int256{testPeerID: balancePeer, testPeer2ID: balancePeer2})
 }
 
 // tests that a map of peerID:balance matches the result of the Balances function
-func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
+func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]*boundedint.Int256) {
 	t.Helper()
 	actualBalances, err := s.Balances()
 	if err != nil {
