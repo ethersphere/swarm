@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
+	"github.com/ethersphere/swarm/swap/txqueue"
 )
 
 var (
@@ -26,7 +27,7 @@ var (
 type simpleSwapFactory struct {
 	instance *chequebookFactory.SimpleSwapFactory
 	address  common.Address
-	backend  Backend
+	backend  txqueue.Backend
 }
 
 // SimpleSwapFactory interface defines the methods available for a factory contract for SimpleSwap
@@ -40,7 +41,7 @@ type SimpleSwapFactory interface {
 }
 
 // FactoryAt creates a SimpleSwapFactory instance for the given address and backend
-func FactoryAt(address common.Address, backend Backend) (SimpleSwapFactory, error) {
+func FactoryAt(address common.Address, backend txqueue.Backend) (SimpleSwapFactory, error) {
 	simple, err := chequebookFactory.NewSimpleSwapFactory(address, backend)
 	if err != nil {
 		return nil, err
@@ -83,7 +84,7 @@ func (sf simpleSwapFactory) DeploySimpleSwap(auth *bind.TransactOpts, issuer com
 		return nil, err
 	}
 
-	receipt, err := WaitFunc(auth.Context, sf.backend, tx)
+	receipt, err := txqueue.WaitMined(auth.Context, sf.backend, tx.Hash())
 	if err != nil {
 		return nil, err
 	}

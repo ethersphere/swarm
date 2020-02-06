@@ -39,6 +39,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/swap/txqueue"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -60,7 +61,7 @@ type Swap struct {
 	peers             map[enode.ID]*Peer         // map of all swap Peers
 	peersLock         sync.RWMutex               // lock for peers map
 	owner             *Owner                     // contract access
-	backend           contract.Backend           // the backend (blockchain) used
+	backend           txqueue.Backend            // the backend (blockchain) used
 	chainID           uint64                     // id of the chain the backend is connected to
 	params            *Params                    // economic and operational parameters
 	contract          contract.Contract          // reference to the smart contract
@@ -135,7 +136,7 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend txqueue.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
 	return &Swap{
 		store:             stateStore,
 		peers:             make(map[enode.ID]*Peer),
@@ -193,6 +194,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
+
 	// initialize the factory
 	factory, err := createFactory(factoryAddress, chainID, backend)
 	if err != nil {
@@ -246,7 +248,7 @@ const (
 )
 
 // createFactory determines the factory address and returns and error if no factory address has been specified or is unknown for the network
-func createFactory(factoryAddress common.Address, chainID *big.Int, backend contract.Backend) (factory swap.SimpleSwapFactory, err error) {
+func createFactory(factoryAddress common.Address, chainID *big.Int, backend txqueue.Backend) (factory swap.SimpleSwapFactory, err error) {
 	if (factoryAddress == common.Address{}) {
 		if factoryAddress, err = contract.FactoryAddressForNetwork(chainID.Uint64()); err != nil {
 			return nil, err
@@ -497,7 +499,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 
 	if err != nil {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-		swapLog.Error("cashing cheque:", err)
+		swapLog.Error("cashing cheque:", "error", err)
 	}
 }
 

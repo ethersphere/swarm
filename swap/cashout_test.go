@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
-	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/swap/txqueue"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -37,7 +37,6 @@ func TestContractIntegration(t *testing.T) {
 	defer reset()
 
 	payout := uint256.FromUint64(42)
-
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +54,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	receipt, err := contract.WaitForTransactionByHash(context.Background(), backend, tx.Hash())
+	receipt, err := txqueue.WaitMined(nil, backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +98,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	receipt, err = contract.WaitForTransactionByHash(context.Background(), backend, tx.Hash())
+	receipt, err = txqueue.WaitMined(nil, backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}

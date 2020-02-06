@@ -47,6 +47,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/swap/txqueue"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -233,7 +234,7 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	}
 	defaultBackend.Commit()
 
-	testBackend := &swapTestBackend{SimulatedBackend: defaultBackend, factoryAddress: factoryAddress, tokenAddress: tokenAddress}
+	testBackend := &swapTestBackend{TestBackend: txqueue.NewTestBackend(defaultBackend), factoryAddress: factoryAddress, tokenAddress: tokenAddress}
 	// finally, create all Swap instances for each node, which share the same backend
 	var owner *Owner
 	defParams := newDefaultParams(t)
