@@ -25,15 +25,9 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-type Uint256TestCase struct {
-	name         string
-	baseInteger  *big.Int
-	expectsError bool
-}
-
 // TestSet tests the creation of valid and invalid Uint256 structs by calling the Set function
 func TestSet(t *testing.T) {
-	testCases := []Uint256TestCase{
+	testCases := []BoundedIntTestCase{
 		{
 			name:         "base 0",
 			baseInteger:  big.NewInt(0),
@@ -91,7 +85,7 @@ func TestSet(t *testing.T) {
 	testSet(t, testCases)
 }
 
-func testSet(t *testing.T, testCases []Uint256TestCase) {
+func testSet(t *testing.T, testCases []BoundedIntTestCase) {
 	t.Helper()
 
 	for _, tc := range testCases {
