@@ -74,7 +74,7 @@ type swapSimulationParams struct {
 // define test message types
 type testMsgBySender struct{}
 type testMsgByReceiver struct{}
-type testMsgBigPrice struct{}
+type testMsgSmallPrice struct{}
 
 // create a test Spec; every node has its Spec and its accounting Hook
 func newTestSpec() *protocols.Spec {
@@ -85,7 +85,7 @@ func newTestSpec() *protocols.Spec {
 		Messages: []interface{}{
 			testMsgBySender{},
 			testMsgByReceiver{},
-			testMsgBigPrice{},
+			testMsgSmallPrice{},
 		},
 	}
 }
@@ -106,9 +106,9 @@ func (m *testMsgByReceiver) Price() *protocols.Price {
 	}
 }
 
-func (m *testMsgBigPrice) Price() *protocols.Price {
+func (m *testMsgSmallPrice) Price() *protocols.Price {
 	return &protocols.Price{
-		Value:   DefaultPaymentThreshold + 1,
+		Value:   DefaultPaymentThreshold / 100, // ensures that the message won't put nodes into debt
 		PerByte: false,
 		Payer:   protocols.Sender,
 	}
@@ -250,135 +250,6 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 	return params, nil
 }
 
-// TestPingPongChequeSimulation just launches two nodes and sends each other
-// messages which immediately crosses the PaymentThreshold and triggers cheques
-// to each other. Checks that accounting and cheque handling works across multiple
-// cheques and also if cheques are mutually sent
-func TestPingPongChequeSimulation(t *testing.T) {
-	nodeCount := 2
-	// create the shared backend and params
-	params, err := newSharedBackendSwaps(t, nodeCount)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// cleanup backend
-	defer params.backend.Close()
-
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
-
-	params.backend.cashDone = make(chan struct{}, 1)
-	defer close(params.backend.cashDone)
-
-	// initialize the simulation
-	sim := simulation.NewBzzInProc(newSimServiceMap(params), false)
-	defer sim.Close()
-
-	log.Info("Initializing")
-
-	// we are going to use the metrics system to sync the test
-	// we are only going to continue with the next iteration after the message
-	// has been received on the other side
-	metricsReg := metrics.AccountingRegistry
-	// testMsgBigPrice is paid by the sender, so the credit counter will only be
-	// increased when receiving the message, which is what we want for this test
-	cter := metricsReg.Get("account.msg.credit")
-	counter := cter.(metrics.Counter)
-	counter.Clear()
-	var lastCount int64
-	expectedPayout1, expectedPayout2 := DefaultPaymentThreshold+1, DefaultPaymentThreshold+1
-
-	_, err = sim.AddNodesAndConnectFull(nodeCount)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p1 := sim.UpNodeIDs()[0]
-	p2 := sim.UpNodeIDs()[1]
-	ts1 := sim.Service("swap", p1).(*testService)
-	ts2 := sim.Service("swap", p2).(*testService)
-
-	var ts1Len, ts2Len, ts1sLen, ts2sLen int
-	timeout := time.After(10 * time.Second)
-
-	for {
-		// let's always be nice and allow a time out to be catched
-		select {
-		case <-timeout:
-			t.Fatal("Timed out waiting for all swap peer connections to be established")
-		default:
-		}
-		// the node has all other peers in its peer list
-		ts1.swap.peersLock.Lock()
-		ts1Len = len(ts1.swap.peers)
-		ts1sLen = len(ts1.peers)
-		ts1.swap.peersLock.Unlock()
-
-		ts2.swap.peersLock.Lock()
-		ts2Len = len(ts2.swap.peers)
-		ts2sLen = len(ts2.peers)
-		ts2.swap.peersLock.Unlock()
-
-		if ts1Len == 1 && ts2Len == 1 && ts1sLen == 1 && ts2sLen == 1 {
-			break
-		}
-		// don't overheat the CPU...
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	maxCheques := 42
-
-	ts1.lock.Lock()
-	p2Peer := ts1.peers[p2]
-	ts1.lock.Unlock()
-
-	ts2.lock.Lock()
-	p1Peer := ts2.peers[p1]
-	ts2.lock.Unlock()
-
-	for i := 0; i < maxCheques; i++ {
-		if i%2 == 0 {
-			if err := p2Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
-				t.Fatal(err)
-			}
-			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts1.swap.peers[p2], expectedPayout1); err != nil {
-				t.Fatal(err)
-			}
-			lastCount += 1
-			expectedPayout1 += DefaultPaymentThreshold + 1
-		} else {
-			if err := p1Peer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
-				t.Fatal(err)
-			}
-			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, ts2.swap.peers[p1], expectedPayout2); err != nil {
-				t.Fatal(err)
-			}
-			lastCount += 1
-			expectedPayout2 += DefaultPaymentThreshold + 1
-		}
-	}
-
-	ch1, err := ts2.swap.loadLastReceivedCheque(p1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ch2, err := ts1.swap.loadLastReceivedCheque(p2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expected := uint64(maxCheques) / 2 * (DefaultPaymentThreshold + 1)
-	if !ch1.CumulativePayout.Equals(uint256.FromUint64(expected)) {
-		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch1.CumulativePayout)
-	}
-	if !ch2.CumulativePayout.Equals(uint256.FromUint64(expected)) {
-		t.Fatalf("expected cumulative payout to be %d, but is %v", expected, ch2.CumulativePayout)
-	}
-
-	log.Info("Simulation ended")
-}
-
 // TestMultiChequeSimulation just launches two nodes, a creditor and a debitor.
 // The debitor is the one owing to the creditor, so the debitor is the one sending cheques
 // It sends multiple cheques in a sequence to the same node.
@@ -405,18 +276,18 @@ func TestMultiChequeSimulation(t *testing.T) {
 	defer sim.Close()
 
 	log.Info("Initializing")
-
+	msgPrice := (&testMsgSmallPrice{}).Price().Value
 	// we are going to use the metrics system to sync the test
 	// we are only going to continue with the next iteration after the message
 	// has been received on the other side
 	metricsReg := metrics.AccountingRegistry
-	// testMsgBigPrice is paid by the sender, so the credit counter will only be
+	// testMsgSmallPrice is paid by the sender, so the credit counter will only be
 	// increased when receiving the message, which is what we want for this test
 	cter := metricsReg.Get("account.msg.credit")
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
-	expectedPayout := DefaultPaymentThreshold + 1
+	var expectedPayout uint64
 
 	_, err = sim.AddNodesAndConnectFull(nodeCount)
 	if err != nil {
@@ -434,7 +305,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	var debLen, credLen, debSwapLen, credSwapLen int
 	timeout := time.After(10 * time.Second)
 	for {
-		// let's always be nice and allow a time out to be catched
+		// let's always be nice and allow a time out to be caught
 		select {
 		case <-timeout:
 			t.Fatal("Timed out waiting for all swap peer connections to be established")
@@ -458,27 +329,68 @@ func TestMultiChequeSimulation(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	// we will send just maxCheques number of cheques
-	maxCheques := 10
+	paymentThreshold := debitorSvc.swap.params.PaymentThreshold
+
+	chequesAmount := 4
+	msgsPerCheque := (uint64(paymentThreshold) / msgPrice) + 1 // +1 to round up without casting to float
+	msgAmount := int(msgsPerCheque) * chequesAmount
+	log.Debug("sending %d messages", msgAmount)
 
 	// the peer object used for sending
 	debitorSvc.lock.Lock()
 	creditorPeer := debitorSvc.peers[creditor]
 	debitorSvc.lock.Unlock()
 
-	// send maxCheques number of cheques
-	for i := 0; i < maxCheques; i++ {
-		// use a price which will trigger a cheque each time
-		if err := creditorPeer.Send(context.Background(), &testMsgBigPrice{}); err != nil {
+	allMessagesArrived := make(chan struct{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			// all messages have been received
+			if counter.Count() == int64(msgAmount) {
+				close(allMessagesArrived)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	for i := 0; i < msgAmount; i++ {
+		debitorBalance, err := debitorSvc.swap.loadBalance(creditor)
+		if err != nil {
 			t.Fatal(err)
 		}
-		// we need to wait a bit in order to give time for the cheque to be processed
-		if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
+
+		if err := creditorPeer.Send(ctx, &testMsgSmallPrice{}); err != nil {
 			t.Fatal(err)
 		}
-		lastCount += 1
-		expectedPayout += DefaultPaymentThreshold + 1
+
+		// check if cheque should have been sent
+		balanceAfterMessage := debitorBalance - int64(msgPrice)
+		if balanceAfterMessage <= -paymentThreshold {
+			// we need to wait a bit in order to give time for the cheque to be processed
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
+				t.Fatal(err)
+			}
+			expectedPayout += uint64(-balanceAfterMessage)
+		}
+
+		lastCount++
 	}
+	// give enough time for all messages to be processed
+	select {
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for all messages to arrive, aborting")
+	case <-allMessagesArrived:
+	}
+	log.Debug("all messages arrived")
 
 	// check balances:
 	b1, err := debitorSvc.swap.loadBalance(creditor)
@@ -506,9 +418,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 	if !cheque1.CumulativePayout.Equals(cheque2.CumulativePayout) {
 		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
-
-	// check also the actual expected amount
-	expectedPayout = uint64(maxCheques) * (DefaultPaymentThreshold + 1)
 
 	if !cheque2.CumulativePayout.Equals(uint256.FromUint64(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
@@ -722,7 +631,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 			select {
 			case <-ctx.Done():
 				lock.Lock()
-				errs = append(errs, "Timed out waiting for cheque to have been cached")
+				errs = append(errs, "Timed out waiting for cheque to be cashed")
 				lock.Unlock()
 				wg.Done()
 				return
@@ -762,7 +671,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 			select {
 			case <-ctx.Done():
 				lock.Lock()
-				errs = append(errs, "Timed out waiting for peer to have processed accounted message")
+				errs = append(errs, "Timed out waiting for peer to process accounted message")
 				lock.Unlock()
 				wg.Done()
 				return
