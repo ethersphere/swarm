@@ -1,0 +1,94 @@
+package store
+
+import (
+	"bytes"
+	"context"
+	"testing"
+	"time"
+
+	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/file/testutillocal"
+	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/testutil"
+)
+
+const (
+	sectionSize = 32
+	branches    = 128
+	chunkSize   = 4096
+)
+
+func init() {
+	testutil.Init()
+}
+
+// wraps storage.FakeChunkStore to intercept incoming chunk
+type testChunkStore struct {
+	*storage.FakeChunkStore
+	chunkC chan<- chunk.Chunk
+}
+
+func newTestChunkStore(chunkC chan<- chunk.Chunk) *testChunkStore {
+	return &testChunkStore{
+		FakeChunkStore: &storage.FakeChunkStore{},
+		chunkC:         chunkC,
+	}
+}
+
+// Put overrides storage.FakeChunkStore.Put
+func (s *testChunkStore) Put(_ context.Context, _ chunk.ModePut, chs ...chunk.Chunk) ([]bool, error) {
+	for _, ch := range chs {
+		s.chunkC <- ch
+	}
+	return s.FakeChunkStore.Put(nil, 0, chs...)
+}
+
+// TestStoreWithHasher writes a single chunk and verifies the asynchronusly received chunk
+// through the underlying chunk store
+func TestStoreWithHasher(t *testing.T) {
+
+	hashFunc := testutillocal.NewBMTHasherFunc(128)
+
+	// initialize chunk store with channel to intercept chunk
+	chunkC := make(chan chunk.Chunk)
+	store := newTestChunkStore(chunkC)
+
+	// initialize FileStore
+	h := New(store, hashFunc)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+	h.Init(ctx, nil)
+
+	// Write data to Store
+	_, data := testutil.SerialData(chunkSize, 255, 0)
+	span := bmt.LengthToSpan(chunkSize)
+	go func() {
+		for i := 0; i < chunkSize; i += sectionSize {
+			h.SeekSection(i / sectionSize)
+			h.Write(data[i : i+sectionSize])
+		}
+		h.SetSpan(chunkSize)
+		h.SetLength(chunkSize)
+		h.Sum(nil)
+	}()
+
+	// capture chunk and verify contents
+	select {
+	case ch := <-chunkC:
+		if !bytes.Equal(ch.Data()[:8], span) {
+			t.Fatalf("chunk span; expected %x, got %x", span, ch.Data()[:8])
+		}
+		if !bytes.Equal(ch.Data()[8:], data) {
+			t.Fatalf("chunk data; expected %x, got %x", data, ch.Data()[8:])
+		}
+		refHex := ch.Address().Hex()
+		correctRefHex := "c10090961e7682a10890c334d759a28426647141213abda93b096b892824d2ef"
+		if refHex != correctRefHex {
+			t.Fatalf("chunk ref; expected %s, got %s", correctRefHex, refHex)
+		}
+
+	case <-ctx.Done():
+		t.Fatalf("timeout %v", ctx.Err())
+	}
+}

@@ -31,14 +31,12 @@ type Key []byte
 type Encryption interface {
 	Encrypt(data []byte) ([]byte, error)
 	Decrypt(data []byte) ([]byte, error)
-	Reset()
 }
 
 type encryption struct {
 	key      Key              // the encryption key (hashSize bytes long)
 	keyLen   int              // length of the key = length of blockcipher block
 	padding  int              // encryption will pad the data upto this if > 0
-	index    int              // counter index
 	initCtr  uint32           // initial counter used for counter mode blockcipher
 	hashFunc func() hash.Hash // hasher constructor function
 }
@@ -81,24 +79,18 @@ func (e *encryption) Decrypt(data []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Reset resets the counter. It is only safe to call after an encryption operation is completed
-// After Reset is called, the Encryption object can be re-used for other data
-func (e *encryption) Reset() {
-	e.index = 0
-}
-
-// split up input into keylength segments and encrypt sequentially
+//
 func (e *encryption) transform(in, out []byte) {
 	inLength := len(in)
 	wg := sync.WaitGroup{}
 	wg.Add((inLength-1)/e.keyLen + 1)
 	for i := 0; i < inLength; i += e.keyLen {
 		l := min(e.keyLen, inLength-i)
+		// call transformations per segment (asyncronously)
 		go func(i int, x, y []byte) {
 			defer wg.Done()
 			e.Transcrypt(i, x, y)
-		}(e.index, in[i:i+l], out[i:i+l])
-		e.index++
+		}(i/e.keyLen, in[i:i+l], out[i:i+l])
 	}
 	// pad the rest if out is longer
 	pad(out[inLength:])

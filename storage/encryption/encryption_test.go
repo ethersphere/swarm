@@ -18,7 +18,6 @@ package encryption
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +37,6 @@ func init() {
 	if err != nil {
 		panic(err.Error())
 	}
-	testutil.Init()
 }
 
 func TestEncryptDataLongerThanPadding(t *testing.T) {
@@ -134,7 +132,6 @@ func testEncryptDecryptIsIdentity(t *testing.T, padding int, initCtr uint32, dat
 		t.Fatalf("Expected no error got %v", err)
 	}
 
-	enc.Reset()
 	decrypted, err := enc.Decrypt(encrypted)
 	if err != nil {
 		t.Fatalf("Expected no error got %v", err)
@@ -150,44 +147,5 @@ func testEncryptDecryptIsIdentity(t *testing.T, padding int, initCtr uint32, dat
 
 	if !bytes.Equal(data, decrypted) {
 		t.Fatalf("Expected decrypted %v got %v", common.Bytes2Hex(data), common.Bytes2Hex(decrypted))
-	}
-}
-
-// TestEncryptSectioned tests that the cipherText is the same regardless of size of data input buffer
-func TestEncryptSectioned(t *testing.T) {
-	data := make([]byte, 4096)
-	c, err := crand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c < 4096 {
-		t.Fatalf("short read %d", c)
-	}
-
-	key := make([]byte, KeyLength)
-	c, err = crand.Read(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c < KeyLength {
-		t.Fatalf("short read %d", c)
-	}
-
-	enc := New(key, 0, uint32(42), sha3.NewLegacyKeccak256)
-	whole, err := enc.Encrypt(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	enc.Reset()
-	for i := 0; i < 4096; i += KeyLength {
-		cipher, err := enc.Encrypt(data[i : i+KeyLength])
-		if err != nil {
-			t.Fatal(err)
-		}
-		wholeSection := whole[i : i+KeyLength]
-		if !bytes.Equal(cipher, wholeSection) {
-			t.Fatalf("index %d, expected %x, got %x", i/KeyLength, wholeSection, cipher)
-		}
 	}
 }
