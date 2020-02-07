@@ -47,6 +47,8 @@ const (
 
 var counts = []int{1, 2, 3, 4, 5, 8, 9, 15, 16, 17, 32, 37, 42, 53, 63, 64, 65, 111, 127, 128}
 
+var benchmarkBMTResult []byte
+
 // calculates the Keccak256 SHA3 hash of the data
 func sha3hash(data ...[]byte) []byte {
 	h := sha3.NewLegacyKeccak256()
@@ -473,12 +475,14 @@ func benchmarkBMT(t *testing.B, n int) {
 	hasher := sha3.NewLegacyKeccak256
 	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	bmt := New(pool)
+	var r []byte
 
 	t.ReportAllocs()
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		syncHash(bmt, 0, data)
+		r = syncHash(bmt, 0, data)
 	}
+	benchmarkBMTResult = r
 }
 
 // benchmarks BMT hasher with asynchronous concurrent segment/section writes
