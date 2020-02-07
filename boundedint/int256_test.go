@@ -50,13 +50,18 @@ func TestInt256Set(t *testing.T) {
 			expectsError: false,
 		},
 		{
-			name:         "base -1 * 2^256",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(-1)),
+			name:         "base -1 * 2^255",
+			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(-1)),
+			expectsError: false,
+		},
+		{
+			name:         "base -1 * 2^255 - 1",
+			baseInteger:  new(big.Int).Sub(new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(-1)), big.NewInt(1)),
 			expectsError: true,
 		},
 		{
 			name:         "base -1 * 2^512",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(-1)),
 			expectsError: true,
 		},
 		// positive numbers

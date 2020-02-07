@@ -72,12 +72,12 @@ func TestUint256Set(t *testing.T) {
 		},
 		{
 			name:         "base 2^256",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
+			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil),
 			expectsError: true,
 		},
 		{
 			name:         "base 2^512",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(1)),
+			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
 			expectsError: true,
 		},
 	}
