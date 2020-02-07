@@ -119,32 +119,32 @@ func testInt256Set(t *testing.T, testCases []BoundedIntTestCase) {
 
 // TestCopy tests the duplication of an existing Int256 variable
 func TestInt256Copy(t *testing.T) {
-	r, err := randomUint256()
+	r, err := randomInt256()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c := NewUint256().Copy(r)
+	c := NewInt256().Copy(r)
 
 	if !c.Equals(r) {
-		t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
+		t.Fatalf("copy of Int256 %v has an unequal value of %v", r, c)
 	}
 }
 
-func randomInt256() (*Uint256, error) {
-	r, err := rand.Int(rand.Reader, new(big.Int).Sub(maxUint256, minUint256)) // base for random
+func randomInt256() (*Int256, error) {
+	r, err := rand.Int(rand.Reader, new(big.Int).Sub(maxInt256, minInt256)) // base for random
 	if err != nil {
 		return nil, err
 	}
 
-	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minInt256, maxInt256]
+	randomInt256 := new(big.Int).Add(r, minInt256) // random is within [minInt256, maxInt256]
 
-	return NewUint256().Set(*randomUint256)
+	return NewInt256().Set(*randomInt256)
 }
 
 // TestStore indirectly tests the marshaling and unmarshaling of a random Int256 variable
 func TestInt256Store(t *testing.T) {
-	testDir, err := ioutil.TempDir("", "uint256_test_store")
+	testDir, err := ioutil.TempDir("", "int256_test_store")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,6 +171,6 @@ func TestInt256Store(t *testing.T) {
 	}
 
 	if !u.Equals(r) {
-		t.Fatalf("retrieved Uint256 %v has an unequal balance to the original Uint256 %v", u, r)
+		t.Fatalf("retrieved Int256 %v has an unequal balance to the original Int256 %v", u, r)
 	}
 }
