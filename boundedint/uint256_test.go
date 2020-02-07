@@ -41,12 +41,12 @@ func TestUint256Set(t *testing.T) {
 		},
 		{
 			name:         "base -1 * 2^8",
-			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
 			expectsError: true,
 		},
 		{
 			name:         "base -1 * 2^64",
-			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
 			expectsError: true,
 		},
 		// positive numbers

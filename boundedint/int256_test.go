@@ -41,27 +41,27 @@ func TestInt256Set(t *testing.T) {
 		},
 		{
 			name:         "base -1 * 2^8",
-			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
 			expectsError: false,
 		},
 		{
 			name:         "base -1 * 2^64",
-			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
 			expectsError: false,
 		},
 		{
 			name:         "base -1 * 2^255",
-			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
 			expectsError: false,
 		},
 		{
 			name:         "base -1 * 2^255 - 1",
-			baseInteger:  new(big.Int).Sub(new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(-1)), big.NewInt(1)),
+			baseInteger:  new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
 			expectsError: true,
 		},
 		{
 			name:         "base -1 * 2^512",
-			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(-1)),
+			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
 			expectsError: true,
 		},
 		// positive numbers
@@ -87,12 +87,12 @@ func TestInt256Set(t *testing.T) {
 		},
 		{
 			name:         "base 2^255",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
+			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
 			expectsError: true,
 		},
 		{
 			name:         "base 2^512",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(1)),
+			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
 			expectsError: true,
 		},
 	}
