@@ -698,11 +698,11 @@ func TestDebtCheques(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := testDeploy(ctx, creditorSwap, uint256.FromUint64(0)); err != nil {
+	if err := testDeploy(ctx, creditorSwap, boundedint.Uint64ToUint256(0)); err != nil {
 		t.Fatal(err)
 	}
 
-	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, uint256.FromUint64((DefaultPaymentThreshold * 2)))
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, boundedint.Uint64ToUint256((DefaultPaymentThreshold * 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,7 +714,7 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// create debt cheque
-	chequeAmount := uint256.FromUint64(ChequeDebtTolerance * 2)
+	chequeAmount := boundedint.Uint64ToUint256(ChequeDebtTolerance * 2)
 	cheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
 	if err != nil {
 		t.Fatal(err)
@@ -730,7 +730,7 @@ func TestDebtCheques(t *testing.T) {
 	}
 
 	// now create a (barely) admissible cheque
-	chequeAmount = uint256.FromUint64(ChequeDebtTolerance)
+	chequeAmount = boundedint.Uint64ToUint256(ChequeDebtTolerance)
 	cheque, err = newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
 	if err != nil {
 		t.Fatal(err)
