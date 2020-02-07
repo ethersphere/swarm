@@ -1175,10 +1175,40 @@ func (r *Registry) GetOutgoing() map[string]string {
 	//return r.outgoing
 }
 
-func (r *Registry) Wanted() map[string]string      { return r.wanted }
-func (r *Registry) Offered() map[string]string     { return r.offered }
-func (r *Registry) OfferedZwei() map[string]string { return r.offeredZwei }
-func (r *Registry) OfferedDrei() map[string]string { return r.offeredDrei }
+func (r *Registry) Wanted() map[string]string {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return copyStringMap(r.wanted)
+}
+
+func (r *Registry) Offered() map[string]string {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return copyStringMap(r.offered)
+}
+
+func (r *Registry) OfferedZwei() map[string]string {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return copyStringMap(r.offeredZwei)
+}
+
+func (r *Registry) OfferedDrei() map[string]string {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return copyStringMap(r.offeredDrei)
+}
+
 func (r *Registry) Stuff() (int, int) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
 	return r.offeredMsgs, r.wantedMsgs
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
