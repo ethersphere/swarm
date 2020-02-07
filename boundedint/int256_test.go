@@ -25,8 +25,8 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-// TestSet tests the creation of valid and invalid Uint256 structs by calling the Set function
-func TestUint256Set(t *testing.T) {
+// TestSet tests the creation of valid and invalid Int256 structs by calling the Set function
+func TestInt256Set(t *testing.T) {
 	testCases := []BoundedIntTestCase{
 		{
 			name:         "base 0",
@@ -37,16 +37,26 @@ func TestUint256Set(t *testing.T) {
 		{
 			name:         "base -1",
 			baseInteger:  big.NewInt(-1),
-			expectsError: true,
+			expectsError: false,
 		},
 		{
 			name:         "base -1 * 2^8",
 			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil), big.NewInt(-1)),
-			expectsError: true,
+			expectsError: false,
 		},
 		{
 			name:         "base -1 * 2^64",
 			baseInteger:  new(big.Int).Mul(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil), big.NewInt(-1)),
+			expectsError: false,
+		},
+		{
+			name:         "base -1 * 2^256",
+			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(-1)),
+			expectsError: true,
+		},
+		{
+			name:         "base -1 * 2^512",
+			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil), big.NewInt(-1)),
 			expectsError: true,
 		},
 		// positive numbers
@@ -66,13 +76,13 @@ func TestUint256Set(t *testing.T) {
 			expectsError: false,
 		},
 		{
-			name:         "base 2^256 - 1",
-			baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
+			name:         "base 2^255 - 1",
+			baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
 			expectsError: false,
 		},
 		{
-			name:         "base 2^256",
-			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
+			name:         "base 2^255",
+			baseInteger:  new(big.Int).Add(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
 			expectsError: true,
 		},
 		{
@@ -82,21 +92,21 @@ func TestUint256Set(t *testing.T) {
 		},
 	}
 
-	testUint256Set(t, testCases)
+	testInt256Set(t, testCases)
 }
 
-func testUint256Set(t *testing.T, testCases []BoundedIntTestCase) {
+func testInt256Set(t *testing.T, testCases []BoundedIntTestCase) {
 	t.Helper()
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256().Set(*tc.baseInteger)
+			result, err := NewInt256().Set(*tc.baseInteger)
 			if tc.expectsError && err == nil {
-				t.Fatalf("expected error when creating new Uint256, but got none")
+				t.Fatalf("expected error when creating new Int256, but got none")
 			}
 			if !tc.expectsError {
 				if err != nil {
-					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
 				resultValue := result.Value()
 				if (&resultValue).Cmp(tc.baseInteger) != 0 {
@@ -107,8 +117,8 @@ func testUint256Set(t *testing.T, testCases []BoundedIntTestCase) {
 	}
 }
 
-// TestCopy tests the duplication of an existing Uint256 variable
-func TestUint256Copy(t *testing.T) {
+// TestCopy tests the duplication of an existing Int256 variable
+func TestInt256Copy(t *testing.T) {
 	r, err := randomUint256()
 	if err != nil {
 		t.Fatal(err)
@@ -121,19 +131,19 @@ func TestUint256Copy(t *testing.T) {
 	}
 }
 
-func randomUint256() (*Uint256, error) {
+func randomInt256() (*Uint256, error) {
 	r, err := rand.Int(rand.Reader, new(big.Int).Sub(maxUint256, minUint256)) // base for random
 	if err != nil {
 		return nil, err
 	}
 
-	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minUint256, maxUint256]
+	randomUint256 := new(big.Int).Add(r, minUint256) // random is within [minInt256, maxInt256]
 
 	return NewUint256().Set(*randomUint256)
 }
 
-// TestStore indirectly tests the marshaling and unmarshaling of a random Uint256 variable
-func TestUint256Store(t *testing.T) {
+// TestStore indirectly tests the marshaling and unmarshaling of a random Int256 variable
+func TestInt256Store(t *testing.T) {
 	testDir, err := ioutil.TempDir("", "uint256_test_store")
 	if err != nil {
 		t.Fatal(err)
