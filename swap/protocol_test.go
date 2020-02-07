@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -51,7 +50,7 @@ type swapTester struct {
 }
 
 // creates a new protocol tester for swap with a deployed chequebook
-func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *big.Int) (*swapTester, func(), error) {
+func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *uint256.Uint256) (*swapTester, func(), error) {
 	swap, clean := newTestSwap(t, ownerKey, backend)
 
 	err := testDeploy(context.Background(), swap, depositAmount)
@@ -136,7 +135,7 @@ func correctSwapHandshakeMsg(swap *Swap) *HandshakeMsg {
 // TestHandshake tests the correct handshake scenario
 func TestHandshake(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
+	protocolTester, clean, err := newSwapTester(t, nil, uint256.FromUint64(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +153,7 @@ func TestHandshake(t *testing.T) {
 // TestHandshakeInvalidChainID tests that a handshake with the wrong chain id is rejected
 func TestHandshakeInvalidChainID(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
+	protocolTester, clean, err := newSwapTester(t, nil, uint256.FromUint64(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +175,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 // TestHandshakeEmptyContract tests that a handshake with an empty contract address is rejected
 func TestHandshakeEmptyContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
+	protocolTester, clean, err := newSwapTester(t, nil, uint256.FromUint64(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +197,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 // TestHandshakeInvalidContract tests that a handshake with an address that's not a valid chequebook
 func TestHandshakeInvalidContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, big.NewInt(0))
+	protocolTester, clean, err := newSwapTester(t, nil, uint256.FromUint64(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +223,7 @@ func TestHandshakeInvalidContract(t *testing.T) {
 func TestEmitCheque(t *testing.T) {
 	testBackend := newTestBackend(t)
 
-	protocolTester, clean, err := newSwapTester(t, testBackend, big.NewInt(0))
+	protocolTester, clean, err := newSwapTester(t, testBackend, uint256.FromUint64(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +248,7 @@ func TestEmitCheque(t *testing.T) {
 	balance := uint256.FromUint64(100001)
 	balanceValue := balance.Value()
 
-	if err := testDeploy(context.Background(), debitorSwap, &balanceValue); err != nil {
+	if err := testDeploy(context.Background(), debitorSwap, balance); err != nil {
 		t.Fatal(err)
 	}
 
@@ -334,7 +333,7 @@ func TestEmitCheque(t *testing.T) {
 func TestTriggerPaymentThreshold(t *testing.T) {
 	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
-	protocolTester, clean, err := newSwapTester(t, testBackend, big.NewInt(int64(DefaultPaymentThreshold)*2))
+	protocolTester, clean, err := newSwapTester(t, testBackend, uint256.FromUint64(DefaultPaymentThreshold*2))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -359,7 +358,9 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	// set the balance to manually be at PaymentThreshold
 	overDraft := 42
 	expectedAmount := uint64(overDraft) + DefaultPaymentThreshold
-	creditor.setBalance(-int64(DefaultPaymentThreshold))
+	if err = creditor.setBalance(-int64(DefaultPaymentThreshold)); err != nil {
+		t.Fatal(err)
+	}
 
 	// we expect a cheque at the end of the test, but not yet
 	if creditor.getLastSentCheque() != nil {
@@ -494,7 +495,9 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 	overDraft := 42
 	expectedBalance := int64(DefaultDisconnectThreshold)
 	// we don't expect any change after the test
-	debitor.setBalance(expectedBalance)
+	if err = debitor.setBalance(expectedBalance); err != nil {
+		t.Fatal(err)
+	}
 	// we also don't expect any cheques yet
 	if debitor.getPendingCheque() != nil {
 		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getPendingCheque())

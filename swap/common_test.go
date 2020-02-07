@@ -177,14 +177,15 @@ func newTestCheque() *Cheque {
 	return cheque
 }
 
-func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress common.Address, cumulativePayout *big.Int, signingKey *ecdsa.PrivateKey) (*Cheque, error) {
+func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress common.Address, cumulativePayout *uint256.Uint256, signingKey *ecdsa.PrivateKey) (*Cheque, error) {
+	cp := cumulativePayout.Value()
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: uint256.FromUint64(cumulativePayout.Uint64()),
+			CumulativePayout: cumulativePayout,
 			Beneficiary:      beneficiaryAddress,
 		},
-		Honey: cumulativePayout.Uint64(),
+		Honey: (&cp).Uint64(),
 	}
 
 	sig, err := cheque.Sign(signingKey)
@@ -263,7 +264,7 @@ func setupContractTest() func() {
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *big.Int) (cswap.Contract, error) {
+func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *uint256.Uint256) (cswap.Contract, error) {
 	opts := bind.NewKeyedTransactor(privateKey)
 	opts.Context = ctx
 
@@ -293,7 +294,8 @@ func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privat
 		return nil, err
 	}
 
-	tx, err := token.Mint(bind.NewKeyedTransactor(ownerKey), contract.ContractParams().ContractAddress, depositAmount)
+	deposit := depositAmount.Value()
+	tx, err := token.Mint(bind.NewKeyedTransactor(ownerKey), contract.ContractParams().ContractAddress, &deposit)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +313,7 @@ func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privat
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap, depositAmount *big.Int) (err error) {
+func testDeploy(ctx context.Context, swap *Swap, depositAmount *uint256.Uint256) (err error) {
 	swap.contract, err = testDeployWithPrivateKey(ctx, swap.backend, swap.owner.privateKey, swap.owner.address, depositAmount)
 	return err
 }
