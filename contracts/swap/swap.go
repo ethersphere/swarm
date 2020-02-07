@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
+	"github.com/ethersphere/swarm/uint256"
 )
 
 var (
@@ -50,7 +51,7 @@ type Contract interface {
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
 	Deposit(auth *bind.TransactOpts, amout *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
-	CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Transaction, error)
+	CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*types.Transaction, error)
 	// CashChequeBeneficiaryResult processes the receipt from a CashChequeBeneficiary transaction
 	CashChequeBeneficiaryResult(receipt *types.Receipt) *CashChequeResult
 	// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
@@ -143,8 +144,9 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 }
 
 // CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
-func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *big.Int, ownerSig []byte) (*types.Transaction, error) {
-	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, cumulativePayout, ownerSig)
+func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*types.Transaction, error) {
+	payout := cumulativePayout.Value()
+	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, &payout, ownerSig)
 	if err != nil {
 		return nil, err
 	}
