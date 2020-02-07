@@ -479,7 +479,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	if !provider.WantStream(p, w.stream) {
 		wantedHashesMsg.BitVector = []byte{}
 		if err := p.Send(ctx, wantedHashesMsg); err != nil {
-			protocols.Break(fmt.Errorf("sending empty wanted hashes:  %w", err))
+			return protocols.Break(fmt.Errorf("sending empty wanted hashes:  %w", err))
 		}
 		return nil
 	}
