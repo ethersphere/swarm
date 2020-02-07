@@ -17,93 +17,85 @@
 package boundedint
 
 import (
-	"crypto/rand"
+	"github.com/ethersphere/swarm/state"
 	"io/ioutil"
 	"math/big"
 	"testing"
-
-	"github.com/ethersphere/swarm/state"
 )
+
+var int256TestCases = []BoundedIntTestCase{
+	{
+		name:         "base 0",
+		baseInteger:  big.NewInt(0),
+		expectsError: false,
+	},
+	// negative numbers
+	{
+		name:         "base -1",
+		baseInteger:  big.NewInt(-1),
+		expectsError: false,
+	},
+	{
+		name:         "base -1 * 2^8",
+		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
+		expectsError: false,
+	},
+	{
+		name:         "base -1 * 2^64",
+		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
+		expectsError: false,
+	},
+	{
+		name:         "base -1 * 2^255",
+		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
+		expectsError: false,
+	},
+	{
+		name:         "base -1 * 2^255 - 1",
+		baseInteger:  new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
+		expectsError: true,
+	},
+	{
+		name:         "base -1 * 2^512",
+		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
+		expectsError: true,
+	},
+	// positive numbers
+	{
+		name:         "base 1",
+		baseInteger:  big.NewInt(1),
+		expectsError: false,
+	},
+	{
+		name:         "base 2^8",
+		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
+		expectsError: false,
+	},
+	{
+		name:         "base 2^128",
+		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
+		expectsError: false,
+	},
+	{
+		name:         "base 2^255 - 1",
+		baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
+		expectsError: false,
+	},
+	{
+		name:         "base 2^255",
+		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
+		expectsError: true,
+	},
+	{
+		name:         "base 2^512",
+		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
+		expectsError: true,
+	},
+}
 
 // TestSet tests the creation of valid and invalid Int256 structs by calling the Set function
 func TestInt256Set(t *testing.T) {
-	testCases := []BoundedIntTestCase{
-		{
-			name:         "base 0",
-			baseInteger:  big.NewInt(0),
-			expectsError: false,
-		},
-		// negative numbers
-		{
-			name:         "base -1",
-			baseInteger:  big.NewInt(-1),
-			expectsError: false,
-		},
-		{
-			name:         "base -1 * 2^8",
-			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
-			expectsError: false,
-		},
-		{
-			name:         "base -1 * 2^64",
-			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
-			expectsError: false,
-		},
-		{
-			name:         "base -1 * 2^255",
-			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
-			expectsError: false,
-		},
-		{
-			name:         "base -1 * 2^255 - 1",
-			baseInteger:  new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
-			expectsError: true,
-		},
-		{
-			name:         "base -1 * 2^512",
-			baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
-			expectsError: true,
-		},
-		// positive numbers
-		{
-			name:         "base 1",
-			baseInteger:  big.NewInt(1),
-			expectsError: false,
-		},
-		{
-			name:         "base 2^8",
-			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
-			expectsError: false,
-		},
-		{
-			name:         "base 2^128",
-			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
-			expectsError: false,
-		},
-		{
-			name:         "base 2^255 - 1",
-			baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
-			expectsError: false,
-		},
-		{
-			name:         "base 2^255",
-			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
-			expectsError: true,
-		},
-		{
-			name:         "base 2^512",
-			baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
-			expectsError: true,
-		},
-	}
-
-	testInt256Set(t, testCases)
-}
-
-func testInt256Set(t *testing.T, testCases []BoundedIntTestCase) {
-	t.Helper()
-
-	for _, tc := range testCases {
+	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := NewInt256().Set(*tc.baseInteger)
 			if tc.expectsError && err == nil {
@@ -124,27 +116,21 @@ func testInt256Set(t *testing.T, testCases []BoundedIntTestCase) {
 
 // TestCopy tests the duplication of an existing Int256 variable
 func TestInt256Copy(t *testing.T) {
-	r, err := randomInt256()
-	if err != nil {
-		t.Fatal(err)
+	for _, tc := range int256TestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !tc.expectsError {
+				r, err := NewInt256().Set(*tc.baseInteger)
+				if err != nil {
+					t.Fatalf("got unexpected error when creating new Int256: %v", err)
+				}
+				c := NewInt256().Copy(r)
+
+				if !c.Equals(r) {
+					t.Fatalf("copy of Int256 %v has an unequal value of %v", r, c)
+				}
+			}
+		})
 	}
-
-	c := NewInt256().Copy(r)
-
-	if !c.Equals(r) {
-		t.Fatalf("copy of Int256 %v has an unequal value of %v", r, c)
-	}
-}
-
-func randomInt256() (*Int256, error) {
-	r, err := rand.Int(rand.Reader, new(big.Int).Sub(maxInt256, minInt256)) // base for random
-	if err != nil {
-		return nil, err
-	}
-
-	randomInt256 := new(big.Int).Add(r, minInt256) // random is within [minInt256, maxInt256]
-
-	return NewInt256().Set(*randomInt256)
 }
 
 // TestStore indirectly tests the marshaling and unmarshaling of a random Int256 variable
@@ -160,22 +146,28 @@ func TestInt256Store(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := randomUint256()
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tc := range int256TestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !tc.expectsError {
+				r, err := NewInt256().Set(*tc.baseInteger)
+				if err != nil {
+					t.Fatalf("got unexpected error when creating new Int256: %v", err)
+				}
 
-	k := r.String()
+				k := r.String()
 
-	stateStore.Put(k, r)
+				stateStore.Put(k, r)
 
-	var u *Uint256
-	err = stateStore.Get(k, &u)
-	if err != nil {
-		t.Fatal(err)
-	}
+				var u *Int256
+				err = stateStore.Get(k, &u)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-	if !u.Equals(r) {
-		t.Fatalf("retrieved Int256 %v has an unequal balance to the original Int256 %v", u, r)
+				if !u.Equals(r) {
+					t.Fatalf("retrieved Int256 %v has an unequal balance to the original Uint256 %v", u, r)
+				}
+			}
+		})
 	}
 }
