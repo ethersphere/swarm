@@ -438,16 +438,14 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	payout := uint256.FromUint64(expectedPayout)
-	costs := uint256.FromUint64(transactionCosts)
 	costsMultiplier := uint256.FromUint64(2)
-	costThreshold, err := uint256.New().Mul(costs, costsMultiplier)
+	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
 
 	// do a payout transaction if we get 2 times the gas costs
-	if payout.Cmp(costThreshold) == 1 {
+	if expectedPayout.Cmp(costThreshold) == 1 {
 		go defaultCashCheque(s, cheque)
 	}
 
@@ -467,15 +465,24 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 		return fmt.Errorf("ignoring confirm msg, unexpected cheque, confirm message cheque %s, expected %s", cheque, p.getPendingCheque())
 	}
 
-	err := p.setLastSentCheque(cheque)
+	batch := new(state.StoreBatch)
+	err := batch.Put(sentChequeKey(p.ID()), cheque)
 	if err != nil {
-		return protocols.Break(fmt.Errorf("setLastSentCheque failed: %w", err))
+		return protocols.Break(fmt.Errorf("encoding cheque failed: %w", err))
 	}
 
-	err = p.setPendingCheque(nil)
+	err = batch.Put(pendingChequeKey(p.ID()), nil)
 	if err != nil {
-		return protocols.Break(fmt.Errorf("setPendingCheque failed: %w", err))
+		return protocols.Break(fmt.Errorf("encoding pending cheque failed: %w", err))
 	}
+
+	err = s.store.WriteBatch(batch)
+	if err != nil {
+		return protocols.Break(fmt.Errorf("could not write cheque to database: %w", err))
+	}
+
+	p.lastSentCheque = cheque
+	p.pendingCheque = nil
 
 	return nil
 }

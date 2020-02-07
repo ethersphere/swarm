@@ -434,7 +434,7 @@ func TestStartChequebookFailure(t *testing.T) {
 				swap, clean := newTestSwap(t, ownerKey, config.testBackend)
 				defer clean()
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap, big.NewInt(0))
+				err := testDeploy(context.TODO(), swap, uint256.FromUint64(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -493,7 +493,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap, big.NewInt(0))
+				err := testDeploy(context.TODO(), swap, uint256.FromUint64(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -519,7 +519,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 				defer clean()
 
 				// deploy a chequebook
-				err := testDeploy(context.TODO(), swap, big.NewInt(0))
+				err := testDeploy(context.TODO(), swap, uint256.FromUint64(0))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -551,7 +551,7 @@ func TestStartChequebookSuccess(t *testing.T) {
 func TestDisconnectThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap, big.NewInt(0))
+	testDeploy(context.Background(), swap, uint256.FromUint64(0))
 
 	testPeer := newDummyPeer()
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
@@ -577,7 +577,7 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap, big.NewInt(int64(DefaultPaymentThreshold)))
+	testDeploy(context.Background(), swap, uint256.FromUint64(DefaultPaymentThreshold))
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
@@ -607,14 +607,14 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
-	testAmount := int64(DefaultPaymentThreshold + 42)
+	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap, big.NewInt(0))
+	err := testDeploy(ctx, creditorSwap, uint256.FromUint64(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, big.NewInt(testAmount))
+	err = testDeploy(ctx, debitorSwap, uint256.FromUint64(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -634,10 +634,10 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	if err = debitor.setBalance(testAmount); err != nil {
+	if err = debitor.setBalance(int64(testAmount)); err != nil {
 		t.Fatal(err)
 	}
-	if err = creditor.setBalance(-testAmount); err != nil {
+	if err = creditor.setBalance(int64(-testAmount)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -694,42 +694,34 @@ func TestDebtCheques(t *testing.T) {
 	testBackend := newTestBackend(t)
 	defer testBackend.Close()
 
-	creditorSwap, cClean := newTestSwap(t, beneficiaryKey, testBackend)
-	debitorSwap, dClean := newTestSwap(t, ownerKey, testBackend)
-	defer cClean()
-	defer dClean()
+	creditorSwap, cleanup := newTestSwap(t, beneficiaryKey, testBackend)
+	defer cleanup()
 
 	ctx := context.Background()
-	if err := testDeploy(ctx, creditorSwap, big.NewInt(0)); err != nil {
-		t.Fatal(err)
-	}
-	if err := testDeploy(ctx, debitorSwap, big.NewInt(int64(DefaultPaymentThreshold*2))); err != nil {
+	if err := testDeploy(ctx, creditorSwap, uint256.FromUint64(0)); err != nil {
 		t.Fatal(err)
 	}
 
-	cDummyPeer := newDummyPeerWithSpec(Spec)
-	dDummyPeer := newDummyPeerWithSpec(Spec)
-	creditor, err := debitorSwap.addPeer(cDummyPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	debitor, err := creditorSwap.addPeer(dDummyPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, uint256.FromUint64((DefaultPaymentThreshold * 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// set asymmetric balance and attempt to send cheque
-	if err = creditor.setBalance(-int64(ChequeDebtTolerance * 2)); err != nil {
+	debitorDummyPeer := newDummyPeerWithSpec(Spec)
+	debitorPeer, err := creditorSwap.addPeer(debitorDummyPeer.Peer, ownerAddress, debitorChequebook.ContractParams().ContractAddress)
+	if err != nil {
 		t.Fatal(err)
 	}
-	// now simulate sending the cheque to the creditor from the debitor
-	if err = creditor.sendCheque(); err != nil {
+
+	// create debt cheque
+	chequeAmount := uint256.FromUint64(ChequeDebtTolerance * 2)
+	cheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
 		t.Fatal(err)
 	}
-	cheque := creditor.getPendingCheque()
 
 	// simulate cheque handling
-	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, &EmitChequeMsg{
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
 		Cheque: cheque,
 	})
 	// cheque should not have gone through as it would put the creditor in debt
@@ -737,25 +729,18 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatalf("expected invalid cheque to trigger debt cheque error, but got: %v", err)
 	}
 
-	// clear pending cheque to start over
-	if err = creditor.setPendingCheque(nil); err != nil {
+	// now create a (barely) admissible cheque
+	chequeAmount = uint256.FromUint64(ChequeDebtTolerance)
+	cheque, err = newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	// set asymmetric balances to send a (barely) admissible cheque
-	if err = creditor.setBalance(-int64(ChequeDebtTolerance)); err != nil {
-		t.Fatal(err)
-	}
-
-	if err = creditor.sendCheque(); err != nil {
-		t.Fatal(err)
-	}
-	cheque = creditor.getPendingCheque()
 
 	// simulate cheque handling
-	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, &EmitChequeMsg{
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
 		Cheque: cheque,
 	})
+	// cheque should have gone through
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -970,7 +955,7 @@ func TestVerifyContract(t *testing.T) {
 	defer clean()
 
 	// deploy a new swap contract
-	err := testDeploy(context.TODO(), swap, big.NewInt(0))
+	err := testDeploy(context.TODO(), swap, uint256.FromUint64(0))
 	if err != nil {
 		t.Fatalf("Error in deploy: %v", err)
 	}
@@ -1275,14 +1260,14 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
-	testAmount := int64(DefaultPaymentThreshold + 42)
+	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap, big.NewInt(testAmount))
+	err = testDeploy(ctx, creditorSwap, uint256.FromUint64(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, big.NewInt(0))
+	err = testDeploy(ctx, debitorSwap, uint256.FromUint64(0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1302,10 +1287,10 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	// set balances arbitrarily
-	if err = debitor.setBalance(testAmount); err != nil {
+	if err = debitor.setBalance(int64(testAmount)); err != nil {
 		t.Fatal(err)
 	}
-	if err = creditor.setBalance(-testAmount); err != nil {
+	if err = creditor.setBalance(int64(-testAmount)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1369,7 +1354,7 @@ func TestAvailableBalance(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	depositAmount := big.NewInt(9000 * int64(RetrieveRequestPrice))
+	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
 
 	// deploy a chequebook
 	err := testDeploy(context.TODO(), swap, depositAmount)
@@ -1387,15 +1372,20 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !availableBalance.Equals(uint256.FromUint64(depositAmount.Uint64())) {
-		t.Fatalf("availableBalance not equal to deposited amount. availableBalance: %v, depositAmount: %d", availableBalance, depositAmount)
+	if !availableBalance.Equals(depositAmount) {
+		t.Fatalf("available balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
 	}
 	// withdraw 50
-	withdrawAmount := big.NewInt(50)
-	netDeposit := depositAmount.Uint64() - withdrawAmount.Uint64()
+	withdrawAmount := uint256.FromUint64(50)
+	netDeposit, err := uint256.New().Sub(depositAmount, withdrawAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withdraw := withdrawAmount.Value()
+
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
-	rec, err := swap.contract.Withdraw(opts, withdrawAmount)
+	rec, err := swap.contract.Withdraw(opts, &withdraw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1408,14 +1398,14 @@ func TestAvailableBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !availableBalance.Equals(uint256.FromUint64(netDeposit)) {
-		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	if !availableBalance.Equals(netDeposit) {
+		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, deposit minus withdrawn: %v", availableBalance, netDeposit)
 	}
 
 	// send a cheque worth 42
-	chequeAmount := int64(42)
+	chequeAmount := uint64(42)
 	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
-	if err = peer.setBalance(-chequeAmount); err != nil {
+	if err = peer.setBalance(int64(-chequeAmount)); err != nil {
 		t.Fatal(err)
 	}
 	if err = peer.sendCheque(); err != nil {
@@ -1427,9 +1417,12 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// verify available balance
-	expectedBalance := netDeposit - uint64(chequeAmount)
-	if !availableBalance.Equals(uint256.FromUint64(expectedBalance)) {
-		t.Fatalf("availableBalance not equal to deposited minus withdraw. availableBalance: %v, deposit minus withdrawn: %d", availableBalance, depositAmount.Uint64()-withdrawAmount.Uint64())
+	expectedBalance, err := uint256.New().Sub(netDeposit, uint256.FromUint64(chequeAmount))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availableBalance.Equals(expectedBalance) {
+		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
 	}
 
 }

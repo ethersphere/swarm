@@ -161,7 +161,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance, big.NewInt(100000*int64(RetrieveRequestPrice)))
+			err = testDeploy(context.Background(), balance, uint256.FromUint64(100000*RetrieveRequestPrice))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -332,15 +332,9 @@ func TestMultiChequeSimulation(t *testing.T) {
 
 	paymentThreshold := debitorSvc.swap.params.PaymentThreshold
 
-	minCheques := 2
-	maxCheques := 5
-
+	chequesAmount := 4
 	msgsPerCheque := (uint64(paymentThreshold) / msgPrice) + 1 // +1 to round up without casting to float
-
-	minMsgs := msgsPerCheque * uint64(minCheques)
-	maxMsgs := msgsPerCheque * uint64(maxCheques)
-
-	msgAmount := rand.Intn(int(maxMsgs-minMsgs)) + int(minMsgs)
+	msgAmount := int(msgsPerCheque) * chequesAmount
 	log.Debug("sending %d messages", msgAmount)
 
 	// the peer object used for sending
@@ -375,7 +369,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := creditorPeer.Send(context.Background(), &testMsgSmallPrice{}); err != nil {
+		if err := creditorPeer.Send(ctx, &testMsgSmallPrice{}); err != nil {
 			t.Fatal(err)
 		}
 

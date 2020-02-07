@@ -233,6 +233,10 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // Resolve a name into a content-addressed hash
 // where address could be an ENS/RNS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
+	// if the address is a hash, do not resolve
+	if hashMatcher.MatchString(address) {
+		return common.Hex2Bytes(address), nil
+	}
 	// if address is .rsk, resolve it with RNS resolver
 	if tld(address) == "rsk" {
 		// if RNS is not configured, return an error
@@ -249,18 +253,12 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 	}
 	// if DNS is not configured, return an error
 	if a.dns == nil {
-		if hashMatcher.MatchString(address) {
-			return common.Hex2Bytes(address), nil
-		}
 		apiResolveFail.Inc(1)
 		return nil, fmt.Errorf("no DNS to resolve name: %q", address)
 	}
 	// try and resolve the address
 	resolved, err := a.dns.Resolve(address)
 	if err != nil {
-		if hashMatcher.MatchString(address) {
-			return common.Hex2Bytes(address), nil
-		}
 		return nil, err
 	}
 	return resolved[:], nil
