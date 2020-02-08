@@ -184,8 +184,9 @@ func (h *hasherStore) startWait(ctx context.Context) {
 
 func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	hasher := h.hashFunc()
-	hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
-	hasher.Write(chunkData[8:])           // minus 8 []byte length
+	hasher.Reset()
+	hasher.SetSpanBytes(chunkData[:8]) // 8 bytes of length
+	hasher.Write(chunkData[8:])        // minus 8 []byte length
 	return hasher.Sum(nil)
 }
 

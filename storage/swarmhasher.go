@@ -28,14 +28,14 @@ const (
 
 type SwarmHash interface {
 	hash.Hash
-	ResetWithLength([]byte)
+	SetSpanBytes([]byte)
 }
 
 type HashWithLength struct {
 	hash.Hash
 }
 
-func (h *HashWithLength) ResetWithLength(length []byte) {
+func (h *HashWithLength) SetSpanBytes(length []byte) {
 	h.Reset()
 	h.Write(length)
 }
