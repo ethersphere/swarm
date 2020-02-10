@@ -17,10 +17,11 @@
 package boundedint
 
 import (
-	"github.com/ethersphere/swarm/state"
 	"io/ioutil"
 	"math/big"
 	"testing"
+
+	"github.com/ethersphere/swarm/state"
 )
 
 var int256TestCases = []BoundedIntTestCase{
@@ -123,6 +124,7 @@ func TestInt256Copy(t *testing.T) {
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
+
 				c := NewInt256().Copy(r)
 
 				if !c.Equals(r) {

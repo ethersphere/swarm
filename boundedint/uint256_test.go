@@ -109,6 +109,7 @@ func TestUint256Copy(t *testing.T) {
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
+
 				c := NewUint256().Copy(r)
 
 				if !c.Equals(r) {
