@@ -23,14 +23,14 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
-	"github.com/ethersphere/swarm/swap/txqueue"
+	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/uint256"
 )
 
 // swapTestBackend encapsulates the SimulatedBackend and can offer
 // additional properties for the tests
 type swapTestBackend struct {
-	*txqueue.TestBackend
+	*chain.TestBackend
 	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
 	tokenAddress   common.Address // address of the token in the simulated network
 	// the async cashing go routine needs synchronization for tests
@@ -46,7 +46,7 @@ var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
 func newTestBackend(t *testing.T) *swapTestBackend {
 	t.Helper()
 
-	backend := txqueue.NewTestBackend(defaultBackend)
+	backend := chain.NewTestBackend(defaultBackend)
 	// deploy the ERC20-contract
 	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
 	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), backend)
@@ -231,7 +231,7 @@ func setupContractTest() func() {
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeployWithPrivateKey(ctx context.Context, backend txqueue.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *uint256.Uint256) (cswap.Contract, error) {
+func testDeployWithPrivateKey(ctx context.Context, backend chain.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *uint256.Uint256) (cswap.Contract, error) {
 	opts := bind.NewKeyedTransactor(privateKey)
 	opts.Context = ctx
 
@@ -266,7 +266,7 @@ func testDeployWithPrivateKey(ctx context.Context, backend txqueue.Backend, priv
 		return nil, err
 	}
 
-	receipt, err := txqueue.WaitMined(ctx, stb, tx.Hash())
+	receipt, err := chain.WaitMined(ctx, stb, tx.Hash())
 	if err != nil {
 		return nil, err
 	}

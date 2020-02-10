@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
-	"github.com/ethersphere/swarm/swap/txqueue"
+	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -76,13 +76,13 @@ type Params struct {
 type simpleContract struct {
 	instance *contract.ERC20SimpleSwap
 	address  common.Address
-	backend  txqueue.Backend
+	backend  chain.Backend
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
 // It assumes that there is an existing contract instance at the given address, or an error is returned
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
-func InstanceAt(address common.Address, backend txqueue.Backend) (Contract, error) {
+func InstanceAt(address common.Address, backend chain.Backend) (Contract, error) {
 	instance, err := contract.NewERC20SimpleSwap(address, backend)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, amount *big.Int) (*typ
 	if err != nil {
 		return nil, err
 	}
-	return txqueue.WaitMined(auth.Context, s.backend, tx.Hash())
+	return chain.WaitMined(auth.Context, s.backend, tx.Hash())
 }
 
 // Deposit sends an amount in ERC20 token to the chequebook and blocks until the transaction is mined
@@ -127,7 +127,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	if err != nil {
 		return nil, err
 	}
-	return txqueue.WaitMined(auth.Context, s.backend, tx.Hash())
+	return chain.WaitMined(auth.Context, s.backend, tx.Hash())
 }
 
 // CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary

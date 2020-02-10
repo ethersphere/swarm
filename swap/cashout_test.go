@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethersphere/swarm/swap/txqueue"
+	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -54,7 +54,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	receipt, err := txqueue.WaitMined(nil, backend, tx.Hash())
+	receipt, err := chain.WaitMined(nil, backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	receipt, err = txqueue.WaitMined(nil, backend, tx.Hash())
+	receipt, err = chain.WaitMined(nil, backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
