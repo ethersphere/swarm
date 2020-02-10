@@ -1,3 +1,5 @@
+## v0.6.0 (Unreleased)
+
 ## v0.5.6 (February 10, 2020)
 
 ### Notes
