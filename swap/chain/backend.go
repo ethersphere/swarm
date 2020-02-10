@@ -62,7 +62,7 @@ func (b *TestBackend) SendTransaction(ctx context.Context, tx *types.Transaction
 }
 
 // Close overrides the Close function of the underlying SimulatedBackend so that it does nothing
-// This allows the same SimulatedBackend backend to be reused accross tests
+// This allows the same SimulatedBackend backend to be reused across tests
 // This is necessary due to some memory leakage issues with the used version of the SimulatedBackend
 func (b *TestBackend) Close() {
 
