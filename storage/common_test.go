@@ -151,7 +151,8 @@ func testStoreCorrect(m ChunkStore, n int, t *testing.T) {
 		}
 		hasher := MakeHashFunc(DefaultHash)()
 		data := chunk.Data()
-		hasher.ResetWithLength(data[:8])
+		hasher.Reset()
+		hasher.SetSpanBytes(data[:8])
 		hasher.Write(data[8:])
 		exp := hasher.Sum(nil)
 		if !bytes.Equal(h, exp) {

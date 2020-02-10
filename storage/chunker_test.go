@@ -151,7 +151,8 @@ func TestSha3ForCorrectness(t *testing.T) {
 	rawSha3Output := rawSha3.Sum(nil)
 
 	sha3FromMakeFunc := MakeHashFunc(SHA3Hash)()
-	sha3FromMakeFunc.ResetWithLength(input[:8])
+	sha3FromMakeFunc.Reset()
+	sha3FromMakeFunc.SetSpanBytes(input[:8])
 	sha3FromMakeFunc.Write(input[8:])
 	sha3FromMakeFuncOutput := sha3FromMakeFunc.Sum(nil)
 
