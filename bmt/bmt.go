@@ -334,11 +334,14 @@ func (h *Hasher) BlockSize() int {
 // Implements hash.Hash in file.SectionWriter
 func (h *Hasher) Sum(b []byte) (s []byte) {
 	t := h.getTree()
+	h.mtx.Lock()
 	if h.size == 0 && t.offset == 0 {
+		h.mtx.Unlock()
 		h.releaseTree()
 		//return h.pool.zerohashes[h.pool.Depth]
 		return h.GetZeroHash()
 	}
+	h.mtx.Unlock()
 	// write the last section with final flag set to true
 	go h.WriteSection(t.cursor, t.section, true, true)
 	// wait for the result
@@ -360,7 +363,9 @@ func (h *Hasher) Write(b []byte) (int, error) {
 	if l == 0 || l > h.pool.Size {
 		return 0, nil
 	}
+	h.mtx.Lock()
 	h.size += len(b)
+	h.mtx.Unlock()
 	t := h.getTree()
 	secsize := 2 * h.pool.SegmentSize
 	// calculate length of missing bit to complete current open section
