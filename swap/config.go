@@ -27,6 +27,9 @@ const (
 	// DefaultPaymentThreshold is set to be equivalent to requesting and serving 10mb of data (2441 chunks (4096 bytes) = 10 mb, 10^7 bytes = 10 mb)
 	DefaultPaymentThreshold    = 2441*RetrieveRequestPrice + (10^7)*ChunkDeliveryPrice // 4096 * 2441 = 10 mb,
 	DefaultDisconnectThreshold = 20 * DefaultPaymentThreshold
+	// ChequeDebtTolerance is the lowest resulting balance a node is willing to accept when receiving a cheque
+	// the value is meant to be used below 0, as positive resulting balances should always be accepted when receiving cheques
+	ChequeDebtTolerance = DefaultPaymentThreshold * 20 / 100 // roughly 20% of the payment threshold
 	// DefaultDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation
 	DefaultDepositAmount = 0

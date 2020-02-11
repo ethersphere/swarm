@@ -1,4 +1,21 @@
-## v0.5.6 (Unreleased)
+## v0.6.0 (Unreleased)
+
+## v0.5.6 (February 10, 2020)
+
+### Notes
+
+- A hotfix to ENS resolver contract address has been applied due to a security vulnerability. More information here: https://medium.com/the-ethereum-name-service/ens-registry-migration-bug-fix-new-features-64379193a5a
+- A bug related to syncing has been fixed
+
+### Commits
+* [#2021](https://github.com/ethersphere/swarm/pull/2021) bmt:  Introduce SectionWriter, implement hash.Hash in bmt
+* [#2096](https://github.com/ethersphere/swarm/pull/2096) Revert "stream: limit the number of peers we sync with on bin 0 (#1972)"
+* [#2095](https://github.com/ethersphere/swarm/pull/2095) stream: fix stream not wanted bug
+* [#2091](https://github.com/ethersphere/swarm/pull/2091) contract/ens: use new ens contract address 0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e
+* [#1983](https://github.com/ethersphere/swarm/pull/1983) swap: prevent debt cheques
+* [#2090](https://github.com/ethersphere/swarm/pull/2090) api/http/langos: fix TestHTTPMultipleRangeResponse test
+* [#2088](https://github.com/ethersphere/swarm/pull/2088) state, swap: add batch support to state store
+
 
 ## v0.5.5 (January 29, 2020)
 

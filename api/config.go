@@ -100,7 +100,7 @@ func NewConfig() *Config {
 		SwapLogPath:             "",
 		HiveParams:              network.NewHiveParams(),
 		Pss:                     pss.NewParams(),
-		EnsRoot:                 ens.TestNetAddress,
+		EnsRoot:                 ens.Address,
 		EnsAPIs:                 nil,
 		RnsAPI:                  "",
 		Path:                    node.DefaultDataDir(),
