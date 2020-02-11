@@ -35,23 +35,19 @@ func WaitMined(ctx context.Context, b Backend, hash common.Hash) (*types.Receipt
 	queryTicker := time.NewTicker(time.Second)
 	defer queryTicker.Stop()
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	for {
 		receipt, err := b.TransactionReceipt(ctx, hash)
+		if err != nil {
+			log.Trace("Receipt retrieval failed", "err", err)
+		}
 		if receipt != nil {
 			if receipt.Status != types.ReceiptStatusSuccessful {
 				return nil, ErrTransactionReverted
 			}
 			return receipt, nil
 		}
-		if err != nil {
-			log.Trace("Receipt retrieval failed", "err", err)
-		} else {
-			log.Trace("Transaction not yet mined")
-		}
+
+		log.Trace("Transaction not yet mined")
 		// Wait for the next round.
 		select {
 		case <-ctx.Done():
