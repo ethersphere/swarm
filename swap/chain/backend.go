@@ -31,6 +31,7 @@ type TestBackend struct {
 }
 
 // WaitMined waits until either the transaction with the given hash has been mined or the context is cancelled
+// this is an adapted version of go-ethereums bind.WaitMined
 func WaitMined(ctx context.Context, b Backend, hash common.Hash) (*types.Receipt, error) {
 	queryTicker := time.NewTicker(time.Second)
 	defer queryTicker.Stop()
