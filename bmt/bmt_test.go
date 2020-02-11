@@ -35,8 +35,6 @@ func init() {
 	testutil.Init()
 }
 
-var benchmarkBMTResult []byte
-
 // calculates the Keccak256 SHA3 hash of the data
 func sha3hash(data ...[]byte) []byte {
 	h := sha3.NewLegacyKeccak256()
@@ -409,7 +407,7 @@ func benchmarkBMT(t *testing.B, n int) {
 	for i := 0; i < t.N; i++ {
 		r = syncHash(bmt, 0, data)
 	}
-	benchmarkBMTResult = r
+	bmttestutil.BenchmarkBMTResult = r
 }
 
 // benchmarks 100 concurrent bmt hashes with pool capacity
