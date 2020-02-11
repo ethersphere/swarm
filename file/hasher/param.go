@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/ethersphere/swarm/file"
-	"github.com/ethersphere/swarm/log"
 )
 
 // defines the boundaries of the hashing job and also contains the hash factory functino of the job
@@ -31,10 +30,8 @@ func newTreeParams(hashFunc file.SectionWriterFunc) *treeParams {
 		hashFunc:    hashFunc,
 	}
 	h.Reset()
-	log.Trace("new tree params", "sectionsize", p.SectionSize, "branches", p.Branches, "chunksize", p.ChunkSize)
 	p.writerPool.New = func() interface{} {
 		hf := p.hashFunc(p.ctx)
-		//log.Trace("param new hasher", "h", hf)
 		return hf
 	}
 	p.Spans = generateSpanSizes(p.Branches, 9)

@@ -8,7 +8,6 @@ const (
 	sectionSize = 32
 	branches    = 128
 	chunkSize   = 4096
-	zeroHex     = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 var (
