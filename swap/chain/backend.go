@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -10,6 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+)
+
+var (
+	// ErrTransactionReverted is given when the transaction that cashes a cheque is reverted
+	ErrTransactionReverted = errors.New("Transaction reverted")
 )
 
 // Backend is the minimum amount of functionality required by the underlying ethereum backend
@@ -36,6 +42,9 @@ func WaitMined(ctx context.Context, b Backend, hash common.Hash) (*types.Receipt
 	for {
 		receipt, err := b.TransactionReceipt(ctx, hash)
 		if receipt != nil {
+			if receipt.Status != types.ReceiptStatusSuccessful {
+				return nil, ErrTransactionReverted
+			}
 			return receipt, nil
 		}
 		if err != nil {
