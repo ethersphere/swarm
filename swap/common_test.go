@@ -24,13 +24,14 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
+	mock "github.com/ethersphere/swarm/swap/chain/mock"
 	"github.com/ethersphere/swarm/uint256"
 )
 
 // swapTestBackend encapsulates the SimulatedBackend and can offer
 // additional properties for the tests
 type swapTestBackend struct {
-	*chain.TestBackend
+	*mock.TestBackend
 	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
 	tokenAddress   common.Address // address of the token in the simulated network
 	// the async cashing go routine needs synchronization for tests
@@ -46,7 +47,7 @@ var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
 func newTestBackend(t *testing.T) *swapTestBackend {
 	t.Helper()
 
-	backend := chain.NewTestBackend(defaultBackend)
+	backend := mock.NewTestBackend(defaultBackend)
 	// deploy the ERC20-contract
 	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
 	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), backend)
