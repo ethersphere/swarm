@@ -6,7 +6,7 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 [![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
-[![](https://godoc.org/github.com/nathany/looper?status.svg)](https://godoc.org/github.com/ethersphere/swarm/network)
+[![](https://godoc.org/github.com/nathany/looper?status.svg)](https://godoc.org/github.com/ethersphere/swarm/)
 
 
 ## Table of Contents  <!-- omit in toc -->
