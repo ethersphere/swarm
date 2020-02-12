@@ -27,13 +27,10 @@ type Backend interface {
 // WaitMined waits until either the transaction with the given hash has been mined or the context is cancelled
 // this is an adapted version of go-ethereums bind.WaitMined
 func WaitMined(ctx context.Context, b Backend, hash common.Hash) (*types.Receipt, error) {
-	queryTicker := time.NewTicker(time.Second)
-	defer queryTicker.Stop()
-
 	for {
 		receipt, err := b.TransactionReceipt(ctx, hash)
 		if err != nil {
-			log.Trace("Receipt retrieval failed", "err", err)
+			log.Error("receipt retrieval failed", "err", err)
 		}
 		if receipt != nil {
 			if receipt.Status != types.ReceiptStatusSuccessful {
@@ -42,12 +39,12 @@ func WaitMined(ctx context.Context, b Backend, hash common.Hash) (*types.Receipt
 			return receipt, nil
 		}
 
-		log.Trace("Transaction not yet mined")
+		log.Trace("transaction not yet mined", "tx", hash)
 		// Wait for the next round.
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-queryTicker.C:
+		case <-time.After(1 * time.Second):
 		}
 	}
 }
