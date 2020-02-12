@@ -16,6 +16,8 @@ type ReferenceHasher struct {
 }
 
 // NewReferenceHasher constructs and returns a new ReferenceHasher
+// This implementation is limited to a tree of 9 levels, where level 0 is the data level
+// With 32 section size and 128 branches this means a capacity of 4096 bytes * (128^(9-1))
 func NewReferenceHasher(params *treeParams) *ReferenceHasher {
 	// TODO: remove when bmt interface is amended
 	h := params.GetWriter()
