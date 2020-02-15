@@ -446,11 +446,11 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	}(start)
 
 	var (
-		lenHashes                    = len(msg.Hashes)
-		ctr             uint64       = 0                                         // the number of chunks wanted out of the batch
-		addresses                    = make([]chunk.Address, lenHashes/HashSize) // the address slice for MultiHas
-		wantedHashesMsg              = WantedHashes{Ruid: msg.Ruid}              // the message to send back to the server
-		errc            <-chan error                                             // channel to signal end of batch
+		lenHashes                       = len(msg.Hashes)
+		ctr             uint64          = 0                                         // the number of chunks wanted out of the batch
+		addresses                       = make([]chunk.Address, lenHashes/HashSize) // the address slice for MultiHas
+		wantedHashesMsg                 = WantedHashes{Ruid: msg.Ruid}              // the message to send back to the server
+		donec           <-chan struct{}                                             // channel to signal end of batch
 	)
 
 	if lenHashes%HashSize != 0 {
@@ -524,33 +524,26 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		if err := p.sealWant(w); err != nil {
 			return protocols.Break(fmt.Errorf("persisting interval from %d, to %d: %w", w.from, w.to, err))
 		}
+		if err := p.Send(ctx, wantedHashesMsg); err != nil {
+			return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
+		}
+
+		// request the next range in case no chunks wanted
+		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 	} else {
 		// we want some hashes
 		streamWantedHashes.Inc(1)
 		wantedHashesMsg.BitVector = want.Bytes() // set to bitvector
 
-		errc = r.clientSealBatch(ctx, p, provider, w) // poll for the completion of the batch in a separate goroutine
+		donec = r.clientSealBatch(ctx, p, provider, w) // poll for the completion of the batch in a separate goroutine
 	}
 
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
 	}
-	if ctr == 0 {
-		// request the next range in case no chunks wanted
-		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
-	}
-
-	if errc == nil {
-		return nil
-	}
 
 	select {
-	case err := <-errc:
-		if err != nil {
-			streamBatchFail.Inc(1)
-			return protocols.Break(fmt.Errorf("sealing batch from %d, to %d: %w", w.from, w.to, err))
-		}
-
+	case <-donec:
 		// seal the interval
 		if err := p.sealWant(w); err != nil {
 			return protocols.Break(fmt.Errorf("persisting interval from %d, to %d: %w", w.from, w.to, err))
@@ -562,17 +555,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		delete(p.openWants, msg.Ruid)
 		p.mtx.Unlock()
 
-		// todo: this should happen because of the returned error anyway
-		// if the stream is wanted and has timed out
-		// then drop the peer. this safeguards the edge
-		// case that a batch times out when a kademlia
-		// depth change occurs between the call to
-		// clientSealBatch and a subsequent chunk delivery
-		// message
-		if provider.WantStream(p, w.stream) {
-			return protocols.Break(errors.New("batch has timed out"))
-		}
-		return nil
+		return protocols.Break(errors.New("batch has timed out"))
 	case <-r.quit:
 		return nil
 	case <-p.quit:
@@ -777,9 +760,9 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 
 // clientSealBatch seals a given batch (want). it launches a separate goroutine that check every chunk being delivered on the given ruid
 // if an unsolicited chunk is received it drops the peer
-func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan error {
+func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider StreamProvider, w *want) <-chan struct{} {
 	p.logger.Debug("clientSealBatch", "stream", w.stream, "ruid", w.ruid, "from", w.from, "to", *w.to)
-	errc := make(chan error)
+	donec := make(chan struct{})
 	go func() {
 		start := time.Now()
 		defer func(start time.Time) {
@@ -805,7 +788,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 				v := atomic.AddUint64(&w.remaining, ^uint64(0))
 				if v == 0 {
 					p.logger.Trace("done receiving chunks for open want", "ruid", w.ruid)
-					close(errc)
+					close(donec)
 					return
 				}
 			case <-p.quit:
@@ -821,7 +804,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 		}
 	}()
 
-	return errc
+	return donec
 }
 
 // serverCollectBatch collects a batch of hashes in response for a GetRange message
