@@ -193,8 +193,8 @@ func TestUnsolicitedChunkDeliveryFaultyAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer teardown()
-	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-		return &enode.ID{}, nil
+	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
+		return &enode.ID{}, func() {}, nil
 	}
 	node := tester.Nodes[0]
 
@@ -267,8 +267,8 @@ func TestUnsolicitedChunkDeliveryDouble(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer teardown()
-	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-		return &enode.ID{}, nil
+	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
+		return &enode.ID{}, func() {}, nil
 	}
 	node := tester.Nodes[0]
 
