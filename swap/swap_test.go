@@ -693,6 +693,8 @@ func TestResetBalance(t *testing.T) {
 func TestDebtCheques(t *testing.T) {
 	testBackend := newTestBackend(t)
 	defer testBackend.Close()
+	cleanup := setupContractTest()
+	defer cleanup()
 
 	creditorSwap, cleanup := newTestSwap(t, beneficiaryKey, testBackend)
 	defer cleanup()
@@ -736,6 +738,9 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	testBackend.cashDone = make(chan struct{})
+	defer close(testBackend.cashDone)
+
 	// simulate cheque handling
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
 		Cheque: cheque,
@@ -743,6 +748,14 @@ func TestDebtCheques(t *testing.T) {
 	// cheque should have gone through
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	select {
+	case <-testBackend.cashDone:
+		log.Debug("cash transaction completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
 }
 

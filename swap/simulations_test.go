@@ -315,13 +315,17 @@ func TestMultiChequeSimulation(t *testing.T) {
 		// the node has all other peers in its peer list
 		debitorSvc.swap.peersLock.Lock()
 		debSwapLen = len(debitorSvc.swap.peers)
-		debLen = len(debitorSvc.peers)
 		debitorSvc.swap.peersLock.Unlock()
+		debitorSvc.lock.Lock()
+		debLen = len(debitorSvc.peers)
+		debitorSvc.lock.Unlock()
 
 		creditorSvc.swap.peersLock.Lock()
 		credSwapLen = len(creditorSvc.swap.peers)
-		credLen = len(creditorSvc.peers)
 		creditorSvc.swap.peersLock.Unlock()
+		creditorSvc.lock.Lock()
+		credLen = len(creditorSvc.peers)
+		creditorSvc.lock.Unlock()
 
 		if debLen == 1 && credLen == 1 && debSwapLen == 1 && credSwapLen == 1 {
 			break

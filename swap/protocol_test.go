@@ -432,7 +432,10 @@ loop:
 		case <-ctx.Done():
 			t.Fatal("Expected one cheque, but there is none")
 		default:
-			if creditor.getLastSentCheque() != nil {
+			creditor.lock.Lock()
+			lastSentCheque := creditor.getLastSentCheque()
+			creditor.lock.Unlock()
+			if lastSentCheque != nil {
 				break loop
 			}
 			time.Sleep(10 * time.Millisecond)
