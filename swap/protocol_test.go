@@ -317,7 +317,7 @@ func TestEmitCheque(t *testing.T) {
 		t.Fatalf("Expected cheque %v at creditor, but it was %v:", cheque, recvCheque)
 	}
 
-	// we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	// we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
 	case <-creditorSwap.backend.(*swapTestBackend).cashDone:
 		log.Debug("cash transaction completed and committed")

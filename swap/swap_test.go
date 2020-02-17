@@ -675,7 +675,7 @@ func TestResetBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
 	case <-testBackend.cashDone:
 		log.Debug("cash transaction completed and committed")
@@ -750,7 +750,7 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
 	case <-testBackend.cashDone:
 		log.Debug("cash transaction completed and committed")
