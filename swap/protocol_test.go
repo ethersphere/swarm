@@ -236,8 +236,6 @@ func TestEmitCheque(t *testing.T) {
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
-	// now we need to create the channel...
-	testBackend.cashDone = make(chan struct{})
 
 	log.Debug("deploy to simulated backend")
 
@@ -319,7 +317,7 @@ func TestEmitCheque(t *testing.T) {
 
 	// we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
-	case <-creditorSwap.backend.(*swapTestBackend).cashDone:
+	case <-testBackend.cashDone:
 		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transaction to complete")

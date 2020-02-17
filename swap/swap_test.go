@@ -667,8 +667,7 @@ func TestResetBalance(t *testing.T) {
 	msg := &EmitChequeMsg{
 		Cheque: cheque,
 	}
-	// now we need to create the channel...
-	testBackend.cashDone = make(chan struct{})
+
 	// ...and trigger message handling on the receiver side (creditor)
 	// remember that debitor is the model of the remote node for the creditor...
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
@@ -737,9 +736,6 @@ func TestDebtCheques(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	testBackend.cashDone = make(chan struct{})
-	defer close(testBackend.cashDone)
 
 	// simulate cheque handling
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{

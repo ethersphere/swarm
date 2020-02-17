@@ -67,6 +67,7 @@ func newTestBackend(t *testing.T) *swapTestBackend {
 		TestBackend:    backend,
 		factoryAddress: factoryAddress,
 		tokenAddress:   tokenAddress,
+		cashDone:       make(chan struct{}),
 	}
 }
 
