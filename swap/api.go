@@ -97,6 +97,8 @@ func (s *Swap) AvailableBalance() (*uint256.Uint256, error) {
 // PeerBalance returns the balance for a given peer
 func (s *Swap) PeerBalance(peer enode.ID) (balance int64, err error) {
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
+		swapPeer.lock.Lock()
+		defer swapPeer.lock.Unlock()
 		return swapPeer.getBalance(), nil
 	}
 	err = s.store.Get(balanceKey(peer), &balance)
@@ -141,6 +143,8 @@ func (s *Swap) PeerCheques(peer enode.ID) (PeerCheques, error) {
 
 	swapPeer := s.getPeer(peer)
 	if swapPeer != nil {
+		swapPeer.lock.Lock()
+		defer swapPeer.lock.Unlock()
 		pendingCheque = swapPeer.getPendingCheque()
 		sentCheque = swapPeer.getLastSentCheque()
 		receivedCheque = swapPeer.getLastReceivedCheque()
