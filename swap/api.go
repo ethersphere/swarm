@@ -144,10 +144,10 @@ func (s *Swap) PeerCheques(peer enode.ID) (PeerCheques, error) {
 	swapPeer := s.getPeer(peer)
 	if swapPeer != nil {
 		swapPeer.lock.Lock()
-		defer swapPeer.lock.Unlock()
 		pendingCheque = swapPeer.getPendingCheque()
 		sentCheque = swapPeer.getLastSentCheque()
 		receivedCheque = swapPeer.getLastReceivedCheque()
+		swapPeer.lock.Unlock()
 	} else {
 		errPendingCheque := s.store.Get(pendingChequeKey(peer), &pendingCheque)
 		if errPendingCheque != nil && errPendingCheque != state.ErrNotFound {
