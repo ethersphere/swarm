@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package swap
 
 import (
@@ -34,18 +35,21 @@ const CashChequeBeneficiaryTransactionCost = 50000
 type CashoutProcessor struct {
 	backend    chain.Backend     // ethereum backend to use
 	privateKey *ecdsa.PrivateKey // private key to use
+	Logger     Logger
 }
 
 // CashoutRequest represents a request for a cashout operation
 type CashoutRequest struct {
 	Cheque      Cheque         // cheque to be cashed
 	Destination common.Address // destination for the payout
+	Logger      Logger
 }
 
 // ActiveCashout stores the necessary information for a cashout in progess
 type ActiveCashout struct {
 	Request         CashoutRequest // the request that caused this cashout
 	TransactionHash common.Hash    // the hash of the current transaction for this request
+	Logger          Logger
 }
 
 // newCashoutProcessor creates a new instance of CashoutProcessor
@@ -77,6 +81,7 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 	return c.waitForAndProcessActiveCashout(&ActiveCashout{
 		Request:         *request,
 		TransactionHash: tx.Hash(),
+		Logger:          request.Logger,
 	})
 }
 
@@ -145,9 +150,9 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 
 	if result.Bounced {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
-		swapLog.Warn("cheque bounced", "tx", receipt.TxHash)
+		activeCashout.Logger.Warn("cheque bounced", "tx", receipt.TxHash)
 	}
 
-	swapLog.Info("cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
+	activeCashout.Logger.Info("cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
 	return nil
 }

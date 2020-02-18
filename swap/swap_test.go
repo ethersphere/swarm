@@ -80,7 +80,6 @@ func TestMain(m *testing.M) {
 func init() {
 	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
-	swapLog = log.Root()
 }
 
 type storeKeysTestCase struct {
@@ -678,7 +677,7 @@ func TestResetBalance(t *testing.T) {
 	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
 	case <-testBackend.cashDone:
-		log.Debug("cash transaction completed and committed")
+		creditorSwap.logger.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}

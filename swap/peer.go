@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/uint256"
@@ -44,7 +43,7 @@ type Peer struct {
 	lastSentCheque     *Cheque        // last cheque that was sent to peer that was confirmed
 	pendingCheque      *Cheque        // last cheque that was sent to peer but is not yet confirmed
 	balance            int64          // current balance of the peer
-	logger             log.Logger     // logger for swap related messages and audit trail with peer identifier
+	logger             Logger         // logger for swap related messages and audit trail with peer identifier
 }
 
 // NewPeer creates a new swap Peer instance
