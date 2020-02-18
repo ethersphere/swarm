@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -319,19 +318,14 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 	}
 
 	p.mtx.Lock()
-	s := fmt.Sprintf("%s_%d_%d", stream.String(), from, to)
+	s := fmt.Sprintf("%s_%t", stream.String(), head)
 	if v, ok := p.openGetRange[s]; ok {
-		ss := fmt.Sprintf("batch already requested at %v, ruid %d", v.timestamp, v.ruid)
-		debug.PrintStack()
+		p.logger.Warn("batch already requested, skipping", "stream", stream, "head", head, "from", from, "to", to, "existing ruid", v)
 		return nil
-		panic(ss)
 	}
-	p.openGetRange[s] = reqData{
-		timestamp: time.Now(),
-		ruid:      g.Ruid,
-	}
+	p.openGetRange[s] = g.Ruid
+
 	p.logger.Trace("clientCreateSendWant", "ruid", g.Ruid, "stream", g.Stream, "from", g.From, "to", to)
-	debug.PrintStack()
 	p.openWants[g.Ruid] = &want{
 		ruid:   g.Ruid,
 		stream: g.Stream,
