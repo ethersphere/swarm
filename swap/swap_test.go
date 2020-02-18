@@ -1327,6 +1327,67 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 }
 
+func TestSwapActions(t *testing.T) {
+	// create a log dir
+	logDirDebitor, err := ioutil.TempDir("", "swap_test_log")
+	log.Debug("creating swap log dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(logDirDebitor)
+
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
+	defer clean()
+
+	swapLog := newSwapLogger(logDirDebitor, swap.params.BaseAddrs.Over())
+
+	swapLog.Info("Test")
+	swapLog.SetLogAction("disconnecting")
+	swapLog.Info("Test")
+	swapLog.Info("Test", "swap_action", "emitting_cheque")
+	swapLog.SetLogAction("sent_cheque")
+	swapLog.Info("Test")
+
+	if logDirDebitor == "" {
+		t.Fatal("Swap Log Dir is not defined")
+	}
+
+	files, err := ioutil.ReadDir(logDirDebitor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("expected at least 1 file in the log directory, found none")
+	}
+
+	logFile := path.Join(logDirDebitor, files[0].Name())
+
+	var b []byte
+	b, err = ioutil.ReadFile(logFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logString := string(b)
+
+	if !strings.Contains(logString, `"swap_action","undefined"`) {
+		t.Fatalf("expected the log to contain action \"undefined\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","disconnecting"`) {
+		t.Fatalf("expected the log to contain action \"disconnecting\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","emitting_cheque"`) {
+		t.Fatalf("expected the log to contain action \"emitting_cheque\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","sent_cheque"`) {
+		t.Fatalf("expected the log to contain action \"sent_cheque\"")
+	}
+
+}
+
 func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()

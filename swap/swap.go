@@ -87,11 +87,7 @@ type Params struct {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-<<<<<<< Updated upstream
-func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory) *Swap {
-=======
-func newSwapInstance(stateStore state.Store, owner *Owner, backend contract.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory, logger Logger) *Swap {
->>>>>>> Stashed changes
+func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory, logger Logger) *Swap {
 	return &Swap{
 		store:             stateStore,
 		peers:             make(map[enode.ID]*Peer),
@@ -123,6 +119,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if depositAmountFlag > 0 && skipDepositFlag {
 		return nil, ErrSkipDeposit
 	}
+	swapLog.SetLogAction("init")
 	swapLog.Info("connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
@@ -205,7 +202,7 @@ const (
 )
 
 // createFactory determines the factory address and returns and error if no factory address has been specified or is unknown for the network
-func createFactory(factoryAddress common.Address, chainID *big.Int, backend contract.Backend, logger Logger) (factory swap.SimpleSwapFactory, err error) {
+func createFactory(factoryAddress common.Address, chainID *big.Int, backend chain.Backend, logger Logger) (factory swap.SimpleSwapFactory, err error) {
 	if (factoryAddress == common.Address{}) {
 		if factoryAddress, err = contract.FactoryAddressForNetwork(chainID.Uint64()); err != nil {
 			return nil, err
@@ -357,6 +354,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
+	p.logger.SetLogAction("handle_cheque")
 	p.logger.Info("received cheque from peer", "honey", cheque.Honey)
 
 	if p.getLastReceivedCheque() != nil && cheque.Equal(p.getLastReceivedCheque()) {
@@ -449,6 +447,7 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 // cashCheque should be called async as it blocks until the transaction(s) are mined
 // The function cashes the cheque by sending it to the blockchain
 func cashCheque(s *Swap, cheque *Cheque) {
+	s.logger.SetLogAction("cash_cheque")
 	err := s.cashoutProcessor.cashCheque(context.Background(), &CashoutRequest{
 		Cheque:      *cheque,
 		Destination: s.GetParams().ContractAddress,
@@ -456,11 +455,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 
 	if err != nil {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-<<<<<<< Updated upstream
-		swapLog.Error("cashing cheque:", "error", err)
-=======
 		s.logger.Error("cashing cheque:", err)
->>>>>>> Stashed changes
 	}
 }
 
@@ -667,6 +662,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	opts.Context = ctx
+	s.logger.SetLogAction("deploy_chequebook_contract")
 	s.logger.Info("Deploying new swap", "owner", opts.From.Hex())
 	chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {

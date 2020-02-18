@@ -144,6 +144,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
+	p.logger.SetLogAction("update_balance")
 	p.logger.Debug("updated balance", "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
@@ -216,7 +217,7 @@ func (p *Peer) sendCheque() error {
 
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(honeyAmount)
-
+	p.logger.SetLogAction("send_cheque")
 	p.logger.Info("sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
