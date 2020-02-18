@@ -47,11 +47,6 @@ type Peer struct {
 	quit chan struct{} // closed when peer is going offline
 }
 
-type reqData struct {
-	timestamp time.Time
-	ruid      uint
-}
-
 // newPeer is the constructor for Peer
 func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
