@@ -194,7 +194,7 @@ func (p *Peer) sealWant(w *want) error {
 	}
 	p.mtx.Lock()
 	delete(p.openWants, w.ruid)
-	s := fmt.Sprintf("%s_%t", w.stream.String(), w.head)
+	s := p.getRangeKey(w.stream, w.head)
 	delete(p.openGetRange, s)
 	p.mtx.Unlock()
 	return nil
@@ -225,4 +225,8 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 func (p *Peer) peerStreamIntervalKey(stream ID) string {
 	k := fmt.Sprintf("%s|%s", hex.EncodeToString(p.BzzAddr.OAddr), stream.String())
 	return k
+}
+
+func (p *Peer) getRangeKey(id ID, head bool) string {
+	return fmt.Sprintf("%s_%t", id.String(), head)
 }
