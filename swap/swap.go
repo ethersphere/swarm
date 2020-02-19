@@ -505,6 +505,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
+// the caller is expected to hold p.lock
 func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
 		return nil, err

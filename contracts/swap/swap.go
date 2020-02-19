@@ -133,7 +133,8 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 // CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
 func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*types.Transaction, error) {
 	payout := cumulativePayout.Value()
-	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, &payout, ownerSig)
+	// send a copy of cumulativePayout to instance as it modifies the supplied big int internally
+	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, big.NewInt(0).Set(&payout), ownerSig)
 	if err != nil {
 		return nil, err
 	}
