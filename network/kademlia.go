@@ -947,7 +947,7 @@ func (k *Kademlia) kademliaInfo() (ki KademliaInfo) {
 
 		row := []string{}
 		bin.ValIterator(func(val pot.Val) bool {
-			e := val.(*Peer)
+			e := val.(*entry)
 			row = append(row, hex.EncodeToString(e.Address()))
 			return true
 		})

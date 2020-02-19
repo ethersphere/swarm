@@ -383,7 +383,8 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	return nil
 }
 
-// RequestFromPeers sends a chunk retrieve request to the next found peer
+// RequestFromPeers sends a chunk retrieve request to the next found peer.
+// returns the next peer to try, a cleanup function to expire retrievals that were never delivered
 func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
 	r.logger.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr, "localID", localID)
 	metrics.GetOrRegisterCounter("network.retrieve.request_from_peers", nil).Inc(1)

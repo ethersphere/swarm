@@ -161,7 +161,18 @@ func TestNoSuitablePeer(t *testing.T) {
 			t.Fatal("not enough nodes up")
 		}
 		// allow the two nodes time to set up the protocols otherwise kademlias will be empty when retrieve requests happen
-		time.Sleep(50 * time.Millisecond)
+		i := 0
+		for iterate := true; iterate; {
+			kinfo := sim.MustNodeItem(nodeIDs[1], simulation.BucketKeyKademlia).(*network.Kademlia).KademliaInfo()
+			if kinfo.TotalConnections != 1 {
+				i++
+			}
+			time.Sleep(50 * time.Millisecond)
+			if i == 5 {
+				t.Fatal("timed out waiting for 1 connections")
+			}
+		}
+
 		log.Debug("fetching through node", "enode", nodeIDs[1])
 		ns := sim.MustNodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
 		c := chunktesting.GenerateTestRandomChunk()
