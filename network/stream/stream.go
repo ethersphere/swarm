@@ -524,6 +524,12 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		if err := p.sealWant(w); err != nil {
 			return protocols.Break(fmt.Errorf("persisting interval from %d, to %d: %w", w.from, w.to, err))
 		}
+		if err := p.Send(ctx, wantedHashesMsg); err != nil {
+			return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
+		}
+
+		// request the next range in case no chunks wanted
+		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 	} else {
 		// we want some hashes
 		streamWantedHashes.Inc(1)
@@ -534,14 +540,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
-	}
-	if ctr == 0 {
-		// request the next range in case no chunks wanted
-		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
-	}
-
-	if errc == nil {
-		return nil
 	}
 
 	select {

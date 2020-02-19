@@ -86,7 +86,7 @@ func (fi *Fetcher) SafeClose(ch chunk.Chunk) {
 	})
 }
 
-type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
+type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, func(), error)
 
 // NetStore is an extension of LocalStore
 // it implements the ChunkStore interface
@@ -247,13 +247,14 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) (
 
 		log.Trace("remote.fetch", "ref", ref)
 
-		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
+		currentPeer, cleanup, err := n.RemoteGet(ctx, req, n.LocalID)
 		if err != nil {
 			n.logger.Trace(err.Error(), "ref", ref)
 			osp.LogFields(olog.String("err", err.Error()))
 			osp.Finish()
 			return nil, ErrNoSuitablePeer
 		}
+		defer cleanup()
 
 		// add peer to the set of peers to skip from now
 		n.logger.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
