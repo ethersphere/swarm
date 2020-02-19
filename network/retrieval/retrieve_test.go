@@ -166,6 +166,8 @@ func TestNoSuitablePeer(t *testing.T) {
 			kinfo := sim.MustNodeItem(nodeIDs[1], simulation.BucketKeyKademlia).(*network.Kademlia).KademliaInfo()
 			if kinfo.TotalConnections != 1 {
 				i++
+			} else {
+				break
 			}
 			time.Sleep(50 * time.Millisecond)
 			if i == 5 {
