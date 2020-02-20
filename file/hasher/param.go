@@ -7,7 +7,7 @@ import (
 	"github.com/ethersphere/swarm/file"
 )
 
-// defines the boundaries of the hashing job and also contains the hash factory functino of the job
+// defines the boundaries of the hashing job and also contains the hash factory function of the job
 // setting Debug means omitting any automatic behavior (for now it means job processing won't auto-start)
 type treeParams struct {
 	SectionSize int

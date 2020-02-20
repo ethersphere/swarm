@@ -2,7 +2,6 @@ package hasher
 
 import (
 	"github.com/ethersphere/swarm/file"
-	"github.com/ethersphere/swarm/log"
 )
 
 // ReferenceHasher is the source-of-truth implementation of the swarm file hashing algorithm
@@ -17,7 +16,8 @@ type ReferenceHasher struct {
 
 // NewReferenceHasher constructs and returns a new ReferenceHasher
 // This implementation is limited to a tree of 9 levels, where level 0 is the data level
-// With 32 section size and 128 branches this means a capacity of 4096 bytes * (128^(9-1))
+// With 32 section size and 128 branches (i.e. unencrypted, non erasure-coded content) this means
+// a capacity of 4096 bytes * (128^(9-1)) ~ 295.148 * (10^18) bytes
 func NewReferenceHasher(params *treeParams) *ReferenceHasher {
 	// TODO: remove when bmt interface is amended
 	h := params.GetWriter()
@@ -38,9 +38,6 @@ func (r *ReferenceHasher) Hash(data []byte) []byte {
 			l = len(data) - i
 		}
 		r.update(0, data[i:i+l])
-	}
-	for i := 0; i < 9; i++ {
-		log.Trace("cursor", "lvl", i, "pos", r.cursors[i])
 	}
 	return r.digest()
 }
@@ -67,11 +64,11 @@ func (r *ReferenceHasher) sum(lvl int) []byte {
 	spanSize := r.params.Spans[lvl] * r.params.ChunkSize
 	span := (r.length-1)%spanSize + 1
 
-	toSumSize := r.cursors[lvl] - r.cursors[lvl+1]
+	sizeToSum := r.cursors[lvl] - r.cursors[lvl+1]
 
 	r.hasher.Reset()
 	r.hasher.SetSpan(span)
-	r.hasher.Write(r.buffer[r.cursors[lvl+1] : r.cursors[lvl+1]+toSumSize])
+	r.hasher.Write(r.buffer[r.cursors[lvl+1] : r.cursors[lvl+1]+sizeToSum])
 	ref := r.hasher.Sum(nil)
 	return ref
 }
@@ -101,7 +98,6 @@ func (r *ReferenceHasher) digest() []byte {
 		if r.counts[i] > 0 {
 			// TODO: simplify if possible
 			if r.counts[i-1]-r.params.Spans[targetLevel-1-i] <= 1 {
-				log.Trace("skip")
 				r.cursors[i+1] = r.cursors[i]
 				r.cursors[i] = r.cursors[i-1]
 				continue
