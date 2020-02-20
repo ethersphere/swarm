@@ -42,6 +42,7 @@ type Peer struct {
 	streamCursors   map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
 	openWants       map[uint]*want    // maintain open wants on the client side
 	openOffers      map[uint]offer    // maintain open offers on the server side
+	openGetRange    map[string]uint   // maintain open GetRange requests to eliminate overlapping requests
 
 	quit chan struct{} // closed when peer is going offline
 }
@@ -55,6 +56,7 @@ func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store,
 		streamCursors:  make(map[string]uint64),
 		openWants:      make(map[uint]*want),
 		openOffers:     make(map[uint]offer),
+		openGetRange:   make(map[string]uint),
 		quit:           make(chan struct{}),
 		logger:         log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
@@ -192,6 +194,8 @@ func (p *Peer) sealWant(w *want) error {
 	}
 	p.mtx.Lock()
 	delete(p.openWants, w.ruid)
+	s := p.getRangeKey(w.stream, w.head)
+	delete(p.openGetRange, s)
 	p.mtx.Unlock()
 	return nil
 }
@@ -221,4 +225,8 @@ func (p *Peer) getOrCreateInterval(key string) (*intervals.Intervals, error) {
 func (p *Peer) peerStreamIntervalKey(stream ID) string {
 	k := fmt.Sprintf("%s|%s", hex.EncodeToString(p.BzzAddr.OAddr), stream.String())
 	return k
+}
+
+func (p *Peer) getRangeKey(id ID, head bool) string {
+	return fmt.Sprintf("%s_%t", id.String(), head)
 }

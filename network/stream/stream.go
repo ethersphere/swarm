@@ -318,6 +318,14 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 	}
 
 	p.mtx.Lock()
+	s := p.getRangeKey(stream, head)
+	if v, ok := p.openGetRange[s]; ok {
+		p.logger.Warn("batch already requested, skipping", "stream", stream, "head", head, "from", from, "to", to, "existing ruid", v)
+		p.mtx.Unlock()
+		return nil
+	}
+	p.openGetRange[s] = g.Ruid
+
 	p.openWants[g.Ruid] = &want{
 		ruid:   g.Ruid,
 		stream: g.Stream,
@@ -331,6 +339,8 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 		requested: time.Now(),
 	}
 	p.mtx.Unlock()
+
+	p.logger.Trace("clientCreateSendWant", "ruid", g.Ruid, "stream", g.Stream, "from", g.From, "to", to)
 
 	return p.Send(ctx, g)
 }
