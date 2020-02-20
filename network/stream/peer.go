@@ -51,15 +51,16 @@ type Peer struct {
 // newPeer is the constructor for Peer
 func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
-		BzzPeer:        peer,
-		providers:      providers,
-		intervalsStore: i,
-		streamCursors:  make(map[string]uint64),
-		openWants:      make(map[uint]*want),
-		openOffers:     make(map[uint]offer),
-		openGetRange:   make(map[string]uint),
-		quit:           make(chan struct{}),
-		logger:         log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
+		BzzPeer:            peer,
+		providers:          providers,
+		intervalsStore:     i,
+		streamCursors:      make(map[string]uint64),
+		openWants:          make(map[uint]*want),
+		openOffers:         make(map[uint]offer),
+		clientOpenGetRange: make(map[string]uint),
+		serverOpenGetRange: make(map[string]uint),
+		quit:               make(chan struct{}),
+		logger:             log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
 	return p
 }
@@ -196,7 +197,7 @@ func (p *Peer) sealWant(w *want) error {
 	p.mtx.Lock()
 	delete(p.openWants, w.ruid)
 	s := p.getRangeKey(w.stream, w.head)
-	delete(p.openGetRange, s)
+	delete(p.clientOpenGetRange, s)
 	p.mtx.Unlock()
 	return nil
 }
