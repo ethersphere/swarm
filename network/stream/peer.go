@@ -38,11 +38,12 @@ type Peer struct {
 
 	logger log.Logger
 
-	streamCursorsMu sync.Mutex
-	streamCursors   map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
-	openWants       map[uint]*want    // maintain open wants on the client side
-	openOffers      map[uint]offer    // maintain open offers on the server side
-	openGetRange    map[string]uint   // maintain open GetRange requests to eliminate overlapping requests
+	streamCursorsMu    sync.Mutex
+	streamCursors      map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
+	openWants          map[uint]*want    // maintain open wants on the client side
+	openOffers         map[uint]offer    // maintain open offers on the server side
+	clientOpenGetRange map[string]uint   // maintain open GetRange requests to eliminate overlapping requests on the client side
+	serverOpenGetRange map[string]uint   // maintain open GetRange requests to eliminate overlapping requests on the server side
 
 	quit chan struct{} // closed when peer is going offline
 }
