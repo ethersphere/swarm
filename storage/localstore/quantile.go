@@ -1,9 +1,10 @@
 package localstore
 
 import (
-	"github.com/ethersphere/swarm/shed"
 	"math"
 	"sort"
+
+	"github.com/ethersphere/swarm/shed"
 )
 
 type fraction struct {

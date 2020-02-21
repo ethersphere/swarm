@@ -252,13 +252,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		})
 
 		for {
-			select {
-			case _, ok := <-c:
-				if !ok {
-					return
-				}
-				localStore.SetResponsibilityRadius(to.NeighbourhoodDepth())
+			_, ok := <-c
+			if !ok {
+				return
 			}
+			localStore.SetResponsibilityRadius(to.NeighbourhoodDepth())
 		}
 	}()
 
