@@ -327,7 +327,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 				break
 			}
 		}
-		if !found {
+		if len(gcQuantiles) > 0 && !found {
 			var shift int64
 			if closest := gcQuantiles.Closest(f); closest == nil {
 				shift = int64(position)
