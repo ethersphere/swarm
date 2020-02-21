@@ -1,4 +1,26 @@
-## v0.6.0 (Unreleased)
+## v0.5.7 (February 21, 2020)
+
+### Notes
+
+- Swarm Bootnodes have changed, please update your version to connect to the new bootnodes
+- A memory leak related to the retrieval protocol has been fixed
+- A deadlock related to incentivised retrievals has been fixed
+- Possible data races in SWAP have been fixed
+
+### Commits
+* [#2113](https://github.com/ethersphere/swarm/pull/2113) stream: enforce server get ranges
+* [#2111](https://github.com/ethersphere/swarm/pull/2111) bootnodes: change old ef bootnodes to new ones
+* [#2107](https://github.com/ethersphere/swarm/pull/2107) stream: eliminate overlapping requests on the same stream
+* [#2112](https://github.com/ethersphere/swarm/pull/2112) p2p/protocols: remove peer accounting lock
+* [#2106](https://github.com/ethersphere/swarm/pull/2106) swap: fix various data races
+* [#2103](https://github.com/ethersphere/swarm/pull/2103) retrieval: fix memory leak
+* [#2104](https://github.com/ethersphere/swarm/pull/2104) stream: make empty wanted hashes more explicit
+* [#2105](https://github.com/ethersphere/swarm/pull/2105) http: remove spamming logline
+* [#2101](https://github.com/ethersphere/swarm/pull/2101) readme: add godoc shield
+* [#2092](https://github.com/ethersphere/swarm/pull/2092) contract, swap: refactor test backend
+* [#2100](https://github.com/ethersphere/swarm/pull/2100) bmt: fix data races in Hasher
+* [#2097](https://github.com/ethersphere/swarm/pull/2097) bmt, file: Extract AsyncHasher to separate package
+
 
 ## v0.5.6 (February 10, 2020)
 
