@@ -22,8 +22,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/boundedint"
-	contract "github.com/ethersphere/swarm/contracts/swap"
 )
 
 // TestContractIntegration tests a end-to-end cheque interaction.
@@ -55,7 +55,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	receipt, err := contract.WaitForTransactionByHash(context.Background(), backend, tx.Hash())
+	receipt, err := chain.WaitMined(nil, backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	receipt, err = contract.WaitForTransactionByHash(context.Background(), backend, tx.Hash())
+	receipt, err = chain.WaitMined(nil, backend, tx.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}

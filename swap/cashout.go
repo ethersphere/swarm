@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/boundedint"
 	contract "github.com/ethersphere/swarm/contracts/swap"
+	"github.com/ethersphere/swarm/swap/chain"
 )
 
 // CashChequeBeneficiaryTransactionCost is the expected gas cost of a CashChequeBeneficiary transaction
@@ -31,7 +32,7 @@ const CashChequeBeneficiaryTransactionCost = 50000
 
 // CashoutProcessor holds all relevant fields needed for processing cashouts
 type CashoutProcessor struct {
-	backend    contract.Backend  // ethereum backend to use
+	backend    chain.Backend     // ethereum backend to use
 	privateKey *ecdsa.PrivateKey // private key to use
 }
 
@@ -48,7 +49,7 @@ type ActiveCashout struct {
 }
 
 // newCashoutProcessor creates a new instance of CashoutProcessor
-func newCashoutProcessor(backend contract.Backend, privateKey *ecdsa.PrivateKey) *CashoutProcessor {
+func newCashoutProcessor(backend chain.Backend, privateKey *ecdsa.PrivateKey) *CashoutProcessor {
 	return &CashoutProcessor{
 		backend:    backend,
 		privateKey: privateKey,
@@ -128,7 +129,7 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultTransactionTimeout)
 	defer cancel()
 
-	receipt, err := contract.WaitForTransactionByHash(ctx, c.backend, activeCashout.TransactionHash)
+	receipt, err := chain.WaitMined(ctx, c.backend, activeCashout.TransactionHash)
 	if err != nil {
 		return err
 	}

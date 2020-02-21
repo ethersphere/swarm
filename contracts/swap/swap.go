@@ -20,8 +20,6 @@
 package swap
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -29,20 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
+	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/boundedint"
 )
-
-var (
-	// ErrTransactionReverted is given when the transaction that cashes a cheque is reverted
-	ErrTransactionReverted = errors.New("Transaction reverted")
-)
-
-// Backend wraps all methods required for contract deployment.
-type Backend interface {
-	bind.ContractBackend
-	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
-	TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error)
-}
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
 type Contract interface {
@@ -89,13 +76,13 @@ type Params struct {
 type simpleContract struct {
 	instance *contract.ERC20SimpleSwap
 	address  common.Address
-	backend  Backend
+	backend  chain.Backend
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
 // It assumes that there is an existing contract instance at the given address, or an error is returned
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
-func InstanceAt(address common.Address, backend Backend) (Contract, error) {
+func InstanceAt(address common.Address, backend chain.Backend) (Contract, error) {
 	instance, err := contract.NewERC20SimpleSwap(address, backend)
 	if err != nil {
 		return nil, err
@@ -110,7 +97,7 @@ func (s simpleContract) Withdraw(auth *bind.TransactOpts, amount *big.Int) (*typ
 	if err != nil {
 		return nil, err
 	}
-	return WaitFunc(auth.Context, s.backend, tx)
+	return chain.WaitMined(auth.Context, s.backend, tx.Hash())
 }
 
 // Deposit sends an amount in ERC20 token to the chequebook and blocks until the transaction is mined
@@ -140,13 +127,14 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	if err != nil {
 		return nil, err
 	}
-	return WaitFunc(auth.Context, s.backend, tx)
+	return chain.WaitMined(auth.Context, s.backend, tx.Hash())
 }
 
 // CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
 func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *boundedint.Uint256, ownerSig []byte) (*types.Transaction, error) {
 	payout := cumulativePayout.Value()
-	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, &payout, ownerSig)
+	// send a copy of cumulativePayout to instance as it modifies the supplied big int internally
+	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, big.NewInt(0).Set(&payout), ownerSig)
 	if err != nil {
 		return nil, err
 	}
@@ -223,45 +211,4 @@ func (s simpleContract) Issuer(opts *bind.CallOpts) (common.Address, error) {
 // PaidOut returns the total paid out amount for the given address
 func (s simpleContract) PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error) {
 	return s.instance.PaidOut(opts, addr)
-}
-
-// WaitFunc is the default function to wait for transactions
-// We can overwrite this in tests so that we don't need to wait for mining
-var WaitFunc = waitForTx
-
-// waitForTx waits for transaction to be mined and returns the receipt
-func waitForTx(ctx context.Context, backend Backend, tx *types.Transaction) (*types.Receipt, error) {
-	// it blocks here until tx is mined
-	receipt, err := bind.WaitMined(ctx, backend, tx)
-	if err != nil {
-		return nil, err
-	}
-	// indicate whether the transaction did not revert
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, ErrTransactionReverted
-	}
-	return receipt, nil
-}
-
-// WaitForTransactionByHash waits for a transaction to by mined by hash
-func WaitForTransactionByHash(ctx context.Context, backend Backend, txHash common.Hash) (*types.Receipt, error) {
-	tx, pending, err := backend.TransactionByHash(ctx, txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	var receipt *types.Receipt
-	if pending {
-		receipt, err = WaitFunc(ctx, backend, tx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		receipt, err = backend.TransactionReceipt(ctx, txHash)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return receipt, nil
 }
