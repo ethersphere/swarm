@@ -301,11 +301,11 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	// Add in gcIndex only if this chunk is not pinned
-	ok, err := db.pinIndex.Has(item)
+	pinned, err := db.pinIndex.Has(item)
 	if err != nil {
 		return 0, err
 	}
-	if !ok {
+	if !pinned {
 		// set access timestamp based on quantile calculated from
 		// chunk proximity and db.responsibilityRadius
 		f := chunkQuantileFraction(int(db.po(item.Address)), db.getResponsibilityRadius())
