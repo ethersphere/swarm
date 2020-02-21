@@ -383,8 +383,9 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	return nil
 }
 
-// RequestFromPeers sends a chunk retrieve request to the next found peer
-func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+// RequestFromPeers sends a chunk retrieve request to the next found peer.
+// returns the next peer to try, a cleanup function to expire retrievals that were never delivered
+func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
 	r.logger.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr, "localID", localID)
 	metrics.GetOrRegisterCounter("network.retrieve.request_from_peers", nil).Inc(1)
 
@@ -395,7 +396,7 @@ FINDPEER:
 	sp, err := r.findPeerLB(ctx, req)
 	if err != nil {
 		r.logger.Trace(err.Error())
-		return nil, err
+		return nil, func() {}, err
 	}
 
 	protoPeer := r.getPeer(sp.ID())
@@ -405,7 +406,7 @@ FINDPEER:
 		retries++
 		if retries == maxFindPeerRetries {
 			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
-			return nil, ErrNoPeerFound
+			return nil, func() {}, ErrNoPeerFound
 		}
 
 		goto FINDPEER
@@ -417,14 +418,18 @@ FINDPEER:
 	}
 	protoPeer.logger.Trace("sending retrieve request", "ref", ret.Addr, "origin", localID, "ruid", ret.Ruid)
 	protoPeer.addRetrieval(ret.Ruid, ret.Addr)
+	cleanup := func() {
+		protoPeer.expireRetrieval(ret.Ruid)
+	}
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
 		protoPeer.logger.Error("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
-		return nil, err
+		cleanup()
+		return nil, func() {}, err
 	}
 
 	spID := protoPeer.ID()
-	return &spID, nil
+	return &spID, cleanup, nil
 }
 
 func (r *Retrieval) Start(server *p2p.Server) error {

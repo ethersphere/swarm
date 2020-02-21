@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -137,6 +138,62 @@ func TestChunkDelivery(t *testing.T) {
 	}
 }
 
+// TestNoSuitablePeer brings up two nodes, tries to retrieve a chunk which is never
+// found, expecting a NoSuitablePeer error from netstore
+func TestNoSuitablePeer(t *testing.T) {
+	nodes := 2
+
+	sim := simulation.NewBzzInProc(map[string]simulation.ServiceFunc{
+		"bzz-retrieve": newBzzRetrieveWithLocalstore,
+	}, true)
+	defer sim.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := sim.AddNodesAndConnectFull(nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != nodes {
+			t.Fatal("not enough nodes up")
+		}
+		// allow the two nodes time to set up the protocols otherwise kademlias will be empty when retrieve requests happen
+		i := 0
+		for iterate := true; iterate; {
+			kinfo := sim.MustNodeItem(nodeIDs[1], simulation.BucketKeyKademlia).(*network.Kademlia).KademliaInfo()
+			if kinfo.TotalConnections != 1 {
+				i++
+			} else {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+			if i == 5 {
+				t.Fatal("timed out waiting for 1 connections")
+			}
+		}
+
+		log.Debug("fetching through node", "enode", nodeIDs[1])
+		ns := sim.MustNodeItem(nodeIDs[1], bucketKeyNetstore).(*storage.NetStore)
+		c := chunktesting.GenerateTestRandomChunk()
+
+		ref := c.Address()
+		_, err := ns.Get(context.Background(), chunk.ModeGetRequest, storage.NewRequest(ref))
+		if err == nil {
+			return errors.New("expected netstore retrieval error but got none")
+		}
+		if err != storage.ErrNoSuitablePeer {
+			return fmt.Errorf("expected ErrNoSuitablePeer but got %v instead", err)
+		}
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
 // TestUnsolicitedChunkDelivery tests that a node is dropped in response to an unsolicited chunk delivery
 // this case covers a chunk Ruid that was not previously known to the downstream peer
 func TestUnsolicitedChunkDelivery(t *testing.T) {
@@ -193,8 +250,8 @@ func TestUnsolicitedChunkDeliveryFaultyAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer teardown()
-	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-		return &enode.ID{}, nil
+	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
+		return &enode.ID{}, func() {}, nil
 	}
 	node := tester.Nodes[0]
 
@@ -267,8 +324,8 @@ func TestUnsolicitedChunkDeliveryDouble(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer teardown()
-	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-		return &enode.ID{}, nil
+	ns.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
+		return &enode.ID{}, func() {}, nil
 	}
 	node := tester.Nodes[0]
 
