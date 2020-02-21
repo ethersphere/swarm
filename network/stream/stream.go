@@ -318,6 +318,14 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 	}
 
 	p.mtx.Lock()
+	s := p.getRangeKey(stream, head)
+	if v, ok := p.clientOpenGetRange[s]; ok {
+		p.logger.Warn("batch already requested, skipping", "stream", stream, "head", head, "from", from, "to", to, "existing ruid", v)
+		p.mtx.Unlock()
+		return nil
+	}
+	p.clientOpenGetRange[s] = g.Ruid
+
 	p.openWants[g.Ruid] = &want{
 		ruid:   g.Ruid,
 		stream: g.Stream,
@@ -332,6 +340,8 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 	}
 	p.mtx.Unlock()
 
+	p.logger.Trace("clientCreateSendWant", "ruid", g.Ruid, "stream", g.Stream, "from", g.From, "to", to)
+
 	return p.Send(ctx, g)
 }
 
@@ -345,6 +355,16 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	}
 
 	p.logger.Debug("serverHandleGetRange", "ruid", msg.Ruid, "head?", msg.To == nil)
+	p.mtx.Lock()
+	s := p.getRangeKey(msg.Stream, msg.To == nil)
+	if ruid, exists := p.serverOpenGetRange[s]; exists {
+		p.logger.Debug("stream request already ongoing, skipping", "ruid in flight", ruid)
+		p.mtx.Unlock()
+		return nil
+	}
+	p.serverOpenGetRange[s] = msg.Ruid
+	p.mtx.Unlock()
+
 	start := time.Now()
 	defer func(start time.Time) {
 		if msg.To == nil {
@@ -425,6 +445,10 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		return protocols.Break(fmt.Errorf("sending offered hashes, ruid %d: %w", msg.Ruid, err))
 	}
 
+	p.mtx.Lock()
+	delete(p.serverOpenGetRange, s)
+	p.mtx.Unlock()
+
 	return nil
 }
 
@@ -479,8 +503,9 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	if !provider.WantStream(p, w.stream) {
 		wantedHashesMsg.BitVector = []byte{}
 		if err := p.Send(ctx, wantedHashesMsg); err != nil {
-			protocols.Break(fmt.Errorf("sending empty wanted hashes:  %w", err))
+			return protocols.Break(fmt.Errorf("sending empty wanted hashes:  %w", err))
 		}
+		return nil
 	}
 
 	want, err := bv.New(lenHashes / HashSize)
@@ -523,6 +548,12 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		if err := p.sealWant(w); err != nil {
 			return protocols.Break(fmt.Errorf("persisting interval from %d, to %d: %w", w.from, w.to, err))
 		}
+		if err := p.Send(ctx, wantedHashesMsg); err != nil {
+			return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
+		}
+
+		// request the next range in case no chunks wanted
+		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
 	} else {
 		// we want some hashes
 		streamWantedHashes.Inc(1)
@@ -533,14 +564,6 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 
 	if err := p.Send(ctx, wantedHashesMsg); err != nil {
 		return protocols.Break(fmt.Errorf("sending wanted hashes: %w", err))
-	}
-	if ctr == 0 {
-		// request the next range in case no chunks wanted
-		return r.requestSubsequentRange(ctx, p, provider, w, msg.LastIndex)
-	}
-
-	if errc == nil {
-		return nil
 	}
 
 	select {
@@ -571,6 +594,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 		if provider.WantStream(p, w.stream) {
 			return protocols.Break(errors.New("batch has timed out"))
 		}
+		return nil
 	case <-r.quit:
 		return nil
 	case <-p.quit:
