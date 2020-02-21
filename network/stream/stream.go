@@ -319,12 +319,12 @@ func (r *Registry) clientCreateSendWant(ctx context.Context, p *Peer, stream ID,
 
 	p.mtx.Lock()
 	s := p.getRangeKey(stream, head)
-	if v, ok := p.openGetRange[s]; ok {
+	if v, ok := p.clientOpenGetRange[s]; ok {
 		p.logger.Warn("batch already requested, skipping", "stream", stream, "head", head, "from", from, "to", to, "existing ruid", v)
 		p.mtx.Unlock()
 		return nil
 	}
-	p.openGetRange[s] = g.Ruid
+	p.clientOpenGetRange[s] = g.Ruid
 
 	p.openWants[g.Ruid] = &want{
 		ruid:   g.Ruid,
@@ -355,6 +355,16 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	}
 
 	p.logger.Debug("serverHandleGetRange", "ruid", msg.Ruid, "head?", msg.To == nil)
+	p.mtx.Lock()
+	s := p.getRangeKey(msg.Stream, msg.To == nil)
+	if ruid, exists := p.serverOpenGetRange[s]; exists {
+		p.logger.Debug("stream request already ongoing, skipping", "ruid in flight", ruid)
+		p.mtx.Unlock()
+		return nil
+	}
+	p.serverOpenGetRange[s] = msg.Ruid
+	p.mtx.Unlock()
+
 	start := time.Now()
 	defer func(start time.Time) {
 		if msg.To == nil {
@@ -434,6 +444,10 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 		p.mtx.Unlock()
 		return protocols.Break(fmt.Errorf("sending offered hashes, ruid %d: %w", msg.Ruid, err))
 	}
+
+	p.mtx.Lock()
+	delete(p.serverOpenGetRange, s)
+	p.mtx.Unlock()
 
 	return nil
 }

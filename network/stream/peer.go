@@ -38,11 +38,12 @@ type Peer struct {
 
 	logger log.Logger
 
-	streamCursorsMu sync.Mutex
-	streamCursors   map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
-	openWants       map[uint]*want    // maintain open wants on the client side
-	openOffers      map[uint]offer    // maintain open offers on the server side
-	openGetRange    map[string]uint   // maintain open GetRange requests to eliminate overlapping requests
+	streamCursorsMu    sync.Mutex
+	streamCursors      map[string]uint64 // key: Stream ID string representation, value: session cursor. Keeps cursors for all streams. when unset - we are not interested in that bin
+	openWants          map[uint]*want    // maintain open wants on the client side
+	openOffers         map[uint]offer    // maintain open offers on the server side
+	clientOpenGetRange map[string]uint   // maintain open GetRange requests to eliminate overlapping requests on the client side
+	serverOpenGetRange map[string]uint   // maintain open GetRange requests to eliminate overlapping requests on the server side
 
 	quit chan struct{} // closed when peer is going offline
 }
@@ -50,15 +51,16 @@ type Peer struct {
 // newPeer is the constructor for Peer
 func newPeer(peer *network.BzzPeer, baseAddress *network.BzzAddr, i state.Store, providers map[string]StreamProvider) *Peer {
 	p := &Peer{
-		BzzPeer:        peer,
-		providers:      providers,
-		intervalsStore: i,
-		streamCursors:  make(map[string]uint64),
-		openWants:      make(map[uint]*want),
-		openOffers:     make(map[uint]offer),
-		openGetRange:   make(map[string]uint),
-		quit:           make(chan struct{}),
-		logger:         log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
+		BzzPeer:            peer,
+		providers:          providers,
+		intervalsStore:     i,
+		streamCursors:      make(map[string]uint64),
+		openWants:          make(map[uint]*want),
+		openOffers:         make(map[uint]offer),
+		clientOpenGetRange: make(map[string]uint),
+		serverOpenGetRange: make(map[string]uint),
+		quit:               make(chan struct{}),
+		logger:             log.NewBaseAddressLogger(baseAddress.ShortString(), "peer", peer.BzzAddr.ShortString()),
 	}
 	return p
 }
@@ -195,7 +197,7 @@ func (p *Peer) sealWant(w *want) error {
 	p.mtx.Lock()
 	delete(p.openWants, w.ruid)
 	s := p.getRangeKey(w.stream, w.head)
-	delete(p.openGetRange, s)
+	delete(p.clientOpenGetRange, s)
 	p.mtx.Unlock()
 	return nil
 }
