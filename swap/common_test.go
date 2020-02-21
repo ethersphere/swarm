@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -25,21 +24,18 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/swap/chain"
+	mock "github.com/ethersphere/swarm/swap/chain/mock"
 )
 
 // swapTestBackend encapsulates the SimulatedBackend and can offer
 // additional properties for the tests
 type swapTestBackend struct {
-	*backends.SimulatedBackend
+	*mock.TestBackend
 	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
 	tokenAddress   common.Address // address of the token in the simulated network
 	// the async cashing go routine needs synchronization for tests
 	cashDone chan struct{}
-}
-
-func (b *swapTestBackend) Close() error {
-	// Do not close SimulatedBackend as it is a global instance.
-	return nil
 }
 
 var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
@@ -50,30 +46,28 @@ var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
 // newTestBackend creates a new test backend instance
 func newTestBackend(t *testing.T) *swapTestBackend {
 	t.Helper()
-	// commit the initial "pre-mined" accounts (issuer and beneficiary addresses)
-	defaultBackend.Commit()
 
+	backend := mock.NewTestBackend(defaultBackend)
 	// deploy the ERC20-contract
 	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
-	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), defaultBackend)
+	tokenAddress, _, _, err := contractFactory.DeployERC20Mintable(bind.NewKeyedTransactor(ownerKey), backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaultBackend.Commit()
 
 	// deploy a SimpleSwapFactoy
 	// ignore receipt because if there is no error, we can assume everything is fine on a simulated backend
 	// ignore factory instance, because the address is all we need at this point
-	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), defaultBackend, tokenAddress)
+	factoryAddress, _, _, err := contractFactory.DeploySimpleSwapFactory(bind.NewKeyedTransactor(ownerKey), backend, tokenAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaultBackend.Commit()
 
 	return &swapTestBackend{
-		SimulatedBackend: defaultBackend,
-		factoryAddress:   factoryAddress,
-		tokenAddress:     tokenAddress,
+		TestBackend:    backend,
+		factoryAddress: factoryAddress,
+		tokenAddress:   tokenAddress,
+		cashDone:       make(chan struct{}),
 	}
 }
 
@@ -225,40 +219,15 @@ func testCashCheque(s *Swap, cheque *Cheque) {
 	}
 }
 
-// when testing, we don't need to wait for a transaction to be mined
-func testWaitForTx(ctx context.Context, backend cswap.Backend, tx *types.Transaction) (*types.Receipt, error) {
-
-	var stb *swapTestBackend
-	var ok bool
-	if stb, ok = backend.(*swapTestBackend); !ok {
-		return nil, errors.New("not the expected test backend")
-	}
-	stb.Commit()
-
-	receipt, err := backend.TransactionReceipt(ctx, tx.Hash())
-	if err != nil {
-		return nil, err
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, cswap.ErrTransactionReverted
-	}
-	return receipt, nil
-}
-
 // setupContractTest is a helper function for setting up the
 // blockchain wait function for testing
 func setupContractTest() func() {
-	// we overwrite the waitForTx function with one which the simulated backend
-	// immediately commits
-	currentWaitFunc := cswap.WaitFunc
 	// we also need to store the previous cashCheque function in case this is called multiple times
 	currentCashCheque := defaultCashCheque
 	defaultCashCheque = testCashCheque
 	// overwrite only for the duration of the test, so...
-	cswap.WaitFunc = testWaitForTx
 	return func() {
 		// ...we need to set it back to original when done
-		cswap.WaitFunc = currentWaitFunc
 		defaultCashCheque = currentCashCheque
 	}
 }
@@ -286,7 +255,6 @@ func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privat
 	if err != nil {
 		return nil, err
 	}
-	stb.Commit()
 
 	// send money into the new chequebook
 	token, err := contractFactory.NewERC20Mintable(stb.tokenAddress, stb)
@@ -299,8 +267,8 @@ func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privat
 	if err != nil {
 		return nil, err
 	}
-	stb.Commit()
-	receipt, err := stb.TransactionReceipt(ctx, tx.Hash())
+
+	receipt, err := chain.WaitMined(ctx, stb, tx.Hash())
 	if err != nil {
 		return nil, err
 	}

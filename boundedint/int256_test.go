@@ -24,7 +24,7 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-var uint256TestCases = []BoundedIntTestCase{
+var int256TestCases = []BoundedIntTestCase{
 	{
 		name:         "base 0",
 		baseInteger:  big.NewInt(0),
@@ -34,16 +34,31 @@ var uint256TestCases = []BoundedIntTestCase{
 	{
 		name:         "base -1",
 		baseInteger:  big.NewInt(-1),
-		expectsError: true,
+		expectsError: false,
 	},
 	{
 		name:         "base -1 * 2^8",
 		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
-		expectsError: true,
+		expectsError: false,
 	},
 	{
 		name:         "base -1 * 2^64",
 		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
+		expectsError: false,
+	},
+	{
+		name:         "base -1 * 2^255",
+		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
+		expectsError: false,
+	},
+	{
+		name:         "base -1 * 2^255 - 1",
+		baseInteger:  new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
+		expectsError: true,
+	},
+	{
+		name:         "base -1 * 2^512",
+		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
 		expectsError: true,
 	},
 	// positive numbers
@@ -63,13 +78,13 @@ var uint256TestCases = []BoundedIntTestCase{
 		expectsError: false,
 	},
 	{
-		name:         "base 2^256 - 1",
-		baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
+		name:         "base 2^255 - 1",
+		baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^256",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil),
+		name:         "base 2^255",
+		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
 		expectsError: true,
 	},
 	{
@@ -79,17 +94,17 @@ var uint256TestCases = []BoundedIntTestCase{
 	},
 }
 
-// TestSet tests the creation of valid and invalid Uint256 structs by calling the Set function
-func TestUint256Set(t *testing.T) {
-	for _, tc := range uint256TestCases {
+// TestSet tests the creation of valid and invalid Int256 structs by calling the Set function
+func TestInt256Set(t *testing.T) {
+	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256().Set(*tc.baseInteger)
+			result, err := NewInt256().Set(*tc.baseInteger)
 			if tc.expectsError && err == nil {
-				t.Fatalf("expected error when creating new Uint256, but got none")
+				t.Fatalf("expected error when creating new Int256, but got none")
 			}
 			if !tc.expectsError {
 				if err != nil {
-					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
 				resultValue := result.Value()
 				if (&resultValue).Cmp(tc.baseInteger) != 0 {
@@ -100,29 +115,29 @@ func TestUint256Set(t *testing.T) {
 	}
 }
 
-// TestCopy tests the duplication of an existing Uint256 variable
-func TestUint256Copy(t *testing.T) {
-	for _, tc := range uint256TestCases {
+// TestCopy tests the duplication of an existing Int256 variable
+func TestInt256Copy(t *testing.T) {
+	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewUint256().Set(*tc.baseInteger)
+				r, err := NewInt256().Set(*tc.baseInteger)
 				if err != nil {
-					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
 
-				c := NewUint256().Copy(r)
+				c := NewInt256().Copy(r)
 
 				if !c.Equals(r) {
-					t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
+					t.Fatalf("copy of Int256 %v has an unequal value of %v", r, c)
 				}
 			}
 		})
 	}
 }
 
-// TestStore indirectly tests the marshaling and unmarshaling of a random Uint256 variable
-func TestUint256Store(t *testing.T) {
-	testDir, err := ioutil.TempDir("", "uint256_test_store")
+// TestStore indirectly tests the marshaling and unmarshaling of a random Int256 variable
+func TestInt256Store(t *testing.T) {
+	testDir, err := ioutil.TempDir("", "int256_test_store")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,26 +148,26 @@ func TestUint256Store(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, tc := range uint256TestCases {
+	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewUint256().Set(*tc.baseInteger)
+				r, err := NewInt256().Set(*tc.baseInteger)
 				if err != nil {
-					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
 
 				k := r.String()
 
 				stateStore.Put(k, r)
 
-				var u *Uint256
+				var u *Int256
 				err = stateStore.Get(k, &u)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				if !u.Equals(r) {
-					t.Fatalf("retrieved Uint256 %v has an unequal balance to the original Uint256 %v", u, r)
+					t.Fatalf("retrieved Int256 %v has an unequal balance to the original Uint256 %v", u, r)
 				}
 			}
 		})

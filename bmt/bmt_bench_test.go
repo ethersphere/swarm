@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package boundedint
+package bmt
 
-import "math/big"
+import (
+	"fmt"
+	"testing"
+)
 
-type BoundedInt interface {
-	Value() big.Int
-}
-	
-type BoundedIntTestCase struct {
-	name         string
-	baseInteger  *big.Int
-	expectsError bool
+func BenchmarkBMTUsed(t *testing.B) {
+	size := 4096
+	t.Run(fmt.Sprintf("%v_size_%v", "BMT", size), func(t *testing.B) {
+		benchmarkBMT(t, size)
+	})
 }

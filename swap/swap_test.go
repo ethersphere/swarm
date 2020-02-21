@@ -652,15 +652,21 @@ func TestResetBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// set balances arbitrarily
-	debitor.setBalance(debitorBalance)
-	creditor.setBalance(creditorBalance)
+	if err = debitor.setBalance(debitorBalance); err != nil {
+		t.Fatal(err)
+	}
+	if err = creditor.setBalance(creditorBalance); err != nil {
+		t.Fatal(err)
+	}
 
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
+	if err = creditor.sendCheque(); err != nil {
+		t.Fatal(err)
+	}
 
 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
 		Cheque: creditor.getPendingCheque(),
@@ -679,15 +685,14 @@ func TestResetBalance(t *testing.T) {
 	msg := &EmitChequeMsg{
 		Cheque: cheque,
 	}
-	// now we need to create the channel...
-	testBackend.cashDone = make(chan struct{})
+
 	// ...and trigger message handling on the receiver side (creditor)
 	// remember that debitor is the model of the remote node for the creditor...
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
 	case <-testBackend.cashDone:
 		log.Debug("cash transaction completed and committed")
@@ -697,6 +702,74 @@ func TestResetBalance(t *testing.T) {
 	// finally check that the creditor also successfully reset the balances
 	if !debitor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
 		t.Fatalf("unexpected balance to be 0, but it is %v", debitor.getBalance())
+	}
+}
+
+// TestDebtCheques verifies that cheques that would put a node in debt past the defined tolerance are rejected
+// and that ones within the tolerance are accepted
+func TestDebtCheques(t *testing.T) {
+	testBackend := newTestBackend(t)
+	defer testBackend.Close()
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	creditorSwap, cleanup := newTestSwap(t, beneficiaryKey, testBackend)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := testDeploy(ctx, creditorSwap, boundedint.Uint64ToUint256(0)); err != nil {
+		t.Fatal(err)
+	}
+
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, boundedint.Uint64ToUint256((DefaultPaymentThreshold * 2)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	debitorDummyPeer := newDummyPeerWithSpec(Spec)
+	debitorPeer, err := creditorSwap.addPeer(debitorDummyPeer.Peer, ownerAddress, debitorChequebook.ContractParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create debt cheque
+	chequeAmount := boundedint.Uint64ToUint256(ChequeDebtTolerance * 2)
+	cheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// simulate cheque handling
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
+		Cheque: cheque,
+	})
+	// cheque should not have gone through as it would put the creditor in debt
+	if err == nil || !strings.Contains(err.Error(), "cause debt") {
+		t.Fatalf("expected invalid cheque to trigger debt cheque error, but got: %v", err)
+	}
+
+	// now create a (barely) admissible cheque
+	chequeAmount = boundedint.Uint64ToUint256(ChequeDebtTolerance)
+	cheque, err = newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, creditorSwap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// simulate cheque handling
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitorPeer, &EmitChequeMsg{
+		Cheque: cheque,
+	})
+	// cheque should have gone through
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
+	select {
+	case <-testBackend.cashDone:
+		log.Debug("cash transaction completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
 }
 
@@ -790,7 +863,10 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testPeer.setBalance(boundedint.Int64ToInt256(-8888))
+
+	if err = testPeer.setBalance(boundedint.Int64ToInt256(-8888)); err != nil {
+		t.Fatal(err)
+	}
 
 	tmpBalance := testPeer.getBalance()
 	swap.store.Put(testPeer.ID().String(), &tmpBalance)
@@ -1251,15 +1327,21 @@ func TestSwapLogToFile(t *testing.T) {
 	debitorAmount, err := boundedint.NewInt256().Set(ta)
 	creditorAmount, err := boundedint.NewInt256().Set(*new(big.Int).Mul(big.NewInt(-1), &ta))
 	// set balances arbitrarily
-	debitor.setBalance(debitorAmount)
-	creditor.setBalance(creditorAmount)
+	if err = debitor.setBalance(debitorAmount); err != nil {
+		t.Fatal(err)
+	}
+	if err = creditor.setBalance(creditorAmount); err != nil {
+		t.Fatal(err)
+	}
 
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
 
 	// now simulate sending the cheque to the creditor from the debitor
-	creditor.sendCheque()
+	if err = creditor.sendCheque(); err != nil {
+		t.Fatal(err)
+	}
 
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
@@ -1363,7 +1445,10 @@ func TestAvailableBalance(t *testing.T) {
 	// send a cheque worth 42
 	chequeAmount := uint64(42)
 	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
-	peer.setBalance(boundedint.Int64ToInt256(int64(-chequeAmount)))
+	if err = peer.setBalance(boundedint.Int64ToInt256(int64(-chequeAmount))); err != nil {
+		t.Fatal(err)
+	}
+
 	if err = peer.sendCheque(); err != nil {
 		t.Fatal(err)
 	}

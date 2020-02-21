@@ -217,7 +217,7 @@ func (p *Peer) sendCheque() error {
 	honeyAmount := boundedint.Int64ToInt256(int64(cheque.Honey))
 	err = p.updateBalance(honeyAmount)
 	if err != nil {
-		return fmt.Errorf("error while creating cheque: %v", err)
+		return fmt.Errorf("error while updating balance: %v", err)
 	}
 
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)

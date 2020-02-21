@@ -236,8 +236,6 @@ func TestEmitCheque(t *testing.T) {
 	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
-	// now we need to create the channel...
-	testBackend.cashDone = make(chan struct{})
 
 	log.Debug("deploy to simulated backend")
 
@@ -317,9 +315,9 @@ func TestEmitCheque(t *testing.T) {
 		t.Fatalf("Expected cheque %v at creditor, but it was %v:", cheque, recvCheque)
 	}
 
-	// we wait until the cashCheque is actually terminated (ensures proper nounce count)
+	// we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
-	case <-creditorSwap.backend.(*swapTestBackend).cashDone:
+	case <-testBackend.cashDone:
 		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transaction to complete")
@@ -375,7 +373,9 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	creditor.setBalance(b)
+	if err = creditor.setBalance(-int64(DefaultPaymentThreshold)); err != nil {
+		t.Fatal(err)
+	}
 
 	// we expect a cheque at the end of the test, but not yet
 	if creditor.getLastSentCheque() != nil {
@@ -448,7 +448,10 @@ loop:
 		case <-ctx.Done():
 			t.Fatal("Expected one cheque, but there is none")
 		default:
-			if creditor.getLastSentCheque() != nil {
+			creditor.lock.Lock()
+			lastSentCheque := creditor.getLastSentCheque()
+			creditor.lock.Unlock()
+			if lastSentCheque != nil {
 				break loop
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -515,7 +518,9 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 	// we don't expect any change after the test
-	debitor.setBalance(expectedBalance)
+	if err = debitor.setBalance(expectedBalance); err != nil {
+		t.Fatal(err)
+	}
 	// we also don't expect any cheques yet
 	if debitor.getPendingCheque() != nil {
 		t.Fatalf("Expected no cheques yet, but there is %v", debitor.getPendingCheque())
