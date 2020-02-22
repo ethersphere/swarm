@@ -14,31 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package leveldb
+package fcds
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
+	"fmt"
+	"sort"
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/storage/fcds"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
-var _ fcds.MetaStore = new(MetaStore)
+var _ MetaStore = new(metaStore)
 
 // MetaStore implements FCDS MetaStore with LevelDB
 // for persistence.
-type MetaStore struct {
+type metaStore struct {
 	db   *leveldb.DB
 	free map[uint8]int64 // free slots cardinality
-	mu   sync.RWMutex    // synchronise free slots
+	mtx  sync.RWMutex    // synchronise free slots
 }
 
 // NewMetaStore returns new MetaStore at path.
-func NewMetaStore(path string, inmem bool) (s *MetaStore, err error) {
+func NewMetaStore(path string, inmem bool) (s *metaStore, err error) {
 	var (
 		db *leveldb.DB
 	)
@@ -48,16 +52,21 @@ func NewMetaStore(path string, inmem bool) (s *MetaStore, err error) {
 	} else {
 		db, err = leveldb.OpenFile(path, &opt.Options{})
 	}
+
 	if err != nil {
 		return nil, err
 	}
-	return &MetaStore{
-		db: db,
+
+	// todo: try to get and deserialize the free map from the persisted value on disk
+
+	return &metaStore{
+		db:   db,
+		free: make(map[uint8]int64),
 	}, err
 }
 
 // Get returns chunk meta information.
-func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
+func (s *metaStore) Get(addr chunk.Address) (m *Meta, err error) {
 	data, err := s.db.Get(chunkKey(addr), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
@@ -65,7 +74,7 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 		}
 		return nil, err
 	}
-	m = new(fcds.Meta)
+	m = new(Meta)
 	if err := m.UnmarshalBinary(data); err != nil {
 		return nil, err
 	}
@@ -75,7 +84,7 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 // Set adds a new chunk meta information for a shard.
 // Reclaimed flag denotes that the chunk is at the place of
 // already deleted chunk, not appended to the end of the file.
-func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
+func (s *metaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *Meta) (err error) {
 	batch := new(leveldb.Batch)
 	if reclaimed {
 		batch.Delete(freeKey(shard, m.Offset))
@@ -89,25 +98,48 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 }
 
 // Remove removes chunk meta information from the shard.
-func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
+func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	m, err := s.Get(addr)
 	if err != nil {
 		return err
 	}
 	batch := new(leveldb.Batch)
+
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	batch.Put(freeKey(shard, m.Offset), nil)
+	s.free[shard]++
+	batch.Put(freeCountKey(), encodeFreeSlots(s.free))
 	batch.Delete(chunkKey(addr))
-	return s.db.Write(batch, nil)
+
+	err = s.db.Write(batch, nil)
+	if err != nil {
+		s.free[shard]-- // rollback the value change since the commit did not succeed
+		return err
+	}
+
+	return nil
 }
 
-func (s *MetaStore) NextShard() uint8 {
-	return 0
+func (s *metaStore) NextShard() uint8 {
+	freeSlots := make([]shardSlots, ShardCount)
+	for shard, slots := range s.free {
+		fmt.Println("shard ", shard, "slots", slots)
+		freeSlots[shard] = shardSlots{shard: shard, slots: slots}
+	}
+
+	spew.Dump(freeSlots)
+	sort.Sort(BySlots(freeSlots))
+	spew.Dump(freeSlots)
+
+	return freeSlots[0].shard
 }
 
 // FreeOffset returns an offset that can be reclaimed by
 // another chunk. If the returned value is less then 0
 // there are no free offset at this shard.
-func (s *MetaStore) FreeOffset() (shard uint8, offset int64, err error) {
+func (s *metaStore) FreeOffset() (shard uint8, offset int64, err error) {
 	i := s.db.NewIterator(nil, nil)
 	defer i.Release()
 
@@ -123,7 +155,7 @@ func (s *MetaStore) FreeOffset() (shard uint8, offset int64, err error) {
 
 // Count returns a number of chunks in MetaStore.
 // This operation is slow for larger numbers of chunks.
-func (s *MetaStore) Count() (count int, err error) {
+func (s *metaStore) Count() (count int, err error) {
 	it := s.db.NewIterator(nil, nil)
 	defer it.Release()
 
@@ -142,7 +174,7 @@ func (s *MetaStore) Count() (count int, err error) {
 }
 
 // Iterate iterates over all chunk meta information.
-func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err error)) (err error) {
+func (s *metaStore) Iterate(fn func(chunk.Address, *Meta) (stop bool, err error)) (err error) {
 	it := s.db.NewIterator(nil, nil)
 	defer it.Release()
 
@@ -155,7 +187,7 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 		if len(key) < 1 {
 			continue
 		}
-		m := new(fcds.Meta)
+		m := new(Meta)
 		if err := m.UnmarshalBinary(value); err != nil {
 			return err
 		}
@@ -171,13 +203,14 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 }
 
 // Close closes the underlaying LevelDB instance.
-func (s *MetaStore) Close() (err error) {
+func (s *metaStore) Close() (err error) {
 	return s.db.Close()
 }
 
 const (
 	chunkPrefix = 0
 	freePrefix  = 1
+	freeCount   = 2
 )
 
 func chunkKey(addr chunk.Address) (key []byte) {
@@ -190,4 +223,45 @@ func freeKey(shard uint8, offset int64) (key []byte) {
 	key[1] = shard
 	binary.BigEndian.PutUint64(key[2:10], uint64(offset))
 	return key
+}
+
+func freeCountKey() (key []byte) {
+	return []byte{freeCount}
+}
+
+func encodeFreeSlots(m map[uint8]int64) []byte {
+	b := new(bytes.Buffer)
+
+	e := gob.NewEncoder(b)
+
+	err := e.Encode(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return b.Bytes()
+}
+
+func decodeFreeSlots(b []byte) map[uint8]int64 {
+	buf := bytes.NewBuffer(b)
+	var decodedMap map[uint8]int64
+	d := gob.NewDecoder(buf)
+
+	err := d.Decode(&decodedMap)
+	if err != nil {
+		panic(err)
+	}
+
+	return decodedMap
+}
+
+type BySlots []shardSlots
+
+func (a BySlots) Len() int           { return len(a) }
+func (a BySlots) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BySlots) Less(i, j int) bool { return a[j].slots < a[i].slots }
+
+type shardSlots struct {
+	shard uint8
+	slots int64
 }

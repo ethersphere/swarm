@@ -118,6 +118,10 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	return nil
 }
 
+func (s *Store) ShardSize() []int64 {
+	return nil
+}
+
 // Close doesn't do anything.
 // It exists to implement fcdb.MetaStore interface.
 func (s *Store) Close() error {

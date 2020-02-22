@@ -35,7 +35,25 @@ func TestFCDS(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
+		metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return test.NewFCDSStore(t, path, metaStore)
+	})
+}
+
+// TestFCDS runs a standard series of tests on main Store implementation
+// with LevelDB meta store.
+func TestFCDSInMem(t *testing.T) {
+	test.RunAll(t, func(t *testing.T) (fcds.Storer, func()) {
+		path, err := ioutil.TempDir("", "swarm-fcds-")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		metaStore, err := leveldb.NewMetaStore("", true)
 		if err != nil {
 			t.Fatal(err)
 		}
