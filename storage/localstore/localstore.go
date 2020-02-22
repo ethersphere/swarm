@@ -19,6 +19,7 @@ package localstore
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
@@ -230,7 +231,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			filepath.Join(path, "data"),
 			chunk.DefaultSize+8, // chunk data has additional 8 bytes prepended
 			metaStore,
-			fcds.WithCache(true),
+			fcds.WithCache(false),
 		)
 		if err != nil {
 			return nil, err
@@ -496,6 +497,17 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	indexInfo["gcSize"] = int(val)
 
 	indexInfo["data"], err = db.data.Count()
+	cnt := 0
+	db.data.Iterate(func(_ chunk.Chunk) (bool, error) {
+		cnt++
+		return false, nil
+	})
+	indexInfo["data_iter"] = cnt
+	shards := db.data.ShardSize()
+	for i, v := range shards {
+		indexInfo[fmt.Sprintf("shardSizes_%d", i)] = int(v)
+	}
+
 	return indexInfo, err
 }
 

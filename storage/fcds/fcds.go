@@ -40,13 +40,14 @@ type Storer interface {
 	Delete(addr chunk.Address) (err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
+	ShardSize() []int64
 	Close() (err error)
 }
 
 var _ Storer = new(Store)
 
 // Number of files that store chunk data.
-const shardCount = 32
+var ShardCount = uint8(4)
 
 // ErrStoreClosed is returned if store is already closed.
 var ErrStoreClosed = errors.New("closed store")
@@ -73,7 +74,7 @@ type Option func(*Store)
 func WithCache(yes bool) Option {
 	return func(s *Store) {
 		if yes {
-			s.freeCache = newOffsetCache(shardCount)
+			s.freeCache = newOffsetCache(ShardCount)
 		} else {
 			s.freeCache = nil
 		}
@@ -83,9 +84,9 @@ func WithCache(yes bool) Option {
 // New constructs a new Store with files at path, with specified max chunk size.
 func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s *Store, err error) {
 	s = &Store{
-		shards:       make([]shard, shardCount),
+		shards:       make([]shard, ShardCount),
 		meta:         metaStore,
-		free:         make([]bool, shardCount),
+		free:         make([]bool, ShardCount),
 		maxChunkSize: maxChunkSize,
 		quit:         make(chan struct{}),
 	}
@@ -95,7 +96,7 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 	if err := os.MkdirAll(path, 0777); err != nil {
 		return nil, err
 	}
-	for i := byte(0); i < shardCount; i++ {
+	for i := byte(0); i < ShardCount; i++ {
 		s.shards[i].f, err = os.OpenFile(filepath.Join(path, fmt.Sprintf("chunks-%v.db", i)), os.O_CREATE|os.O_RDWR, 0666)
 		if err != nil {
 			return nil, err
@@ -181,14 +182,18 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 		return err
 	}
 
+	//log.Error("shard getOffset", "offset", offset, "reclaimed", reclaimed)
+
 	if offset < 0 {
 		// no free offsets found,
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
+		//log.Error("seeking to end")
 	} else {
 		// seek to the offset position
 		// to replace the chunk data at that position
+		//log.Error("seek to offset position")
 		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
 	if err != nil {
@@ -212,6 +217,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 // If offset is less then 0, no free offsets are available.
 func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
 	if !s.shardHasFreeOffsets(shard) {
+		log.Error("no shard offsets avail")
 		return -1, false, nil
 	}
 
@@ -219,17 +225,22 @@ func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error)
 	if s.freeCache != nil {
 		offset = s.freeCache.get(shard)
 	}
-
+	log.Error("tried to get offset from cache", "offset", offset, "shard", shard)
 	if offset < 0 {
+
 		offset, err = s.meta.FreeOffset(shard)
 		if err != nil {
 			return 0, false, err
 		}
+		log.Error("tried to get offset from meta", "offset", offset)
 	}
 	if offset < 0 {
 		s.markShardWithFreeOffsets(shard, false)
+		log.Error("no free offsets found in meta", "offset", offset)
+
 		return -1, false, nil
 	}
+	log.Error("found in meta", "offset", offset)
 
 	return offset, true, nil
 }
@@ -287,6 +298,18 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 		}
 		return fn(chunk.NewChunk(addr, data))
 	})
+}
+
+func (s *Store) ShardSize() []int64 {
+	sizes := make([]int64, ShardCount)
+	for i, shard := range s.shards {
+		fi, err := shard.f.Stat()
+		if err != nil {
+			panic(err)
+		}
+		sizes[i] = fi.Size() / int64(4096)
+	}
+	return sizes
 }
 
 // Close disables of further operations on the Store.
@@ -359,7 +382,7 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 
 // getShard returns a shard number for the chunk address.
 func getShard(addr chunk.Address) (shard uint8) {
-	return addr[len(addr)-1] % shardCount
+	return addr[len(addr)-1] % ShardCount
 }
 
 type shard struct {
