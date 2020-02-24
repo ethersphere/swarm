@@ -224,6 +224,15 @@ func (d *dummySectionWriter) isFull() bool {
 	return d.size == d.sectionSize*d.branches
 }
 
+func (d *dummySectionWriter) SumIndexed(b []byte, i int) []byte {
+	return d.writer.Sum(b)
+}
+
+func (d *dummySectionWriter) WriteIndexed(_ int, b []byte) {
+	log.Warn("index in WriteIndexed ignored for dummyWriter")
+	d.writer.Write(b)
+}
+
 // TestDummySectionWriter
 func TestDummySectionWriter(t *testing.T) {
 

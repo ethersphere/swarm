@@ -104,3 +104,11 @@ func (c *Cache) Get(index int) []byte {
 func (c *Cache) Delete(index int) {
 	delete(c.data, index)
 }
+
+func (c *Cache) SumIndexed(b []byte, i int) []byte {
+	return c.w.SumIndexed(b, i)
+}
+
+func (c *Cache) WriteIndexed(i int, b []byte) {
+	c.w.WriteIndexed(i, b)
+}

@@ -13,4 +13,6 @@ type SectionWriter interface {
 	SetSpan(length int)                                 // set data span of chunk
 	SectionSize() int                                   // section size of this SectionWriter
 	Branches() int                                      // branch factor of this SectionWriter
+	SumIndexed([]byte, int) []byte
+	WriteIndexed(int, []byte)
 }

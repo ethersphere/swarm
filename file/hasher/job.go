@@ -31,8 +31,8 @@ type job struct {
 	firstSectionData []byte // store first section of data written to solve the dangling chunk edge case
 
 	writeC chan jobUnit
-	writer file.SectionWriter // underlying data processor
-	doneC  chan struct{}      // pointer to target doneC channel, set to nil in process() when closed
+	writer file.SectionWriter
+	doneC  chan struct{} // pointer to target doneC channel, set to nil in process() when closed
 
 	mu sync.Mutex
 }
@@ -165,8 +165,8 @@ OUTER:
 				idx := entry.index + i
 				data := entry.data[offset : offset+jb.writer.SectionSize()]
 				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", oldProcessCount+i, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
-				jb.writer.SeekSection(idx)
-				jb.writer.Write(data)
+				//jb.writer.SeekSection(idx)
+				jb.writer.WriteIndexed(idx, data)
 				offset += jb.writer.SectionSize()
 			}
 
@@ -224,10 +224,10 @@ func (jb *job) sum() {
 	size := jb.size()
 	//span := bmt.LengthToSpan(size)
 	refSize := jb.count() * jb.params.SectionSize
-	jb.writer.SetLength(refSize)
+	//jb.writer.SetLength(refSize)
 	jb.writer.SetSpan(size)
 	log.Trace("job sum", "count", jb.count(), "refsize", refSize, "size", size, "datasection", jb.dataSection, "level", jb.level, "targetlevel", targetLevel, "endcount", jb.endCount)
-	ref := jb.writer.Sum(nil)
+	ref := jb.writer.SumIndexed(nil, refSize)
 
 	// endCount > 0 means this is the last chunk on the level
 	// the hash from the level below the target level will be the result

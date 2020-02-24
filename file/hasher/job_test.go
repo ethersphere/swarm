@@ -544,9 +544,9 @@ func TestJobVector(t *testing.T) {
 			if ie > dataLength {
 				ie = dataLength
 			}
-			writeSize := ie - i
+			//writeSize := ie - i
 			dataHash.Reset()
-			dataHash.SetLength(writeSize)
+			//dataHash.SetLength(writeSize)
 			c, err := dataHash.Write(data[i:ie])
 			if err != nil {
 				jb.destroy()
@@ -556,7 +556,7 @@ func TestJobVector(t *testing.T) {
 				jb.destroy()
 				t.Fatalf("data ref short write: expect %d, got %d", ie-i, c)
 			}
-			ref := dataHash.Sum(nil)
+			ref := dataHash.Sum(nil) //, writeSize)
 			log.Debug("data ref", "i", i, "ie", ie, "data", hexutil.Encode(ref))
 			jb.write(count, ref)
 			count += 1
@@ -621,9 +621,9 @@ func benchmarkJob(b *testing.B) {
 			if ie > dataLength {
 				ie = dataLength
 			}
-			writeSize := ie - i
+			//writeSize := ie - i
 			dataHash.Reset()
-			dataHash.SetLength(writeSize)
+			//dataHash.SetLength(writeSize)
 			c, err := dataHash.Write(data[i:ie])
 			if err != nil {
 				jb.destroy()

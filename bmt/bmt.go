@@ -25,9 +25,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/ethersphere/swarm/file"
-	"github.com/ethersphere/swarm/log"
 )
 
 /*
@@ -290,11 +287,12 @@ func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
 	}
 }
 
-// SetWriter implements file.SectionWriter
-func (h *Hasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
-	log.Warn("Synchasher does not currently support SectionWriter chaining")
-	return h
-}
+//
+//// SetWriter implements file.SectionWriter
+//func (h *Hasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
+//	log.Warn("Synchasher does not currently support SectionWriter chaining")
+//	return h
+//}
 
 // SectionSize implements file.SectionWriter
 func (h *Hasher) SectionSize() int {
