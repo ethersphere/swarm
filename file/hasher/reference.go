@@ -39,6 +39,13 @@ func (r *ReferenceHasher) Hash(data []byte) []byte {
 		}
 		r.update(0, data[i:i+l])
 	}
+
+	// if we didn't end on a chunk boundary we need to hash remaining chunks first
+	r.hashUnfinished()
+
+	// if the already hashed parts tree is balanced
+	r.moveDanglingChunk()
+
 	return r.digest()
 }
 
@@ -77,12 +84,6 @@ func (r *ReferenceHasher) sum(lvl int) []byte {
 // sums the final chunks of each level
 // skips intermediate levels that end on span boundary
 func (r *ReferenceHasher) digest() []byte {
-
-	// if we didn't end on a chunk boundary we need to hash remaining chunks first
-	r.hashUnfinished()
-
-	// if the already hashed parts tree is balanced
-	r.moveDanglingChunk()
 
 	// the first section of the buffer will hold the root hash
 	return r.buffer[:r.params.SectionSize]
