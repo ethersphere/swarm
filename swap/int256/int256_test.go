@@ -32,69 +32,69 @@ type testCase struct {
 
 var int256TestCases = []testCase{
 	{
-		name:         "base 0",
+		name:         "case 0",
 		baseInteger:  big.NewInt(0),
 		expectsError: false,
 	},
 	// negative numbers
 	{
-		name:         "base -1",
+		name:         "case -1",
 		baseInteger:  big.NewInt(-1),
 		expectsError: false,
 	},
 	{
-		name:         "base -1 * 2^8",
+		name:         "case -1 * 2^8",
 		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
 		expectsError: false,
 	},
 	{
-		name:         "base -1 * 2^64",
+		name:         "case -1 * 2^64",
 		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
 		expectsError: false,
 	},
 	{
-		name:         "base -1 * 2^255",
+		name:         "case -1 * 2^255",
 		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
 		expectsError: false,
 	},
 	{
-		name:         "base -1 * 2^255 - 1",
+		name:         "case -1 * 2^255 - 1",
 		baseInteger:  new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
 		expectsError: true,
 	},
 	{
-		name:         "base -1 * 2^512",
+		name:         "case -1 * 2^512",
 		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
 		expectsError: true,
 	},
 	// positive numbers
 	{
-		name:         "base 1",
+		name:         "case 1",
 		baseInteger:  big.NewInt(1),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^8",
+		name:         "case 2^8",
 		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^128",
+		name:         "case 2^128",
 		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^255 - 1",
+		name:         "case 2^255 - 1",
 		baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^255",
+		name:         "case 2^255",
 		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
 		expectsError: true,
 	},
 	{
-		name:         "base 2^512",
+		name:         "case 2^512",
 		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
 		expectsError: true,
 	},
