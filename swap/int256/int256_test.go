@@ -26,76 +26,79 @@ import (
 
 type testCase struct {
 	name         string
-	baseInteger  *big.Int
+	value        *big.Int
 	expectsError bool
 }
 
+// the following test cases cover a range of values to be used to create int256 variables
+// these variables are expected to be created successfully when using integer values
+// contained in the closed interval between -2^255 and 2^255 - 1
 var int256TestCases = []testCase{
 	{
 		name:         "case 0",
-		baseInteger:  big.NewInt(0),
+		value:        big.NewInt(0),
 		expectsError: false,
 	},
 	// negative numbers
 	{
 		name:         "case -1",
-		baseInteger:  big.NewInt(-1),
+		value:        big.NewInt(-1),
 		expectsError: false,
 	},
 	{
 		name:         "case -1 * 2^8",
-		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
+		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
 		expectsError: false,
 	},
 	{
 		name:         "case -1 * 2^64",
-		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
+		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
 		expectsError: false,
 	},
 	{
 		name:         "case -1 * 2^255",
-		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
+		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)),
 		expectsError: false,
 	},
 	{
 		name:         "case -1 * 2^255 - 1",
-		baseInteger:  new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
+		value:        new(big.Int).Sub(new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)), big.NewInt(1)),
 		expectsError: true,
 	},
 	{
 		name:         "case -1 * 2^512",
-		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
+		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil)),
 		expectsError: true,
 	},
 	// positive numbers
 	{
 		name:         "case 1",
-		baseInteger:  big.NewInt(1),
+		value:        big.NewInt(1),
 		expectsError: false,
 	},
 	{
 		name:         "case 2^8",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
 		expectsError: false,
 	},
 	{
 		name:         "case 2^128",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		expectsError: false,
 	},
 	{
 		name:         "case 2^255 - 1",
-		baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
+		value:        new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1)),
 		expectsError: false,
 	},
 	{
 		name:         "case 2^255",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil),
 		expectsError: true,
 	},
 	{
 		name:         "case 2^512",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
 		expectsError: true,
 	},
 }
@@ -104,7 +107,7 @@ var int256TestCases = []testCase{
 func TestInt256Set(t *testing.T) {
 	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewInt256().Set(*tc.baseInteger)
+			result, err := NewInt256().Set(*tc.value)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Int256, but got none")
 			}
@@ -113,8 +116,8 @@ func TestInt256Set(t *testing.T) {
 					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
 				resultValue := result.Value()
-				if (&resultValue).Cmp(tc.baseInteger) != 0 {
-					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.value)
+				if (&resultValue).Cmp(tc.value) != 0 {
+					t.Fatalf("expected value of %v, got %v instead", tc.value, result.value)
 				}
 			}
 		})
@@ -164,7 +167,7 @@ func TestInt256Store(t *testing.T) {
 	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewInt256().Set(*tc.baseInteger)
+				r, err := NewInt256().Set(*tc.value)
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
