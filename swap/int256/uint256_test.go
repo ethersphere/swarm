@@ -24,7 +24,7 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-var uint256TestCases = []BoundedIntTestCase{
+var uint256TestCases = []testCase{
 	{
 		name:         "base 0",
 		baseInteger:  big.NewInt(0),

@@ -24,7 +24,13 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-var int256TestCases = []BoundedIntTestCase{
+type testCase struct {
+	name         string
+	baseInteger  *big.Int
+	expectsError bool
+}
+
+var int256TestCases = []testCase{
 	{
 		name:         "base 0",
 		baseInteger:  big.NewInt(0),
