@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/chunk"
 	chunktesting "github.com/ethersphere/swarm/chunk/testing"
@@ -43,8 +44,8 @@ func TestStoreGrow(t *testing.T) {
 	}(ShardCount)
 
 	ShardCount = 16
-	capacity := 10000
-	gcTarget := 1000
+	capacity := 100000
+	gcTarget := 7000
 	insert := 10000000000
 
 	s, err := New(path, chunk.DefaultSize, newMetaStore(), WithCache(false))
@@ -74,7 +75,10 @@ func TestStoreGrow(t *testing.T) {
 			case sem <- struct{}{}:
 				gcRuns++
 				go func() {
-					defer func() { <-sem }()
+					defer func() {
+						time.Sleep(1 * time.Second)
+						<-sem
+					}()
 					count := 0
 					var wg sync.WaitGroup
 					err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
