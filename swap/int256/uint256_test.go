@@ -102,21 +102,28 @@ func TestUint256Set(t *testing.T) {
 
 // TestCopy tests the duplication of an existing Uint256 variable
 func TestUint256Copy(t *testing.T) {
-	for _, tc := range uint256TestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if !tc.expectsError {
-				r, err := NewUint256().Set(*tc.baseInteger)
-				if err != nil {
-					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
-				}
+	// pick test value
+	i := new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil) // 2^128
+	v, err := NewUint256().Set(*i)
+	if err != nil {
+		t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+	}
 
-				c := NewUint256().Copy(r)
+	// copy picked value
+	c := NewUint256().Copy(v)
 
-				if !c.Equals(r) {
-					t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
-				}
-			}
-		})
+	if !c.Equals(v) {
+		t.Fatalf("copy of Uint256 %v has an unequal value of %v", v, c)
+	}
+
+	_, err = v.Add(v, Uint256From(1))
+	if err != nil {
+		t.Fatalf("got unexpected error when increasing test case %v: %v", v, err)
+	}
+
+	// value of copy should not have changed
+	if c.Equals(v) {
+		t.Fatalf("copy of Uint256 %v had an unexpected change of value to %v", v, c)
 	}
 }
 

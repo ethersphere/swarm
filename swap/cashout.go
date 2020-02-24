@@ -107,7 +107,7 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	transactionCosts, err = int256.NewUint256().Mul(gasPrice, int256.Uint64ToUint256(CashChequeBeneficiaryTransactionCost))
+	transactionCosts, err = int256.NewUint256().Mul(gasPrice, int256.Uint256From(CashChequeBeneficiaryTransactionCost))
 	if err != nil {
 		return nil, nil, err
 	}

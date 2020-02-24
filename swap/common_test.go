@@ -162,7 +162,7 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: int256.Uint64ToUint256(42),
+			CumulativePayout: int256.Uint256From(42),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
@@ -197,7 +197,7 @@ func newRandomTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: int256.Uint64ToUint256(amount),
+			CumulativePayout: int256.Uint256From(amount),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: amount,

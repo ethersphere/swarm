@@ -44,6 +44,14 @@ func (u *Int256) Value() big.Int {
 	return u.value
 }
 
+// Int256From creates a Int256 struct based on the given int64 param
+// any int64 is valid as a Int256
+func Int256From(base int64) *Int256 {
+	u := NewInt256()
+	u.value = *new(big.Int).SetInt64(base)
+	return u
+}
+
 // Set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Int256) Set(value big.Int) (*Int256, error) {
