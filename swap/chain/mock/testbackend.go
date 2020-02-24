@@ -21,6 +21,11 @@ func (b *TestBackend) SendTransaction(ctx context.Context, tx *types.Transaction
 	return err
 }
 
+// SendTransactionNoCommit provides access to the underlying SendTransaction function without the auto commit
+func (b *TestBackend) SendTransactionNoCommit(ctx context.Context, tx *types.Transaction) (err error) {
+	return b.SimulatedBackend.SendTransaction(ctx, tx)
+}
+
 // Close overrides the Close function of the underlying SimulatedBackend so that it does nothing
 // This allows the same SimulatedBackend backend to be reused across tests
 // This is necessary due to some memory leakage issues with the used version of the SimulatedBackend
