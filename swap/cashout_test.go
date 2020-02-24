@@ -19,9 +19,11 @@ package swap
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/uint256"
 )
@@ -33,8 +35,7 @@ import (
 // afterwards it attempts to cash-in a bouncing cheque
 func TestContractIntegration(t *testing.T) {
 	backend := newTestBackend(t)
-	reset := setupContractTest()
-	defer reset()
+	defer backend.Close()
 
 	payout := uint256.FromUint64(42)
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
@@ -116,11 +117,18 @@ func TestContractIntegration(t *testing.T) {
 // TestCashCheque creates a valid cheque and feeds it to cashoutProcessor.cashCheque
 func TestCashCheque(t *testing.T) {
 	backend := newTestBackend(t)
-	reset := setupContractTest()
-	defer reset()
+	defer backend.Close()
 
-	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := uint256.FromUint64(42)
+	store := state.NewInmemoryStore()
+	defer store.Close()
+
+	transactionQueue := chain.NewTxQueue(store, "queue", backend, ownerKey)
+	transactionQueue.Start()
+	defer transactionQueue.Stop()
+
+	cashoutHandler := newTestCashoutResultHandler(nil)
+	cashoutProcessor := newCashoutProcessor(transactionQueue, backend, ownerKey, cashoutHandler)
+	payout := uint256.FromUint64(CashChequeBeneficiaryTransactionCost*2 + 1)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -132,12 +140,14 @@ func TestCashCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cashoutProcessor.cashCheque(context.Background(), &CashoutRequest{
+	cashoutProcessor.submitCheque(context.Background(), &CashoutRequest{
 		Cheque:      *testCheque,
 		Destination: ownerAddress,
 	})
-	if err != nil {
-		t.Fatal(err)
+
+	select {
+	case <-cashoutHandler.cashChequeDone:
+	case <-time.After(5 * time.Second):
 	}
 
 	paidOut, err := chequebook.PaidOut(nil, ownerAddress)
@@ -154,12 +164,18 @@ func TestCashCheque(t *testing.T) {
 // TestEstimatePayout creates a valid cheque and feeds it to cashoutProcessor.estimatePayout
 func TestEstimatePayout(t *testing.T) {
 	backend := newTestBackend(t)
-	reset := setupContractTest()
-	defer reset()
+	defer backend.Close()
 
-	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
+	store := state.NewInmemoryStore()
+	defer store.Close()
+
+	transactionQueue := chain.NewTxQueue(store, "queue", backend, ownerKey)
+	transactionQueue.Start()
+	defer transactionQueue.Stop()
+
+	cashoutProcessor := newCashoutProcessor(transactionQueue, backend, ownerKey, &testCashoutResultHandler{})
+
 	payout := uint256.FromUint64(42)
-
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
 		t.Fatal(err)

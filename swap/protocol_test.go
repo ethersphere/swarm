@@ -49,7 +49,6 @@ type swapTester struct {
 	swap *Swap
 }
 
-// creates a new protocol tester for swap with a deployed chequebook
 func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *uint256.Uint256) (*swapTester, func(), error) {
 	swap, clean := newTestSwap(t, ownerKey, backend)
 
@@ -229,13 +228,10 @@ func TestEmitCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 	creditorSwap := protocolTester.swap
+	cashoutHandler := overrideCashoutResultHandler(creditorSwap)
 
 	debitorSwap, cleanDebitorSwap := newTestSwap(t, beneficiaryKey, testBackend)
 	defer cleanDebitorSwap()
-
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
 
 	log.Debug("deploy to simulated backend")
 
@@ -317,7 +313,7 @@ func TestEmitCheque(t *testing.T) {
 
 	// we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
-	case <-testBackend.cashDone:
+	case <-cashoutHandler.cashChequeDone:
 		log.Debug("cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transaction to complete")
@@ -340,9 +336,6 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
 
 	if err = protocolTester.testHandshake(
 		correctSwapHandshakeMsg(debitorSwap),

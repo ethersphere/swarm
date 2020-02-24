@@ -47,6 +47,7 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/swap/chain"
 	mock "github.com/ethersphere/swarm/swap/chain/mock"
 	"github.com/ethersphere/swarm/uint256"
 )
@@ -62,6 +63,7 @@ For integration tests, run test cluster deployments with all integration moduele
 (blockchains, oracles, etc.)
 */
 // swapSimulationParams allows to avoid global variables for the test
+
 type swapSimulationParams struct {
 	swaps       map[int]*Swap
 	dirs        map[int]string
@@ -165,9 +167,10 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			if err != nil {
 				return nil, nil, err
 			}
+			ts.swap.cashoutProcessor.txScheduler.Start()
 
 			cleanup = func() {
-				ts.swap.store.Close()
+				ts.swap.Close()
 				os.RemoveAll(dir)
 			}
 
@@ -238,7 +241,6 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		TestBackend:    mock.NewTestBackend(defaultBackend),
 		factoryAddress: factoryAddress,
 		tokenAddress:   tokenAddress,
-		cashDone:       make(chan struct{}),
 	}
 	// finally, create all Swap instances for each node, which share the same backend
 	var owner *Owner
@@ -249,7 +251,8 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		if err != nil {
 			t.Fatal(err)
 		}
-		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory)
+		txqueue := chain.NewTxQueue(stores[i], "chain", testBackend, owner.privateKey)
+		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory, txqueue)
 	}
 
 	params.backend = testBackend
@@ -270,10 +273,6 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 	// cleanup backend
 	defer params.backend.Close()
-
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
 
 	// initialize the simulation
 	sim := simulation.NewBzzInProc(newSimServiceMap(params), false)
@@ -305,6 +304,8 @@ func TestMultiChequeSimulation(t *testing.T) {
 	debitorSvc := sim.Service("swap", debitor).(*testService)
 	// get the testService for the creditor
 	creditorSvc := sim.Service("swap", creditor).(*testService)
+
+	cashoutHandler := overrideCashoutResultHandler(creditorSvc.swap)
 
 	var debLen, credLen, debSwapLen, credSwapLen int
 	timeout := time.After(10 * time.Second)
@@ -384,7 +385,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		balanceAfterMessage := debitorBalance - int64(msgPrice)
 		if balanceAfterMessage <= -paymentThreshold {
 			// we need to wait a bit in order to give time for the cheque to be processed
-			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
+			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout, cashoutHandler.cashChequeDone); err != nil {
 				t.Fatal(err)
 			}
 			expectedPayout += uint64(-balanceAfterMessage)
@@ -620,7 +621,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metrics.Counter, lastCount int64, p *Peer, expectedLastPayout uint64) error {
+func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metrics.Counter, lastCount int64, p *Peer, expectedLastPayout uint64, cashChequeDone chan cashChequeDoneData) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -643,7 +644,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				lock.Unlock()
 				wg.Done()
 				return
-			case <-backend.cashDone:
+			case <-cashChequeDone:
 				wg.Done()
 				return
 			}
