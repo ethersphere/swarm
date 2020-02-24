@@ -78,14 +78,46 @@ func (r *ReferenceHasher) sum(lvl int) []byte {
 // skips intermediate levels that end on span boundary
 func (r *ReferenceHasher) digest() []byte {
 
-	// if we did not end on a chunk boundary, the last chunk hasn't been hashed
-	// we need to do this first
+	// if we didn't end on a chunk boundary we need to hash remaining chunks first
+	r.hashUnfinished()
+
+	// if the already hashed parts tree is balanced
+	r.moveDanglingChunk()
+
+	// the first section of the buffer will hold the root hash
+	return r.buffer[:r.params.SectionSize]
+}
+
+// hashes the remaining unhashed chunks at the end of each level
+func (r *ReferenceHasher) hashUnfinished() {
 	if r.length%r.params.ChunkSize != 0 {
 		ref := r.sum(0)
 		copy(r.buffer[r.cursors[1]:], ref)
 		r.cursors[1] += len(ref)
 		r.cursors[0] = r.cursors[1]
 	}
+}
+
+// in case of a balanced tree this method concatenates the reference to the single reference
+// at the highest level of the tree.
+//
+// Let F be full chunks (disregarding branching factor) and S be single references
+// in the following scenario:
+//
+//       S
+//     F   F
+//   F   F   F
+// F   F   F   F S
+//
+// The result will be:
+//
+//       SS
+//     F    F
+//   F   F   F
+// F   F   F   F
+//
+// After which the SS will be hashed to obtain the final root hash
+func (r *ReferenceHasher) moveDanglingChunk() {
 
 	// calculate the total number of levels needed to represent the data (including the data level)
 	targetLevel := getLevelsFromLength(r.length, r.params.SectionSize, r.params.Branches)
@@ -93,7 +125,7 @@ func (r *ReferenceHasher) digest() []byte {
 	// sum every intermediate level and write to the level above it
 	for i := 1; i < targetLevel; i++ {
 
-		// if the tree is balanced or if there is a single reference outside a balanced tree on this level
+		// and if there is a single reference outside a balanced tree on this level
 		// don't hash it again but pass it on to the next level
 		if r.counts[i] > 0 {
 			// TODO: simplify if possible
@@ -109,7 +141,4 @@ func (r *ReferenceHasher) digest() []byte {
 		r.cursors[i+1] += len(ref)
 		r.cursors[i] = r.cursors[i+1]
 	}
-
-	// the first section of the buffer will hold the root hash
-	return r.buffer[:r.params.SectionSize]
 }
