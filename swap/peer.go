@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // ErrDontOwe indictates that no balance is actially owned
@@ -117,12 +117,12 @@ func (p *Peer) setPendingCheque(cheque *Cheque) error {
 
 // getLastSentCumulativePayout returns the cumulative payout of the last sent cheque or 0 if there is none
 // the caller is expected to hold p.lock
-func (p *Peer) getLastSentCumulativePayout() *boundedint.Uint256 {
+func (p *Peer) getLastSentCumulativePayout() *int256.Uint256 {
 	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
-	return boundedint.NewUint256()
+	return int256.NewUint256()
 }
 
 // the caller is expected to hold p.lock
@@ -167,10 +167,10 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
-	price := boundedint.Uint64ToUint256(oraclePrice)
+	price := int256.Uint64ToUint256(oraclePrice)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
-	newCumulativePayout, err := boundedint.NewUint256().Add(cumulativePayout, price)
+	newCumulativePayout, err := int256.NewUint256().Add(cumulativePayout, price)
 	if err != nil {
 		return nil, err
 	}

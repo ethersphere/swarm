@@ -34,13 +34,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/contracts/swap"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
@@ -440,8 +440,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	costsMultiplier := boundedint.Uint64ToUint256(2)
-	costThreshold, err := boundedint.NewUint256().Mul(transactionCosts, costsMultiplier)
+	costsMultiplier := int256.Uint64ToUint256(2)
+	costThreshold, err := int256.NewUint256().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
@@ -506,7 +506,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
 // the caller is expected to hold p.lock
-func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*boundedint.Uint256, error) {
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
 		return nil, err
 	}
@@ -519,7 +519,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*boundedint.Uint
 		return nil, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, boundedint.Uint64ToUint256(expectedAmount))
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, int256.Uint64ToUint256(expectedAmount))
 	if err != nil {
 		return nil, err
 	}

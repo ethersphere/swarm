@@ -32,9 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/boundedint"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	"github.com/ethersphere/swarm/swap/int256"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -50,7 +50,7 @@ type swapTester struct {
 }
 
 // creates a new protocol tester for swap with a deployed chequebook
-func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *boundedint.Uint256) (*swapTester, func(), error) {
+func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *int256.Uint256) (*swapTester, func(), error) {
 	swap, clean := newTestSwap(t, ownerKey, backend)
 
 	err := testDeploy(context.Background(), swap, depositAmount)
@@ -135,7 +135,7 @@ func correctSwapHandshakeMsg(swap *Swap) *HandshakeMsg {
 // TestHandshake tests the correct handshake scenario
 func TestHandshake(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint64ToUint256(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func TestHandshake(t *testing.T) {
 // TestHandshakeInvalidChainID tests that a handshake with the wrong chain id is rejected
 func TestHandshakeInvalidChainID(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint64ToUint256(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 // TestHandshakeEmptyContract tests that a handshake with an empty contract address is rejected
 func TestHandshakeEmptyContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint64ToUint256(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +197,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 // TestHandshakeInvalidContract tests that a handshake with an address that's not a valid chequebook
 func TestHandshakeInvalidContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint64ToUint256(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestHandshakeInvalidContract(t *testing.T) {
 func TestEmitCheque(t *testing.T) {
 	testBackend := newTestBackend(t)
 
-	protocolTester, clean, err := newSwapTester(t, testBackend, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, testBackend, int256.Uint64ToUint256(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestEmitCheque(t *testing.T) {
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	balance := boundedint.Uint64ToUint256(100001)
+	balance := int256.Uint64ToUint256(100001)
 	balanceValue := balance.Value()
 
 	if err := testDeploy(context.Background(), debitorSwap, balance); err != nil {
@@ -331,7 +331,7 @@ func TestEmitCheque(t *testing.T) {
 func TestTriggerPaymentThreshold(t *testing.T) {
 	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
-	protocolTester, clean, err := newSwapTester(t, testBackend, boundedint.Uint64ToUint256(DefaultPaymentThreshold*2))
+	protocolTester, clean, err := newSwapTester(t, testBackend, int256.Uint64ToUint256(DefaultPaymentThreshold*2))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -381,7 +381,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal("Expected pending cheque")
 	}
 
-	if !pending.CumulativePayout.Equals(boundedint.Uint64ToUint256(expectedAmount)) {
+	if !pending.CumulativePayout.Equals(int256.Uint64ToUint256(expectedAmount)) {
 		t.Fatalf("Expected cheque cumulative payout to be %d, but is %v", expectedAmount, pending.CumulativePayout)
 	}
 

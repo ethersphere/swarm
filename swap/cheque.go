@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethersphere/swarm/boundedint"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // encodeForSignature encodes the cheque params in the format used in the signing procedure
@@ -133,8 +133,8 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 
 // verifyChequeAgainstLast verifies that the amount is higher than in the previous cheque and the increase is as expected
 // returns the actual amount received in this cheque
-func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *boundedint.Uint256) (*boundedint.Uint256, error) {
-	actualAmount := boundedint.NewUint256().Copy(cheque.CumulativePayout)
+func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *int256.Uint256) (*int256.Uint256, error) {
+	actualAmount := int256.NewUint256().Copy(cheque.CumulativePayout)
 
 	if lastCheque != nil {
 		if cheque.CumulativePayout.Cmp(lastCheque.CumulativePayout) < 1 {

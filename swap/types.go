@@ -18,14 +18,14 @@ package swap
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/swarm/boundedint"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // ChequeParams encapsulate all cheque parameters
 type ChequeParams struct {
-	Contract         common.Address      // address of chequebook, needed to avoid cross-contract submission
-	Beneficiary      common.Address      // address of the beneficiary, the contract which will redeem the cheque
-	CumulativePayout *boundedint.Uint256 // cumulative amount of the cheque in currency
+	Contract         common.Address  // address of chequebook, needed to avoid cross-contract submission
+	Beneficiary      common.Address  // address of the beneficiary, the contract which will redeem the cheque
+	CumulativePayout *int256.Uint256 // cumulative amount of the cheque in currency
 }
 
 // Cheque encapsulates the parameters and the signature

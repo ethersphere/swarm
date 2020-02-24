@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/swap/chain"
-	"github.com/ethersphere/swarm/boundedint"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // TestContractIntegration tests a end-to-end cheque interaction.
@@ -36,7 +36,7 @@ func TestContractIntegration(t *testing.T) {
 	reset := setupContractTest()
 	defer reset()
 
-	payout := boundedint.Uint64ToUint256(42)
+	payout := int256.Uint64ToUint256(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paidOut, err := boundedint.NewUint256().Set(*result)
+	paidOut, err := int256.NewUint256().Set(*result)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("cheques result", "result", result)
 
 	// create a cheque that will bounce
-	_, err = payout.Add(payout, boundedint.Uint64ToUint256(10000*RetrieveRequestPrice))
+	_, err = payout.Add(payout, int256.Uint64ToUint256(10000*RetrieveRequestPrice))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestCashCheque(t *testing.T) {
 	defer reset()
 
 	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := boundedint.Uint64ToUint256(42)
+	payout := int256.Uint64ToUint256(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -159,7 +159,7 @@ func TestEstimatePayout(t *testing.T) {
 	defer reset()
 
 	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := boundedint.Uint64ToUint256(42)
+	payout := int256.Uint64ToUint256(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -181,7 +181,7 @@ func TestEstimatePayout(t *testing.T) {
 	}
 
 	// the gas price in the simulated backend is 1 therefore the total transactionCost should be 50000 * 1 = 50000
-	if !transactionCost.Equals(boundedint.Uint64ToUint256(CashChequeBeneficiaryTransactionCost)) {
+	if !transactionCost.Equals(int256.Uint64ToUint256(CashChequeBeneficiaryTransactionCost)) {
 		t.Fatalf("unexpected transaction cost: got %v, wanted: %d", transactionCost, 0)
 	}
 }

@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
-	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/swap/chain"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
@@ -38,7 +38,7 @@ type Contract interface {
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
 	Deposit(auth *bind.TransactOpts, amout *big.Int) (*types.Receipt, error)
 	// CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
-	CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *boundedint.Uint256, ownerSig []byte) (*types.Transaction, error)
+	CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *int256.Uint256, ownerSig []byte) (*types.Transaction, error)
 	// CashChequeBeneficiaryResult processes the receipt from a CashChequeBeneficiary transaction
 	CashChequeBeneficiaryResult(receipt *types.Receipt) *CashChequeResult
 	// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
@@ -131,7 +131,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 }
 
 // CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
-func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *boundedint.Uint256, ownerSig []byte) (*types.Transaction, error) {
+func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *int256.Uint256, ownerSig []byte) (*types.Transaction, error) {
 	payout := cumulativePayout.Value()
 	// send a copy of cumulativePayout to instance as it modifies the supplied big int internally
 	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, big.NewInt(0).Set(&payout), ownerSig)

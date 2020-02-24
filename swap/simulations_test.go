@@ -43,12 +43,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
-	"github.com/ethersphere/swarm/boundedint"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	mock "github.com/ethersphere/swarm/swap/chain/mock"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 /*
@@ -161,7 +161,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance, boundedint.Uint64ToUint256(100000*RetrieveRequestPrice))
+			err = testDeploy(context.Background(), balance, int256.Uint64ToUint256(100000*RetrieveRequestPrice))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -427,7 +427,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
 
-	if !cheque2.CumulativePayout.Equals(boundedint.Uint64ToUint256(expectedPayout)) {
+	if !cheque2.CumulativePayout.Equals(int256.Uint64ToUint256(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
@@ -663,7 +663,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if !lastPayout.Equals(boundedint.Uint64ToUint256(expectedLastPayout)) {
+				if !lastPayout.Equals(int256.Uint64ToUint256(expectedLastPayout)) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {
