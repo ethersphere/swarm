@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
-	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/boundedint"
+	"github.com/ethersphere/swarm/swap/chain"
 )
 
 // Contract interface defines the methods exported from the underlying go-bindings for the smart contract
