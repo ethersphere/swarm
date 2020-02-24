@@ -37,15 +37,17 @@ type MetaStore interface {
 
 // Meta stores chunk data size and its offset in a file.
 type Meta struct {
+	Shard  uint8
 	Size   uint16
 	Offset int64
 }
 
 // MarshalBinary returns binary encoded value of meta chunk information.
 func (m *Meta) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, 10)
+	data = make([]byte, 12)
 	binary.BigEndian.PutUint64(data[:8], uint64(m.Offset))
 	binary.BigEndian.PutUint16(data[8:10], m.Size)
+	binary.BigEndian.PutUint16(data[10:12], uint16(m.Shard))
 	return data, nil
 }
 
@@ -53,6 +55,7 @@ func (m *Meta) MarshalBinary() (data []byte, err error) {
 func (m *Meta) UnmarshalBinary(data []byte) error {
 	m.Offset = int64(binary.BigEndian.Uint64(data[:8]))
 	m.Size = binary.BigEndian.Uint16(data[8:10])
+	m.Shard = uint8(binary.BigEndian.Uint16(data[10:12]))
 	return nil
 }
 

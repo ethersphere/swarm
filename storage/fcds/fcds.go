@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -29,6 +30,10 @@ import (
 
 	"github.com/ethersphere/swarm/chunk"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // Storer specifies methods required for FCDS implementation.
 // It can be used where alternative implementations are needed to
@@ -103,6 +108,7 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 		}
 		s.shards[i].mu = new(sync.Mutex)
 	}
+
 	return s, nil
 }
 
@@ -112,8 +118,12 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 		return nil, err
 	}
 	defer s.unprotect()
+	shard, err := s.getShardAddr(addr)
+	if err != nil {
+		return nil, err
+	}
 
-	sh := s.shards[getShard(addr)]
+	sh := s.shards[shard]
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
@@ -138,10 +148,6 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 		return false, err
 	}
 	defer s.unprotect()
-
-	mu := s.shards[getShard(addr)].mu
-	mu.Lock()
-	defer mu.Unlock()
 
 	_, err = s.getMeta(addr)
 	if err != nil {
@@ -171,6 +177,11 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
+	// get a random shard
+	// lock it
+	// find a free offset
+	// write to it
+
 	shard := getShard(addr)
 	sh := s.shards[shard]
 
@@ -181,8 +192,6 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	if err != nil {
 		return err
 	}
-
-	//log.Error("shard getOffset", "offset", offset, "reclaimed", reclaimed)
 
 	if offset < 0 {
 		// no free offsets found,
@@ -209,6 +218,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	return s.meta.Set(addr, shard, reclaimed, &Meta{
 		Size:   uint16(size),
 		Offset: offset,
+		Shard:  shard,
 	})
 }
 
@@ -217,7 +227,6 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 // If offset is less then 0, no free offsets are available.
 func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
 	if !s.shardHasFreeOffsets(shard) {
-		log.Error("no shard offsets avail")
 		return -1, false, nil
 	}
 
@@ -252,7 +261,10 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	}
 	defer s.unprotect()
 
-	shard := getShard(addr)
+	shard, err := s.getShardAddr(addr)
+	if err != nil {
+		return err
+	}
 	s.markShardWithFreeOffsets(shard, true)
 
 	mu := s.shards[shard].mu
@@ -292,7 +304,12 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 
 	return s.meta.Iterate(func(addr chunk.Address, m *Meta) (stop bool, err error) {
 		data := make([]byte, m.Size)
-		_, err = s.shards[getShard(addr)].f.ReadAt(data, m.Offset)
+		shard, err := s.getShardAddr(addr)
+		if err != nil {
+			return true, err
+		}
+
+		_, err = s.shards[shard].f.ReadAt(data, m.Offset)
 		if err != nil {
 			return true, err
 		}
@@ -382,7 +399,16 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 
 // getShard returns a shard number for the chunk address.
 func getShard(addr chunk.Address) (shard uint8) {
-	return addr[len(addr)-1] % ShardCount
+	return uint8(rand.Intn(int(ShardCount)))
+}
+
+func (s *Store) getShardAddr(addr chunk.Address) (shard uint8, err error) {
+	m, err := s.meta.Get(addr)
+	if err != nil {
+		return 0, err
+	}
+
+	return m.Shard, nil
 }
 
 type shard struct {

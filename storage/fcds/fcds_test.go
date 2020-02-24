@@ -17,12 +17,12 @@
 package fcds
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/chunk"
 	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/log"
@@ -42,7 +42,11 @@ func TestStoreGrow(t *testing.T) {
 		ShardCount = sc
 	}(ShardCount)
 
-	ShardCount = 2
+	ShardCount = 16
+	capacity := 10000
+	gcTarget := 1000
+	insert := 10000000000
+
 	s, err := New(path, chunk.DefaultSize, newMetaStore(), WithCache(false))
 	if err != nil {
 		os.RemoveAll(path)
@@ -52,102 +56,65 @@ func TestStoreGrow(t *testing.T) {
 		s.Close()
 		os.RemoveAll(path)
 	}()
+	inserted := 0
+	gcRuns := 0
+	var mtx sync.Mutex
+	sem := make(chan struct{}, 1)
+	for i := 0; i < insert; i++ {
+		ch := chunktesting.GenerateTestRandomChunk()
+		err = s.Put(ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mtx.Lock()
+		inserted++
+		mtx.Unlock()
+		if inserted >= capacity {
+			select {
+			case sem <- struct{}{}:
+				gcRuns++
+				go func() {
+					defer func() { <-sem }()
+					count := 0
+					var wg sync.WaitGroup
+					err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
+						count++
+						wg.Add(1)
+						go func(c chunk.Address) {
+							defer wg.Done()
+							e := s.Delete(c)
+							if e != nil {
+								fmt.Println("error deleteing", e)
+							}
+							mtx.Lock()
+							inserted--
+							mtx.Unlock()
+						}(c.Address())
+						if count >= gcTarget {
+							return true, nil
+						}
+						return false, nil
+					})
+					if err != nil {
+						fmt.Println("iterator err", err)
+					}
+					wg.Wait()
+				}()
+			default:
 
-	chunkss := 0
-	ch := chunktesting.GenerateTestRandomChunk()
-
-	err = s.Put(ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chunkss = 1
-
-	if ss := getShardsSum(s.shards); ss != 4096 {
-		t.Fatal(ss)
-	}
-
-	err = s.Delete(ch.Address())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	chunkss--
-
-	if ss := getShardsSum(s.shards); ss != 4096 {
-		t.Fatal(ss)
-	}
-	c, err := s.Count()
-	if err != nil {
-		t.Fatal(err)
-
-	}
-	if c != 0 {
-		t.Fatalf("expected count to be 0 but got %d", c)
-	}
-	var delFuncs []func()
-	rmf := func(c chunk.Address) func() {
-		f := func() {
-			err := s.Delete(c)
-			if err != nil {
-				log.Error("err", "err", err, "addr", c)
 			}
-			chunkss--
+
 		}
-		return f
-	}
+		if i%10000 == 0 {
+			mtx.Lock()
+			ss := getShardsSum(s.shards)
+			ssmb := ss / (1024 * 1024)
+			insertedmb := i * 4096 / (1024 * 1024)
+			expectedSum := capacity * 4096 / (1024 * 1024)
 
-	for i := 0; i < 10; i++ {
-		ch = chunktesting.GenerateTestRandomChunk()
-
-		err = s.Put(ch)
-		if err != nil {
-			t.Fatal(err)
+			fmt.Println("inserted", i, "insertedMB", insertedmb, "expectedSum", expectedSum, "shardsum", ss, "mb", ssmb, "gcruns", gcRuns)
+			mtx.Unlock()
 		}
-		chunkss++
-		delFuncs = append(delFuncs, rmf(ch.Address()))
-	}
-	cnt, err := s.Count()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if chunkss != cnt {
-		t.Fatal(chunkss)
-	}
-
-	for _, vv := range delFuncs {
-		vv()
-	}
-	cnt, err = s.Count()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if chunkss != cnt {
-		t.Fatal(chunkss)
-	}
-
-	if ss := getShardsSum(s.shards); ss != 40960 {
-		t.Fatal(ss)
-	}
-	log.Error("fail starts here")
-	for i := 0; i < 10; i++ {
-		ch = chunktesting.GenerateTestRandomChunk()
-
-		err = s.Put(ch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		chunkss++
-	}
-	cnt, err = s.Count()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if chunkss != cnt {
-		t.Fatal(chunkss)
-	}
-
-	if ss := getShardsSum(s.shards); ss != 40960 {
-		t.Fatal(ss)
 	}
 
 }
@@ -155,12 +122,12 @@ func TestStoreGrow(t *testing.T) {
 func getShardsSum(s []shard) int {
 	sum := 0
 
-	for i, sh := range s {
+	for _, sh := range s {
 		v, err := sh.f.Stat()
 		if err != nil {
 			panic(err)
 		}
-		log.Error("summing", "i", i, "sum", sum, "size", v.Size())
+		//log.Error("summing", "i", i, "sum", sum, "size", v.Size())
 		sum += int(v.Size())
 	}
 
@@ -233,7 +200,7 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 // there are no free offset at this shard.
 func (s *metaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	s.mu.RLock()
-	spew.Dump("free slots", s.free[shard])
+	//spew.Dump("free slots", s.free[shard])
 	for o := range s.free[shard] {
 		s.mu.RUnlock()
 		return o, nil
