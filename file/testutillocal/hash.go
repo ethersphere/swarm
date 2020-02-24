@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethersphere/swarm/bmt"
 	"github.com/ethersphere/swarm/file"
+	asyncbmt "github.com/ethersphere/swarm/file/bmt"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -17,8 +18,9 @@ func NewBMTHasherFunc(poolSize int) file.SectionWriterFunc {
 		poolSize = bmt.PoolSize
 	}
 	poolAsync := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, poolSize)
-	refHashFunc := func(_ context.Context) file.SectionWriter {
-		return bmt.New(poolAsync).NewAsyncWriter(false)
+	refHashFunc := func(ctx context.Context) file.SectionWriter {
+		bmtHasher := bmt.New(poolAsync)
+		return asyncbmt.NewAsyncHasher(ctx, bmtHasher, false, nil)
 	}
 	return refHashFunc
 }

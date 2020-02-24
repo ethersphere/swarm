@@ -37,18 +37,18 @@ func (c *Cache) SetSpan(length int) {
 	}
 }
 
-func (c *Cache) SetLength(length int) {
-	if c.w != nil {
-		c.w.SetLength(length)
-	}
-}
+//func (c *Cache) SetLength(length int) {
+//	if c.w != nil {
+//		c.w.SetLength(length)
+//	}
+//}
 
-func (c *Cache) SeekSection(offset int) {
-	c.index = offset
-	if c.w != nil {
-		c.w.SeekSection(offset)
-	}
-}
+//func (c *Cache) SeekSection(offset int) {
+//	c.index = offset
+//	if c.w != nil {
+//		c.w.SeekSection(offset)
+//	}
+//}
 
 func (c *Cache) Write(b []byte) (int, error) {
 	c.data[c.index] = b
