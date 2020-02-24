@@ -233,7 +233,7 @@ func setupContractTest() func() {
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *boundedint.Uint256) (cswap.Contract, error) {
+func testDeployWithPrivateKey(ctx context.Context, backend chain.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *boundedint.Uint256) (cswap.Contract, error) {
 	opts := bind.NewKeyedTransactor(privateKey)
 	opts.Context = ctx
 
