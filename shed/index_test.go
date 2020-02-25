@@ -1138,11 +1138,17 @@ func TestIndexOffset(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	index4, err := db.NewIndex("test4", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	items := generateItems(100)
 	for _, item := range items {
 		index1.Put(item)
 		index2.Put(item)
-		index3.Put(item)
+		// index3 is intentionally empty
+		index4.Put(item)
 	}
 
 	tests := []struct {
@@ -1175,6 +1181,11 @@ func TestIndexOffset(t *testing.T) {
 			checkItem(tt, item, items[tc.start+tc.offset])
 
 			item, err = index3.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+
+			item, err = index4.Offset(&items[tc.start], int64(tc.offset))
 			if err != nil {
 				tt.Error(err)
 			}
@@ -1206,6 +1217,34 @@ func TestIndexOffset(t *testing.T) {
 			if err == nil {
 				tt.Error("expected error")
 			}
+			_, err = index4.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
 		})
 	}
+
+	t.Run("Invalid start Item", func(tt *testing.T) {
+		invalid := Item{
+			Address:         []byte("out-of-index"),
+			Data:            []byte("not so random data"),
+			AccessTimestamp: time.Now().UnixNano(),
+		}
+		_, err := index1.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+		_, err = index2.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+		_, err = index3.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+		_, err = index4.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+	})
 }

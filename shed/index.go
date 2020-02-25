@@ -462,21 +462,26 @@ func (f Index) Offset(start *Item, shift int64) (i Item, err error) {
 	it := f.db.NewIterator()
 	defer it.Release()
 
+	ok := it.Seek(startKey)
+	if !ok || bytes.Compare(it.Key(), startKey) != 0 {
+		return i, errors.New("start Item not found in index")
+	}
+
 	next := it.Next
 	if shift < 0 {
 		next = it.Prev
 		shift *= -1
 	}
 
-	var key []byte
-	for ok := it.Seek(startKey); ok && shift > 0; ok = next() {
+	key := startKey
+	for shift != 0 && next() {
 		key = it.Key()
 		if key[0] != f.prefix[0] {
 			break
 		}
 		shift--
 	}
-	if key == nil {
+	if shift != 0 {
 		return i, errors.New("key not found")
 	}
 
