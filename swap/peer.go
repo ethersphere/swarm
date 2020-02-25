@@ -144,8 +144,7 @@ func (p *Peer) updateBalance(amount int64) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	p.logger.SetLogAction("update_balance")
-	p.logger.Debug("updated balance", "balance", strconv.FormatInt(newBalance, 10))
+	p.logger.Debug(UpdateBalanceAction, "balance", strconv.FormatInt(newBalance, 10))
 	return nil
 }
 
@@ -194,7 +193,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 // the caller is expected to hold p.lock
 func (p *Peer) sendCheque() error {
 	if p.getPendingCheque() != nil {
-		p.logger.Info("previous cheque still pending, resending cheque", "pending", p.getPendingCheque())
+		p.logger.Info(SendChequeAction, "previous cheque still pending, resending cheque", "pending", p.getPendingCheque())
 		return p.Send(context.Background(), &EmitChequeMsg{
 			Cheque: p.getPendingCheque(),
 		})
@@ -217,8 +216,7 @@ func (p *Peer) sendCheque() error {
 
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(honeyAmount)
-	p.logger.SetLogAction("send_cheque")
-	p.logger.Info("sending cheque to peer", "cheque", cheque)
+	p.logger.Info(SendChequeAction, "sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

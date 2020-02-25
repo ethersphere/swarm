@@ -150,9 +150,9 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 
 	if result.Bounced {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
-		activeCashout.Logger.Warn("cheque bounced", "tx", receipt.TxHash)
+		activeCashout.Logger.Warn(CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
 	}
 
-	activeCashout.Logger.Info("cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
+	activeCashout.Logger.Info(CashChequeAction, "cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
 	return nil
 }

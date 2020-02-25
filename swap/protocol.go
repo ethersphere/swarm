@@ -66,13 +66,13 @@ func (s *Swap) Protocols() []p2p.Protocol {
 
 // Start is a node.Service interface method
 func (s *Swap) Start(server *p2p.Server) error {
-	log.Info("Swap service started")
+	log.Info(InitAction, "Swap service started")
 	return nil
 }
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
-	log.Info("Swap service stopping")
+	log.Info(StopAction, "Swap service stopping")
 	return s.Close()
 }
 

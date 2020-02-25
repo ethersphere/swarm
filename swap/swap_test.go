@@ -677,7 +677,7 @@ func TestResetBalance(t *testing.T) {
 	// ...on which we wait until the cashCheque is actually terminated (ensures proper nounce count)
 	select {
 	case <-testBackend.cashDone:
-		creditorSwap.logger.Debug("cash transaction completed and committed")
+		creditorSwap.logger.Debug(CashChequeAction, "cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
@@ -1342,12 +1342,12 @@ func TestSwapActions(t *testing.T) {
 
 	swapLog := newSwapLogger(logDirDebitor, swap.params.BaseAddrs.Over())
 
-	swapLog.Info("Test")
-	swapLog.SetLogAction("disconnecting")
-	swapLog.Info("Test")
-	swapLog.Info("Test", "swap_action", "emitting_cheque")
-	swapLog.SetLogAction("sent_cheque")
-	swapLog.Info("Test")
+	swapLog.Info(UndefinedAction, "Test")
+	//swapLog.SetLogAction("disconnecting")
+	swapLog.Info(StopAction, "Test")
+	swapLog.Info(HandleChequeAction, "Test")
+	//swapLog.SetLogAction("sent_cheque")
+	swapLog.Info(SendChequeAction, "Test")
 
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
@@ -1374,16 +1374,16 @@ func TestSwapActions(t *testing.T) {
 		t.Fatalf("expected the log to contain action \"undefined\"")
 	}
 
-	if !strings.Contains(logString, `"swap_action","disconnecting"`) {
+	if !strings.Contains(logString, `"swap_action","stop"`) {
 		t.Fatalf("expected the log to contain action \"disconnecting\"")
 	}
 
-	if !strings.Contains(logString, `"swap_action","emitting_cheque"`) {
-		t.Fatalf("expected the log to contain action \"emitting_cheque\"")
+	if !strings.Contains(logString, `"swap_action","handle_cheque"`) {
+		t.Fatalf("expected the log to contain action \"handle_cheque\"")
 	}
 
-	if !strings.Contains(logString, `"swap_action","sent_cheque"`) {
-		t.Fatalf("expected the log to contain action \"sent_cheque\"")
+	if !strings.Contains(logString, `"swap_action","send_cheque"`) {
+		t.Fatalf("expected the log to contain action \"send_cheque\"")
 	}
 
 }
