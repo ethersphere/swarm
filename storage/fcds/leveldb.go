@@ -123,10 +123,12 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
 	freeSlots := make([]shardSlots, ShardCount)
 	has := false
+	s.mtx.Lock()
 	for shard, slots := range s.free {
 		has = true
 		freeSlots[shard] = shardSlots{shard: shard, slots: slots}
 	}
+	s.mtx.Unlock()
 
 	if !has {
 		return 0, has

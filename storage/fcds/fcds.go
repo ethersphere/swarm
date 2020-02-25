@@ -421,7 +421,6 @@ func (s *Store) getShardWrite() (shard uint8) {
 		shard = metaNext
 	}
 	s.next = (shard + 1) % ShardCount // round robin
-	//fmt.Println("writing to shard", shard)
 
 	return shard
 }

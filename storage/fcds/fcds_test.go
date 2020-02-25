@@ -45,7 +45,7 @@ func TestStoreGrow(t *testing.T) {
 	ShardCount = 8
 	capacity := 10000
 	gcTarget := 100
-	insert := 11000
+	insert := 15000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -78,20 +78,18 @@ func TestStoreGrow(t *testing.T) {
 				gcRuns++
 				go func() {
 					defer func() {
-						//time.Sleep(1 * time.Second)
 						<-sem
 					}()
 					count := 0
 					var wg sync.WaitGroup
 					err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
-						fmt.Println("get chunk to iterate on ", c.Address().String())
 						count++
 						wg.Add(1)
 						go func(c chunk.Address) {
 							defer wg.Done()
 							e := s.Delete(c)
 							if e != nil {
-								fmt.Println("error deleting", e, "c", c)
+								//fmt.Println("error deleting", e, "c", c)
 							}
 							mtx.Lock()
 							inserted--
@@ -108,10 +106,9 @@ func TestStoreGrow(t *testing.T) {
 					wg.Wait()
 				}()
 			default:
-
 			}
-
 		}
+
 		if i%1000 == 0 {
 			mtx.Lock()
 			ss := getShardsSum(s.shards)
