@@ -186,26 +186,18 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
-	//offset, reclaimed, err := s.getOffset(shard)
-	//if err != nil {
-	//return err
-	//}
-
 	if offset < 0 {
 		// no free offsets found,
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
-		fmt.Println("seeking to end")
 	} else {
 		// seek to the offset position
 		// to replace the chunk data at that position
-		fmt.Println("seek to offset position")
-		panic(0)
 		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
 
-	fmt.Println("putting addr ", addr.String(), " shard", shard, " offset", offset)
+	//fmt.Println("putting addr ", addr.String(), " shard", shard, " offset", offset)
 
 	if err != nil {
 		return err
@@ -420,13 +412,16 @@ func getRandomShard() (shard uint8) {
 
 // getShardWrite gets the next shard to write to.
 // currently returns a shard from the available shards in a round robin manner.
-// todo: logic for when shards are no longer balanced (after gc)
+// uses metastore.NextShard value in case a shard with empty entries is available
 func (s *Store) getShardWrite() (shard uint8) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	shard = s.next
-	s.next = (s.next + 1) % ShardCount // round robin
-	fmt.Println("writing to shard", shard)
+	if metaNext, hasFree := s.meta.NextShard(); hasFree {
+		shard = metaNext
+	}
+	s.next = (shard + 1) % ShardCount // round robin
+	//fmt.Println("writing to shard", shard)
 
 	return shard
 }
@@ -436,8 +431,6 @@ func (s *Store) getShardAddr(addr chunk.Address) (shard uint8, err error) {
 	if err != nil {
 		return 0, err
 	}
-
-	fmt.Println("addr", addr.String(), "shard", m.Shard)
 
 	return m.Shard, nil
 }

@@ -22,7 +22,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/chunk"
@@ -45,8 +44,8 @@ func TestStoreGrow(t *testing.T) {
 
 	ShardCount = 8
 	capacity := 10000
-	gcTarget := 7000
-	insert := 10000
+	gcTarget := 3000
+	insert := 100000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -79,19 +78,20 @@ func TestStoreGrow(t *testing.T) {
 				gcRuns++
 				go func() {
 					defer func() {
-						time.Sleep(1 * time.Second)
+						//time.Sleep(1 * time.Second)
 						<-sem
 					}()
 					count := 0
 					var wg sync.WaitGroup
 					err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
+						fmt.Println("get chunk to iterate on ", c.Address().String())
 						count++
 						wg.Add(1)
 						go func(c chunk.Address) {
 							defer wg.Done()
 							e := s.Delete(c)
 							if e != nil {
-								fmt.Println("error deleteing", e)
+								fmt.Println("error deleteing", e, "c", c)
 							}
 							mtx.Lock()
 							inserted--
@@ -112,7 +112,7 @@ func TestStoreGrow(t *testing.T) {
 			}
 
 		}
-		if i%1 == 0 {
+		if i%1000 == 0 {
 			mtx.Lock()
 			ss := getShardsSum(s.shards)
 			ssmb := ss / (1024 * 1024)

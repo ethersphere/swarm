@@ -20,11 +20,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"fmt"
 	"sort"
 	"sync"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -122,18 +120,22 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	return nil
 }
 
-func (s *metaStore) NextShard() uint8 {
+func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
 	freeSlots := make([]shardSlots, ShardCount)
+	has := false
 	for shard, slots := range s.free {
-		fmt.Println("shard ", shard, "slots", slots)
+		has = true
 		freeSlots[shard] = shardSlots{shard: shard, slots: slots}
 	}
 
-	spew.Dump(freeSlots)
-	sort.Sort(BySlots(freeSlots))
-	spew.Dump(freeSlots)
+	if !has {
+		return 0, has
+	}
 
-	return freeSlots[0].shard
+	sort.Sort(BySlots(freeSlots))
+	//spew.Dump(freeSlots)
+
+	return freeSlots[0].shard, freeSlots[0].slots > 0
 }
 
 // FreeOffset returns an offset that can be reclaimed by

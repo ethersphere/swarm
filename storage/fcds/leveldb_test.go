@@ -1,7 +1,6 @@
 package fcds
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -13,8 +12,10 @@ func TestNextShard(t *testing.T) {
 	ms.free[3]++
 	ms.free[3]++
 	ms.free[3]++
-	v := ms.NextShard()
-	fmt.Println(v)
+	v, b := ms.NextShard()
+	if !b {
+		t.Fatal("expected free slots on shard")
+	}
 	if v != 3 {
 		t.Fatal(v)
 	}
@@ -22,14 +23,18 @@ func TestNextShard(t *testing.T) {
 	ms.free[2]++
 	ms.free[2]++
 	ms.free[2]++
-	v = ms.NextShard()
-	fmt.Println(v)
+	v, b = ms.NextShard()
+	if !b {
+		t.Fatal("expected free slots on shard")
+	}
 	if v != 2 {
 		t.Fatal(v)
 	}
 	ms.free[3]++
-	v = ms.NextShard()
-	fmt.Println(v)
+	v, b = ms.NextShard()
+	if !b {
+		t.Fatal("expected free slots on shard")
+	}
 	if v != 3 {
 		t.Fatal(v)
 	}
