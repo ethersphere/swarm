@@ -44,8 +44,8 @@ func TestStoreGrow(t *testing.T) {
 
 	ShardCount = 8
 	capacity := 10000
-	gcTarget := 3000
-	insert := 100000
+	gcTarget := 100
+	insert := 11000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestStoreGrow(t *testing.T) {
 							defer wg.Done()
 							e := s.Delete(c)
 							if e != nil {
-								fmt.Println("error deleteing", e, "c", c)
+								fmt.Println("error deleting", e, "c", c)
 							}
 							mtx.Lock()
 							inserted--
