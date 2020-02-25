@@ -1160,4 +1160,20 @@ func TestIndexOffset(t *testing.T) {
 		})
 	}
 
+	// special cases
+	tests = []struct {
+		start, offset int
+	}{
+		{0, -1},
+		{len(items) - 1, 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%d_%d", tc.start, tc.offset), func(tt *testing.T) {
+			_, err := index.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+		})
+	}
 }
