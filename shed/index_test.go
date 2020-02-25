@@ -1120,19 +1120,29 @@ func generateItems(n int) []Item {
 }
 
 func TestIndexOffset(t *testing.T) {
-	t.Parallel()
-
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	index1, err := db.NewIndex("test1", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index2, err := db.NewIndex("test2", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index3, err := db.NewIndex("test3", retrievalIndexFuncs)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	items := generateItems(100)
 	for _, item := range items {
-		index.Put(item)
+		index1.Put(item)
+		index2.Put(item)
+		index3.Put(item)
 	}
 
 	tests := []struct {
@@ -1152,7 +1162,19 @@ func TestIndexOffset(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%d_%d", tc.start, tc.offset), func(tt *testing.T) {
-			item, err := index.Offset(&items[tc.start], int64(tc.offset))
+			item, err := index1.Offset(&items[tc.start], int64(tc.offset))
+			if err != nil {
+				tt.Error(err)
+			}
+			checkItem(tt, item, items[tc.start+tc.offset])
+
+			item, err = index2.Offset(&items[tc.start], int64(tc.offset))
+			if err != nil {
+				tt.Error(err)
+			}
+			checkItem(tt, item, items[tc.start+tc.offset])
+
+			item, err = index3.Offset(&items[tc.start], int64(tc.offset))
 			if err != nil {
 				tt.Error(err)
 			}
@@ -1160,17 +1182,27 @@ func TestIndexOffset(t *testing.T) {
 		})
 	}
 
-	// special cases
+	// special cases - testing all indexes, to catch all edge cases
 	tests = []struct {
 		start, offset int
 	}{
 		{0, -1},
 		{len(items) - 1, 1},
+		{0, -1000},
+		{len(items) - 1, 1000},
 	}
 
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%d_%d", tc.start, tc.offset), func(tt *testing.T) {
-			_, err := index.Offset(&items[tc.start], int64(tc.offset))
+			_, err := index1.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+			_, err = index2.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+			_, err = index3.Offset(&items[tc.start], int64(tc.offset))
 			if err == nil {
 				tt.Error("expected error")
 			}
