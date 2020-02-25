@@ -1104,3 +1104,60 @@ func TestIndex_HasMulti(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
+
+func generateItems(n int) []Item {
+	items := make([]Item, 0, n)
+
+	for i := 0; i < n; i++ {
+		items = append(items, Item{
+			Address:        []byte(fmt.Sprintf("hash%03d", i)),
+			Data:           []byte(fmt.Sprintf("data%06d", i)),
+			StoreTimestamp: time.Now().UnixNano(),
+		})
+	}
+
+	return items
+}
+
+func TestIndexOffset(t *testing.T) {
+	t.Parallel()
+
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items := generateItems(100)
+	for _, item := range items {
+		index.Put(item)
+	}
+
+	tests := []struct {
+		start, offset int
+	}{
+		{0, 0},
+		{0, 1},
+		{0, 50},
+		{44, 0},
+		{10, 10},
+		{0, len(items) - 1},
+		{10, -3},
+		{10, -10},
+		{len(items) - 1, 0},
+		{len(items) - 2, 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%d_%d", tc.start, tc.offset), func(tt *testing.T) {
+			item, err := index.Offset(&items[tc.start], int64(tc.offset))
+			if err != nil {
+				tt.Error(err)
+			}
+			checkItem(tt, item, items[tc.start+tc.offset])
+		})
+	}
+
+}
