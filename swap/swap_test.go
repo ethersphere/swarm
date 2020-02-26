@@ -721,7 +721,11 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, int256.Uint256From((DefaultPaymentThreshold * 2)))
+	amount, err := int256.NewUint256().Mul(&DefaultPaymentThreshold, int256.Uint256From(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, amount)
 	if err != nil {
 		t.Fatal(err)
 	}

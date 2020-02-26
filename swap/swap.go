@@ -561,7 +561,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 
 	// check if this new balance would put creditor into debt
 	if newBalance.Cmp(tolerance) == -1 {
-		return nil, fmt.Errorf("received cheque would result in balance %d which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
+		return nil, fmt.Errorf("received cheque would result in balance %v which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {

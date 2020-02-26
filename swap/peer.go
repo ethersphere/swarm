@@ -38,13 +38,13 @@ type Peer struct {
 	*protocols.Peer
 	lock               sync.RWMutex
 	swap               *Swap
-	beneficiary        common.Address     // address of the peers chequebook owner
-	contractAddress    common.Address     // address of the peers chequebook
-	lastReceivedCheque *Cheque            // last cheque we received from the peer
-	lastSentCheque     *Cheque            // last cheque that was sent to peer that was confirmed
-	pendingCheque      *Cheque            // last cheque that was sent to peer but is not yet confirmed
+	beneficiary        common.Address // address of the peers chequebook owner
+	contractAddress    common.Address // address of the peers chequebook
+	lastReceivedCheque *Cheque        // last cheque we received from the peer
+	lastSentCheque     *Cheque        // last cheque that was sent to peer that was confirmed
+	pendingCheque      *Cheque        // last cheque that was sent to peer but is not yet confirmed
 	balance            *int256.Int256 // current balance of the peer
-	logger             log.Logger         // logger for swap related messages and audit trail with peer identifier
+	logger             log.Logger     // logger for swap related messages and audit trail with peer identifier
 }
 
 // NewPeer creates a new swap Peer instance

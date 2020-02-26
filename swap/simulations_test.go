@@ -341,9 +341,10 @@ func TestMultiChequeSimulation(t *testing.T) {
 	}
 
 	paymentThreshold := debitorSvc.swap.params.PaymentThreshold
+	pt := paymentThreshold.Value()
 
 	chequesAmount := 4
-	msgsPerCheque := (uint64(paymentThreshold) / msgPrice) + 1 // +1 to round up without casting to float
+	msgsPerCheque := (pt.Uint64() / msgPrice) + 1 // +1 to round up without casting to float
 	msgAmount := int(msgsPerCheque) * chequesAmount
 	log.Debug("sending %d messages", msgAmount)
 
@@ -383,14 +384,31 @@ func TestMultiChequeSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		mp := new(big.Int).SetUint64(msgPrice)
+		price, err := int256.NewInt256().Set(*mp)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		// check if cheque should have been sent
-		balanceAfterMessage := debitorBalance - int64(msgPrice)
-		if balanceAfterMessage <= -paymentThreshold {
+		balanceAfterMessage, err := int256.NewInt256().Sub(debitorBalance, price)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		threshold, err := int256.NewInt256().Set(paymentThreshold.Value())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		pt, err := int256.NewInt256().Mul(threshold, int256.Int256From(-1))
+		if balanceAfterMessage.Cmp(pt) <= 0 {
 			// we need to wait a bit in order to give time for the cheque to be processed
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
 				t.Fatal(err)
 			}
-			expectedPayout += uint64(-balanceAfterMessage)
+			b := balanceAfterMessage.Value()
+			expectedPayout += (&b).Uint64()
 		}
 
 		lastCount++

@@ -365,15 +365,17 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pt, err := int256.NewInt256().Set(DefaultPaymentThreshold.Value())
+	paymentThreshold := DefaultPaymentThreshold.Value()
+	newBalance, err := int256.NewInt256().Set(paymentThreshold)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := int256.NewInt256().Mul(int256.Int256From(-1), pt)
+	_, err = newBalance.Mul(newBalance, int256.Int256From(-1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = creditor.setBalance(-int64(DefaultPaymentThreshold)); err != nil {
+
+	if err = creditor.setBalance(newBalance); err != nil {
 		t.Fatal(err)
 	}
 

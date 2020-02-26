@@ -44,9 +44,9 @@ func NewInt256() *Int256 {
 	return u
 }
 
-// Int64ToInt256 creates a Int256 struct based on the given int64 param
+// Int256From creates a Int256 struct based on the given int64 param
 // any int64 is valid as a Int256
-func Int64ToInt256(base int64) *Int256 {
+func Int256From(base int64) *Int256 {
 	u := NewInt256()
 	u.value = *new(big.Int).SetInt64(base)
 	return u
@@ -55,14 +55,6 @@ func Int64ToInt256(base int64) *Int256 {
 // Value returns the underlying private value for a Int256 struct
 func (u *Int256) Value() big.Int {
 	return u.value
-}
-
-// Int256From creates a Int256 struct based on the given int64 param
-// any int64 is valid as a Int256
-func Int256From(base int64) *Int256 {
-	u := NewInt256()
-	u.value = *new(big.Int).SetInt64(base)
-	return u
 }
 
 // Set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
