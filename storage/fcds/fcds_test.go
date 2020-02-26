@@ -84,7 +84,7 @@ func TestStoreGrow(t *testing.T) {
 					aa := c.Address()
 					e := s.Delete(aa)
 					if e != nil {
-						//fmt.Println("error deleting", e, "c", v)
+						fmt.Println("error deleting", e, "c", aa)
 					}
 
 					mtx.Lock()
