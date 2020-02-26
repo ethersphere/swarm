@@ -1,6 +1,7 @@
 package fcds
 
 import (
+	"math/rand"
 	"testing"
 )
 
@@ -139,4 +140,34 @@ func TestShardSlotsSorted(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestProbabilisticNextShard(t *testing.T) {
+	rand.Seed(42424242) //use a constant seed so we can assert the results
+
+	ms, err := NewMetaStore("", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		shard      uint8 // which shard to manipulate on this run
+		delta      int64 // shard free slot change
+		expectNext uint8 // what next shard should we expect
+	}{
+		{shard: 1, delta: 15, expectNext: 2}, // magic == 17, intervals {[0 1] [1 16] [16 17] [17 18]}
+		{shard: 1, delta: 15, expectNext: 1}, // magic == 6, intervals  {[0 1] [1 31] [31 32] [32 33]}
+		{shard: 1, delta: 15, expectNext: 1}, // magic == 9, intervals  {[0 1] [1 46] [46 47] [47 48]}
+		{shard: 3, delta: 11, expectNext: 3}, // magic == 56, intervals {[0 1] [1 46] [46 47] [47 58]}
+		{shard: 0, delta: 10, expectNext: 3}, // magic == 63, intervals {[0 10] [10 56] [56 57] [57 68]}
+		{shard: 0, delta: 11, expectNext: 1}, // magic == 34, intervals {[0 10] [10 55] [55 56] [56 57]}
+	} {
+		ms.free[tc.shard] += tc.delta
+		slots := ms.shardSlots(false)
+		shard := probabilisticNextShard(slots)
+		if tc.expectNext != shard {
+			t.Errorf("expected next to be %d but got %d", tc.expectNext, shard)
+		}
+	}
+
 }

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"fmt"
 	"math/rand"
 	"sort"
 	"sync"
@@ -32,7 +33,7 @@ import (
 
 var _ MetaStore = new(metaStore)
 
-const probabilisticNextShard = true
+const probabilistic = true
 
 // MetaStore implements FCDS MetaStore with LevelDB
 // for persistence.
@@ -127,36 +128,11 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 // indicating whether that shard has free offsets
 func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
 
-	if probabilisticNextShard {
+	if probabilistic {
 		// do some magic
 		slots := s.shardSlots(false)
-		x := make([]int64, len(slots))
-		sum := 0
-		for _, v := range slots {
-
-			// we need to consider the edge case where no free slots are available
-			// we still need to potentially insert 1 chunk and so if all shards have
-			// no empty offsets - they all must be considered equally as having at least
-			// one empty slot
-			if v == 0 {
-				v = 1
-			}
-			sum += v
-		}
-
-		magic := rand.Intn(sum)
-		movingSum := 0
-		for _, v := range slots {
-			add := 0
-			if v.slots == 0 {
-				add = 1
-			}
-			movingSum += v.slots + add
-			if magic <= movingSum {
-				// we've reached the shard with the correct id
-				return v.shard, v.slots > 0
-			}
-		}
+		next := probabilisticNextShard(slots)
+		return next, slots[next].slots > 0
 	} else {
 		// get a definitive next shard to write to with a free slot
 	}
@@ -166,6 +142,44 @@ func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
 	return 0, false
 
 	//return freeSlots[0].shard, freeSlots[0].slots > 0
+}
+
+// probabilisticNextShard returns a next shard to write to
+// using a weighted probability
+func probabilisticNextShard(slots []shardSlot) (shard uint8) {
+	sum := 0
+	for _, v := range slots {
+
+		// we need to consider the edge case where no free slots are available
+		// we still need to potentially insert 1 chunk and so if all shards have
+		// no empty offsets - they all must be considered equally as having at least
+		// one empty slot
+		add := v.slots
+		if add == 0 {
+			add = 1
+		}
+		sum += int(add)
+	}
+
+	magic := int64(rand.Intn(sum))
+	var movingSum, add int64
+	fmt.Println("sum", sum, "magic", magic) // TODO: remove, leaving this in for review purposes
+
+	for _, v := range slots {
+		add = 0
+		if v.slots == 0 {
+			add = 1
+		}
+		fmt.Println("adding to moving sum", v.slots+add, "movingSum", movingSum, "shard", v.shard)
+		movingSum += v.slots + add
+		if magic <= movingSum {
+			// we've reached the shard with the correct id
+			return v.shard
+		}
+	}
+
+	return 0
+
 }
 
 // shardSlots gives back a slice of shardSlot items that represent the number
