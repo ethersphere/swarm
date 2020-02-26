@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"math/rand"
 	"sort"
 	"sync"
 
@@ -128,7 +129,34 @@ func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
 
 	if probabilisticNextShard {
 		// do some magic
-		_ = s.shardSlots(false)
+		slots := s.shardSlots(false)
+		x := make([]int64, len(slots))
+		sum := 0
+		for _, v := range slots {
+
+			// we need to consider the edge case where no free slots are available
+			// we still need to potentially insert 1 chunk and so if all shards have
+			// no empty offsets - they all must be considered equally as having at least
+			// one empty slot
+			if v == 0 {
+				v = 1
+			}
+			sum += v
+		}
+
+		magic := rand.Intn(sum)
+		movingSum := 0
+		for _, v := range slots {
+			add := 0
+			if v.slots == 0 {
+				add = 1
+			}
+			movingSum += v.slots + add
+			if magic <= movingSum {
+				// we've reached the shard with the correct id
+				return v.shard, v.slots > 0
+			}
+		}
 	} else {
 		// get a definitive next shard to write to with a free slot
 	}
