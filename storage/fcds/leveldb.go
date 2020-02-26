@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"fmt"
 	"math/rand"
 	"sort"
 	"sync"
@@ -155,16 +154,16 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 	magic := int64(rand.Intn(sum))
 	var movingSum, add int64
 
-	fmt.Println("sum", sum, "magic", magic) // TODO: remove, leaving this in for review purposes
+	//fmt.Println("sum", sum, "magic", magic) // TODO: remove, leaving this in for review purposes
 
 	for _, v := range slots {
 		add = 0
 		if v.slots == 0 {
 			add = 1
 		}
-		fmt.Println("adding to moving sum", v.slots+add, "movingSum", movingSum, "shard", v.shard)
+		//fmt.Println("adding to moving sum", v.slots+add, "movingSum", movingSum, "shard", v.shard) // TODO: remove
 		movingSum += v.slots + add
-		if magic <= movingSum {
+		if magic < movingSum {
 			// we've reached the shard with the correct id
 			return v.shard
 		}
@@ -179,6 +178,7 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
 	freeSlots = make([]shardSlot, ShardCount)
 	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
 	for i := 0; uint8(i) < ShardCount; i++ {
 		slot := shardSlot{shard: uint8(i)}
@@ -188,7 +188,6 @@ func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
 		}
 		freeSlots[i] = slot
 	}
-	s.mtx.Unlock()
 
 	if toSort {
 		sort.Sort(BySlots(freeSlots))
@@ -201,18 +200,17 @@ func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
 // FreeOffset returns an offset that can be reclaimed by
 // another chunk. If the returned value is less then 0
 // there are no free offset at this shard.
-func (s *metaStore) FreeOffset() (shard uint8, offset int64, err error) {
+func (s *metaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	i := s.db.NewIterator(nil, nil)
 	defer i.Release()
 
-	i.Seek([]byte{freePrefix})
+	i.Seek([]byte{freePrefix, shard})
 	key := i.Key()
-	if key == nil || key[0] != freePrefix {
-		return 0, -1, nil
+	if key == nil || key[0] != freePrefix || key[1] != shard {
+		return -1, nil
 	}
-	shard = key[1]
 	offset = int64(binary.BigEndian.Uint64(key[2:10]))
-	return shard, offset, nil
+	return offset, nil
 }
 
 // Count returns a number of chunks in MetaStore.

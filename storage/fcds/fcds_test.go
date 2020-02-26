@@ -44,8 +44,8 @@ func TestStoreGrow(t *testing.T) {
 
 	ShardCount = 8
 	capacity := 10000
-	gcTarget := 100
-	insert := 10000
+	gcTarget := 3000
+	insert := 150000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +63,7 @@ func TestStoreGrow(t *testing.T) {
 	gcRuns := 0
 	var mtx sync.Mutex
 	sem := make(chan struct{}, 1)
+
 	for i := 0; i < insert; i++ {
 		ch := chunktesting.GenerateTestRandomChunk()
 		err = s.Put(ch)
@@ -76,35 +77,28 @@ func TestStoreGrow(t *testing.T) {
 			select {
 			case sem <- struct{}{}:
 				gcRuns++
-				go func() {
-					defer func() {
-						<-sem
-					}()
-					count := 0
-					var wg sync.WaitGroup
-					err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
-						count++
-						wg.Add(1)
-						go func(c chunk.Address) {
-							defer wg.Done()
-							e := s.Delete(c)
-							if e != nil {
-								//fmt.Println("error deleting", e, "c", c)
-							}
-							mtx.Lock()
-							inserted--
-							mtx.Unlock()
-						}(c.Address())
-						if count >= gcTarget {
-							return true, nil
-						}
-						return false, nil
-					})
-					if err != nil {
-						fmt.Println("iterator err", err)
+				count := 0
+				err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
+					count++
+					e := s.Delete(c.Address())
+					if e != nil {
+						fmt.Println("error deleting", e, "c", c)
 					}
-					wg.Wait()
-				}()
+
+					mtx.Lock()
+					inserted--
+					mtx.Unlock()
+					if count >= gcTarget {
+						return true, nil
+					}
+					return false, nil
+				})
+
+				if err != nil {
+					fmt.Println("iterator err", err)
+				}
+				<-sem
+
 			default:
 			}
 		}

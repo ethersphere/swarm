@@ -179,12 +179,16 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	shard, offset, reclaimed := s.getFreeShardOffset()
-
+	shard := s.getShardWrite()
 	sh := s.shards[shard]
 
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
+
+	offset, reclaimed, err := s.getOffset(shard)
+	if err != nil {
+		return err
+	}
 
 	if offset < 0 {
 		// no free offsets found,
@@ -196,8 +200,6 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 		// to replace the chunk data at that position
 		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
-
-	//fmt.Println("putting addr ", addr.String(), " shard", shard, " offset", offset)
 
 	if err != nil {
 		return err
@@ -216,21 +218,6 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	})
 }
 
-// getFreeShardOffset returns a shard to write to with an offset.
-// returns a random shard with EOF if no shards with free slots have been found.
-func (s *Store) getFreeShardOffset() (shard uint8, offset int64, reclaimed bool) {
-	//shard, offset, err := s.meta.FreeOffset()
-	//if err != nil {
-	//panic(err)
-	//}
-	//if offset == -1 {
-	shard = s.getShardWrite()
-	//} else {
-	//panic(shard)
-	//}
-	return shard, -1, false
-}
-
 // getOffset returns an offset where chunk data can be written to
 // and a flag if the offset is reclaimed from a previously removed chunk.
 // If offset is less then 0, no free offsets are available.
@@ -243,21 +230,16 @@ func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error)
 	if s.freeCache != nil {
 		offset = s.freeCache.get(shard)
 	}
-	log.Error("tried to get offset from cache", "offset", offset, "shard", shard)
 	if offset < 0 {
-		shard, offset, err = s.meta.FreeOffset()
+		offset, err = s.meta.FreeOffset(shard)
 		if err != nil {
 			return 0, false, err
 		}
-		log.Error("tried to get offset from meta", "offset", offset)
 	}
 	if offset < 0 {
 		s.markShardWithFreeOffsets(shard, false)
-		log.Error("no free offsets found in meta", "offset", offset)
-
 		return -1, false, nil
 	}
-	log.Error("found in meta", "offset", offset)
 
 	return offset, true, nil
 }
@@ -269,15 +251,19 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	}
 	defer s.unprotect()
 
+	//fmt.Println("delete1")
+
 	shard, err := s.getShardAddr(addr)
 	if err != nil {
 		return err
 	}
 	s.markShardWithFreeOffsets(shard, true)
+	//fmt.Println("delete2")
 
 	mu := s.shards[shard].mu
 	mu.Lock()
 	defer mu.Unlock()
+	//fmt.Println("delete3")
 
 	if s.freeCache != nil {
 		m, err := s.getMeta(addr)
@@ -286,6 +272,8 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		}
 		s.freeCache.set(shard, m.Offset)
 	}
+	//fmt.Println("delete4")
+
 	return s.meta.Remove(addr, shard)
 }
 
@@ -301,14 +289,16 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	}
 	defer s.unprotect()
 
-	for _, sh := range s.shards {
-		sh.mu.Lock()
-	}
-	defer func() {
-		for _, sh := range s.shards {
-			sh.mu.Unlock()
-		}
-	}()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	//for _, sh := range s.shards {
+	//sh.mu.Lock()
+	//}
+	//defer func() {
+	//for _, sh := range s.shards {
+	//sh.mu.Unlock()
+	//}
+	//}()
 
 	return s.meta.Iterate(func(addr chunk.Address, m *Meta) (stop bool, err error) {
 		data := make([]byte, m.Size)
@@ -412,16 +402,14 @@ func getRandomShard() (shard uint8) {
 
 // getShardWrite gets the next shard to write to.
 // currently returns a shard from the available shards in a round robin manner.
-// uses metastore.NextShard value in case a shard with empty entries is available
+// uses metastore.NextShard value in case a shard with empty entries is available.
 func (s *Store) getShardWrite() (shard uint8) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	shard = s.next
-	if metaNext, hasFree := s.meta.NextShard(); hasFree {
-		shard = metaNext
-	}
-	s.next = (shard + 1) % ShardCount // round robin
 
+	// warning: if multiple writers call this at the same time we might get the same shard again and again
+	// because the free slot value has not been decremented yet(!)
+	shard, _ = s.meta.NextShard()
 	return shard
 }
 

@@ -31,7 +31,7 @@ type MetaStore interface {
 	Remove(addr chunk.Address, shard uint8) error
 	Count() (int, error)
 	Iterate(func(chunk.Address, *Meta) (stop bool, err error)) error
-	FreeOffset() (shard uint8, offset int64, err error)
+	FreeOffset(shard uint8) (offset int64, err error)
 	NextShard() (shard uint8, hasFree bool)
 	Close() error
 }

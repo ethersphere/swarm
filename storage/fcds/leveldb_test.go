@@ -6,6 +6,11 @@ import (
 )
 
 func TestShardSlotsUnsorted(t *testing.T) {
+	defer func(v uint8) {
+		ShardCount = v
+	}(ShardCount)
+	ShardCount = 4
+
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -69,6 +74,11 @@ func TestShardSlotsUnsorted(t *testing.T) {
 }
 
 func TestShardSlotsSorted(t *testing.T) {
+	defer func(v uint8) {
+		ShardCount = v
+	}(ShardCount)
+	ShardCount = 4
+
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +154,10 @@ func TestShardSlotsSorted(t *testing.T) {
 
 func TestProbabilisticNextShard(t *testing.T) {
 	rand.Seed(42424242) //use a constant seed so we can assert the results
+	defer func(v uint8) {
+		ShardCount = v
+	}(ShardCount)
+	ShardCount = 4
 
 	ms, err := NewMetaStore("", true)
 	if err != nil {
