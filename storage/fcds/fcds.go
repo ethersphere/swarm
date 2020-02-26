@@ -112,7 +112,12 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	}
 	defer s.unprotect()
 
-	sh := s.shards[getShard(addr)]
+	shard, err := s.getShardAddr(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	sh := s.shards[shard]
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
@@ -138,7 +143,12 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	}
 	defer s.unprotect()
 
-	mu := s.shards[getShard(addr)].mu
+	shard, err := getShardAddr(addr)
+	if err != nil {
+		return false, err
+	}
+
+	mu := s.shards[shard].mu
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -170,7 +180,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	shard := getShard(addr)
+	shard := s.getWritableShard()
 	sh := s.shards[shard]
 
 	sh.mu.Lock()
@@ -204,6 +214,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	return s.meta.Set(addr, shard, reclaimed, &Meta{
 		Size:   uint16(size),
 		Offset: offset,
+		Shard:  shard,
 	})
 }
 
@@ -241,7 +252,11 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	}
 	defer s.unprotect()
 
-	shard := getShard(addr)
+	shard, err := s.getShardAddr(addr)
+	if err != nil {
+		return err
+	}
+
 	s.markShardWithFreeOffsets(shard, true)
 
 	mu := s.shards[shard].mu
@@ -281,7 +296,13 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 
 	return s.meta.Iterate(func(addr chunk.Address, m *Meta) (stop bool, err error) {
 		data := make([]byte, m.Size)
-		_, err = s.shards[getShard(addr)].f.ReadAt(data, m.Offset)
+
+		shard, err := s.getShardAddr(addr)
+		if err != nil {
+			return true, err
+		}
+
+		_, err = s.shards[shard].f.ReadAt(data, m.Offset)
 		if err != nil {
 			return true, err
 		}
@@ -355,6 +376,29 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 	has = s.free[shard]
 	s.freeMu.RUnlock()
 	return has
+}
+
+// getShardWrite gets the next shard to write to.
+// currently returns a shard from the available shards in a round robin manner.
+// uses metastore.NextShard value in case a shard with empty entries is available.
+func (s *Store) getWritableShard() (shard uint8) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	// warning: if multiple writers call this at the same time we might get the same shard again and again
+	// because the free slot value has not been decremented yet(!)
+	shard, _ = s.meta.NextShard()
+	return shard
+}
+
+// getShardAddr gets the shard id for an arbitrary stored address.
+func (s *Store) getShardAddr(addr chunk.Address) (shard uint8, err error) {
+	m, err := s.meta.Get(addr)
+	if err != nil {
+		return 0, err
+	}
+
+	return m.Shard, nil
 }
 
 // getShard returns a shard number for the chunk address.

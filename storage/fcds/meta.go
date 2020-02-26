@@ -32,6 +32,7 @@ type MetaStore interface {
 	Count() (int, error)
 	Iterate(func(chunk.Address, *Meta) (stop bool, err error)) error
 	FreeOffset(shard uint8) (int64, error)
+	FreeSlots() []ShardSlot
 	Close() error
 }
 
@@ -39,6 +40,7 @@ type MetaStore interface {
 type Meta struct {
 	Size   uint16
 	Offset int64
+	Shard  uint8
 }
 
 // MarshalBinary returns binary encoded value of meta chunk information.
