@@ -121,23 +121,38 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 }
 
 func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
-	freeSlots := make([]shardSlots, ShardCount)
-	has := false
+
+	s.mtx.Lock()
+	//for shard, slots := range s.free {
+
+	//}
+	s.mtx.Unlock()
+
+	// now iterate over all free slots then give weight to each one of them
+	// then generate a float and see which one gets picked
+	return 0, false
+
+	//return freeSlots[0].shard, freeSlots[0].slots > 0
+}
+
+func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
+	freeSlots = make([]shardSlot, ShardCount)
+	for i := 0; uint8(i) < ShardCount; i++ {
+		freeSlots[i] = shardSlot{shard: uint8(i)}
+	}
+
 	s.mtx.Lock()
 	for shard, slots := range s.free {
-		has = true
-		freeSlots[shard] = shardSlots{shard: shard, slots: slots}
+		freeSlots[shard].slots = slots
 	}
 	s.mtx.Unlock()
 
-	if !has {
-		return 0, has
+	if toSort {
+		sort.Sort(BySlots(freeSlots))
 	}
 
-	sort.Sort(BySlots(freeSlots))
-	//spew.Dump(freeSlots)
+	return freeSlots
 
-	return freeSlots[0].shard, freeSlots[0].slots > 0
 }
 
 // FreeOffset returns an offset that can be reclaimed by
@@ -259,13 +274,13 @@ func decodeFreeSlots(b []byte) map[uint8]int64 {
 	return decodedMap
 }
 
-type BySlots []shardSlots
+type BySlots []shardSlot
 
 func (a BySlots) Len() int           { return len(a) }
 func (a BySlots) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a BySlots) Less(i, j int) bool { return a[j].slots < a[i].slots }
 
-type shardSlots struct {
+type shardSlot struct {
 	shard uint8
 	slots int64
 }

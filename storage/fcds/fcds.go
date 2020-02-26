@@ -425,6 +425,7 @@ func (s *Store) getShardWrite() (shard uint8) {
 	return shard
 }
 
+// getShardAddr gets the shard id for an arbitrary stored address.
 func (s *Store) getShardAddr(addr chunk.Address) (shard uint8, err error) {
 	m, err := s.meta.Get(addr)
 	if err != nil {

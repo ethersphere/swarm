@@ -45,7 +45,7 @@ func TestStoreGrow(t *testing.T) {
 	ShardCount = 8
 	capacity := 10000
 	gcTarget := 100
-	insert := 15000
+	insert := 10000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
