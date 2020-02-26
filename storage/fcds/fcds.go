@@ -251,19 +251,15 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	}
 	defer s.unprotect()
 
-	//fmt.Println("delete1")
-
 	shard, err := s.getShardAddr(addr)
 	if err != nil {
 		return err
 	}
 	s.markShardWithFreeOffsets(shard, true)
-	//fmt.Println("delete2")
 
 	mu := s.shards[shard].mu
 	mu.Lock()
 	defer mu.Unlock()
-	//fmt.Println("delete3")
 
 	if s.freeCache != nil {
 		m, err := s.getMeta(addr)
@@ -272,7 +268,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		}
 		s.freeCache.set(shard, m.Offset)
 	}
-	//fmt.Println("delete4")
 
 	return s.meta.Remove(addr, shard)
 }
@@ -289,16 +284,14 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	}
 	defer s.unprotect()
 
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	//for _, sh := range s.shards {
-	//sh.mu.Lock()
-	//}
-	//defer func() {
-	//for _, sh := range s.shards {
-	//sh.mu.Unlock()
-	//}
-	//}()
+	for _, sh := range s.shards {
+		sh.mu.Lock()
+	}
+	defer func() {
+		for _, sh := range s.shards {
+			sh.mu.Unlock()
+		}
+	}()
 
 	return s.meta.Iterate(func(addr chunk.Address, m *Meta) (stop bool, err error) {
 		data := make([]byte, m.Size)

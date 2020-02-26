@@ -45,7 +45,7 @@ func TestStoreGrow(t *testing.T) {
 	ShardCount = 8
 	capacity := 10000
 	gcTarget := 3000
-	insert := 150000
+	insert := 25000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -77,31 +77,34 @@ func TestStoreGrow(t *testing.T) {
 			select {
 			case sem <- struct{}{}:
 				gcRuns++
-				count := 0
-				a := []chunk.Address{}
-				err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
-					count++
-					aa := c.Address()
-					e := s.Delete(aa)
-					if e != nil {
-						fmt.Println("error deleting", e, "c", aa)
+				go func() {
+					count := 0
+					a := []chunk.Address{}
+					err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
+						count++
+						a = append(a, c.Address())
+						if count >= gcTarget {
+							return true, nil
+						}
+						return false, nil
+					})
+
+					for _, aa := range a {
+						e := s.Delete(aa)
+						if e != nil {
+							fmt.Println("error deleting", e, "c", aa)
+						}
+
+						mtx.Lock()
+						inserted--
+						mtx.Unlock()
 					}
 
-					mtx.Lock()
-					inserted--
-					mtx.Unlock()
-					a = append(a, aa)
-					if count >= gcTarget {
-						return true, nil
+					if err != nil {
+						fmt.Println("iterator err", err)
 					}
-					return false, nil
-				})
-
-				if err != nil {
-					fmt.Println("iterator err", err)
-				}
-				<-sem
-
+					<-sem
+				}()
 			default:
 			}
 		}

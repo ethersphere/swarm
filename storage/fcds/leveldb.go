@@ -143,10 +143,7 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 		// we still need to potentially insert 1 chunk and so if all shards have
 		// no empty offsets - they all must be considered equally as having at least
 		// one empty slot
-		add := v.slots
-		if add == 0 {
-			add = 1
-		}
+		add := v.slots + 1
 		sum += int(add)
 	}
 
@@ -157,10 +154,10 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 	//fmt.Println("sum", sum, "magic", magic) // TODO: remove, leaving this in for review purposes
 
 	for _, v := range slots {
-		add = 0
-		if v.slots == 0 {
-			add = 1
-		}
+		add = 1
+		//if v.slots == 0 {
+		//add = 1
+		//}
 		//fmt.Println("adding to moving sum", v.slots+add, "movingSum", movingSum, "shard", v.shard) // TODO: remove
 		movingSum += v.slots + add
 		if magic < movingSum {
@@ -180,11 +177,10 @@ func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	for i := 0; uint8(i) < ShardCount; i++ {
-		slot := shardSlot{shard: uint8(i)}
-		if slots, ok := s.free[uint8(i)]; ok {
+	for i := uint8(0); i < ShardCount; i++ {
+		slot := shardSlot{shard: i}
+		if slots, ok := s.free[i]; ok {
 			slot.slots = slots
-
 		}
 		freeSlots[i] = slot
 	}
@@ -251,7 +247,9 @@ func (s *metaStore) Iterate(fn func(chunk.Address, *Meta) (stop bool, err error)
 		if err := m.UnmarshalBinary(value); err != nil {
 			return err
 		}
-		stop, err := fn(chunk.Address(key[1:]), m)
+		b := make([]byte, len(key)-1)
+		copy(b, key[1:])
+		stop, err := fn(chunk.Address(b), m)
 		if err != nil {
 			return err
 		}
