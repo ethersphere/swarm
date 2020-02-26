@@ -33,8 +33,6 @@ import (
 
 var _ MetaStore = new(metaStore)
 
-const probabilistic = true
-
 // MetaStore implements FCDS MetaStore with LevelDB
 // for persistence.
 type metaStore struct {
@@ -127,21 +125,13 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 // NextShard returns an id of the next shard to write to and a boolean
 // indicating whether that shard has free offsets
 func (s *metaStore) NextShard() (shard uint8, hasFree bool) {
+	// get the slots ordered by shard number
+	slots := s.shardSlots(false)
 
-	if probabilistic {
-		// do some magic
-		slots := s.shardSlots(false)
-		next := probabilisticNextShard(slots)
-		return next, slots[next].slots > 0
-	} else {
-		// get a definitive next shard to write to with a free slot
-	}
+	// get the next shard to write to
+	next := probabilisticNextShard(slots)
 
-	// now iterate over all free slots then give weight to each one of them
-	// then generate a float and see which one gets picked
-	return 0, false
-
-	//return freeSlots[0].shard, freeSlots[0].slots > 0
+	return next, slots[next].slots > 0
 }
 
 // probabilisticNextShard returns a next shard to write to
@@ -161,8 +151,10 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 		sum += int(add)
 	}
 
+	// do some magic
 	magic := int64(rand.Intn(sum))
 	var movingSum, add int64
+
 	fmt.Println("sum", sum, "magic", magic) // TODO: remove, leaving this in for review purposes
 
 	for _, v := range slots {
@@ -179,7 +171,6 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 	}
 
 	return 0
-
 }
 
 // shardSlots gives back a slice of shardSlot items that represent the number
