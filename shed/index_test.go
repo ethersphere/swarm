@@ -1247,4 +1247,18 @@ func TestIndexOffset(t *testing.T) {
 			tt.Error("expected error")
 		}
 	})
+
+	t.Run("nil start Item", func(tt *testing.T) {
+		item, err := index1.Offset(nil, 0)
+		if err != nil {
+			t.Error(err)
+		}
+		checkItem(t, item, items[0])
+
+		item, err = index2.Offset(nil, 10)
+		if err != nil {
+			t.Error(err)
+		}
+		checkItem(t, item, items[10])
+	})
 }
