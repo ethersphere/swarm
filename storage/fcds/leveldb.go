@@ -102,21 +102,21 @@ func (s *metaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	if err != nil {
 		return err
 	}
+
 	batch := new(leveldb.Batch)
 
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	batch.Put(freeKey(shard, m.Offset), nil)
-	s.free[shard]++
 	batch.Put(freeCountKey(), encodeFreeSlots(s.free))
 	batch.Delete(chunkKey(addr))
 
 	err = s.db.Write(batch, nil)
 	if err != nil {
-		s.free[shard]-- // rollback the value change since the commit did not succeed
 		return err
 	}
+
+	s.mtx.Lock()
+	s.free[shard]++
+	s.mtx.Unlock()
 
 	return nil
 }
@@ -151,14 +151,8 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 	magic := int64(rand.Intn(sum))
 	var movingSum, add int64
 
-	//fmt.Println("sum", sum, "magic", magic) // TODO: remove, leaving this in for review purposes
-
 	for _, v := range slots {
 		add = 1
-		//if v.slots == 0 {
-		//add = 1
-		//}
-		//fmt.Println("adding to moving sum", v.slots+add, "movingSum", movingSum, "shard", v.shard) // TODO: remove
 		movingSum += v.slots + add
 		if magic < movingSum {
 			// we've reached the shard with the correct id
@@ -174,9 +168,8 @@ func probabilisticNextShard(slots []shardSlot) (shard uint8) {
 // function argument
 func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
 	freeSlots = make([]shardSlot, ShardCount)
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
 
+	s.mtx.RLock()
 	for i := uint8(0); i < ShardCount; i++ {
 		slot := shardSlot{shard: i}
 		if slots, ok := s.free[i]; ok {
@@ -184,13 +177,13 @@ func (s *metaStore) shardSlots(toSort bool) (freeSlots []shardSlot) {
 		}
 		freeSlots[i] = slot
 	}
+	s.mtx.RUnlock()
 
 	if toSort {
 		sort.Sort(BySlots(freeSlots))
 	}
 
 	return freeSlots
-
 }
 
 // FreeOffset returns an offset that can be reclaimed by

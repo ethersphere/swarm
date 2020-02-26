@@ -257,9 +257,9 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	}
 	s.markShardWithFreeOffsets(shard, true)
 
-	mu := s.shards[shard].mu
-	mu.Lock()
-	defer mu.Unlock()
+	//mu := s.shards[shard].mu
+	//mu.Lock()
+	//defer mu.Unlock()
 
 	if s.freeCache != nil {
 		m, err := s.getMeta(addr)

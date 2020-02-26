@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/chunk"
@@ -42,10 +43,10 @@ func TestStoreGrow(t *testing.T) {
 		ShardCount = sc
 	}(ShardCount)
 
-	ShardCount = 8
+	ShardCount = 16
 	capacity := 10000
-	gcTarget := 3000
-	insert := 25000
+	gcTarget := 4000
+	insert := 1000000
 	ms, err := NewMetaStore("", true)
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +104,10 @@ func TestStoreGrow(t *testing.T) {
 					if err != nil {
 						fmt.Println("iterator err", err)
 					}
+
+					time.Sleep(1000 * time.Millisecond)
 					<-sem
+
 				}()
 			default:
 			}
