@@ -32,9 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethersphere/swarm/boundedint"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	p2ptest "github.com/ethersphere/swarm/p2p/testing"
+	"github.com/ethersphere/swarm/swap/int256"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -50,7 +50,7 @@ type swapTester struct {
 }
 
 // creates a new protocol tester for swap with a deployed chequebook
-func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *boundedint.Uint256) (*swapTester, func(), error) {
+func newSwapTester(t *testing.T, backend *swapTestBackend, depositAmount *int256.Uint256) (*swapTester, func(), error) {
 	swap, clean := newTestSwap(t, ownerKey, backend)
 
 	err := testDeploy(context.Background(), swap, depositAmount)
@@ -135,7 +135,7 @@ func correctSwapHandshakeMsg(swap *Swap) *HandshakeMsg {
 // TestHandshake tests the correct handshake scenario
 func TestHandshake(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint256From(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func TestHandshake(t *testing.T) {
 // TestHandshakeInvalidChainID tests that a handshake with the wrong chain id is rejected
 func TestHandshakeInvalidChainID(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint256From(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestHandshakeInvalidChainID(t *testing.T) {
 // TestHandshakeEmptyContract tests that a handshake with an empty contract address is rejected
 func TestHandshakeEmptyContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint256From(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +197,7 @@ func TestHandshakeEmptyContract(t *testing.T) {
 // TestHandshakeInvalidContract tests that a handshake with an address that's not a valid chequebook
 func TestHandshakeInvalidContract(t *testing.T) {
 	// setup the protocolTester, which will allow protocol testing by sending messages
-	protocolTester, clean, err := newSwapTester(t, nil, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, nil, int256.Uint256From(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestHandshakeInvalidContract(t *testing.T) {
 func TestEmitCheque(t *testing.T) {
 	testBackend := newTestBackend(t)
 
-	protocolTester, clean, err := newSwapTester(t, testBackend, boundedint.Uint64ToUint256(0))
+	protocolTester, clean, err := newSwapTester(t, testBackend, int256.Uint256From(0))
 	defer clean()
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestEmitCheque(t *testing.T) {
 	// gasPrice on testBackend == 1
 	// estimated gas costs == 50000
 	// cheque should be sent if the accumulated amount of uncashed cheques is worth more than 100000
-	balance := boundedint.Uint64ToUint256(100001)
+	balance := int256.Uint256From(100001)
 	balanceValue := balance.Value()
 
 	if err := testDeploy(context.Background(), debitorSwap, balance); err != nil {
@@ -259,7 +259,7 @@ func TestEmitCheque(t *testing.T) {
 
 	debitor := creditorSwap.getPeer(protocolTester.Nodes[0].ID())
 	// set balance artificially
-	if err = debitor.setBalance(boundedint.Int64ToInt256(100001)); err != nil {
+	if err = debitor.setBalance(int256.Int256From(100001)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,7 +306,7 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	// check that the balance has been reset
-	if debitor.getBalance().Cmp(boundedint.Int64ToInt256(0)) != 0 {
+	if debitor.getBalance().Cmp(int256.Int256From(0)) != 0 {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %v", 0, debitor.getBalance())
 	}
 	recvCheque := debitor.getLastReceivedCheque()
@@ -331,7 +331,7 @@ func TestEmitCheque(t *testing.T) {
 func TestTriggerPaymentThreshold(t *testing.T) {
 	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
-	depositAmount, err := boundedint.NewUint256().Mul(&DefaultPaymentThreshold, boundedint.Uint64ToUint256(2))
+	depositAmount, err := int256.NewUint256().Mul(&DefaultPaymentThreshold, int256.Uint256From(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,17 +359,17 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	creditor := debitorSwap.getPeer(protocolTester.Nodes[0].ID())
 
 	// set the balance to manually be at PaymentThreshold
-	overDraft := boundedint.Uint64ToUint256(42)
-	expectedAmount, err := boundedint.NewUint256().Add(overDraft, &DefaultPaymentThreshold)
+	overDraft := int256.Uint256From(42)
+	expectedAmount, err := int256.NewUint256().Add(overDraft, &DefaultPaymentThreshold)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pt, err := boundedint.NewInt256().Set(DefaultPaymentThreshold.Value())
+	pt, err := int256.NewInt256().Set(DefaultPaymentThreshold.Value())
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := boundedint.NewInt256().Mul(boundedint.Int64ToInt256(-1), pt)
+	b, err := int256.NewInt256().Mul(int256.Int256From(-1), pt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +388,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	// balance should be reset now
-	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
+	if !creditor.getBalance().Equals(int256.Int256From(0)) {
 		t.Fatalf("Expected debitorSwap balance to be 0, but is %v", creditor.getBalance())
 	}
 
@@ -465,7 +465,7 @@ loop:
 	}
 
 	// because no other accounting took place in the meantime the balance should be exactly 0
-	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
+	if !creditor.getBalance().Equals(int256.Int256From(0)) {
 		t.Fatalf("Expected debitorSwap balance to be 0, but is %v", creditor.getBalance())
 	}
 
@@ -491,7 +491,7 @@ loop:
 		t.Fatal(err)
 	}
 
-	if !creditor.getBalance().Equals(boundedint.Int64ToInt256(0)) {
+	if !creditor.getBalance().Equals(int256.Int256From(0)) {
 		t.Fatalf("Expected debitorSwap balance to be 0, but is %v", creditor.getBalance())
 	}
 }
@@ -513,7 +513,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// set the balance to manually be at DisconnectThreshold
 	overDraft := 42
-	expectedBalance, err := boundedint.NewInt256().Set((&DefaultDisconnectThreshold).Value())
+	expectedBalance, err := int256.NewInt256().Set((&DefaultDisconnectThreshold).Value())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,11 +599,11 @@ func TestSwapRPC(t *testing.T) {
 	id2 := dummyPeer2.ID()
 
 	// set some fake balances
-	fakeBalance1 := boundedint.Int64ToInt256(234)
-	fakeBalance2 := boundedint.Int64ToInt256(-100)
+	fakeBalance1 := int256.Int256From(234)
+	fakeBalance2 := int256.Int256From(-100)
 
 	// query a first time, should give error
-	balance := boundedint.NewInt256()
+	balance := int256.NewInt256()
 	err = rpcclient.Call(balance, "swap_peerBalance", id1)
 	// at this point no balance should be there:  no peer registered with Swap
 	if err == nil {
@@ -612,7 +612,7 @@ func TestSwapRPC(t *testing.T) {
 	log.Debug("servicenode balance", "balance", balance)
 
 	// ...thus balance should be empty
-	if !balance.Equals(boundedint.NewInt256()) {
+	if !balance.Equals(int256.NewInt256()) {
 		t.Fatalf("Expected balance to be empty but it is %v", balance)
 	}
 
@@ -654,19 +654,19 @@ func TestSwapRPC(t *testing.T) {
 	}
 
 	// now call all balances
-	allBalances := make(map[enode.ID]*boundedint.Int256)
+	allBalances := make(map[enode.ID]*int256.Int256)
 	err = rpcclient.Call(&allBalances, "swap_balances")
 	if err != nil {
 		t.Fatal(err)
 	}
 	log.Debug("received balances", "allBalances", allBalances)
 
-	sum := boundedint.NewInt256()
+	sum := int256.NewInt256()
 	for _, v := range allBalances {
 		sum.Add(sum, v)
 	}
 
-	fakeSum, err := boundedint.NewInt256().Add(fakeBalance1, fakeBalance2)
+	fakeSum, err := int256.NewInt256().Add(fakeBalance1, fakeBalance2)
 	if err != nil {
 		t.Fatal(err)
 	}

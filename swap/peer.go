@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // ErrDontOwe indictates that no balance is actially owned
@@ -43,7 +43,7 @@ type Peer struct {
 	lastReceivedCheque *Cheque            // last cheque we received from the peer
 	lastSentCheque     *Cheque            // last cheque that was sent to peer that was confirmed
 	pendingCheque      *Cheque            // last cheque that was sent to peer but is not yet confirmed
-	balance            *boundedint.Int256 // current balance of the peer
+	balance            *int256.Int256 // current balance of the peer
 	logger             log.Logger         // logger for swap related messages and audit trail with peer identifier
 }
 
@@ -117,31 +117,31 @@ func (p *Peer) setPendingCheque(cheque *Cheque) error {
 
 // getLastSentCumulativePayout returns the cumulative payout of the last sent cheque or 0 if there is none
 // the caller is expected to hold p.lock
-func (p *Peer) getLastSentCumulativePayout() *boundedint.Uint256 {
+func (p *Peer) getLastSentCumulativePayout() *int256.Uint256 {
 	lastCheque := p.getLastSentCheque()
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
-	return boundedint.NewUint256()
+	return int256.NewUint256()
 }
 
 // the caller is expected to hold p.lock
-func (p *Peer) setBalance(balance *boundedint.Int256) error {
+func (p *Peer) setBalance(balance *int256.Int256) error {
 	p.balance = balance
 	return p.swap.saveBalance(p.ID(), balance)
 }
 
 // getBalance returns the current balance for this peer
 // the caller is expected to hold p.lock
-func (p *Peer) getBalance() *boundedint.Int256 {
+func (p *Peer) getBalance() *int256.Int256 {
 	return p.balance
 }
 
 // the caller is expected to hold p.lock
-func (p *Peer) updateBalance(amount *boundedint.Int256) error {
+func (p *Peer) updateBalance(amount *int256.Int256) error {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
-	newBalance, err := boundedint.NewInt256().Add(p.getBalance(), amount)
+	newBalance, err := int256.NewInt256().Add(p.getBalance(), amount)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	if p.getBalance().Cmp(boundedint.Int64ToInt256(0)) >= 0 {
+	if p.getBalance().Cmp(int256.Int256From(0)) >= 0 {
 		return nil, fmt.Errorf("expected negative balance, found: %v", p.getBalance())
 	}
 	// the balance should be negative here, we take the absolute value:
@@ -172,10 +172,10 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting price from oracle: %v", err)
 	}
-	price := boundedint.Uint64ToUint256(oraclePrice)
+	price := int256.Uint256From(oraclePrice)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
-	newCumulativePayout, err := boundedint.NewUint256().Add(cumulativePayout, price)
+	newCumulativePayout, err := int256.NewUint256().Add(cumulativePayout, price)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
-	honeyAmount := boundedint.Int64ToInt256(int64(cheque.Honey))
+	honeyAmount := int256.Int256From(int64(cheque.Honey))
 	err = p.updateBalance(honeyAmount)
 	if err != nil {
 		return fmt.Errorf("error while updating balance: %v", err)

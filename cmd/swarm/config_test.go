@@ -35,8 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/api"
-	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/swap"
+	"github.com/ethersphere/swarm/swap/int256"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -228,13 +228,13 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	paymentThresholdOverride, err := boundedint.NewUint256().Add(&swap.DefaultPaymentThreshold, boundedint.Uint64ToUint256(1))
+	paymentThresholdOverride, err := int256.NewUint256().Add(&swap.DefaultPaymentThreshold, int256.Uint256From(1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	pt := paymentThresholdOverride.Value()
 
-	disconnectThresholdOverride, err := boundedint.NewUint256().Add(&swap.DefaultDisconnectThreshold, boundedint.Uint64ToUint256(1))
+	disconnectThresholdOverride, err := int256.NewUint256().Add(&swap.DefaultDisconnectThreshold, int256.Uint256From(1))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ package swap
 import (
 	"time"
 
-	"github.com/ethersphere/swarm/boundedint"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // These are currently arbitrary values which have not been verified nor tested
@@ -43,5 +43,5 @@ const (
 	DefaultTransactionTimeout = 10 * time.Minute
 )
 
-var DefaultPaymentThreshold = *boundedint.Uint64ToUint256(defaultPaymentThreshold)
-var DefaultDisconnectThreshold = *boundedint.Uint64ToUint256(defaultDisconnectThreshold)
+var DefaultPaymentThreshold = *int256.Uint256From(defaultPaymentThreshold)
+var DefaultDisconnectThreshold = *int256.Uint256From(defaultDisconnectThreshold)

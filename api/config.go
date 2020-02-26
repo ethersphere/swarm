@@ -27,12 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethersphere/swarm/boundedint"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/swap"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 const (
@@ -53,15 +53,15 @@ type Config struct {
 	BaseKey       []byte
 
 	// Swap configs
-	SwapBackendURL          string              // Ethereum API endpoint
-	SwapEnabled             bool                // whether SWAP incentives are enabled
-	SwapPaymentThreshold    *boundedint.Uint256 // honey amount at which a payment is triggered
-	SwapDisconnectThreshold *boundedint.Uint256 // honey amount at which a peer disconnects
-	SwapSkipDeposit         bool                // do not ask the user to deposit during boot sequence
-	SwapDepositAmount       uint64              // deposit amount to the chequebook
-	SwapLogPath             string              // dir to swap related audit logs
-	Contract                common.Address      // address of the chequebook contract
-	SwapChequebookFactory   common.Address      // address of the chequebook factory contract
+	SwapBackendURL          string          // Ethereum API endpoint
+	SwapEnabled             bool            // whether SWAP incentives are enabled
+	SwapPaymentThreshold    *int256.Uint256 // honey amount at which a payment is triggered
+	SwapDisconnectThreshold *int256.Uint256 // honey amount at which a peer disconnects
+	SwapSkipDeposit         bool            // do not ask the user to deposit during boot sequence
+	SwapDepositAmount       uint64          // deposit amount to the chequebook
+	SwapLogPath             string          // dir to swap related audit logs
+	Contract                common.Address  // address of the chequebook contract
+	SwapChequebookFactory   common.Address  // address of the chequebook factory contract
 	// end of Swap configs
 
 	*network.HiveParams

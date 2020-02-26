@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package boundedint
+package int256
 
 import (
 	"fmt"
@@ -27,6 +27,11 @@ import (
 // Int256 represents an signed integer of 256 bits
 type Int256 struct {
 	value big.Int
+}
+
+// BigIntWrapper represents a struct with an underlying big.Int value
+type BigIntWrapper interface {
+	Value() big.Int
 }
 
 var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)) // -(2^255)
@@ -52,6 +57,14 @@ func (u *Int256) Value() big.Int {
 	return u.value
 }
 
+// Int256From creates a Int256 struct based on the given int64 param
+// any int64 is valid as a Int256
+func Int256From(base int64) *Int256 {
+	u := NewInt256()
+	u.value = *new(big.Int).SetInt64(base)
+	return u
+}
+
 // Set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Int256) Set(value big.Int) (*Int256, error) {
@@ -72,13 +85,13 @@ func (u *Int256) Copy(v *Int256) *Int256 {
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
-func (u *Int256) Cmp(v BoundedInt) int {
+func (u *Int256) Cmp(v BigIntWrapper) int {
 	value := v.Value()
 	return u.value.Cmp(&value)
 }
 
 // Equals returns true if the two Int256 structs have the same underlying values, false otherwise
-func (u *Int256) Equals(v BoundedInt) bool {
+func (u *Int256) Equals(v BigIntWrapper) bool {
 	return u.Cmp(v) == 0
 }
 

@@ -43,12 +43,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
-	"github.com/ethersphere/swarm/boundedint"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	mock "github.com/ethersphere/swarm/swap/chain/mock"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 /*
@@ -110,7 +110,7 @@ func (m *testMsgByReceiver) Price() *protocols.Price {
 var paymentThreshold = DefaultPaymentThreshold.Value()
 var paymentThresholdPrice = paymentThreshold.Uint64()
 
-func (m *testMsgBigPrice) Price() *protocols.Price {
+func (m *testMsgSmallPrice) Price() *protocols.Price {
 	return &protocols.Price{
 		Value:   paymentThresholdPrice / 100, // ensures that the message won't put nodes into debt
 		PerByte: false,
@@ -164,7 +164,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance, boundedint.Uint64ToUint256(100000*RetrieveRequestPrice))
+			err = testDeploy(context.Background(), balance, int256.Uint256From(100000*RetrieveRequestPrice))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -413,7 +413,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b2, err = boundedint.NewInt256().Mul(b2, boundedint.Int64ToInt256(-1))
+	b2, err = int256.NewInt256().Mul(b2, int256.Int256From(-1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +435,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
 
-	if !cheque2.CumulativePayout.Equals(boundedint.Uint64ToUint256(expectedPayout)) {
+	if !cheque2.CumulativePayout.Equals(int256.Uint256From(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
@@ -610,7 +610,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("expected counter balance for node %v to be found, but not found", node)
 				}
-				pBalanceWithNode, err = boundedint.NewInt256().Mul(pBalanceWithNode, boundedint.Int64ToInt256(-1))
+				pBalanceWithNode, err = int256.NewInt256().Mul(pBalanceWithNode, int256.Int256From(-1))
 				if err != nil {
 					return err
 				}
@@ -675,7 +675,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if !lastPayout.Equals(boundedint.Uint64ToUint256(expectedLastPayout)) {
+				if !lastPayout.Equals(int256.Uint256From(expectedLastPayout)) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {

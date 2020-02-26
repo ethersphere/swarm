@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package boundedint
+package int256
 
 import (
 	"io/ioutil"
@@ -24,57 +24,60 @@ import (
 	"github.com/ethersphere/swarm/state"
 )
 
-var uint256TestCases = []BoundedIntTestCase{
+// the following test cases cover a range of values to be used to create uint256 variables
+// these variables are expected to be created successfully when using integer values
+// contained in the closed interval between 0 and 2^256
+var uint256TestCases = []testCase{
 	{
-		name:         "base 0",
-		baseInteger:  big.NewInt(0),
+		name:         "case 0",
+		value:        big.NewInt(0),
 		expectsError: false,
 	},
 	// negative numbers
 	{
-		name:         "base -1",
-		baseInteger:  big.NewInt(-1),
+		name:         "case -1",
+		value:        big.NewInt(-1),
 		expectsError: true,
 	},
 	{
-		name:         "base -1 * 2^8",
-		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
+		name:         "case -1 * 2^8",
+		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
 		expectsError: true,
 	},
 	{
-		name:         "base -1 * 2^64",
-		baseInteger:  new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
+		name:         "case -1 * 2^64",
+		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
 		expectsError: true,
 	},
 	// positive numbers
 	{
-		name:         "base 1",
-		baseInteger:  big.NewInt(1),
+		name:         "case 1",
+		value:        big.NewInt(1),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^8",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
+		name:         "case 2^8",
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^128",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
+		name:         "case 2^128",
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^256 - 1",
-		baseInteger:  new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
+		name:         "case 2^256 - 1",
+		value:        new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)),
 		expectsError: false,
 	},
 	{
-		name:         "base 2^256",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil),
+		name:         "case 2^256",
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil),
 		expectsError: true,
 	},
 	{
-		name:         "base 2^512",
-		baseInteger:  new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
+		name:         "case 2^512",
+		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
 		expectsError: true,
 	},
 }
@@ -83,7 +86,7 @@ var uint256TestCases = []BoundedIntTestCase{
 func TestUint256Set(t *testing.T) {
 	for _, tc := range uint256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256().Set(*tc.baseInteger)
+			result, err := NewUint256().Set(*tc.value)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
@@ -92,31 +95,38 @@ func TestUint256Set(t *testing.T) {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
 				resultValue := result.Value()
-				if (&resultValue).Cmp(tc.baseInteger) != 0 {
-					t.Fatalf("expected value of %v, got %v instead", tc.baseInteger, result.value)
+				if (&resultValue).Cmp(tc.value) != 0 {
+					t.Fatalf("expected value of %v, got %v instead", tc.value, result.value)
 				}
 			}
 		})
 	}
 }
 
-// TestCopy tests the duplication of an existing Uint256 variable
+// TestCopy tests the du:heartplication of an existing Uint256 variable
 func TestUint256Copy(t *testing.T) {
-	for _, tc := range uint256TestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if !tc.expectsError {
-				r, err := NewUint256().Set(*tc.baseInteger)
-				if err != nil {
-					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
-				}
+	// pick test value
+	i := new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil) // 2^128
+	v, err := NewUint256().Set(*i)
+	if err != nil {
+		t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+	}
 
-				c := NewUint256().Copy(r)
+	// copy picked value
+	c := NewUint256().Copy(v)
 
-				if !c.Equals(r) {
-					t.Fatalf("copy of Uint256 %v has an unequal value of %v", r, c)
-				}
-			}
-		})
+	if !c.Equals(v) {
+		t.Fatalf("copy of Uint256 %v has an unequal value of %v", v, c)
+	}
+
+	_, err = v.Add(v, Uint256From(1))
+	if err != nil {
+		t.Fatalf("got unexpected error when increasing test case %v: %v", v, err)
+	}
+
+	// value of copy should not have changed
+	if c.Equals(v) {
+		t.Fatalf("copy of Uint256 %v had an unexpected change of value to %v", v, c)
 	}
 }
 
@@ -136,7 +146,7 @@ func TestUint256Store(t *testing.T) {
 	for _, tc := range uint256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewUint256().Set(*tc.baseInteger)
+				r, err := NewUint256().Set(*tc.value)
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}

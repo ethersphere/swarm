@@ -19,13 +19,13 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
-	"github.com/ethersphere/swarm/boundedint"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
 	mock "github.com/ethersphere/swarm/swap/chain/mock"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // swapTestBackend encapsulates the SimulatedBackend and can offer
@@ -162,7 +162,7 @@ func newTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: boundedint.Uint64ToUint256(42),
+			CumulativePayout: int256.Uint256From(42),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: uint64(42),
@@ -171,7 +171,7 @@ func newTestCheque() *Cheque {
 	return cheque
 }
 
-func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress common.Address, cumulativePayout *boundedint.Uint256, signingKey *ecdsa.PrivateKey) (*Cheque, error) {
+func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress common.Address, cumulativePayout *int256.Uint256, signingKey *ecdsa.PrivateKey) (*Cheque, error) {
 	cp := cumulativePayout.Value()
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
@@ -197,7 +197,7 @@ func newRandomTestCheque() *Cheque {
 	cheque := &Cheque{
 		ChequeParams: ChequeParams{
 			Contract:         testChequeContract,
-			CumulativePayout: boundedint.Uint64ToUint256(amount),
+			CumulativePayout: int256.Uint256From(amount),
 			Beneficiary:      beneficiaryAddress,
 		},
 		Honey: amount,
@@ -233,7 +233,7 @@ func setupContractTest() func() {
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *boundedint.Uint256) (cswap.Contract, error) {
+func testDeployWithPrivateKey(ctx context.Context, backend chain.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *int256.Uint256) (cswap.Contract, error) {
 	opts := bind.NewKeyedTransactor(privateKey)
 	opts.Context = ctx
 
@@ -281,7 +281,7 @@ func testDeployWithPrivateKey(ctx context.Context, backend cswap.Backend, privat
 }
 
 // deploy for testing (needs simulated backend commit)
-func testDeploy(ctx context.Context, swap *Swap, depositAmount *boundedint.Uint256) (err error) {
+func testDeploy(ctx context.Context, swap *Swap, depositAmount *int256.Uint256) (err error) {
 	swap.contract, err = testDeployWithPrivateKey(ctx, swap.backend, swap.owner.privateKey, swap.owner.address, depositAmount)
 	return err
 }

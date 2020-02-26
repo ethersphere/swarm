@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package boundedint
+package int256
 
 import (
 	"fmt"
@@ -39,9 +39,9 @@ func NewUint256() *Uint256 {
 	return u
 }
 
-// Uint64ToUint256 creates a Uint256 struct based on the given uint64 param
+// Uint256From creates a Uint256 struct based on the given uint64 param
 // any uint64 is valid as a Uint256
-func Uint64ToUint256(base uint64) *Uint256 {
+func Uint256From(base uint64) *Uint256 {
 	u := NewUint256()
 	u.value = *new(big.Int).SetUint64(base)
 	return u
@@ -72,13 +72,13 @@ func (u *Uint256) Copy(v *Uint256) *Uint256 {
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
-func (u *Uint256) Cmp(v BoundedInt) int {
+func (u *Uint256) Cmp(v BigIntWrapper) int {
 	value := v.Value()
 	return u.value.Cmp(&value)
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
-func (u *Uint256) Equals(v BoundedInt) bool {
+func (u *Uint256) Equals(v BigIntWrapper) bool {
 	return u.Cmp(v) == 0
 }
 
