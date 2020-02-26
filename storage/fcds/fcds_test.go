@@ -78,16 +78,19 @@ func TestStoreGrow(t *testing.T) {
 			case sem <- struct{}{}:
 				gcRuns++
 				count := 0
+				a := []chunk.Address{}
 				err := s.Iterate(func(c chunk.Chunk) (stop bool, err error) {
 					count++
-					e := s.Delete(c.Address())
+					aa := c.Address()
+					e := s.Delete(aa)
 					if e != nil {
-						fmt.Println("error deleting", e, "c", c)
+						//fmt.Println("error deleting", e, "c", v)
 					}
 
 					mtx.Lock()
 					inserted--
 					mtx.Unlock()
+					a = append(a, aa)
 					if count >= gcTarget {
 						return true, nil
 					}
