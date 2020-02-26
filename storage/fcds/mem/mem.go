@@ -83,6 +83,24 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	return nil
 }
 
+// ShardSlots gives back a slice of ShardSlot items that represent the number
+// of free slots inside each shard.
+func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot) {
+	freeSlots = make([]fcds.ShardSlot, fcds.ShardCount)
+
+	s.mu.RLock()
+	for i := uint8(0); i < fcds.ShardCount; i++ {
+		slot := fcds.ShardSlot{Shard: i}
+		if slots, ok := s.free[i]; ok {
+			slot.Slots = int64(len(slots))
+		}
+		freeSlots[i] = slot
+	}
+	s.mu.RUnlock()
+
+	return freeSlots
+}
+
 // FreeOffset returns an offset that can be reclaimed by
 // another chunk. If the returned value is less then 0
 // there are no free offset at this shard.

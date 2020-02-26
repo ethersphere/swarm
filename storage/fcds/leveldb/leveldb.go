@@ -17,7 +17,10 @@
 package leveldb
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
+	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage/fcds"
@@ -30,17 +33,24 @@ var _ fcds.MetaStore = new(MetaStore)
 // MetaStore implements FCDS MetaStore with LevelDB
 // for persistence.
 type MetaStore struct {
-	db *leveldb.DB
+	db   *leveldb.DB
+	free map[uint8]int64 // free slots cardinality
+	mtx  sync.RWMutex    // synchronise free slots
 }
 
 // NewMetaStore returns new MetaStore at path.
 func NewMetaStore(path string) (s *MetaStore, err error) {
 	db, err := leveldb.OpenFile(path, &opt.Options{})
+
 	if err != nil {
 		return nil, err
 	}
+
+	// todo: try to get and deserialize the free map from the persisted value on disk
+
 	return &MetaStore{
-		db: db,
+		db:   db,
+		free: make(map[uint8]int64),
 	}, err
 }
 
@@ -84,8 +94,37 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	}
 	batch := new(leveldb.Batch)
 	batch.Put(freeKey(shard, m.Offset), nil)
+	batch.Put(freeCountKey(), encodeFreeSlots(s.free))
 	batch.Delete(chunkKey(addr))
-	return s.db.Write(batch, nil)
+
+	err = s.db.Write(batch, nil)
+	if err != nil {
+		return err
+	}
+
+	s.mtx.Lock()
+	s.free[shard]++
+	s.mtx.Unlock()
+
+	return nil
+}
+
+// ShardSlots gives back a slice of ShardSlot items that represent the number
+// of free slots inside each shard.
+func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot) {
+	freeSlots = make([]fcds.ShardSlot, fcds.ShardCount)
+
+	s.mtx.RLock()
+	for i := uint8(0); i < fcds.ShardCount; i++ {
+		slot := fcds.ShardSlot{Shard: i}
+		if slots, ok := s.free[i]; ok {
+			slot.Slots = slots
+		}
+		freeSlots[i] = slot
+	}
+	s.mtx.RUnlock()
+
+	return freeSlots
 }
 
 // FreeOffset returns an offset that can be reclaimed by
@@ -142,7 +181,9 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 		if err := m.UnmarshalBinary(value); err != nil {
 			return err
 		}
-		stop, err := fn(chunk.Address(key[1:]), m)
+		b := make([]byte, len(key)-1)
+		copy(b, key[1:])
+		stop, err := fn(chunk.Address(b), m)
 		if err != nil {
 			return err
 		}
@@ -161,6 +202,7 @@ func (s *MetaStore) Close() (err error) {
 const (
 	chunkPrefix = 0
 	freePrefix  = 1
+	freeCount   = 2
 )
 
 func chunkKey(addr chunk.Address) (key []byte) {
@@ -173,4 +215,34 @@ func freeKey(shard uint8, offset int64) (key []byte) {
 	key[1] = shard
 	binary.BigEndian.PutUint64(key[2:10], uint64(offset))
 	return key
+}
+
+func freeCountKey() (key []byte) {
+	return []byte{freeCount}
+}
+
+func encodeFreeSlots(m map[uint8]int64) []byte {
+	b := new(bytes.Buffer)
+
+	e := gob.NewEncoder(b)
+
+	err := e.Encode(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return b.Bytes()
+}
+
+func decodeFreeSlots(b []byte) map[uint8]int64 {
+	buf := bytes.NewBuffer(b)
+	var decodedMap map[uint8]int64
+	d := gob.NewDecoder(buf)
+
+	err := d.Decode(&decodedMap)
+	if err != nil {
+		panic(err)
+	}
+
+	return decodedMap
 }
