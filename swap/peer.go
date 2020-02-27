@@ -193,7 +193,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 // the caller is expected to hold p.lock
 func (p *Peer) sendCheque() error {
 	if p.getPendingCheque() != nil {
-		p.logger.Info(SendChequeAction, "previous cheque still pending, resending cheque", "pending", p.getPendingCheque())
+		p.logger.Info(SendChequeAction, "previous cheque still pending, resending cheque", "pending cheque", p.getPendingCheque())
 		return p.Send(context.Background(), &EmitChequeMsg{
 			Cheque: p.getPendingCheque(),
 		})

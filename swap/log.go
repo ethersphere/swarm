@@ -17,32 +17,37 @@
 package swap
 
 import (
-	"encoding/hex"
-
 	log "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/network"
 )
 
 const (
 	// UndefinedAction is the default actions filter for swap logs
-	UndefinedAction        string = "undefined"
-	InitAction             string = "init"
-	StopAction             string = "stop"
-	UpdateBalanceAction    string = "update_balance"
-	SendChequeAction       string = "send_cheque"
-	HandleChequeAction     string = "handle_cheque"
-	CashChequeAction       string = "cash_cheque"
+	UndefinedAction string = "undefined"
+	// InitAction used when starting swap
+	InitAction string = "init"
+	// StopAction used when stopping swap
+	StopAction string = "stop"
+	// UpdateBalanceAction used when updating balances
+	UpdateBalanceAction string = "update_balance"
+	// SendChequeAction used for cheque actions
+	SendChequeAction string = "send_cheque"
+	// HandleChequeAction used for cheque actions
+	HandleChequeAction string = "handle_cheque"
+	// CashChequeAction used for cheque actions
+	CashChequeAction string = "cash_cheque"
+	// DeployChequebookAction used when deploying chequebooks
 	DeployChequebookAction string = "deploy_chequebook_contract"
 )
 
 const swapLogLevel = 3       // swapLogLevel indicates filter level of log messages
 const fileSizeLimit = 262144 // max bytes limit for splitting file in parts
+const emptyLogPath = ""      // Used when no logPath is specified for a logger
 
 // Logger wraps the ethereum logger with specific information for swap logging
-// this struct contains an action string that is used for grouping similar logs together
 // each log contains a context which will be printed on each message
 type Logger struct {
-	action string
 	logger log.Logger
 }
 
@@ -88,9 +93,7 @@ func (sl Logger) Trace(action string, msg string, ctx ...interface{}) {
 
 // newLogger return a new SwapLogger Instance with ctx loaded for swap
 func newLogger(logPath string, ctx []interface{}) (swapLogger Logger) {
-	swapLogger = Logger{
-		action: UndefinedAction,
-	} //TODO:REMOVE ACTION FROM LOGGER
+	swapLogger = Logger{}
 	swapLogger.logger = log.New(ctx...)
 	setLoggerHandler(logPath, swapLogger.logger)
 	return swapLogger
@@ -101,7 +104,7 @@ func newLogger(logPath string, ctx []interface{}) (swapLogger Logger) {
 func setLoggerHandler(logpath string, logger log.Logger) {
 	lh := log.Root().GetHandler()
 
-	if logpath == "" {
+	if logpath == emptyLogPath {
 		logger.SetHandler(lh)
 		return
 	}
@@ -133,13 +136,13 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, overlayAddr []byte) Logger {
-	ctx := []interface{}{"base", hex.EncodeToString(overlayAddr)[:16]}
+func newSwapLogger(logPath string, baseAddress *network.BzzAddr) Logger {
+	ctx := []interface{}{"base", baseAddress.ShortString()}
 	return newLogger(logPath, ctx)
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) Logger {
-	ctx := []interface{}{"base", hex.EncodeToString(s.params.BaseAddrs.Over())[:16], "peer", peerID.String()[:16]}
+	ctx := []interface{}{"base", s.params.BaseAddrs.ShortString(), "peer", peerID.String()[:16]}
 	return newLogger(s.params.LogPath, ctx)
 }

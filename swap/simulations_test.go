@@ -244,8 +244,8 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		if err != nil {
 			t.Fatal(err)
 		}
-		swapLog := newSwapLogger(defParams.LogPath, defParams.BaseAddrs.Over())
-		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory, swapLog)
+		swapLogger := newSwapLogger(defParams.LogPath, defParams.BaseAddrs)
+		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory, swapLogger)
 	}
 
 	params.backend = testBackend

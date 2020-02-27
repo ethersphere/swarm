@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/swap"
@@ -107,7 +106,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend
 // - starts the chequebook; creates the swap instance
 func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, skipDepositFlag bool, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
-	swapLog := newSwapLogger(params.LogPath, params.BaseAddrs.Over())
+	swapLogger := newSwapLogger(params.LogPath, params.BaseAddrs)
 	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
@@ -116,7 +115,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if depositAmountFlag > 0 && skipDepositFlag {
 		return nil, ErrSkipDeposit
 	}
-	swapLog.Info(InitAction, "connecting to SWAP API", "url", backendURL)
+	swapLogger.Info(InitAction, "connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
 	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
@@ -136,16 +135,16 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		return nil, fmt.Errorf("retrieving chainID from backendURL: %v", err)
 	}
 	// verify that we have not used SWAP before on a different chainID
-	if err := checkChainID(chainID.Uint64(), stateStore, swapLog); err != nil {
+	if err := checkChainID(chainID.Uint64(), stateStore, swapLogger); err != nil {
 		return nil, err
 	}
-	swapLog.Info(InitAction, "Using backend network ID", "ID", chainID.Uint64())
+	swapLogger.Info(InitAction, "Using backend network ID", "ID", chainID.Uint64())
 
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
 
 	// initialize the factory
-	factory, err := createFactory(factoryAddress, chainID, backend, swapLog)
+	factory, err := createFactory(factoryAddress, chainID, backend, swapLogger)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +157,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		chainID.Uint64(),
 		params,
 		factory,
-		swapLog,
+		swapLogger,
 	)
 	// start the chequebook
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag); err != nil {
@@ -181,7 +180,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 				return nil, err
 			}
 		} else {
-			swapLog.Info(InitAction, "Skipping deposit")
+			swapLogger.Info(InitAction, "Skipping deposit")
 		}
 	}
 
@@ -657,8 +656,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	opts.Context = ctx
-	//s.logger.SetLogAction("deploy_chequebook_contract")
-	s.logger.Info(InitAction, "Deploying new swap", "owner", opts.From.Hex())
+	s.logger.Info(DeployChequebookAction, "Deploying new swap", "owner", opts.From.Hex())
 	chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy chequebook: %w", err)
@@ -675,7 +673,7 @@ func (s *Swap) Deposit(ctx context.Context, amount *big.Int) error {
 	if err != nil {
 		return err
 	}
-	log.Info(InitAction, "Deposited ERC20 into chequebook", "amount", amount, "transaction", rec.TxHash)
+	s.logger.Info(InitAction, "Deposited ERC20 into chequebook", "amount", amount, "transaction", rec.TxHash)
 	return nil
 }
 

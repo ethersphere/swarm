@@ -1340,12 +1340,16 @@ func TestSwapActions(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
-	swapLog := newSwapLogger(logDirDebitor, swap.params.BaseAddrs.Over())
+	swapLog := newSwapLogger(logDirDebitor, swap.params.BaseAddrs)
 
 	swapLog.Info(UndefinedAction, "Test")
+	swapLog.Info(InitAction, "Test")
 	swapLog.Info(StopAction, "Test")
-	swapLog.Info(HandleChequeAction, "Test")
+	swapLog.Info(UpdateBalanceAction, "Test")
 	swapLog.Info(SendChequeAction, "Test")
+	swapLog.Info(HandleChequeAction, "Test")
+	swapLog.Info(CashChequeAction, "Test")
+	swapLog.Info(DeployChequebookAction, "Test")
 
 	if logDirDebitor == "" {
 		t.Fatal("Swap Log Dir is not defined")
@@ -1372,16 +1376,32 @@ func TestSwapActions(t *testing.T) {
 		t.Fatalf("expected the log to contain action \"undefined\"")
 	}
 
+	if !strings.Contains(logString, `"swap_action","init"`) {
+		t.Fatalf("expected the log to contain action \"init\"")
+	}
+
 	if !strings.Contains(logString, `"swap_action","stop"`) {
 		t.Fatalf("expected the log to contain action \"stop\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","update_balance"`) {
+		t.Fatalf("expected the log to contain action \"update_balance\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","send_cheque"`) {
+		t.Fatalf("expected the log to contain action \"send_cheque\"")
 	}
 
 	if !strings.Contains(logString, `"swap_action","handle_cheque"`) {
 		t.Fatalf("expected the log to contain action \"handle_cheque\"")
 	}
 
-	if !strings.Contains(logString, `"swap_action","send_cheque"`) {
-		t.Fatalf("expected the log to contain action \"send_cheque\"")
+	if !strings.Contains(logString, `"swap_action","cash_cheque"`) {
+		t.Fatalf("expected the log to contain action \"cash_cheque\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","deploy_chequebook_contract"`) {
+		t.Fatalf("expected the log to contain action \"deploy_chequebook_contract\"")
 	}
 
 }

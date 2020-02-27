@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/uint256"
 )
@@ -131,7 +132,7 @@ func TestCashCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swapLog := newSwapLogger("", ownerAddress.Bytes())
+	swapLog := newSwapLogger(emptyLogPath, &network.BzzAddr{OAddr: ownerAddress.Bytes(), UAddr: ownerAddress.Bytes()})
 
 	err = cashoutProcessor.cashCheque(context.Background(), &CashoutRequest{
 		Cheque:      *testCheque,
