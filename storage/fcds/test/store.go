@@ -126,15 +126,13 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 
 	chunkShards := make(map[string]uint8)
 
-	t.Run("write", func(t *testing.T) {
-		for _, ch := range chunks {
-			if shard, err := db.Put(ch); err != nil {
-				t.Fatal(err)
-			} else {
-				chunkShards[ch.Address().String()] = shard
-			}
+	for _, ch := range chunks {
+		if shard, err := db.Put(ch); err != nil {
+			t.Fatal(err)
+		} else {
+			chunkShards[ch.Address().String()] = shard
 		}
-	})
+	}
 
 	for _, tc := range []struct {
 		incFreeSlots []int
@@ -173,6 +171,10 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 				if len(deleteChunks) == inc {
 					break
 				}
+			}
+
+			if len(deleteChunks) != inc {
+				panic(0)
 			}
 
 			for _, v := range deleteChunks {
@@ -381,6 +383,7 @@ func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.
 		t.Fatal(err)
 	}
 
+	fmt.Println("creating new forky", path)
 	s, err = fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(!*noCacheFlag))
 	if err != nil {
 		os.RemoveAll(path)
