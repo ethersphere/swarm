@@ -148,7 +148,6 @@ type Peer struct {
 	running         bool         // if running is true async go routines are dispatched in the event loop
 	mtx             sync.RWMutex // guards running
 	handleMsgPauser MsgPauser    //  message pauser, should be used only in tests
-	lock            sync.Mutex
 }
 
 // NewPeer constructs a new peer
@@ -306,9 +305,6 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		// let's lock, we want to avoid that after validating, a separate call might interfere
-		p.lock.Lock()
-		defer p.lock.Unlock()
 		// validate that this operation would succeed...
 		costToLocalNode, err := p.spec.Hook.Validate(p, uint32(size), wmsg, Sender)
 		if err != nil {
@@ -376,8 +372,6 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 
 	// if the accounting hook is set, do accounting logic
 	if p.spec.Hook != nil {
-		p.lock.Lock()
-		defer p.lock.Unlock()
 		size := uint32(len(msgBytes))
 
 		// validate that the accounting call would succeed...

@@ -821,7 +821,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 			fileName = found
 		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
-		log.Error("serving content")
 		http.ServeContent(w, r, fileName, time.Now(), langos.NewBufferedReadSeeker(reader, getFileBufferSize))
 
 	case uri.Hash():

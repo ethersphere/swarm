@@ -53,6 +53,13 @@ func (p *Peer) addRetrieval(ruid uint, addr storage.Address) {
 	p.retrievals[ruid] = addr
 }
 
+func (p *Peer) expireRetrieval(ruid uint) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	delete(p.retrievals, ruid)
+}
+
 // chunkReceived is called upon ChunkDelivery message reception
 // it is meant to idenfify unsolicited chunk deliveries
 func (p *Peer) checkRequest(ruid uint, addr storage.Address) error {

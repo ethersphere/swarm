@@ -53,8 +53,8 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
 	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), nil))
-	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-		return nil, errors.New("not found")
+	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
+		return nil, func() {}, errors.New("not found")
 	}
 	fh.SetStore(netStore)
 	return &TestHandler{fh}, nil
@@ -69,8 +69,8 @@ func newTestHandlerWithStore(fh *Handler, datadir string, db chunk.Store, params
 	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
 
 	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), nil))
-	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
-		return nil, errors.New("not found")
+	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
+		return nil, func() {}, errors.New("not found")
 	}
 	fh.SetStore(netStore)
 	return &TestHandler{fh}, nil
