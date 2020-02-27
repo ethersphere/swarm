@@ -1,3 +1,19 @@
+// Copyright 2019 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package swap
 
 import (
@@ -19,8 +35,8 @@ const (
 	DeployChequebookAction string = "deploy_chequebook_contract"
 )
 
-//var swapLog log.Logger // logger for Swap related messages and audit trail
-const swapLogLevel = 3 // swapLogLevel indicates filter level of log messages
+const swapLogLevel = 3       // swapLogLevel indicates filter level of log messages
+const fileSizeLimit = 262144 // max bytes limit for splitting file in parts
 
 // Logger wraps the ethereum logger with specific information for swap logging
 // this struct contains an action string that is used for grouping similar logs together
@@ -111,7 +127,7 @@ func setLoggerHandler(logpath string, logger log.Logger) {
 func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 	return log.RotatingFileHandler(
 		logdir,
-		262144,
+		fileSizeLimit,
 		log.JSONFormatOrderedEx(false, true),
 	)
 }

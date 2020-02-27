@@ -13,21 +13,22 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/containerd/containerd v1.2.7 // indirect
 	github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc // indirect
-	github.com/containerd/fifo v0.0.0-20191213151349-ff969a566b00 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v0.7.3-0.20190806133308-ecdb0b22393b
 	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/ethereum/go-ethereum v1.9.2
 	github.com/ethersphere/go-sw3 v0.2.1
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
 	github.com/go-kit/kit v0.9.0 // indirect
+	github.com/go-logfmt/logfmt v0.4.0 // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
+	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/googleapis/gnostic v0.0.0-20190624222214-25d8b0b66985 // indirect
 	github.com/gorilla/mux v1.7.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.3
+	github.com/json-iterator/go v1.1.7 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.2

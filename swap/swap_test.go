@@ -1343,10 +1343,8 @@ func TestSwapActions(t *testing.T) {
 	swapLog := newSwapLogger(logDirDebitor, swap.params.BaseAddrs.Over())
 
 	swapLog.Info(UndefinedAction, "Test")
-	//swapLog.SetLogAction("disconnecting")
 	swapLog.Info(StopAction, "Test")
 	swapLog.Info(HandleChequeAction, "Test")
-	//swapLog.SetLogAction("sent_cheque")
 	swapLog.Info(SendChequeAction, "Test")
 
 	if logDirDebitor == "" {
@@ -1375,7 +1373,7 @@ func TestSwapActions(t *testing.T) {
 	}
 
 	if !strings.Contains(logString, `"swap_action","stop"`) {
-		t.Fatalf("expected the log to contain action \"disconnecting\"")
+		t.Fatalf("expected the log to contain action \"stop\"")
 	}
 
 	if !strings.Contains(logString, `"swap_action","handle_cheque"`) {
