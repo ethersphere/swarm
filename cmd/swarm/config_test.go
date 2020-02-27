@@ -228,17 +228,19 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// add 1 to payment threshold
 	paymentThresholdOverride, err := int256.NewUint256().Add(swap.DefaultPaymentThreshold, int256.Uint256From(1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	pt := paymentThresholdOverride.Value()
+	paymentThreshold := paymentThresholdOverride.Value()
 
+	// add 1 to disconnect threshold
 	disconnectThresholdOverride, err := int256.NewUint256().Add(swap.DefaultDisconnectThreshold, int256.Uint256From(1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	dt := disconnectThresholdOverride.Value()
+	disconnectThreshold := disconnectThresholdOverride.Value()
 
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
@@ -251,8 +253,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.FormatUint(pt.Uint64(), 10),
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.FormatUint(dt.Uint64(), 10),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.FormatUint(paymentThreshold.Uint64(), 10),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.FormatUint(disconnectThreshold.Uint64(), 10),
 		fmt.Sprintf("--%s", SwarmEnablePinningFlag.Name),
 	}
 
