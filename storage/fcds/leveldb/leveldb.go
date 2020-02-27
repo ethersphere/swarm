@@ -94,6 +94,10 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	}
 	batch := new(leveldb.Batch)
 	batch.Put(freeKey(shard, m.Offset), nil)
+
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	batch.Put(freeCountKey(), encodeFreeSlots(s.free))
 	batch.Delete(chunkKey(addr))
 
@@ -102,9 +106,7 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 		return err
 	}
 
-	s.mtx.Lock()
 	s.free[shard]++
-	s.mtx.Unlock()
 
 	return nil
 }

@@ -171,7 +171,6 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 
 	shard := s.getWritableShard()
 
-	fmt.Println("writing addr to shard", "addr", addr.String(), "shard", shard)
 	sh := s.shards[shard]
 
 	sh.mu.Lock()
