@@ -63,8 +63,13 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 }
 
 // Put stores chunk data.
-func (s *Store) Put(ch chunk.Chunk) (err error) {
-	return s.m.Put(ch.Address(), ch.Data())
+func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
+	err = s.m.Put(ch.Address(), ch.Data())
+	return 0, err
+}
+
+func (s *Store) NextShard() (shard uint8) {
+	return 0
 }
 
 // Delete removes chunk data.

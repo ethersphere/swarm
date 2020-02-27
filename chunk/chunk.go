@@ -18,6 +18,7 @@ package chunk
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -116,6 +117,20 @@ func (a *Address) UnmarshalJSON(value []byte) error {
 	*a = make([]byte, 32)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
 	copy(*a, h)
+	return nil
+}
+
+func (a *Address) UnmarshalString(s string) error {
+	v, err := hex.DecodeString(s)
+	if err != nil {
+		return err
+	}
+
+	if len(v) != AddressLength {
+		return fmt.Errorf("address length mistmatch. got %d bytes but expected %d", len(v), AddressLength)
+	}
+	*a = make([]byte, 32)
+	copy(*a, v)
 	return nil
 }
 

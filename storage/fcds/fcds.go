@@ -37,8 +37,9 @@ import (
 type Storer interface {
 	Get(addr chunk.Address) (ch chunk.Chunk, err error)
 	Has(addr chunk.Address) (yes bool, err error)
-	Put(ch chunk.Chunk) (err error)
+	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
+	NextShard() (shard uint8)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
 	Close() (err error)
@@ -47,7 +48,7 @@ type Storer interface {
 var _ Storer = new(Store)
 
 // Number of files that store chunk data.
-const ShardCount = 32
+var ShardCount = uint8(32)
 
 // ErrStoreClosed is returned if store is already closed.
 var ErrStoreClosed = errors.New("closed store")
@@ -152,9 +153,9 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 }
 
 // Put stores chunk data.
-func (s *Store) Put(ch chunk.Chunk) (err error) {
+func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 	if err := s.protect(); err != nil {
-		return err
+		return 0, err
 	}
 	defer s.unprotect()
 
@@ -163,13 +164,13 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 
 	size := len(data)
 	if size > s.maxChunkSize {
-		return fmt.Errorf("chunk data size %v exceeds %v bytes", size, s.maxChunkSize)
+		return 0, fmt.Errorf("chunk data size %v exceeds %v bytes", size, s.maxChunkSize)
 	}
 
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	shard := s.getWritableShard()
+	shard = s.NextShard()
 
 	sh := s.shards[shard]
 
@@ -178,7 +179,7 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 
 	offset, reclaimed, err := s.getOffset(shard)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if offset < 0 {
@@ -192,20 +193,23 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if _, err = sh.f.Write(section); err != nil {
-		return err
+		return 0, err
 	}
 	if reclaimed && s.freeCache != nil {
 		s.freeCache.remove(shard, offset)
 	}
-	return s.meta.Set(addr, shard, reclaimed, &Meta{
+
+	err = s.meta.Set(addr, shard, reclaimed, &Meta{
 		Size:   uint16(size),
 		Offset: offset,
 		Shard:  shard,
 	})
+
+	return shard, err
 }
 
 // getOffset returns an offset where chunk data can be written to
@@ -359,16 +363,14 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 	return has
 }
 
-// getWritableShard gets the next shard to write to.
+// NextShard gets the next shard to write to.
 // uses weighted probability to choose the next shard.
-func (s *Store) getWritableShard() (shard uint8) {
+func (s *Store) NextShard() (shard uint8) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
 
 	slots := s.meta.ShardSlots()
-	shard = probabilisticNextShard(slots)
-
-	return shard
+	return probabilisticNextShard(slots)
 }
 
 // probabilisticNextShard returns a next shard to write to
@@ -381,14 +383,15 @@ func probabilisticNextShard(slots []ShardSlot) (shard uint8) {
 		// we still need to potentially insert 1 chunk and so if all shards have
 		// no empty offsets - they all must be considered equally as having at least
 		// one empty slot
+		fmt.Println("sum", sum, sum+v.Slots+1)
 		sum += v.Slots + 1
 	}
 
 	// do some magic
 	magic := int64(rand.Intn(int(sum)))
-
+	fmt.Println("magic", magic)
 	for _, v := range slots {
-		movingSum += v.Slots + int64(1)
+		movingSum += v.Slots + 1
 		if magic < movingSum {
 			// we've reached the shard with the correct id
 			return v.Shard
