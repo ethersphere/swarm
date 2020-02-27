@@ -46,62 +46,62 @@ func Main(m *testing.M) {
 // RunAll runs all available tests for a Store implementation.
 func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 
-	//t.Run("empty", func(t *testing.T) {
-	//RunStore(t, &RunStoreOptions{
-	//ChunkCount:   *chunksFlag,
-	//NewStoreFunc: newStoreFunc,
-	//})
-	//})
+	t.Run("empty", func(t *testing.T) {
+		RunStore(t, &RunStoreOptions{
+			ChunkCount:   *chunksFlag,
+			NewStoreFunc: newStoreFunc,
+		})
+	})
 
-	//t.Run("cleaned", func(t *testing.T) {
-	//RunStore(t, &RunStoreOptions{
-	//ChunkCount:   *chunksFlag,
-	//NewStoreFunc: newStoreFunc,
-	//Cleaned:      true,
-	//})
-	//})
+	t.Run("cleaned", func(t *testing.T) {
+		RunStore(t, &RunStoreOptions{
+			ChunkCount:   *chunksFlag,
+			NewStoreFunc: newStoreFunc,
+			Cleaned:      true,
+		})
+	})
 
-	//for _, tc := range []struct {
-	//name        string
-	//deleteSplit int
-	//}{
-	//{
-	//name:        "delete-all",
-	//deleteSplit: 1,
-	//},
-	//{
-	//name:        "delete-half",
-	//deleteSplit: 2,
-	//},
-	//{
-	//name:        "delete-fifth",
-	//deleteSplit: 5,
-	//},
-	//{
-	//name:        "delete-tenth",
-	//deleteSplit: 10,
-	//},
-	//{
-	//name:        "delete-percent",
-	//deleteSplit: 100,
-	//},
-	//{
-	//name:        "delete-permill",
-	//deleteSplit: 1000,
-	//},
-	//} {
-	//t.Run(tc.name, func(t *testing.T) {
-	//RunStore(t, &RunStoreOptions{
-	//ChunkCount:   *chunksFlag,
-	//DeleteSplit:  tc.deleteSplit,
-	//NewStoreFunc: newStoreFunc,
-	//})
-	//})
-	//}
+	for _, tc := range []struct {
+		name        string
+		deleteSplit int
+	}{
+		{
+			name:        "delete-all",
+			deleteSplit: 1,
+		},
+		{
+			name:        "delete-half",
+			deleteSplit: 2,
+		},
+		{
+			name:        "delete-fifth",
+			deleteSplit: 5,
+		},
+		{
+			name:        "delete-tenth",
+			deleteSplit: 10,
+		},
+		{
+			name:        "delete-percent",
+			deleteSplit: 100,
+		},
+		{
+			name:        "delete-permill",
+			deleteSplit: 1000,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RunStore(t, &RunStoreOptions{
+				ChunkCount:   *chunksFlag,
+				DeleteSplit:  tc.deleteSplit,
+				NewStoreFunc: newStoreFunc,
+			})
+		})
+	}
 
-	//t.Run("iterator", func(t *testing.T) {
-	//RunIterator(t, newStoreFunc)
-	//})
+	t.Run("iterator", func(t *testing.T) {
+		RunIterator(t, newStoreFunc)
+	})
 
 	t.Run("next shard", func(t *testing.T) {
 		runNextShard(t, newStoreFunc)
@@ -136,21 +136,19 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 		}
 	})
 
-	fmt.Println("done putting")
-
 	for _, tc := range []struct {
 		incFreeSlots []int
 		expectNext   uint8
 	}{
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: 1},
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: 1},
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: 1},
-		{incFreeSlots: []int{0, 0, 0, 11}, expectNext: 1},
-		{incFreeSlots: []int{10, 0, 0, 0}, expectNext: 1},
-		{incFreeSlots: []int{100, 0, 0, 0}, expectNext: 3},
-		{incFreeSlots: []int{0, 200, 0, 0}, expectNext: 1},
-		{incFreeSlots: []int{0, 0, 302, 0}, expectNext: 2},
-		{incFreeSlots: []int{0, 0, 0, 440}, expectNext: 3},
+		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: 1},  // magic 10, intervals [0 1) [1 17) [17 18) [18 19)
+		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: 1},  // magic 23, intervals [0 1) [1 32) [32 33) [33 34)
+		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: 1},  // magic 44, intervals [0 1) [1 47) [47 48) [48 49)
+		{incFreeSlots: []int{0, 0, 0, 11}, expectNext: 1},  // magic 14, intervals [0 1) [1 47) [47 48) [48 60)
+		{incFreeSlots: []int{10, 0, 0, 0}, expectNext: 1},  // magic 48, intervals [0 11) [11 57) [57 58) [58 70)
+		{incFreeSlots: []int{100, 0, 0, 0}, expectNext: 3}, // magic 164, intervals [0 111) [111 157) [157 158) [158 170)
+		{incFreeSlots: []int{0, 200, 0, 0}, expectNext: 1}, // magic 305, intervals [0 111) [111 352) [352 353) [353 365)
+		{incFreeSlots: []int{0, 0, 302, 0}, expectNext: 2}, // magic 400, intervals [0 111) [111 352) [352 622) [622 634)
+		{incFreeSlots: []int{0, 0, 0, 440}, expectNext: 3}, // magic 637, intervals [0 111) [111 352) [352 622) [622 874)
 	} {
 		for shard, inc := range tc.incFreeSlots {
 			if inc == 0 {

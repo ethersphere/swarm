@@ -377,19 +377,22 @@ func (s *Store) NextShard() (shard uint8) {
 // using a weighted probability
 func probabilisticNextShard(slots []ShardSlot) (shard uint8) {
 	var sum, movingSum int64
+
+	intervalString := ""
 	for _, v := range slots {
 
 		// we need to consider the edge case where no free slots are available
 		// we still need to potentially insert 1 chunk and so if all shards have
 		// no empty offsets - they all must be considered equally as having at least
 		// one empty slot
-		fmt.Println("sum", sum, sum+v.Slots+1)
+		intervalString += fmt.Sprintf("[%d %d) ", sum, sum+v.Slots+1)
 		sum += v.Slots + 1
 	}
 
 	// do some magic
 	magic := int64(rand.Intn(int(sum)))
-	fmt.Println("magic", magic)
+	intervalString = fmt.Sprintf("magic %d, intervals ", magic) + intervalString
+	fmt.Println(intervalString)
 	for _, v := range slots {
 		movingSum += v.Slots + 1
 		if magic < movingSum {
