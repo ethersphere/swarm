@@ -367,7 +367,7 @@ func TestNewSwapFailure(t *testing.T) {
 			configure: func(config *testSwapConfig) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
-				params.PaymentThreshold = &DefaultPaymentThreshold
+				params.PaymentThreshold = DefaultPaymentThreshold
 				config.skipDeposit = false
 				config.factoryAddress = testBackend.factoryAddress
 			},
@@ -581,7 +581,7 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap, &DefaultPaymentThreshold)
+	testDeploy(context.Background(), swap, DefaultPaymentThreshold)
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	amount := DefaultPaymentThreshold.Value()
@@ -591,7 +591,7 @@ func TestPaymentThreshold(t *testing.T) {
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if !cheque.CumulativePayout.Equals(&DefaultPaymentThreshold) {
+	if !cheque.CumulativePayout.Equals(DefaultPaymentThreshold) {
 		t.Fatal()
 	}
 }
@@ -612,7 +612,7 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
-	testAmount, err := int256.NewUint256().Add(&DefaultPaymentThreshold, int256.Uint256From(42))
+	testAmount, err := int256.NewUint256().Add(DefaultPaymentThreshold, int256.Uint256From(42))
 
 	if err != nil {
 		t.Fatal(err)
@@ -721,7 +721,7 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	amount, err := int256.NewUint256().Mul(&DefaultPaymentThreshold, int256.Uint256From(2))
+	amount, err := int256.NewUint256().Mul(DefaultPaymentThreshold, int256.Uint256From(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1298,7 +1298,7 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
-	testAmount, err := int256.NewUint256().Add(&DefaultPaymentThreshold, int256.Uint256From(42))
+	testAmount, err := int256.NewUint256().Add(DefaultPaymentThreshold, int256.Uint256From(42))
 	if err != nil {
 		t.Fatal(err)
 	}

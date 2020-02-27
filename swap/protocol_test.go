@@ -331,7 +331,7 @@ func TestEmitCheque(t *testing.T) {
 func TestTriggerPaymentThreshold(t *testing.T) {
 	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
-	depositAmount, err := int256.NewUint256().Mul(&DefaultPaymentThreshold, int256.Uint256From(2))
+	depositAmount, err := int256.NewUint256().Mul(DefaultPaymentThreshold, int256.Uint256From(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := int256.Uint256From(42)
-	expectedAmount, err := int256.NewUint256().Add(overDraft, &DefaultPaymentThreshold)
+	expectedAmount, err := int256.NewUint256().Add(overDraft, DefaultPaymentThreshold)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,7 +515,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// set the balance to manually be at DisconnectThreshold
 	overDraft := 42
-	expectedBalance, err := int256.NewInt256().Set((&DefaultDisconnectThreshold).Value())
+	expectedBalance, err := int256.NewInt256().Set((DefaultDisconnectThreshold).Value())
 	if err != nil {
 		t.Fatal(err)
 	}

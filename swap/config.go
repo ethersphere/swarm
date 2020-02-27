@@ -43,5 +43,5 @@ const (
 	DefaultTransactionTimeout = 10 * time.Minute
 )
 
-var DefaultPaymentThreshold = *int256.Uint256From(defaultPaymentThreshold)
-var DefaultDisconnectThreshold = *int256.Uint256From(defaultDisconnectThreshold)
+var DefaultPaymentThreshold = int256.Uint256From(defaultPaymentThreshold)
+var DefaultDisconnectThreshold = int256.Uint256From(defaultDisconnectThreshold)
