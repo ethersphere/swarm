@@ -50,7 +50,7 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 		free: make(map[uint8]int64),
 	}
 
-	data, err := s.db.Get(freeCountKey(addr), nil)
+	data, err := s.db.Get(freeCountKey(), nil)
 	if err != nil {
 		// key doesn't exist since this is a new db
 		// write an empty set into it
@@ -59,7 +59,7 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 			return nil, err
 		}
 
-		err = s.db.Put(freeCountKey(), b)
+		err = s.db.Put(freeCountKey(), b, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -116,8 +116,11 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-
-	batch.Put(freeCountKey(), encodeFreeSlots(s.free))
+	b, err := encodeFreeSlots(s.free)
+	if err != nil {
+		return err
+	}
+	batch.Put(freeCountKey(), b)
 	batch.Delete(chunkKey(addr))
 
 	err = s.db.Write(batch, nil)
