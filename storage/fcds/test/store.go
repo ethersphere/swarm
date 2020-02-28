@@ -43,9 +43,8 @@ func Main(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// RunAll runs all available tests for a Store implementation.
-func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-
+// RunStd runs the standard tests
+func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	t.Run("empty", func(t *testing.T) {
 		RunStore(t, &RunStoreOptions{
 			ChunkCount:   *chunksFlag,
@@ -102,6 +101,13 @@ func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 	t.Run("iterator", func(t *testing.T) {
 		RunIterator(t, newStoreFunc)
 	})
+
+}
+
+// RunAll runs all available tests for a Store implementation.
+func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
+
+	RunStd(t, newStoreFunc)
 
 	t.Run("next shard", func(t *testing.T) {
 		runNextShard(t, newStoreFunc)
@@ -182,7 +188,11 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 			}
 		}
 
-		shard := db.NextShard()
+		shard, err := db.NextShard()
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		if shard != tc.expectNext {
 			t.Fatalf("expected next shard value to be %d but got %d", tc.expectNext, shard)
 		}

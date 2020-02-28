@@ -41,7 +41,6 @@ type MetaStore struct {
 // NewMetaStore returns new MetaStore at path.
 func NewMetaStore(path string) (s *MetaStore, err error) {
 	db, err := leveldb.OpenFile(path, &opt.Options{})
-
 	if err != nil {
 		return nil, err
 	}

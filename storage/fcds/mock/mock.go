@@ -68,8 +68,8 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 	return 0, err
 }
 
-func (s *Store) NextShard() (shard uint8) {
-	return 0
+func (s *Store) NextShard() (shard uint8, err error) {
+	return 0, nil
 }
 
 // Delete removes chunk data.

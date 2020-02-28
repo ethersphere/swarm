@@ -39,7 +39,7 @@ type Storer interface {
 	Has(addr chunk.Address) (yes bool, err error)
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
-	NextShard() (shard uint8)
+	NextShard() (shard uint8, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
 	Close() (err error)
@@ -51,7 +51,10 @@ var _ Storer = new(Store)
 var ShardCount = uint8(32)
 
 // ErrStoreClosed is returned if store is already closed.
-var ErrStoreClosed = errors.New("closed store")
+var (
+	ErrStoreClosed = errors.New("closed store")
+	ErrNextShard   = errors.New("error getting next shard")
+)
 
 // Store is the main FCDS implementation. It stores chunk data into
 // a number of files partitioned by the last byte of the chunk address.
@@ -170,7 +173,10 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	shard = s.NextShard()
+	shard, err = s.NextShard()
+	if err != nil {
+		return 0, err
+	}
 
 	sh := s.shards[shard]
 
@@ -364,8 +370,8 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 }
 
 // NextShard gets the next shard to write to.
-// uses weighted probability to choose the next shard.
-func (s *Store) NextShard() (shard uint8) {
+// Uses weighted probability to choose the next shard.
+func (s *Store) NextShard() (shard uint8, err error) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
 
@@ -375,7 +381,7 @@ func (s *Store) NextShard() (shard uint8) {
 
 // probabilisticNextShard returns a next shard to write to
 // using a weighted probability
-func probabilisticNextShard(slots []ShardSlot) (shard uint8) {
+func probabilisticNextShard(slots []ShardSlot) (shard uint8, err error) {
 	var sum, movingSum int64
 
 	intervalString := ""
@@ -397,11 +403,11 @@ func probabilisticNextShard(slots []ShardSlot) (shard uint8) {
 		movingSum += v.Slots + 1
 		if magic < movingSum {
 			// we've reached the shard with the correct id
-			return v.Shard
+			return v.Shard, nil
 		}
 	}
-	//TODO: this is probably wrong
-	return 0
+
+	return 0, ErrNextShard
 }
 
 type shard struct {
