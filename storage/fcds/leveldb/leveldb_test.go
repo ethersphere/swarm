@@ -43,3 +43,13 @@ func TestFCDS(t *testing.T) {
 		return test.NewFCDSStore(t, path, metaStore)
 	})
 }
+
+// TestFreeSlotCounter tests that the free slot counter gets persisted
+// and properly loaded on existing store restart
+func TestFreeSlotCounter(t *testing.T) {
+	metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
