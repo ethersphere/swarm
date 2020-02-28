@@ -23,25 +23,25 @@ import (
 )
 
 const (
-	// UndefinedAction is the default actions filter for swap logs
-	UndefinedAction string = "undefined"
 	// InitAction used when starting swap
 	InitAction string = "init"
 	// StopAction used when stopping swap
 	StopAction string = "stop"
-	// UpdateBalanceAction used when updating balances
+	// UpdateBalanceAction used when updating swap balances
 	UpdateBalanceAction string = "update_balance"
-	// SendChequeAction used for cheque actions
+	// SendChequeAction used for grouping actions when sending a cheque with swap
 	SendChequeAction string = "send_cheque"
-	// HandleChequeAction used for cheque actions
+	// HandleChequeAction used for grouping actions related to swap cheque events, received/processed/etc cheques
 	HandleChequeAction string = "handle_cheque"
-	// CashChequeAction used for cheque actions
+	// CashChequeAction used for grouping actions of swap cashed cheques
 	CashChequeAction string = "cash_cheque"
 	// DeployChequebookAction used when deploying chequebooks
 	DeployChequebookAction string = "deploy_chequebook_contract"
 )
 
-const swapLogLevel = 3       // swapLogLevel indicates filter level of log messages
+// DefaultSwapLogLevel indicates default filter level of log messages
+const DefaultSwapLogLevel = 3
+
 const fileSizeLimit = 262144 // max bytes limit for splitting file in parts
 const emptyLogPath = ""      // Used when no logPath is specified for a logger
 
@@ -92,16 +92,16 @@ func (sl Logger) Trace(action string, msg string, ctx ...interface{}) {
 }
 
 // newLogger return a new SwapLogger Instance with ctx loaded for swap
-func newLogger(logPath string, ctx []interface{}) (swapLogger Logger) {
+func newLogger(logPath string, swapLogLevel int, ctx []interface{}) (swapLogger Logger) {
 	swapLogger = Logger{}
 	swapLogger.logger = log.New(ctx...)
-	setLoggerHandler(logPath, swapLogger.logger)
+	setLoggerHandler(logPath, swapLogLevel, swapLogger.logger)
 	return swapLogger
 }
 
 // setLoggerHandler will set the logger handle to write logs to the specified path
 // or use the default swarm logger in case this isn't specified or an error occurs
-func setLoggerHandler(logpath string, logger log.Logger) {
+func setLoggerHandler(logpath string, swapLogLevel int, logger log.Logger) {
 	lh := log.Root().GetHandler()
 
 	if logpath == emptyLogPath {
@@ -136,13 +136,13 @@ func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 }
 
 // newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, baseAddress *network.BzzAddr) Logger {
+func newSwapLogger(logPath string, swapLogLevel int, baseAddress *network.BzzAddr) Logger {
 	ctx := []interface{}{"base", baseAddress.ShortString()}
-	return newLogger(logPath, ctx)
+	return newLogger(logPath, swapLogLevel, ctx)
 }
 
 // newPeerLogger returns a new logger for swap logs with peer info
 func newPeerLogger(s *Swap, peerID enode.ID) Logger {
 	ctx := []interface{}{"base", s.params.BaseAddrs.ShortString(), "peer", peerID.String()[:16]}
-	return newLogger(s.params.LogPath, ctx)
+	return newLogger(s.params.LogPath, s.params.LogLevel, ctx)
 }

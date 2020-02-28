@@ -78,6 +78,7 @@ type Owner struct {
 type Params struct {
 	BaseAddrs           *network.BzzAddr // this node's base address
 	LogPath             string           // optional audit log path
+	LogLevel            int              // optional indicates audit filter level of swap log messages
 	PaymentThreshold    int64            // honey amount at which a payment is triggered
 	DisconnectThreshold int64            // honey amount at which a peer disconnects
 }
@@ -106,7 +107,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend
 // - starts the chequebook; creates the swap instance
 func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, skipDepositFlag bool, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
-	swapLogger := newSwapLogger(params.LogPath, params.BaseAddrs)
+	swapLogger := newSwapLogger(params.LogPath, params.LogLevel, params.BaseAddrs)
 	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
@@ -216,6 +217,7 @@ func createFactory(factoryAddress common.Address, chainID *big.Int, backend chai
 }
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
+// the logger is being injected from swap New function, this let's us continue logging in the same swap log context
 func checkChainID(currentChainID uint64, s state.Store, logger Logger) (err error) {
 	var connectedBlockchain uint64
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)

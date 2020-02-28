@@ -1349,9 +1349,8 @@ func TestSwapActions(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
-	swapLog := newSwapLogger(logDirDebitor, swap.params.BaseAddrs)
+	swapLog := newSwapLogger(logDirDebitor, swap.params.LogLevel, swap.params.BaseAddrs)
 
-	swapLog.Info(UndefinedAction, "Test")
 	swapLog.Info(InitAction, "Test")
 	swapLog.Info(StopAction, "Test")
 	swapLog.Info(UpdateBalanceAction, "Test")
@@ -1380,10 +1379,6 @@ func TestSwapActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	logString := string(b)
-
-	if !strings.Contains(logString, `"swap_action","undefined"`) {
-		t.Fatalf("expected the log to contain action \"undefined\"")
-	}
 
 	if !strings.Contains(logString, `"swap_action","init"`) {
 		t.Fatalf("expected the log to contain action \"init\"")

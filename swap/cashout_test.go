@@ -132,7 +132,7 @@ func TestCashCheque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swapLog := newSwapLogger(emptyLogPath, &network.BzzAddr{OAddr: ownerAddress.Bytes(), UAddr: ownerAddress.Bytes()})
+	swapLog := newSwapLogger(emptyLogPath, DefaultSwapLogLevel, &network.BzzAddr{OAddr: ownerAddress.Bytes(), UAddr: ownerAddress.Bytes()})
 
 	err = cashoutProcessor.cashCheque(context.Background(), &CashoutRequest{
 		Cheque:      *testCheque,
