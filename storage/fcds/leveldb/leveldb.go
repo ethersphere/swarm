@@ -45,12 +45,32 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 		return nil, err
 	}
 
-	// todo: try to get and deserialize the free map from the persisted value on disk
-
-	return &MetaStore{
+	ms := &MetaStore{
 		db:   db,
 		free: make(map[uint8]int64),
-	}, err
+	}
+
+	data, err := s.db.Get(freeCountKey(addr), nil)
+	if err != nil {
+		// key doesn't exist since this is a new db
+		// write an empty set into it
+		b, err := encodeFreeSlots(ms.free)
+		if err != nil {
+			return nil, err
+		}
+
+		err = s.db.Put(freeCountKey(), b)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	ms.free, err = decodeFreeSlots(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return ms, err
 }
 
 // Get returns chunk meta information.
@@ -222,28 +242,28 @@ func freeCountKey() (key []byte) {
 	return []byte{freeCount}
 }
 
-func encodeFreeSlots(m map[uint8]int64) []byte {
+func encodeFreeSlots(m map[uint8]int64) ([]byte, error) {
 	b := new(bytes.Buffer)
 
 	e := gob.NewEncoder(b)
 
 	err := e.Encode(m)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return b.Bytes()
+	return b.Bytes(), nil
 }
 
-func decodeFreeSlots(b []byte) map[uint8]int64 {
+func decodeFreeSlots(b []byte) (map[uint8]int64, error) {
 	buf := bytes.NewBuffer(b)
 	var decodedMap map[uint8]int64
 	d := gob.NewDecoder(buf)
 
 	err := d.Decode(&decodedMap)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return decodedMap
+	return decodedMap, nil
 }
