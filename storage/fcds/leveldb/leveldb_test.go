@@ -47,6 +47,11 @@ func TestFCDS(t *testing.T) {
 // TestFreeSlotCounter tests that the free slot counter gets persisted
 // and properly loaded on existing store restart
 func TestFreeSlotCounter(t *testing.T) {
+	path, err := ioutil.TempDir("", "swarm-fcds-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
 	if err != nil {
 		t.Fatal(err)
