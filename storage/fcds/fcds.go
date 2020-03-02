@@ -41,6 +41,7 @@ type Storer interface {
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
 	NextShard() (shard uint8, err error)
+	ShardSize() (slots []ShardSlot, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
 	Close() (err error)
@@ -109,6 +110,20 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 		s.shards[i].mu = new(sync.Mutex)
 	}
 	return s, nil
+}
+
+func (s *Store) ShardSize() (slots []ShardSlot, err error) {
+	slots = make([]ShardSlot, len(s.shards))
+	for i, sh := range s.shards {
+		fs, err := sh.f.Stat()
+		if err != nil {
+			return nil, err
+		}
+
+		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size()}
+	}
+
+	return slots, nil
 }
 
 // Get returns a chunk with data.
@@ -398,6 +413,7 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	// otherwise, just balance them out
 
 	if slots[0].Slots > 0 {
+		fmt.Println("retuning shard with free slot", slots[0].Shard, slots[0].Slots)
 		return slots[0].Shard, nil
 	}
 

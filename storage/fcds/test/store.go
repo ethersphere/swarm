@@ -45,63 +45,199 @@ func Main(m *testing.M) {
 
 // RunStd runs the standard tests
 func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-	t.Run("empty", func(t *testing.T) {
-		RunStore(t, &RunStoreOptions{
-			ChunkCount:   *chunksFlag,
-			NewStoreFunc: newStoreFunc,
-		})
+	//t.Run("empty", func(t *testing.T) {
+	//RunStore(t, &RunStoreOptions{
+	//ChunkCount:   *chunksFlag,
+	//NewStoreFunc: newStoreFunc,
+	//})
+	//})
+
+	//t.Run("cleaned", func(t *testing.T) {
+	//RunStore(t, &RunStoreOptions{
+	//ChunkCount:   *chunksFlag,
+	//NewStoreFunc: newStoreFunc,
+	//Cleaned:      true,
+	//})
+	//})
+
+	//for _, tc := range []struct {
+	//name        string
+	//deleteSplit int
+	//}{
+	//{
+	//name:        "delete-all",
+	//deleteSplit: 1,
+	//},
+	//{
+	//name:        "delete-half",
+	//deleteSplit: 2,
+	//},
+	//{
+	//name:        "delete-fifth",
+	//deleteSplit: 5,
+	//},
+	//{
+	//name:        "delete-tenth",
+	//deleteSplit: 10,
+	//},
+	//{
+	//name:        "delete-percent",
+	//deleteSplit: 100,
+	//},
+	//{
+	//name:        "delete-permill",
+	//deleteSplit: 1000,
+	//},
+	//} {
+	//t.Run(tc.name, func(t *testing.T) {
+	//RunStore(t, &RunStoreOptions{
+	//ChunkCount:   *chunksFlag,
+	//DeleteSplit:  tc.deleteSplit,
+	//NewStoreFunc: newStoreFunc,
+	//})
+	//})
+	//}
+
+	//t.Run("iterator", func(t *testing.T) {
+	//RunIterator(t, newStoreFunc)
+	//})
+
+	t.Run("no grow", func(t *testing.T) {
+		RunNoGrow(t, newStoreFunc)
 	})
 
-	t.Run("cleaned", func(t *testing.T) {
-		RunStore(t, &RunStoreOptions{
-			ChunkCount:   *chunksFlag,
-			NewStoreFunc: newStoreFunc,
-			Cleaned:      true,
-		})
-	})
+}
 
-	for _, tc := range []struct {
-		name        string
-		deleteSplit int
-	}{
-		{
-			name:        "delete-all",
-			deleteSplit: 1,
-		},
-		{
-			name:        "delete-half",
-			deleteSplit: 2,
-		},
-		{
-			name:        "delete-fifth",
-			deleteSplit: 5,
-		},
-		{
-			name:        "delete-tenth",
-			deleteSplit: 10,
-		},
-		{
-			name:        "delete-percent",
-			deleteSplit: 100,
-		},
-		{
-			name:        "delete-permill",
-			deleteSplit: 1000,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			RunStore(t, &RunStoreOptions{
-				ChunkCount:   *chunksFlag,
-				DeleteSplit:  tc.deleteSplit,
-				NewStoreFunc: newStoreFunc,
-			})
-		})
+func RunNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
+	runNoGrow(t, newStoreFunc)
+}
+
+// RunNextShard runs the test scenario for NextShard selection
+func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
+	defer func(s uint8) {
+		fcds.ShardCount = s
+	}(fcds.ShardCount)
+
+	fcds.ShardCount = 4
+
+	db, clean := newStoreFunc(t)
+
+	defer clean()
+
+	chunkCount := 1000
+	chunks := getChunks(chunkCount)
+
+	chunkShards := make(map[string]uint8)
+
+	for _, ch := range chunks {
+		if shard, err := db.Put(ch); err != nil {
+			t.Fatal(err)
+		} else {
+			chunkShards[ch.Address().String()] = shard
+		}
 	}
 
-	t.Run("iterator", func(t *testing.T) {
-		RunIterator(t, newStoreFunc)
-	})
+	// delete 4,3,2,1 chunks from shards 0,1,2,3
+	del := 4
+	deleteChunks := []string{}
 
+	for i := uint8(0); i < fcds.ShardCount; i++ {
+		d := del
+		for addr, storedOn := range chunkShards {
+			if storedOn == i {
+
+				// delete the chunk to make a free slot on the shard
+				c := new(chunk.Address)
+				err := c.UnmarshalString(addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Delete(*c); err != nil {
+					t.Fatal(err)
+				}
+				deleteChunks = append(deleteChunks, addr)
+				if len(deleteChunks) == d {
+					break
+				}
+			}
+		}
+		for _, v := range deleteChunks {
+			delete(chunkShards, v)
+		}
+		deleteChunks = []string{}
+
+		del--
+	}
+
+	ins := 4 + 3 + 2 + 1
+	// insert 4,3,2,1 chunks and expect the shards as next shards inserted into
+	// in the following order
+	order := []uint8{
+		// comment denotes free slots _after_ PUT
+		0, //3,3,2,1
+		0, //2,3,2,1
+		1, //2,2,2,1
+		0, //1,2,2,1
+		1, //1,1,2,1
+		2, //1,1,1,1
+		0, //0,1,1,1
+		1, //0,0,1,1
+		2, //0,0,0,1
+		3, //0,0,0,0
+	}
+	for i := 0; i < ins; i++ {
+		cc := chunktesting.GenerateTestRandomChunk()
+		if shard, err := db.Put(cc); err != nil {
+			t.Fatal(err)
+		} else {
+			if shard != order[i] {
+				t.Fatalf("expected %d chunk to be on shard %d but got %d", i, order[i], shard)
+			}
+			chunkShards[cc.Address().String()] = shard
+		}
+	}
+
+	slots, err := db.ShardSize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sum := 0
+	for _, v := range slots {
+		sum += int(v.Slots)
+	}
+
+	if sum != 4096*1000 {
+		t.Fatal(sum)
+	}
+
+	// now for each new chunk, we should first check all shard
+	// sizes, and locate the smallest shard
+	// for each Put we should get that shard as next
+
+	insNew := 1000
+	for i := 0; i < insNew; i++ {
+		slots, err := db.ShardSize()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		minSize, minSlot := slots[0].Slots, uint8(0)
+		for i, v := range slots {
+			if v.Slots < minSize {
+				minSize = v.Slots
+				minSlot = uint8(i)
+			}
+		}
+		cc := chunktesting.GenerateTestRandomChunk()
+		if shard, err := db.Put(cc); err != nil {
+			t.Fatal(err)
+		} else {
+			if shard != minSlot {
+				t.Fatalf("next slot expected to be %d but got %d. chunk number %d", minSlot, shard, i)
+			}
+		}
+	}
 }
 
 // RunAll runs all available tests for a Store implementation.
@@ -109,9 +245,9 @@ func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 
 	RunStd(t, newStoreFunc)
 
-	t.Run("next shard", func(t *testing.T) {
-		runNextShard(t, newStoreFunc)
-	})
+	//t.Run("next shard", func(t *testing.T) {
+	//runNextShard(t, newStoreFunc)
+	//})
 }
 
 // RunNextShard runs the test scenario for NextShard selection
