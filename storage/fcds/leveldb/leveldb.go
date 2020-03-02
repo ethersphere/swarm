@@ -106,7 +106,26 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 		return err
 	}
 	batch.Put(chunkKey(addr), meta)
-	return s.db.Write(batch, nil)
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	zero := s.free[m.Shard] == 0
+	if !zero {
+		s.free[m.Shard]--
+	}
+	b, err := encodeFreeSlots(s.free)
+	if err != nil {
+		return err
+	}
+	batch.Put(freeCountKey(), b)
+
+	err = s.db.Write(batch, nil)
+	if err != nil {
+		if !zero {
+			s.free[m.Shard]++
+		}
+		return err
+	}
+	return nil
 }
 
 // Remove removes chunk meta information from the shard.
@@ -120,6 +139,7 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	s.free[shard]++
 	b, err := encodeFreeSlots(s.free)
 	if err != nil {
 		return err
@@ -129,10 +149,9 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 
 	err = s.db.Write(batch, nil)
 	if err != nil {
+		s.free[shard]--
 		return err
 	}
-
-	s.free[shard]++
 
 	return nil
 }

@@ -103,13 +103,9 @@ func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 	//})
 
 	t.Run("no grow", func(t *testing.T) {
-		RunNoGrow(t, newStoreFunc)
+		runNoGrow(t, newStoreFunc)
 	})
 
-}
-
-func RunNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-	runNoGrow(t, newStoreFunc)
 }
 
 // RunNextShard runs the test scenario for NextShard selection
@@ -169,21 +165,26 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 		del--
 	}
 
+	fmt.Println("done deleting")
+	fmt.Println("done deleting")
+	fmt.Println("done deleting")
+	fmt.Println("done deleting")
+
 	ins := 4 + 3 + 2 + 1
 	// insert 4,3,2,1 chunks and expect the shards as next shards inserted into
 	// in the following order
 	order := []uint8{
 		// comment denotes free slots _after_ PUT
-		0, //3,3,2,1
-		0, //2,3,2,1
-		1, //2,2,2,1
-		0, //1,2,2,1
-		1, //1,1,2,1
-		2, //1,1,1,1
-		0, //0,1,1,1
-		1, //0,0,1,1
-		2, //0,0,0,1
-		3, //0,0,0,0
+		0, //4,3,2,1 -> 3,3,2,1
+		0, //3,3,2,1 -> 2,3,2,1
+		1, //2,3,2,1 -> 2,2,2,1
+		0, //2,2,2,1 -> 1,2,2,1
+		1, //1,2,2,1 -> 1,1,2,1
+		2, //1,1,2,1 -> 1,1,1,1
+		0, //1,1,1,1 -> 0,1,1,1
+		1, //0,1,1,1 -> 0,0,1,1
+		2, //0,0,1,1 -> 0,0,0,1
+		3, //0,0,0,1 -> 0,0,0,0
 	}
 	for i := 0; i < ins; i++ {
 		cc := chunktesting.GenerateTestRandomChunk()
@@ -191,7 +192,7 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 			t.Fatal(err)
 		} else {
 			if shard != order[i] {
-				t.Fatalf("expected %d chunk to be on shard %d but got %d", i, order[i], shard)
+				t.Fatalf("expected chunk %d to be on shard %d but got %d", i, order[i], shard)
 			}
 			chunkShards[cc.Address().String()] = shard
 		}
@@ -215,7 +216,7 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 	// sizes, and locate the smallest shard
 	// for each Put we should get that shard as next
 
-	insNew := 1000
+	insNew := 10000
 	for i := 0; i < insNew; i++ {
 		slots, err := db.ShardSize()
 		if err != nil {
@@ -224,7 +225,8 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 
 		minSize, minSlot := slots[0].Slots, uint8(0)
 		for i, v := range slots {
-			if v.Slots < minSize {
+			// take the _last_ minimum
+			if v.Slots <= minSize {
 				minSize = v.Slots
 				minSlot = uint8(i)
 			}
