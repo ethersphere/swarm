@@ -123,6 +123,11 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	return nil
 }
 
+func (s *Store) ShardSize() (slots []fcds.ShardSlot, err error) {
+	i, err := s.Count()
+	return []fcds.ShardSlot{fcds.ShardSlot{Shard: 0, Slots: int64(i)}}, err
+}
+
 // Close doesn't do anything.
 // It exists to implement fcdb.MetaStore interface.
 func (s *Store) Close() error {
