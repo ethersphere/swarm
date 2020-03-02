@@ -17,16 +17,17 @@
 package soc
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/network"
 )
 
-func createRandomSOC(t *testing.T, refId uint32) {
+func createRandomSOC(t *testing.T, refId []byte) {
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("could not generate a random key")
@@ -36,25 +37,62 @@ func createRandomSOC(t *testing.T, refId uint32) {
 	data := make([]byte, chunk.DefaultSize)
 	rand.Read(data)
 
-	soc := NewSoc(privKey, network.RandomBzzAddr())
 	span := rand.Uint64()
-	socChunk, err := soc.NewChunk(refId, pubKey, span, data)
+
+	socAddr, err := NewSOCAddress(pubKey, refId)
 	if err != nil {
-		t.Fatalf("could not create Soc chunk")
+		t.Fatalf("could not create Soc Address")
 	}
 
-	if !verifySocChunk(refId, pubKey, data, socChunk) {
-		t.Fatalf("chunk verification failed")
+	socData, err := NewSOCData(refId, span, data, privKey)
+	if err != nil {
+		t.Fatalf("could not create Soc Data")
 	}
+
+	verifySocChunk(t, refId, pubKey, span, data, privKey, socAddr, socData)
 }
 
-func verifySocChunk(refId uint32, pubKey string, data []byte, socChunk *SocChunk) bool {
-	return true
+func verifySocChunk(t *testing.T, refId []byte, pubKey string, span uint64, data []byte, pkey *ecdsa.PrivateKey,
+	socAddr []byte, socData []byte) {
+	t.Helper()
+
+	if len(socAddr) != 32 {
+		t.Fatalf("soc address length is not 32 bytes")
+	}
+
+	if len(data) !=  (SOCDataHeaderSize + len(data)) {
+		t.Fatalf("soc payload length is not 128 + actual data length")
+	}
+
+	extractedRefId := data[:ReferenceIdSize]
+	if bytes.EqualFold(extractedRefId, refId) {
+		t.Fatalf("invalid reference id")
+	}
+
+
+	// verify signatures
+
+	//extractedSignature := make([]byte, SignatureSize)
+	//extractedSignature = data[ReferenceIdSize:ReferenceIdSize+SignatureSize]
+	//dataUsedForSignature, err := getIdAndDataHash(span, data, refId)
+	//if err != nil {
+	//	t.Fatalf("could not get the data used for signature")
+	//}
+	//extractedPublicKey, err := crypto.SigToPub(dataUsedForSignature, extractedSignature)
+	//extractedPublicKey.
+	//
+	//if pkey.Public() == extractedPublicKey {
+	//	t.Fatalf("error in signature")
+	//}
+
 }
+
 
 func TestRandomDataForSoc(t *testing.T) {
 	s := make([]int, 10)
 	for _ = range s {
-		createRandomSOC(t, rand.Uint32())
+		refId := make([]byte, 32)
+		_,_ = rand.Read(refId)
+		createRandomSOC(t, refId)
 	}
 }

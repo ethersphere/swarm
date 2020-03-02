@@ -20,10 +20,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"errors"
-	"math/rand"
-
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -31,53 +28,21 @@ const (
 	DefaultHash       = "SHA3" // http://golang.org/pkg/hash/#Hash
 	PayloadHash       = "BMT"
 	PublicKeySize     = 32  //
-	ReferenceIdSize   = 32  //
+	ReferenceIdSize   = 32   //
 	SOCDataHeaderSize = 128 // // ID  + Signature + padding + span  = 128
 	SignatureSize     = 65
 	PaddingSize       = 23
+	SpanLength        = 8
 )
 
-type Soc struct {
-	pkey        *ecdsa.PrivateKey
-	overlayAddr *network.BzzAddr
-}
 
-type SocChunk struct {
-	address []byte
-	data    []byte
-}
-
-func NewSoc(key *ecdsa.PrivateKey, bzzAddr *network.BzzAddr) *Soc {
-	return &Soc{
-		pkey:        key,
-		overlayAddr: bzzAddr,
-	}
-}
-
-func (s *Soc) NewChunk(refId uint32, ownerPubKey string, span uint64, payload []byte) (*SocChunk, error) {
-	add, err := s.setChunkAddress(ownerPubKey, refId)
-	if err != nil {
-		return nil, err
-	}
-
-	payload, err = s.setChunkData(refId, span, payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SocChunk{
-		address: add,
-		data:    payload,
-	}, nil
-}
-
-func (s *Soc) setChunkAddress(ownerKey string, refId uint32) ([]byte, error) {
+func NewSOCAddress(ownerKey string, refId []byte) ([]byte, error) {
 	hasher := storage.MakeHashFunc(DefaultHash)
 	hasher().Reset()
 	saddr := make([]byte, PublicKeySize+ReferenceIdSize)
 
 	copy(saddr[:PublicKeySize], []byte(ownerKey))
-	binary.BigEndian.PutUint32(saddr[:PublicKeySize], refId)
+	copy(saddr[PublicKeySize:], refId)
 	_, err := hasher().Write(saddr)
 	if err != nil {
 		return nil, err
@@ -85,7 +50,7 @@ func (s *Soc) setChunkAddress(ownerKey string, refId uint32) ([]byte, error) {
 	return hasher().Sum(nil), nil
 }
 
-func (s *Soc) setChunkData(refId uint32, span uint64, data []byte) ([]byte, error) {
+func NewSOCData(refId []byte, span uint64, data []byte, pkey *ecdsa.PrivateKey) ([]byte, error) {
 	if data == nil {
 		return nil, errors.New("Invalid data length")
 	}
@@ -94,12 +59,41 @@ func (s *Soc) setChunkData(refId uint32, span uint64, data []byte) ([]byte, erro
 	socData := make([]byte, SOCDataHeaderSize+len(data))
 
 	// 1 - Add refId
-	binary.BigEndian.PutUint32(socData[:ReferenceIdSize], refId)
+	copy(socData[:ReferenceIdSize], refId)
 
-	//BMT (data)
+
+	// 2 - Add Signature
+	idAndDataHash, err := getIdAndDataHash(span, data, refId)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := crypto.Sign(idAndDataHash, pkey)
+	if err != nil {
+		return nil, err
+	}
+	copy(socData[ReferenceIdSize:], sig)
+
+	// 3 - Add Padding
+	padding := make([]byte, PaddingSize)
+	copy(socData[ReferenceIdSize+SignatureSize:], padding)
+
+	// 4 - Span
+	binary.BigEndian.PutUint64(socData[ReferenceIdSize+SignatureSize+PaddingSize:], span)
+
+	// 5 - data
+	copy(socData[:SOCDataHeaderSize], data)
+
+	return socData, nil
+}
+
+func getIdAndDataHash(span uint64, data []byte, refId []byte) ([]byte, error){
+	//BMT (span + data)
 	payloadHasher := storage.MakeHashFunc(PayloadHash)
 	payloadHasher().Reset()
-	_, err := payloadHasher().Write(data)
+	payload := make([]byte, 8 + len(data))
+	binary.BigEndian.PutUint64(payload[:8], span)
+	copy(payload[8:],data)
+	_, err := payloadHasher().Write(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +103,7 @@ func (s *Soc) setChunkData(refId uint32, span uint64, data []byte) ([]byte, erro
 	hasher := storage.MakeHashFunc(DefaultHash)
 	hasher().Reset()
 	saddr := make([]byte, ReferenceIdSize+len(dataHash))
-	binary.BigEndian.PutUint32(saddr[:ReferenceIdSize], refId)
+	copy(saddr[:ReferenceIdSize], refId)
 	copy(saddr[ReferenceIdSize:], dataHash)
 	_, err = hasher().Write(saddr)
 	if err != nil {
@@ -117,24 +111,5 @@ func (s *Soc) setChunkData(refId uint32, span uint64, data []byte) ([]byte, erro
 	}
 	IdandDataHash := hasher().Sum(nil)
 
-	sig, err := crypto.Sign(IdandDataHash, s.pkey)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2 - Add Signature
-	copy(socData[ReferenceIdSize:], sig)
-
-	// 3 - Add Padding
-	padding := make([]byte, PaddingSize)
-	rand.Read(padding)
-	copy(socData[ReferenceIdSize+SignatureSize:], padding)
-
-	// 4 - Span
-	binary.BigEndian.PutUint64(socData[ReferenceIdSize+SignatureSize+PaddingSize:], span)
-
-	// 5 - data
-	copy(socData[:SOCDataHeaderSize], data)
-
-	return saddr, nil
+	return IdandDataHash, nil
 }
