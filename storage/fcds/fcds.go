@@ -370,6 +370,21 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 	return has
 }
 
+// shardSizes returns a ShardSlot slice in which Slots signify how many
+// taken slots are there in the shard
+func (s *Store) shardSizes() (slots []ShardSlot) {
+	slots := make([]ShardSlot, len(s.shards))
+	for i, sh := range s.shards {
+		fs, err := sh.f.Stat()
+		if err != nil {
+			return 0, err
+		}
+
+		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size() / s.maxChunkSize}
+	}
+	return slots
+}
+
 // NextShard gets the next shard to write to.
 // Uses weighted probability to choose the next shard.
 func (s *Store) NextShard() (shard uint8, err error) {
@@ -380,13 +395,20 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	sort.Sort(bySlots(slots))
 
 	// if the first shard has free slots - return it
-	// otherwise, return a random shard
+	// otherwise, just balance them out
 
 	if slots[0].Slots > 0 {
 		return slots[0].Shard, nil
 	}
 
-	shard = uint8(rand.Intn(len(slots)))
+	// each element has in Slots the number of _taken_ slots
+	slots = s.shardSizes()
+
+	// sorting them will make the first element the largest shard and the last
+	// element the smallest shard; pick the smallest
+	sort.Sort(bySlots(slots))
+
+	shard = slots[len(slots)-1]
 
 	return shard, nil
 }
