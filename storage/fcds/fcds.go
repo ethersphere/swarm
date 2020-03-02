@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -376,7 +377,18 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	// because the free slot value has not been decremented yet(!)
 
 	slots := s.meta.ShardSlots()
-	return probabilisticNextShard(slots)
+	sort.Sort(bySlots(slots))
+
+	// if the first shard has free slots - return it
+	// otherwise, return a random shard
+
+	if slots[0].Slots > 0 {
+		return slots[0].Shard, nil
+	}
+
+	shard = uint8(rand.Intn(len(slots)))
+
+	return shard, nil
 }
 
 // probabilisticNextShard returns a next shard to write to

@@ -56,18 +56,22 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 		// write an empty set into it
 		b, err := encodeFreeSlots(ms.free)
 		if err != nil {
+			panic(err)
 			return nil, err
 		}
 
 		err = ms.db.Put(freeCountKey(), b, nil)
 		if err != nil {
+			panic(err)
 			return nil, err
 		}
-	}
+	} else {
 
-	ms.free, err = decodeFreeSlots(data)
-	if err != nil {
-		return nil, err
+		ms.free, err = decodeFreeSlots(data)
+		if err != nil {
+			panic(err)
+			return nil, err
+		}
 	}
 
 	return ms, nil

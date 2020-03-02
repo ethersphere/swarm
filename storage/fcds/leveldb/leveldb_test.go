@@ -18,9 +18,12 @@ package leveldb_test
 
 import (
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/storage/fcds"
 	"github.com/ethersphere/swarm/storage/fcds/leveldb"
 	"github.com/ethersphere/swarm/storage/fcds/test"
@@ -52,9 +55,73 @@ func TestFreeSlotCounter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
+	metaPath := filepath.Join(path, "meta")
+
+	metaStore, err := leveldb.NewMetaStore(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	store, err := fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(false))
+	if err != nil {
+		os.RemoveAll(path)
+		t.Fatal(err)
+	}
+
+	defer func() {
+		store.Close()
+		os.RemoveAll(path)
+	}()
+
+	// put some chunks, delete some chunks, find the free slots
+	// then close the store, init a new one on the same dir
+	// then check free slots again and compare
+	numChunks := 100
+	deleteChunks := 10
+	chunks := make([]chunk.Chunk, numChunks)
+
+	for i := 0; i < numChunks; i++ {
+		chunks[i] = chunktesting.GenerateTestRandomChunk()
+		_, err := store.Put(chunks[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < deleteChunks; i++ {
+		err := store.Delete(chunks[i].Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	freeSlots := metaStore.ShardSlots()
+
+	store.Close()
+	metaStore.Close()
+
+	metaStore2, err := leveldb.NewMetaStore(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		metaStore2.Close()
+		os.RemoveAll(metaPath)
+	}()
+
+	freeSlots2 := metaStore.ShardSlots()
+	count := 0
+	for i, v := range freeSlots {
+		count++
+		if freeSlots2[i].Shard != v.Shard {
+			t.Fatalf("expected shard %d to be %d but got %d", i, v.Shard, freeSlots[2].Shard)
+		}
+		if freeSlots2[i].Slots != v.Slots {
+			t.Fatalf("expected shard %d to have %d free slots but got %d", i, v.Slots, freeSlots[2].Slots)
+		}
+	}
+
+	if uint8(count) != fcds.ShardCount {
+		t.Fatalf("did not process enough shards: got %d but expected %d", count, fcds.ShardCount)
+	}
 }
