@@ -21,6 +21,7 @@ import (
 	"testing"
 )
 
+// TestShardSlotSort is a unit test to ensure correct sorting of a slice of ShartSlot
 func TestShardSlotSort(t *testing.T) {
 
 	for _, tc := range []struct {
