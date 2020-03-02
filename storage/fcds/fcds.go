@@ -372,17 +372,17 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 
 // shardSizes returns a ShardSlot slice in which Slots signify how many
 // taken slots are there in the shard
-func (s *Store) shardSizes() (slots []ShardSlot) {
-	slots := make([]ShardSlot, len(s.shards))
+func (s *Store) shardSizes() (slots []ShardSlot, err error) {
+	slots = make([]ShardSlot, len(s.shards))
 	for i, sh := range s.shards {
 		fs, err := sh.f.Stat()
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
-		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size() / s.maxChunkSize}
+		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size() / int64(s.maxChunkSize)}
 	}
-	return slots
+	return slots, nil
 }
 
 // NextShard gets the next shard to write to.
@@ -402,13 +402,16 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	}
 
 	// each element has in Slots the number of _taken_ slots
-	slots = s.shardSizes()
+	slots, err = s.shardSizes()
+	if err != nil {
+		return 0, err
+	}
 
 	// sorting them will make the first element the largest shard and the last
 	// element the smallest shard; pick the smallest
 	sort.Sort(bySlots(slots))
 
-	shard = slots[len(slots)-1]
+	shard = slots[len(slots)-1].Shard
 
 	return shard, nil
 }
