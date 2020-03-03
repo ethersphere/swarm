@@ -171,10 +171,11 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 
 	_, err = s.getMeta(addr)
 	if err != nil {
-		metrics.GetOrRegisterCounter("fcds.has.err", nil).Inc(1)
 		if err == chunk.ErrChunkNotFound {
+			metrics.GetOrRegisterCounter("fcds.has.no", nil).Inc(1)
 			return false, nil
 		}
+		metrics.GetOrRegisterCounter("fcds.has.err", nil).Inc(1)
 		return false, err
 	}
 	metrics.GetOrRegisterCounter("fcds.has.ok", nil).Inc(1)
