@@ -70,6 +70,7 @@ type Store struct {
 	maxChunkSize int            // maximal chunk data size
 	quit         chan struct{}  // quit disables all operations after Close is called
 	quitOnce     sync.Once      // protects quit channel from multiple Close calls
+	mtx          sync.Mutex
 }
 
 // Option is an optional argument passed to New.
@@ -133,6 +134,9 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	}
 	defer s.unprotect()
 
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return nil, err
@@ -177,7 +181,8 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 	defer s.unprotect()
-
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	addr := ch.Address()
 	data := ch.Data()
 
@@ -267,7 +272,8 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		return err
 	}
 	defer s.unprotect()
-
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return err
@@ -296,7 +302,8 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 		return err
 	}
 	defer s.unprotect()
-
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	for _, sh := range s.shards {
 		sh.mu.Lock()
 	}
