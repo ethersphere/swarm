@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -149,11 +150,15 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	data := make([]byte, m.Size)
 	n, err := sh.f.ReadAt(data, m.Offset)
 	if err != nil && err != io.EOF {
+		metrics.GetOrRegisterCounter("fcds.get.error", nil).Inc(1)
+
 		return nil, err
 	}
 	if n != int(m.Size) {
 		return nil, fmt.Errorf("incomplete chunk data, read %v of %v", n, m.Size)
 	}
+	metrics.GetOrRegisterCounter("fcds.get.ok", nil).Inc(1)
+
 	return chunk.NewChunk(addr, data), nil
 }
 
@@ -166,11 +171,13 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 
 	_, err = s.getMeta(addr)
 	if err != nil {
+		metrics.GetOrRegisterCounter("fcds.has.err", nil).Inc(1)
 		if err == chunk.ErrChunkNotFound {
 			return false, nil
 		}
 		return false, err
 	}
+	metrics.GetOrRegisterCounter("fcds.has.ok", nil).Inc(1)
 
 	return true, nil
 }
@@ -209,12 +216,18 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 
+	if reclaimed {
+		metrics.GetOrRegisterCounter("fcds.put.reclaimed").Inc(1)
+	}
+
 	if offset < 0 {
+		metrics.GetOrRegisterCounter("fcds.put.append").Inc(1)
 		// no free offsets found,
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
 	} else {
+		metrics.GetOrRegisterCounter("fcds.put.offset").Inc(1)
 		// seek to the offset position
 		// to replace the chunk data at that position
 		_, err = sh.f.Seek(offset, io.SeekStart)
@@ -288,7 +301,15 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	if s.freeCache != nil {
 		s.freeCache.set(m.Shard, m.Offset)
 	}
-	return s.meta.Remove(addr, m.Shard)
+	err = s.meta.Remove(addr, m.Shard)
+	if err != nil {
+		metrics.GetOrRegisterCounter("fcds.delete.fail", nil).Inc(1)
+		return err
+	}
+
+	metrics.GetOrRegisterCounter("fcds.delete.ok", nil).Inc(1)
+	return nil
+
 }
 
 // Count returns a number of stored chunks.
