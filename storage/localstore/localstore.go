@@ -30,7 +30,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/ethersphere/swarm/storage/fcds"
-	fcdsleveldb "github.com/ethersphere/swarm/storage/fcds/leveldb"
+	fcdsmem "github.com/ethersphere/swarm/storage/fcds/mem"
 	fcdsmock "github.com/ethersphere/swarm/storage/fcds/mock"
 	"github.com/ethersphere/swarm/storage/mock"
 )
@@ -222,7 +222,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 
 	if o.MockStore == nil {
-		metaStore, err := fcdsleveldb.NewMetaStore(filepath.Join(path, "meta"))
+		metaStore, err := fcdsmem.NewMetaStore(filepath.Join(path, "meta"))
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +230,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			filepath.Join(path, "data"),
 			chunk.DefaultSize+8, // chunk data has additional 8 bytes prepended
 			metaStore,
-			fcds.WithCache(true),
+			fcds.WithCache(false),
 		)
 		if err != nil {
 			return nil, err
