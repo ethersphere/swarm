@@ -61,10 +61,10 @@ var (
 // Store is the main FCDS implementation. It stores chunk data into
 // a number of files partitioned by the last byte of the chunk address.
 type Store struct {
-	shards       []shard        // relations with shard id and a shard file and their mutexes
-	meta         MetaStore      // stores chunk offsets
-	free         []bool         // which shards have free offsets
-	freeMu       sync.RWMutex   // protects free field
+	shards []shard   // relations with shard id and a shard file and their mutexes
+	meta   MetaStore // stores chunk offsets
+	//free         []bool         // which shards have free offsets
+	//freeMu       sync.RWMutex   // protects free field
 	freeCache    *offsetCache   // optional cache of free offset values
 	wg           sync.WaitGroup // blocks Close until all other method calls are done
 	maxChunkSize int            // maximal chunk data size
@@ -90,9 +90,9 @@ func WithCache(yes bool) Option {
 // New constructs a new Store with files at path, with specified max chunk size.
 func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s *Store, err error) {
 	s = &Store{
-		shards:       make([]shard, ShardCount),
-		meta:         metaStore,
-		free:         make([]bool, ShardCount),
+		shards: make([]shard, ShardCount),
+		meta:   metaStore,
+		//free:         make([]bool, ShardCount),
 		maxChunkSize: maxChunkSize,
 		quit:         make(chan struct{}),
 	}
@@ -373,16 +373,17 @@ func (s *Store) getMeta(addr chunk.Address) (m *Meta, err error) {
 }
 
 func (s *Store) markShardWithFreeOffsets(shard uint8, has bool) {
-	s.freeMu.Lock()
-	s.free[shard] = has
-	s.freeMu.Unlock()
+	//s.freeMu.Lock()
+	//s.free[shard] = has
+	//s.freeMu.Unlock()
 }
 
 func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
-	s.freeMu.RLock()
-	has = s.free[shard]
-	s.freeMu.RUnlock()
-	return has
+	//s.freeMu.RLock()
+	//has = s.free[shard]
+	//s.freeMu.RUnlock()
+	return true
+	//return has
 }
 
 // NextShard gets the next shard to write to.
