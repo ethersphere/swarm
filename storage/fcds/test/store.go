@@ -45,62 +45,62 @@ func Main(m *testing.M) {
 
 // RunStd runs the standard tests
 func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-	//t.Run("empty", func(t *testing.T) {
-	//RunStore(t, &RunStoreOptions{
-	//ChunkCount:   *chunksFlag,
-	//NewStoreFunc: newStoreFunc,
-	//})
-	//})
+	t.Run("empty", func(t *testing.T) {
+		RunStore(t, &RunStoreOptions{
+			ChunkCount:   *chunksFlag,
+			NewStoreFunc: newStoreFunc,
+		})
+	})
 
-	//t.Run("cleaned", func(t *testing.T) {
-	//RunStore(t, &RunStoreOptions{
-	//ChunkCount:   *chunksFlag,
-	//NewStoreFunc: newStoreFunc,
-	//Cleaned:      true,
-	//})
-	//})
+	t.Run("cleaned", func(t *testing.T) {
+		RunStore(t, &RunStoreOptions{
+			ChunkCount:   *chunksFlag,
+			NewStoreFunc: newStoreFunc,
+			Cleaned:      true,
+		})
+	})
 
-	//for _, tc := range []struct {
-	//name        string
-	//deleteSplit int
-	//}{
-	//{
-	//name:        "delete-all",
-	//deleteSplit: 1,
-	//},
-	//{
-	//name:        "delete-half",
-	//deleteSplit: 2,
-	//},
-	//{
-	//name:        "delete-fifth",
-	//deleteSplit: 5,
-	//},
-	//{
-	//name:        "delete-tenth",
-	//deleteSplit: 10,
-	//},
-	//{
-	//name:        "delete-percent",
-	//deleteSplit: 100,
-	//},
-	//{
-	//name:        "delete-permill",
-	//deleteSplit: 1000,
-	//},
-	//} {
-	//t.Run(tc.name, func(t *testing.T) {
-	//RunStore(t, &RunStoreOptions{
-	//ChunkCount:   *chunksFlag,
-	//DeleteSplit:  tc.deleteSplit,
-	//NewStoreFunc: newStoreFunc,
-	//})
-	//})
-	//}
+	for _, tc := range []struct {
+		name        string
+		deleteSplit int
+	}{
+		{
+			name:        "delete-all",
+			deleteSplit: 1,
+		},
+		{
+			name:        "delete-half",
+			deleteSplit: 2,
+		},
+		{
+			name:        "delete-fifth",
+			deleteSplit: 5,
+		},
+		{
+			name:        "delete-tenth",
+			deleteSplit: 10,
+		},
+		{
+			name:        "delete-percent",
+			deleteSplit: 100,
+		},
+		{
+			name:        "delete-permill",
+			deleteSplit: 1000,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RunStore(t, &RunStoreOptions{
+				ChunkCount:   *chunksFlag,
+				DeleteSplit:  tc.deleteSplit,
+				NewStoreFunc: newStoreFunc,
+			})
+		})
+	}
 
-	//t.Run("iterator", func(t *testing.T) {
-	//RunIterator(t, newStoreFunc)
-	//})
+	t.Run("iterator", func(t *testing.T) {
+		RunIterator(t, newStoreFunc)
+	})
 
 	t.Run("no grow", func(t *testing.T) {
 		runNoGrow(t, newStoreFunc)

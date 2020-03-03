@@ -49,7 +49,7 @@ func TestFCDS(t *testing.T) {
 
 // TestFreeSlotCounter tests that the free slot counter gets persisted
 // and properly loaded on existing store restart
-func xTestFreeSlotCounter(t *testing.T) {
+func TestFreeSlotCounter(t *testing.T) {
 	path, err := ioutil.TempDir("", "swarm-fcds-")
 	if err != nil {
 		t.Fatal(err)
