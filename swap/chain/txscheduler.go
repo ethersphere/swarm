@@ -1,0 +1,127 @@
+package chain
+
+import (
+	"context"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// TxSchedulerBackend is an extension of the normal Backend interface
+type TxSchedulerBackend interface {
+	Backend
+	// SendTransactionWithID is the same as SendTransaction but with the ID of the associated request passed alongside
+	// This is primarily used so the backend can react with the expected result during testing
+	SendTransactionWithID(ctx context.Context, id uint64, tx *types.Transaction) error
+}
+
+// DefaultTxSchedulerBackend is the standard backend that should be used
+// It simply wraps another Backend
+type DefaultTxSchedulerBackend struct {
+	Backend
+}
+
+// SendTransactionWithID in the default Backend calls the underlying SendTransaction function
+func (b *DefaultTxSchedulerBackend) SendTransactionWithID(ctx context.Context, id uint64, tx *types.Transaction) error {
+	return b.Backend.SendTransaction(ctx, tx)
+}
+
+// TxRequest describes a request for a transaction that can be scheduled
+type TxRequest struct {
+	To       common.Address // recipient of the transaction
+	Data     []byte         // transaction data
+	GasPrice *big.Int       // gas price or nil if suggested gas price should be used
+	GasLimit uint64         // gas limit or 0 if it should be estimated
+	Value    *big.Int       // amount of wei to send
+}
+
+// ToSignedTx returns a signed types.Transaction for the given request and nonce
+func (request *TxRequest) ToSignedTx(nonce uint64, opts *bind.TransactOpts) (*types.Transaction, error) {
+	tx := types.NewTransaction(
+		nonce,
+		request.To,
+		request.Value,
+		request.GasLimit,
+		request.GasPrice,
+		request.Data,
+	)
+
+	return opts.Signer(&types.HomesteadSigner{}, opts.From, tx)
+}
+
+// TxScheduler represents a central sender for all transactions from a single ethereum account
+// its purpose is to ensure there are no nonce issues and that transaction initiators are notified of the result
+// notifications are guaranteed to happen even across node restarts and disconnects from the ethereum backend
+type TxScheduler interface {
+	// SetHandlers registers the handlers for the given handlerID
+	// This starts the delivery of notifications for this handlerID
+	SetHandlers(handlerID string, handlers *TxRequestHandlers) error
+	// ScheduleRequest adds a new request to be processed
+	// The request is assigned an id which is returned
+	ScheduleRequest(handlerID string, request TxRequest, requestExtraData interface{}) (id uint64, err error)
+	// GetExtraData load the serialized extra data for this request from disk and tries to decode it
+	GetExtraData(id uint64, request interface{}) error
+	// GetRequestState gets the state the request is currently in
+	GetRequestState(id uint64) (TxRequestState, error)
+	// Start starts processing transactions if it is not already doing so
+	// This cannot be used to restart the queue once stopped
+	Start()
+	// Stop stops processing transactions if it is running
+	// It will block until processing has terminated
+	Stop()
+}
+
+// TxRequestHandlers holds all the callbacks for a given string
+// Any of the functions may be nil
+// Notify functions are called by the transaction queue when a notification for a transaction occurs
+// If the handler returns an error the notification will be resent in the future (including across restarts)
+type TxRequestHandlers struct {
+	// NotifyReceipt is called the first time a receipt is observed for a transaction
+	NotifyReceipt func(ctx context.Context, id uint64, notification *TxReceiptNotification) error
+	// NotifyPending is called after the transaction was successfully sent to the backend
+	NotifyPending func(ctx context.Context, id uint64, notification *TxPendingNotification) error
+	// NotifyCancelled is called when it is certain that this transaction will never be sent
+	NotifyCancelled func(ctx context.Context, id uint64, notification *TxCancelledNotification) error
+	// NotifyStatusUnknown is called if it cannot be determined if the transaction might be confirmed
+	NotifyStatusUnknown func(ctx context.Context, id uint64, notification *TxStatusUnknownNotification) error
+}
+
+// TxReceiptNotification is the notification emitted when the receipt is available
+type TxReceiptNotification struct {
+	Receipt types.Receipt // the receipt of the included transaction
+}
+
+// TxCancelledNotification is the notification emitted when it is certain that a transaction will never be sent
+type TxCancelledNotification struct {
+	Reason string // The reason behind the cancellation
+}
+
+// TxStatusUnknownNotification is the notification emitted if it cannot be determined if the transaction might be confirmed
+type TxStatusUnknownNotification struct {
+	Reason string // The reason why it is unknown
+}
+
+// TxPendingNotification is the notification emitted after the transaction was successfully sent to the backend
+type TxPendingNotification struct {
+	Transaction *types.Transaction // The transaction that was sent
+}
+
+// TxRequestState is the type used to indicate which state the transaction is in
+type TxRequestState uint8
+
+const (
+	// TxRequestStateScheduled is the initial state for all requests that enter the queue
+	TxRequestStateScheduled TxRequestState = 0
+	// TxRequestStateSigned means the transaction has been generated and signed but not yet sent
+	TxRequestStateSigned TxRequestState = 1
+	// TxRequestStatePending means the transaction has been sent but is not yet confirmed
+	TxRequestStatePending TxRequestState = 2
+	// TxRequestStateConfirmed is entered the first time a confirmation is received
+	TxRequestStateConfirmed TxRequestState = 3
+	// TxRequestStateStatusUnknown is used for all cases where it is unclear wether the transaction was broadcast or not. This is also used for timed-out transactions.
+	TxRequestStateStatusUnknown TxRequestState = 4
+	// TxRequestStateCancelled is used for all cases where it is certain the transaction was and never will be sent
+	TxRequestStateCancelled TxRequestState = 5
+)
