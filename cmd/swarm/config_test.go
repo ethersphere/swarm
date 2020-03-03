@@ -302,6 +302,112 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	node.Shutdown()
 }
 
+func TestSwapConfigCmdLineOverrides(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	conf, account := getTestAccount(t, dir)
+	node := &testNode{Dir: dir}
+	swapTestLogPath := "/tmp/swaptest"
+	swapTestLogLevel := 3
+
+	// assign ports
+	httpPort, err := assignTCPPort()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "5",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
+		fmt.Sprintf("--%s", SwarmNoSyncFlag.Name),
+		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
+		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
+		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
+		fmt.Sprintf("--%s", SwarmSwapEnabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSwapBackendURLFlag.Name), conf.IPCPath,
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.FormatUint(swap.DefaultPaymentThreshold+1, 10),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.FormatUint(swap.DefaultDisconnectThreshold+1, 10),
+		fmt.Sprintf("--%s", SwarmSwapLogPathFlag.Name), swapTestLogPath,
+		fmt.Sprintf("--%s", SwarmSwapLogLevelFlag.Name), strconv.FormatInt(int64(swapTestLogLevel), 10),
+		fmt.Sprintf("--%s", SwarmEnablePinningFlag.Name),
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+	node.Cmd.InputLine(testPassphrase)
+	defer func() {
+		if t.Failed() {
+			node.Shutdown()
+		}
+	}()
+	// wait for the node to start
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
+
+		node.Client, err = rpc.Dial(conf.IPCEndpoint())
+		if err == nil {
+			break
+		}
+	}
+	if node.Client == nil {
+		t.Fatal(err)
+	}
+
+	// load info
+	var info swarm.Info
+	if err := node.Client.Call(&info, "bzz_info"); err != nil {
+		t.Fatal(err)
+	}
+
+	if info.Port != httpPort {
+		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
+	}
+
+	if info.NetworkID != 42 {
+		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkID)
+	}
+
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
+	}
+
+	if info.PushSyncEnabled {
+		t.Fatal("Expected Push Sync to be disabled, but is true")
+	}
+
+	if info.Cors != "*" {
+		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
+	}
+
+	if info.SwapPaymentThreshold != (swap.DefaultPaymentThreshold + 1) {
+		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", swap.DefaultPaymentThreshold+1, info.SwapPaymentThreshold)
+	}
+
+	if info.SwapDisconnectThreshold != (swap.DefaultDisconnectThreshold + 1) {
+		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold+1, info.SwapDisconnectThreshold)
+	}
+
+	if info.SwapLogPath != swapTestLogPath {
+		t.Fatalf("Expected SwapLogPath to be %s, but got %s", swapTestLogPath, info.SwapLogPath)
+	}
+
+	if info.SwapLogLevel != swapTestLogLevel {
+		t.Fatalf("Expected SwapLogLevel to be %d, but got %d", swapTestLogLevel, info.SwapLogLevel)
+	}
+
+	if info.EnablePinning != true {
+		t.Fatalf("expected EnablePinning to be %t but got %t", true, info.EnablePinning)
+	}
+
+	node.Shutdown()
+}
+
 func TestConfigFileOverrides(t *testing.T) {
 
 	// assign ports
