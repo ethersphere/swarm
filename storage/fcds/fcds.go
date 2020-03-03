@@ -27,7 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethersphere/swarm/log"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -394,8 +393,6 @@ func (s *Store) NextShard() (shard uint8, err error) {
 
 	slots := s.meta.ShardSlots()
 	sort.Sort(bySlots(slots))
-
-	spew.Dump(slots)
 
 	// if the first shard has free slots - return it
 	// otherwise, just balance them out

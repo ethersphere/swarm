@@ -251,10 +251,13 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 		}
 		new = gcSize - c
 	}
+	metrics.GetOrRegisterGauge("localstore.gcsize.index", nil).Update(gcSize)
 	db.gcSize.PutInBatch(batch, new)
 
 	// trigger garbage collection if we reached the capacity
 	if new >= db.capacity {
+		metrics.GetOrRegisterCounter("localstore.trigger-gc-on-inc", nil).Inc(1)
+
 		db.triggerGarbageCollection()
 	}
 	return nil
