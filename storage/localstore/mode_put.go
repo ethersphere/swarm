@@ -81,7 +81,7 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 				exist[i] = true
 				continue
 			}
-			exists, c, err := db.putRequest(batch, binIDs, chunkToItem(ch))
+			exists, c, err := db.putUpload(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +115,7 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 				exist[i] = true
 				continue
 			}
-			exists, c, err := db.putSync(batch, binIDs, chunkToItem(ch))
+			exists, c, err := db.putUpload(batch, binIDs, chunkToItem(ch))
 			if err != nil {
 				return nil, err
 			}
