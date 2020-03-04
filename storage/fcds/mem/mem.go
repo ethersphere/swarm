@@ -62,14 +62,10 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
 	s.mu.Lock()
 
-	if _, ok := s.meta[addr.String()]; ok {
-		panic("wtf")
+	if reclaimed {
+		sh := s.free[shard]
+		delete(sh, m.Offset)
 	}
-
-	//if reclaimed {
-	sh := s.free[shard]
-	delete(sh, m.Offset)
-	//}
 	s.meta[addr.String()] = m
 	s.mu.Unlock()
 	return nil
