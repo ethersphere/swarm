@@ -167,6 +167,7 @@ func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot) {
 
 	s.mtx.RLock()
 	for i := uint8(0); i < fcds.ShardCount; i++ {
+		i := i
 		slot := fcds.ShardSlot{Shard: i}
 		if slots, ok := s.free[i]; ok {
 			slot.Slots = slots

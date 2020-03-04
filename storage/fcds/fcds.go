@@ -41,7 +41,7 @@ type Storer interface {
 	Has(addr chunk.Address) (yes bool, err error)
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
-	NextShard() (shard uint8, hasfree bool, err error)
+	NextShard() (freeShard []uint8, fallback uint8, err error)
 	ShardSize() (slots []ShardSlot, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
@@ -62,10 +62,10 @@ var (
 // Store is the main FCDS implementation. It stores chunk data into
 // a number of files partitioned by the last byte of the chunk address.
 type Store struct {
-	shards []shard   // relations with shard id and a shard file and their mutexes
-	meta   MetaStore // stores chunk offsets
-	//free         []bool         // which shards have free offsets
-	//freeMu       sync.RWMutex   // protects free field
+	shards       []shard        // relations with shard id and a shard file and their mutexes
+	meta         MetaStore      // stores chunk offsets
+	free         []bool         // which shards have free offsets
+	freeMu       sync.RWMutex   // protects free field
 	freeCache    *offsetCache   // optional cache of free offset values
 	wg           sync.WaitGroup // blocks Close until all other method calls are done
 	maxChunkSize int            // maximal chunk data size
@@ -92,9 +92,9 @@ func WithCache(yes bool) Option {
 // New constructs a new Store with files at path, with specified max chunk size.
 func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s *Store, err error) {
 	s = &Store{
-		shards: make([]shard, ShardCount),
-		meta:   metaStore,
-		//free:         make([]bool, ShardCount),
+		shards:       make([]shard, ShardCount),
+		meta:         metaStore,
+		free:         make([]bool, ShardCount),
 		maxChunkSize: maxChunkSize,
 		quit:         make(chan struct{}),
 	}
@@ -117,6 +117,7 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 func (s *Store) ShardSize() (slots []ShardSlot, err error) {
 	slots = make([]ShardSlot, len(s.shards))
 	for i, sh := range s.shards {
+		i := i
 		fs, err := sh.f.Stat()
 		if err != nil {
 			return nil, err
@@ -205,13 +206,13 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	var shardId uint8
 	var reclaimed bool
 	var sh shard
+	found := false
+	free, fallback, err := s.NextShard()
+	if err != nil {
+		return 0, err
+	}
 
-	for {
-		id, hasfree, err := s.NextShard()
-		if err != nil {
-			return 0, err
-		}
-
+	for _, id := range free {
 		sh = s.shards[id]
 
 		sh.mu.Lock()
@@ -221,15 +222,21 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 			return 0, err
 		}
 
-		if hasfree {
-			if offset >= 0 {
-				shardId = id
-				break
-			}
-			sh.mu.Unlock()
-		} else {
+		if offset >= 0 {
 			shardId = id
+			found = true
 			break
+		} else {
+			sh.mu.Unlock()
+		}
+	}
+	if !found {
+		sh = s.shards[fallback]
+		shardId = fallback
+		sh.mu.Lock()
+		offset, reclaimed, err = s.getOffset(fallback)
+		if err != nil {
+			return 0, err
 		}
 	}
 	defer sh.mu.Unlock()
@@ -274,9 +281,9 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 // and a flag if the offset is reclaimed from a previously removed chunk.
 // If offset is less then 0, no free offsets are available.
 func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
-	if !s.shardHasFreeOffsets(shard) {
-		return -1, false, nil
-	}
+	//if !s.shardHasFreeOffsets(shard) {
+	//return -1, false, nil
+	//}
 
 	offset = -1
 	if s.freeCache != nil {
@@ -418,45 +425,44 @@ func (s *Store) getMeta(addr chunk.Address) (m *Meta, err error) {
 }
 
 func (s *Store) markShardWithFreeOffsets(shard uint8, has bool) {
-	//s.freeMu.Lock()
-	//s.free[shard] = has
-	//s.freeMu.Unlock()
+	s.freeMu.Lock()
+	s.free[shard] = has
+	s.freeMu.Unlock()
 }
 
 func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
-	//s.freeMu.RLock()
-	//has = s.free[shard]
-	//s.freeMu.RUnlock()
-	return true
-	//return has
+	s.freeMu.RLock()
+	has = s.free[shard]
+	s.freeMu.RUnlock()
+	return has
 }
 
 // NextShard gets the next shard to write to.
 // Uses weighted probability to choose the next shard.
-func (s *Store) NextShard() (shard uint8, hasfree bool, err error) {
+func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
-
 	slots := s.meta.ShardSlots()
 	sort.Sort(bySlots(slots))
 
-	// if the first shard has free slots - return it
-	// otherwise, just balance them out
-	if slots[0].Slots > 0 {
-		return slots[0].Shard, true, nil
+	for _, v := range slots {
+		if v.Slots > 0 {
+			freeShards = append(freeShards, v.Shard)
+		}
 	}
+
 	// each element has in Slots the number of _taken_ slots
-	slots, err = s.ShardSize()
+	takenSlots, err := s.ShardSize()
 	if err != nil {
-		return 0, false, err
+		return nil, 0, err
 	}
 
 	// sorting them will make the first element the largest shard and the last
 	// element the smallest shard; pick the smallest
-	sort.Sort(bySlots(slots))
-	shard = slots[len(slots)-1].Shard
+	sort.Sort(bySlots(takenSlots))
+	fallback = takenSlots[len(takenSlots)-1].Shard
 
-	return shard, false, nil
+	return freeShards, fallback, nil
 }
 
 // probabilisticNextShard returns a next shard to write to
