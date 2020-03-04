@@ -48,7 +48,7 @@ func NewMetaStore() (s *MetaStore) {
 // Get returns chunk meta information.
 func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	s.mu.RLock()
-	m = s.meta[addr.String()]
+	m = s.meta[string(addr)]
 	s.mu.RUnlock()
 	if m == nil {
 		return nil, chunk.ErrChunkNotFound
@@ -67,7 +67,7 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 		delete(sh, m.Offset)
 	}
 
-	s.meta[addr.String()] = m
+	s.meta[string(addr)] = m
 	s.mu.Unlock()
 	return nil
 }
@@ -76,7 +76,7 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := addr.String()
+	key := string(addr)
 	m := s.meta[key]
 	if m == nil {
 		return chunk.ErrChunkNotFound
