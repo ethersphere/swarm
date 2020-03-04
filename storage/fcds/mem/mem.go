@@ -66,6 +66,7 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 		sh := s.free[shard]
 		delete(sh, m.Offset)
 	}
+
 	s.meta[addr.String()] = m
 	s.mu.Unlock()
 	return nil
@@ -78,15 +79,10 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	key := addr.String()
 	m := s.meta[key]
 	if m == nil {
-		panic("eeek")
 		return chunk.ErrChunkNotFound
 	}
-	v := len(s.free[shard])
 	s.free[shard][m.Offset] = struct{}{}
-	vv := len(s.free[shard])
-	if v == vv {
-		panic(0)
-	}
+
 	delete(s.meta, key)
 	return nil
 }
