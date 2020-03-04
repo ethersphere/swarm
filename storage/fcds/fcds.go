@@ -121,8 +121,7 @@ func (s *Store) ShardSize() (slots []ShardSlot, err error) {
 		if err != nil {
 			return nil, err
 		}
-		ii := i
-		slots[i] = ShardSlot{Shard: uint8(ii), Slots: fs.Size()}
+		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size()}
 	}
 
 	return slots, nil
@@ -134,9 +133,6 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 		return nil, err
 	}
 	defer s.unprotect()
-
-	//s.mtx.Lock()
-	//defer s.mtx.Unlock()
 
 	m, err := s.getMeta(addr)
 	if err != nil {
@@ -189,8 +185,6 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 	defer s.unprotect()
-	//s.mtx.Lock()
-	//defer s.mtx.Unlock()
 	m, err := s.getMeta(ch.Address())
 	if err == nil {
 		return m.Shard, nil
@@ -290,8 +284,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		return err
 	}
 	defer s.unprotect()
-	//s.mtx.Lock()
-	//defer s.mtx.Unlock()
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return err
