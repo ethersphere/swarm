@@ -135,8 +135,8 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	}
 	defer s.unprotect()
 
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	//s.mtx.Lock()
+	//defer s.mtx.Unlock()
 
 	m, err := s.getMeta(addr)
 	if err != nil {
@@ -189,8 +189,8 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 	defer s.unprotect()
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	//s.mtx.Lock()
+	//defer s.mtx.Unlock()
 	m, err := s.getMeta(ch.Address())
 	if err == nil {
 		return m.Shard, nil
@@ -231,19 +231,11 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
-		//fmt.Printf("*")
 	} else {
 		metrics.GetOrRegisterCounter("fcds.put.offset", nil).Inc(1)
 		// seek to the offset position
 		// to replace the chunk data at that position
-		oo, err := sh.f.Seek(offset, io.SeekStart)
-		//fmt.Printf("|")
-		if err != nil {
-			return 0, err
-		}
-		if oo != offset {
-			panic("wtf")
-		}
+		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
 	if err != nil {
 		return 0, err
@@ -298,8 +290,8 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		return err
 	}
 	defer s.unprotect()
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	//s.mtx.Lock()
+	//defer s.mtx.Unlock()
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return err
@@ -337,8 +329,8 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 		return err
 	}
 	defer s.unprotect()
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	//s.mtx.Lock()
+	//defer s.mtx.Unlock()
 	for _, sh := range s.shards {
 		sh.mu.Lock()
 	}
