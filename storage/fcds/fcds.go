@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -211,9 +212,12 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 		return 0, err
 	}
 
-	for _, id := range free {
-		sh = s.shards[id]
+	for len(free) > 0 {
+		elem := rand.Intn(len(free))
+		id := free[elem]
 
+		free = append(free[:elem], free[elem+1:]...)
+		sh = s.shards[id]
 		sh.mu.Lock()
 
 		offset, reclaimed, err = s.getOffset(id)
