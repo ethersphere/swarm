@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/swap/chain"
+	swapLog "github.com/ethersphere/swarm/swap/log"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -35,21 +36,21 @@ const CashChequeBeneficiaryTransactionCost = 50000
 type CashoutProcessor struct {
 	backend    chain.Backend     // ethereum backend to use
 	privateKey *ecdsa.PrivateKey // private key to use
-	Logger     Logger
+	Logger     swapLog.Logger
 }
 
 // CashoutRequest represents a request for a cashout operation
 type CashoutRequest struct {
 	Cheque      Cheque         // cheque to be cashed
 	Destination common.Address // destination for the payout
-	Logger      Logger
+	Logger      swapLog.Logger
 }
 
 // ActiveCashout stores the necessary information for a cashout in progess
 type ActiveCashout struct {
 	Request         CashoutRequest // the request that caused this cashout
 	TransactionHash common.Hash    // the hash of the current transaction for this request
-	Logger          Logger
+	Logger          swapLog.Logger
 }
 
 // newCashoutProcessor creates a new instance of CashoutProcessor
@@ -150,9 +151,9 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 
 	if result.Bounced {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
-		activeCashout.Logger.Warn(CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
+		activeCashout.Logger.Warn(swapLog.CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
 	}
 
-	activeCashout.Logger.Info(CashChequeAction, "cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
+	activeCashout.Logger.Info(swapLog.CashChequeAction, "cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
 	return nil
 }

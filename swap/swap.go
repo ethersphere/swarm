@@ -39,6 +39,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
+	swapLog "github.com/ethersphere/swarm/swap/log"
 	"github.com/ethersphere/swarm/uint256"
 )
 
@@ -64,7 +65,7 @@ type Swap struct {
 	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
 	honeyPriceOracle  HoneyOracle                // oracle which resolves the price of honey (in Wei)
 	cashoutProcessor  *CashoutProcessor          // processor for cashing out
-	logger            Logger                     //Swap Logger
+	logger            swapLog.Logger             //Swap Logger
 }
 
 // Owner encapsulates information related to accessing the contract
@@ -84,7 +85,7 @@ type Params struct {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory, logger Logger) *Swap {
+func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory, logger swapLog.Logger) *Swap {
 	return &Swap{
 		store:             stateStore,
 		peers:             make(map[enode.ID]*Peer),
@@ -107,7 +108,7 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend
 // - starts the chequebook; creates the swap instance
 func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Params, chequebookAddressFlag common.Address, skipDepositFlag bool, depositAmountFlag uint64, factoryAddress common.Address) (swap *Swap, err error) {
 	// swap log for auditing purposes
-	swapLogger := newSwapLogger(params.LogPath, params.LogLevel, params.BaseAddrs)
+	swapLogger := swapLog.NewSwapLogger(params.LogPath, params.LogLevel, params.BaseAddrs)
 	// verify that backendURL is not empty
 	if backendURL == "" {
 		return nil, errors.New("no backend URL given")
@@ -116,7 +117,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if depositAmountFlag > 0 && skipDepositFlag {
 		return nil, ErrSkipDeposit
 	}
-	swapLogger.Info(InitAction, "connecting to SWAP API", "url", backendURL)
+	swapLogger.Info(swapLog.InitAction, "connecting to SWAP API", "url", backendURL)
 	// initialize the balances store
 	var stateStore state.Store
 	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
@@ -139,7 +140,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if err := checkChainID(chainID.Uint64(), stateStore, swapLogger); err != nil {
 		return nil, err
 	}
-	swapLogger.Info(InitAction, "Using backend network ID", "ID", chainID.Uint64())
+	swapLogger.Info(swapLog.InitAction, "Using backend network ID", "ID", chainID.Uint64())
 
 	// create the owner of SWAP
 	owner := createOwner(prvkey)
@@ -181,7 +182,7 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 				return nil, err
 			}
 		} else {
-			swapLogger.Info(InitAction, "Skipping deposit")
+			swapLogger.Info(swapLog.InitAction, "Skipping deposit")
 		}
 	}
 
@@ -198,13 +199,13 @@ const (
 )
 
 // createFactory determines the factory address and returns and error if no factory address has been specified or is unknown for the network
-func createFactory(factoryAddress common.Address, chainID *big.Int, backend chain.Backend, logger Logger) (factory swap.SimpleSwapFactory, err error) {
+func createFactory(factoryAddress common.Address, chainID *big.Int, backend chain.Backend, logger swapLog.Logger) (factory swap.SimpleSwapFactory, err error) {
 	if (factoryAddress == common.Address{}) {
 		if factoryAddress, err = contract.FactoryAddressForNetwork(chainID.Uint64()); err != nil {
 			return nil, err
 		}
 	}
-	logger.Info(InitAction, "Using chequebook factory", "address", factoryAddress)
+	logger.Info(swapLog.InitAction, "Using chequebook factory", "address", factoryAddress)
 	// instantiate an object representing the factory and verify it's bytecode
 	factory, err = contract.FactoryAt(factoryAddress, backend)
 	if err != nil {
@@ -218,7 +219,7 @@ func createFactory(factoryAddress common.Address, chainID *big.Int, backend chai
 
 // checkChainID verifies whether we have initialized SWAP before and ensures that we are on the same backendNetworkID if this is the case
 // the logger is being injected from swap New function, this let's us continue logging in the same swap log context
-func checkChainID(currentChainID uint64, s state.Store, logger Logger) (err error) {
+func checkChainID(currentChainID uint64, s state.Store, logger swapLog.Logger) (err error) {
 	var connectedBlockchain uint64
 	err = s.Get(connectedBlockchainKey, &connectedBlockchain)
 	// error reading from database
@@ -230,7 +231,7 @@ func checkChainID(currentChainID uint64, s state.Store, logger Logger) (err erro
 		return fmt.Errorf("statestore previously used on different backend network. Used before on network: %d, Attempting to connect on network %d", connectedBlockchain, currentChainID)
 	}
 	if err == state.ErrNotFound {
-		logger.Info(InitAction, "First time connected to SWAP. Storing chain ID", "ID", currentChainID)
+		logger.Info(swapLog.InitAction, "First time connected to SWAP. Storing chain ID", "ID", currentChainID)
 		return s.Put(connectedBlockchainKey, currentChainID)
 	}
 	return nil
@@ -323,7 +324,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 // the caller is expected to hold swapPeer.lock
 func (s *Swap) checkPaymentThresholdAndSendCheque(swapPeer *Peer) error {
 	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
-		swapPeer.logger.Info(SendChequeAction, "balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold)
+		swapPeer.logger.Info(swapLog.SendChequeAction, "balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold)
 		return swapPeer.sendCheque()
 	}
 	return nil
@@ -351,10 +352,10 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	defer p.lock.Unlock()
 
 	cheque := msg.Cheque
-	p.logger.Info(HandleChequeAction, "received cheque from peer", "honey", cheque.Honey)
+	p.logger.Info(swapLog.HandleChequeAction, "received cheque from peer", "honey", cheque.Honey)
 
 	if p.getLastReceivedCheque() != nil && cheque.Equal(p.getLastReceivedCheque()) {
-		p.logger.Warn(HandleChequeAction, "cheque sent by peer has already been received in the past", "cumulativePayout", cheque.CumulativePayout)
+		p.logger.Warn(swapLog.HandleChequeAction, "cheque sent by peer has already been received in the past", "cumulativePayout", cheque.CumulativePayout)
 		return p.Send(ctx, &ConfirmChequeMsg{
 			Cheque: cheque,
 		})
@@ -365,7 +366,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(fmt.Errorf("processing and verifying received cheque: %w", err))
 	}
 
-	p.logger.Debug(HandleChequeAction, "processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
+	p.logger.Debug(swapLog.HandleChequeAction, "processed and verified received cheque", "beneficiary", cheque.Beneficiary, "cumulative payout", cheque.CumulativePayout)
 
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
@@ -451,7 +452,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 
 	if err != nil {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-		s.logger.Error(CashChequeAction, "cashing cheque:", err)
+		s.logger.Error(swapLog.CashChequeAction, "cashing cheque:", err)
 	}
 }
 
@@ -484,7 +485,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
-		p.logger.Error(HandleChequeAction, "error while saving last received cheque", "err", err.Error())
+		p.logger.Error(swapLog.HandleChequeAction, "error while saving last received cheque", "err", err.Error())
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
@@ -595,7 +596,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 		return nil, err
 	}
 	// log available balance and ERC20 balance
-	s.logger.Info(InitAction, "Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
+	s.logger.Info(swapLog.InitAction, "Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
 	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): ")
 	// need to prompt user for deposit amount
 	prompter := console.Stdin
@@ -633,7 +634,7 @@ func (s *Swap) StartChequebook(chequebookAddrFlag common.Address) (contract cont
 		if err := s.saveChequebook(contract.ContractParams().ContractAddress); err != nil {
 			return nil, err
 		}
-		s.logger.Info(InitAction, "Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "owner", s.owner.address)
+		s.logger.Info(swapLog.InitAction, "Deployed chequebook", "contract address", contract.ContractParams().ContractAddress.Hex(), "owner", s.owner.address)
 		return contract, nil
 	}
 	// first time connecting with a chequebookAddress passed in
@@ -650,7 +651,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 	if err := s.chequebookFactory.VerifyContract(address); err != nil {
 		return nil, fmt.Errorf("contract validation for %v: %w", address.Hex(), err)
 	}
-	s.logger.Info(InitAction, "bound to chequebook", "chequebookAddr", address)
+	s.logger.Info(swapLog.InitAction, "bound to chequebook", "chequebookAddr", address)
 	// get the instance
 	return contract.InstanceAt(address, s.backend)
 }
@@ -659,7 +660,7 @@ func (s *Swap) bindToContractAt(address common.Address) (contract.Contract, erro
 func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	opts.Context = ctx
-	s.logger.Info(DeployChequebookAction, "Deploying new swap", "owner", opts.From.Hex())
+	s.logger.Info(swapLog.DeployChequebookAction, "Deploying new swap", "owner", opts.From.Hex())
 	chequebook, err := s.chequebookFactory.DeploySimpleSwap(opts, s.owner.address, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy chequebook: %w", err)
@@ -671,12 +672,12 @@ func (s *Swap) Deploy(ctx context.Context) (contract.Contract, error) {
 func (s *Swap) Deposit(ctx context.Context, amount *big.Int) error {
 	opts := bind.NewKeyedTransactor(s.owner.privateKey)
 	opts.Context = ctx
-	s.logger.Info(InitAction, "Depositing ERC20 into chequebook", "amount", amount)
+	s.logger.Info(swapLog.InitAction, "Depositing ERC20 into chequebook", "amount", amount)
 	rec, err := s.contract.Deposit(opts, amount)
 	if err != nil {
 		return err
 	}
-	s.logger.Info(InitAction, "Deposited ERC20 into chequebook", "amount", amount, "transaction", rec.TxHash)
+	s.logger.Info(swapLog.InitAction, "Deposited ERC20 into chequebook", "amount", amount, "transaction", rec.TxHash)
 	return nil
 }
 

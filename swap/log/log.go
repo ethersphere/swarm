@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package swap
+package log
 
 import (
 	log "github.com/ethereum/go-ethereum/log"
@@ -42,8 +42,11 @@ const (
 // DefaultSwapLogLevel indicates default filter level of log messages
 const DefaultSwapLogLevel = 3
 
-const fileSizeLimit = 262144 // max bytes limit for splitting file in parts
-const emptyLogPath = ""      // Used when no logPath is specified for a logger
+// FileSizeLimit specifies max bytes limit for splitting file in parts
+const FileSizeLimit = 262144
+
+// EmptyLogPath  is used when no logPath specified for a logger
+const EmptyLogPath = ""
 
 // Logger wraps the ethereum logger with specific information for swap logging
 // each log contains a context which will be printed on each message
@@ -104,7 +107,7 @@ func newLogger(logPath string, swapLogLevel int, ctx []interface{}) (swapLogger 
 func setLoggerHandler(logpath string, swapLogLevel int, logger log.Logger) {
 	lh := log.Root().GetHandler()
 
-	if logpath == emptyLogPath {
+	if logpath == EmptyLogPath {
 		logger.SetHandler(lh)
 		return
 	}
@@ -130,19 +133,19 @@ func setLoggerHandler(logpath string, swapLogLevel int, logger log.Logger) {
 func swapRotatingFileHandler(logdir string) (log.Handler, error) {
 	return log.RotatingFileHandler(
 		logdir,
-		fileSizeLimit,
+		FileSizeLimit,
 		log.JSONFormatOrderedEx(false, true),
 	)
 }
 
-// newSwapLogger returns a new logger for standard swap logs
-func newSwapLogger(logPath string, swapLogLevel int, baseAddress *network.BzzAddr) Logger {
+// NewSwapLogger returns a new logger for standard swap logs
+func NewSwapLogger(logPath string, swapLogLevel int, baseAddress *network.BzzAddr) Logger {
 	ctx := []interface{}{"base", baseAddress.ShortString()}
 	return newLogger(logPath, swapLogLevel, ctx)
 }
 
-// newPeerLogger returns a new logger for swap logs with peer info
-func newPeerLogger(s *Swap, peerID enode.ID) Logger {
-	ctx := []interface{}{"base", s.params.BaseAddrs.ShortString(), "peer", peerID.String()[:16]}
-	return newLogger(s.params.LogPath, s.params.LogLevel, ctx)
+// NewPeerLogger returns a new logger for swap logs with peer info
+func NewPeerLogger(logPath string, swapLogLevel int, baseAddress *network.BzzAddr, peerID enode.ID) Logger {
+	ctx := []interface{}{"base", baseAddress.ShortString(), "peer", peerID.String()[:16]}
+	return newLogger(logPath, swapLogLevel, ctx)
 }

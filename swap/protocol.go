@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	swapLog "github.com/ethersphere/swarm/swap/log"
 )
 
 var (
@@ -66,13 +67,13 @@ func (s *Swap) Protocols() []p2p.Protocol {
 
 // Start is a node.Service interface method
 func (s *Swap) Start(server *p2p.Server) error {
-	log.Info(InitAction, "Swap service started")
+	log.Info(swapLog.InitAction, "Swap service started")
 	return nil
 }
 
 // Stop is a node.Service interface method
 func (s *Swap) Stop() error {
-	log.Info(StopAction, "Swap service stopping")
+	log.Info(swapLog.StopAction, "Swap service stopping")
 	return s.Close()
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/swap"
+	swapLog "github.com/ethersphere/swarm/swap/log"
 )
 
 const (
@@ -98,8 +99,8 @@ func NewConfig() *Config {
 		SwapDepositAmount:       swap.DefaultDepositAmount,
 		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
 		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
-		SwapLogPath:             "",
-		SwapLogLevel:            swap.DefaultSwapLogLevel,
+		SwapLogPath:             swapLog.EmptyLogPath,
+		SwapLogLevel:            swapLog.DefaultSwapLogLevel,
 		HiveParams:              network.NewHiveParams(),
 		Pss:                     pss.NewParams(),
 		EnsRoot:                 ens.Address,
