@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -180,6 +181,9 @@ func TestIssue1(t *testing.T) {
 						if err != nil {
 							panic(err)
 						}
+						mu.Lock()
+						addrs[ch.Address().String()] = struct{}{}
+						mu.Unlock()
 					}()
 				}
 				mu.Lock()
@@ -210,6 +214,7 @@ func TestIssue1(t *testing.T) {
 		for range trigger {
 			for {
 				var addr chunk.Address
+				mu.Lock()
 				for a := range addrs {
 					b, err := hex.DecodeString(a)
 					if err != nil {
@@ -221,7 +226,6 @@ func TestIssue1(t *testing.T) {
 				if err := s.Delete(addr); err != nil {
 					panic(err)
 				}
-				mu.Lock()
 				delete(addrs, addr.String())
 				if len(addrs) <= 900 {
 					mu.Unlock()
@@ -243,7 +247,7 @@ func dirSize(path string) (size int64, err error) {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".db") {
 			size += info.Size()
 		}
 		return err
