@@ -17,9 +17,8 @@
 package leveldb
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/gob"
+	"errors"
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -29,13 +28,14 @@ import (
 )
 
 var _ fcds.MetaStore = new(MetaStore)
+var errNoEntries = errors.New("no entries")
 
 // MetaStore implements FCDS MetaStore with LevelDB
 // for persistence.
 type MetaStore struct {
 	db   *leveldb.DB
-	free map[uint8]int64 // free slots cardinality
-	mtx  sync.RWMutex    // synchronise free slots
+	free map[uint8]map[int64]struct{} // free slots cardinality
+	mtx  sync.RWMutex                 // synchronise free slots
 }
 
 // NewMetaStore returns new MetaStore at path.
@@ -47,32 +47,18 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 
 	ms := &MetaStore{
 		db:   db,
-		free: make(map[uint8]int64),
+		free: make(map[uint8]map[int64]struct{}),
 	}
 
-	data, err := ms.db.Get(freeCountKey(), nil)
-	if err != nil {
-		// key doesn't exist since this is a new db
-		// write an empty set into it
-		//b, err := encodeFreeSlots(ms.free)
-		//if err != nil {
-		//panic(err)
-		//return nil, err
-		//}
-
-		//err = ms.db.Put(freeCountKey(), b, nil)
-		//if err != nil {
-		//panic(err)
-		//return nil, err
-		//}
-	} else {
-
-		ms.free, err = decodeFreeSlots(data)
-		if err != nil {
-			panic(err)
-			return nil, err
-		}
+	for i := uint8(0); i < fcds.ShardCount; i++ {
+		ms.free[i] = make(map[int64]struct{})
 	}
+
+	// caution - this _will_ break if we one day decide to
+	// decrease the shard count
+	ms.iterateFree(func(shard uint8, offset int64) {
+		ms.free[shard][offset] = struct{}{}
+	})
 
 	return ms, nil
 }
@@ -96,6 +82,7 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 // Set adds a new chunk meta information for a shard.
 // Reclaimed flag denotes that the chunk is at the place of
 // already deleted chunk, not appended to the end of the file.
+// Caller expected to hold the shard lock.
 func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
 	batch := new(leveldb.Batch)
 	if reclaimed {
@@ -105,30 +92,20 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	if err != nil {
 		return err
 	}
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	if _, err := s.Get(addr); err != nil {
 		batch.Put(chunkKey(addr), meta)
 	}
 
-	zero := s.free[m.Shard] == 0
-	if !zero {
-		s.free[m.Shard]--
-	}
-	//b, err := encodeFreeSlots(s.free)
-	//if err != nil {
-	//return err
-	//}
-	//batch.Put(freeCountKey(), b)
-
 	err = s.db.Write(batch, nil)
 	if err != nil {
-		if !zero {
-			s.free[m.Shard]++
-		}
 		return err
 	}
+
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	delete(s.free[m.Shard], m.Offset)
+
 	return nil
 }
 
@@ -140,22 +117,16 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	}
 	batch := new(leveldb.Batch)
 	batch.Put(freeKey(shard, m.Offset), nil)
-
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.free[shard]++
-	//b, err := encodeFreeSlots(s.free)
-	//if err != nil {
-	//return err
-	//}
-	//batch.Put(freeCountKey(), b)
 	batch.Delete(chunkKey(addr))
 
 	err = s.db.Write(batch, nil)
 	if err != nil {
-		s.free[shard]--
 		return err
 	}
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	s.free[shard][m.Offset] = struct{}{}
 
 	return nil
 }
@@ -170,7 +141,7 @@ func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
 		i := i
 		slot := fcds.ShardInfo{Shard: i}
 		if slots, ok := s.free[i]; ok {
-			slot.Val = slots
+			slot.Val = int64(len(slots))
 		}
 		freeSlots[i] = slot
 	}
@@ -246,6 +217,21 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 	return it.Error()
 }
 
+func (s *MetaStore) iterateFree(fn func(shard uint8, offset int64)) {
+	i := s.db.NewIterator(nil, nil)
+	defer i.Release()
+
+	for ok := i.Seek([]byte{freePrefix}); ok; ok = i.Next() {
+		key := i.Key()
+		if key == nil || key[0] != freePrefix {
+			return
+		}
+		shard := uint8(key[1])
+		offset := int64(binary.BigEndian.Uint64(key[2:10]))
+		fn(shard, offset)
+	}
+}
+
 // Close closes the underlaying LevelDB instance.
 func (s *MetaStore) Close() (err error) {
 	return s.db.Close()
@@ -254,7 +240,6 @@ func (s *MetaStore) Close() (err error) {
 const (
 	chunkPrefix = 0
 	freePrefix  = 1
-	freeCount   = 2
 )
 
 func chunkKey(addr chunk.Address) (key []byte) {
@@ -267,34 +252,4 @@ func freeKey(shard uint8, offset int64) (key []byte) {
 	key[1] = shard
 	binary.BigEndian.PutUint64(key[2:10], uint64(offset))
 	return key
-}
-
-func freeCountKey() (key []byte) {
-	return []byte{freeCount}
-}
-
-func encodeFreeSlots(m map[uint8]int64) ([]byte, error) {
-	b := new(bytes.Buffer)
-
-	e := gob.NewEncoder(b)
-
-	err := e.Encode(m)
-	if err != nil {
-		return nil, err
-	}
-
-	return b.Bytes(), nil
-}
-
-func decodeFreeSlots(b []byte) (map[uint8]int64, error) {
-	buf := bytes.NewBuffer(b)
-	var decodedMap map[uint8]int64
-	d := gob.NewDecoder(buf)
-
-	err := d.Decode(&decodedMap)
-	if err != nil {
-		return nil, err
-	}
-
-	return decodedMap, nil
 }
