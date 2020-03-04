@@ -130,7 +130,6 @@ func TestIssue1(t *testing.T) {
 		//defer wg.Done()
 
 		for range trigger {
-			mu.Lock()
 			for {
 				var addr chunk.Address
 				for a := range addrs {
@@ -141,18 +140,43 @@ func TestIssue1(t *testing.T) {
 					addr = chunk.Address(b)
 					break
 				}
-				//fmt.Printf("-")
 				if err := s.Delete(addr); err != nil {
 					panic(err)
 				}
+				mu.Lock()
 				delete(addrs, addr.String())
 				if len(addrs) <= 900 {
+					mu.Unlock()
 					break
 				}
+				mu.Unlock()
 			}
-			mu.Unlock()
-
 		}
+		//for range trigger {
+		//for {
+		//var addr chunk.Address
+		//mu.Lock()
+		//for a := range addrs {
+		//b, err := hex.DecodeString(a)
+		//if err != nil {
+		//panic(err)
+		//}
+		//addr = chunk.Address(b)
+		//break
+		//}
+		////fmt.Printf("-")
+		//if err := s.Delete(addr); err != nil {
+		//panic(err)
+		//}
+		//delete(addrs, addr.String())
+		//if len(addrs) <= 900 {
+		//mu.Unlock()
+		//break
+		//}
+		//mu.Unlock()
+		//}
+
+		//}
 	}()
 
 	wg.Wait()
