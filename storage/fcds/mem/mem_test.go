@@ -55,6 +55,7 @@ func TestIssue1(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	//metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
 	metaStore := mem.NewMetaStore()
 	if err != nil {
 		t.Fatal(err)
