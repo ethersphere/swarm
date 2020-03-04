@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -438,10 +437,13 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 }
 
 // NextShard gets the next shard to write to.
-// Uses weighted probability to choose the next shard.
+// Returns a slice of shards with free slots and a fallback shard
+// which is the shortest shard in size, but does not guarantee it has
+// any free slots.
 func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
-	// warning: if multiple writers call this at the same time we might get the same shard again and again
-	// because the free slot value has not been decremented yet(!)
+
+	// multiple writers that call this at the same time will get the same shard again and again
+	// because the free slot value has not been decremented yet
 	slots := s.meta.ShardSlots()
 	sort.Sort(byVal(slots))
 
@@ -451,49 +453,17 @@ func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 		}
 	}
 
-	// each element has in Slots the number of _taken_ slots
-	takenSlots, err := s.ShardSize()
+	// each element Val is the shard size in bytes
+	shardSizes, err := s.ShardSize()
 	if err != nil {
 		return nil, 0, err
 	}
 
 	// sorting them will make the first element the largest shard and the last
 	// element the smallest shard; pick the smallest
-	sort.Sort(byVal(takenSlots))
-	fallback = takenSlots[len(takenSlots)-1].Shard
+	sort.Sort(byVal(shardSizes))
 
-	return freeShards, fallback, nil
-}
-
-// probabilisticNextShard returns a next shard to write to
-// using a weighted probability
-func probabilisticNextShard(slots []ShardInfo) (shard uint8, err error) {
-	var sum, movingSum int64
-
-	intervalString := ""
-	for _, v := range slots {
-
-		// we need to consider the edge case where no free slots are available
-		// we still need to potentially insert 1 chunk and so if all shards have
-		// no empty offsets - they all must be considered equally as having at least
-		// one empty slot
-		intervalString += fmt.Sprintf("[%d %d) ", sum, sum+v.Val+1)
-		sum += v.Val + 1
-	}
-
-	// do some magic
-	magic := int64(rand.Intn(int(sum)))
-	intervalString = fmt.Sprintf("magic %d, intervals ", magic) + intervalString
-	fmt.Println(intervalString)
-	for _, v := range slots {
-		movingSum += v.Val + 1
-		if magic < movingSum {
-			// we've reached the shard with the correct id
-			return v.Shard, nil
-		}
-	}
-
-	return 0, ErrNextShard
+	return freeShards, shardSizes[len(shardSizes)-1].Shard, nil
 }
 
 type shard struct {

@@ -238,7 +238,6 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 
 // RunAll runs all available tests for a Store implementation.
 func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-
 	RunStd(t, newStoreFunc)
 
 	t.Run("next shard", func(t *testing.T) {
@@ -277,15 +276,15 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 		expectNext   []uint8
 		expFallback  uint8
 	}{
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 0},  // magic 10, intervals [0 1) [1 17) [17 18) [18 19)
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 0},  // magic 23, intervals [0 1) [1 32) [32 33) [33 34)
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 0},  // magic 44, intervals [0 1) [1 47) [47 48) [48 49)
-		{incFreeSlots: []int{0, 0, 0, 11}, expectNext: []uint8{1}, expFallback: 0},  // magic 14, intervals [0 1) [1 47) [47 48) [48 60)
-		{incFreeSlots: []int{10, 0, 0, 0}, expectNext: []uint8{1}, expFallback: 0},  // magic 48, intervals [0 11) [11 57) [57 58) [58 70)
-		{incFreeSlots: []int{100, 0, 0, 0}, expectNext: []uint8{3}, expFallback: 0}, // magic 164, intervals [0 111) [111 157) [157 158) [158 170)
-		{incFreeSlots: []int{0, 200, 0, 0}, expectNext: []uint8{1}, expFallback: 0}, // magic 305, intervals [0 111) [111 352) [352 353) [353 365)
-		{incFreeSlots: []int{0, 0, 302, 0}, expectNext: []uint8{2}, expFallback: 0}, // magic 400, intervals [0 111) [111 352) [352 622) [622 634)
-		{incFreeSlots: []int{0, 0, 0, 440}, expectNext: []uint8{3}, expFallback: 0}, // magic 637, intervals [0 111) [111 352) [352 622) [622 874)
+		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 3},
+		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 3},
+		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 3},
+		{incFreeSlots: []int{0, 0, 0, 11}, expectNext: []uint8{1, 3}, expFallback: 3},
+		{incFreeSlots: []int{10, 0, 0, 0}, expectNext: []uint8{1, 3, 0}, expFallback: 3},
+		{incFreeSlots: []int{100, 0, 0, 0}, expectNext: []uint8{0, 1, 3}, expFallback: 3},
+		{incFreeSlots: []int{0, 200, 0, 0}, expectNext: []uint8{1, 0, 3}, expFallback: 3},
+		{incFreeSlots: []int{0, 0, 202, 0}, expectNext: []uint8{1, 2, 0, 3}, expFallback: 3},
+		{incFreeSlots: []int{0, 0, 0, 203}, expectNext: []uint8{1, 3, 2, 0}, expFallback: 3},
 	} {
 		for shard, inc := range tc.incFreeSlots {
 			if inc == 0 {
@@ -321,16 +320,20 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 			}
 		}
 
-		//freeShards, fallback, err := db.NextShard()
-		//if err != nil {
-		//t.Fatal(err)
-		//}
+		freeShards, fallback, err := db.NextShard()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, shard := range freeShards {
+			if shard != tc.expectNext[i] {
+				t.Fatalf("expected next shard value to be %d but got %d", tc.expectNext[i], shard)
+			}
+		}
 
-		//if shard != tc.expectNext {
-		//t.Fatalf("expected next shard value to be %d but got %d", tc.expectNext, shard)
-		//}
+		if tc.expFallback != fallback {
+			t.Fatalf("expected fallback value to be %d but got %d", tc.expFallback, fallback)
+		}
 	}
-
 }
 
 // RunStoreOptions define parameters for Store test function.

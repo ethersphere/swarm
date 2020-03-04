@@ -132,7 +132,7 @@ func TestFreeSlotCounter(t *testing.T) {
 	}
 }
 
-func TestIssue1(t *testing.T) {
+func xTestIssue1(t *testing.T) {
 	path, err := ioutil.TempDir("", "swarm-fcds-")
 	if err != nil {
 		t.Fatal(err)

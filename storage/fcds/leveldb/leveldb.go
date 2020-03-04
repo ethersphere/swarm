@@ -54,17 +54,17 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 	if err != nil {
 		// key doesn't exist since this is a new db
 		// write an empty set into it
-		b, err := encodeFreeSlots(ms.free)
-		if err != nil {
-			panic(err)
-			return nil, err
-		}
+		//b, err := encodeFreeSlots(ms.free)
+		//if err != nil {
+		//panic(err)
+		//return nil, err
+		//}
 
-		err = ms.db.Put(freeCountKey(), b, nil)
-		if err != nil {
-			panic(err)
-			return nil, err
-		}
+		//err = ms.db.Put(freeCountKey(), b, nil)
+		//if err != nil {
+		//panic(err)
+		//return nil, err
+		//}
 	} else {
 
 		ms.free, err = decodeFreeSlots(data)
@@ -116,11 +116,11 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	if !zero {
 		s.free[m.Shard]--
 	}
-	b, err := encodeFreeSlots(s.free)
-	if err != nil {
-		return err
-	}
-	batch.Put(freeCountKey(), b)
+	//b, err := encodeFreeSlots(s.free)
+	//if err != nil {
+	//return err
+	//}
+	//batch.Put(freeCountKey(), b)
 
 	err = s.db.Write(batch, nil)
 	if err != nil {
@@ -144,11 +144,11 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.free[shard]++
-	b, err := encodeFreeSlots(s.free)
-	if err != nil {
-		return err
-	}
-	batch.Put(freeCountKey(), b)
+	//b, err := encodeFreeSlots(s.free)
+	//if err != nil {
+	//return err
+	//}
+	//batch.Put(freeCountKey(), b)
 	batch.Delete(chunkKey(addr))
 
 	err = s.db.Write(batch, nil)
