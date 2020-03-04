@@ -325,7 +325,7 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 			}
 		}
 
-		shard, err := db.NextShard()
+		shard, _, err := db.NextShard()
 		if err != nil {
 			t.Fatal(err)
 		}

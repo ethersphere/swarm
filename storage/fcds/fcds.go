@@ -41,7 +41,7 @@ type Storer interface {
 	Has(addr chunk.Address) (yes bool, err error)
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
-	NextShard() (shard uint8, err error)
+	NextShard() (shard uint8, hasfree bool, err error)
 	ShardSize() (slots []ShardSlot, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
@@ -180,7 +180,8 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 }
 
 // Put stores chunk data.
-func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
+// Returns the shard number into which the chunk was added.
+func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	if err := s.protect(); err != nil {
 		return 0, err
 	}
@@ -200,20 +201,39 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	shard, err = s.NextShard()
-	if err != nil {
-		return 0, err
+	var offset int64
+	var shardId uint8
+	var reclaimed bool
+	var sh shard
+
+	done := false
+	for !done {
+		id, hasfree, err := s.NextShard()
+		if err != nil {
+			return 0, err
+		}
+
+		sh = s.shards[id]
+
+		sh.mu.Lock()
+
+		offset, reclaimed, err = s.getOffset(id)
+		if err != nil {
+			return 0, err
+		}
+
+		if hasfree {
+			if offset >= 0 {
+				shardId = id
+				break
+			}
+			sh.mu.Unlock()
+		} else {
+			shardId = id
+			break
+		}
 	}
-
-	sh := s.shards[shard]
-
-	sh.mu.Lock()
 	defer sh.mu.Unlock()
-
-	offset, reclaimed, err := s.getOffset(shard)
-	if err != nil {
-		return 0, err
-	}
 
 	if reclaimed {
 		metrics.GetOrRegisterCounter("fcds.put.reclaimed", nil).Inc(1)
@@ -239,16 +259,16 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 	if reclaimed && s.freeCache != nil {
-		s.freeCache.remove(shard, offset)
+		s.freeCache.remove(shardId, offset)
 	}
 
-	err = s.meta.Set(addr, shard, reclaimed, &Meta{
+	err = s.meta.Set(addr, shardId, reclaimed, &Meta{
 		Size:   uint16(size),
 		Offset: offset,
-		Shard:  shard,
+		Shard:  shardId,
 	})
 
-	return shard, err
+	return shardId, err
 }
 
 // getOffset returns an offset where chunk data can be written to
@@ -414,7 +434,7 @@ func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
 
 // NextShard gets the next shard to write to.
 // Uses weighted probability to choose the next shard.
-func (s *Store) NextShard() (shard uint8, err error) {
+func (s *Store) NextShard() (shard uint8, hasfree bool, err error) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
 
@@ -424,12 +444,12 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	// if the first shard has free slots - return it
 	// otherwise, just balance them out
 	if slots[0].Slots > 0 {
-		return slots[0].Shard, nil
+		return slots[0].Shard, true, nil
 	}
 	// each element has in Slots the number of _taken_ slots
 	slots, err = s.ShardSize()
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 
 	// sorting them will make the first element the largest shard and the last
@@ -437,7 +457,7 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	sort.Sort(bySlots(slots))
 	shard = slots[len(slots)-1].Shard
 
-	return shard, nil
+	return shard, false, nil
 }
 
 // probabilisticNextShard returns a next shard to write to
