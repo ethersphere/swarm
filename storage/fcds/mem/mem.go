@@ -95,7 +95,7 @@ func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
 	for i := uint8(0); i < fcds.ShardCount; i++ {
 		slot := fcds.ShardInfo{Shard: i}
 		if slots, ok := s.free[i]; ok {
-			slot.Slots = int64(len(slots))
+			slot.Val = int64(len(slots))
 		}
 		freeSlots[i] = slot
 	}
