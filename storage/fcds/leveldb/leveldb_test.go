@@ -177,11 +177,13 @@ func TestIssue1(t *testing.T) {
 					// every tenth chunk write again after some time
 					go func() {
 						time.Sleep(10 * time.Second)
-						fmt.Printf(".")
 						_, err := s.Put(ch)
 						if err != nil {
 							panic(err)
 						}
+						mu.Lock()
+						addrs[ch.Address().String()] = struct{}{}
+						mu.Unlock()
 					}()
 				}
 				mu.Lock()
@@ -197,7 +199,6 @@ func TestIssue1(t *testing.T) {
 					if err != nil {
 						panic(err)
 					}
-					fmt.Println()
 					fmt.Println("r", i, size, len(addrs))
 				}
 				mu.Unlock()
@@ -222,7 +223,6 @@ func TestIssue1(t *testing.T) {
 					addr = chunk.Address(b)
 					break
 				}
-				fmt.Printf("-")
 				if err := s.Delete(addr); err != nil {
 					panic(err)
 				}
