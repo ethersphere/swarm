@@ -51,7 +51,7 @@ type Storer interface {
 var _ Storer = new(Store)
 
 // Number of files that store chunk data.
-var ShardCount = uint8(4)
+var ShardCount = uint8(16)
 
 // ErrStoreClosed is returned if store is already closed.
 var (
