@@ -105,9 +105,13 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	if err != nil {
 		return err
 	}
-	batch.Put(chunkKey(addr), meta)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+
+	if _, err := s.Get(addr); err != nil {
+		batch.Put(chunkKey(addr), meta)
+	}
+
 	zero := s.free[m.Shard] == 0
 	if !zero {
 		s.free[m.Shard]--

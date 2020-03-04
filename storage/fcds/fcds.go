@@ -51,7 +51,7 @@ type Storer interface {
 var _ Storer = new(Store)
 
 // Number of files that store chunk data.
-var ShardCount = uint8(32)
+var ShardCount = uint8(4)
 
 // ErrStoreClosed is returned if store is already closed.
 var (
@@ -121,8 +121,8 @@ func (s *Store) ShardSize() (slots []ShardSlot, err error) {
 		if err != nil {
 			return nil, err
 		}
-
-		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size()}
+		ii := i
+		slots[i] = ShardSlot{Shard: uint8(ii), Slots: fs.Size()}
 	}
 
 	return slots, nil
@@ -191,6 +191,10 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 	defer s.unprotect()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	m, err := s.getMeta(ch.Address())
+	if err == nil {
+		return m.Shard, nil
+	}
 	addr := ch.Address()
 	data := ch.Data()
 
@@ -207,6 +211,8 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 
+	//fmt.Println("putting chunk address to shard", ch.Address().String(), "shard", shard)
+
 	sh := s.shards[shard]
 
 	sh.mu.Lock()
@@ -217,21 +223,31 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 
+	//fmt.Println("got free offset on shard for chunk", "offset", offset, "shard", shard)
+
 	if reclaimed {
-		metrics.GetOrRegisterCounter("fcds.put.reclaimed").Inc(1)
+		metrics.GetOrRegisterCounter("fcds.put.reclaimed", nil).Inc(1)
 	}
 
 	if offset < 0 {
-		metrics.GetOrRegisterCounter("fcds.put.append").Inc(1)
+		metrics.GetOrRegisterCounter("fcds.put.append", nil).Inc(1)
 		// no free offsets found,
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
+		fmt.Printf("*")
 	} else {
-		metrics.GetOrRegisterCounter("fcds.put.offset").Inc(1)
+		metrics.GetOrRegisterCounter("fcds.put.offset", nil).Inc(1)
 		// seek to the offset position
 		// to replace the chunk data at that position
-		_, err = sh.f.Seek(offset, io.SeekStart)
+		oo, err := sh.f.Seek(offset, io.SeekStart)
+		fmt.Printf("|")
+		if err != nil {
+			return 0, err
+		}
+		if oo != offset {
+			panic("wtf")
+		}
 	}
 	if err != nil {
 		return 0, err
@@ -302,6 +318,8 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	if s.freeCache != nil {
 		s.freeCache.set(m.Shard, m.Offset)
 	}
+	//fmt.Println("freeing chunk offset", addr.String(), "shard", m.Shard, "offset", m.Offset)
+
 	err = s.meta.Remove(addr, m.Shard)
 	if err != nil {
 		metrics.GetOrRegisterCounter("fcds.delete.fail", nil).Inc(1)
@@ -421,7 +439,7 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
 
-	slots := s.meta.ShardSlots()
+	slots, hasSomething := s.meta.ShardSlots()
 	sort.Sort(bySlots(slots))
 
 	// if the first shard has free slots - return it
@@ -429,7 +447,9 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	if slots[0].Slots > 0 {
 		return slots[0].Shard, nil
 	}
-
+	if hasSomething {
+		panic("shoudnt")
+	}
 	// each element has in Slots the number of _taken_ slots
 	slots, err = s.ShardSize()
 	if err != nil {

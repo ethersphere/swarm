@@ -48,7 +48,7 @@ func NewMetaStore() (s *MetaStore) {
 // Get returns chunk meta information.
 func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	s.mu.RLock()
-	m = s.meta[string(addr)]
+	m = s.meta[addr.String()]
 	s.mu.RUnlock()
 	if m == nil {
 		return nil, chunk.ErrChunkNotFound
@@ -61,10 +61,16 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 // already deleted chunk, not appended to the end of the file.
 func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
 	s.mu.Lock()
-	if reclaimed {
-		delete(s.free[shard], m.Offset)
+
+	if _, ok := s.meta[addr.String()]; ok {
+		panic("wtf")
 	}
-	s.meta[string(addr)] = m
+
+	//if reclaimed {
+	sh := s.free[shard]
+	delete(sh, m.Offset)
+	//}
+	s.meta[addr.String()] = m
 	s.mu.Unlock()
 	return nil
 }
@@ -73,32 +79,42 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := string(addr)
+	key := addr.String()
 	m := s.meta[key]
 	if m == nil {
+		panic("eeek")
 		return chunk.ErrChunkNotFound
 	}
+	v := len(s.free[shard])
 	s.free[shard][m.Offset] = struct{}{}
+	vv := len(s.free[shard])
+	if v == vv {
+		panic(0)
+	}
 	delete(s.meta, key)
 	return nil
 }
 
 // ShardSlots gives back a slice of ShardSlot items that represent the number
 // of free slots inside each shard.
-func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot) {
+func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot, hasSomething bool) {
 	freeSlots = make([]fcds.ShardSlot, fcds.ShardCount)
 
 	s.mu.RLock()
 	for i := uint8(0); i < fcds.ShardCount; i++ {
-		slot := fcds.ShardSlot{Shard: i}
-		if slots, ok := s.free[i]; ok {
+		ii := i
+		slot := fcds.ShardSlot{Shard: ii}
+		if slots, ok := s.free[ii]; ok {
+			if len(slots) > 0 {
+				hasSomething = true
+			}
 			slot.Slots = int64(len(slots))
 		}
-		freeSlots[i] = slot
+		freeSlots[ii] = slot
 	}
 	s.mu.RUnlock()
 
-	return freeSlots
+	return freeSlots, hasSomething
 }
 
 // FreeOffset returns an offset that can be reclaimed by

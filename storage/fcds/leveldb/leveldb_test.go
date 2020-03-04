@@ -17,10 +17,16 @@
 package leveldb_test
 
 import (
+	"encoding/hex"
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/chunk"
 	chunktesting "github.com/ethersphere/swarm/chunk/testing"
@@ -124,4 +130,127 @@ func TestFreeSlotCounter(t *testing.T) {
 	if uint8(count) != fcds.ShardCount {
 		t.Fatalf("did not process enough shards: got %d but expected %d", count, fcds.ShardCount)
 	}
+}
+
+func TestIssue1(t *testing.T) {
+	path, err := ioutil.TempDir("", "swarm-fcds-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(path)
+
+	metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, cleanup := test.NewFCDSStore(t, path, metaStore)
+	defer cleanup()
+
+	var wg sync.WaitGroup
+
+	var mu sync.Mutex
+	addrs := make(map[string]struct{})
+	trigger := make(chan struct{}, 1)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		sem := make(chan struct{}, 100)
+
+		for i := 0; i < 100000; i++ {
+			i := i
+			sem <- struct{}{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+				ch := chunktesting.GenerateTestRandomChunk()
+				_, err := s.Put(ch)
+				if err != nil {
+					panic(err)
+				}
+				if i%10 == 0 {
+					// THIS IS CAUSING THE ISSUE
+					// every tenth chunk write again after some time
+					go func() {
+						time.Sleep(10 * time.Second)
+						fmt.Printf(".")
+						_, err := s.Put(ch)
+						if err != nil {
+							panic(err)
+						}
+					}()
+				}
+				mu.Lock()
+				addrs[ch.Address().String()] = struct{}{}
+				if len(addrs) >= 1000 {
+					select {
+					case trigger <- struct{}{}:
+					default:
+					}
+				}
+				if i%100 == 0 {
+					size, err := dirSize(path)
+					if err != nil {
+						panic(err)
+					}
+					fmt.Println()
+					fmt.Println("r", i, size, len(addrs))
+				}
+				mu.Unlock()
+				time.Sleep(time.Duration(rand.Intn(300)) * time.Millisecond)
+			}()
+		}
+	}()
+
+	//wg.Add(1)
+	go func() {
+		//defer wg.Done()
+
+		for range trigger {
+			for {
+				var addr chunk.Address
+				mu.Lock()
+				for a := range addrs {
+					b, err := hex.DecodeString(a)
+					if err != nil {
+						panic(err)
+					}
+					addr = chunk.Address(b)
+					break
+				}
+				fmt.Printf("-")
+				if err := s.Delete(addr); err != nil {
+					panic(err)
+				}
+				delete(addrs, addr.String())
+				if len(addrs) <= 900 {
+					mu.Unlock()
+					break
+				}
+				mu.Unlock()
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	// wait some time before removing the temp dir
+	time.Sleep(time.Minute)
+}
+
+func dirSize(path string) (size int64, err error) {
+	err = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".db") {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
