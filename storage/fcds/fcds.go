@@ -211,8 +211,6 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		return 0, err
 	}
 
-	//fmt.Println("putting chunk address to shard", ch.Address().String(), "shard", shard)
-
 	sh := s.shards[shard]
 
 	sh.mu.Lock()
@@ -222,8 +220,6 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 	if err != nil {
 		return 0, err
 	}
-
-	//fmt.Println("got free offset on shard for chunk", "offset", offset, "shard", shard)
 
 	if reclaimed {
 		metrics.GetOrRegisterCounter("fcds.put.reclaimed", nil).Inc(1)
@@ -235,13 +231,13 @@ func (s *Store) Put(ch chunk.Chunk) (shard uint8, err error) {
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
-		fmt.Printf("*")
+		//fmt.Printf("*")
 	} else {
 		metrics.GetOrRegisterCounter("fcds.put.offset", nil).Inc(1)
 		// seek to the offset position
 		// to replace the chunk data at that position
 		oo, err := sh.f.Seek(offset, io.SeekStart)
-		fmt.Printf("|")
+		//fmt.Printf("|")
 		if err != nil {
 			return 0, err
 		}
@@ -318,7 +314,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	if s.freeCache != nil {
 		s.freeCache.set(m.Shard, m.Offset)
 	}
-	//fmt.Println("freeing chunk offset", addr.String(), "shard", m.Shard, "offset", m.Offset)
 
 	err = s.meta.Remove(addr, m.Shard)
 	if err != nil {

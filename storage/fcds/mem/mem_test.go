@@ -55,8 +55,6 @@ func TestIssue1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println(path)
-
 	metaStore := mem.NewMetaStore()
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +94,7 @@ func TestIssue1(t *testing.T) {
 					// every tenth chunk write again after some time
 					go func() {
 						time.Sleep(10 * time.Second)
-						fmt.Printf(".")
+						//fmt.Printf(".")
 						mu.Lock()
 						_, err := s.Put(ch)
 						if err != nil {
@@ -119,7 +117,6 @@ func TestIssue1(t *testing.T) {
 					if err != nil {
 						panic(err)
 					}
-					fmt.Println()
 					fmt.Println("r", i, size, len(addrs))
 				}
 				mu.Unlock()
@@ -144,9 +141,8 @@ func TestIssue1(t *testing.T) {
 					addr = chunk.Address(b)
 					break
 				}
-				fmt.Printf("-")
+				//fmt.Printf("-")
 				if err := s.Delete(addr); err != nil {
-					fmt.Println(err)
 					panic(err)
 				}
 				delete(addrs, addr.String())
