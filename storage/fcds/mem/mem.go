@@ -93,12 +93,11 @@ func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot) {
 
 	s.mu.RLock()
 	for i := uint8(0); i < fcds.ShardCount; i++ {
-		ii := i
-		slot := fcds.ShardSlot{Shard: ii}
-		if slots, ok := s.free[ii]; ok {
+		slot := fcds.ShardSlot{Shard: i}
+		if slots, ok := s.free[i]; ok {
 			slot.Slots = int64(len(slots))
 		}
-		freeSlots[ii] = slot
+		freeSlots[i] = slot
 	}
 	s.mu.RUnlock()
 
