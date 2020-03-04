@@ -42,7 +42,7 @@ type Storer interface {
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
 	NextShard() (freeShard []uint8, fallback uint8, err error)
-	ShardSize() (slots []ShardSlot, err error)
+	ShardSize() (slots []ShardInfo, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
 	Close() (err error)
@@ -114,15 +114,15 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 	return s, nil
 }
 
-func (s *Store) ShardSize() (slots []ShardSlot, err error) {
-	slots = make([]ShardSlot, len(s.shards))
+func (s *Store) ShardSize() (slots []ShardInfo, err error) {
+	slots = make([]ShardInfo, len(s.shards))
 	for i, sh := range s.shards {
 		i := i
 		fs, err := sh.f.Stat()
 		if err != nil {
 			return nil, err
 		}
-		slots[i] = ShardSlot{Shard: uint8(i), Slots: fs.Size()}
+		slots[i] = ShardInfo{Shard: uint8(i), Val: fs.Size()}
 	}
 
 	return slots, nil
@@ -281,9 +281,9 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 // and a flag if the offset is reclaimed from a previously removed chunk.
 // If offset is less then 0, no free offsets are available.
 func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
-	//if !s.shardHasFreeOffsets(shard) {
-	//return -1, false, nil
-	//}
+	if !s.shardHasFreeOffsets(shard) {
+		return -1, false, nil
+	}
 
 	offset = -1
 	if s.freeCache != nil {
@@ -443,10 +443,10 @@ func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
 	slots := s.meta.ShardSlots()
-	sort.Sort(bySlots(slots))
+	sort.Sort(byVal(slots))
 
 	for _, v := range slots {
-		if v.Slots > 0 {
+		if v.Val > 0 {
 			freeShards = append(freeShards, v.Shard)
 		}
 	}
@@ -459,7 +459,7 @@ func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 
 	// sorting them will make the first element the largest shard and the last
 	// element the smallest shard; pick the smallest
-	sort.Sort(bySlots(takenSlots))
+	sort.Sort(byVal(takenSlots))
 	fallback = takenSlots[len(takenSlots)-1].Shard
 
 	return freeShards, fallback, nil
@@ -467,7 +467,7 @@ func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 
 // probabilisticNextShard returns a next shard to write to
 // using a weighted probability
-func probabilisticNextShard(slots []ShardSlot) (shard uint8, err error) {
+func probabilisticNextShard(slots []ShardInfo) (shard uint8, err error) {
 	var sum, movingSum int64
 
 	intervalString := ""
@@ -477,8 +477,8 @@ func probabilisticNextShard(slots []ShardSlot) (shard uint8, err error) {
 		// we still need to potentially insert 1 chunk and so if all shards have
 		// no empty offsets - they all must be considered equally as having at least
 		// one empty slot
-		intervalString += fmt.Sprintf("[%d %d) ", sum, sum+v.Slots+1)
-		sum += v.Slots + 1
+		intervalString += fmt.Sprintf("[%d %d) ", sum, sum+v.Val+1)
+		sum += v.Val + 1
 	}
 
 	// do some magic
@@ -486,7 +486,7 @@ func probabilisticNextShard(slots []ShardSlot) (shard uint8, err error) {
 	intervalString = fmt.Sprintf("magic %d, intervals ", magic) + intervalString
 	fmt.Println(intervalString)
 	for _, v := range slots {
-		movingSum += v.Slots + 1
+		movingSum += v.Val + 1
 		if magic < movingSum {
 			// we've reached the shard with the correct id
 			return v.Shard, nil

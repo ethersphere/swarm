@@ -32,7 +32,7 @@ type MetaStore interface {
 	Count() (int, error)
 	Iterate(func(chunk.Address, *Meta) (stop bool, err error)) error
 	FreeOffset(shard uint8) (int64, error)
-	ShardSlots() []ShardSlot
+	ShardSlots() []ShardInfo
 	Close() error
 }
 
@@ -67,15 +67,15 @@ func (m *Meta) String() (s string) {
 	return fmt.Sprintf("{Size: %v, Offset %v}", m.Size, m.Offset)
 }
 
-type bySlots []ShardSlot
+type byVal []ShardInfo
 
-func (a bySlots) Len() int           { return len(a) }
-func (a bySlots) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a bySlots) Less(i, j int) bool { return a[j].Slots < a[i].Slots }
+func (a byVal) Len() int           { return len(a) }
+func (a byVal) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byVal) Less(i, j int) bool { return a[j].Val < a[i].Val }
 
-// ShardSlot contains data about free number of slots
+// ShardInfo contains data about free number of slots
 // in a shard.
-type ShardSlot struct {
+type ShardInfo struct {
 	Shard uint8
-	Slots int64
+	Val   int64
 }

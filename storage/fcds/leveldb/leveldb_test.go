@@ -122,8 +122,8 @@ func TestFreeSlotCounter(t *testing.T) {
 		if freeSlots2[i].Shard != v.Shard {
 			t.Fatalf("expected shard %d to be %d but got %d", i, v.Shard, freeSlots[2].Shard)
 		}
-		if freeSlots2[i].Slots != v.Slots {
-			t.Fatalf("expected shard %d to have %d free slots but got %d", i, v.Slots, freeSlots[2].Slots)
+		if freeSlots2[i].Val != v.Val {
+			t.Fatalf("expected shard %d to have %d free slots but got %d", i, v.Val, freeSlots[2].Val)
 		}
 	}
 

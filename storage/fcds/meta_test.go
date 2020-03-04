@@ -64,7 +64,7 @@ func TestShardSlotSort(t *testing.T) {
 		s := make([]ShardSlot, len(tc.freeSlots))
 
 		for i, v := range tc.freeSlots {
-			s[i] = ShardSlot{Shard: uint8(i), Slots: int64(v)}
+			s[i] = ShardInfo{Shard: uint8(i), Info: int64(v)}
 		}
 		sort.Sort(bySlots(s))
 

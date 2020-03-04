@@ -160,17 +160,17 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	return nil
 }
 
-// ShardSlots gives back a slice of ShardSlot items that represent the number
-// of free slots inside each shard.
-func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardSlot) {
-	freeSlots = make([]fcds.ShardSlot, fcds.ShardCount)
+// ShardSlots gives back a slice of ShardInfo items that represent the number
+// of free slots inside each shard, value is in number of chunks, not bytes.
+func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
+	freeSlots = make([]fcds.ShardInfo, fcds.ShardCount)
 
 	s.mtx.RLock()
 	for i := uint8(0); i < fcds.ShardCount; i++ {
 		i := i
-		slot := fcds.ShardSlot{Shard: i}
+		slot := fcds.ShardInfo{Shard: i}
 		if slots, ok := s.free[i]; ok {
-			slot.Slots = slots
+			slot.Val = slots
 		}
 		freeSlots[i] = slot
 	}
