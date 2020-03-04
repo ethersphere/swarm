@@ -133,6 +133,7 @@ func TestIssue1(t *testing.T) {
 		for range trigger {
 			for {
 				var addr chunk.Address
+				mu.Lock()
 				for a := range addrs {
 					b, err := hex.DecodeString(a)
 					if err != nil {
@@ -144,7 +145,6 @@ func TestIssue1(t *testing.T) {
 				if err := s.Delete(addr); err != nil {
 					panic(err)
 				}
-				mu.Lock()
 				delete(addrs, addr.String())
 				if len(addrs) <= 900 {
 					mu.Unlock()
