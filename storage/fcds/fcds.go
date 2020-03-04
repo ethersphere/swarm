@@ -206,8 +206,7 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	var reclaimed bool
 	var sh shard
 
-	done := false
-	for !done {
+	for {
 		id, hasfree, err := s.NextShard()
 		if err != nil {
 			return 0, err
