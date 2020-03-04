@@ -418,16 +418,13 @@ func (s *Store) NextShard() (shard uint8, err error) {
 	// warning: if multiple writers call this at the same time we might get the same shard again and again
 	// because the free slot value has not been decremented yet(!)
 
-	slots, hasSomething := s.meta.ShardSlots()
+	slots := s.meta.ShardSlots()
 	sort.Sort(bySlots(slots))
 
 	// if the first shard has free slots - return it
 	// otherwise, just balance them out
 	if slots[0].Slots > 0 {
 		return slots[0].Shard, nil
-	}
-	if hasSomething {
-		panic("shoudnt")
 	}
 	// each element has in Slots the number of _taken_ slots
 	slots, err = s.ShardSize()
