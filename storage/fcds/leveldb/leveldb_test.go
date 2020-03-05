@@ -160,7 +160,7 @@ func TestIssue1(t *testing.T) {
 
 		sem := make(chan struct{}, 100)
 
-		for i := 0; i < 100000; i++ {
+		for i := 0; i < 50000; i++ {
 			i := i
 			sem <- struct{}{}
 			wg.Add(1)

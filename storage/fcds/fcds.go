@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,6 +41,7 @@ type Storer interface {
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
 	NextShard() (freeShard []uint8, fallback uint8, err error)
+	NextShardLocked() (freeShard shard, s uint8, offset int64, reclaimed bool, err error)
 	ShardSize() (slots []ShardInfo, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
@@ -202,46 +202,11 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	var offset int64
-	var shardId uint8
-	var reclaimed bool
-	var sh shard
-	found := false
-	free, fallback, err := s.NextShard()
+	sh, shardId, offset, reclaimed, err := s.NextShardLocked()
 	if err != nil {
 		return 0, err
 	}
 
-	for len(free) > 0 {
-		elem := rand.Intn(len(free))
-		id := free[elem]
-
-		free = append(free[:elem], free[elem+1:]...)
-		sh = s.shards[id]
-		sh.mu.Lock()
-
-		offset, reclaimed, err = s.getOffset(id)
-		if err != nil {
-			return 0, err
-		}
-
-		if offset >= 0 {
-			shardId = id
-			found = true
-			break
-		} else {
-			sh.mu.Unlock()
-		}
-	}
-	if !found {
-		sh = s.shards[fallback]
-		shardId = fallback
-		sh.mu.Lock()
-		offset, reclaimed, err = s.getOffset(fallback)
-		if err != nil {
-			return 0, err
-		}
-	}
 	defer sh.mu.Unlock()
 
 	if reclaimed {
@@ -319,6 +284,8 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	}
 
 	s.markShardWithFreeOffsets(m.Shard, true)
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
 	mu := s.shards[m.Shard].mu
 	mu.Lock()
@@ -468,6 +435,55 @@ func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 	sort.Sort(byVal(shardSizes))
 
 	return freeShards, shardSizes[len(shardSizes)-1].Shard, nil
+}
+
+func (s *Store) NextShardLocked() (sh shard, id uint8, offset int64, reclaimed bool, err error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	// multiple writers that call this at the same time will get the same shard again and again
+	// because the free slot value has not been decremented yet
+	slots := s.meta.ShardSlots()
+	sort.Sort(byVal(slots))
+	if slots[0].Val > 0 {
+		fmt.Println("slots", slots[0].Val, slots)
+		i := slots[0].Shard
+		sh = s.shards[i]
+		sh.mu.Lock()
+		offset, reclaimed, err = s.getOffset(i)
+		if err != nil {
+			sh.mu.Unlock()
+			return sh, 0, 0, false, err
+		}
+
+		if offset < 0 {
+			panic("got no offset but should have")
+			s.shards[i].mu.Unlock()
+		} else {
+			return sh, i, offset, reclaimed, nil
+		}
+	}
+
+	// each element Val is the shard size in bytes
+	shardSizes, err := s.ShardSize()
+	if err != nil {
+		return sh, 0, 0, false, err
+	}
+
+	// sorting them will make the first element the largest shard and the last
+	// element the smallest shard; pick the smallest
+	sort.Sort(byVal(shardSizes))
+
+	fallback := shardSizes[len(shardSizes)-1].Shard
+	sh = s.shards[fallback]
+	sh.mu.Lock()
+	offset, reclaimed, err = s.getOffset(fallback)
+	if err != nil {
+		sh.mu.Unlock()
+		return sh, 0, 0, false, err
+	}
+
+	return sh, fallback, offset, reclaimed, nil
+
 }
 
 type shard struct {
