@@ -60,7 +60,7 @@ func verifySocChunk(t *testing.T, refId []byte, pubKey string, span uint64, data
 		t.Fatalf("soc address length is not 32 bytes")
 	}
 
-	if len(data) !=  (SOCDataHeaderSize + len(data)) {
+	if len(socData) !=  (DataHeaderSize + len(data)) {
 		t.Fatalf("soc payload length is not 128 + actual data length")
 	}
 
@@ -70,21 +70,19 @@ func verifySocChunk(t *testing.T, refId []byte, pubKey string, span uint64, data
 	}
 
 
-	// verify signatures
-
-	//extractedSignature := make([]byte, SignatureSize)
-	//extractedSignature = data[ReferenceIdSize:ReferenceIdSize+SignatureSize]
-	//dataUsedForSignature, err := getIdAndDataHash(span, data, refId)
-	//if err != nil {
-	//	t.Fatalf("could not get the data used for signature")
-	//}
-	//extractedPublicKey, err := crypto.SigToPub(dataUsedForSignature, extractedSignature)
-	//extractedPublicKey.
-	//
-	//if pkey.Public() == extractedPublicKey {
-	//	t.Fatalf("error in signature")
-	//}
-
+	// verify signatures and public key
+	extractedSignature := make([]byte, SignatureSize)
+	extractedSignature = data[ReferenceIdSize:ReferenceIdSize+SignatureSize]
+	dataUsedForSignature, err := getIdAndDataHash(span, data, refId)
+	if err != nil {
+		t.Fatalf("could not get the data used for signature")
+	}
+	extractedPublicKey, err := crypto.SigToPub(dataUsedForSignature, extractedSignature)
+	extractedPublicKeyBytes := crypto.FromECDSAPub(extractedPublicKey)
+	pubkey := crypto.FromECDSAPub(&pkey.PublicKey)
+	if bytes.Equal(pubkey,extractedPublicKeyBytes) {
+		t.Fatalf("error in signature")
+	}
 }
 
 

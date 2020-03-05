@@ -29,13 +29,13 @@ const (
 	PayloadHash       = "BMT"
 	PublicKeySize     = 32  //
 	ReferenceIdSize   = 32   //
-	SOCDataHeaderSize = 128 // // ID  + Signature + padding + span  = 128
+	DataHeaderSize    = 128 // // ID  + Signature + padding + span  = 128
 	SignatureSize     = 65
 	PaddingSize       = 23
 	SpanLength        = 8
 )
 
-
+// NewSOCAddress creates the address portion of the Single Owner Chunk
 func NewSOCAddress(ownerKey string, refId []byte) ([]byte, error) {
 	hasher := storage.MakeHashFunc(DefaultHash)
 	hasher().Reset()
@@ -50,18 +50,18 @@ func NewSOCAddress(ownerKey string, refId []byte) ([]byte, error) {
 	return hasher().Sum(nil), nil
 }
 
+//NewSOCData creates the chunk payload required for a Single Owner Chunk
 func NewSOCData(refId []byte, span uint64, data []byte, pkey *ecdsa.PrivateKey) ([]byte, error) {
 	if data == nil {
 		return nil, errors.New("Invalid data length")
 	}
 
 	//(32)  +   (65)    +  (23)   + (8)   =  128
-	socData := make([]byte, SOCDataHeaderSize+len(data))
+	socData := make([]byte, DataHeaderSize+len(data))
 
 	// 1 - Add refId
 	copy(socData[:ReferenceIdSize], refId)
-
-
+	
 	// 2 - Add Signature
 	idAndDataHash, err := getIdAndDataHash(span, data, refId)
 	if err != nil {
@@ -81,7 +81,7 @@ func NewSOCData(refId []byte, span uint64, data []byte, pkey *ecdsa.PrivateKey) 
 	binary.BigEndian.PutUint64(socData[ReferenceIdSize+SignatureSize+PaddingSize:], span)
 
 	// 5 - data
-	copy(socData[:SOCDataHeaderSize], data)
+	copy(socData[:DataHeaderSize], data)
 
 	return socData, nil
 }
