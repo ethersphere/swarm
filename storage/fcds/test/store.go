@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"sync"
@@ -292,12 +291,7 @@ func RunIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fun
 func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.Store, clean func()) {
 	t.Helper()
 
-	path, err := ioutil.TempDir("", "swarm-fcds")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	s, err = fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(!*noCacheFlag))
+	s, err := fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(!*noCacheFlag))
 	if err != nil {
 		os.RemoveAll(path)
 		t.Fatal(err)
