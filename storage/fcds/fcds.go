@@ -176,6 +176,15 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
+	_, err = s.getMeta(addr)
+	switch err {
+	case chunk.ErrChunkNotFound:
+	case nil:
+		return nil
+	default:
+		return err
+	}
+
 	offset, reclaimed, err := s.getOffset(shard)
 	if err != nil {
 		return err
