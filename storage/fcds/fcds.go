@@ -142,14 +142,7 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	_, err = s.getMeta(addr)
-	if err != nil {
-		if err == chunk.ErrChunkNotFound {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+	return s.meta.Has(addr)
 }
 
 // Put stores chunk data.
@@ -176,13 +169,12 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
-	_, err = s.getMeta(addr)
-	switch err {
-	case chunk.ErrChunkNotFound:
-	case nil:
-		return nil
-	default:
+	has, err := s.meta.Has(addr)
+	if err != nil {
 		return err
+	}
+	if has {
+		return nil
 	}
 
 	offset, reclaimed, err := s.getOffset(shard)
