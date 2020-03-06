@@ -254,7 +254,8 @@ func newSharedBackendSwaps(t *testing.T, nodeCount int) (*swapSimulationParams, 
 		txqueue := chain.NewTxQueue(stores[i], "chain", &chain.DefaultTxSchedulerBackend{
 			Backend: testBackend,
 		}, owner.privateKey)
-		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory, txqueue)
+		swapLogger := newSwapLogger(defParams.LogPath, defParams.LogLevel, defParams.BaseAddrs)
+		params.swaps[i] = newSwapInstance(stores[i], owner, testBackend, 10, defParams, factory, txqueue, swapLogger)
 	}
 
 	params.backend = testBackend

@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package swap
 
 import (
@@ -45,6 +46,7 @@ type CashoutProcessor struct {
 	backend              chain.Backend     // ethereum backend to use
 	txScheduler          chain.TxScheduler // transaction queue to use
 	cashoutResultHandler CashoutResultHandler
+	Logger               Logger
 }
 
 // CashoutResultHandler is an interface which accepts CashChequeResults from a CashoutProcessor
@@ -55,11 +57,12 @@ type CashoutResultHandler interface {
 }
 
 // newCashoutProcessor creates a new instance of CashoutProcessor
-func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, privateKey *ecdsa.PrivateKey, cashoutResultHandler CashoutResultHandler) *CashoutProcessor {
+func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, privateKey *ecdsa.PrivateKey, cashoutResultHandler CashoutResultHandler, logger Logger) *CashoutProcessor {
 	c := &CashoutProcessor{
 		backend:              backend,
 		txScheduler:          txScheduler,
 		cashoutResultHandler: cashoutResultHandler,
+		Logger:               logger,
 	}
 
 	txScheduler.SetHandlers(CashoutRequestHandlerID, &chain.TxRequestHandlers{
@@ -77,7 +80,7 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 
 			receipt := &notification.Receipt
 			if receipt.Status == 0 {
-				swapLog.Error("cheque cashing transaction reverted", "tx", receipt.TxHash)
+				c.Logger.Error("cheque cashing transaction reverted", "tx", receipt.TxHash)
 				return nil
 			}
 
@@ -93,39 +96,39 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 func (c *CashoutProcessor) submitCheque(ctx context.Context, request *CashoutRequest) {
 	expectedPayout, transactionCosts, err := c.estimatePayout(ctx, &request.Cheque)
 	if err != nil {
-		swapLog.Error("could not estimate payout", "error", err)
+		c.Logger.Error(CashChequeAction, "could not estimate payout", "error", err)
 		return
 	}
 
 	costsMultiplier := uint256.FromUint64(2)
 	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
-		swapLog.Error("overflow in transaction fee", "error", err)
+		c.Logger.Error(CashChequeAction, "overflow in transaction fee", "error", err)
 		return
 	}
 
 	// do a payout transaction if we get more than 2 times the gas costs
 	if expectedPayout.Cmp(costThreshold) == 1 {
-		swapLog.Info("queueing cashout", "cheque", &request.Cheque)
+		c.Logger.Info(CashChequeAction, "queueing cashout", "cheque", &request.Cheque)
 
 		cheque := request.Cheque
 		otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
 		if err != nil {
-			swapLog.Error("could not get swap instance", "error", err)
+			c.Logger.Error(CashChequeAction, "could not get swap instance", "error", err)
 			return
 		}
 
 		txRequest, err := otherSwap.CashChequeBeneficiaryRequest(cheque.Beneficiary, cheque.CumulativePayout, cheque.Signature)
 		if err != nil {
 			metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-			swapLog.Error("cashing cheque:", "error", err)
+			c.Logger.Error(CashChequeAction, "cashing cheque:", "error", err)
 			return
 		}
 
 		_, err = c.txScheduler.ScheduleRequest(CashoutRequestHandlerID, *txRequest, request)
 		if err != nil {
 			metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-			swapLog.Error("cashing cheque:", "error", err)
+			c.Logger.Error(CashChequeAction, "cashing cheque:", "error", err)
 		}
 	}
 }

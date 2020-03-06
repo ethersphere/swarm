@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/uint256"
@@ -160,7 +161,8 @@ func TestCashCheque(t *testing.T) {
 	defer transactionQueue.Stop()
 
 	cashoutHandler := newTestCashoutResultHandler(nil)
-	cashoutProcessor := newCashoutProcessor(transactionQueue, backend, ownerKey, cashoutHandler)
+	swapLog := newSwapLogger(emptyLogPath, DefaultSwapLogLevel, &network.BzzAddr{OAddr: ownerAddress.Bytes(), UAddr: ownerAddress.Bytes()})
+	cashoutProcessor := newCashoutProcessor(transactionQueue, backend, ownerKey, cashoutHandler, swapLog)
 	payout := uint256.FromUint64(CashChequeBeneficiaryTransactionCost*2 + 1)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
@@ -209,7 +211,8 @@ func TestEstimatePayout(t *testing.T) {
 	transactionQueue.Start()
 	defer transactionQueue.Stop()
 
-	cashoutProcessor := newCashoutProcessor(transactionQueue, backend, ownerKey, &testCashoutResultHandler{})
+	swapLog := newSwapLogger(emptyLogPath, DefaultSwapLogLevel, &network.BzzAddr{OAddr: ownerAddress.Bytes(), UAddr: ownerAddress.Bytes()})
+	cashoutProcessor := newCashoutProcessor(transactionQueue, backend, ownerKey, &testCashoutResultHandler{}, swapLog)
 
 	payout := uint256.FromUint64(42)
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
