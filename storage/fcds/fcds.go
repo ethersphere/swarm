@@ -112,14 +112,15 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	}
 	defer s.unprotect()
 
-	sh := s.shards[getShard(addr)]
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
-
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return nil, err
 	}
+
+	sh := s.shards[getShard(addr)]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
 	data := make([]byte, m.Size)
 	n, err := sh.f.ReadAt(data, m.Offset)
 	if err != nil && err != io.EOF {
@@ -137,10 +138,6 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 		return false, err
 	}
 	defer s.unprotect()
-
-	mu := s.shards[getShard(addr)].mu
-	mu.Lock()
-	defer mu.Unlock()
 
 	return s.meta.Has(addr)
 }
@@ -166,9 +163,6 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	shard := getShard(addr)
 	sh := s.shards[shard]
 
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
-
 	has, err := s.meta.Has(addr)
 	if err != nil {
 		return err
@@ -176,6 +170,9 @@ func (s *Store) Put(ch chunk.Chunk) (err error) {
 	if has {
 		return nil
 	}
+
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
 	offset, reclaimed, err := s.getOffset(shard)
 	if err != nil {
@@ -244,10 +241,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 
 	shard := getShard(addr)
 	s.markShardWithFreeOffsets(shard, true)
-
-	mu := s.shards[shard].mu
-	mu.Lock()
-	defer mu.Unlock()
 
 	if s.freeCache != nil {
 		m, err := s.getMeta(addr)
