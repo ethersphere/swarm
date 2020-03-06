@@ -46,7 +46,7 @@ type CashoutProcessor struct {
 	backend              chain.Backend     // ethereum backend to use
 	txScheduler          chain.TxScheduler // transaction queue to use
 	cashoutResultHandler CashoutResultHandler
-	Logger               Logger
+	logger               Logger
 }
 
 // CashoutResultHandler is an interface which accepts CashChequeResults from a CashoutProcessor
@@ -62,7 +62,7 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 		backend:              backend,
 		txScheduler:          txScheduler,
 		cashoutResultHandler: cashoutResultHandler,
-		Logger:               logger,
+		logger:               logger,
 	}
 
 	txScheduler.SetHandlers(CashoutRequestHandlerID, &chain.TxRequestHandlers{
@@ -80,7 +80,7 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 
 			receipt := &notification.Receipt
 			if receipt.Status == 0 {
-				c.Logger.Error("cheque cashing transaction reverted", "tx", receipt.TxHash)
+				c.logger.Error("cheque cashing transaction reverted", "tx", receipt.TxHash)
 				return nil
 			}
 
@@ -96,39 +96,39 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 func (c *CashoutProcessor) submitCheque(ctx context.Context, request *CashoutRequest) {
 	expectedPayout, transactionCosts, err := c.estimatePayout(ctx, &request.Cheque)
 	if err != nil {
-		c.Logger.Error(CashChequeAction, "could not estimate payout", "error", err)
+		c.logger.Error(CashChequeAction, "could not estimate payout", "error", err)
 		return
 	}
 
 	costsMultiplier := uint256.FromUint64(2)
 	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
 	if err != nil {
-		c.Logger.Error(CashChequeAction, "overflow in transaction fee", "error", err)
+		c.logger.Error(CashChequeAction, "overflow in transaction fee", "error", err)
 		return
 	}
 
 	// do a payout transaction if we get more than 2 times the gas costs
 	if expectedPayout.Cmp(costThreshold) == 1 {
-		c.Logger.Info(CashChequeAction, "queueing cashout", "cheque", &request.Cheque)
+		c.logger.Info(CashChequeAction, "queueing cashout", "cheque", &request.Cheque)
 
 		cheque := request.Cheque
 		otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
 		if err != nil {
-			c.Logger.Error(CashChequeAction, "could not get swap instance", "error", err)
+			c.logger.Error(CashChequeAction, "could not get swap instance", "error", err)
 			return
 		}
 
 		txRequest, err := otherSwap.CashChequeBeneficiaryRequest(cheque.Beneficiary, cheque.CumulativePayout, cheque.Signature)
 		if err != nil {
 			metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-			c.Logger.Error(CashChequeAction, "cashing cheque:", "error", err)
+			c.logger.Error(CashChequeAction, "cashing cheque:", "error", err)
 			return
 		}
 
 		_, err = c.txScheduler.ScheduleRequest(CashoutRequestHandlerID, *txRequest, request)
 		if err != nil {
 			metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
-			c.Logger.Error(CashChequeAction, "cashing cheque:", "error", err)
+			c.logger.Error(CashChequeAction, "cashing cheque:", "error", err)
 		}
 	}
 }
