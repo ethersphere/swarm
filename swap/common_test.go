@@ -81,7 +81,8 @@ func newDefaultParams(t *testing.T) *Params {
 	}
 	return &Params{
 		BaseAddrs:           network.NewBzzAddr(baseKey, nil),
-		LogPath:             "",
+		LogPath:             emptyLogPath,
+		LogLevel:            DefaultSwapLogLevel, //Info level
 		PaymentThreshold:    int64(DefaultPaymentThreshold),
 		DisconnectThreshold: int64(DefaultDisconnectThreshold),
 	}
@@ -100,12 +101,12 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	}
 	log.Debug("creating simulated backend")
 	owner := createOwner(key)
-	swapLog = newSwapLogger(params.LogPath, params.BaseAddrs)
+	swapLogger := newSwapLogger(params.LogPath, params.LogLevel, params.BaseAddrs)
 	factory, err := cswap.FactoryAt(backend.factoryAddress, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory)
+	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory, swapLogger)
 	return swap, dir
 }
 
