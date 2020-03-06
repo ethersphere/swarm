@@ -14,8 +14,8 @@ import (
 
 /*
 	PersistentQueue represents a queue stored in a state store
-  Items are enqueued by writing them to the state store with the timestamp as prefix and a nonce in case two items get queued at the same time
-  It provides a (blocking) Next function to wait for a new item to be available. Only a single call to Next may be active at any time
+	Items are enqueued by writing them to the state store with the timestamp as prefix and a nonce so that two items can be queued at the same time
+	It provides a (blocking) Next function to wait for a new item to be available. Only a single call to Next may be active at any time
 	To allow atomic operations with other state store operations all functions only write to batches instead of writing to the store directly
 	The user must ensure that all functions (except Next) are called with the same lock held which is provided externally so multiple queues can use the same
 	The queue provides no dequeue function. Instead an item must be deleted by its key

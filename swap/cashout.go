@@ -45,7 +45,6 @@ type CashoutProcessor struct {
 	backend              chain.Backend     // ethereum backend to use
 	txScheduler          chain.TxScheduler // transaction queue to use
 	cashoutResultHandler CashoutResultHandler
-	cashoutDone          chan *CashoutRequest
 }
 
 // CashoutResultHandler is an interface which accepts CashChequeResults from a CashoutProcessor
@@ -105,7 +104,7 @@ func (c *CashoutProcessor) submitCheque(ctx context.Context, request *CashoutReq
 		return
 	}
 
-	// do a payout transaction if we get 2 times the gas costs
+	// do a payout transaction if we get more than 2 times the gas costs
 	if expectedPayout.Cmp(costThreshold) == 1 {
 		swapLog.Info("queueing cashout", "cheque", &request.Cheque)
 

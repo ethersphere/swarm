@@ -721,6 +721,7 @@ func (s *Swap) saveChequebook(chequebook common.Address) error {
 	return s.store.Put(connectedChequebookKey, chequebook)
 }
 
+// HandleCashoutResult is the handler function called by the CashoutProcessor in cae of a successful cashing transaction
 func (s *Swap) HandleCashoutResult(request *CashoutRequest, result *contract.CashChequeResult, receipt *types.Receipt) error {
 	metrics.GetOrRegisterCounter("swap.cheques.cashed.honey", nil).Inc(result.TotalPayout.Int64())
 

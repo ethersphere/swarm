@@ -196,7 +196,7 @@ func (txq *TxQueue) Start() {
 	go func() {
 		defer txq.wg.Done()
 		// run the actual loop
-		err := txq.loop()
+		err := txq.processQueue()
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error("transaction queue terminated with an error", "queue", txq.prefix, "error", err)
 		}
@@ -357,7 +357,7 @@ func (txq *TxQueue) notify(batch *state.StoreBatch, id uint64, handlerID string,
 	return triggerNotifyQueue, nil
 }
 
-// waitForNextRequestLegacy waits for the next request and sets it as the active request
+// waitForNextRequest waits for the next request and sets it as the active request
 // the txqueue lock must not be held
 func (txq *TxQueue) waitForNextRequest() (requestMetadata *txRequestData, err error) {
 	var id uint64
@@ -610,10 +610,10 @@ func (txq *TxQueue) waitForActiveTransaction(requestMetadata *txRequestData) err
 	return txq.finalizeRequestConfirmed(requestMetadata, *receipt)
 }
 
-// loop is the main transaction processing function of the TxQueue
+// processQueue is the main transaction processing function of the TxQueue
 // first it checks if there already is an active request. If so it processes this first
 // then it will take requests from the queue in a loop and execute those
-func (txq *TxQueue) loop() error {
+func (txq *TxQueue) processQueue() error {
 	err := txq.processActiveRequest()
 	if err != nil {
 		return err

@@ -83,7 +83,7 @@ type simpleContract struct {
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
-// It assumes that there is an existing contract instance at the given address, or an error is returned
+// It assumes that there is an existing contract instance at the given address
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
 func InstanceAt(address common.Address, backend chain.Backend) (Contract, error) {
 	instance, err := contract.NewERC20SimpleSwap(address, backend)
@@ -146,7 +146,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 // CashChequeBeneficiaryRequest generates a TxRequest for a CashChequeBeneficiary transaction
 func (s simpleContract) CashChequeBeneficiaryRequest(beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*chain.TxRequest, error) {
 	payout := cumulativePayout.Value()
-	data, err := s.abi.Pack("cashChequeBeneficiary", beneficiary, big.NewInt(0).Set(&payout), ownerSig)
+	callData, err := s.abi.Pack("cashChequeBeneficiary", beneficiary, big.NewInt(0).Set(&payout), ownerSig)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (s simpleContract) CashChequeBeneficiaryRequest(beneficiary common.Address,
 		To:       s.address,
 		Value:    big.NewInt(0),
 		GasLimit: 200000,
-		Data:     data,
+		Data:     callData,
 	}, nil
 }
 

@@ -181,6 +181,7 @@ func TestCashCheque(t *testing.T) {
 	select {
 	case <-cashoutHandler.cashChequeDone:
 	case <-time.After(5 * time.Second):
+		t.Fatal("cheque was not cashed within timeout")
 	}
 
 	paidOut, err := chequebook.PaidOut(nil, ownerAddress)

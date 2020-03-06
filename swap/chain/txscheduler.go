@@ -54,6 +54,7 @@ func (request *TxRequest) ToSignedTx(nonce uint64, opts *bind.TransactOpts) (*ty
 // TxScheduler represents a central sender for all transactions from a single ethereum account
 // its purpose is to ensure there are no nonce issues and that transaction initiators are notified of the result
 // notifications are guaranteed to happen even across node restarts and disconnects from the ethereum backend
+// the account managed by this scheduler must not be used from anywhere else
 type TxScheduler interface {
 	// SetHandlers registers the handlers for the given handlerID
 	// This starts the delivery of notifications for this handlerID
@@ -61,7 +62,7 @@ type TxScheduler interface {
 	// ScheduleRequest adds a new request to be processed
 	// The request is assigned an id which is returned
 	ScheduleRequest(handlerID string, request TxRequest, requestExtraData interface{}) (id uint64, err error)
-	// GetExtraData load the serialized extra data for this request from disk and tries to decode it
+	// GetExtraData loads the serialized extra data for this request from disk and tries to decode it
 	GetExtraData(id uint64, request interface{}) error
 	// GetRequestState gets the state the request is currently in
 	GetRequestState(id uint64) (TxRequestState, error)
@@ -79,6 +80,7 @@ type TxScheduler interface {
 // If the handler returns an error the notification will be resent in the future (including across restarts)
 type TxRequestHandlers struct {
 	// NotifyReceipt is called the first time a receipt is observed for a transaction
+	// This happens the first time a transaction was included in a block
 	NotifyReceipt func(ctx context.Context, id uint64, notification *TxReceiptNotification) error
 	// NotifyPending is called after the transaction was successfully sent to the backend
 	NotifyPending func(ctx context.Context, id uint64, notification *TxPendingNotification) error
