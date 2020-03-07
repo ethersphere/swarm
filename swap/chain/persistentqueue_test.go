@@ -16,7 +16,7 @@ func TestNewPersistentQueue(t *testing.T) {
 	store := state.NewInmemoryStore()
 	defer store.Close()
 
-	queue := NewPersistentQueue(store, "testq")
+	queue := newPersistentQueue(store, "testq")
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -32,7 +32,7 @@ func TestNewPersistentQueue(t *testing.T) {
 		for i := 0; i < count; i++ {
 			func() { // this is a function so we can use defer with the right scope
 				var value uint64
-				key, err := queue.Next(ctx, &value, &lock)
+				key, err := queue.next(ctx, &value, &lock)
 				if err != nil {
 					errout = fmt.Errorf("failed to get next item: %v", err)
 					return
@@ -50,7 +50,7 @@ func TestNewPersistentQueue(t *testing.T) {
 				}
 
 				batch := new(state.StoreBatch)
-				queue.Delete(batch, key)
+				queue.delete(batch, key)
 				err = store.WriteBatch(batch)
 				if err != nil {
 					errout = fmt.Errorf("could not write batch: %v", err)
@@ -69,7 +69,7 @@ func TestNewPersistentQueue(t *testing.T) {
 
 				var value = uint64(i)
 				batch := new(state.StoreBatch)
-				_, trigger, err := queue.Queue(batch, value)
+				_, trigger, err := queue.queue(batch, value)
 				if err != nil {
 					errout = fmt.Errorf("failed to queue item: %v", err)
 					return

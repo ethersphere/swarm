@@ -13,7 +13,7 @@ import (
 )
 
 /*
-	PersistentQueue represents a queue stored in a state store
+	persistentQueue represents a queue stored in a state store
 	Items are enqueued by writing them to the state store with the timestamp as prefix and a nonce so that two items can be queued at the same time
 	It provides a (blocking) Next function to wait for a new item to be available. Only a single call to Next may be active at any time
 	To allow atomic operations with other state store operations all functions only write to batches instead of writing to the store directly
@@ -21,8 +21,8 @@ import (
 	The queue provides no dequeue function. Instead an item must be deleted by its key
 */
 
-// PersistentQueue represents a queue stored in a state store
-type PersistentQueue struct {
+// persistentQueue represents a queue stored in a state store
+type persistentQueue struct {
 	store   state.Store   // the store backing this queue
 	prefix  string        // the prefix for the keys for this queue
 	trigger chan struct{} // channel to notify the queue that a new item is available
@@ -30,8 +30,8 @@ type PersistentQueue struct {
 }
 
 // NewPersistentQueue creates a structure to interact with a queue with the given prefix
-func NewPersistentQueue(store state.Store, prefix string) *PersistentQueue {
-	return &PersistentQueue{
+func newPersistentQueue(store state.Store, prefix string) *persistentQueue {
+	return &persistentQueue{
 		store:   store,
 		prefix:  prefix,
 		trigger: make(chan struct{}, 1),
@@ -39,11 +39,11 @@ func NewPersistentQueue(store state.Store, prefix string) *PersistentQueue {
 	}
 }
 
-// Queue puts the necessary database operations for enqueueing a new item into the supplied batch
+// queue puts the necessary database operations for enqueueing a new item into the supplied batch
 // It returns the generated key and a trigger function which must be called once the batch was successfully written
 // This only returns an error if the encoding fails which is an unrecoverable error
 // A lock must be held and kept until after the trigger function was called or the batch write failed
-func (pq *PersistentQueue) Queue(b *state.StoreBatch, v interface{}) (key string, trigger func(), err error) {
+func (pq *persistentQueue) queue(b *state.StoreBatch, v interface{}) (key string, trigger func(), err error) {
 	// the nonce guarantees keys don't collide if multiple transactions are queued in the same second
 	pq.nonce++
 	key = fmt.Sprintf("%d_%08d", time.Now().Unix(), pq.nonce)
@@ -59,10 +59,10 @@ func (pq *PersistentQueue) Queue(b *state.StoreBatch, v interface{}) (key string
 	}, nil
 }
 
-// Peek looks at the next item in the queue
+// peek looks at the next item in the queue
 // The error returned is either a decode or an io error
 // A lock must be held when this is called and should be held afterwards to prevent the item from being removed while processing
-func (pq *PersistentQueue) Peek(i interface{}) (key string, exists bool, err error) {
+func (pq *persistentQueue) peek(i interface{}) (key string, exists bool, err error) {
 	err = pq.store.Iterate(pq.prefix, func(k, data []byte) (bool, error) {
 		key = string(k)
 		unmarshaler, ok := i.(encoding.BinaryUnmarshaler)
@@ -85,9 +85,9 @@ func (pq *PersistentQueue) Peek(i interface{}) (key string, exists bool, err err
 // No lock should not be held when this is called. Only a single call to next may be active at any time
 // If the the key is not "", the value exists, the supplied lock was acquired and must be released by the caller after processing the item
 // The supplied lock should be the same that is used for the other functions
-func (pq *PersistentQueue) Next(ctx context.Context, i interface{}, lock *sync.Mutex) (key string, err error) {
+func (pq *persistentQueue) next(ctx context.Context, i interface{}, lock *sync.Mutex) (key string, err error) {
 	lock.Lock()
-	key, exists, err := pq.Peek(i)
+	key, exists, err := pq.peek(i)
 	if exists {
 		return key, nil
 	}
@@ -100,7 +100,7 @@ func (pq *PersistentQueue) Next(ctx context.Context, i interface{}, lock *sync.M
 		select {
 		case <-pq.trigger:
 			lock.Lock()
-			key, exists, err = pq.Peek(i)
+			key, exists, err = pq.peek(i)
 			if exists {
 				return key, nil
 			}
@@ -116,6 +116,6 @@ func (pq *PersistentQueue) Next(ctx context.Context, i interface{}, lock *sync.M
 
 // Delete adds the batch operation to delete the queue element with the given key
 // A lock must be held when the batch is written
-func (pq *PersistentQueue) Delete(b *state.StoreBatch, key string) {
+func (pq *persistentQueue) delete(b *state.StoreBatch, key string) {
 	b.Delete(pq.prefix + key)
 }

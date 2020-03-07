@@ -29,9 +29,9 @@ type TxQueue struct {
 
 	store              state.Store                   // state store to use as the db backend
 	prefix             string                        // all keys in the state store are prefixed with this
-	requestQueue       *PersistentQueue              // queue for all future requests
+	requestQueue       *persistentQueue              // queue for all future requests
 	handlers           map[string]*TxRequestHandlers // map from handlerIDs to their registered handlers
-	notificationQueues map[string]*PersistentQueue   // map from handlerIDs to the notification queue of that handler
+	notificationQueues map[string]*persistentQueue   // map from handlerIDs to the notification queue of that handler
 
 	backend    TxSchedulerBackend // ethereum backend to use
 	privateKey *ecdsa.PrivateKey  // private key used to sign transactions
@@ -67,10 +67,10 @@ func NewTxQueue(store state.Store, prefix string, backend TxSchedulerBackend, pr
 		store:              store,
 		prefix:             prefix,
 		handlers:           make(map[string]*TxRequestHandlers),
-		notificationQueues: make(map[string]*PersistentQueue),
+		notificationQueues: make(map[string]*persistentQueue),
 		backend:            backend,
 		privateKey:         privateKey,
-		requestQueue:       NewPersistentQueue(store, prefix+"_requestQueue_"),
+		requestQueue:       newPersistentQueue(store, prefix+"_requestQueue_"),
 		errorChan:          make(chan error, 1),
 	}
 	// we create the context here already because handlers can be set before the queue starts
@@ -152,7 +152,7 @@ func (txq *TxQueue) ScheduleRequest(handlerID string, request TxRequest, extraDa
 		return 0, err
 	}
 
-	_, triggerQueue, err := txq.requestQueue.Queue(batch, id)
+	_, triggerQueue, err := txq.requestQueue.queue(batch, id)
 	if err != nil {
 		return 0, err
 	}
@@ -234,10 +234,10 @@ func (txq *TxQueue) Stop() {
 // getNotificationQueue gets the notification queue for a handler
 // it initializes the struct if it does not yet exist
 // the TxQueue lock must be held
-func (txq *TxQueue) getNotificationQueue(handlerID string) *PersistentQueue {
+func (txq *TxQueue) getNotificationQueue(handlerID string) *persistentQueue {
 	queue, ok := txq.notificationQueues[handlerID]
 	if !ok {
-		queue = NewPersistentQueue(txq.store, fmt.Sprintf("%s_notify_%s", txq.prefix, handlerID))
+		queue = newPersistentQueue(txq.store, fmt.Sprintf("%s_notify_%s", txq.prefix, handlerID))
 		txq.notificationQueues[handlerID] = queue
 	}
 	return queue
@@ -263,7 +263,7 @@ func (txq *TxQueue) SetHandlers(handlerID string, handlers *TxRequestHandlers) e
 		for {
 			var item notificationQueueItem
 			// get the next notification item
-			key, err := notifyQueue.Next(txq.ctx, &item, &txq.lock)
+			key, err := notifyQueue.next(txq.ctx, &item, &txq.lock)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					txq.stopWithError(fmt.Errorf("could not read from notification queue: %v", err))
@@ -325,7 +325,7 @@ func (txq *TxQueue) SetHandlers(handlerID string, handlers *TxRequestHandlers) e
 			// once the notification was handled delete it from the queue
 			txq.lock.Lock()
 			batch := new(state.StoreBatch)
-			notifyQueue.Delete(batch, key)
+			notifyQueue.delete(batch, key)
 			err = txq.store.WriteBatch(batch)
 			txq.lock.Unlock()
 			if err != nil {
@@ -342,7 +342,7 @@ func (txq *TxQueue) SetHandlers(handlerID string, handlers *TxRequestHandlers) e
 // must be called with the txqueue lock held
 func (txq *TxQueue) notify(batch *state.StoreBatch, id uint64, handlerID string, notificationType string, notification interface{}) (triggerNotifyQueue func(), err error) {
 	notifyQueue := txq.getNotificationQueue(handlerID)
-	key, triggerNotifyQueue, err := notifyQueue.Queue(batch, &notificationQueueItem{
+	key, triggerNotifyQueue, err := notifyQueue.queue(batch, &notificationQueueItem{
 		RequestID:        id,
 		NotificationType: notificationType,
 	})
@@ -362,7 +362,7 @@ func (txq *TxQueue) notify(batch *state.StoreBatch, id uint64, handlerID string,
 func (txq *TxQueue) waitForNextRequest() (requestMetadata *txRequestData, err error) {
 	var id uint64
 	// get the id of the next request in the queue
-	key, err := txq.requestQueue.Next(txq.ctx, &id, &txq.lock)
+	key, err := txq.requestQueue.next(txq.ctx, &id, &txq.lock)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func (txq *TxQueue) waitForNextRequest() (requestMetadata *txRequestData, err er
 	if err != nil {
 		return nil, fmt.Errorf("could not put id write into batch: %v", err)
 	}
-	txq.requestQueue.Delete(batch, key)
+	txq.requestQueue.delete(batch, key)
 
 	err = txq.store.WriteBatch(batch)
 	if err != nil {
