@@ -1110,13 +1110,9 @@ func TestPeerVerifyChequeAgainstLast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	actualAmount, err := newCheque.verifyChequeAgainstLast(oldCheque, increase)
+	err = newCheque.verifyChequeAgainstLast(oldCheque, increase)
 	if err != nil {
 		t.Fatalf("failed to verify cheque compared to old cheque: %v", err)
-	}
-
-	if !actualAmount.Equals(increase) {
-		t.Fatalf("wrong actual amount, expected: %v, was: %v", increase, actualAmount)
 	}
 }
 
@@ -1128,7 +1124,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	oldCheque := newTestCheque()
 	newCheque := newTestCheque()
 
-	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
+	if err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with same amount")
 	}
 
@@ -1145,7 +1141,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
+	if err := newCheque.verifyChequeAgainstLast(oldCheque, increase); err == nil {
 		t.Fatal("accepted a cheque with unexpected amount")
 	}
 }
@@ -1159,13 +1155,9 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	cheque := newTestCheque()
 	cheque.Signature, _ = cheque.Sign(ownerKey)
 
-	actualAmount, err := swap.processAndVerifyCheque(cheque, peer)
+	err := swap.processAndVerifyCheque(cheque, peer)
 	if err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
-	}
-
-	if !actualAmount.Equals(cheque.CumulativePayout) {
-		t.Fatalf("computed wrong actual amount: was %v, expected: %v", actualAmount, cheque.CumulativePayout)
 	}
 
 	// verify that it was indeed saved
@@ -1182,7 +1174,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
-	if _, err := swap.processAndVerifyCheque(otherCheque, peer); err != nil {
+	if err := swap.processAndVerifyCheque(otherCheque, peer); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
@@ -1205,7 +1197,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	cheque.Beneficiary = ownerAddress
 	cheque.Signature, _ = cheque.Sign(ownerKey)
 
-	if _, err := swap.processAndVerifyCheque(cheque, peer); err == nil {
+	if err := swap.processAndVerifyCheque(cheque, peer); err == nil {
 		t.Fatal("accecpted an invalid cheque as first cheque")
 	}
 
@@ -1213,7 +1205,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	cheque = newTestCheque()
 	cheque.Signature, _ = cheque.Sign(ownerKey)
 
-	if _, err := swap.processAndVerifyCheque(cheque, peer); err != nil {
+	if err := swap.processAndVerifyCheque(cheque, peer); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
 	}
 
@@ -1230,7 +1222,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	otherCheque.Honey = 10
 	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
-	if _, err := swap.processAndVerifyCheque(otherCheque, peer); err == nil {
+	if err := swap.processAndVerifyCheque(otherCheque, peer); err == nil {
 		t.Fatal("accepted a cheque with lower amount")
 	}
 
