@@ -202,11 +202,15 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	sh, shardId, offset, reclaimed, err := s.NextShardLocked()
+	//sh, shardId, offset, reclaimed, err := s.NextShardLocked()
+	shardId, offset, cancel, err := s.so()
 	if err != nil {
 		return 0, err
 	}
+	reclaimed := offset >= 0
 
+	sh := s.shards[shardId]
+	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
 	if reclaimed {
@@ -226,10 +230,12 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 		_, err = sh.f.Seek(offset, io.SeekStart)
 	}
 	if err != nil {
+		cancel()
 		return 0, err
 	}
 
 	if _, err = sh.f.Write(section); err != nil {
+		cancel()
 		return 0, err
 	}
 	if reclaimed && s.freeCache != nil {
@@ -241,6 +247,9 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 		Offset: offset,
 		Shard:  shardId,
 	})
+	if err != nil {
+		cancel()
+	}
 
 	return shardId, err
 }
@@ -435,6 +444,31 @@ func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
 	sort.Sort(byVal(shardSizes))
 
 	return freeShards, shardSizes[len(shardSizes)-1].Shard, nil
+}
+
+func (s *Store) so() (uint8, int64, func(), error) {
+
+	shard, offset, cancel, err := s.meta.FastFreeOffset()
+	if err != nil {
+		return 0, 0, func() {}, err
+	}
+
+	if offset >= 0 {
+		return shard, offset, cancel, nil
+	}
+
+	// each element Val is the shard size in bytes
+	shardSizes, err := s.ShardSize()
+	if err != nil {
+		return 0, 0, func() {}, err
+	}
+
+	// sorting them will make the first element the largest shard and the last
+	// element the smallest shard; pick the smallest
+	sort.Sort(byVal(shardSizes))
+
+	return shardSizes[len(shardSizes)-1].Shard, -1, func() {}, nil
+
 }
 
 func (s *Store) NextShardLocked() (sh shard, id uint8, offset int64, reclaimed bool, err error) {

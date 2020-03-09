@@ -166,6 +166,29 @@ func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
 	return offset, nil
 }
 
+func (s *MetaStore) FastFreeOffset() (uint8, int64, func(), error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	for shard, offsets := range s.free {
+		for o, _ := range offsets {
+			if o >= 0 {
+				o := o
+				// remove from free offset map, create cancel func, return all values
+				delete(offsets, o)
+				return shard, o, func() {
+					s.mtx.Lock()
+					defer s.mtx.Unlock()
+					s.free[shard][o] = struct{}{}
+				}, nil
+			} else {
+				panic("wtf")
+			}
+		}
+	}
+	return 0, -1, func() {}, nil
+}
+
 // Count returns a number of chunks in MetaStore.
 // This operation is slow for larger numbers of chunks.
 func (s *MetaStore) Count() (count int, err error) {

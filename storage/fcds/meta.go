@@ -32,6 +32,7 @@ type MetaStore interface {
 	Count() (int, error)
 	Iterate(func(chunk.Address, *Meta) (stop bool, err error)) error
 	FreeOffset(shard uint8) (int64, error)
+	FastFreeOffset() (uint8, int64, func(), error)
 	ShardSlots() []ShardInfo
 	Close() error
 }

@@ -30,7 +30,7 @@ var _ fcds.MetaStore = new(MetaStore)
 type MetaStore struct {
 	meta map[string]*fcds.Meta
 	free map[uint8]map[int64]struct{}
-	mu   sync.RWMutex
+	mtx  sync.RWMutex
 }
 
 // NewMetaStore constructs a new MetaStore.
@@ -47,9 +47,9 @@ func NewMetaStore() (s *MetaStore) {
 
 // Get returns chunk meta information.
 func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
-	s.mu.RLock()
+	s.mtx.RLock()
 	m = s.meta[string(addr)]
-	s.mu.RUnlock()
+	s.mtx.RUnlock()
 	if m == nil {
 		return nil, chunk.ErrChunkNotFound
 	}
@@ -60,21 +60,21 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 // Reclaimed flag denotes that the chunk is at the place of
 // already deleted chunk, not appended to the end of the file.
 func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds.Meta) (err error) {
-	s.mu.Lock()
+	s.mtx.Lock()
 
 	if reclaimed {
 		delete(s.free[shard], m.Offset)
 	}
 
 	s.meta[string(addr)] = m
-	s.mu.Unlock()
+	s.mtx.Unlock()
 	return nil
 }
 
 // Remove removes chunk meta information from the shard.
 func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	key := string(addr)
 	m := s.meta[key]
 	if m == nil {
@@ -91,7 +91,7 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
 	freeSlots = make([]fcds.ShardInfo, fcds.ShardCount)
 
-	s.mu.RLock()
+	s.mtx.RLock()
 	for i := uint8(0); i < fcds.ShardCount; i++ {
 		slot := fcds.ShardInfo{Shard: i}
 		if slots, ok := s.free[i]; ok {
@@ -99,7 +99,7 @@ func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
 		}
 		freeSlots[i] = slot
 	}
-	s.mu.RUnlock()
+	s.mtx.RUnlock()
 
 	return freeSlots
 }
@@ -108,27 +108,53 @@ func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
 // another chunk. If the returned value is less then 0
 // there are no free offset at this shard.
 func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
-	s.mu.RLock()
+	s.mtx.RLock()
 	for o := range s.free[shard] {
-		s.mu.RUnlock()
+		s.mtx.RUnlock()
 		return o, nil
 	}
-	s.mu.RUnlock()
+	s.mtx.RUnlock()
 	return -1, nil
+}
+
+func (s *MetaStore) FastFreeOffset() (uint8, int64, func(), error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	for shard, offsets := range s.free {
+		for o, _ := range offsets {
+			if o >= 0 {
+				o := o
+				// remove from free offset map, create cancel func, return all values
+
+				delete(offsets, o)
+				return shard, o, func() {
+					s.mtx.Lock()
+					defer s.mtx.Unlock()
+					s.free[shard][o] = struct{}{}
+				}, nil
+			} else {
+				panic("wtf mem")
+			}
+		}
+	}
+
+	return 0, -1, func() {}, nil
+
 }
 
 // Count returns a number of chunks in MetaStore.
 func (s *MetaStore) Count() (count int, err error) {
-	s.mu.RLock()
+	s.mtx.RLock()
 	count = len(s.meta)
-	s.mu.RUnlock()
+	s.mtx.RUnlock()
 	return count, nil
 }
 
 // Iterate iterates over all chunk meta information.
 func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err error)) (err error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 	for a, m := range s.meta {
 		stop, err := fn(chunk.Address(a), m)
 		if err != nil {
