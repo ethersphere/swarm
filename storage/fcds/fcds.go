@@ -41,7 +41,7 @@ type Storer interface {
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
 	NextShard() (freeShard []uint8, fallback uint8, err error)
-	NextShardLocked() (freeShard shard, s uint8, offset int64, reclaimed bool, err error)
+	//NextShardLocked() (freeShard shard, s uint8, offset int64, reclaimed bool, err error)
 	ShardSize() (slots []ShardInfo, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
