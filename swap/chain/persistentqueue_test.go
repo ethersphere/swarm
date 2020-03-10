@@ -69,7 +69,7 @@ func TestNewPersistentQueue(t *testing.T) {
 
 				var value = uint64(i)
 				batch := new(state.StoreBatch)
-				_, trigger, err := queue.queue(batch, value)
+				_, trigger, err := queue.enqueue(batch, value)
 				if err != nil {
 					errout = fmt.Errorf("failed to queue item: %v", err)
 					return

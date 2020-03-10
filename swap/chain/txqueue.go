@@ -152,7 +152,7 @@ func (txq *TxQueue) ScheduleRequest(handlerID string, request TxRequest, extraDa
 		return 0, err
 	}
 
-	_, triggerQueue, err := txq.requestQueue.queue(batch, id)
+	_, triggerQueue, err := txq.requestQueue.enqueue(batch, id)
 	if err != nil {
 		return 0, err
 	}
@@ -342,7 +342,7 @@ func (txq *TxQueue) SetHandlers(handlerID string, handlers *TxRequestHandlers) e
 // must be called with the txqueue lock held
 func (txq *TxQueue) notify(batch *state.StoreBatch, id uint64, handlerID string, notificationType string, notification interface{}) (triggerNotifyQueue func(), err error) {
 	notifyQueue := txq.getNotificationQueue(handlerID)
-	key, triggerNotifyQueue, err := notifyQueue.queue(batch, &notificationQueueItem{
+	key, triggerNotifyQueue, err := notifyQueue.enqueue(batch, &notificationQueueItem{
 		RequestID:        id,
 		NotificationType: notificationType,
 	})

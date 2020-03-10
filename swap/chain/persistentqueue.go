@@ -39,11 +39,11 @@ func newPersistentQueue(store state.Store, prefix string) *persistentQueue {
 	}
 }
 
-// queue puts the necessary database operations for enqueueing a new item into the supplied batch
+// enqueue puts the necessary database operations for enqueueing a new item into the supplied batch
 // It returns the generated key and a trigger function which must be called once the batch was successfully written
 // This only returns an error if the encoding fails which is an unrecoverable error
 // A lock must be held and kept until after the trigger function was called or the batch write failed
-func (pq *persistentQueue) queue(b *state.StoreBatch, v interface{}) (key string, trigger func(), err error) {
+func (pq *persistentQueue) enqueue(b *state.StoreBatch, v interface{}) (key string, trigger func(), err error) {
 	// the nonce guarantees keys don't collide if multiple transactions are queued in the same second
 	pq.nonce++
 	key = fmt.Sprintf("%d_%08d", time.Now().Unix(), pq.nonce)
