@@ -65,10 +65,11 @@ func (u *Uint256) Set(value big.Int) (*Uint256, error) {
 	return u, nil
 }
 
-// Copy sets the underlying value of u to a copy of the given Uint256 param, and returns the modified receiver struct
-func (u *Uint256) Copy(v *Uint256) *Uint256 {
-	u.value = *new(big.Int).Set(&v.value)
-	return u
+// Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
+func (u *Uint256) Copy() *Uint256 {
+	v := NewUint256()
+	v.value = *new(big.Int).Set(&u.value)
+	return v
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field

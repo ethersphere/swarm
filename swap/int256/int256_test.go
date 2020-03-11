@@ -134,7 +134,7 @@ func TestInt256Copy(t *testing.T) {
 	}
 
 	// copy picked value
-	c := NewInt256().Copy(v)
+	c := v.Copy()
 
 	if !c.Equals(v) {
 		t.Fatalf("copy of Int256 %v has an unequal value of %v", v, c)
