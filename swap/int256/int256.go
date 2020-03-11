@@ -72,13 +72,13 @@ func (u *Int256) Copy(v *Int256) *Int256 {
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
-func (u *Int256) Cmp(v *Int256) int {
+func (u *Int256) cmp(v *Int256) int {
 	return u.value.Cmp(&v.value)
 }
 
 // Equals returns true if the two Int256 structs have the same underlying values, false otherwise
 func (u *Int256) Equals(v *Int256) bool {
-	return u.Cmp(v) == 0
+	return u.cmp(v) == 0
 }
 
 // Add sets u to augend + addend and returns u as the sum
