@@ -97,7 +97,7 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	paidOut, err := int256.NewUint256().Set(*po)
+	paidOut, err := int256.NewUint256(*po)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,21 +107,21 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	gasPrice, err := int256.NewUint256().Set(*gp)
+	gasPrice, err := int256.NewUint256(*gp)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	transactionCosts, err = int256.NewUint256().Mul(gasPrice, int256.Uint256From(CashChequeBeneficiaryTransactionCost))
+	transactionCosts, err = new(int256.Uint256).Mul(gasPrice, int256.Uint256From(CashChequeBeneficiaryTransactionCost))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if paidOut.Cmp(cheque.CumulativePayout) > 0 {
-		return int256.NewUint256(), transactionCosts, nil
+		return new(int256.Uint256), transactionCosts, nil
 	}
 
-	expectedPayout, err = int256.NewUint256().Sub(cheque.CumulativePayout, paidOut)
+	expectedPayout, err = new(int256.Uint256).Sub(cheque.CumulativePayout, paidOut)
 	if err != nil {
 		return nil, nil, err
 	}

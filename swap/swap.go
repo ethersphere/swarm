@@ -392,7 +392,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	}
 
 	costsMultiplier := int256.Uint256From(2)
-	costThreshold, err := int256.NewUint256().Mul(transactionCosts, costsMultiplier)
+	costThreshold, err := new(int256.Uint256).Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}

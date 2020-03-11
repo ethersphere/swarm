@@ -1135,7 +1135,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	cumulativePayoutIncrease, err := int256.NewUint256().Add(increase, int256.Uint256From(5))
+	cumulativePayoutIncrease, err := new(int256.Uint256).Add(increase, int256.Uint256From(5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1459,7 +1459,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// withdraw 50
 	withdrawAmount := int256.Uint256From(50)
-	netDeposit, err := int256.NewUint256().Sub(depositAmount, withdrawAmount)
+	netDeposit, err := new(int256.Uint256).Sub(depositAmount, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1499,7 +1499,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// verify available balance
-	expectedBalance, err := int256.NewUint256().Sub(netDeposit, int256.Uint256From(chequeAmount))
+	expectedBalance, err := new(int256.Uint256).Sub(netDeposit, int256.Uint256From(chequeAmount))
 	if err != nil {
 		t.Fatal(err)
 	}

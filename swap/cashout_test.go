@@ -74,7 +74,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paidOut, err := int256.NewUint256().Set(*result)
+	paidOut, err := int256.NewUint256(*result)
 	if err != nil {
 		t.Fatal(err)
 	}
