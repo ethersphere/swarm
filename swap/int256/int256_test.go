@@ -107,7 +107,7 @@ var int256TestCases = []testCase{
 func TestInt256Set(t *testing.T) {
 	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewInt256().Set(*tc.value)
+			result, err := NewInt256(*tc.value)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Int256, but got none")
 			}
@@ -128,7 +128,7 @@ func TestInt256Set(t *testing.T) {
 func TestInt256Copy(t *testing.T) {
 	// pick test value
 	i := new(big.Int).Exp(big.NewInt(-2), big.NewInt(128), nil) // -2^128
-	v, err := NewInt256().Set(*i)
+	v, err := NewInt256(*i)
 	if err != nil {
 		t.Fatalf("got unexpected error when creating new Int256: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestInt256Store(t *testing.T) {
 	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewInt256().Set(*tc.value)
+				r, err := NewInt256(*tc.value)
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}

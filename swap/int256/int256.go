@@ -32,11 +32,11 @@ type Int256 struct {
 var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)) // -(2^255)
 var maxInt256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1))  // 2^255 - 1
 
-// NewInt256 creates a Int256 struct with an initial underlying value of zero
-func NewInt256() *Int256 {
+// NewInt256 creates a Int256 struct with an initial underlying value of the given param
+// returns an error when the result falls outside of the signed 256-bit integer range
+func NewInt256(value big.Int) (*Int256, error) {
 	u := new(Int256)
-	u.value = *new(big.Int).Set(big.NewInt(0))
-	return u
+	return u.set(value)
 }
 
 // Value returns the underlying private value for a Int256 struct
@@ -47,14 +47,14 @@ func (u *Int256) Value() big.Int {
 // Int256From creates a Int256 struct based on the given int64 param
 // any int64 is valid as a Int256
 func Int256From(base int64) *Int256 {
-	u := NewInt256()
+	u := new(Int256)
 	u.value = *new(big.Int).SetInt64(base)
 	return u
 }
 
-// Set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
-// returns an error when the result falls outside of the unsigned 256-bit integer range
-func (u *Int256) Set(value big.Int) (*Int256, error) {
+// set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
+// returns an error when the result falls outside of the signed 256-bit integer range
+func (u *Int256) set(value big.Int) (*Int256, error) {
 	if value.Cmp(maxInt256) == 1 {
 		return nil, fmt.Errorf("cannot set Int256 to %v as it overflows max value of %v", value, maxInt256)
 	}
@@ -67,7 +67,7 @@ func (u *Int256) Set(value big.Int) (*Int256, error) {
 
 // Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
 func (u *Int256) Copy() *Int256 {
-	v := NewInt256()
+	v := new(Int256)
 	v.value = *new(big.Int).Set(&u.value)
 	return v
 }
@@ -86,21 +86,21 @@ func (u *Int256) Equals(v *Int256) bool {
 // returns an error when the result falls outside of the signed 256-bit integer range
 func (u *Int256) Add(augend, addend *Int256) (*Int256, error) {
 	sum := new(big.Int).Add(&augend.value, &addend.value)
-	return u.Set(*sum)
+	return u.set(*sum)
 }
 
 // Sub sets u to minuend - subtrahend and returns u as the difference
 // returns an error when the result falls outside of the signed 256-bit integer range
 func (u *Int256) Sub(minuend, subtrahend *Int256) (*Int256, error) {
 	difference := new(big.Int).Sub(&minuend.value, &subtrahend.value)
-	return u.Set(*difference)
+	return u.set(*difference)
 }
 
 // Mul sets u to multiplicand * multiplier and returns u as the product
 // returns an error when the result falls outside of the signed 256-bit integer range
 func (u *Int256) Mul(multiplicand, multiplier *Int256) (*Int256, error) {
 	product := new(big.Int).Mul(&multiplicand.value, &multiplier.value)
-	return u.Set(*product)
+	return u.set(*product)
 }
 
 // String returns the string representation for Int256 structs
@@ -126,7 +126,7 @@ func (u *Int256) UnmarshalJSON(b []byte) error {
 	if !ok {
 		return fmt.Errorf("not a valid integer value: %s", b)
 	}
-	_, err := u.Set(value)
+	_, err := u.set(value)
 	return err
 }
 
@@ -142,6 +142,6 @@ func (u *Int256) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&u.value); err != nil {
 		return nil
 	}
-	_, err := u.Set(u.value)
+	_, err := u.set(u.value)
 	return err
 }
