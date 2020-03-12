@@ -47,6 +47,13 @@ func Uint256From(base uint64) *Uint256 {
 	return u
 }
 
+// Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
+func (u *Uint256) Copy() *Uint256 {
+	v := new(Uint256)
+	v.value = *new(big.Int).Set(&u.value)
+	return v
+}
+
 // Value returns the underlying private value for a Uint256 struct
 func (u *Uint256) Value() big.Int {
 	return u.value
@@ -63,23 +70,6 @@ func (u *Uint256) set(value big.Int) (*Uint256, error) {
 	}
 	u.value = *new(big.Int).Set(&value)
 	return u, nil
-}
-
-// Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
-func (u *Uint256) Copy() *Uint256 {
-	v := new(Uint256)
-	v.value = *new(big.Int).Set(&u.value)
-	return v
-}
-
-// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
-func (u *Uint256) Cmp(v *Uint256) int {
-	return u.value.Cmp(&v.value)
-}
-
-// Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
-func (u *Uint256) Equals(v *Uint256) bool {
-	return u.Cmp(v) == 0
 }
 
 // Add sets u to augend + addend and returns u as the sum
@@ -101,6 +91,16 @@ func (u *Uint256) Sub(minuend, subtrahend *Uint256) (*Uint256, error) {
 func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
 	product := new(big.Int).Mul(&multiplicand.value, &multiplier.value)
 	return u.set(*product)
+}
+
+// Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
+func (u *Uint256) Cmp(v *Uint256) int {
+	return u.value.Cmp(&v.value)
+}
+
+// Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
+func (u *Uint256) Equals(v *Uint256) bool {
+	return u.Cmp(v) == 0
 }
 
 // String returns the string representation for Uint256 structs

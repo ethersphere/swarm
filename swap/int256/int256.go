@@ -39,17 +39,24 @@ func NewInt256(value big.Int) (*Int256, error) {
 	return u.set(value)
 }
 
-// Value returns the underlying private value for a Int256 struct
-func (u *Int256) Value() big.Int {
-	return u.value
-}
-
 // Int256From creates a Int256 struct based on the given int64 param
 // any int64 is valid as a Int256
 func Int256From(base int64) *Int256 {
 	u := new(Int256)
 	u.value = *new(big.Int).SetInt64(base)
 	return u
+}
+
+// Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
+func (u *Int256) Copy() *Int256 {
+	v := new(Int256)
+	v.value = *new(big.Int).Set(&u.value)
+	return v
+}
+
+// Value returns the underlying private value for a Int256 struct
+func (u *Int256) Value() big.Int {
+	return u.value
 }
 
 // set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
@@ -63,23 +70,6 @@ func (u *Int256) set(value big.Int) (*Int256, error) {
 	}
 	u.value = *new(big.Int).Set(&value)
 	return u, nil
-}
-
-// Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
-func (u *Int256) Copy() *Int256 {
-	v := new(Int256)
-	v.value = *new(big.Int).Set(&u.value)
-	return v
-}
-
-// Cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
-func (u *Int256) cmp(v *Int256) int {
-	return u.value.Cmp(&v.value)
-}
-
-// Equals returns true if the two Int256 structs have the same underlying values, false otherwise
-func (u *Int256) Equals(v *Int256) bool {
-	return u.cmp(v) == 0
 }
 
 // Add sets u to augend + addend and returns u as the sum
@@ -101,6 +91,16 @@ func (u *Int256) Sub(minuend, subtrahend *Int256) (*Int256, error) {
 func (u *Int256) Mul(multiplicand, multiplier *Int256) (*Int256, error) {
 	product := new(big.Int).Mul(&multiplicand.value, &multiplier.value)
 	return u.set(*product)
+}
+
+// cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
+func (u *Int256) cmp(v *Int256) int {
+	return u.value.Cmp(&v.value)
+}
+
+// Equals returns true if the two Int256 structs have the same underlying values, false otherwise
+func (u *Int256) Equals(v *Int256) bool {
+	return u.cmp(v) == 0
 }
 
 // String returns the string representation for Int256 structs
