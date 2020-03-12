@@ -313,7 +313,7 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ipcEndpoint
-				params.PaymentThreshold, err = int256.NewUint256().Add(params.DisconnectThreshold, int256.Uint256From(1))
+				params.PaymentThreshold, err = new(int256.Uint256).Add(params.DisconnectThreshold, int256.Uint256From(1))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -611,7 +611,7 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
-	testAmount, err := int256.NewUint256().Add(DefaultPaymentThreshold, int256.Uint256From(42))
+	testAmount, err := new(int256.Uint256).Add(DefaultPaymentThreshold, int256.Uint256From(42))
 
 	if err != nil {
 		t.Fatal(err)
@@ -642,11 +642,11 @@ func TestResetBalance(t *testing.T) {
 	}
 
 	amount := testAmount.Value()
-	debitorBalance, err := int256.NewInt256().Set(amount)
+	debitorBalance, err := int256.NewInt256(amount)
 	if err != nil {
 		t.Fatal(err)
 	}
-	creditorBalance, err := int256.NewInt256().Set(*new(big.Int).Mul(big.NewInt(-1), &amount))
+	creditorBalance, err := int256.NewInt256(*new(big.Int).Mul(big.NewInt(-1), &amount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -720,7 +720,7 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	amount, err := int256.NewUint256().Mul(DefaultPaymentThreshold, int256.Uint256From(2))
+	amount, err := new(int256.Uint256).Mul(DefaultPaymentThreshold, int256.Uint256From(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -835,7 +835,7 @@ func calculateExpectedBalances(t *testing.T, swap *Swap, bookings []booking) map
 		peerID := booking.peer.ID()
 		peerBalance, ok := expectedBalances[peerID]
 		if !ok {
-			peerBalance = int256.NewInt256()
+			peerBalance = new(int256.Int256)
 		}
 		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
 		if peerBalance.Cmp(swap.params.DisconnectThreshold) < 0 || booking.amount.Cmp(int256.Int256From(0)) < 0 {
@@ -1297,7 +1297,7 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
-	testAmount, err := int256.NewUint256().Add(DefaultPaymentThreshold, int256.Uint256From(42))
+	testAmount, err := new(int256.Uint256).Add(DefaultPaymentThreshold, int256.Uint256From(42))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1327,8 +1327,8 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 
 	ta := testAmount.Value()
-	debitorAmount, err := int256.NewInt256().Set(ta)
-	creditorAmount, err := int256.NewInt256().Set(*new(big.Int).Mul(big.NewInt(-1), &ta))
+	debitorAmount, err := int256.NewInt256(ta)
+	creditorAmount, err := int256.NewInt256(*new(big.Int).Mul(big.NewInt(-1), &ta))
 	// set balances arbitrarily
 	if err = debitor.setBalance(debitorAmount); err != nil {
 		t.Fatal(err)

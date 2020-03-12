@@ -331,7 +331,7 @@ func TestEmitCheque(t *testing.T) {
 func TestTriggerPaymentThreshold(t *testing.T) {
 	testBackend := newTestBackend(t)
 	log.Debug("create test swap")
-	depositAmount, err := int256.NewUint256().Mul(DefaultPaymentThreshold, int256.Uint256From(2))
+	depositAmount, err := new(int256.Uint256).Mul(DefaultPaymentThreshold, int256.Uint256From(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,13 +360,13 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 
 	// set the balance to manually be at PaymentThreshold
 	overDraft := int256.Uint256From(42)
-	expectedAmount, err := int256.NewUint256().Add(overDraft, DefaultPaymentThreshold)
+	expectedAmount, err := new(int256.Uint256).Add(overDraft, DefaultPaymentThreshold)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	paymentThreshold := DefaultPaymentThreshold.Value()
-	newBalance, err := int256.NewInt256().Set(paymentThreshold)
+	newBalance, err := int256.NewInt256(paymentThreshold)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,7 +515,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// set the balance to manually be at DisconnectThreshold
 	overDraft := 42
-	expectedBalance, err := int256.NewInt256().Set((DefaultDisconnectThreshold).Value())
+	expectedBalance, err := int256.NewInt256((DefaultDisconnectThreshold).Value())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -605,7 +605,7 @@ func TestSwapRPC(t *testing.T) {
 	fakeBalance2 := int256.Int256From(-100)
 
 	// query a first time, should give error
-	balance := int256.NewInt256()
+	balance := new(int256.Int256)
 	err = rpcclient.Call(balance, "swap_peerBalance", id1)
 	// at this point no balance should be there:  no peer registered with Swap
 	if err == nil {
@@ -614,7 +614,7 @@ func TestSwapRPC(t *testing.T) {
 	log.Debug("servicenode balance", "balance", balance)
 
 	// ...thus balance should be empty
-	if !balance.Equals(int256.NewInt256()) {
+	if !balance.Equals(new(int256.Int256)) {
 		t.Fatalf("Expected balance to be empty but it is %v", balance)
 	}
 
@@ -663,12 +663,12 @@ func TestSwapRPC(t *testing.T) {
 	}
 	log.Debug("received balances", "allBalances", allBalances)
 
-	sum := int256.NewInt256()
+	sum := new(int256.Int256)
 	for _, v := range allBalances {
 		sum.Add(sum, v)
 	}
 
-	fakeSum, err := int256.NewInt256().Add(fakeBalance1, fakeBalance2)
+	fakeSum, err := new(int256.Int256).Add(fakeBalance1, fakeBalance2)
 	if err != nil {
 		t.Fatal(err)
 	}

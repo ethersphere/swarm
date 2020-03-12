@@ -229,14 +229,14 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	}
 
 	// add 1 to payment threshold
-	paymentThresholdOverride, err := int256.NewUint256().Add(swap.DefaultPaymentThreshold, int256.Uint256From(1))
+	paymentThresholdOverride, err := new(int256.Uint256).Add(swap.DefaultPaymentThreshold, int256.Uint256From(1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	paymentThreshold := paymentThresholdOverride.Value()
 
 	// add 1 to disconnect threshold
-	disconnectThresholdOverride, err := int256.NewUint256().Add(swap.DefaultDisconnectThreshold, int256.Uint256From(1))
+	disconnectThresholdOverride, err := new(int256.Uint256).Add(swap.DefaultDisconnectThreshold, int256.Uint256From(1))
 	if err != nil {
 		t.Fatal(err)
 	}

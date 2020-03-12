@@ -386,23 +386,23 @@ func TestMultiChequeSimulation(t *testing.T) {
 		}
 
 		mp := new(big.Int).SetUint64(msgPrice)
-		price, err := int256.NewInt256().Set(*mp)
+		price, err := int256.NewInt256(*mp)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// check if cheque should have been sent
-		balanceAfterMessage, err := int256.NewInt256().Sub(debitorBalance, price)
+		balanceAfterMessage, err := new(int256.Int256).Sub(debitorBalance, price)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		threshold, err := int256.NewInt256().Set(paymentThreshold.Value())
+		threshold, err := int256.NewInt256(paymentThreshold.Value())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		pt, err := int256.NewInt256().Mul(threshold, int256.Int256From(-1))
+		pt, err := new(int256.Int256).Mul(threshold, int256.Int256From(-1))
 		if balanceAfterMessage.Cmp(pt) <= 0 {
 			// we need to wait a bit in order to give time for the cheque to be processed
 			if err := waitForChequeProcessed(t, params.backend, counter, lastCount, debitorSvc.swap.peers[creditor], expectedPayout); err != nil {
@@ -432,7 +432,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b2, err = int256.NewInt256().Mul(b2, int256.Int256From(-1))
+	b2, err = new(int256.Int256).Mul(b2, int256.Int256From(-1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -629,7 +629,7 @@ func TestBasicSwapSimulation(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("expected counter balance for node %v to be found, but not found", node)
 				}
-				pBalanceWithNode, err = int256.NewInt256().Mul(pBalanceWithNode, int256.Int256From(-1))
+				pBalanceWithNode, err = new(int256.Int256).Mul(pBalanceWithNode, int256.Int256From(-1))
 				if err != nil {
 					return err
 				}
