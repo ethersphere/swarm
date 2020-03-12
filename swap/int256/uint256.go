@@ -59,7 +59,7 @@ func (u *Uint256) Value() big.Int {
 	return u.value
 }
 
-// Set assigns the underlying value of the given Uint256 param to u, and returns the modified receiver struct
+// set assigns the underlying value of the given Uint256 param to u, and returns the modified receiver struct
 // returns an error when the result falls outside of the unsigned 256-bit integer range
 func (u *Uint256) set(value big.Int) (*Uint256, error) {
 	if value.Cmp(maxUint256) == 1 {
