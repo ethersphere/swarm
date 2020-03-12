@@ -324,12 +324,12 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 func (s *Swap) checkPaymentThresholdAndSendCheque(swapPeer *Peer) error {
 	balance := swapPeer.getBalance()
 	thresholdValue := s.params.PaymentThreshold.Value()
-	threshold, err := int256.NewInt256().Set(thresholdValue)
+	threshold, err := int256.NewInt256(thresholdValue)
 	if err != nil {
 		return err
 	}
 
-	negativeThreshold, err := int256.NewInt256().Mul(int256.Int256From(-1), threshold)
+	negativeThreshold, err := new(int256.Int256).Mul(int256.Int256From(-1), threshold)
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
 	honeyAmount := int256.Int256From(int64(cheque.Honey))
-	honey, err := int256.NewInt256().Mul(int256.Int256From(-1), honeyAmount)
+	honey, err := new(int256.Int256).Mul(int256.Int256From(-1), honeyAmount)
 	if err != nil {
 		return protocols.Break(err)
 	}
@@ -494,19 +494,19 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 	}
 
 	chequeHoney := new(big.Int).SetUint64(cheque.Honey)
-	honey, err := int256.NewInt256().Set(*chequeHoney)
+	honey, err := int256.NewInt256(*chequeHoney)
 	if err != nil {
 		return nil, err
 	}
 
 	// calculate tentative new balance after cheque is processed
-	newBalance, err := int256.NewInt256().Sub(p.getBalance(), honey)
+	newBalance, err := new(int256.Int256).Sub(p.getBalance(), honey)
 	if err != nil {
 		return nil, err
 	}
 
 	debtTolerance := big.NewInt(-int64(ChequeDebtTolerance))
-	tolerance, err := int256.NewInt256().Set(*debtTolerance)
+	tolerance, err := int256.NewInt256(*debtTolerance)
 	if err != nil {
 		return nil, err
 	}

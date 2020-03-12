@@ -98,15 +98,15 @@ func (u *Int256) Mul(multiplicand, multiplier *Int256) (*Int256, error) {
 	return u.set(*product)
 }
 
-// cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
-func (u *Int256) cmp(v *BigIntWrapper) int {
+// Cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
+func (u *Int256) Cmp(v BigIntWrapper) int {
 	value := v.Value()
 	return u.value.Cmp(&value)
 }
 
 // Equals returns true if the two Int256 structs have the same underlying values, false otherwise
-func (u *Int256) Equals(v *BigIntWrapper) bool {
-	return u.cmp(v) == 0
+func (u *Int256) Equals(v BigIntWrapper) bool {
+	return u.Cmp(v) == 0
 }
 
 // String returns the string representation for Int256 structs

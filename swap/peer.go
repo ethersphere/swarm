@@ -140,7 +140,7 @@ func (p *Peer) getBalance() *int256.Int256 {
 func (p *Peer) updateBalance(amount *int256.Int256) error {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
-	newBalance, err := int256.NewInt256().Add(p.getBalance(), amount)
+	newBalance, err := new(int256.Int256).Add(p.getBalance(), amount)
 	if err != nil {
 		return err
 	}
