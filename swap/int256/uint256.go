@@ -100,7 +100,7 @@ func (u *Uint256) Cmp(v BigIntWrapper) int {
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
-func (u *Uint256) Equals(v *Uint256) bool {
+func (u *Uint256) Equals(v BigIntWrapper) bool {
 	return u.Cmp(v) == 0
 }
 
