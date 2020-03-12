@@ -18,7 +18,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/ethereum/go-ethereum v1.9.2
-	github.com/ethersphere/go-sw3 v0.2.1
+	github.com/ethersphere/go-sw3 v0.2.3
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
 	github.com/go-kit/kit v0.9.0 // indirect
