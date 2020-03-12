@@ -1508,3 +1508,89 @@ func TestAvailableBalance(t *testing.T) {
 	}
 
 }
+func TestBouncedCheque(t *testing.T) {
+	// TODO: REPLACE WITH TEST
+	// ON CONNECT TO PEER NO BOUNCED CHEQUE
+	// ON CONNECT TO PEER BOUNCED CHEQUE
+	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE AFTER A COUPLE OF MESSAGES
+	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE AFTER A COUPLE OF MESSAGES
+
+	testBackend := newTestBackend(t)
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
+	defer clean()
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
+
+	// deploy a chequebook
+	err := testDeploy(context.TODO(), swap, depositAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// create a peer
+	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify that available balance equals depositAmount (we deposit during deployment)
+	availableBalance, err := swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availableBalance.Equals(depositAmount) {
+		t.Fatalf("available balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
+	}
+	// withdraw 50
+	withdrawAmount := uint256.FromUint64(50)
+	netDeposit, err := uint256.New().Sub(depositAmount, withdrawAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withdraw := withdrawAmount.Value()
+
+	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
+	opts.Context = context.TODO()
+	rec, err := swap.contract.Withdraw(opts, &withdraw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != types.ReceiptStatusSuccessful {
+		t.Fatal("Transaction reverted")
+	}
+
+	// verify available balance
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availableBalance.Equals(netDeposit) {
+		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, deposit minus withdrawn: %v", availableBalance, netDeposit)
+	}
+
+	// send a cheque worth 42
+	chequeAmount := uint64(42)
+	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
+	if err = peer.setBalance(int64(-chequeAmount)); err != nil {
+		t.Fatal(err)
+	}
+	if err = peer.sendCheque(); err != nil {
+		t.Fatal(err)
+	}
+
+	availableBalance, err = swap.AvailableBalance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// verify available balance
+	expectedBalance, err := uint256.New().Sub(netDeposit, uint256.FromUint64(chequeAmount))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availableBalance.Equals(expectedBalance) {
+		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
+	}
+
+}

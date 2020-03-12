@@ -91,6 +91,15 @@ func InstanceAt(address common.Address, backend chain.Backend) (Contract, error)
 	return c, err
 }
 
+// Bounced obtains if a cheque has been bounced previously of a contract at a specific address.
+// Once it's bounced, it will not change it's state again, unless re deployed.
+func Bounced(address common.Address, backend chain.Backend) (bool, error) {
+	//TODO: REPLACE THIS MOCK, WHEN SC ARE UPDATED
+	//TEST BOUNCED TRUE/FALSE
+	//TEST ERROR
+	return false, nil
+}
+
 // Withdraw withdraws amount from the chequebook and blocks until the transaction is mined
 func (s simpleContract) Withdraw(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error) {
 	tx, err := s.instance.Withdraw(auth, amount)

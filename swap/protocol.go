@@ -39,6 +39,9 @@ var (
 	// structure of the HandshakeMsg
 	ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
 
+	// ErrBouncedCheque is used when the peer has a bounced cheque and should be disconnected
+	ErrBouncedCheque = errors.New("bounced cheque detected")
+
 	// Spec is the swap protocol specification
 	Spec = &protocols.Spec{
 		Name:       "swap",
@@ -114,6 +117,14 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	beneficiary, err := s.getContractOwner(context.Background(), response.ContractAddress)
 	if err != nil {
 		return err
+	}
+
+	bounced, err := s.getBouncedCheque(context.Background(), response.ContractAddress)
+	if err != nil {
+		return err
+	}
+	if bounced {
+		return ErrBouncedCheque
 	}
 
 	swapPeer, err := s.addPeer(protoPeer, beneficiary, response.ContractAddress)

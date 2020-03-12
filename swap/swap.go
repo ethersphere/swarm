@@ -463,6 +463,14 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256
 		return nil, err
 	}
 
+	bounced, err := s.getBouncedCheque(context.Background(), s.owner.address)
+	if err != nil {
+		return nil, err
+	}
+	if bounced {
+		return nil, ErrBouncedCheque
+	}
+
 	lastCheque := p.getLastReceivedCheque()
 
 	// TODO: there should probably be a lock here?
@@ -581,6 +589,16 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	}
 
 	return contr.Issuer(nil)
+}
+
+// getBouncedCheque retrieves if a bounced cheque exists at address from the blockchain
+func (s *Swap) getBouncedCheque(ctx context.Context, address common.Address) (bool, error) {
+	bounced, err := contract.Bounced(address, s.backend)
+	if err != nil {
+		return false, err
+	}
+
+	return bounced, nil
 }
 
 // promptDepositAmount blocks and asks the user how much ERC20 he wants to deposit
