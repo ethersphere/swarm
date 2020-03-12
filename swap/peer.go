@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/swap/int256"
@@ -44,7 +43,7 @@ type Peer struct {
 	lastSentCheque     *Cheque        // last cheque that was sent to peer that was confirmed
 	pendingCheque      *Cheque        // last cheque that was sent to peer but is not yet confirmed
 	balance            *int256.Int256 // current balance of the peer
-	logger             log.Logger     // logger for swap related messages and audit trail with peer identifier
+	logger             Logger         // logger for swap related messages and audit trail with peer identifier
 }
 
 // NewPeer creates a new swap Peer instance
@@ -122,7 +121,7 @@ func (p *Peer) getLastSentCumulativePayout() *int256.Uint256 {
 	if lastCheque != nil {
 		return lastCheque.CumulativePayout
 	}
-	return int256.NewUint256()
+	return int256.Uint256From(0)
 }
 
 // the caller is expected to hold p.lock
@@ -148,7 +147,7 @@ func (p *Peer) updateBalance(amount *int256.Int256) error {
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	p.logger.Debug("updated balance", "balance", newBalance)
+	p.logger.Debug(UpdateBalanceAction, "balance", newBalance)
 	return nil
 }
 
@@ -175,7 +174,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	price := int256.Uint256From(oraclePrice)
 
 	cumulativePayout := p.getLastSentCumulativePayout()
-	newCumulativePayout, err := int256.NewUint256().Add(cumulativePayout, price)
+	newCumulativePayout, err := new(int256.Uint256).Add(cumulativePayout, price)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +198,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 // the caller is expected to hold p.lock
 func (p *Peer) sendCheque() error {
 	if p.getPendingCheque() != nil {
-		p.logger.Info("previous cheque still pending, resending cheque", "pending", p.getPendingCheque())
+		p.logger.Info(SendChequeAction, "previous cheque still pending, resending cheque", "pending cheque", p.getPendingCheque())
 		return p.Send(context.Background(), &EmitChequeMsg{
 			Cheque: p.getPendingCheque(),
 		})
@@ -222,8 +221,7 @@ func (p *Peer) sendCheque() error {
 
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
 	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(int64(cheque.Honey))
-
-	p.logger.Info("sending cheque to peer", "cheque", cheque)
+	p.logger.Info(SendChequeAction, "sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})

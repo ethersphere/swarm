@@ -104,6 +104,11 @@ var (
 		Usage:  "Write execution logs of swap audit to the given directory",
 		EnvVar: SwarmEnvSwapLogPath,
 	}
+	SwarmSwapLogLevelFlag = cli.StringFlag{
+		Name:   "swap-audit-loglevel",
+		Usage:  "Default log level of swap audit logs",
+		EnvVar: SwarmEnvSwapLogLevel,
+	}
 	SwarmLightNodeEnabled = cli.BoolFlag{
 		Name:   "lightnode",
 		Usage:  "Enable Swarm LightNode (default false)",

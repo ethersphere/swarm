@@ -75,6 +75,7 @@ const (
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
 	SwarmNoSync                     = "SWARM_NO_SYNC"
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
+	SwarmEnvSwapLogLevel            = "SWARM_SWAP_LOG_LEVEL"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
 	SwarmEnvENSAPI                  = "SWARM_ENS_API"
 	SwarmEnvRNSAPI                  = "SWARM_RNS_API"
@@ -211,6 +212,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	}
 	if swapLogPath := ctx.GlobalString(SwarmSwapLogPathFlag.Name); currentConfig.SwapEnabled && swapLogPath != "" {
 		currentConfig.SwapLogPath = swapLogPath
+	}
+	if swapLogLevel := ctx.GlobalInt(SwarmSwapLogLevelFlag.Name); currentConfig.SwapEnabled && swapLogLevel != 0 {
+		currentConfig.SwapLogLevel = swapLogLevel
 	}
 
 	if skipDeposit := ctx.GlobalBool(SwarmSwapSkipDepositFlag.Name); skipDeposit {

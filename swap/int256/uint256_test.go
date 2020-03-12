@@ -41,7 +41,7 @@ var uint256TestCases = []testCase{
 	},
 	{
 		name:         "case -1 * 2^8",
-		value:        new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil)),
+		value:        big.NewInt(-256),
 		expectsError: true,
 	},
 	{
@@ -57,7 +57,7 @@ var uint256TestCases = []testCase{
 	},
 	{
 		name:         "case 2^8",
-		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
+		value:        big.NewInt(256),
 		expectsError: false,
 	},
 	{
@@ -86,7 +86,7 @@ var uint256TestCases = []testCase{
 func TestUint256Set(t *testing.T) {
 	for _, tc := range uint256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256().Set(*tc.value)
+			result, err := NewUint256(*tc.value)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
@@ -107,13 +107,13 @@ func TestUint256Set(t *testing.T) {
 func TestUint256Copy(t *testing.T) {
 	// pick test value
 	i := new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil) // 2^128
-	v, err := NewUint256().Set(*i)
+	v, err := NewUint256(*i)
 	if err != nil {
 		t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 	}
 
 	// copy picked value
-	c := NewUint256().Copy(v)
+	c := v.Copy()
 
 	if !c.Equals(v) {
 		t.Fatalf("copy of Uint256 %v has an unequal value of %v", v, c)
@@ -146,7 +146,7 @@ func TestUint256Store(t *testing.T) {
 	for _, tc := range uint256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewUint256().Set(*tc.value)
+				r, err := NewUint256(*tc.value)
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}

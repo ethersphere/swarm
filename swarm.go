@@ -134,6 +134,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		swapParams := &swap.Params{
 			BaseAddrs:           bzzconfig.Address,
 			LogPath:             self.config.SwapLogPath,
+			LogLevel:            self.config.SwapLogLevel,
 			DisconnectThreshold: self.config.SwapDisconnectThreshold,
 			PaymentThreshold:    self.config.SwapPaymentThreshold,
 		}

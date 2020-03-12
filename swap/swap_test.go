@@ -80,7 +80,6 @@ func TestMain(m *testing.M) {
 func init() {
 	testutil.Init()
 	mrand.Seed(time.Now().UnixNano())
-	swapLog = log.Root()
 }
 
 type storeKeysTestCase struct {
@@ -695,7 +694,7 @@ func TestResetBalance(t *testing.T) {
 	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
 	case <-testBackend.cashDone:
-		log.Debug("cash transaction completed and committed")
+		creditorSwap.logger.Debug(CashChequeAction, "cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
 		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
@@ -1165,7 +1164,7 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 	// cheque with amount != increase
 	oldCheque = newTestCheque()
 	newCheque = newTestCheque()
-	cumulativePayoutIncrease, err := int256.NewUint256().Add(increase, int256.Uint256From(5))
+	cumulativePayoutIncrease, err := new(int256.Uint256).Add(increase, int256.Uint256From(5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1372,6 +1371,80 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 }
 
+func TestSwapActions(t *testing.T) {
+	// create a log dir
+	logDirDebitor, err := ioutil.TempDir("", "swap_test_log")
+	log.Debug("creating swap log dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(logDirDebitor)
+
+	// create a test swap account
+	swap, clean := newTestSwap(t, ownerKey, nil)
+	defer clean()
+
+	swapLog := newSwapLogger(logDirDebitor, swap.params.LogLevel, swap.params.BaseAddrs)
+
+	swapLog.Info(InitAction, "Test")
+	swapLog.Info(StopAction, "Test")
+	swapLog.Info(UpdateBalanceAction, "Test")
+	swapLog.Info(SendChequeAction, "Test")
+	swapLog.Info(HandleChequeAction, "Test")
+	swapLog.Info(CashChequeAction, "Test")
+	swapLog.Info(DeployChequebookAction, "Test")
+
+	if logDirDebitor == "" {
+		t.Fatal("Swap Log Dir is not defined")
+	}
+
+	files, err := ioutil.ReadDir(logDirDebitor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("expected at least 1 file in the log directory, found none")
+	}
+
+	logFile := path.Join(logDirDebitor, files[0].Name())
+
+	var b []byte
+	b, err = ioutil.ReadFile(logFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logString := string(b)
+
+	if !strings.Contains(logString, `"swap_action","init"`) {
+		t.Fatalf("expected the log to contain action \"init\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","stop"`) {
+		t.Fatalf("expected the log to contain action \"stop\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","update_balance"`) {
+		t.Fatalf("expected the log to contain action \"update_balance\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","send_cheque"`) {
+		t.Fatalf("expected the log to contain action \"send_cheque\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","handle_cheque"`) {
+		t.Fatalf("expected the log to contain action \"handle_cheque\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","cash_cheque"`) {
+		t.Fatalf("expected the log to contain action \"cash_cheque\"")
+	}
+
+	if !strings.Contains(logString, `"swap_action","deploy_chequebook_contract"`) {
+		t.Fatalf("expected the log to contain action \"deploy_chequebook_contract\"")
+	}
+
+}
+
 func TestPeerGetLastSentCumulativePayout(t *testing.T) {
 	_, peer, clean := newTestSwapAndPeer(t, ownerKey)
 	defer clean()
@@ -1421,7 +1494,7 @@ func TestAvailableBalance(t *testing.T) {
 	}
 	// withdraw 50
 	withdrawAmount := int256.Uint256From(50)
-	netDeposit, err := int256.NewUint256().Sub(depositAmount, withdrawAmount)
+	netDeposit, err := new(int256.Uint256).Sub(depositAmount, withdrawAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1462,7 +1535,7 @@ func TestAvailableBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	// verify available balance
-	expectedBalance, err := int256.NewUint256().Sub(netDeposit, int256.Uint256From(chequeAmount))
+	expectedBalance, err := new(int256.Uint256).Sub(netDeposit, int256.Uint256From(chequeAmount))
 	if err != nil {
 		t.Fatal(err)
 	}

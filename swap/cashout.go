@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package swap
 
 import (
@@ -34,18 +35,21 @@ const CashChequeBeneficiaryTransactionCost = 50000
 type CashoutProcessor struct {
 	backend    chain.Backend     // ethereum backend to use
 	privateKey *ecdsa.PrivateKey // private key to use
+	Logger     Logger
 }
 
 // CashoutRequest represents a request for a cashout operation
 type CashoutRequest struct {
 	Cheque      Cheque         // cheque to be cashed
 	Destination common.Address // destination for the payout
+	Logger      Logger
 }
 
 // ActiveCashout stores the necessary information for a cashout in progess
 type ActiveCashout struct {
 	Request         CashoutRequest // the request that caused this cashout
 	TransactionHash common.Hash    // the hash of the current transaction for this request
+	Logger          Logger
 }
 
 // newCashoutProcessor creates a new instance of CashoutProcessor
@@ -77,6 +81,7 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 	return c.waitForAndProcessActiveCashout(&ActiveCashout{
 		Request:         *request,
 		TransactionHash: tx.Hash(),
+		Logger:          request.Logger,
 	})
 }
 
@@ -92,7 +97,7 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	paidOut, err := int256.NewUint256().Set(*po)
+	paidOut, err := int256.NewUint256(*po)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -102,21 +107,21 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	gasPrice, err := int256.NewUint256().Set(*gp)
+	gasPrice, err := int256.NewUint256(*gp)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	transactionCosts, err = int256.NewUint256().Mul(gasPrice, int256.Uint256From(CashChequeBeneficiaryTransactionCost))
+	transactionCosts, err = new(int256.Uint256).Mul(gasPrice, int256.Uint256From(CashChequeBeneficiaryTransactionCost))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if paidOut.Cmp(cheque.CumulativePayout) > 0 {
-		return int256.NewUint256(), transactionCosts, nil
+		return new(int256.Uint256), transactionCosts, nil
 	}
 
-	expectedPayout, err = int256.NewUint256().Sub(cheque.CumulativePayout, paidOut)
+	expectedPayout, err = new(int256.Uint256).Sub(cheque.CumulativePayout, paidOut)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -145,9 +150,9 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 
 	if result.Bounced {
 		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
-		swapLog.Warn("cheque bounced", "tx", receipt.TxHash)
+		activeCashout.Logger.Warn(CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
 	}
 
-	swapLog.Info("cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
+	activeCashout.Logger.Info(CashChequeAction, "cheque cashed", "honey", activeCashout.Request.Cheque.Honey)
 	return nil
 }

@@ -60,6 +60,7 @@ type Config struct {
 	SwapSkipDeposit         bool            // do not ask the user to deposit during boot sequence
 	SwapDepositAmount       uint64          // deposit amount to the chequebook
 	SwapLogPath             string          // dir to swap related audit logs
+	SwapLogLevel            int            // log level of swap related audit logs
 	Contract                common.Address  // address of the chequebook contract
 	SwapChequebookFactory   common.Address  // address of the chequebook factory contract
 	// end of Swap configs
@@ -99,6 +100,7 @@ func NewConfig() *Config {
 		SwapPaymentThreshold:    swap.DefaultPaymentThreshold,
 		SwapDisconnectThreshold: swap.DefaultDisconnectThreshold,
 		SwapLogPath:             "",
+		SwapLogLevel:            swap.DefaultSwapLogLevel,
 		HiveParams:              network.NewHiveParams(),
 		Pss:                     pss.NewParams(),
 		EnsRoot:                 ens.Address,
