@@ -46,7 +46,7 @@ func download(ctx *cli.Context) {
 	case 0:
 		utils.Fatalf("Usage: swarm down [options] <bzz locator> [<destination path>]")
 	case 1:
-		log.Trace(fmt.Sprintf("swarm down: no destination path - assuming working dir"))
+		log.Trace("swarm down: no destination path - assuming working dir")
 	default:
 		log.Trace(fmt.Sprintf("destination path arg: %s", args[1]))
 		if absDest, err := filepath.Abs(args[1]); err == nil {

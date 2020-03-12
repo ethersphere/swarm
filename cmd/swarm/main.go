@@ -283,10 +283,10 @@ func keys(ctx *cli.Context) error {
 	bzzkey := crypto.Keccak256Hash(pubkey).Hex()
 
 	if !ctx.Bool(SwarmCompressedFlag.Name) {
-		fmt.Println(fmt.Sprintf("bzzkey=%s", bzzkey[2:]))
-		fmt.Println(fmt.Sprintf("publicKey=%s", pubkeyhex))
+		fmt.Print(fmt.Sprintf("bzzkey=%s", bzzkey[2:]), "\n")
+		fmt.Print(fmt.Sprintf("publicKey=%s", pubkeyhex), "\n")
 	}
-	fmt.Println(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed))
+	fmt.Print(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed), "\n")
 
 	return nil
 }
