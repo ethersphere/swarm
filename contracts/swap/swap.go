@@ -152,10 +152,9 @@ func (s simpleContract) CashChequeBeneficiaryRequest(beneficiary common.Address,
 	}
 
 	return &chain.TxRequest{
-		To:       s.address,
-		Value:    big.NewInt(0),
-		GasLimit: 200000,
-		Data:     callData,
+		To:    s.address,
+		Value: big.NewInt(0),
+		Data:  callData,
 	}, nil
 }
 

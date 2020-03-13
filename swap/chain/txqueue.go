@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 
@@ -507,14 +506,11 @@ func (txq *TxQueue) generateTransaction(requestMetadata *txRequestData) error {
 
 	request := requestMetadata.Request
 	if request.GasLimit == 0 {
-		request.GasLimit, err = txq.backend.EstimateGas(txq.ctx, ethereum.CallMsg{
-			From: opts.From,
-			To:   &request.To,
-			Data: request.Data,
-		})
+		gasLimit, err := request.EstimateGas(txq.ctx, txq.backend, opts.From)
 		if err != nil {
 			return txq.finalizeRequestCancelled(requestMetadata, err)
 		}
+		request.GasLimit = gasLimit
 	}
 
 	if request.GasPrice == nil {

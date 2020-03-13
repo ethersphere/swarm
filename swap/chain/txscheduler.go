@@ -19,6 +19,7 @@ import (
 	"context"
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -64,6 +65,19 @@ func (request *TxRequest) ToSignedTx(nonce uint64, opts *bind.TransactOpts) (*ty
 	)
 
 	return opts.Signer(&types.HomesteadSigner{}, opts.From, tx)
+}
+
+// EstimateGas estimates the gas usage if this request was send from the supplied sender
+func (request *TxRequest) EstimateGas(ctx context.Context, backend Backend, from common.Address) (uint64, error) {
+	gasLimit, err := backend.EstimateGas(ctx, ethereum.CallMsg{
+		From: from,
+		To:   &request.To,
+		Data: request.Data,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return gasLimit, nil
 }
 
 // TxScheduler represents a central sender for all transactions from a single ethereum account

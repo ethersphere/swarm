@@ -58,6 +58,14 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	txRequest.GasLimit, err = txRequest.EstimateGas(ctx, backend, opts.From)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	nonce, err := backend.PendingNonceAt(ctx, opts.From)
 	if err != nil {
 		t.Fatal(err)
@@ -116,6 +124,11 @@ func TestContractIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	txRequest.GasLimit, err = txRequest.EstimateGas(ctx, backend, opts.From)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	nonce, err = backend.PendingNonceAt(ctx, opts.From)
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +156,6 @@ func TestContractIntegration(t *testing.T) {
 	if !cashResult.Bounced {
 		t.Fatal("cheque did not bounce")
 	}
-
 }
 
 // TestCashCheque creates a valid cheque and feeds it to cashoutProcessor.submitCheque
