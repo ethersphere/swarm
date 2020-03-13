@@ -596,7 +596,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	}
 	// log available balance and ERC20 balance
 	s.logger.Info(InitAction, "Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
-	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): ")
+	promptMessage := "Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): "
 	// need to prompt user for deposit amount
 	prompter := console.Stdin
 	// ask user for input
