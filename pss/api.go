@@ -84,7 +84,7 @@ func (pssapi *API) Receive(ctx context.Context, topic message.Topic, raw bool, p
 		case err := <-psssub.Err():
 			log.Warn(fmt.Sprintf("caught subscription error in pss sub topic %x: %v", topic, err))
 		case <-notifier.Closed():
-			log.Warn(fmt.Sprintf("rpc sub notifier closed"))
+			log.Warn("rpc sub notifier closed")
 		}
 	}()
 
