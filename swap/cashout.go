@@ -87,6 +87,14 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 			result := otherSwap.CashChequeBeneficiaryResult(receipt)
 			return c.cashoutResultHandler.HandleCashoutResult(request, result, receipt)
 		},
+		NotifyCancelled: func(ctx context.Context, id uint64, notification *chain.TxCancelledNotification) error {
+			c.logger.Warn("cheque cashing transaction cancelled", "reason", notification.Reason)
+			return nil
+		},
+		NotifyStatusUnknown: func(ctx context.Context, id uint64, notification *chain.TxStatusUnknownNotification) error {
+			c.logger.Error("cheque cashing transaction status unknown", "reason", notification.Reason)
+			return nil
+		},
 	})
 	return c
 }
