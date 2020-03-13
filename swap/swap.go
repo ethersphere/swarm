@@ -53,6 +53,7 @@ var ErrSkipDeposit = errors.New("swap-deposit-amount non-zero, but swap-skip-dep
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
+// Swap implements the CashoutResultHandler interface
 type Swap struct {
 	store             state.Store                // store is needed in order to keep balances and cheques across sessions
 	peers             map[enode.ID]*Peer         // map of all swap Peers
