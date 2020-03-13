@@ -138,7 +138,7 @@ func (txq *TxQueue) ScheduleRequest(handlerID string, request TxRequest, extraDa
 	if err != nil && err != state.ErrNotFound {
 		return 0, err
 	}
-	// ids start at 1
+	// increment existing id, starting with an initial value of 1
 	id++
 
 	// in a single batch this
