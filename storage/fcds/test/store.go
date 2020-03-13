@@ -42,8 +42,8 @@ func Main(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// RunStd runs the standard tests
-func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
+// RunAll runs all available tests for a Store implementation.
+func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	t.Run("empty", func(t *testing.T) {
 		RunStore(t, &RunStoreOptions{
 			ChunkCount:   *chunksFlag,
@@ -101,9 +101,9 @@ func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 		RunIterator(t, newStoreFunc)
 	})
 
-	//t.Run("no grow", func(t *testing.T) {
-	//runNoGrow(t, newStoreFunc)
-	//})
+	t.Run("no grow", func(t *testing.T) {
+		runNoGrow(t, newStoreFunc)
+	})
 
 }
 
@@ -164,28 +164,17 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 	}
 
 	ins := 4 + 3 + 2 + 1
-	// insert 4,3,2,1 chunks and expect the shards as next shards inserted into
-	// in the following order
-	order := []uint8{
-		// comment denotes free slots _after_ PUT
-		0, //4,3,2,1 -> 3,3,2,1
-		0, //3,3,2,1 -> 2,3,2,1
-		1, //2,3,2,1 -> 2,2,2,1
-		0, //2,2,2,1 -> 1,2,2,1
-		1, //1,2,2,1 -> 1,1,2,1
-		2, //1,1,2,1 -> 1,1,1,1
-		0, //1,1,1,1 -> 0,1,1,1
-		1, //0,1,1,1 -> 0,0,1,1
-		2, //0,0,1,1 -> 0,0,0,1
-		3, //0,0,0,1 -> 0,0,0,0
-	}
+
+	freeSlots := []int{4, 3, 2, 1}
+
 	for i := 0; i < ins; i++ {
 		cc := chunktesting.GenerateTestRandomChunk()
 		if shard, err := db.Put(cc); err != nil {
 			t.Fatal(err)
 		} else {
-			if shard != order[i] {
-				t.Fatalf("expected chunk %d to be on shard %d but got %d", i, order[i], shard)
+			freeSlots[shard]--
+			if freeSlots[shard] < 0 {
+				t.Fatalf("shard %d slots went negative", shard)
 			}
 			chunkShards[cc.Address().String()] = shard
 		}
@@ -232,106 +221,6 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 				t.Fatalf("next slot expected to be %d but got %d. chunk number %d", minSlot, shard, i)
 			}
 		}
-	}
-}
-
-// RunAll runs all available tests for a Store implementation.
-func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-	RunStd(t, newStoreFunc)
-
-	//t.Run("next shard", func(t *testing.T) {
-	//runNextShard(t, newStoreFunc)
-	//})
-}
-
-// RunNextShard runs the test scenario for NextShard selection
-func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
-	rand.Seed(42424242) //use a constant seed so we can assert the results
-	defer func(s uint8) {
-		fcds.ShardCount = s
-	}(fcds.ShardCount)
-
-	fcds.ShardCount = 4
-
-	db, clean := newStoreFunc(t)
-
-	defer clean()
-
-	chunkCount := 1000
-	chunks := getChunks(chunkCount)
-
-	chunkShards := make(map[string]uint8)
-
-	for _, ch := range chunks {
-		if shard, err := db.Put(ch); err != nil {
-			t.Fatal(err)
-		} else {
-			chunkShards[ch.Address().String()] = shard
-		}
-	}
-
-	for _, tc := range []struct {
-		incFreeSlots []int
-		expectNext   []uint8
-		expFallback  uint8
-	}{
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 3},
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 3},
-		{incFreeSlots: []int{0, 15, 0, 0}, expectNext: []uint8{1}, expFallback: 3},
-		{incFreeSlots: []int{0, 0, 0, 11}, expectNext: []uint8{1, 3}, expFallback: 3},
-		{incFreeSlots: []int{10, 0, 0, 0}, expectNext: []uint8{1, 3, 0}, expFallback: 3},
-		{incFreeSlots: []int{100, 0, 0, 0}, expectNext: []uint8{0, 1, 3}, expFallback: 3},
-		{incFreeSlots: []int{0, 200, 0, 0}, expectNext: []uint8{1, 0, 3}, expFallback: 3},
-		{incFreeSlots: []int{0, 0, 202, 0}, expectNext: []uint8{1, 2, 0, 3}, expFallback: 3},
-		{incFreeSlots: []int{0, 0, 0, 203}, expectNext: []uint8{1, 3, 2, 0}, expFallback: 3},
-	} {
-		for shard, inc := range tc.incFreeSlots {
-			if inc == 0 {
-				continue
-			}
-			deleteChunks := []string{}
-			for addr, storedOn := range chunkShards {
-				if storedOn == uint8(shard) {
-
-					// delete the chunk to make a free slot on the shard
-					c := new(chunk.Address)
-					err := c.UnmarshalString(addr)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if err := db.Delete(*c); err != nil {
-						t.Fatal(err)
-					}
-					deleteChunks = append(deleteChunks, addr)
-				}
-
-				if len(deleteChunks) == inc {
-					break
-				}
-			}
-
-			if len(deleteChunks) != inc {
-				panic(0)
-			}
-
-			for _, v := range deleteChunks {
-				delete(chunkShards, v)
-			}
-		}
-
-		//freeShards, fallback, err := db.NextShard()
-		//if err != nil {
-		//t.Fatal(err)
-		//}
-		//for i, shard := range freeShards {
-		//if shard != tc.expectNext[i] {
-		//t.Fatalf("expected next shard value to be %d but got %d", tc.expectNext[i], shard)
-		//}
-		//}
-
-		//if tc.expFallback != fallback {
-		//t.Fatalf("expected fallback value to be %d but got %d", tc.expFallback, fallback)
-		//}
 	}
 }
 
