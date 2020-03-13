@@ -18,6 +18,7 @@ package test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -141,11 +142,8 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 			if storedOn == i {
 
 				// delete the chunk to make a free slot on the shard
-				c := new(chunk.Address)
-				err := c.UnmarshalString(addr)
-				if err != nil {
-					t.Fatal(err)
-				}
+				c := unmarshalAddressString(t, addr)
+
 				if err := db.Delete(*c); err != nil {
 					t.Fatal(err)
 				}
@@ -445,4 +443,21 @@ func getChunks(count int) []chunk.Chunk {
 		return chunkCache
 	}
 	return chunkCache[:count]
+}
+
+func unmarshalAddressString(t *testing.T, s string) *chunk.Address {
+	t.Helper()
+	v, err := hex.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(v) != 32 {
+		t.Fatalf("address length mistmatch. got %d bytes but expected %d", len(v), 32)
+	}
+	a := new(chunk.Address)
+	*a = make([]byte, 32)
+	copy(*a, v)
+
+	return a
 }
