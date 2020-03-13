@@ -240,9 +240,9 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	RunStd(t, newStoreFunc)
 
-	t.Run("next shard", func(t *testing.T) {
-		runNextShard(t, newStoreFunc)
-	})
+	//t.Run("next shard", func(t *testing.T) {
+	//runNextShard(t, newStoreFunc)
+	//})
 }
 
 // RunNextShard runs the test scenario for NextShard selection
@@ -320,19 +320,19 @@ func runNextShard(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fu
 			}
 		}
 
-		freeShards, fallback, err := db.NextShard()
-		if err != nil {
-			t.Fatal(err)
-		}
-		for i, shard := range freeShards {
-			if shard != tc.expectNext[i] {
-				t.Fatalf("expected next shard value to be %d but got %d", tc.expectNext[i], shard)
-			}
-		}
+		//freeShards, fallback, err := db.NextShard()
+		//if err != nil {
+		//t.Fatal(err)
+		//}
+		//for i, shard := range freeShards {
+		//if shard != tc.expectNext[i] {
+		//t.Fatalf("expected next shard value to be %d but got %d", tc.expectNext[i], shard)
+		//}
+		//}
 
-		if tc.expFallback != fallback {
-			t.Fatalf("expected fallback value to be %d but got %d", tc.expFallback, fallback)
-		}
+		//if tc.expFallback != fallback {
+		//t.Fatalf("expected fallback value to be %d but got %d", tc.expFallback, fallback)
+		//}
 	}
 }
 

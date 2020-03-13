@@ -86,61 +86,26 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	return nil
 }
 
-// ShardSlots gives back a slice of ShardInfo items that represent the number
-// of free slots inside each shard.
-func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
-	freeSlots = make([]fcds.ShardInfo, fcds.ShardCount)
-
-	s.mtx.RLock()
-	for i := uint8(0); i < fcds.ShardCount; i++ {
-		slot := fcds.ShardInfo{Shard: i}
-		if slots, ok := s.free[i]; ok {
-			slot.Val = int64(len(slots))
-		}
-		freeSlots[i] = slot
-	}
-	s.mtx.RUnlock()
-
-	return freeSlots
-}
-
 // FreeOffset returns an offset that can be reclaimed by
 // another chunk. If the returned value is less then 0
-// there are no free offset at this shard.
-func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
-	s.mtx.RLock()
-	for o := range s.free[shard] {
-		s.mtx.RUnlock()
-		return o, nil
-	}
-	s.mtx.RUnlock()
-	return -1, nil
-}
-
-func (s *MetaStore) FastFreeOffset() (uint8, int64, func(), error) {
+// there are no free offsets on any shards and the chunk must be
+// appended to the shortest shard
+func (s *MetaStore) FreeOffset() (shard uint8, offset int64, cancel func()) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	for shard, offsets := range s.free {
-		for o, _ := range offsets {
-			if o >= 0 {
-				o := o
-				// remove from free offset map, create cancel func, return all values
-
-				delete(offsets, o)
-				return shard, o, func() {
-					s.mtx.Lock()
-					defer s.mtx.Unlock()
-					s.free[shard][o] = struct{}{}
-				}, nil
-			} else {
-				panic("wtf mem")
+		for offset, _ = range offsets {
+			delete(offsets, offset)
+			return shard, offset, func() {
+				s.mtx.Lock()
+				defer s.mtx.Unlock()
+				s.free[shard][offset] = struct{}{}
 			}
 		}
 	}
 
-	return 0, -1, func() {}, nil
-
+	return 0, -1, func() {}
 }
 
 // Count returns a number of chunks in MetaStore.

@@ -92,15 +92,9 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	if err != nil {
 		return err
 	}
-	if _, err := s.Get(addr); err != nil {
-		batch.Put(chunkKey(addr), meta)
-	}
+	batch.Put(chunkKey(addr), meta)
 
-	err = s.db.Write(batch, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	return s.db.Write(batch, nil)
 }
 
 // Remove removes chunk meta information from the shard.
@@ -126,62 +120,26 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	return nil
 }
 
-// ShardSlots gives back a slice of ShardInfo items that represent the number
-// of free slots inside each shard, value is in number of chunks, not bytes.
-func (s *MetaStore) ShardSlots() (freeSlots []fcds.ShardInfo) {
-	freeSlots = make([]fcds.ShardInfo, fcds.ShardCount)
-
-	s.mtx.RLock()
-	for i := uint8(0); i < fcds.ShardCount; i++ {
-		i := i
-		slot := fcds.ShardInfo{Shard: i}
-		if slots, ok := s.free[i]; ok {
-			slot.Val = int64(len(slots))
-		}
-		freeSlots[i] = slot
-	}
-	s.mtx.RUnlock()
-
-	return freeSlots
-}
-
 // FreeOffset returns an offset that can be reclaimed by
 // another chunk. If the returned value is less then 0
-// there are no free offset at this shard.
-func (s *MetaStore) FreeOffset(shard uint8) (offset int64, err error) {
-	i := s.db.NewIterator(nil, nil)
-	defer i.Release()
-
-	i.Seek([]byte{freePrefix, shard})
-	key := i.Key()
-	if key == nil || key[0] != freePrefix || key[1] != shard {
-		return -1, nil
-	}
-	offset = int64(binary.BigEndian.Uint64(key[2:10]))
-	return offset, nil
-}
-
-func (s *MetaStore) FastFreeOffset() (uint8, int64, func(), error) {
+// there are no free offsets on any shards and the chunk must be
+// appended to the shortest shard
+func (s *MetaStore) FreeOffset() (shard uint8, offset int64, cancel func()) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	for shard, offsets := range s.free {
-		for o, _ := range offsets {
-			if o >= 0 {
-				o := o
-				// remove from free offset map, create cancel func, return all values
-				delete(offsets, o)
-				return shard, o, func() {
-					s.mtx.Lock()
-					defer s.mtx.Unlock()
-					s.free[shard][o] = struct{}{}
-				}, nil
-			} else {
-				panic("wtf")
+		for offset, _ = range offsets {
+			delete(offsets, offset)
+			return shard, offset, func() {
+				s.mtx.Lock()
+				defer s.mtx.Unlock()
+				s.free[shard][offset] = struct{}{}
 			}
 		}
 	}
-	return 0, -1, func() {}, nil
+
+	return 0, -1, func() {}
 }
 
 // Count returns a number of chunks in MetaStore.

@@ -40,8 +40,6 @@ type Storer interface {
 	Has(addr chunk.Address) (yes bool, err error)
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
-	NextShard() (freeShard []uint8, fallback uint8, err error)
-	//NextShardLocked() (freeShard shard, s uint8, offset int64, reclaimed bool, err error)
 	ShardSize() (slots []ShardInfo, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
@@ -117,8 +115,9 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 func (s *Store) ShardSize() (slots []ShardInfo, err error) {
 	slots = make([]ShardInfo, len(s.shards))
 	for i, sh := range s.shards {
-		i := i
+		sh.mu.Lock()
 		fs, err := sh.f.Stat()
+		sh.mu.Unlock()
 		if err != nil {
 			return nil, err
 		}
@@ -142,18 +141,20 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 
 	sh := s.shards[m.Shard]
 	sh.mu.Lock()
-	defer sh.mu.Unlock()
 
 	data := make([]byte, m.Size)
 	n, err := sh.f.ReadAt(data, m.Offset)
 	if err != nil && err != io.EOF {
 		metrics.GetOrRegisterCounter("fcds.get.error", nil).Inc(1)
 
+		sh.mu.Unlock()
 		return nil, err
 	}
 	if n != int(m.Size) {
 		return nil, fmt.Errorf("incomplete chunk data, read %v of %v", n, m.Size)
 	}
+	sh.mu.Unlock()
+
 	metrics.GetOrRegisterCounter("fcds.get.ok", nil).Inc(1)
 
 	return chunk.NewChunk(addr, data), nil
@@ -202,12 +203,10 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	section := make([]byte, s.maxChunkSize)
 	copy(section, data)
 
-	//sh, shardId, offset, reclaimed, err := s.NextShardLocked()
-	shardId, offset, cancel, err := s.so()
+	shardId, offset, reclaimed, cancel, err := s.getOffset()
 	if err != nil {
 		return 0, err
 	}
-	reclaimed := offset >= 0
 
 	sh := s.shards[shardId]
 	sh.mu.Lock()
@@ -254,31 +253,28 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	return shardId, err
 }
 
-// getOffset returns an offset where chunk data can be written to
+// getOffset returns an offset on a shard where chunk data can be written to
 // and a flag if the offset is reclaimed from a previously removed chunk.
 // If offset is less then 0, no free offsets are available.
-func (s *Store) getOffset(shard uint8) (offset int64, reclaimed bool, err error) {
-	if !s.shardHasFreeOffsets(shard) {
-		return -1, false, nil
+func (s *Store) getOffset() (shard uint8, offset int64, reclaimed bool, cancel func(), err error) {
+	shard, offset, cancel = s.meta.FreeOffset()
+
+	if offset >= 0 {
+		return shard, offset, true, cancel, nil
 	}
 
-	offset = -1
-	if s.freeCache != nil {
-		offset = s.freeCache.get(shard)
+	// each element Val is the shard size in bytes
+	shardSizes, err := s.ShardSize()
+	if err != nil {
+		return 0, 0, false, func() {}, err
 	}
 
-	if offset < 0 {
-		offset, err = s.meta.FreeOffset(shard)
-		if err != nil {
-			return 0, false, err
-		}
-	}
-	if offset < 0 {
-		s.markShardWithFreeOffsets(shard, false)
-		return -1, false, nil
-	}
+	// sorting them will make the first element the largest shard and the last
+	// element the smallest shard; pick the smallest
+	sort.Sort(byVal(shardSizes))
 
-	return offset, true, nil
+	return shardSizes[len(shardSizes)-1].Shard, -1, false, func() {}, nil
+
 }
 
 // Delete makes the chunk unavailable.
@@ -292,7 +288,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		return err
 	}
 
-	s.markShardWithFreeOffsets(m.Shard, true)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -326,8 +321,6 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 		return err
 	}
 	defer s.unprotect()
-	//s.mtx.Lock()
-	//defer s.mtx.Unlock()
 	for _, sh := range s.shards {
 		sh.mu.Lock()
 	}
@@ -401,123 +394,6 @@ func (s *Store) unprotect() {
 // getMeta returns Meta information from MetaStore.
 func (s *Store) getMeta(addr chunk.Address) (m *Meta, err error) {
 	return s.meta.Get(addr)
-}
-
-func (s *Store) markShardWithFreeOffsets(shard uint8, has bool) {
-	s.freeMu.Lock()
-	s.free[shard] = has
-	s.freeMu.Unlock()
-}
-
-func (s *Store) shardHasFreeOffsets(shard uint8) (has bool) {
-	s.freeMu.RLock()
-	has = s.free[shard]
-	s.freeMu.RUnlock()
-	return has
-}
-
-// NextShard gets the next shard to write to.
-// Returns a slice of shards with free slots and a fallback shard
-// which is the shortest shard in size, but does not guarantee it has
-// any free slots.
-func (s *Store) NextShard() (freeShards []uint8, fallback uint8, err error) {
-
-	// multiple writers that call this at the same time will get the same shard again and again
-	// because the free slot value has not been decremented yet
-	slots := s.meta.ShardSlots()
-	sort.Sort(byVal(slots))
-
-	for _, v := range slots {
-		if v.Val > 0 {
-			freeShards = append(freeShards, v.Shard)
-		}
-	}
-
-	// each element Val is the shard size in bytes
-	shardSizes, err := s.ShardSize()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// sorting them will make the first element the largest shard and the last
-	// element the smallest shard; pick the smallest
-	sort.Sort(byVal(shardSizes))
-
-	return freeShards, shardSizes[len(shardSizes)-1].Shard, nil
-}
-
-func (s *Store) so() (uint8, int64, func(), error) {
-
-	shard, offset, cancel, err := s.meta.FastFreeOffset()
-	if err != nil {
-		return 0, 0, func() {}, err
-	}
-
-	if offset >= 0 {
-		return shard, offset, cancel, nil
-	}
-
-	// each element Val is the shard size in bytes
-	shardSizes, err := s.ShardSize()
-	if err != nil {
-		return 0, 0, func() {}, err
-	}
-
-	// sorting them will make the first element the largest shard and the last
-	// element the smallest shard; pick the smallest
-	sort.Sort(byVal(shardSizes))
-
-	return shardSizes[len(shardSizes)-1].Shard, -1, func() {}, nil
-
-}
-
-func (s *Store) NextShardLocked() (sh shard, id uint8, offset int64, reclaimed bool, err error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	// multiple writers that call this at the same time will get the same shard again and again
-	// because the free slot value has not been decremented yet
-	slots := s.meta.ShardSlots()
-	sort.Sort(byVal(slots))
-	if slots[0].Val > 0 {
-		fmt.Println("slots", slots[0].Val, slots)
-		i := slots[0].Shard
-		sh = s.shards[i]
-		sh.mu.Lock()
-		offset, reclaimed, err = s.getOffset(i)
-		if err != nil {
-			sh.mu.Unlock()
-			return sh, 0, 0, false, err
-		}
-
-		if offset < 0 {
-			panic("got no offset but should have")
-			s.shards[i].mu.Unlock()
-		} else {
-			return sh, i, offset, reclaimed, nil
-		}
-	}
-
-	// each element Val is the shard size in bytes
-	shardSizes, err := s.ShardSize()
-	if err != nil {
-		return sh, 0, 0, false, err
-	}
-
-	// sorting them will make the first element the largest shard and the last
-	// element the smallest shard; pick the smallest
-	sort.Sort(byVal(shardSizes))
-
-	fallback := shardSizes[len(shardSizes)-1].Shard
-	sh = s.shards[fallback]
-	sh.mu.Lock()
-	offset, reclaimed, err = s.getOffset(fallback)
-	if err != nil {
-		sh.mu.Unlock()
-		return sh, 0, 0, false, err
-	}
-
-	return sh, fallback, offset, reclaimed, nil
-
 }
 
 type shard struct {
