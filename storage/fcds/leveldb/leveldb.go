@@ -54,7 +54,7 @@ func NewMetaStore(path string) (s *MetaStore, err error) {
 
 	// caution - this _will_ break if we one day decide to
 	// decrease the shard count
-	ms.iterateFree(func(shard uint8, offset int64) {
+	ms.IterateFree(func(shard uint8, offset int64) {
 		ms.free[shard][offset] = struct{}{}
 	})
 
@@ -189,9 +189,9 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 	return it.Error()
 }
 
-// iterateFree iterates over all free slot entries in leveldb
+// IterateFree iterates over all free slot entries in leveldb
 // and calls the defined callback function on each entry found.
-func (s *MetaStore) iterateFree(fn func(shard uint8, offset int64)) {
+func (s *MetaStore) IterateFree(fn func(shard uint8, offset int64)) {
 	i := s.db.NewIterator(nil, nil)
 	defer i.Release()
 

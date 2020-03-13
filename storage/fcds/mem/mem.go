@@ -131,6 +131,19 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 	return nil
 }
 
+// IterateFree iterates over all free slot entries
+// and calls the defined callback function on each entry found.
+func (s *MetaStore) IterateFree(fn func(shard uint8, offset int64)) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	for shard, offsets := range s.free {
+		for offset, _ := range offsets {
+			fn(shard, offset)
+		}
+	}
+}
+
 // Close doesn't do anything.
 // It exists to implement fcdb.MetaStore interface.
 func (s *MetaStore) Close() (err error) {

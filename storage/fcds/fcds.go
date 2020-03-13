@@ -307,7 +307,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 
 	metrics.GetOrRegisterCounter("fcds.delete.ok", nil).Inc(1)
 	return nil
-
 }
 
 // Count returns a number of stored chunks.
@@ -332,7 +331,6 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 
 	return s.meta.Iterate(func(addr chunk.Address, m *Meta) (stop bool, err error) {
 		data := make([]byte, m.Size)
-
 		_, err = s.shards[m.Shard].f.ReadAt(data, m.Offset)
 		if err != nil {
 			return true, err

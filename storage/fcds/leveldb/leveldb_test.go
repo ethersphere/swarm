@@ -95,33 +95,36 @@ func TestFreeSlotCounter(t *testing.T) {
 		}
 	}
 
-	//freeSlots := metaStore.ShardSlots()
+	// verify free slots
+	cnt := 0
 
-	//store.Close()
-	//metaStore.Close()
+	metaStore.IterateFree(func(uint8, int64) {
+		cnt++
+	})
 
-	//metaStore2, err := leveldb.NewMetaStore(metaPath)
-	//if err != nil {
-	//t.Fatal(err)
-	//}
-	//defer func() {
-	//metaStore2.Close()
-	//os.RemoveAll(metaPath)
-	//}()
+	if cnt != 10 {
+		t.Fatalf("expected %d free slots but got %d", 10, cnt)
+	}
 
-	////freeSlots2 := metaStore.ShardSlots()
-	//count := 0
-	//for i, v := range freeSlots {
-	//count++
-	//if freeSlots2[i].Shard != v.Shard {
-	//t.Fatalf("expected shard %d to be %d but got %d", i, v.Shard, freeSlots[2].Shard)
-	//}
-	//if freeSlots2[i].Val != v.Val {
-	//t.Fatalf("expected shard %d to have %d free slots but got %d", i, v.Val, freeSlots[2].Val)
-	//}
-	//}
+	store.Close()
+	metaStore.Close()
 
-	//if uint8(count) != fcds.ShardCount {
-	//t.Fatalf("did not process enough shards: got %d but expected %d", count, fcds.ShardCount)
-	//}
+	metaStore2, err := leveldb.NewMetaStore(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		metaStore2.Close()
+		os.RemoveAll(metaPath)
+	}()
+
+	cnt = 0
+
+	metaStore2.IterateFree(func(_ uint8, _ int64) {
+		cnt++
+	})
+
+	if cnt != 10 {
+		t.Fatalf("expected %d free slots but got %d", 10, cnt)
+	}
 }
