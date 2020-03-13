@@ -80,19 +80,23 @@ func newCashoutProcessor(txScheduler chain.TxScheduler, backend chain.Backend, p
 
 			receipt := &notification.Receipt
 			if receipt.Status == 0 {
-				c.logger.Error("cheque cashing transaction reverted", "tx", receipt.TxHash)
+				c.logger.Error(CashChequeAction, "cheque cashing transaction reverted", "tx", receipt.TxHash)
 				return nil
 			}
 
 			result := otherSwap.CashChequeBeneficiaryResult(receipt)
 			return c.cashoutResultHandler.HandleCashoutResult(request, result, receipt)
 		},
+		NotifyPending: func(ctx context.Context, id uint64, notification *chain.TxPendingNotification) error {
+			c.logger.Debug(CashChequeAction, "cheque cashing transaction sent", "hash", notification.Transaction.Hash())
+			return nil
+		},
 		NotifyCancelled: func(ctx context.Context, id uint64, notification *chain.TxCancelledNotification) error {
-			c.logger.Warn("cheque cashing transaction cancelled", "reason", notification.Reason)
+			c.logger.Warn(CashChequeAction, "cheque cashing transaction cancelled", "reason", notification.Reason)
 			return nil
 		},
 		NotifyStatusUnknown: func(ctx context.Context, id uint64, notification *chain.TxStatusUnknownNotification) error {
-			c.logger.Error("cheque cashing transaction status unknown", "reason", notification.Reason)
+			c.logger.Error(CashChequeAction, "cheque cashing transaction status unknown", "reason", notification.Reason)
 			return nil
 		},
 	})
