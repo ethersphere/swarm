@@ -257,6 +257,7 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 // and a flag if the offset is reclaimed from a previously removed chunk.
 // If offset is less then 0, no free offsets are available.
 func (s *Store) getOffset() (shard uint8, offset int64, reclaimed bool, cancel func(), err error) {
+	cancel = func() {}
 	shard, offset, cancel = s.meta.FreeOffset()
 
 	if offset >= 0 {
@@ -266,14 +267,14 @@ func (s *Store) getOffset() (shard uint8, offset int64, reclaimed bool, cancel f
 	// each element Val is the shard size in bytes
 	shardSizes, err := s.ShardSize()
 	if err != nil {
-		return 0, 0, false, func() {}, err
+		return 0, 0, false, cancel, err
 	}
 
 	// sorting them will make the first element the largest shard and the last
 	// element the smallest shard; pick the smallest
 	sort.Sort(byVal(shardSizes))
 
-	return shardSizes[len(shardSizes)-1].Shard, -1, false, func() {}, nil
+	return shardSizes[len(shardSizes)-1].Shard, -1, false, cancel, nil
 
 }
 

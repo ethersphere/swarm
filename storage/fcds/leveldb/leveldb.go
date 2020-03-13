@@ -18,7 +18,6 @@ package leveldb
 
 import (
 	"encoding/binary"
-	"errors"
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -28,14 +27,13 @@ import (
 )
 
 var _ fcds.MetaStore = new(MetaStore)
-var errNoEntries = errors.New("no entries")
 
 // MetaStore implements FCDS MetaStore with LevelDB
 // for persistence.
 type MetaStore struct {
 	db   *leveldb.DB
-	free map[uint8]map[int64]struct{} // free slots cardinality
-	mtx  sync.RWMutex                 // synchronise free slots
+	free map[uint8]map[int64]struct{} // free slots map. root map key is shard id
+	mtx  sync.Mutex                   // synchronise free slots
 }
 
 // NewMetaStore returns new MetaStore at path.
@@ -93,7 +91,6 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 		return err
 	}
 	batch.Put(chunkKey(addr), meta)
-
 	return s.db.Write(batch, nil)
 }
 
@@ -113,9 +110,8 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	}
 
 	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	s.free[shard][m.Offset] = struct{}{}
+	s.mtx.Unlock()
 
 	return nil
 }
