@@ -77,6 +77,17 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	return m, nil
 }
 
+// Has returns true if chunk has meta information stored.
+func (s *MetaStore) Has(addr chunk.Address) (yes bool, err error) {
+	if _, err = s.db.Get(chunkKey(addr), nil); err != nil {
+		if err == leveldb.ErrNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Set adds a new chunk meta information for a shard.
 // Reclaimed flag denotes that the chunk is at the place of
 // already deleted chunk, not appended to the end of the file.

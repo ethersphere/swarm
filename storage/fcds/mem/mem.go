@@ -56,6 +56,14 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 	return m, nil
 }
 
+// Get returns true is meta information is stored.
+func (s *MetaStore) Has(addr chunk.Address) (yes bool, err error) {
+	s.mu.RLock()
+	_, yes = s.meta[string(addr)]
+	s.mu.RUnlock()
+	return yes, nil
+}
+
 // Set adds a new chunk meta information for a shard.
 // Reclaimed flag denotes that the chunk is at the place of
 // already deleted chunk, not appended to the end of the file.

@@ -27,6 +27,7 @@ import (
 // chunk meta information in Store FCDS implementation.
 type MetaStore interface {
 	Get(addr chunk.Address) (*Meta, error)
+	Has(addr chunk.Address) (bool, error)
 	Set(addr chunk.Address, shard uint8, reclaimed bool, m *Meta) error
 	Remove(addr chunk.Address, shard uint8) error
 	Count() (int, error)
