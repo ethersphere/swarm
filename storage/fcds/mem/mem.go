@@ -65,7 +65,6 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	if reclaimed {
 		delete(s.free[shard], m.Offset)
 	}
-
 	s.meta[string(addr)] = m
 	s.mtx.Unlock()
 	return nil
