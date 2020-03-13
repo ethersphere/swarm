@@ -259,7 +259,6 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 func (s *Store) getOffset() (shard uint8, offset int64, reclaimed bool, cancel func(), err error) {
 	cancel = func() {}
 	shard, offset, cancel = s.meta.FreeOffset()
-
 	if offset >= 0 {
 		return shard, offset, true, cancel, nil
 	}
