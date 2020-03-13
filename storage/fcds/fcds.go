@@ -69,7 +69,6 @@ type Store struct {
 	maxChunkSize int            // maximal chunk data size
 	quit         chan struct{}  // quit disables all operations after Close is called
 	quitOnce     sync.Once      // protects quit channel from multiple Close calls
-	mtx          sync.Mutex
 }
 
 // Option is an optional argument passed to New.
@@ -287,9 +286,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	if err != nil {
 		return err
 	}
-
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
 
 	mu := s.shards[m.Shard].mu
 	mu.Lock()
