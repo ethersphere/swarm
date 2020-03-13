@@ -100,12 +100,6 @@ func (s *MetaStore) Set(addr chunk.Address, shard uint8, reclaimed bool, m *fcds
 	if err != nil {
 		return err
 	}
-
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	delete(s.free[m.Shard], m.Offset)
-
 	return nil
 }
 
@@ -123,6 +117,7 @@ func (s *MetaStore) Remove(addr chunk.Address, shard uint8) (err error) {
 	if err != nil {
 		return err
 	}
+
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
