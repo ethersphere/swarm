@@ -189,6 +189,8 @@ func (s *MetaStore) Iterate(fn func(chunk.Address, *fcds.Meta) (stop bool, err e
 	return it.Error()
 }
 
+// iterateFree iterates over all free slot entries in leveldb
+// and calls the defined callback function on each entry found.
 func (s *MetaStore) iterateFree(fn func(shard uint8, offset int64)) {
 	i := s.db.NewIterator(nil, nil)
 	defer i.Release()

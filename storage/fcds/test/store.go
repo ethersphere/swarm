@@ -101,13 +101,12 @@ func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 		RunIterator(t, newStoreFunc)
 	})
 
-	t.Run("no grow", func(t *testing.T) {
-		runNoGrow(t, newStoreFunc)
-	})
+	//t.Run("no grow", func(t *testing.T) {
+	//runNoGrow(t, newStoreFunc)
+	//})
 
 }
 
-// RunNextShard runs the test scenario for NextShard selection
 func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	defer func(s uint8) {
 		fcds.ShardCount = s
