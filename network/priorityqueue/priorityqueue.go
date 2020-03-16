@@ -75,7 +75,7 @@ READ:
 				t time.Time
 			})
 			f(val.v)
-			metrics.GetOrRegisterResettingTimer("pq.run", nil).UpdateSince(val.t)
+			metrics.GetOrRegisterResettingTimer("pq/run", nil).UpdateSince(val.t)
 			p = top
 		default:
 			if p > 0 {

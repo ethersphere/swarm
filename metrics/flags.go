@@ -68,7 +68,7 @@ func datadirDiskUsage(path string, d time.Duration) {
 			log.Trace("cannot get disk space", "err", err)
 		}
 
-		metrics.GetOrRegisterGauge("datadir.usage", nil).Update(bytes)
+		metrics.GetOrRegisterGauge("datadir/usage", nil).Update(bytes)
 	}
 }
 

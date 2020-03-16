@@ -285,7 +285,7 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
-	metrics.GetOrRegisterCounter("kad.register", nil).Inc(1)
+	metrics.GetOrRegisterCounter("kad/register", nil).Inc(1)
 
 	var size int
 	for _, p := range peers {
@@ -328,7 +328,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
-	metrics.GetOrRegisterCounter("kad.suggestpeer", nil).Inc(1)
+	metrics.GetOrRegisterCounter("kad/suggestpeer", nil).Inc(1)
 
 	radius := neighbourhoodRadiusForPot(k.defaultIndex.conns, k.NeighbourhoodSize, k.base)
 	// collect undersaturated bins in ascending order of number of connected peers
@@ -502,7 +502,7 @@ func (k *Kademlia) suggestPeerInBinByGap(bin *pot.Bin) *BzzAddr {
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
-	metrics.GetOrRegisterCounter("kad.on", nil).Inc(1)
+	metrics.GetOrRegisterCounter("kad/on", nil).Inc(1)
 
 	var ins bool
 	index := k.defaultIndex
