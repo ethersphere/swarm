@@ -34,12 +34,13 @@ import (
 // A new transaction is only sent after the previous one confirmed
 // This is done to minimize the chance of wrong nonce use
 type TxQueue struct {
-	lock      sync.Mutex         // lock for the entire queue
-	ctx       context.Context    // context used for all network requests and waiting operations to ensure the queue can be stopped at any point
-	cancel    context.CancelFunc // function to cancel the above context
-	wg        sync.WaitGroup     // used to ensure that all background go routines have finished before Stop returns
-	started   bool               // bool indicating that the queue has been started. used to ensure it does not run multiple times simultaneously
-	errorChan chan error         // channel to stop the queue in case of errors
+	lock        sync.Mutex         // lock for the entire queue
+	ctx         context.Context    // context used for all network requests and waiting operations to ensure the queue can be stopped at any point
+	cancel      context.CancelFunc // function to cancel the above context
+	wg          sync.WaitGroup     // used to ensure that all background go routines have finished before Stop returns
+	startedChan chan struct{}      // channel to be closed when the queue has started processing
+	started     bool               // bool indicating that the queue has been started. used to ensure it does not run multiple times simultaneously
+	errorChan   chan error         // channel to stop the queue in case of errors
 
 	store              state.Store                   // state store to use as the db backend
 	prefix             string                        // all keys in the state store are prefixed with this
@@ -86,6 +87,7 @@ func NewTxQueue(store state.Store, prefix string, backend TxSchedulerBackend, pr
 		privateKey:         privateKey,
 		requestQueue:       newPersistentQueue(store, prefix+"_requestQueue_"),
 		errorChan:          make(chan error, 1),
+		startedChan:        make(chan struct{}, 0),
 	}
 	// we create the context here already because handlers can be set before the queue starts
 	txq.ctx, txq.cancel = context.WithCancel(context.Background())
@@ -226,6 +228,8 @@ func (txq *TxQueue) Start() {
 		case <-txq.ctx.Done():
 		}
 	}()
+
+	close(txq.startedChan)
 }
 
 // Stop stops processing transactions if it is running
@@ -273,6 +277,13 @@ func (txq *TxQueue) SetHandlers(handlerID string, handlers *TxRequestHandlers) e
 	txq.wg.Add(1)
 	go func() {
 		defer txq.wg.Done()
+
+		// only start sending notification once the loop started
+		select {
+		case <-txq.startedChan:
+		case <-txq.ctx.Done():
+			return
+		}
 
 		for {
 			var item notificationQueueItem
