@@ -34,7 +34,6 @@ import (
 var (
 	chunksFlag      = flag.Int("chunks", 100, "Number of chunks to use in tests.")
 	concurrencyFlag = flag.Int("concurrency", 8, "Maximal number of parallel operations.")
-	noCacheFlag     = flag.Bool("no-cache", false, "Disable memory cache.")
 )
 
 // Main parses custom cli flags automatically on test runs.
@@ -43,8 +42,16 @@ func Main(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// RunAll runs all available tests for a Store implementation.
 func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
+	RunStd(t, newStoreFunc)
+
+	t.Run("no grow", func(t *testing.T) {
+		runNoGrow(t, newStoreFunc)
+	})
+}
+
+// RunAll runs all available tests for a Store implementation.
+func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	t.Run("empty", func(t *testing.T) {
 		RunStore(t, &RunStoreOptions{
 			ChunkCount:   *chunksFlag,
@@ -100,10 +107,6 @@ func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 
 	t.Run("iterator", func(t *testing.T) {
 		RunIterator(t, newStoreFunc)
-	})
-
-	t.Run("no grow", func(t *testing.T) {
-		runNoGrow(t, newStoreFunc)
 	})
 
 }
@@ -410,7 +413,7 @@ func RunIterator(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, fun
 func NewFCDSStore(t *testing.T, path string, metaStore fcds.MetaStore) (s *fcds.Store, clean func()) {
 	t.Helper()
 
-	s, err := fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(!*noCacheFlag))
+	s, err := fcds.New(path, chunk.DefaultSize, metaStore)
 	if err != nil {
 		os.RemoveAll(path)
 		t.Fatal(err)

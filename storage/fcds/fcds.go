@@ -62,9 +62,6 @@ var (
 type Store struct {
 	shards       []shard        // relations with shard id and a shard file and their mutexes
 	meta         MetaStore      // stores chunk offsets
-	free         []bool         // which shards have free offsets
-	freeMu       sync.RWMutex   // protects free field
-	freeCache    *offsetCache   // optional cache of free offset values
 	wg           sync.WaitGroup // blocks Close until all other method calls are done
 	maxChunkSize int            // maximal chunk data size
 	quit         chan struct{}  // quit disables all operations after Close is called
@@ -74,24 +71,11 @@ type Store struct {
 // Option is an optional argument passed to New.
 type Option func(*Store)
 
-// WithCache is an optional argument to New constructor that enables
-// in memory cache of free chunk data positions in files
-func WithCache(yes bool) Option {
-	return func(s *Store) {
-		if yes {
-			s.freeCache = newOffsetCache(ShardCount)
-		} else {
-			s.freeCache = nil
-		}
-	}
-}
-
 // New constructs a new Store with files at path, with specified max chunk size.
 func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s *Store, err error) {
 	s = &Store{
 		shards:       make([]shard, ShardCount),
 		meta:         metaStore,
-		free:         make([]bool, ShardCount),
 		maxChunkSize: maxChunkSize,
 		quit:         make(chan struct{}),
 	}
@@ -236,9 +220,6 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 		cancel()
 		return 0, err
 	}
-	if reclaimed && s.freeCache != nil {
-		s.freeCache.remove(shardId, offset)
-	}
 
 	err = s.meta.Set(addr, shardId, reclaimed, &Meta{
 		Size:   uint16(size),
@@ -282,6 +263,7 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 		return err
 	}
 	defer s.unprotect()
+
 	m, err := s.getMeta(addr)
 	if err != nil {
 		return err
@@ -290,10 +272,6 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 	mu := s.shards[m.Shard].mu
 	mu.Lock()
 	defer mu.Unlock()
-
-	if s.freeCache != nil {
-		s.freeCache.set(m.Shard, m.Offset)
-	}
 
 	err = s.meta.Remove(addr, m.Shard)
 	if err != nil {

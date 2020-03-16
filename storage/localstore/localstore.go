@@ -230,7 +230,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			filepath.Join(path, "data"),
 			chunk.DefaultSize+8, // chunk data has additional 8 bytes prepended
 			metaStore,
-			fcds.WithCache(false),
 		)
 		if err != nil {
 			return nil, err

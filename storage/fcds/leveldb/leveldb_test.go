@@ -62,7 +62,7 @@ func TestFreeSlotCounter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err := fcds.New(path, chunk.DefaultSize, metaStore, fcds.WithCache(false))
+	store, err := fcds.New(path, chunk.DefaultSize, metaStore)
 	if err != nil {
 		os.RemoveAll(path)
 		t.Fatal(err)

@@ -58,9 +58,9 @@ func (s *MetaStore) Get(addr chunk.Address) (m *fcds.Meta, err error) {
 
 // Get returns true is meta information is stored.
 func (s *MetaStore) Has(addr chunk.Address) (yes bool, err error) {
-	s.mu.RLock()
+	s.mtx.RLock()
 	_, yes = s.meta[string(addr)]
-	s.mu.RUnlock()
+	s.mtx.RUnlock()
 	return yes, nil
 }
 
