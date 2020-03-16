@@ -52,10 +52,7 @@ var _ Storer = new(Store)
 var ShardCount = uint8(32)
 
 // ErrStoreClosed is returned if store is already closed.
-var (
-	ErrStoreClosed = errors.New("closed store")
-	ErrNextShard   = errors.New("error getting next shard")
-)
+var ErrStoreClosed = errors.New("closed store")
 
 // Store is the main FCDS implementation. It stores chunk data into
 // a number of files partitioned by the last byte of the chunk address.
