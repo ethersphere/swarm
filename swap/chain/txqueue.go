@@ -87,7 +87,7 @@ func NewTxQueue(store state.Store, prefix string, backend TxSchedulerBackend, pr
 		privateKey:         privateKey,
 		requestQueue:       newPersistentQueue(store, prefix+"_requestQueue_"),
 		errorChan:          make(chan error, 1),
-		startedChan:        make(chan struct{}, 0),
+		startedChan:        make(chan struct{}),
 	}
 	// we create the context here already because handlers can be set before the queue starts
 	txq.ctx, txq.cancel = context.WithCancel(context.Background())
