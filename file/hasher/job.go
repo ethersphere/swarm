@@ -56,6 +56,7 @@ func newJob(params *treeParams, tgt *target, jobIndex *jobIndex, lvl int, dataSe
 		jb.doneC = tgt.doneC
 
 	} else {
+		log.Trace("target set", "level", lvl, "targetLevel", targetLevel)
 		targetCount := tgt.Count()
 		jb.endCount = int32(jb.targetCountToEndCount(targetCount))
 	}
@@ -131,7 +132,7 @@ func (jb *job) write(index int, data []byte) {
 // - data write is finalized and targetcount is reached on a subsequent job write
 func (jb *job) process() {
 
-	log.Trace("starting job process", "level", jb.level, "sec", jb.dataSection)
+	log.Trace("starting job process", "level", jb.level, "sec", jb.dataSection, "target", jb.target)
 
 	var processCount int
 	defer jb.destroy()
@@ -165,7 +166,6 @@ OUTER:
 				idx := entry.index + i
 				data := entry.data[offset : offset+jb.writer.SectionSize()]
 				log.Trace("job write", "datasection", jb.dataSection, "level", jb.level, "processCount", oldProcessCount+i, "endcount", endCount, "index", entry.index+i, "data", hexutil.Encode(data))
-				//jb.writer.SeekSection(idx)
 				jb.writer.WriteIndexed(idx, data)
 				offset += jb.writer.SectionSize()
 			}
@@ -185,6 +185,7 @@ OUTER:
 		// enter here if data writes have been completed
 		// TODO: this case currently executes for all cycles after data write is complete for which writes to this job do not happen. perhaps it can be improved
 		case <-jb.doneC:
+			log.Trace("doneloop enter")
 			jb.mu.Lock()
 			jb.doneC = nil
 			log.Trace("doneloop", "level", jb.level, "processCount", processCount, "endcount", jb.endCount)

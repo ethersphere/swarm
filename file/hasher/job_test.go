@@ -366,7 +366,7 @@ func TestJobWriteFull(t *testing.T) {
 	defer cancel()
 	select {
 	case ref := <-tgt.Done():
-		correctRefHex := "0x8ace4673563b86281778b943aa60481fc4ede9f238dd98f1b3a5df4cb54ee79b"
+		correctRefHex := "0x1ed31ae32fe570b69b01f800fbdec1f17b7ea6f0348216d6d79df91ddf28344e"
 		refHex := hexutil.Encode(ref)
 		if refHex != correctRefHex {
 			t.Fatalf("job write full: expected %s, got %s", correctRefHex, refHex)
@@ -489,37 +489,6 @@ func TestJobWriteSpanShuffle(t *testing.T) {
 	}
 }
 
-func TestJobWriteDoubleSection(t *testing.T) {
-	writeSize := sectionSize * 2
-	dummyHashDoubleFunc := func(_ context.Context) file.SectionWriter {
-		return newDummySectionWriter(chunkSize, sectionSize*2, sectionSize*2, branches/2)
-	}
-	params := newTreeParams(dummyHashDoubleFunc)
-
-	tgt := newTarget()
-	jb := newJob(params, tgt, nil, 1, 0)
-	jb.start()
-	_, data := testutil.SerialData(chunkSize, 255, 0)
-
-	for i := 0; i < chunkSize; i += writeSize {
-		jb.write(i/writeSize, data[i:i+writeSize])
-	}
-	tgt.Set(chunkSize, branches/2-1, 2)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
-	defer cancel()
-	select {
-	case refLong := <-tgt.Done():
-		refLongHex := hexutil.Encode(refLong)
-		correctRefLongHex := "0x8ace4673563b86281778b943aa60481fc4ede9f238dd98f1b3a5df4cb54ee79b" + zeroHex
-		if refLongHex != correctRefLongHex {
-			t.Fatalf("section long: expected %s, got %s", correctRefLongHex, refLongHex)
-		}
-	case <-ctx.Done():
-		t.Fatalf("timeout: %v", ctx.Err())
-	}
-
-}
-
 // TestVectors executes the barebones functionality of the hasher
 // and verifies against source of truth results generated from the reference hasher
 // for the same data
@@ -544,9 +513,9 @@ func TestJobVector(t *testing.T) {
 			if ie > dataLength {
 				ie = dataLength
 			}
-			//writeSize := ie - i
+			writeSize := ie - i
 			dataHash.Reset()
-			//dataHash.SetLength(writeSize)
+			dataHash.SetSpan(writeSize)
 			c, err := dataHash.Write(data[i:ie])
 			if err != nil {
 				jb.destroy()

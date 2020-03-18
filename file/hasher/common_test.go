@@ -110,6 +110,7 @@ type dummySectionWriter struct {
 }
 
 func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int) *dummySectionWriter {
+	log.Trace("creating dummy writer", "sectionsize", sectionSize, "digestsize", digestSize, "branches", branches)
 	return &dummySectionWriter{
 		sectionSize: sectionSize,
 		digestSize:  digestSize,
@@ -224,13 +225,16 @@ func (d *dummySectionWriter) isFull() bool {
 	return d.size == d.sectionSize*d.branches
 }
 
-func (d *dummySectionWriter) SumIndexed(b []byte, i int) []byte {
+func (d *dummySectionWriter) SumIndexed(b []byte, l int) []byte {
+	//log.Trace("dummy sum indexed", "d", d.data[:l], "l", l, "b", b, "s", d.span)
+	d.writer.Write(d.span)
+	d.writer.Write(d.data[:l])
 	return d.writer.Sum(b)
 }
 
-func (d *dummySectionWriter) WriteIndexed(_ int, b []byte) {
-	log.Warn("index in WriteIndexed ignored for dummyWriter")
-	d.writer.Write(b)
+func (d *dummySectionWriter) WriteIndexed(i int, b []byte) {
+	//log.Trace("dummy write indexed", "i", i, "b", len(b))
+	copy(d.data[i*d.sectionSize:], b)
 }
 
 // TestDummySectionWriter
