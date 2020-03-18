@@ -74,8 +74,10 @@ func (a byVal) Len() int           { return len(a) }
 func (a byVal) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byVal) Less(i, j int) bool { return a[j].Val < a[i].Val }
 
-// ShardInfo contains data about free number of slots
-// in a shard.
+// ShardInfo contains data about an arbitrary shard
+// in that Val could potentially represent any scalar
+// size pertaining to a shard (number of free slots,
+// size in bytes, number of occupied slots, etc).
 type ShardInfo struct {
 	Shard uint8
 	Val   int64

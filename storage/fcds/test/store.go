@@ -42,6 +42,7 @@ func Main(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// RunAll runs all available tests for a Store implementation.
 func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	RunStd(t, newStoreFunc)
 
@@ -50,7 +51,7 @@ func RunAll(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func()))
 	})
 }
 
-// RunAll runs all available tests for a Store implementation.
+// RunStd runs all standard tests that are agnostic to specific Store implementation details.
 func RunStd(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func())) {
 	t.Run("empty", func(t *testing.T) {
 		RunStore(t, &RunStoreOptions{

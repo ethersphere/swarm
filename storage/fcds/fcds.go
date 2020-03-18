@@ -125,7 +125,7 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	data := make([]byte, m.Size)
 	n, err := sh.f.ReadAt(data, m.Offset)
 	if err != nil && err != io.EOF {
-		metrics.GetOrRegisterCounter("fcds.get.error", nil).Inc(1)
+		metrics.GetOrRegisterCounter("fcds/get/error", nil).Inc(1)
 
 		sh.mu.Unlock()
 		return nil, err
@@ -135,7 +135,7 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	}
 	sh.mu.Unlock()
 
-	metrics.GetOrRegisterCounter("fcds.get.ok", nil).Inc(1)
+	metrics.GetOrRegisterCounter("fcds/get/ok", nil).Inc(1)
 
 	return chunk.NewChunk(addr, data), nil
 }
@@ -150,13 +150,13 @@ func (s *Store) Has(addr chunk.Address) (yes bool, err error) {
 	_, err = s.getMeta(addr)
 	if err != nil {
 		if err == chunk.ErrChunkNotFound {
-			metrics.GetOrRegisterCounter("fcds.has.no", nil).Inc(1)
+			metrics.GetOrRegisterCounter("fcds/has/no", nil).Inc(1)
 			return false, nil
 		}
-		metrics.GetOrRegisterCounter("fcds.has.err", nil).Inc(1)
+		metrics.GetOrRegisterCounter("fcds/has/err", nil).Inc(1)
 		return false, err
 	}
-	metrics.GetOrRegisterCounter("fcds.has.ok", nil).Inc(1)
+	metrics.GetOrRegisterCounter("fcds/has/ok", nil).Inc(1)
 
 	return true, nil
 }
@@ -193,17 +193,17 @@ func (s *Store) Put(ch chunk.Chunk) (uint8, error) {
 	defer sh.mu.Unlock()
 
 	if reclaimed {
-		metrics.GetOrRegisterCounter("fcds.put.reclaimed", nil).Inc(1)
+		metrics.GetOrRegisterCounter("fcds/put/reclaimed", nil).Inc(1)
 	}
 
 	if offset < 0 {
-		metrics.GetOrRegisterCounter("fcds.put.append", nil).Inc(1)
+		metrics.GetOrRegisterCounter("fcds/put/append", nil).Inc(1)
 		// no free offsets found,
 		// append the chunk data by
 		// seeking to the end of the file
 		offset, err = sh.f.Seek(0, io.SeekEnd)
 	} else {
-		metrics.GetOrRegisterCounter("fcds.put.offset", nil).Inc(1)
+		metrics.GetOrRegisterCounter("fcds/put/offset", nil).Inc(1)
 		// seek to the offset position
 		// to replace the chunk data at that position
 		_, err = sh.f.Seek(offset, io.SeekStart)
@@ -272,11 +272,11 @@ func (s *Store) Delete(addr chunk.Address) (err error) {
 
 	err = s.meta.Remove(addr, m.Shard)
 	if err != nil {
-		metrics.GetOrRegisterCounter("fcds.delete.fail", nil).Inc(1)
+		metrics.GetOrRegisterCounter("fcds/delete/fail", nil).Inc(1)
 		return err
 	}
 
-	metrics.GetOrRegisterCounter("fcds.delete.ok", nil).Inc(1)
+	metrics.GetOrRegisterCounter("fcds/delete/ok", nil).Inc(1)
 	return nil
 }
 

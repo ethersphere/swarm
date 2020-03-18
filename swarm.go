@@ -227,7 +227,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MockStore:    mockStore,
 		Capacity:     config.DbCapacity,
 		Tags:         self.tags,
-		PutToGCCheck: func(_ []byte) bool { return true },
+		PutToGCCheck: to.IsWithinDepth,
 	})
 	if err != nil {
 		return nil, err
