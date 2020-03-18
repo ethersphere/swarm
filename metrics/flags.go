@@ -20,10 +20,12 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"net/http"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethersphere/swarm/log"
 )
 
@@ -60,6 +62,7 @@ func Setup(o Options) {
 			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, o.Endoint, o.Database, o.Username, o.Password, "swarm.", tagsMap)
 			go influxdb.InfluxDBWithTags(metrics.AccountingRegistry, 10*time.Second, o.Endoint, o.Database, o.Username, o.Password, "accounting.", tagsMap)
 		}
+        http.Handle("/debug/metrics/prometheus/accounting", prometheus.Handler(metrics.AccountingRegistry))
 	}
 }
 
