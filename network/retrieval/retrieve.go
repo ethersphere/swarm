@@ -401,11 +401,11 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
-		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
+		r.logger.Trace("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
 		req.PeersToSkip.Store(sp.ID().String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
-			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
+			r.logger.Trace("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
 			return nil, func() {}, ErrNoPeerFound
 		}
 
@@ -423,7 +423,7 @@ FINDPEER:
 	}
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
-		protoPeer.logger.Error("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
+		protoPeer.logger.Trace("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
 		cleanup()
 		return nil, func() {}, err
 	}
