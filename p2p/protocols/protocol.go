@@ -34,9 +34,9 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -283,7 +283,7 @@ func (p *Peer) Stop(timeout time.Duration) error {
 func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	defer metrics.GetOrRegisterResettingTimer("peer/send_t", nil).UpdateSince(time.Now())
 	metrics.GetOrRegisterCounter("peer/send", nil).Inc(1)
-	metrics.GetOrRegisterCounter(strings.ReplaceAll(fmt.Sprintf("peer/send/%T", msg), ".", "/") , nil).Inc(1)
+	metrics.GetOrRegisterCounter(strings.ReplaceAll(fmt.Sprintf("peer/send/%T", msg), ".", "/"), nil).Inc(1)
 
 	code, found := p.spec.GetCode(msg)
 	if !found {
