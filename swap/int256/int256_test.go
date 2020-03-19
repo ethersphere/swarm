@@ -78,7 +78,7 @@ var int256TestCases = []testCase{
 	},
 	{
 		name:         "case 2^8",
-		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(8), nil),
+		value:        big.NewInt(256),
 		expectsError: false,
 	},
 	{
