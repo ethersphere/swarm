@@ -15,6 +15,23 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+type referenceBmtWrapper struct {
+	*bmt.Hasher
+}
+
+func (r *referenceBmtWrapper) SetWriter(hashFunc file.SectionWriterFunc) file.SectionWriter {
+	log.Warn("BMT hasher does not currently support SectionWriter chaining")
+	return r
+}
+
+func (r *referenceBmtWrapper) SumIndexed(b []byte, _ int) []byte {
+	return r.Sum(b)
+}
+
+func (r *referenceBmtWrapper) WriteIndexed(_ int, b []byte) {
+	r.Write(b)
+}
+
 // TestManualDanglingChunk is a test script explicitly hashing and writing every individual level in the dangling chunk edge case
 // we use a balanced tree with data size of chunkSize*branches, and a single chunk of data
 // this case is chosen because it produces the wrong result in the pyramid hasher at the time of writing (master commit hash 4928d989ebd0854d993c10c194e61a5a5455e4f9)
@@ -90,7 +107,7 @@ func TestReferenceHasherVector(t *testing.T) {
 
 	hashFunc := func(_ context.Context) file.SectionWriter {
 		pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-		return bmt.New(pool)
+		return &referenceBmtWrapper{Hasher: bmt.New(pool)}
 	}
 	params := newTreeParams(hashFunc)
 	var mismatch int
@@ -128,7 +145,7 @@ func benchmarkReferenceHasher(b *testing.B) {
 	}
 	hashFunc := func(_ context.Context) file.SectionWriter {
 		pool := bmt.NewTreePool(sha3.NewLegacyKeccak256, branches, bmt.PoolSize)
-		return bmt.New(pool)
+		return &referenceBmtWrapper{Hasher: bmt.New(pool)}
 	}
 	params := newTreeParams(hashFunc)
 	b.ResetTimer()
