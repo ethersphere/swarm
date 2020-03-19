@@ -110,7 +110,7 @@ func (u *Uint256) String() string {
 
 // MarshalJSON implements the json.Marshaler interface
 // it specifies how to marshal a Uint256 struct so that it can be written to disk
-func (u Uint256) MarshalJSON() ([]byte, error) {
+func (u *Uint256) MarshalJSON() ([]byte, error) {
 	return []byte(u.value.String()), nil
 }
 
