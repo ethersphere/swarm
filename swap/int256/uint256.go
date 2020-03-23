@@ -43,14 +43,14 @@ func NewUint256(value big.Int) (*Uint256, error) {
 // any uint64 is valid as a Uint256
 func Uint256From(base uint64) *Uint256 {
 	u := new(Uint256)
-	u.value = *new(big.Int).SetUint64(base)
+	u.value.SetUint64(base)
 	return u
 }
 
 // Copy creates and returns a new Int256 instance, with its underlying value set matching the receiver
 func (u *Uint256) Copy() *Uint256 {
 	v := new(Uint256)
-	v.value = *new(big.Int).Set(&u.value)
+	v.value.Set(&u.value)
 	return v
 }
 
@@ -68,7 +68,7 @@ func (u *Uint256) set(value big.Int) (*Uint256, error) {
 	if value.Cmp(minUint256) == -1 {
 		return nil, fmt.Errorf("cannot set Uint256 to %v as it underflows min value of %v", value, minUint256)
 	}
-	u.value = *new(big.Int).Set(&value)
+	u.value.Set(&value)
 	return u, nil
 }
 
