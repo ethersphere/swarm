@@ -19,10 +19,10 @@ package localstore
 import (
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -36,7 +36,7 @@ var (
 	// garbage collection runs.
 	gcTargetRatio = 0.9
 	// gcBatchSize limits the number of chunks in a single
-	// leveldb batch on garbage collection.
+	// batch on garbage collection.
 	gcBatchSize uint64 = 200
 )
 
@@ -87,7 +87,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		}
 	}()
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.GetBatch()
 	target := db.gcTarget()
 
 	// protect database from changing idexes and gcSize
@@ -157,7 +157,7 @@ func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
 		}
 	}()
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.GetBatch()
 	excludedCount := 0
 	var gcSizeChange int64
 	err = db.gcExcludeIndex.Iterate(func(item shed.Item) (stop bool, err error) {
@@ -227,7 +227,7 @@ func (db *DB) triggerGarbageCollection() {
 // incGCSizeInBatch changes gcSize field value
 // by change which can be negative. This function
 // must be called under batchMu lock.
-func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
+func (db *DB) incGCSizeInBatch(txn *badger.Txn, change int64) (err error) {
 	if change == 0 {
 		return nil
 	}
@@ -249,10 +249,12 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 		}
 		new = gcSize - c
 	}
-	db.gcSize.PutInBatch(batch, new)
+	metrics.GetOrRegisterGauge("localstore.gcsize.index", nil).Update(int64(gcSize))
+	db.gcSize.PutInBatch(txn, new)
 
 	// trigger garbage collection if we reached the capacity
 	if new >= db.capacity {
+		metrics.GetOrRegisterCounter("localstore.trigger-gc-on-inc", nil).Inc(1)
 		db.triggerGarbageCollection()
 	}
 	return nil

@@ -17,8 +17,8 @@
 package shed
 
 import (
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // StructField is a helper to store complex structure by
@@ -42,7 +42,7 @@ func (db *DB) NewStructField(name string) (f StructField, err error) {
 }
 
 // Get unmarshals data from the database to a provided val.
-// If the data is not found leveldb.ErrNotFound is returned.
+// If the data is not found badger.ErrKeyNotFound is returned.
 func (f StructField) Get(val interface{}) (err error) {
 	b, err := f.db.Get(f.key)
 	if err != nil {
@@ -61,11 +61,10 @@ func (f StructField) Put(val interface{}) (err error) {
 }
 
 // PutInBatch marshals provided val and puts it into the batch.
-func (f StructField) PutInBatch(batch *leveldb.Batch, val interface{}) (err error) {
+func (f StructField) PutInBatch(txn *badger.Txn, val interface{}) (err error) {
 	b, err := rlp.EncodeToBytes(val)
 	if err != nil {
 		return err
 	}
-	batch.Put(f.key, b)
-	return nil
+	return txn.Set(f.key, b)
 }

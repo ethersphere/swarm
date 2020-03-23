@@ -128,11 +128,12 @@ func setLoggerHandler(logpath string, swapLogLevel int, logger log.Logger) {
 // swapRotatingFileHandler returns a RotatingFileHandler this will split the logs into multiple files.
 // the files are split based on the limit parameter expressed in bytes
 func swapRotatingFileHandler(logdir string) (log.Handler, error) {
-	return log.RotatingFileHandler(
-		logdir,
-		fileSizeLimit,
-		log.JSONFormatOrderedEx(false, true),
-	)
+	//return log.RotatingFileHandler(
+	//	logdir,
+	//	fileSizeLimit,
+	//	log.JSONFormatOrderedEx(false, true),
+	//)
+	return nil, nil
 }
 
 // newSwapLogger returns a new logger for standard swap logs

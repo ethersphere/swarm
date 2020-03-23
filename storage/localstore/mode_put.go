@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Put stores Chunks to database and depending
@@ -58,7 +58,7 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.GetBatch()
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
@@ -160,14 +160,14 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 //  - it does not enter the syncpool
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putRequest(txn *badger.Txn, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
 	i, err := db.retrievalDataIndex.Get(item)
 	switch err {
 	case nil:
 		exists = true
 		item.StoreTimestamp = i.StoreTimestamp
 		item.BinID = i.BinID
-	case leveldb.ErrNotFound:
+	case badger.ErrKeyNotFound:
 		// no chunk accesses
 		exists = false
 	default:
@@ -183,12 +183,12 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 		}
 	}
 
-	gcSizeChange, err = db.setGC(batch, item)
+	gcSizeChange, err = db.setGC(txn, item)
 	if err != nil {
 		return false, 0, err
 	}
 
-	db.retrievalDataIndex.PutInBatch(batch, item)
+	db.retrievalDataIndex.PutInBatch(txn, item)
 
 	return exists, gcSizeChange, nil
 }
@@ -197,14 +197,14 @@ func (db *DB) putRequest(batch *leveldb.Batch, binIDs map[uint8]uint64, item she
 //  - put to indexes: retrieve, push, pull
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putUpload(txn *badger.Txn, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
 	exists, err = db.retrievalDataIndex.Has(item)
 	if err != nil {
 		return false, 0, err
 	}
 	if exists {
 		if db.putToGCCheck(item.Address) {
-			gcSizeChange, err = db.setGC(batch, item)
+			gcSizeChange, err = db.setGC(txn, item)
 			if err != nil {
 				return false, 0, err
 			}
@@ -226,10 +226,10 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 	if err != nil {
 		return false, 0, err
 	}
-	db.retrievalDataIndex.PutInBatch(batch, item)
-	db.pullIndex.PutInBatch(batch, item)
+	db.retrievalDataIndex.PutInBatch(txn, item)
+	db.pullIndex.PutInBatch(txn, item)
 	if !anonymous {
-		db.pushIndex.PutInBatch(batch, item)
+		db.pushIndex.PutInBatch(txn, item)
 	}
 
 	if db.putToGCCheck(item.Address) {
@@ -238,7 +238,7 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 		// that has very little storage and uploads using an anonymous
 		// upload will have some of the content GCd before being able
 		// to sync it
-		gcSizeChange, err = db.setGC(batch, item)
+		gcSizeChange, err = db.setGC(txn, item)
 		if err != nil {
 			return false, 0, err
 		}
@@ -251,14 +251,14 @@ func (db *DB) putUpload(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed
 //  - put to indexes: retrieve, pull
 // The batch can be written to the database.
 // Provided batch and binID map are updated.
-func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
+func (db *DB) putSync(txn *badger.Txn, binIDs map[uint8]uint64, item shed.Item) (exists bool, gcSizeChange int64, err error) {
 	exists, err = db.retrievalDataIndex.Has(item)
 	if err != nil {
 		return false, 0, err
 	}
 	if exists {
 		if db.putToGCCheck(item.Address) {
-			gcSizeChange, err = db.setGC(batch, item)
+			gcSizeChange, err = db.setGC(txn, item)
 			if err != nil {
 				return false, 0, err
 			}
@@ -272,15 +272,15 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 	if err != nil {
 		return false, 0, err
 	}
-	db.retrievalDataIndex.PutInBatch(batch, item)
-	db.pullIndex.PutInBatch(batch, item)
+	db.retrievalDataIndex.PutInBatch(txn, item)
+	db.pullIndex.PutInBatch(txn, item)
 
 	if db.putToGCCheck(item.Address) {
 		// TODO: this might result in an edge case where a node
 		// that has very little storage and uploads using an anonymous
 		// upload will have some of the content GCd before being able
 		// to sync it
-		gcSizeChange, err = db.setGC(batch, item)
+		gcSizeChange, err = db.setGC(txn, item)
 		if err != nil {
 			return false, 0, err
 		}
@@ -295,7 +295,7 @@ func (db *DB) putSync(batch *leveldb.Batch, binIDs map[uint8]uint64, item shed.I
 // a chunk is added to a node's localstore and given that the chunk is
 // already within that node's NN (thus, it can be added to the gc index
 // safely)
-func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, err error) {
+func (db *DB) setGC(txn *badger.Txn, item shed.Item) (gcSizeChange int64, err error) {
 	if item.BinID == 0 {
 		i, err := db.retrievalDataIndex.Get(item)
 		if err != nil {
@@ -307,17 +307,17 @@ func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, e
 	switch err {
 	case nil:
 		item.AccessTimestamp = i.AccessTimestamp
-		db.gcIndex.DeleteInBatch(batch, item)
+		db.gcIndex.DeleteInBatch(txn, item)
 		gcSizeChange--
-	case leveldb.ErrNotFound:
+	case badger.ErrKeyNotFound:
 		// the chunk is not accessed before
 	default:
 		return 0, err
 	}
 	item.AccessTimestamp = now()
-	db.retrievalAccessIndex.PutInBatch(batch, item)
+	db.retrievalAccessIndex.PutInBatch(txn, item)
 
-	db.gcIndex.PutInBatch(batch, item)
+	db.gcIndex.PutInBatch(txn, item)
 	gcSizeChange++
 
 	return gcSizeChange, nil

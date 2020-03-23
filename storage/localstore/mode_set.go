@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Set updates database indexes for
@@ -53,7 +53,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.GetBatch()
 
 	// variables that provide information for operations
 	// to be done after write batch function successfully executes
@@ -134,7 +134,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 // setAccess sets the chunk access time by updating required indexes:
 //  - add to pull, insert to gc
 // Provided batch and binID map are updated.
-func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chunk.Address, po uint8) (gcSizeChange int64, err error) {
+func (db *DB) setAccess(txn *badger.Txn, binIDs map[uint8]uint64, addr chunk.Address, po uint8) (gcSizeChange int64, err error) {
 
 	item := addressToItem(addr)
 
@@ -146,8 +146,8 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	case nil:
 		item.StoreTimestamp = i.StoreTimestamp
 		item.BinID = i.BinID
-	case leveldb.ErrNotFound:
-		db.pushIndex.DeleteInBatch(batch, item)
+	case badger.ErrKeyNotFound:
+		db.pushIndex.DeleteInBatch(txn, item)
 		item.StoreTimestamp = now()
 		item.BinID, err = db.incBinID(binIDs, po)
 		if err != nil {
@@ -161,17 +161,17 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	switch err {
 	case nil:
 		item.AccessTimestamp = i.AccessTimestamp
-		db.gcIndex.DeleteInBatch(batch, item)
+		db.gcIndex.DeleteInBatch(txn, item)
 		gcSizeChange--
-	case leveldb.ErrNotFound:
+	case badger.ErrKeyNotFound:
 		// the chunk is not accessed before
 	default:
 		return 0, err
 	}
 	item.AccessTimestamp = now()
-	db.retrievalAccessIndex.PutInBatch(batch, item)
-	db.pullIndex.PutInBatch(batch, item)
-	db.gcIndex.PutInBatch(batch, item)
+	db.retrievalAccessIndex.PutInBatch(txn, item)
+	db.pullIndex.PutInBatch(txn, item)
+	db.gcIndex.PutInBatch(txn, item)
 	gcSizeChange++
 
 	return gcSizeChange, nil
@@ -184,7 +184,7 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 //   from push sync index
 // - update to gc index happens given item does not exist in pin index
 // Provided batch is updated.
-func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeSet) (gcSizeChange int64, err error) {
+func (db *DB) setSync(txn *badger.Txn, addr chunk.Address, mode chunk.ModeSet) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
 
 	// need to get access timestamp here as it is not
@@ -193,12 +193,12 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 
 	i, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			// chunk is not found,
 			// no need to update gc index
 			// just delete from the push index
 			// if it is there
-			db.pushIndex.DeleteInBatch(batch, item)
+			db.pushIndex.DeleteInBatch(txn, item)
 			return 0, nil
 		}
 		return 0, err
@@ -213,7 +213,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		// this prevents duplicate increments
 		i, err := db.pullIndex.Get(item)
 		if err != nil {
-			if err == leveldb.ErrNotFound {
+			if err == badger.ErrKeyNotFound {
 				// we handle this error internally, since this is an internal inconsistency of the indices
 				// if we return the error here - it means that for example, in stream protocol peers which we sync
 				// to would be dropped. this is possible when the chunk is put with ModePutRequest and ModeSetSyncPull is
@@ -239,7 +239,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 				// the same chunk to different peers
 				item.Tag = 0
 
-				err = db.pullIndex.PutInBatch(batch, item)
+				err = db.pullIndex.PutInBatch(txn, item)
 				if err != nil {
 					return 0, err
 				}
@@ -248,7 +248,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	case chunk.ModeSetSyncPush:
 		i, err := db.pushIndex.Get(item)
 		if err != nil {
-			if err == leveldb.ErrNotFound {
+			if err == badger.ErrKeyNotFound {
 				// we handle this error internally, since this is an internal inconsistency of the indices
 				// this error can happen if the chunk is put with ModePutRequest or ModePutSync
 				// but this function is called with ModeSetSyncPush
@@ -273,22 +273,22 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 			}
 		}
 
-		db.pushIndex.DeleteInBatch(batch, item)
+		db.pushIndex.DeleteInBatch(txn, item)
 	}
 
 	i, err = db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
 		item.AccessTimestamp = i.AccessTimestamp
-		db.gcIndex.DeleteInBatch(batch, item)
+		db.gcIndex.DeleteInBatch(txn, item)
 		gcSizeChange--
-	case leveldb.ErrNotFound:
+	case badger.ErrKeyNotFound:
 		// the chunk is not accessed before
 	default:
 		return 0, err
 	}
 	item.AccessTimestamp = now()
-	db.retrievalAccessIndex.PutInBatch(batch, item)
+	db.retrievalAccessIndex.PutInBatch(txn, item)
 
 	// Add in gcIndex only if this chunk is not pinned
 	ok, err := db.pinIndex.Has(item)
@@ -296,7 +296,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		return 0, err
 	}
 	if !ok {
-		db.gcIndex.PutInBatch(batch, item)
+		db.gcIndex.PutInBatch(txn, item)
 		gcSizeChange++
 	}
 
@@ -306,7 +306,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 // setRemove removes the chunk by updating indexes:
 //  - delete from retrieve, pull, gc
 // Provided batch is updated.
-func (db *DB) setRemove(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange int64, err error) {
+func (db *DB) setRemove(txn *badger.Txn, addr chunk.Address) (gcSizeChange int64, err error) {
 	item := addressToItem(addr)
 
 	// need to get access timestamp here as it is not
@@ -316,7 +316,7 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange 
 	switch err {
 	case nil:
 		item.AccessTimestamp = i.AccessTimestamp
-	case leveldb.ErrNotFound:
+	case badger.ErrKeyNotFound:
 	default:
 		return 0, err
 	}
@@ -327,10 +327,10 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange 
 	item.StoreTimestamp = i.StoreTimestamp
 	item.BinID = i.BinID
 
-	db.retrievalDataIndex.DeleteInBatch(batch, item)
-	db.retrievalAccessIndex.DeleteInBatch(batch, item)
-	db.pullIndex.DeleteInBatch(batch, item)
-	db.gcIndex.DeleteInBatch(batch, item)
+	db.retrievalDataIndex.DeleteInBatch(txn, item)
+	db.retrievalAccessIndex.DeleteInBatch(txn, item)
+	db.pullIndex.DeleteInBatch(txn, item)
+	db.gcIndex.DeleteInBatch(txn, item)
 	// a check is needed for decrementing gcSize
 	// as delete is not reporting if the key/value pair
 	// is deleted or not
@@ -344,19 +344,19 @@ func (db *DB) setRemove(batch *leveldb.Batch, addr chunk.Address) (gcSizeChange 
 // setPin increments pin counter for the chunk by updating
 // pin index and sets the chunk to be excluded from garbage collection.
 // Provided batch is updated.
-func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address) (err error) {
+func (db *DB) setPin(txn *badger.Txn, addr chunk.Address) (err error) {
 	item := addressToItem(addr)
 
 	// Get the existing pin counter of the chunk
 	existingPinCounter := uint64(0)
 	pinnedChunk, err := db.pinIndex.Get(item)
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			// If this Address is not present in DB, then its a new entry
 			existingPinCounter = 0
 
 			// Add in gcExcludeIndex of the chunk is not pinned already
-			db.gcExcludeIndex.PutInBatch(batch, item)
+			db.gcExcludeIndex.PutInBatch(txn, item)
 		} else {
 			return err
 		}
@@ -366,14 +366,14 @@ func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 
 	// Otherwise increase the existing counter by 1
 	item.PinCounter = existingPinCounter + 1
-	db.pinIndex.PutInBatch(batch, item)
+	db.pinIndex.PutInBatch(txn, item)
 
 	return nil
 }
 
 // setUnpin decrements pin counter for the chunk by updating pin index.
 // Provided batch is updated.
-func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
+func (db *DB) setUnpin(txn *badger.Txn, addr chunk.Address) (err error) {
 	item := addressToItem(addr)
 
 	// Get the existing pin counter of the chunk
@@ -386,9 +386,9 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	// delete it from pin index if the pin counter has reached 0
 	if pinnedChunk.PinCounter > 1 {
 		item.PinCounter = pinnedChunk.PinCounter - 1
-		db.pinIndex.PutInBatch(batch, item)
+		db.pinIndex.PutInBatch(txn, item)
 	} else {
-		db.pinIndex.DeleteInBatch(batch, item)
+		db.pinIndex.DeleteInBatch(txn, item)
 	}
 
 	return nil

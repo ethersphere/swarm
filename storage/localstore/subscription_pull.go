@@ -19,6 +19,7 @@ package localstore
 import (
 	"context"
 	"errors"
+	"github.com/dgraph-io/badger"
 	"sync"
 	"time"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
@@ -189,7 +189,7 @@ func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
 
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			return 0, nil
 		}
 		return 0, err

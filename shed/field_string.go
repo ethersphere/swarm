@@ -17,7 +17,7 @@
 package shed
 
 import (
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/dgraph-io/badger"
 )
 
 // StringField is the most simple field implementation
@@ -46,7 +46,7 @@ func (db *DB) NewStringField(name string) (f StringField, err error) {
 func (f StringField) Get() (val string, err error) {
 	b, err := f.db.Get(f.key)
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			return "", nil
 		}
 		return "", err
@@ -61,6 +61,6 @@ func (f StringField) Put(val string) (err error) {
 
 // PutInBatch stores a string in a batch that can be
 // saved later in database.
-func (f StringField) PutInBatch(batch *leveldb.Batch, val string) {
-	batch.Put(f.key, []byte(val))
+func (f StringField) PutInBatch(txn *badger.Txn, val string) (err error){
+	return txn.Set(f.key, []byte(val))
 }

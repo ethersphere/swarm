@@ -23,21 +23,17 @@
 package shed
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
+	"bytes"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethersphere/swarm/log"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
-	openFileLimit              = 128 // The limit for LevelDB OpenFilesCacheCapacity.
-	writePauseWarningThrottler = 1 * time.Minute
+	syncWrites          = true   // do not fsync entries as they are written
+	valueThresholdLimit = 1024    // valuess less than 1K are co-located with the key
+	valueLogEntries     = 1000000 // maximum no of entries in a value log file
 )
 
 // DB provides abstractions over LevelDB in order to
@@ -45,7 +41,7 @@ const (
 // It provides a schema functionality to store fields and indexes
 // information about naming and types.
 type DB struct {
-	ldb  *leveldb.DB
+	bdb  *badger.DB
 	quit chan struct{} // Quit channel to stop the metrics collection before closing the database
 }
 
@@ -53,18 +49,21 @@ type DB struct {
 // if it exists in database on the given path.
 // metricsPrefix is used for metrics collection for the given DB.
 func NewDB(path string, metricsPrefix string) (db *DB, err error) {
-	ldb, err := leveldb.OpenFile(path, &opt.Options{
-		OpenFilesCacheCapacity: openFileLimit,
-	})
+	o := badger.DefaultOptions(path)
+	o.SyncWrites = syncWrites
+	o.ValueThreshold = valueThresholdLimit
+	o.ValueLogMaxEntries = valueLogEntries
+	o.Logger = nil // don't use the badgers internal logging mechanism
+	_bdb, err := badger.Open(o)
 	if err != nil {
 		return nil, err
 	}
 	db = &DB{
-		ldb: ldb,
+		bdb: _bdb,
 	}
 
 	if _, err = db.getSchema(); err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			// save schema with initialized default fields
 			if err = db.putSchema(schema{
 				Fields:  make(map[string]fieldSpec),
@@ -80,14 +79,17 @@ func NewDB(path string, metricsPrefix string) (db *DB, err error) {
 	// Create a quit channel for the periodic metrics collector and run it
 	db.quit = make(chan struct{})
 
-	go db.meter(metricsPrefix, 10*time.Second)
+	//go db.meter(metricsPrefix, 10*time.Second)
 
 	return db, nil
 }
 
-// Put wraps LevelDB Put method to increment metrics counter.
+// Put wraps BadgerDB Put method to increment metrics counter.
 func (db *DB) Put(key []byte, value []byte) (err error) {
-	err = db.ldb.Put(key, value, nil)
+	err = db.bdb.Update(func(txn *badger.Txn) (err error) {
+		err = txn.Set(key, value)
+		return err
+	})
 	if err != nil {
 		metrics.GetOrRegisterCounter("DB.putFail", nil).Inc(1)
 		return err
@@ -96,35 +98,51 @@ func (db *DB) Put(key []byte, value []byte) (err error) {
 	return nil
 }
 
-// Get wraps LevelDB Get method to increment metrics counter.
+// Get wraps BadgerDB Get method to increment metrics counter.
 func (db *DB) Get(key []byte) (value []byte, err error) {
-	value, err = db.ldb.Get(key, nil)
-	if err != nil {
-		if err == leveldb.ErrNotFound {
-			metrics.GetOrRegisterCounter("DB.getNotFound", nil).Inc(1)
-		} else {
+	err = db.bdb.View(func(txn *badger.Txn) (err error) {
+		item, err := txn.Get(key)
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				metrics.GetOrRegisterCounter("DB.getNotFound", nil).Inc(1)
+				return err
+			}
 			metrics.GetOrRegisterCounter("DB.getFail", nil).Inc(1)
 		}
-		return nil, err
-	}
-	metrics.GetOrRegisterCounter("DB.get", nil).Inc(1)
-	return value, nil
+		return item.Value(func(val []byte) error {
+			value = make([]byte, len(val))
+			copy(value, val)
+			metrics.GetOrRegisterCounter("DB.get", nil).Inc(1)
+			return nil
+		})
+	})
+	return value, err
 }
 
-// Has wraps LevelDB Has method to increment metrics counter.
+// Has wraps BadgerDB Has method to increment metrics counter.
 func (db *DB) Has(key []byte) (yes bool, err error) {
-	yes, err = db.ldb.Has(key, nil)
-	if err != nil {
-		metrics.GetOrRegisterCounter("DB.hasFail", nil).Inc(1)
-		return false, err
-	}
-	metrics.GetOrRegisterCounter("DB.has", nil).Inc(1)
-	return yes, nil
+	yes = false
+	err = db.bdb.View(func(txn *badger.Txn) (err error) {
+		_, err = txn.Get(key)
+		if err == badger.ErrKeyNotFound {
+			yes = false
+			return nil
+		}
+		if err != nil {
+			metrics.GetOrRegisterCounter("DB.hasFail", nil).Inc(1)
+			return err
+		}
+		yes = true
+		return nil
+	})
+	return yes, err
 }
 
-// Delete wraps LevelDB Delete method to increment metrics counter.
+// Delete wraps BadgerDB Delete method to increment metrics counter.
 func (db *DB) Delete(key []byte) (err error) {
-	err = db.ldb.Delete(key, nil)
+	err = db.bdb.Update(func(txn *badger.Txn) (err error) {
+		return txn.Delete(key)
+	})
 	if err != nil {
 		metrics.GetOrRegisterCounter("DB.deleteFail", nil).Inc(1)
 		return err
@@ -133,179 +151,313 @@ func (db *DB) Delete(key []byte) (err error) {
 	return nil
 }
 
-// NewIterator wraps LevelDB NewIterator method to increment metrics counter.
-func (db *DB) NewIterator() iterator.Iterator {
-	metrics.GetOrRegisterCounter("DB.newiterator", nil).Inc(1)
+func (db *DB) CountPrefix(prefix []byte) (count int, err error) {
+	metrics.GetOrRegisterCounter("DB.countprefix", nil).Inc(1)
+	err = db.bdb.View(func(txn *badger.Txn) (err error) {
+		o := badger.DefaultIteratorOptions
+		o.PrefetchValues = false
+		o.PrefetchSize = 1024
+		i := txn.NewIterator(o)
+		defer i.Close()
 
-	return db.ldb.NewIterator(nil, nil)
+		// if prefix is nil, it is equivalent to counting from beginning
+		for i.Seek(prefix); i.ValidForPrefix(prefix); i.Next() {
+			item := i.Item()
+			k := item.Key()
+			if prefix != nil {
+				if !bytes.HasPrefix(k, prefix) {
+					break
+				}
+			}
+			count++
+		}
+		return nil
+	})
+	return count, err
 }
 
-// WriteBatch wraps LevelDB Write method to increment metrics counter.
-func (db *DB) WriteBatch(batch *leveldb.Batch) (err error) {
-	err = db.ldb.Write(batch, nil)
+func (db *DB) CountFrom(prefix []byte) (count int, err error) {
+	metrics.GetOrRegisterCounter("DB.countfrom", nil).Inc(1)
+	err = db.bdb.View(func(txn *badger.Txn) (err error) {
+		o := badger.DefaultIteratorOptions
+		o.PrefetchValues = false
+		o.PrefetchSize = 1024
+		i := txn.NewIterator(o)
+		defer i.Close()
+
+		// if prefix is nil, it is equivalent to counting from beginning
+		for i.Seek(prefix); i.Valid(); i.Next() {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+
+func (db *DB) Iterate(startKey []byte, skipStartKey bool, fn func(key []byte, value []byte) (stop bool, err error)) (err error) {
+	metrics.GetOrRegisterCounter("DB.newiterator", nil).Inc(1)
+	return db.bdb.View(func(txn *badger.Txn) (err error) {
+		o := badger.DefaultIteratorOptions
+		o.PrefetchValues = true
+		o.PrefetchSize = 1024
+		i := txn.NewIterator(o)
+		defer i.Close()
+
+		i.Seek(startKey)
+		if !i.Valid() {
+			return nil
+		}
+
+		if skipStartKey && bytes.Equal(startKey, i.Item().Key()) {
+			i.Next()
+		}
+
+		for ; i.Valid(); i.Next() {
+			item := i.Item()
+			k := item.Key()
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			stop, err := fn(k, v)
+			if err != nil {
+				return err
+			}
+			if stop {
+				return nil
+			}
+		}
+		return nil
+	})
+}
+
+func (db *DB) First(prefix []byte) (key []byte, value []byte, err error) {
+	metrics.GetOrRegisterCounter("DB.first", nil).Inc(1)
+	err = db.bdb.View(func(txn *badger.Txn) (err error) {
+		o := badger.DefaultIteratorOptions
+		o.PrefetchValues = true
+		o.PrefetchSize = 1
+
+		i := txn.NewIterator(o)
+		defer i.Close()
+
+		i.Seek(prefix)
+		key = i.Item().Key()
+		if !bytes.HasPrefix(key, prefix) {
+			return badger.ErrKeyNotFound
+		}
+		value, err = i.Item().ValueCopy(value)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return key, value, err
+}
+
+func (db *DB) Last(prefix []byte) (key []byte, value []byte, err error) {
+	metrics.GetOrRegisterCounter("DB.last", nil).Inc(1)
+	err = db.bdb.View(func(txn *badger.Txn) (err error) {
+		o := badger.DefaultIteratorOptions
+		o.PrefetchValues = true
+		o.PrefetchSize = 1024
+
+		i := txn.NewIterator(o)
+		defer i.Close()
+
+		for i.Seek(prefix); i.ValidForPrefix(prefix); i.Next() {
+			key = i.Item().Key()
+			value, err = i.Item().ValueCopy(value)
+			if err != nil {
+				return err
+			}
+		}
+
+		if key == nil {
+			return badger.ErrKeyNotFound
+		}
+
+		if !bytes.HasPrefix(key, prefix) {
+			return badger.ErrKeyNotFound
+		}
+		return nil
+	})
+	return key, value, err
+}
+
+func (db *DB) GetBatch() (txn *badger.Txn) {
+	metrics.GetOrRegisterCounter("DB.newbatch", nil).Inc(1)
+	// set update to true indicating that data will be added/changed in this transaction.
+	return db.bdb.NewTransaction(true)
+}
+
+// WriteBatch wraps badger transaction commit method.
+func (db *DB) WriteBatch(txn *badger.Txn) (err error) {
+	err = txn.Commit()
 	if err != nil {
 		metrics.GetOrRegisterCounter("DB.writebatchFail", nil).Inc(1)
 		return err
 	}
+	txn.Discard()
 	metrics.GetOrRegisterCounter("DB.writebatch", nil).Inc(1)
 	return nil
 }
 
-// Close closes LevelDB database.
+// Close closes badger database.
 func (db *DB) Close() (err error) {
 	close(db.quit)
-	return db.ldb.Close()
+	return db.bdb.Close()
 }
 
 func (db *DB) meter(prefix string, refresh time.Duration) {
-	// Meter for measuring the total time spent in database compaction
-	compTimeMeter := metrics.NewRegisteredMeter(prefix+"compact/time", nil)
-	// Meter for measuring the data read during compaction
-	compReadMeter := metrics.NewRegisteredMeter(prefix+"compact/input", nil)
-	// Meter for measuring the data written during compaction
-	compWriteMeter := metrics.NewRegisteredMeter(prefix+"compact/output", nil)
-	// Meter for measuring the write delay number due to database compaction
-	writeDelayMeter := metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
-	// Meter for measuring the write delay duration due to database compaction
-	writeDelayNMeter := metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
-	// Meter for measuring the effective amount of data read
-	diskReadMeter := metrics.NewRegisteredMeter(prefix+"disk/read", nil)
-	// Meter for measuring the effective amount of data written
-	diskWriteMeter := metrics.NewRegisteredMeter(prefix+"disk/write", nil)
-
-	// Create the counters to store current and previous compaction values
-	compactions := make([][]float64, 2)
-	for i := 0; i < 2; i++ {
-		compactions[i] = make([]float64, 3)
-	}
-	// Create storage for iostats.
-	var iostats [2]float64
-
-	// Create storage and warning log tracer for write delay.
-	var (
-		delaystats      [2]int64
-		lastWritePaused time.Time
-	)
-
-	// Iterate ad infinitum and collect the stats
-	for i := 1; true; i++ {
-		// Retrieve the database stats
-		stats, err := db.ldb.GetProperty("leveldb.stats")
-		if err != nil {
-			log.Error("Failed to read database stats", "err", err)
-			continue
-		}
-		// Find the compaction table, skip the header
-		lines := strings.Split(stats, "\n")
-		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
-			lines = lines[1:]
-		}
-		if len(lines) <= 3 {
-			log.Error("Compaction table not found")
-			continue
-		}
-		lines = lines[3:]
-
-		// Iterate over all the table rows, and accumulate the entries
-		for j := 0; j < len(compactions[i%2]); j++ {
-			compactions[i%2][j] = 0
-		}
-		for _, line := range lines {
-			parts := strings.Split(line, "|")
-			if len(parts) != 6 {
-				break
-			}
-			for idx, counter := range parts[3:] {
-				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
-				if err != nil {
-					log.Error("Compaction entry parsing failed", "err", err)
-					continue
-				}
-				compactions[i%2][idx] += value
-			}
-		}
-		// Update all the requested meters
-		if compTimeMeter != nil {
-			compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
-		}
-		if compReadMeter != nil {
-			compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
-		}
-		if compWriteMeter != nil {
-			compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
-		}
-
-		// Retrieve the write delay statistic
-		writedelay, err := db.ldb.GetProperty("leveldb.writedelay")
-		if err != nil {
-			log.Error("Failed to read database write delay statistic", "err", err)
-			continue
-		}
-		var (
-			delayN        int64
-			delayDuration string
-			duration      time.Duration
-			paused        bool
-		)
-		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
-			log.Error("Write delay statistic not found")
-			continue
-		}
-		duration, err = time.ParseDuration(delayDuration)
-		if err != nil {
-			log.Error("Failed to parse delay duration", "err", err)
-			continue
-		}
-		if writeDelayNMeter != nil {
-			writeDelayNMeter.Mark(delayN - delaystats[0])
-		}
-		if writeDelayMeter != nil {
-			writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}
-		// If a warning that db is performing compaction has been displayed, any subsequent
-		// warnings will be withheld for one minute not to overwhelm the user.
-		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
-			time.Now().After(lastWritePaused.Add(writePauseWarningThrottler)) {
-			log.Warn("Database compacting, degraded performance")
-			lastWritePaused = time.Now()
-		}
-		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
-
-		// Retrieve the database iostats.
-		ioStats, err := db.ldb.GetProperty("leveldb.iostats")
-		if err != nil {
-			log.Error("Failed to read database iostats", "err", err)
-			continue
-		}
-		var nRead, nWrite float64
-		parts := strings.Split(ioStats, " ")
-		if len(parts) < 2 {
-			log.Error("Bad syntax of ioStats", "ioStats", ioStats)
-			continue
-		}
-		if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
-			log.Error("Bad syntax of read entry", "entry", parts[0])
-			continue
-		}
-		if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
-			log.Error("Bad syntax of write entry", "entry", parts[1])
-			continue
-		}
-		if diskReadMeter != nil {
-			diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
-		}
-		if diskWriteMeter != nil {
-			diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
-		}
-		iostats[0], iostats[1] = nRead, nWrite
-
-		// Sleep a bit, then repeat the stats collection
-		select {
-		case <-db.quit:
-			// Quit requesting, stop hammering the database
-			return
-		case <-time.After(refresh):
-			// Timeout, gather a new set of stats
-		}
-	}
+	//// Meter for  measuring the total time spent in database compaction
+	//compTimeMeter := metrics.NewRegisteredMeter(prefix+"compact/time", nil)
+	//// Meter for measuring the data read during compaction
+	//compReadMeter := metrics.NewRegisteredMeter(prefix+"compact/input", nil)
+	//// Meter for measuring the data written during compaction
+	//compWriteMeter := metrics.NewRegisteredMeter(prefix+"compact/output", nil)
+	//// Meter for measuring the write delay number due to database compaction
+	//writeDelayMeter := metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
+	//// Meter for measuring the write delay duration due to database compaction
+	//writeDelayNMeter := metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
+	//// Meter for measuring the effective amount of data read
+	//diskReadMeter := metrics.NewRegisteredMeter(prefix+"disk/read", nil)
+	//// Meter for measuring the effective amount of data written
+	//diskWriteMeter := metrics.NewRegisteredMeter(prefix+"disk/write", nil)
+	//
+	//// Create the counters to store current and previous compaction values
+	//compactions := make([][]float64, 2)
+	//for i := 0; i < 2; i++ {
+	//	compactions[i] = make([]float64, 3)
+	//}
+	//// Create storage for iostats.
+	//var iostats [2]float64
+	//
+	//// Create storage and warning log tracer for write delay.
+	//var (
+	//	delaystats      [2]int64
+	//	lastWritePaused time.Time
+	//)
+	//
+	//// Iterate ad infinitum and collect the stats
+	//for i := 1; true; i++ {
+	//	// Retrieve the database stats
+	//	stats, err := db.ldb.GetProperty("leveldb.stats")
+	//	if err != nil {
+	//		log.Error("Failed to read database stats", "err", err)
+	//		continue
+	//	}
+	//	// Find the compaction table, skip the header
+	//	lines := strings.Split(stats, "\n")
+	//	for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
+	//		lines = lines[1:]
+	//	}
+	//	if len(lines) <= 3 {
+	//		log.Error("Compaction table not found")
+	//		continue
+	//	}
+	//	lines = lines[3:]
+	//
+	//	// Iterate over all the table rows, and accumulate the entries
+	//	for j := 0; j < len(compactions[i%2]); j++ {
+	//		compactions[i%2][j] = 0
+	//	}
+	//	for _, line := range lines {
+	//		parts := strings.Split(line, "|")
+	//		if len(parts) != 6 {
+	//			break
+	//		}
+	//		for idx, counter := range parts[3:] {
+	//			value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
+	//			if err != nil {
+	//				log.Error("Compaction entry parsing failed", "err", err)
+	//				continue
+	//			}
+	//			compactions[i%2][idx] += value
+	//		}
+	//	}
+	//	// Update all the requested meters
+	//	if compTimeMeter != nil {
+	//		compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
+	//	}
+	//	if compReadMeter != nil {
+	//		compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
+	//	}
+	//	if compWriteMeter != nil {
+	//		compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
+	//	}
+	//
+	//	// Retrieve the write delay statistic
+	//	writedelay, err := db.ldb.GetProperty("leveldb.writedelay")
+	//	if err != nil {
+	//		log.Error("Failed to read database write delay statistic", "err", err)
+	//		continue
+	//	}
+	//	var (
+	//		delayN        int64
+	//		delayDuration string
+	//		duration      time.Duration
+	//		paused        bool
+	//	)
+	//	if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
+	//		log.Error("Write delay statistic not found")
+	//		continue
+	//	}
+	//	duration, err = time.ParseDuration(delayDuration)
+	//	if err != nil {
+	//		log.Error("Failed to parse delay duration", "err", err)
+	//		continue
+	//	}
+	//	if writeDelayNMeter != nil {
+	//		writeDelayNMeter.Mark(delayN - delaystats[0])
+	//	}
+	//	if writeDelayMeter != nil {
+	//		writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
+	//	}
+	//	// If a warning that db is performing compaction has been displayed, any subsequent
+	//	// warnings will be withheld for one minute not to overwhelm the user.
+	//	if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
+	//		time.Now().After(lastWritePaused.Add(writePauseWarningThrottler)) {
+	//		log.Warn("Database compacting, degraded performance")
+	//		lastWritePaused = time.Now()
+	//	}
+	//	delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
+	//
+	//	// Retrieve the database iostats.
+	//	ioStats, err := db.ldb.GetProperty("leveldb.iostats")
+	//	if err != nil {
+	//		log.Error("Failed to read database iostats", "err", err)
+	//		continue
+	//	}
+	//	var nRead, nWrite float64
+	//	parts := strings.Split(ioStats, " ")
+	//	if len(parts) < 2 {
+	//		log.Error("Bad syntax of ioStats", "ioStats", ioStats)
+	//		continue
+	//	}
+	//	if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
+	//		log.Error("Bad syntax of read entry", "entry", parts[0])
+	//		continue
+	//	}
+	//	if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
+	//		log.Error("Bad syntax of write entry", "entry", parts[1])
+	//		continue
+	//	}
+	//	if diskReadMeter != nil {
+	//		diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
+	//	}
+	//	if diskWriteMeter != nil {
+	//		diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
+	//	}
+	//	iostats[0], iostats[1] = nRead, nWrite
+	//
+	//	// Sleep a bit, then repeat the stats collection
+	//	select {
+	//	case <-db.quit:
+	//		// Quit requesting, stop hammering the database
+	//		return
+	//	case <-time.After(refresh):
+	//		// Timeout, gather a new set of stats
+	//	}
+	//}
 }
