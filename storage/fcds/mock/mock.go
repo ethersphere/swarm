@@ -119,9 +119,9 @@ func (s *Store) Iterate(fn func(chunk.Chunk) (stop bool, err error)) (err error)
 	return nil
 }
 
-func (s *Store) ShardSize() (slots []fcds.ShardInfo, err error) {
+func (s *Store) ShardSize() (slots []fcds.ShardSize, err error) {
 	i, err := s.Count()
-	return []fcds.ShardInfo{fcds.ShardInfo{Shard: 0, Val: int64(i)}}, err
+	return []fcds.ShardSize{fcds.ShardSize{Shard: 0, Size: int64(i)}}, err
 }
 
 // Close doesn't do anything.

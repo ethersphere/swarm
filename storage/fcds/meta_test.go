@@ -61,12 +61,12 @@ func TestShardSlotSort(t *testing.T) {
 			expectOrder: []int{1, 2, 3, 0},
 		},
 	} {
-		s := make([]ShardInfo, len(tc.freeSlots))
+		s := make([]ShardSize, len(tc.freeSlots))
 
 		for i, v := range tc.freeSlots {
-			s[i] = ShardInfo{Shard: uint8(i), Val: int64(v)}
+			s[i] = ShardSize{Shard: uint8(i), Size: int64(v)}
 		}
-		sort.Sort(byVal(s))
+		sort.Sort(bySize(s))
 
 		for i, v := range s {
 			if v.Shard != uint8(tc.expectOrder[i]) {

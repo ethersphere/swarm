@@ -189,7 +189,7 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 
 	sum := 0
 	for _, v := range slots {
-		sum += int(v.Val)
+		sum += int(v.Size)
 	}
 
 	if sum != 4096*1000 {
@@ -207,11 +207,11 @@ func runNoGrow(t *testing.T, newStoreFunc func(t *testing.T) (fcds.Storer, func(
 			t.Fatal(err)
 		}
 
-		minSize, minSlot := slots[0].Val, uint8(0)
+		minSize, minSlot := slots[0].Size, uint8(0)
 		for i, v := range slots {
 			// take the _last_ minimum
-			if v.Val <= minSize {
-				minSize = v.Val
+			if v.Size <= minSize {
+				minSize = v.Size
 				minSlot = uint8(i)
 			}
 		}

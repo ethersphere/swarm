@@ -40,7 +40,7 @@ type Storer interface {
 	Has(addr chunk.Address) (yes bool, err error)
 	Put(ch chunk.Chunk) (shard uint8, err error)
 	Delete(addr chunk.Address) (err error)
-	ShardSize() (slots []ShardInfo, err error)
+	ShardSize() (slots []ShardSize, err error)
 	Count() (count int, err error)
 	Iterate(func(ch chunk.Chunk) (stop bool, err error)) (err error)
 	Close() (err error)
@@ -92,8 +92,8 @@ func New(path string, maxChunkSize int, metaStore MetaStore, opts ...Option) (s 
 	return s, nil
 }
 
-func (s *Store) ShardSize() (slots []ShardInfo, err error) {
-	slots = make([]ShardInfo, len(s.shards))
+func (s *Store) ShardSize() (slots []ShardSize, err error) {
+	slots = make([]ShardSize, len(s.shards))
 	for i, sh := range s.shards {
 		sh.mu.Lock()
 		fs, err := sh.f.Stat()
@@ -101,7 +101,7 @@ func (s *Store) ShardSize() (slots []ShardInfo, err error) {
 		if err != nil {
 			return nil, err
 		}
-		slots[i] = ShardInfo{Shard: uint8(i), Val: fs.Size()}
+		slots[i] = ShardSize{Shard: uint8(i), Size: fs.Size()}
 	}
 
 	return slots, nil
@@ -121,19 +121,18 @@ func (s *Store) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 
 	sh := s.shards[m.Shard]
 	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
 	data := make([]byte, m.Size)
 	n, err := sh.f.ReadAt(data, m.Offset)
 	if err != nil && err != io.EOF {
 		metrics.GetOrRegisterCounter("fcds/get/error", nil).Inc(1)
 
-		sh.mu.Unlock()
 		return nil, err
 	}
 	if n != int(m.Size) {
 		return nil, fmt.Errorf("incomplete chunk data, read %v of %v", n, m.Size)
 	}
-	sh.mu.Unlock()
 
 	metrics.GetOrRegisterCounter("fcds/get/ok", nil).Inc(1)
 
@@ -248,7 +247,7 @@ func (s *Store) getOffset() (shard uint8, offset int64, reclaimed bool, cancel f
 
 	// sorting them will make the first element the largest shard and the last
 	// element the smallest shard; pick the smallest
-	sort.Sort(byVal(shardSizes))
+	sort.Sort(bySize(shardSizes))
 
 	return shardSizes[len(shardSizes)-1].Shard, -1, false, cancel, nil
 
