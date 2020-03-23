@@ -44,6 +44,9 @@ import (
 	"github.com/ethersphere/swarm/tracing"
 )
 
+// ErrNotAccPeer indicates that the peer in question is not registered as an accounting-enabled peer
+var ErrNotAccPeer = errors.New("peer %s not an accounting-enabled peer")
+
 // MsgPauser can be used to pause run execution
 // IMPORTANT: should be used only for tests
 type MsgPauser interface {
@@ -307,8 +310,12 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	if p.spec.Hook != nil {
 		// validate that this operation would succeed...
 		costToLocalNode, err := p.spec.Hook.Validate(p, uint32(size), wmsg, Sender)
+		// ...because if it would fail, we return and don't send the message
 		if err != nil {
-			// ...because if it would fail, we return and don't send the message
+			// drop peer if not accounting-enabled to avoid pointless message exchange in the future
+			if err == fmt.Errorf(ErrNotAccPeer.Error(), p.ID().String()) {
+				p.Drop(err.Error())
+			}
 			return err
 		}
 		// seems like accounting would succeed, thus send the message first...
@@ -376,8 +383,12 @@ func (p *Peer) handleMsg(msg p2p.Msg, handle func(ctx context.Context, msg inter
 
 		// validate that the accounting call would succeed...
 		costToLocalNode, err := p.spec.Hook.Validate(p, size, val, Receiver)
+		// ...because if it would fail, we return and don't handle the message
 		if err != nil {
-			// ...because if it would fail, we return and don't handle the message
+			// drop peer if not accounting-enabled to avoid pointless message exchange in the future
+			if err == fmt.Errorf(ErrNotAccPeer.Error(), p.ID().String()) {
+				p.Drop(err.Error())
+			}
 			return Break(err)
 		}
 

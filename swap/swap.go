@@ -286,7 +286,7 @@ func (s *Swap) modifyBalanceOk(amount int64, swapPeer *Peer) (err error) {
 func (s *Swap) Check(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer := s.getPeer(peer.ID())
 	if swapPeer == nil {
-		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
+		return fmt.Errorf(protocols.ErrNotAccPeer.Error(), peer.ID().String())
 	}
 
 	swapPeer.lock.Lock()
@@ -300,7 +300,7 @@ func (s *Swap) Check(amount int64, peer *protocols.Peer) (err error) {
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer := s.getPeer(peer.ID())
 	if swapPeer == nil {
-		return fmt.Errorf("peer %s not a swap enabled peer", peer.ID().String())
+		return fmt.Errorf(protocols.ErrNotAccPeer.Error(), peer.ID().String())
 	}
 
 	swapPeer.lock.Lock()
