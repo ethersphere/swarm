@@ -130,6 +130,25 @@ func TestUint256Copy(t *testing.T) {
 	}
 }
 
+// TestUin256ValueInjection verifies that the underlying value for Uint256 structs
+// is not able to be manipulated through the getter
+func TestUin256ValueInjection(t *testing.T) {
+	i := new(big.Int).SetUint64(44)
+	v, err := NewUint256(*i)
+	if err != nil {
+		t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+	}
+
+	vv := v.Value()
+	vvc := v.Value()
+
+	vv.SetUint64(2)
+
+	if vvc.Cmp(&vv) == 0 {
+		t.Fatalf("values are equal though one should change: %v %v", vv, vvc)
+	}
+}
+
 // TestStore indirectly tests the marshaling and unmarshaling of a random Uint256 variable
 func TestUint256Store(t *testing.T) {
 	testDir, err := ioutil.TempDir("", "uint256_test_store")

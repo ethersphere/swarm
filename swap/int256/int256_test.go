@@ -151,6 +151,25 @@ func TestInt256Copy(t *testing.T) {
 	}
 }
 
+// TestIn256ValueInjection verifies that the underlying value for Int256 structs
+// is not able to be manipulated through the getter
+func TestIn256ValueInjection(t *testing.T) {
+	i := new(big.Int).SetInt64(-12)
+	v, err := NewInt256(*i)
+	if err != nil {
+		t.Fatalf("got unexpected error when creating new Int256: %v", err)
+	}
+
+	vv := v.Value()
+	vvc := v.Value()
+
+	vv.SetInt64(-15)
+
+	if vvc.Cmp(&vv) == 0 {
+		t.Fatalf("values are equal though one should change: %v %v", vv, vvc)
+	}
+}
+
 // TestStore indirectly tests the marshaling and unmarshaling of a random Int256 variable
 func TestInt256Store(t *testing.T) {
 	testDir, err := ioutil.TempDir("", "int256_test_store")
