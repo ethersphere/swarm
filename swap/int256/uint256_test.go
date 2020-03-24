@@ -95,7 +95,7 @@ func TestUint256Set(t *testing.T) {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
 				resultValue := result.Value()
-				if (&resultValue).Cmp(tc.value) != 0 {
+				if resultValue.Cmp(tc.value) != 0 {
 					t.Fatalf("expected value of %v, got %v instead", tc.value, result.value)
 				}
 			}
@@ -144,7 +144,7 @@ func TestUin256ValueInjection(t *testing.T) {
 
 	vv.SetUint64(2)
 
-	if vvc.Cmp(&vv) == 0 {
+	if vvc.Cmp(vv) == 0 {
 		t.Fatalf("values are equal though one should change: %v %v", vv, vvc)
 	}
 }
