@@ -19,9 +19,12 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/shed"
 )
 
 // TestExportImport constructs two databases, one to put and export
@@ -31,9 +34,13 @@ func TestExportImport(t *testing.T) {
 	db1, cleanup1 := newTestDB(t, nil)
 	defer cleanup1()
 
-	var chunkCount = 100
+	var (
+		chunkCount  = exportTagsFileLimit * 3
+		pinnedCount = exportTagsFileLimit*2 + 10
+	)
 
 	chunks := make(map[string][]byte, chunkCount)
+	pinned := make(map[string]uint64, pinnedCount)
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
@@ -42,7 +49,43 @@ func TestExportImport(t *testing.T) {
 			t.Fatal(err)
 		}
 		chunks[string(ch.Address())] = ch.Data()
+		if i < pinnedCount {
+			count := uint64(i%84) + 1 // arbitrary pin counter
+			for i := uint64(0); i < count; i++ {
+				err := db1.Set(context.Background(), chunk.ModeSetPin, ch.Address())
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			pinned[string(ch.Address())] = count
+		}
 	}
+
+	validtePins := func(t *testing.T, db *DB) {
+		t.Helper()
+
+		var got int
+		err := db1.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+			count, ok := pinned[string(item.Address)]
+			if !ok {
+				return true, errors.New("chunk not pinned")
+			}
+			if count != item.PinCounter {
+				return true, fmt.Errorf("got pin count %v for chunk %x, want %v", item.PinCounter, item.Address, count)
+			}
+			got++
+			return false, nil
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got != pinnedCount {
+			t.Fatalf("got pinned chunks %v, want %v", got, pinnedCount)
+		}
+	}
+
+	validtePins(t, db1)
 
 	var buf bytes.Buffer
 
@@ -77,4 +120,6 @@ func TestExportImport(t *testing.T) {
 			t.Fatalf("chunk %s: got data %x, want %x", addr.Hex(), got, want)
 		}
 	}
+
+	validtePins(t, db2)
 }

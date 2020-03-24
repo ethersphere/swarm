@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -47,6 +48,7 @@ import (
 	"github.com/ethersphere/swarm/internal/flags"
 	swarmmetrics "github.com/ethersphere/swarm/metrics"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
 	mockrpc "github.com/ethersphere/swarm/storage/mock/rpc"
 	"github.com/ethersphere/swarm/tracing"
@@ -393,7 +395,16 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 			// create a node store for this swarm key on global store
 			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
 		}
-		return swarm.NewSwarm(bzzconfig, nodeStore)
+		s, err := swarm.NewSwarm(bzzconfig, nodeStore)
+		if err != nil {
+			var e *localstore.BreakingMigrationError
+			if errors.As(err, &e) {
+				fmt.Println(e.Manual)
+				utils.Fatalf("Manual storage migration required.")
+			}
+			return nil, err
+		}
+		return s, nil
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {

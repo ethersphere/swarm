@@ -54,7 +54,7 @@ func TestModePutRequest(t *testing.T) {
 				}
 
 				for _, ch := range chunks {
-					newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)(t)
+					newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, 0)(t)
 				}
 
 				newItemsCountTest(db.gcIndex, tc.count)(t)
@@ -73,7 +73,7 @@ func TestModePutRequest(t *testing.T) {
 				}
 
 				for _, ch := range chunks {
-					newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, wantTimestamp)(t)
+					newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, 0)(t)
 				}
 
 				newItemsCountTest(db.gcIndex, tc.count)(t)
@@ -309,7 +309,7 @@ func TestModePut_sameChunk(t *testing.T) {
 							return 0
 						}
 
-						newItemsCountTest(db.retrievalDataIndex, tc.count)(t)
+						newDataCountTest(db, tc.count)(t)
 						newItemsCountTest(db.pullIndex, count(tcn.pullIndex))(t)
 						newItemsCountTest(db.pushIndex, count(tcn.pushIndex))(t)
 					}
@@ -319,13 +319,9 @@ func TestModePut_sameChunk(t *testing.T) {
 	}
 }
 
-// TestModePutSync_addToGc validates ModePut* with PutSetCheckFunc stub results
-// in the added chunk to show up in GC index
-func TestModePut_addToGc(t *testing.T) {
-	retVal := true
-	// PutSetCheckFunc's output is toggled from the test case
-	opts := &Options{PutToGCCheck: func(_ []byte) bool { return retVal }}
-
+// TestModePutSync_addToGC validates ModePut* with PutToGCCheck stub results
+// in the added chunk to show up in GC index.
+func TestModePut_addToGC(t *testing.T) {
 	for _, m := range []struct {
 		mode    chunk.ModePut
 		putToGc bool
@@ -337,10 +333,10 @@ func TestModePut_addToGc(t *testing.T) {
 		{mode: chunk.ModePutRequest, putToGc: true}, // in ModePutRequest we always insert to GC, so putToGc=false not needed
 	} {
 		for _, tc := range multiChunkTestCases {
-			t.Run(tc.name, func(t *testing.T) {
-				retVal = m.putToGc
-
-				db, cleanupFunc := newTestDB(t, opts)
+			t.Run(fmt.Sprintf("%s %s putToGc=%v", tc.name, m.mode, m.putToGc), func(t *testing.T) {
+				db, cleanupFunc := newTestDB(t, &Options{
+					PutToGCCheck: func(_ []byte) bool { return m.putToGc },
+				})
 				defer cleanupFunc()
 
 				wantTimestamp := time.Now().UTC().UnixNano()
@@ -367,18 +363,19 @@ func TestModePut_addToGc(t *testing.T) {
 					newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)
 					newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], wantErr)(t)
 				}
+
+				if m.putToGc {
+					newItemsCountTest(db.gcIndex, tc.count)(t)
+					newIndexGCSizeTest(db)(t)
+				}
 			})
 		}
 	}
 }
 
-// TestModePutSync_addToGcExisting validates ModePut* with PutSetCheckFunc stub results
-// in the added chunk to show up in GC index
-func TestModePut_addToGcExisting(t *testing.T) {
-	retVal := true
-	// PutSetCheckFunc's output is toggled from the test case
-	opts := &Options{PutToGCCheck: func(_ []byte) bool { return retVal }}
-
+// TestModePutSync_addToGCExisting validates ModePut* with PutToGCCheck stub results
+// in the added chunk to show up in GC index.
+func TestModePut_addToGCExisting(t *testing.T) {
 	for _, m := range []struct {
 		mode    chunk.ModePut
 		putToGc bool
@@ -390,10 +387,10 @@ func TestModePut_addToGcExisting(t *testing.T) {
 		{mode: chunk.ModePutRequest, putToGc: true}, // in ModePutRequest we always insert to GC, so putToGc=false not needed
 	} {
 		for _, tc := range multiChunkTestCases {
-			t.Run(tc.name, func(t *testing.T) {
-				retVal = m.putToGc
-
-				db, cleanupFunc := newTestDB(t, opts)
+			t.Run(fmt.Sprintf("%s %s putToGc=%v", tc.name, m.mode, m.putToGc), func(t *testing.T) {
+				db, cleanupFunc := newTestDB(t, &Options{
+					PutToGCCheck: func(_ []byte) bool { return m.putToGc },
+				})
 				defer cleanupFunc()
 
 				wantStoreTimestamp := time.Now().UTC().UnixNano()
@@ -434,6 +431,11 @@ func TestModePut_addToGcExisting(t *testing.T) {
 					newRetrieveIndexesTestWithAccess(db, ch, wantStoreTimestamp, wantAccessTimestamp)
 					newGCIndexTest(db, ch, wantStoreTimestamp, wantAccessTimestamp, binIDs[po], wantErr)(t)
 				}
+
+				if m.putToGc {
+					newItemsCountTest(db.gcIndex, tc.count)(t)
+					newIndexGCSizeTest(db)(t)
+				}
 			})
 		}
 	}
@@ -464,7 +466,7 @@ func TestPutDuplicateChunks(t *testing.T) {
 				t.Error("second chunk should exist")
 			}
 
-			newItemsCountTest(db.retrievalDataIndex, 1)(t)
+			newDataCountTest(db, 1)(t)
 
 			got, err := db.Get(context.Background(), chunk.ModeGetLookup, ch.Address())
 			if err != nil {
