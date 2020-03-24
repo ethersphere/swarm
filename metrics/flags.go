@@ -24,9 +24,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/metrics/influxdb"
 )
 
 type Options struct {
