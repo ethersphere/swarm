@@ -22,50 +22,50 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-// The DB schema we want to use. The actual/current DB schema might differ
-// until migrations are run.
-var DbSchemaCurrent = DbSchemaDiwali
+// dbSchemaCurrent is the schema name of the current implementation.
+// The actual/current DB schema might differ until migrations are run.
+var dbSchemaCurrent = dbSchemaForky
 
-// There was a time when we had no schema at all.
-const DbSchemaNone = ""
+const (
+	// dbSchemaSanctuary is the first storage/localstore schema.
+	dbSchemaSanctuary = "sanctuary"
+	// dbSchemaDiwali migration simply renames the pullIndex in localstore.
+	dbSchemaDiwali = "diwali"
+	// dbSchemaForky migration implements FCDS storage and requires manual import and export.
+	dbSchemaForky = "forky"
+)
 
-// "purity" is the first formal schema of LevelDB we release together with Swarm 0.3.5
-const DbSchemaPurity = "purity"
-
-// "halloween" is here because we had a screw in the garbage collector index.
-// Because of that we had to rebuild the GC index to get rid of erroneous
-// entries and that takes a long time. This schema is used for bookkeeping,
-// so rebuild index will run just once.
-const DbSchemaHalloween = "halloween"
-
-const DbSchemaSanctuary = "sanctuary"
-
-// the "diwali" migration simply renames the pullIndex in localstore
-const DbSchemaDiwali = "diwali"
-
-// returns true if legacy database is in the datadir
+// IsLegacyDatabase returns true if legacy database is in the data directory.
 func IsLegacyDatabase(datadir string) bool {
 
-	var (
-		legacyDbSchemaKey = []byte{8}
-	)
+	// "purity" is the first formal schema of LevelDB we release together with Swarm 0.3.5
+	const dbSchemaPurity = "purity"
+
+	// "halloween" is here because we had a screw in the garbage collector index.
+	// Because of that we had to rebuild the GC index to get rid of erroneous
+	// entries and that takes a long time. This schema is used for bookkeeping,
+	// so rebuild index will run just once.
+	const dbSchemaHalloween = "halloween"
+
+	var legacyDBSchemaKey = []byte{8}
 
 	db, err := leveldb.OpenFile(datadir, &opt.Options{OpenFilesCacheCapacity: 128})
 	if err != nil {
-		log.Error("got an error while trying to open leveldb path", "path", datadir, "err", err)
+		log.Error("open leveldb", "path", datadir, "err", err)
 		return false
 	}
 	defer db.Close()
 
-	data, err := db.Get(legacyDbSchemaKey, nil)
+	data, err := db.Get(legacyDBSchemaKey, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 			// if we haven't found anything under the legacy db schema key- we are not on legacy
 			return false
 		}
 
-		log.Error("got an unexpected error fetching legacy name from the database", "err", err)
+		log.Error("get legacy name from", "err", err)
 	}
-	log.Trace("checking if database scheme is legacy", "schema name", string(data))
-	return string(data) == DbSchemaHalloween || string(data) == DbSchemaPurity
+	schema := string(data)
+	log.Trace("checking if database scheme is legacy", "schema name", schema)
+	return schema == dbSchemaHalloween || schema == dbSchemaPurity
 }

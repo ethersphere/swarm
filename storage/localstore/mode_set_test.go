@@ -333,22 +333,23 @@ func TestModeSetRemove(t *testing.T) {
 
 			t.Run("retrieve indexes", func(t *testing.T) {
 				for _, ch := range chunks {
-					wantErr := leveldb.ErrNotFound
-					_, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
+					wantErr := chunk.ErrChunkNotFound
+					_, err := db.data.Get(ch.Address())
 					if err != wantErr {
 						t.Errorf("got error %v, want %v", err, wantErr)
 					}
 
 					// access index should not be set
-					_, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
+					_, err = db.metaIndex.Get(addressToItem(ch.Address()))
+					wantErr = leveldb.ErrNotFound
 					if err != wantErr {
 						t.Errorf("got error %v, want %v", err, wantErr)
 					}
 				}
 
-				t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
+				t.Run("retrieve data index count", newDataCountTest(db, 0))
 
-				t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
+				t.Run("retrieve access index count", newItemsCountTest(db.metaIndex, 0))
 			})
 
 			for _, ch := range chunks {

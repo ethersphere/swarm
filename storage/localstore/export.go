@@ -18,16 +18,20 @@ package localstore
 
 import (
 	"archive/tar"
+	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/shed"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -38,6 +42,9 @@ const (
 	legacyExportVersion = "1"
 	// current export format version
 	currentExportVersion = "2"
+	// tags
+	tagsFilenamePrefix  = "tags-"
+	exportTagsFileLimit = 1000
 )
 
 // Export writes a tar structured data to the writer of
@@ -58,23 +65,81 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 		return 0, err
 	}
 
-	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+	// tags export
+	var (
+		tagsFileNumber int
+		tagsCounter    int
+		tags           []byte
 
+		writeTags = func() (err error) {
+			l := len(tags)
+			if l == 0 {
+				return nil
+			}
+
+			tagsCounter = 0
+			tagsFileNumber++
+
+			if err := tw.WriteHeader(&tar.Header{
+				Name: fmt.Sprintf("%s%v", tagsFilenamePrefix, tagsFileNumber),
+				Mode: 0644,
+				Size: int64(l),
+			}); err != nil {
+				return err
+			}
+
+			_, err = tw.Write(tags)
+			return err
+		}
+	)
+	err = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		tags = append(tags, encodeExportPin(item.Address, item.PinCounter)...)
+		tags = append(tags, '\n')
+		if tagsCounter == exportTagsFileLimit {
+			if err := writeTags(); err != nil {
+				return true, err
+			}
+		}
+		return false, nil
+	}, nil)
+	if err != nil {
+		return 0, err
+	}
+	if err := writeTags(); err != nil {
+		return 0, err
+	}
+
+	exportchunk := func(addr chunk.Address, data []byte) error {
 		hdr := &tar.Header{
-			Name: hex.EncodeToString(item.Address),
+			Name: hex.EncodeToString(addr),
 			Mode: 0644,
-			Size: int64(len(item.Data)),
+			Size: int64(len(data)),
 		}
 
 		if err := tw.WriteHeader(hdr); err != nil {
-			return false, err
+			return err
 		}
-		if _, err := tw.Write(item.Data); err != nil {
-			return false, err
+		if _, err := tw.Write(data); err != nil {
+			return err
 		}
 		count++
-		return false, nil
+		return nil
+	}
+
+	// Export legacy (pre fcds) data index.
+	// This is required as a manual step in migrateDiwali migration.
+	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		err = exportchunk(item.Address, item.Data)
+		return false, err
 	}, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	err = db.data.Iterate(func(ch chunk.Chunk) (stop bool, err error) {
+		err = exportchunk(ch.Address(), ch.Data())
+		return false, err
+	})
 
 	return count, err
 }
@@ -94,7 +159,6 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 	var wg sync.WaitGroup
 	go func() {
 		var (
-			firstFile = true
 			// if exportVersionFilename file is not present
 			// assume legacy version
 			version = legacyExportVersion
@@ -107,22 +171,70 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				}
 				select {
 				case errC <- err:
+					return
 				case <-ctx.Done():
+					return
 				}
 			}
-			if firstFile {
-				firstFile = false
-				if hdr.Name == exportVersionFilename {
-					data, err := ioutil.ReadAll(tr)
-					if err != nil {
+			// get the export file format version
+			if hdr.Name == exportVersionFilename {
+				data, err := ioutil.ReadAll(tr)
+				if err != nil {
+					select {
+					case errC <- err:
+						return
+					case <-ctx.Done():
+						return
+					}
+				}
+				version = string(data)
+				continue
+			}
+			// set pinned chunks
+			if strings.HasPrefix(hdr.Name, tagsFilenamePrefix) {
+				// All chunks are put before tag files are iterated on
+				// because of tagsFilenamePrefix starts with "t"
+				// which is ordered later in the tar file then
+				// hex characters of chunk addresses.
+				//
+				// Wait for chunks to be stored before continuing.
+				wg.Wait()
+
+				scanner := bufio.NewScanner(tr)
+				batch := new(leveldb.Batch)
+				for scanner.Scan() {
+					addr, counter := decodeExportPin(scanner.Bytes())
+					if addr == nil {
+						continue
+					}
+					if err := db.setPin(batch, addr, counter); err != nil {
 						select {
 						case errC <- err:
+							return
 						case <-ctx.Done():
+							return
 						}
 					}
-					version = string(data)
-					continue
 				}
+
+				if err := scanner.Err(); err != nil {
+					select {
+					case errC <- err:
+						return
+					case <-ctx.Done():
+						return
+					}
+				}
+
+				if err := db.shed.WriteBatch(batch); err != nil {
+					select {
+					case errC <- err:
+						return
+					case <-ctx.Done():
+						return
+					}
+				}
+				continue
 			}
 
 			if len(hdr.Name) != 64 {
@@ -140,7 +252,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			if err != nil {
 				select {
 				case errC <- err:
+					return
 				case <-ctx.Done():
+					return
 				}
 			}
 			key := chunk.Address(keybytes)
@@ -203,4 +317,20 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			}
 		}
 	}
+}
+
+func encodeExportPin(addr chunk.Address, counter uint64) (data []byte) {
+	data = make([]byte, 8, 8+len(addr))
+	binary.BigEndian.PutUint64(data[:8], counter)
+	data = append(data, addr...)
+	return data
+}
+
+func decodeExportPin(data []byte) (addr chunk.Address, counter uint64) {
+	if len(data) < 8 {
+		return nil, 0
+	}
+	counter = binary.BigEndian.Uint64(data[:8])
+	addr = chunk.Address(data[8:])
+	return addr, counter
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -108,6 +109,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	}
 	metrics.GetOrRegisterGauge(metricName+".gcsize", nil).Update(int64(gcSize))
 
+	var addrs []chunk.Address
 	done = true
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		if gcSize-collectedCount <= target {
@@ -118,8 +120,8 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		metrics.GetOrRegisterGauge(metricName+".accessts", nil).Update(item.AccessTimestamp)
 
 		// delete from retrieve, pull, gc
-		db.retrievalDataIndex.DeleteInBatch(batch, item)
-		db.retrievalAccessIndex.DeleteInBatch(batch, item)
+		addrs = append(addrs, item.Address)
+		db.metaIndex.DeleteInBatch(batch, item)
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
 		collectedCount++
@@ -143,6 +145,12 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		metrics.GetOrRegisterCounter(metricName+".writebatch.err", nil).Inc(1)
 		return 0, false, err
 	}
+	for _, a := range addrs {
+		if err := db.data.Delete(a); err != nil {
+			metrics.GetOrRegisterCounter(metricName+".deletechunk.err", nil).Inc(1)
+			return 0, false, err
+		}
+	}
 	return collectedCount, done, nil
 }
 
@@ -162,18 +170,12 @@ func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
 	var gcSizeChange int64
 	err = db.gcExcludeIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		// Get access timestamp
-		retrievalAccessIndexItem, err := db.retrievalAccessIndex.Get(item)
+		metaIndexItem, err := db.metaIndex.Get(item)
 		if err != nil {
 			return false, err
 		}
-		item.AccessTimestamp = retrievalAccessIndexItem.AccessTimestamp
-
-		// Get the binId
-		retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
-		if err != nil {
-			return false, err
-		}
-		item.BinID = retrievalDataIndexItem.BinID
+		item.AccessTimestamp = metaIndexItem.AccessTimestamp
+		item.BinID = metaIndexItem.BinID
 
 		// Check if this item is in gcIndex and remove it
 		ok, err := db.gcIndex.Has(item)
@@ -253,6 +255,8 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 
 	// trigger garbage collection if we reached the capacity
 	if new >= db.capacity {
+		metrics.GetOrRegisterCounter("localstore.trigger-gc-on-inc", nil).Inc(1)
+
 		db.triggerGarbageCollection()
 	}
 	return nil

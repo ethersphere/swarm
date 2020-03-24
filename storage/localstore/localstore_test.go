@@ -32,7 +32,6 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func init() {
@@ -243,17 +242,15 @@ func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTim
 	return func(t *testing.T) {
 		t.Helper()
 
-		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+		c, err := db.data.Get(chunk.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+		validateItem(t, shed.Item{Address: c.Address(), Data: c.Data()}, chunk.Address(), chunk.Data(), 0, 0)
 
-		// access index should not be set
-		wantErr := leveldb.ErrNotFound
-		item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
-		if err != wantErr {
-			t.Errorf("got error %v, want %v", err, wantErr)
+		_, err = db.metaIndex.Get(addressToItem(chunk.Address()))
+		if err != nil {
+			t.Errorf("got error %v, want %v", err, nil)
 		}
 	}
 }
@@ -264,18 +261,18 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, ac
 	return func(t *testing.T) {
 		t.Helper()
 
-		item, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
+		c, err := db.data.Get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, 0)
+		validateItem(t, shed.Item{Address: c.Address(), Data: c.Data()}, ch.Address(), ch.Data(), 0, 0)
 
 		if accessTimestamp > 0 {
-			item, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
+			item, err := db.metaIndex.Get(addressToItem(ch.Address()))
 			if err != nil {
 				t.Fatal(err)
 			}
-			validateItem(t, item, ch.Address(), nil, 0, accessTimestamp)
+			validateItem(t, item, ch.Address(), nil, storeTimestamp, accessTimestamp)
 		}
 	}
 }
@@ -372,6 +369,20 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 		}
 		if c != want {
 			t.Errorf("got %v items in index, want %v", c, want)
+		}
+	}
+}
+
+func newDataCountTest(db *DB, want int) func(t *testing.T) {
+	return func(t *testing.T) {
+		t.Helper()
+
+		got, err := db.data.Count()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("got %v chunks in data, want %v", got, want)
 		}
 	}
 }
@@ -531,7 +542,7 @@ func TestSetNow(t *testing.T) {
 	}
 }
 
-func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int) {
+func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, data, metaIndex int, indexInfo map[string]int) {
 	t.Helper()
 	if indexInfo["pushIndex"] != pushIndex {
 		t.Fatalf("pushIndex count mismatch. got %d want %d", indexInfo["pushIndex"], pushIndex)
@@ -553,12 +564,12 @@ func testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex
 		t.Fatalf("pinIndex count mismatch. got %d want %d", indexInfo["pinIndex"], pinIndex)
 	}
 
-	if indexInfo["retrievalDataIndex"] != retrievalDataIndex {
-		t.Fatalf("retrievalDataIndex count mismatch. got %d want %d", indexInfo["retrievalDataIndex"], retrievalDataIndex)
+	if indexInfo["data"] != data {
+		t.Fatalf("data count mismatch. got %d want %d", indexInfo["data"], data)
 	}
 
-	if indexInfo["retrievalAccessIndex"] != retrievalAccessIndex {
-		t.Fatalf("retrievalAccessIndex count mismatch. got %d want %d", indexInfo["retrievalAccessIndex"], retrievalAccessIndex)
+	if indexInfo["metaIndex"] != metaIndex {
+		t.Fatalf("metaIndex count mismatch. got %d want %d", indexInfo["metaIndex"], metaIndex)
 	}
 }
 
@@ -585,8 +596,8 @@ func TestDBDebugIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// for reference: testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, retrievalDataIndex, retrievalAccessIndex int, indexInfo map[string]int)
-	testIndexCounts(t, 1, 1, 0, 0, 0, 1, 0, indexCounts)
+	// for reference: testIndexCounts(t *testing.T, pushIndex, pullIndex, gcIndex, gcExcludeIndex, pinIndex, data, metaIndex int, indexInfo map[string]int)
+	testIndexCounts(t, 1, 1, 0, 0, 0, 1, 1, indexCounts)
 
 	// set the chunk for pinning and expect the index count to grow
 	err = db.Set(context.Background(), chunk.ModeSetPin, ch.Address())
@@ -600,7 +611,7 @@ func TestDBDebugIndexes(t *testing.T) {
 	}
 
 	// assert that there's a pin and gc exclude entry now
-	testIndexCounts(t, 1, 1, 0, 1, 1, 1, 0, indexCounts)
+	testIndexCounts(t, 1, 1, 0, 1, 1, 1, 1, indexCounts)
 
 	// set the chunk as accessed and expect the access index to grow
 	err = db.Set(context.Background(), chunk.ModeSetAccess, ch.Address())
@@ -614,5 +625,4 @@ func TestDBDebugIndexes(t *testing.T) {
 
 	// assert that there's a pin and gc exclude entry now
 	testIndexCounts(t, 1, 1, 1, 1, 1, 1, 1, indexCounts)
-
 }

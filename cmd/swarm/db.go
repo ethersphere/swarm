@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -168,10 +167,6 @@ func dbImport(ctx *cli.Context) {
 }
 
 func openLDBStore(path string, basekey []byte) (*localstore.DB, error) {
-	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
-		return nil, fmt.Errorf("invalid chunkdb path: %s", err)
-	}
-
 	return localstore.New(path, basekey, nil)
 }
 
