@@ -107,7 +107,7 @@ var int256TestCases = []testCase{
 func TestInt256Set(t *testing.T) {
 	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewInt256(*tc.value)
+			result, err := NewInt256(tc.value)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Int256, but got none")
 			}
@@ -116,7 +116,7 @@ func TestInt256Set(t *testing.T) {
 					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
 				resultValue := result.Value()
-				if (&resultValue).Cmp(tc.value) != 0 {
+				if resultValue.Cmp(tc.value) != 0 {
 					t.Fatalf("expected value of %v, got %v instead", tc.value, result.value)
 				}
 			}
@@ -128,7 +128,7 @@ func TestInt256Set(t *testing.T) {
 func TestInt256Copy(t *testing.T) {
 	// pick test value
 	i := new(big.Int).Exp(big.NewInt(-2), big.NewInt(128), nil) // -2^128
-	v, err := NewInt256(*i)
+	v, err := NewInt256(i)
 	if err != nil {
 		t.Fatalf("got unexpected error when creating new Int256: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestInt256Copy(t *testing.T) {
 // is not able to be manipulated through the getter
 func TestIn256ValueInjection(t *testing.T) {
 	i := new(big.Int).SetInt64(-12)
-	v, err := NewInt256(*i)
+	v, err := NewInt256(i)
 	if err != nil {
 		t.Fatalf("got unexpected error when creating new Int256: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestIn256ValueInjection(t *testing.T) {
 
 	vv.SetInt64(-15)
 
-	if vvc.Cmp(&vv) == 0 {
+	if vvc.Cmp(vv) == 0 {
 		t.Fatalf("values are equal though one should change: %v %v", vv, vvc)
 	}
 }
@@ -186,7 +186,7 @@ func TestInt256Store(t *testing.T) {
 	for _, tc := range int256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewInt256(*tc.value)
+				r, err := NewInt256(tc.value)
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Int256: %v", err)
 				}
