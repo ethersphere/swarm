@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Get returns a chunk from the database. If the chunk is
@@ -47,7 +47,7 @@ func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (
 
 	out, err := db.get(mode, addr)
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			return nil, chunk.ErrChunkNotFound
 		}
 		return nil, err
@@ -129,7 +129,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.GetBatch()
 
 	// update accessTimeStamp in retrieve, gc
 
@@ -137,7 +137,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	switch err {
 	case nil:
 		item.AccessTimestamp = i.AccessTimestamp
-	case leveldb.ErrNotFound:
+	case badger.ErrKeyNotFound:
 		// no chunk accesses
 	default:
 		return err

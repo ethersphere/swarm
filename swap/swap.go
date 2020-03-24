@@ -418,13 +418,13 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 		return fmt.Errorf("ignoring confirm msg, unexpected cheque, confirm message cheque %s, expected %s", cheque, p.getPendingCheque())
 	}
 
-	batch := new(state.StoreBatch)
-	err := batch.Put(sentChequeKey(p.ID()), cheque)
+	batch := s.store.GetBatch()
+	err := s.store.PutInBatch(sentChequeKey(p.ID()), cheque, batch)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("encoding cheque failed: %w", err))
 	}
 
-	err = batch.Put(pendingChequeKey(p.ID()), nil)
+	err = s.store.PutInBatch(pendingChequeKey(p.ID()), nil, batch)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("encoding pending cheque failed: %w", err))
 	}

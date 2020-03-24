@@ -24,7 +24,6 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var errMissingCurrentSchema = errors.New("could not find current db schema")
@@ -127,7 +126,7 @@ func migrateSanctuary(db *DB) error {
 		return errors.New("had an error accessing the tags object")
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.shed.GetBatch()
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 

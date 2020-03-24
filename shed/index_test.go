@@ -20,11 +20,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/dgraph-io/badger"
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Index functions for the index that is used in tests in this file.
@@ -106,8 +105,11 @@ func TestIndex(t *testing.T) {
 			StoreTimestamp: time.Now().UTC().UnixNano(),
 		}
 
-		batch := new(leveldb.Batch)
-		index.PutInBatch(batch, want)
+		batch := db.GetBatch()
+		err = index.PutInBatch(batch, want)
+		if err != nil {
+			t.Fatal(err)
+		}
 		err := db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
@@ -127,9 +129,12 @@ func TestIndex(t *testing.T) {
 				StoreTimestamp: time.Now().UTC().UnixNano(),
 			}
 
-			batch := new(leveldb.Batch)
-			index.PutInBatch(batch, want)
-			db.WriteBatch(batch)
+			batch := db.GetBatch()
+			err = index.PutInBatch(batch, want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = db.WriteBatch(batch)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -146,15 +151,18 @@ func TestIndex(t *testing.T) {
 	t.Run("put in batch twice", func(t *testing.T) {
 		// ensure that the last item of items with the same db keys
 		// is actually saved
-		batch := new(leveldb.Batch)
+		batch := db.GetBatch()
 		address := []byte("put-in-batch-twice-hash")
 
 		// put the first item
-		index.PutInBatch(batch, Item{
+		err = index.PutInBatch(batch, Item{
 			Address:        address,
 			Data:           []byte("DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		want := Item{
 			Address:        address,
@@ -163,8 +171,11 @@ func TestIndex(t *testing.T) {
 		}
 		// then put the item that will produce the same key
 		// but different value in the database
-		index.PutInBatch(batch, want)
-		db.WriteBatch(batch)
+		err = index.PutInBatch(batch, want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -204,12 +215,10 @@ func TestIndex(t *testing.T) {
 		}
 
 		has, err = index.Has(dontWant)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if has {
+		if err == nil  || has {
 			t.Error("unwanted item is found")
 		}
+
 	})
 
 	t.Run("delete", func(t *testing.T) {
@@ -238,7 +247,7 @@ func TestIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		wantErr := leveldb.ErrNotFound
+		wantErr := badger.ErrKeyNotFound
 		got, err = index.Get(Item{
 			Address: want.Address,
 		})
@@ -266,16 +275,19 @@ func TestIndex(t *testing.T) {
 		}
 		checkItem(t, got, want)
 
-		batch := new(leveldb.Batch)
-		index.DeleteInBatch(batch, Item{
+		batch := db.GetBatch()
+		err = index.DeleteInBatch(batch, Item{
 			Address: want.Address,
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 		err = db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		wantErr := leveldb.ErrNotFound
+		wantErr := badger.ErrKeyNotFound
 		got, err = index.Get(Item{
 			Address: want.Address,
 		})
@@ -338,7 +350,7 @@ func TestIndex(t *testing.T) {
 			items = append(items, Item{
 				Address: []byte("put-hash-missing"),
 			})
-			want := leveldb.ErrNotFound
+			want := badger.ErrKeyNotFound
 			err := index.Fill(items)
 			if err != want {
 				t.Errorf("got error %v, want %v", err, want)
@@ -380,9 +392,12 @@ func TestIndex_Iterate(t *testing.T) {
 			Data:    []byte("data1"),
 		},
 	}
-	batch := new(leveldb.Batch)
+	batch := db.GetBatch()
 	for _, i := range items {
-		index.PutInBatch(batch, i)
+		err = index.PutInBatch(batch, i)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = db.WriteBatch(batch)
 	if err != nil {
@@ -551,9 +566,12 @@ func TestIndex_Iterate_withPrefix(t *testing.T) {
 		{Address: []byte("want-hash-09"), Data: []byte("data89")},
 		{Address: []byte("skip-hash-10"), Data: []byte("data90")},
 	}
-	batch := new(leveldb.Batch)
+	batch := db.GetBatch()
 	for _, i := range allItems {
-		index.PutInBatch(batch, i)
+		err = index.PutInBatch(batch, i)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = db.WriteBatch(batch)
 	if err != nil {
@@ -743,9 +761,12 @@ func TestIndex_count(t *testing.T) {
 			Data:    []byte("data1"),
 		},
 	}
-	batch := new(leveldb.Batch)
+	batch := db.GetBatch()
 	for _, i := range items {
-		index.PutInBatch(batch, i)
+		err = index.PutInBatch(batch, i)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = db.WriteBatch(batch)
 	if err != nil {
@@ -913,11 +934,14 @@ func TestIndex_firstAndLast(t *testing.T) {
 		return bytes.Compare(addrs[i], addrs[j]) == -1
 	})
 
-	batch := new(leveldb.Batch)
+	batch := db.GetBatch()
 	for _, addr := range addrs {
-		index.PutInBatch(batch, Item{
+		err = index.PutInBatch(batch, Item{
 			Address: addr,
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = db.WriteBatch(batch)
 	if err != nil {
@@ -972,11 +996,11 @@ func TestIndex_firstAndLast(t *testing.T) {
 		},
 		{
 			prefix: []byte{0, 3},
-			err:    leveldb.ErrNotFound,
+			err:    badger.ErrKeyNotFound,
 		},
 		{
 			prefix: []byte{222},
-			err:    leveldb.ErrNotFound,
+			err:    badger.ErrKeyNotFound,
 		},
 	} {
 		got, err := index.Last(tc.prefix)
@@ -1061,9 +1085,12 @@ func TestIndex_HasMulti(t *testing.T) {
 		Data:    []byte("data0"),
 	}
 
-	batch := new(leveldb.Batch)
+	batch := db.GetBatch()
 	for _, i := range items {
-		index.PutInBatch(batch, i)
+		err = index.PutInBatch(batch, i)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = db.WriteBatch(batch)
 	if err != nil {

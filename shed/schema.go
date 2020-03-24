@@ -162,5 +162,11 @@ func (db *DB) putSchema(s schema) (err error) {
 	if err != nil {
 		return err
 	}
-	return db.Put(keySchema, b)
+	tx := db.GetBatch()
+	defer tx.Discard()
+	err = tx.Set(keySchema, b)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }

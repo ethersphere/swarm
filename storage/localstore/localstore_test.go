@@ -29,10 +29,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethersphere/swarm/chunk"
 	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func init() {
@@ -250,7 +250,7 @@ func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTim
 		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
 
 		// access index should not be set
-		wantErr := leveldb.ErrNotFound
+		wantErr := badger.ErrKeyNotFound
 		item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
 		if err != wantErr {
 			t.Errorf("got error %v, want %v", err, wantErr)

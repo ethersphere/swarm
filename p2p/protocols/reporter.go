@@ -20,10 +20,9 @@ import (
 	"encoding/binary"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 //AccountMetrics abstracts away the metrics DB and
@@ -51,7 +50,7 @@ func (am *AccountingMetrics) Close() {
 type reporter struct {
 	reg      metrics.Registry //the registry for these metrics (independent of other metrics)
 	interval time.Duration    //duration at which the reporter will persist metrics
-	db       *leveldb.DB      //the actual DB
+	db       *badger.DB       //the actual DB
 	quit     chan struct{}    //quit the reporter loop
 	done     chan struct{}    //signal that reporter loop is done
 }
@@ -62,8 +61,10 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 	var val = make([]byte, 8)
 	var err error
 
-	//Create the LevelDB
-	db, err := leveldb.OpenFile(path, nil)
+	//Create the badger db
+	opt := badger.DefaultOptions(path)
+	opt.Logger = nil
+	db, err := badger.Open(opt)
 	if err != nil {
 		log.Error(err.Error())
 		return nil
@@ -84,7 +85,19 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 	}
 	//iterate the map and get the values
 	for key, metric := range metricsMap {
-		val, err = db.Get([]byte(key), nil)
+		var value []byte
+		err = db.View(func(txn *badger.Txn) (err error) {
+			item, err := txn.Get([]byte(key))
+			if err != nil {
+				return err
+			}
+			return item.Value(func(val []byte) error {
+				value = make([]byte, len(val))
+				copy(value, val)
+				metrics.GetOrRegisterCounter("DB.get", nil).Inc(1)
+				return nil
+			})
+		})
 		//until the first time a value is being written,
 		//this will return an error.
 		//it could be beneficial though to log errors later,
@@ -143,8 +156,8 @@ func (r *reporter) run() {
 
 //send the metrics to the DB
 func (r *reporter) save() error {
-	//create a LevelDB Batch
-	batch := leveldb.Batch{}
+	//create a badger transaction
+	batch := r.db.NewTransaction(true)
 	//for each metric in the registry (which is independent)...
 	r.reg.Each(func(name string, i interface{}) {
 		metric, ok := i.(metrics.Counter)
@@ -155,8 +168,13 @@ func (r *reporter) save() error {
 			byteVal := make([]byte, 8)
 			binary.BigEndian.PutUint64(byteVal, uint64(ms.Count()))
 			//...and save the value to the DB
-			batch.Put([]byte(name), byteVal)
+			batch.Set([]byte(name), byteVal)
 		}
 	})
-	return r.db.Write(&batch, nil)
+	err := batch.Commit()
+	if err != nil {
+		return err
+	}
+	batch.Discard()
+	return nil
 }

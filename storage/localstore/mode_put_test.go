@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -362,7 +362,7 @@ func TestModePut_addToGc(t *testing.T) {
 					binIDs[po]++
 					var wantErr error
 					if !m.putToGc {
-						wantErr = leveldb.ErrNotFound
+						wantErr = badger.ErrKeyNotFound
 					}
 					newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp)
 					newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, binIDs[po], wantErr)(t)
@@ -428,7 +428,7 @@ func TestModePut_addToGcExisting(t *testing.T) {
 					binIDs[po]++
 					var wantErr error
 					if !m.putToGc {
-						wantErr = leveldb.ErrNotFound
+						wantErr = badger.ErrKeyNotFound
 					}
 
 					newRetrieveIndexesTestWithAccess(db, ch, wantStoreTimestamp, wantAccessTimestamp)

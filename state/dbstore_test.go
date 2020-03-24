@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/dgraph-io/badger"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -186,17 +187,17 @@ func testStoreIterator(t *testing.T, store Store) {
 func testStoreBatch(t *testing.T, store Store) {
 	defer store.Close()
 
-	batch := new(StoreBatch)
+	batch := store.GetBatch()
 
 	var val1 uint64 = 1
 	var val2 uint64 = 2
 
-	err := batch.Put("key1", val1)
+	err := store.PutInBatch("key1", val1, batch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = batch.Put("key2", val2)
+	err = store.PutInBatch("key2", val2, batch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,22 +226,27 @@ func testStoreBatch(t *testing.T, store Store) {
 		t.Fatalf("expected key1 to be %d, was %d instead", val2, result)
 	}
 
-	batch = new(StoreBatch)
-	batch.Delete("key1")
-	batch.Delete("key2")
-
+	batch = store.GetBatch()
+	err = store.DeleteInBatch("key1", batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = store.DeleteInBatch("key2", batch)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = store.WriteBatch(batch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	err = store.Get("key1", &result)
-	if err != ErrNotFound {
+	if err != badger.ErrKeyNotFound {
 		t.Fatal("expected key1 to be deleted")
 	}
 
 	err = store.Get("key2", &result)
-	if err != ErrNotFound {
+	if err != badger.ErrKeyNotFound {
 		t.Fatal("expected key2 to be deleted")
 	}
 }

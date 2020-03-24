@@ -20,10 +20,11 @@ import (
 	"encoding"
 	"encoding/json"
 	"errors"
+	"github.com/dgraph-io/badger"
+	"io/ioutil"
+	"os"
 
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
+
 )
 
 // ErrNotFound is returned when no results are returned from the database
@@ -36,18 +37,32 @@ type Store interface {
 	Put(key string, i interface{}) (err error)
 	Delete(key string) (err error)
 	Iterate(prefix string, iterFunc iterFunction) (err error)
-	WriteBatch(batch *StoreBatch) (err error)
+	GetBatch() (txn *badger.Txn)
+	PutInBatch(key string, i interface{}, batch *badger.Txn) (err error)
+	DeleteInBatch(key string, batch *badger.Txn) (err error)
+	WriteBatch(batch *badger.Txn) (err error)
 	Close() error
 }
 
-// DBStore uses LevelDB to store values.
+const (
+	syncWrites          = true   // do not fsync entries as they are written
+	valueThresholdLimit = 1024   // valuess less than 1K are co-located with the key
+	valueLogEntries     = 100000  // maximum no of entries in a value log file
+)
+
+// DBStore uses badger to store values.
 type DBStore struct {
-	db *leveldb.DB
+	db *badger.DB
 }
 
 // NewDBStore creates a new instance of DBStore.
 func NewDBStore(path string) (s *DBStore, err error) {
-	db, err := leveldb.OpenFile(path, nil)
+	o := badger.DefaultOptions(path)
+	o.SyncWrites = syncWrites
+	o.ValueThreshold = valueThresholdLimit
+	o.ValueLogMaxEntries = valueLogEntries
+	o.Logger = nil // don't use the badgers internal logging mechanism
+	db, err := badger.Open(o)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +73,10 @@ func NewDBStore(path string) (s *DBStore, err error) {
 
 // NewInmemoryStore returns a new instance of DBStore. To be used only in tests and simulations.
 func NewInmemoryStore() *DBStore {
-	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+
+	dir, err := ioutil.TempDir("", "state-test")
+	defer os.RemoveAll(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	if err != nil {
 		panic(err)
 	}
@@ -71,12 +89,20 @@ func NewInmemoryStore() *DBStore {
 // ErrNotFound is returned. The provided parameter should be either a byte slice or
 // a struct that implements the encoding.BinaryUnmarshaler interface
 func (s *DBStore) Get(key string, i interface{}) (err error) {
-	data, err := s.db.Get([]byte(key), nil)
-	if err != nil {
-		if err == leveldb.ErrNotFound {
-			return ErrNotFound
+	var data []byte
+	err = s.db.View(func(txn *badger.Txn) (err error) {
+		item, err := txn.Get([]byte(key))
+		if err != nil {
+				return err
 		}
-		return err
+		return item.Value(func(val []byte) error {
+			data = make([]byte, len(val))
+			copy(data, val)
+			return nil
+		})
+	})
+	if data == nil {
+		return ErrNotFound
 	}
 
 	unmarshaler, ok := i.(encoding.BinaryUnmarshaler)
@@ -98,12 +124,17 @@ func (s *DBStore) Put(key string, i interface{}) (err error) {
 			return err
 		}
 	}
-	return s.db.Put([]byte(key), bytes, nil)
+	return s.db.Update(func(txn *badger.Txn) (err error) {
+		err = txn.Set([]byte(key), bytes)
+		return err
+	})
 }
 
 // Delete removes entries stored under a specific key.
 func (s *DBStore) Delete(key string) (err error) {
-	return s.db.Delete([]byte(key), nil)
+	return s.db.Update(func(txn *badger.Txn) (err error) {
+		return txn.Delete([]byte(key))
+	})
 }
 
 // iterFunction is a function called on every key/value pair obtained
@@ -115,18 +146,28 @@ type iterFunction func(key, value []byte) (stop bool, err error)
 
 // Iterate entries (key/value pair) which have keys matching the given prefix
 func (s *DBStore) Iterate(prefix string, iterFunc iterFunction) (err error) {
-	iter := s.db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
-	defer iter.Release()
-	for iter.Next() {
-		stop, err := iterFunc(iter.Key(), iter.Value())
-		if err != nil {
-			return err
+	return s.db.View(func(txn *badger.Txn) (err error) {
+		o := badger.DefaultIteratorOptions
+		o.PrefetchValues = true
+		o.PrefetchSize = 1024
+		i := txn.NewIterator(o)
+		defer i.Close()
+
+		for i.Seek([]byte(prefix)); i.ValidForPrefix([]byte(prefix)); i.Next() {
+			value, err := i.Item().ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			stop, err := iterFunc(i.Item().Key(), value)
+			if err != nil {
+				return err
+			}
+			if stop {
+				break
+			}
 		}
-		if stop {
-			break
-		}
-	}
-	return iter.Error()
+		return nil
+	})
 }
 
 // Close releases the resources used by the underlying LevelDB.
@@ -134,14 +175,16 @@ func (s *DBStore) Close() error {
 	return s.db.Close()
 }
 
-// StoreBatch is a wrapper around a leveldb batch that takes care of the proper encoding.
-type StoreBatch struct {
-	leveldb.Batch
+
+func (s *DBStore) GetBatch() *badger.Txn{
+	return s.db.NewTransaction(true)
 }
+
+
 
 // Put encodes the value and puts a corresponding Put operation into the underlying batch.
 // This only returns an error if the encoding failed.
-func (b *StoreBatch) Put(key string, i interface{}) (err error) {
+func (s *DBStore) PutInBatch(key string, i interface{}, batch *badger.Txn) (err error) {
 	var bytes []byte
 	if marshaler, ok := i.(encoding.BinaryMarshaler); ok {
 		if bytes, err = marshaler.MarshalBinary(); err != nil {
@@ -152,16 +195,20 @@ func (b *StoreBatch) Put(key string, i interface{}) (err error) {
 			return err
 		}
 	}
-	b.Batch.Put([]byte(key), bytes)
-	return nil
+	return batch.Set([]byte(key), bytes)
 }
 
 // Delete adds a delete operation to the underlying batch.
-func (b *StoreBatch) Delete(key string) {
-	b.Batch.Delete([]byte(key))
+func (b *DBStore) DeleteInBatch(key string, batch *badger.Txn) error {
+	return batch.Delete([]byte(key))
 }
 
 // WriteBatch executes the batch on the underlying database.
-func (s *DBStore) WriteBatch(batch *StoreBatch) error {
-	return s.db.Write(&batch.Batch, nil)
+func (s *DBStore) WriteBatch(batch *badger.Txn) error {
+	defer batch.Discard()
+	err := batch.Commit()
+	if err != nil {
+		return nil
+	}
+	return nil
 }

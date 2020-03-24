@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/dgraph-io/badger"
 	"sync"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
 	olog "github.com/opentracing/opentracing-go/log"
-	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/ethersphere/swarm/log"
@@ -175,8 +175,8 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 
 	ch, err = n.Store.Get(ctx, mode, ref)
 	if err != nil {
-		// TODO: fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
-		if err != ErrChunkNotFound && err != leveldb.ErrNotFound {
+		// TODO: fix comparison - we should be comparing against badger.ErrKeyNotFound, this error should be wrapped.
+		if err != ErrChunkNotFound && err != badger.ErrKeyNotFound{
 			n.logger.Error("localstore get error", "err", err)
 		}
 

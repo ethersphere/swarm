@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // GetMulti returns chunks from the database. If one of the chunks is not found
@@ -45,7 +45,7 @@ func (db *DB) GetMulti(ctx context.Context, mode chunk.ModeGet, addrs ...chunk.A
 
 	out, err := db.getMulti(mode, addrs...)
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == badger.ErrKeyNotFound {
 			return nil, chunk.ErrChunkNotFound
 		}
 		return nil, err
