@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
-	"path/filepath"
 	"runtime/pprof"
 	"sync"
 	"time"
@@ -30,8 +29,6 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/ethersphere/swarm/storage/fcds"
-	fcdsleveldb "github.com/ethersphere/swarm/storage/fcds/leveldb"
-	fcdsmock "github.com/ethersphere/swarm/storage/fcds/mock"
 	"github.com/ethersphere/swarm/storage/mock"
 )
 
@@ -221,23 +218,59 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 
-	if o.MockStore == nil {
-		metaStore, err := fcdsleveldb.NewMetaStore(filepath.Join(path, "meta"))
-		if err != nil {
-			return nil, err
+	// Functions for retrieval data index.
+	var (
+		encodeValueFunc func(fields shed.Item) (value []byte, err error)
+		decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
+	)
+	if o.MockStore != nil {
+		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 16)
+			binary.BigEndian.PutUint64(b[:8], fields.BinID)
+			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
+			err = o.MockStore.Put(fields.Address, fields.Data)
+			if err != nil {
+				return nil, err
+			}
+			return b, nil
 		}
-		db.data, err = fcds.New(
-			filepath.Join(path, "data"),
-			chunk.DefaultSize+8, // chunk data has additional 8 bytes prepended
-			metaStore,
-		)
-		if err != nil {
-			return nil, err
+		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+			e.BinID = binary.BigEndian.Uint64(value[:8])
+			e.Data, err = o.MockStore.Get(keyItem.Address)
+			return e, err
 		}
 	} else {
-		// Mock store is provided, use mock FCDS.
-		db.data = fcdsmock.New(o.MockStore)
+		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 16)
+			binary.BigEndian.PutUint64(b[:8], fields.BinID)
+			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
+			value = append(b, fields.Data...)
+			return value, nil
+		}
+		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+			e.BinID = binary.BigEndian.Uint64(value[:8])
+			e.Data = value[16:]
+			return e, nil
+		}
 	}
+	// Index storing actual chunk address, data and bin id.
+	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: encodeValueFunc,
+		DecodeValue: decodeValueFunc,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// Index storing bin id, store and access timestamp for a particular address.
 	// It is needed in order to update gc index keys for iteration order.
 	db.metaIndex, err = db.shed.NewIndex("Address->BinID|StoreTimestamp|AccessTimestamp", shed.IndexFuncs{
