@@ -14,7 +14,7 @@ jobs:
     - stage: lint
       os: linux
       dist: trusty
-      go: 1.13.x
+      go: 1.14.x
       env:
         - lint
       script:
@@ -25,7 +25,7 @@ jobs:
       os: linux
       dist: trusty
       sudo: required
-      go: 1.13.x
+      go: 1.14.x
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -35,7 +35,7 @@ jobs:
 
     - stage: build
       os: osx
-      go: 1.13.x
+      go: 1.14.x
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
         - NOFILE=20480
@@ -55,7 +55,7 @@ jobs:
       os: linux
       dist: trusty
       sudo: required
-      go: 1.13.x
+      go: 1.14.x
       env:
         - azure-linux
       addons:
@@ -89,7 +89,7 @@ jobs:
       dist: trusty
       services:
         - docker
-      go: 1.13.x
+      go: 1.14.x
       env:
         - azure-linux-mips
       script:
@@ -113,7 +113,7 @@ jobs:
     - stage: deploy
       if: type = push
       os: osx
-      go: 1.13.x
+      go: 1.14.x
       env:
         - azure-osx
       script:
@@ -126,7 +126,7 @@ jobs:
       if: type = cron
       os: linux
       dist: trusty
-      go: 1.13.x
+      go: 1.14.x
       env:
         - azure-purge
       script:
