@@ -17,15 +17,16 @@
 package metrics
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/metrics"
-	gethmetrics "github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/metrics/influxdb"
 )
 
 type Options struct {
@@ -38,26 +39,30 @@ type Options struct {
 	InfluxDBTags  string
 }
 
+func init() {
+	registerRuntimeMemStats(metrics.DefaultRegistry)
+}
+
 func Setup(o Options) {
-	if gethmetrics.Enabled {
+	if metrics.Enabled {
 		log.Info("Enabling swarm metrics collection")
 
 		// Start system runtime metrics collection
-		go gethmetrics.CollectProcessMetrics(4 * time.Second)
+		go metrics.CollectProcessMetrics(4 * time.Second)
 
 		// Start collecting disk metrics
 		go datadirDiskUsage(o.DataDirectory, 4*time.Second)
 
-		gethmetrics.RegisterRuntimeMemStats(metrics.DefaultRegistry)
-		go gethmetrics.CaptureRuntimeMemStats(metrics.DefaultRegistry, 4*time.Second)
+		go captureRuntimeMemStats(metrics.DefaultRegistry, 4*time.Second)
 
 		tagsMap := utils.SplitTagsFlag(o.InfluxDBTags)
 
 		if o.EnableExport {
 			log.Info("Enabling swarm metrics export to InfluxDB")
-			go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, o.Endoint, o.Database, o.Username, o.Password, "swarm.", tagsMap)
-			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, o.Endoint, o.Database, o.Username, o.Password, "accounting.", tagsMap)
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, o.Endoint, o.Database, o.Username, o.Password, "swarm.", tagsMap)
+			go influxdb.InfluxDBWithTags(metrics.AccountingRegistry, 10*time.Second, o.Endoint, o.Database, o.Username, o.Password, "accounting.", tagsMap)
 		}
+		http.Handle("/debug/metrics/prometheus/accounting", prometheus.Handler(metrics.AccountingRegistry))
 	}
 }
 
@@ -68,7 +73,7 @@ func datadirDiskUsage(path string, d time.Duration) {
 			log.Trace("cannot get disk space", "err", err)
 		}
 
-		metrics.GetOrRegisterGauge("datadir.usage", nil).Update(bytes)
+		metrics.GetOrRegisterGauge("datadir/usage", nil).Update(bytes)
 	}
 }
 

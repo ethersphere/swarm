@@ -73,14 +73,14 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 	//If there is, assign it to the metric. This means that the node
 	//has been running before and that metrics have been persisted.
 	metricsMap := map[string]metrics.Counter{
-		"account.balance.credit": mBalanceCredit,
-		"account.balance.debit":  mBalanceDebit,
-		"account.bytes.credit":   mBytesCredit,
-		"account.bytes.debit":    mBytesDebit,
-		"account.msg.credit":     mMsgCredit,
-		"account.msg.debit":      mMsgDebit,
-		"account.peerdrops":      mPeerDrops,
-		"account.selfdrops":      mSelfDrops,
+		"account/balance/credit": mBalanceCredit,
+		"account.balance/debit":  mBalanceDebit,
+		"account/bytes/credit":   mBytesCredit,
+		"account/bytes/debit":    mBytesDebit,
+		"account/msg/credit":     mMsgCredit,
+		"account/msg/debit":      mMsgDebit,
+		"account/peerdrops":      mPeerDrops,
+		"account/selfdrops":      mSelfDrops,
 	}
 	//iterate the map and get the values
 	for key, metric := range metricsMap {

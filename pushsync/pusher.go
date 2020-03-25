@@ -145,17 +145,17 @@ func (p *Pusher) chunksWorker() {
 			}
 
 			chunksInBatch++
-			metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
+			metrics.GetOrRegisterCounter("pusher/send-chunk", nil).Inc(1)
 			// if no need to sync this chunk then continue
 			if !p.needToSync(ch) {
 				break
 			}
 
-			metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
+			metrics.GetOrRegisterCounter("pusher/send-chunk/send-to-sync", nil).Inc(1)
 			// send the chunk and ignore the error
 
 			if err := p.sendChunkMsg(ch); err != nil {
-				metrics.GetOrRegisterCounter("pusher.send-chunk-msg.err", nil).Inc(1)
+				metrics.GetOrRegisterCounter("pusher/send-chunk-msg/err", nil).Inc(1)
 				p.logger.Error("error sending chunk", "addr", ch.Address().Hex(), "err", err)
 			}
 
@@ -164,7 +164,7 @@ func (p *Pusher) chunksWorker() {
 			// initially timer is set to go off as well as every time we hit the end of push index
 			// so no wait for retryInterval needed to set  items synced
 			func() {
-				defer metrics.GetOrRegisterResettingTimer("pusher.mark-and-sweep", nil).UpdateSince(time.Now())
+				defer metrics.GetOrRegisterResettingTimer("pusher/mark-and-sweep", nil).UpdateSince(time.Now())
 
 				// if subscribe was running, stop it
 				if unsubscribe != nil {
@@ -199,10 +199,10 @@ func (p *Pusher) chunksWorker() {
 				// we don't want to record the first iteration
 				if chunksInBatch != -1 {
 					// hack: this measurement is NOT a timer, but we want a histogram for chunks in batch, so it fits the data structure
-					metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.hist", nil).Update(time.Duration(chunksInBatch))
+					metrics.GetOrRegisterResettingTimer("pusher/subscribe-push/chunks-in-batch/hist", nil).Update(time.Duration(chunksInBatch))
 
-					metrics.GetOrRegisterResettingTimer("pusher.subscribe-push.chunks-in-batch.time", nil).UpdateSince(batchStartTime)
-					metrics.GetOrRegisterCounter("pusher.subscribe-push.chunks-in-batch", nil).Inc(int64(chunksInBatch))
+					metrics.GetOrRegisterResettingTimer("pusher/subscribe-push/chunks-in-batch/time", nil).UpdateSince(batchStartTime)
+					metrics.GetOrRegisterCounter("pusher/subscribe-push/chunks-in-batch", nil).Inc(int64(chunksInBatch))
 				}
 				chunksInBatch = 0
 				batchStartTime = time.Now()
@@ -237,18 +237,18 @@ func (p *Pusher) receiptsWorker() {
 		case addr := <-p.receipts:
 			hexaddr := hex.EncodeToString(addr)
 			p.logger.Trace("got receipt", "addr", hexaddr)
-			metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
+			metrics.GetOrRegisterCounter("pusher/receipts/all", nil).Inc(1)
 			// ignore if already received receipt
 			p.pushedMu.Lock()
 			item, found := p.pushed[hexaddr]
 			p.pushedMu.Unlock()
 			if !found {
-				metrics.GetOrRegisterCounter("pusher.receipts.not-found", nil).Inc(1)
+				metrics.GetOrRegisterCounter("pusher/receipts/not-found", nil).Inc(1)
 				p.logger.Trace("not wanted or already got... ignore", "addr", hexaddr)
 				break
 			}
 			if item.synced { // already got receipt in this same batch
-				metrics.GetOrRegisterCounter("pusher.receipts.already-synced", nil).Inc(1)
+				metrics.GetOrRegisterCounter("pusher/receipts/already-synced", nil).Inc(1)
 				p.logger.Trace("just synced... ignore", "addr", hexaddr)
 				break
 			}
@@ -259,8 +259,8 @@ func (p *Pusher) receiptsWorker() {
 			}
 
 			totalDuration := time.Since(item.sentAt)
-			metrics.GetOrRegisterResettingTimer("pusher.chunk.roundtrip", nil).Update(totalDuration)
-			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
+			metrics.GetOrRegisterResettingTimer("pusher/chunk/roundtrip", nil).Update(totalDuration)
+			metrics.GetOrRegisterCounter("pusher/receipts/synced", nil).Inc(1)
 
 			// collect synced addresses and corresponding items to do subsequent batch operations
 			p.syncedAddrsMu.Lock()
@@ -312,9 +312,9 @@ func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
 	}
 	p.logger.Trace("send chunk", "addr", label(ch.Address()))
 
-	metrics.GetOrRegisterResettingTimer("pusher.send.chunk.rlp", nil).UpdateSince(rlpTimer)
+	metrics.GetOrRegisterResettingTimer("pusher/send/chunk/rlp", nil).UpdateSince(rlpTimer)
 
-	defer metrics.GetOrRegisterResettingTimer("pusher.send.chunk.pss", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pusher/send/chunk/pss", nil).UpdateSince(time.Now())
 	return p.ps.Send(ch.Address()[:], pssChunkTopic, msg)
 }
 

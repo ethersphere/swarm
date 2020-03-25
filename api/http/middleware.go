@@ -35,7 +35,7 @@ type Adapter func(http.Handler) http.Handler
 func SetRequestID(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(SetRUID(r.Context(), uuid.New()[:8]))
-		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("http/request/%s", r.Method), nil).Inc(1)
 		log.Info("created ruid for request", "ruid", GetRUID(r.Context()), "method", r.Method, "url", r.RequestURI)
 
 		h.ServeHTTP(w, r)
@@ -92,8 +92,8 @@ func InitLoggingResponseWriter(h http.Handler) http.Handler {
 
 		ts := time.Since(tn)
 		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode, "time", ts)
-		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).Update(ts)
-		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.%d.time", r.Method, writer.statusCode), nil).Update(ts)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http/request/%s/time", r.Method), nil).Update(ts)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http/request/%s/%d/time", r.Method, writer.statusCode), nil).Update(ts)
 	})
 }
 

@@ -71,7 +71,7 @@ func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Con
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
 			log.Info("total time", "time", totalTime, "kb", filesize)
-			metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
+			metrics.GetOrRegisterResettingTimer(name+"/total-time", nil).Update(totalTime)
 		}(time.Now())
 
 		log.Info("smoke test starting", "task", name, "timeout", timeout)

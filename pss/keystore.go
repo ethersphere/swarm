@@ -148,7 +148,7 @@ func (ks *KeyStore) getPeerAddress(keyid string, topic message.Topic) (PssAddres
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted/not valid.
 func (ks *KeyStore) processSym(pssMsg *message.Message) ([]byte, string, PssAddress, error) {
-	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
+	metrics.GetOrRegisterCounter("pss/process/sym", nil).Inc(1)
 
 	for i := ks.symKeyDecryptCacheCursor; i > ks.symKeyDecryptCacheCursor-cap(ks.symKeyDecryptCache) && i > 0; i-- {
 		symkeyid := ks.symKeyDecryptCache[i%cap(ks.symKeyDecryptCache)]
@@ -186,7 +186,7 @@ func (ks *KeyStore) processSym(pssMsg *message.Message) ([]byte, string, PssAddr
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted.
 func (p *Pss) processAsym(pssMsg *message.Message) ([]byte, string, PssAddress, error) {
-	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
+	metrics.GetOrRegisterCounter("pss/process/asym", nil).Inc(1)
 
 	unwrapParams := &crypto.UnwrapParams{
 		Receiver: p.privateKey,
