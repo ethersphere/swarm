@@ -74,7 +74,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paidOut, err := int256.NewUint256(*result)
+	paidOut, err := int256.NewUint256(result)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestCashCheque(t *testing.T) {
 	}
 
 	cumulativePayout := testCheque.CumulativePayout.Value()
-	if paidOut.Cmp(&cumulativePayout) != 0 {
+	if paidOut.Cmp(cumulativePayout) != 0 {
 		t.Fatalf("paidOut does not equal the CumulativePayout: paidOut=%v expected=%v", paidOut, testCheque.CumulativePayout)
 	}
 }

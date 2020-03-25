@@ -1467,7 +1467,7 @@ func TestAvailableBalance(t *testing.T) {
 
 	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
 	opts.Context = context.TODO()
-	rec, err := swap.contract.Withdraw(opts, &withdraw)
+	rec, err := swap.contract.Withdraw(opts, withdraw)
 	if err != nil {
 		t.Fatal(err)
 	}
