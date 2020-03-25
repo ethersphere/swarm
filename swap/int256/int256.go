@@ -60,13 +60,10 @@ func (u *Int256) Value() *big.Int {
 }
 
 // set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
-// returns an error when the result falls outside of the signed 256-bit integer range
+// returns an error when the value cannot be correctly set
 func (u *Int256) set(value *big.Int) (*Int256, error) {
-	if value.Cmp(maxInt256) == 1 {
-		return nil, fmt.Errorf("cannot set Int256 to %v as it overflows max value of %v", value, maxInt256)
-	}
-	if value.Cmp(minInt256) == -1 {
-		return nil, fmt.Errorf("cannot set Int256 to %v as it underflows min value of %v", value, minInt256)
+	if err := checkUint256Bounds(value); err != nil {
+		return nil, err
 	}
 	if u.value == nil {
 		u.value = new(big.Int)
@@ -75,22 +72,34 @@ func (u *Int256) set(value *big.Int) (*Int256, error) {
 	return u, nil
 }
 
+// checkInt256Bounds returns an error when the given value falls outside of the signed 256-bit integer range
+// returns nil otherwise
+func checkInt256Bounds(value *big.Int) error {
+	if value.Cmp(maxInt256) == 1 {
+		return fmt.Errorf("cannot set Int256 to %v as it overflows max value of %v", value, maxInt256)
+	}
+	if value.Cmp(minInt256) == -1 {
+		return fmt.Errorf("cannot set Int256 to %v as it underflows min value of %v", value, minInt256)
+	}
+	return nil
+}
+
 // Add sets u to augend + addend and returns u as the sum
-// returns an error when the result falls outside of the signed 256-bit integer range
+// returns an error when the value cannot be correctly set
 func (u *Int256) Add(augend, addend *Int256) (*Int256, error) {
 	sum := new(big.Int).Add(augend.value, addend.value)
 	return u.set(sum)
 }
 
 // Sub sets u to minuend - subtrahend and returns u as the difference
-// returns an error when the result falls outside of the signed 256-bit integer range
+// returns an error when the value cannot be correctly set
 func (u *Int256) Sub(minuend, subtrahend *Int256) (*Int256, error) {
 	difference := new(big.Int).Sub(minuend.value, subtrahend.value)
 	return u.set(difference)
 }
 
 // Mul sets u to multiplicand * multiplier and returns u as the product
-// returns an error when the result falls outside of the signed 256-bit integer range
+// returns an error when the value cannot be correctly set
 func (u *Int256) Mul(multiplicand, multiplier *Int256) (*Int256, error) {
 	product := new(big.Int).Mul(multiplicand.value, multiplier.value)
 	return u.set(product)
@@ -143,8 +152,10 @@ func (u *Int256) EncodeRLP(w io.Writer) error {
 // it makes sure the value field is decoded even though it is private
 func (u *Int256) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&u.value); err != nil {
-		return nil
+		return err
 	}
-	_, err := u.set(u.value)
-	return err
+	if err := checkInt256Bounds(u.value); err != nil {
+		return err
+	}
+	return nil
 }
