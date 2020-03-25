@@ -31,7 +31,7 @@ type Int256 struct {
 
 // BigIntWrapper represents a struct with an underlying big.Int value
 type BigIntWrapper interface {
-	Value() big.Int
+	Value() *big.Int
 }
 
 var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)) // -(2^255)
@@ -111,8 +111,8 @@ func (u *Int256) Mul(multiplicand, multiplier *Int256) (*Int256, error) {
 }
 
 // cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
-func (u *Int256) Cmp(v *BigIntWrapper) int {
-	return u.value.Cmp(v.value)
+func (u *Int256) Cmp(v BigIntWrapper) int {
+	return u.value.Cmp(v.Value())
 }
 
 // Equals returns true if the two Int256 structs have the same underlying values, false otherwise

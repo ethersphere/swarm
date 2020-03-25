@@ -106,8 +106,8 @@ func (u *Uint256) Mul(multiplicand, multiplier *Uint256) (*Uint256, error) {
 }
 
 // Cmp calls the underlying Cmp method for the big.Int stored in a Uint256 struct as its value field
-func (u *Uint256) Cmp(v *BigIntWrapper) int {
-	return u.value.Cmp(v.value)
+func (u *Uint256) Cmp(v BigIntWrapper) int {
+	return u.value.Cmp(v.Value())
 }
 
 // Equals returns true if the two Uint256 structs have the same underlying values, false otherwise
