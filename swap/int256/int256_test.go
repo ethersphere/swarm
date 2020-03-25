@@ -163,7 +163,7 @@ func TestIn256ValueInjection(t *testing.T) {
 	vv := v.Value()
 	vvc := v.Value()
 
-	vv.SetInt64(-15)
+	vv.SetInt64(15)
 
 	if vvc.Cmp(vv) == 0 {
 		t.Fatalf("values are equal though one should change: %v %v", vv, vvc)

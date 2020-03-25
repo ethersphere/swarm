@@ -125,7 +125,7 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 	}
 
 	var value big.Int
-	_, ok := value.SetString(string(b), 10)
+	_, ok := (&value).SetString(string(b), 10)
 	if !ok {
 		return fmt.Errorf("not a valid integer value: %s", b)
 	}
