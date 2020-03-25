@@ -134,7 +134,7 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *int256.Uint256, ownerSig []byte) (*types.Transaction, error) {
 	payout := cumulativePayout.Value()
 	// send a copy of cumulativePayout to instance as it modifies the supplied big int internally
-	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, big.NewInt(0).Set(&payout), ownerSig)
+	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, big.NewInt(0).Set(payout), ownerSig)
 	if err != nil {
 		return nil, err
 	}
