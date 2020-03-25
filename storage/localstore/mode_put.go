@@ -143,7 +143,7 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 
 	for i, ch := range chs {
 		if !exist[i] {
-			if _, err := db.data.Put(ch); err != nil {
+			if  err := db.data.Put(ch); err != nil {
 				return nil, err
 			}
 		}
