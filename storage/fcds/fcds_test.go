@@ -40,7 +40,6 @@ func newBadger(b *testing.B) (db Storer, clean func()) {
 		b.Fatal(err)
 	}
 
-	fmt.Println("Creating new store in path ", path)
 	db, err = NewBadgerStore(path)
 	if err != nil {
 		os.RemoveAll(path)
@@ -49,7 +48,6 @@ func newBadger(b *testing.B) (db Storer, clean func()) {
 	return db, func() {
 		db.Close()
 		os.RemoveAll(path)
-		fmt.Println("Removing path ", path)
 	}
 }
 
