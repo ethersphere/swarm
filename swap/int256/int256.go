@@ -62,7 +62,7 @@ func (u *Int256) Value() *big.Int {
 // set assigns the underlying value of the given Int256 param to u, and returns the modified receiver struct
 // returns an error when the value cannot be correctly set
 func (u *Int256) set(value *big.Int) (*Int256, error) {
-	if err := checkUint256Bounds(value); err != nil {
+	if err := checkInt256Bounds(value); err != nil {
 		return nil, err
 	}
 	if u.value == nil {
