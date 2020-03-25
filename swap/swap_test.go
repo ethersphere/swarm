@@ -1152,8 +1152,30 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 
 // TestPeerProcessAndVerifyCheque tests that processAndVerifyCheque accepts a valid cheque and also saves it
 func TestPeerProcessAndVerifyCheque(t *testing.T) {
-	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
+	////////////////////////////
+	testBackend := newTestBackend(t)
+	defer testBackend.Close()
+	swap, clean := newTestSwap(t, ownerKey, testBackend)
 	defer clean()
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
+
+	// deploy a chequebook
+	err := testDeploy(context.TODO(), swap, depositAmount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// create a peer
+	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	/////////////////////////
+	//swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
+	//defer clean()
 
 	// create test cheque and process
 	cheque := newTestCheque()

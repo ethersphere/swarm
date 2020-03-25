@@ -53,6 +53,8 @@ type Contract interface {
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
+	// Bounced returns if there has been a bounced cheque from the chequebook
+	Bounced(opts *bind.CallOpts) (bool, error)
 }
 
 // CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
@@ -93,11 +95,8 @@ func InstanceAt(address common.Address, backend chain.Backend) (Contract, error)
 
 // Bounced obtains if a cheque has been bounced previously of a contract at a specific address.
 // Once it's bounced, it will not change it's state again, unless re deployed.
-func Bounced(address common.Address, backend chain.Backend) (bool, error) {
-	//TODO: REPLACE THIS MOCK, WHEN SC ARE UPDATED
-	//TEST BOUNCED TRUE/FALSE
-	//TEST ERROR
-	return false, nil
+func (s simpleContract) Bounced(opts *bind.CallOpts) (bool, error) {
+	return s.instance.Bounced(opts)
 }
 
 // Withdraw withdraws amount from the chequebook and blocks until the transaction is mined
