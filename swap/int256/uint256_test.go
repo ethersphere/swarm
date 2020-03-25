@@ -80,6 +80,12 @@ var uint256TestCases = []testCase{
 		value:        new(big.Int).Exp(big.NewInt(2), big.NewInt(512), nil),
 		expectsError: true,
 	},
+	// nil case
+	{
+		name:         "case nil",
+		value:        nil,
+		expectsError: true,
+	},
 }
 
 // TestSet tests the creation of valid and invalid Uint256 structs by calling the Set function

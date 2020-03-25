@@ -72,9 +72,12 @@ func (u *Uint256) set(value *big.Int) (*Uint256, error) {
 	return u, nil
 }
 
-// checkUint256NBounds returns an error when the given value falls outside of the unsigned 256-bit integer range
+// checkUint256NBounds returns an error when the given value falls outside of the unsigned 256-bit integer range or is nil
 // returns nil otherwise
 func checkUint256Bounds(value *big.Int) error {
+	if value == nil {
+		return fmt.Errorf("cannot set Uint256 to a nil value")
+	}
 	if value.Cmp(maxUint256) == 1 {
 		return fmt.Errorf("cannot set Uint256 to %v as it overflows max value of %v", value, maxUint256)
 	}
