@@ -222,7 +222,7 @@ func (p *Peer) run(handler func(ctx context.Context, msg interface{}) error) err
 				if errors.As(err, &e) {
 					p.Drop(err.Error())
 				} else {
-					log.Warn(err.Error())
+					log.Trace(err.Error())
 				}
 			}
 		}()

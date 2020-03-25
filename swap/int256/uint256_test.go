@@ -86,7 +86,7 @@ var uint256TestCases = []testCase{
 func TestUint256Set(t *testing.T) {
 	for _, tc := range uint256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewUint256(*tc.value)
+			result, err := NewUint256(tc.value)
 			if tc.expectsError && err == nil {
 				t.Fatalf("expected error when creating new Uint256, but got none")
 			}
@@ -95,7 +95,7 @@ func TestUint256Set(t *testing.T) {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}
 				resultValue := result.Value()
-				if (&resultValue).Cmp(tc.value) != 0 {
+				if resultValue.Cmp(tc.value) != 0 {
 					t.Fatalf("expected value of %v, got %v instead", tc.value, result.value)
 				}
 			}
@@ -107,7 +107,7 @@ func TestUint256Set(t *testing.T) {
 func TestUint256Copy(t *testing.T) {
 	// pick test value
 	i := new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil) // 2^128
-	v, err := NewUint256(*i)
+	v, err := NewUint256(i)
 	if err != nil {
 		t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 	}
@@ -130,6 +130,25 @@ func TestUint256Copy(t *testing.T) {
 	}
 }
 
+// TestUin256ValueInjection verifies that the underlying value for Uint256 structs
+// is not able to be manipulated through the getter
+func TestUin256ValueInjection(t *testing.T) {
+	i := new(big.Int).SetUint64(44)
+	v, err := NewUint256(i)
+	if err != nil {
+		t.Fatalf("got unexpected error when creating new Uint256: %v", err)
+	}
+
+	vv := v.Value()
+	vvc := v.Value()
+
+	vv.SetUint64(2)
+
+	if vvc.Cmp(vv) == 0 {
+		t.Fatalf("values are equal though one should change: %v %v", vv, vvc)
+	}
+}
+
 // TestStore indirectly tests the marshaling and unmarshaling of a random Uint256 variable
 func TestUint256Store(t *testing.T) {
 	testDir, err := ioutil.TempDir("", "uint256_test_store")
@@ -146,7 +165,7 @@ func TestUint256Store(t *testing.T) {
 	for _, tc := range uint256TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !tc.expectsError {
-				r, err := NewUint256(*tc.value)
+				r, err := NewUint256(tc.value)
 				if err != nil {
 					t.Fatalf("got unexpected error when creating new Uint256: %v", err)
 				}

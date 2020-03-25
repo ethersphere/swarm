@@ -80,7 +80,7 @@ func (s *Swap) AvailableBalance() (*int256.Uint256, error) {
 			continue
 		}
 		cumulativePayout := sentCheque.ChequeParams.CumulativePayout.Value()
-		sentChequesWorth.Add(sentChequesWorth, &cumulativePayout)
+		sentChequesWorth.Add(sentChequesWorth, cumulativePayout)
 		paidOut, err := s.contract.PaidOut(nil, sentCheque.ChequeParams.Beneficiary)
 		if err != nil {
 			return nil, err
@@ -91,7 +91,7 @@ func (s *Swap) AvailableBalance() (*int256.Uint256, error) {
 	totalChequesWorth := new(big.Int).Sub(cashedChequesWorth, sentChequesWorth)
 	tentativeLiquidBalance := new(big.Int).Add(contractLiquidBalance, totalChequesWorth)
 
-	return int256.NewUint256(*tentativeLiquidBalance)
+	return int256.NewUint256(tentativeLiquidBalance)
 }
 
 // PeerBalance returns the balance for a given peer

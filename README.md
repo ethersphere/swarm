@@ -33,7 +33,7 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 ## Building the source
 
-It's recommended to use Go 1.13 to build Swarm.
+It's recommended to use Go 1.14 to build Swarm.
 
 To simply compile the `swarm` binary without a `GOPATH`:
 

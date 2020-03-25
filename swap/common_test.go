@@ -180,7 +180,7 @@ func newSignedTestCheque(testChequeContract common.Address, beneficiaryAddress c
 			CumulativePayout: cumulativePayout,
 			Beneficiary:      beneficiaryAddress,
 		},
-		Honey: (&cp).Uint64(),
+		Honey: cp.Uint64(),
 	}
 
 	sig, err := cheque.Sign(signingKey)
@@ -264,7 +264,7 @@ func testDeployWithPrivateKey(ctx context.Context, backend chain.Backend, privat
 	}
 
 	deposit := depositAmount.Value()
-	tx, err := token.Mint(bind.NewKeyedTransactor(ownerKey), contract.ContractParams().ContractAddress, &deposit)
+	tx, err := token.Mint(bind.NewKeyedTransactor(ownerKey), contract.ContractParams().ContractAddress, deposit)
 	if err != nil {
 		return nil, err
 	}

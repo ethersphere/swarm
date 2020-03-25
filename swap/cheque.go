@@ -31,8 +31,7 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	cumulativePayout := cheque.CumulativePayout.Value()
-	chequePayoutBytes := (&cumulativePayout).Bytes()
+	chequePayoutBytes := cheque.CumulativePayout.Value().Bytes()
 	copy(cumulativePayoutBytes[32-len(chequePayoutBytes):], chequePayoutBytes)
 
 	// construct the actual cheque
