@@ -94,6 +94,7 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 		db, clean := newBadger(b)
 		var basechunks []chunk.Chunk
 
+		b.StopTimer()
 		if baseChunksCount > 0 {
 			basechunks = getChunks(baseChunksCount, basechunks)
 			start := time.Now()
@@ -120,6 +121,7 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 		rand.Shuffle(baseChunksCount, func(i, j int) {
 			basechunks[i], basechunks[j] = basechunks[j], basechunks[i]
 		})
+		b.StartTimer()
 
 		var jobWg sync.WaitGroup
 		if writeChunksCount > 0 {
