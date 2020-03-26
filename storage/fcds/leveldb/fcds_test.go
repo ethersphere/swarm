@@ -102,6 +102,7 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 		db, clean := NewFCDSStore(b)
 		var basechunks []chunk.Chunk
 
+		b.StopTimer()
 		if baseChunksCount > 0 {
 			basechunks = getChunks(baseChunksCount, basechunks)
 			start := time.Now()
@@ -128,6 +129,7 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 		rand.Shuffle(baseChunksCount, func(i, j int) {
 			basechunks[i], basechunks[j] = basechunks[j], basechunks[i]
 		})
+		b.StartTimer()
 
 		var jobWg sync.WaitGroup
 		if writeChunksCount > 0 {
@@ -245,24 +247,32 @@ func BenchmarkWriteOverClean_10000(t *testing.B)   { runBenchmark(t, 0, 10000, 0
 func BenchmarkWriteOverClean_100000(t *testing.B)  { runBenchmark(t, 0, 100000, 0, 0, 6) }
 func BenchmarkWriteOverClean_1000000(t *testing.B) { runBenchmark(t, 0, 1000000, 0, 0, 4) }
 
-func BenchmarkWriteOver1Million_10000(t *testing.B) { runBenchmark(t, 1000000, 10000, 0, 0,8) }
-func BenchmarkWriteOver1Million_100000(t *testing.B) { runBenchmark(t, 1000000, 100000, 0, 0,6) }
-func BenchmarkWriteOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 1000000, 0, 0,4) }
+func BenchmarkWriteOver1Million_10000(t *testing.B)   { runBenchmark(t, 1000000, 10000, 0, 0, 8) }
+func BenchmarkWriteOver1Million_100000(t *testing.B)  { runBenchmark(t, 1000000, 100000, 0, 0, 6) }
+func BenchmarkWriteOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 1000000, 0, 0, 4) }
 
 func BenchmarkReadOver1Million_10000(t *testing.B)   { runBenchmark(t, 1000000, 0, 10000, 0, 8) }
 func BenchmarkReadOver1Million_100000(t *testing.B)  { runBenchmark(t, 1000000, 0, 100000, 0, 6) }
 func BenchmarkReadOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 0, 1000000, 0, 4) }
 
+func BenchmarkDeleteOver1Million_10000(t *testing.B)   { runBenchmark(t, 1000000, 0, 0, 10000, 8) }
+func BenchmarkDeleteOver1Million_100000(t *testing.B)  { runBenchmark(t, 1000000, 0, 0, 100000, 6) }
+func BenchmarkDeleteOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 0, 0, 1000000, 4) }
 
-func BenchmarkDeleteOver1Million_10000(t *testing.B) { runBenchmark(t, 1000000, 0, 0, 10000,8) }
-func BenchmarkDeleteOver1Million_100000(t *testing.B) { runBenchmark(t, 1000000, 0, 0, 100000,6) }
-func BenchmarkDeleteOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 0, 0, 1000000,4) }
+func BenchmarkWriteReadOver1Million_10000(t *testing.B) { runBenchmark(t, 1000000, 10000, 10000, 0, 8) }
+func BenchmarkWriteReadOver1Million_100000(t *testing.B) {
+	runBenchmark(t, 1000000, 100000, 100000, 0, 6)
+}
+func BenchmarkWriteReadOver1Million_1000000(t *testing.B) {
+	runBenchmark(t, 1000000, 1000000, 1000000, 0, 4)
+}
 
-func BenchmarkWriteReadOver1Million_10000(t *testing.B) { runBenchmark(t, 1000000, 10000, 10000, 0,8) }
-func BenchmarkWriteReadOver1Million_100000(t *testing.B) { runBenchmark(t, 1000000, 100000, 100000, 0,6) }
-func BenchmarkWriteReadOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 1000000, 1000000, 0,4) }
-
-func BenchmarkWriteReadDeleteOver1Million_10000(t *testing.B) { runBenchmark(t, 1000000, 10000, 10000, 10000,8) }
-func BenchmarkWriteReadDeleteOver1Million_100000(t *testing.B) { runBenchmark(t, 1000000, 100000, 100000, 100000,6) }
-func BenchmarkWriteReadDeleteOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 1000000, 1000000, 1000000,4) }
-
+func BenchmarkWriteReadDeleteOver1Million_10000(t *testing.B) {
+	runBenchmark(t, 1000000, 10000, 10000, 10000, 8)
+}
+func BenchmarkWriteReadDeleteOver1Million_100000(t *testing.B) {
+	runBenchmark(t, 1000000, 100000, 100000, 100000, 6)
+}
+func BenchmarkWriteReadDeleteOver1Million_1000000(t *testing.B) {
+	runBenchmark(t, 1000000, 1000000, 1000000, 1000000, 4)
+}
