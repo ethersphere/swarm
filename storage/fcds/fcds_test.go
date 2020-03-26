@@ -35,7 +35,7 @@ const (
 func newDB(b *testing.B) (db Storer, clean func()) {
 	b.Helper()
 
-	path, err := ioutil.TempDir("", "swarm-shed")
+	path, err := ioutil.TempDir("/tmp/swarm", "swarm-shed")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -81,26 +81,16 @@ func GenerateTestRandomChunk() chunk.Chunk {
 	return chunk.NewChunk(key, data)
 }
 
-// Benchmarkings
+func createBenchBaseline(b *testing.B, baseChunksCount int) (db Storer, clean func(), baseChunks []chunk.Chunk) {
+	db, clean = newDB(b)
 
-func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readChunksCount int, deleteChunksCount int, iterationCount int) {
-	b.Helper()
-
-	var writeElapsed time.Duration
-	var readElapsed time.Duration
-	var deleteElapsed time.Duration
-
-	db, clean := newDB(b)
-	var basechunks []chunk.Chunk
-
-	b.StopTimer()
 	if baseChunksCount > 0 {
-		basechunks = getChunks(baseChunksCount, basechunks)
-		start := time.Now()
+		baseChunks = getChunks(baseChunksCount, baseChunks)
+		//start := time.Now()
 		sem := make(chan struct{}, ConcurrentThreads)
 		var wg sync.WaitGroup
 		wg.Add(baseChunksCount)
-		for i, ch := range basechunks {
+		for i, ch := range baseChunks {
 			sem <- struct{}{}
 			go func(i int, ch chunk.Chunk) {
 				defer func() {
@@ -113,13 +103,23 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 			}(i, ch)
 		}
 		wg.Wait()
-		elapsed := time.Since(start)
-		fmt.Println("-- adding base chunks took, ", elapsed)
+		//elapsed := time.Since(start)
+		//fmt.Println("-- adding base chunks took, ", elapsed)
 	}
 
 	rand.Shuffle(baseChunksCount, func(i, j int) {
-		basechunks[i], basechunks[j] = basechunks[j], basechunks[i]
+		baseChunks[i], baseChunks[j] = baseChunks[j], baseChunks[i]
 	})
+
+	return db, clean, baseChunks
+}
+
+// Benchmarkings
+
+func runBenchmark(b *testing.B, db Storer, basechunks []chunk.Chunk, baseChunksCount int, writeChunksCount int, readChunksCount int, deleteChunksCount int) {
+	var writeElapsed time.Duration
+	var readElapsed time.Duration
+	var deleteElapsed time.Duration
 
 	var writeChunks []chunk.Chunk
 	writeChunks = getChunks(writeChunksCount, writeChunks)
@@ -218,8 +218,6 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 
 	jobWg.Wait()
 
-	clean()
-
 	//if writeElapsed > 0 {
 	//	fmt.Println("- Average write  time : ", writeElapsed.Nanoseconds()/int64(iterationCount), " ns/op")
 	//}
@@ -231,20 +229,49 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 	//}
 }
 
-//func TestStorage (b *testing.T) {
-//	runBenchmark(b, 0, 1000000, 0, 0)
-//}
+func BenchmarkWrite_Add10K(b *testing.B) {
+	for i := 10000; i <= 1000000; i *= 10 {
+		b.Run(fmt.Sprintf("Baseline_%d", i), func(b *testing.B) {
+			for j := 0; j < b.N; j++ {
+				b.StopTimer()
+				db, clean, baseChunks := createBenchBaseline(b, i)
+				b.StartTimer()
 
-//func BenchmarkWriteOverClean_10000(t *testing.B) { runBenchmark(t, 0, 10000, 0, 0,8) }
+				runBenchmark(b, db, baseChunks, 0, 10000, 0, 0)
+				b.StopTimer()
+				clean()
+				b.StartTimer()
+			}
+		})
+	}
+}
+
+func BenchmarkReadOverClean(b *testing.B) {
+	for i := 10000; i <= 1000000; i *= 10 {
+		b.Run(fmt.Sprintf("Baseline_%d", i), func(b *testing.B) {
+			for j := 0; j < b.N; j++ {
+				b.StopTimer()
+				db, clean, baseChunks := createBenchBaseline(b, i)
+				b.StartTimer()
+
+				runBenchmark(b, db, baseChunks, 0, 0, 10000, 0)
+				b.StopTimer()
+				clean()
+				b.StartTimer()
+			}
+		})
+	}
+}
+
 //func BenchmarkWriteOverClean_100000(t *testing.B) { runBenchmark(t, 0, 100000, 0, 0, 6) }
 //func BenchmarkWriteOverClean_1000000(t *testing.B) { runBenchmark(t, 0, 1000000, 0, 0, 4) }
 
-func BenchmarkWriteOver1Million_10000(t *testing.B) {
-	for i := 0; i < t.N; i++ {
-		runBenchmark(t, 1000000, 10000, 0, 0, 8)
-	}
+//func BenchmarkWriteOver1Million_10000(t *testing.B) {
+//for i := 0; i < t.N; i++ {
+//runBenchmark(t, 1000000, 10000, 0, 0, 8)
+//}
 
-}
+//}
 
 //func BenchmarkWriteOver1Million_100000(t *testing.B) { runBenchmark(t, 1000000, 100000, 0, 0,6) }
 //func BenchmarkWriteOver1Million_1000000(t *testing.B) { runBenchmark(t, 1000000, 1000000, 0, 0, 4) }
