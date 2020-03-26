@@ -14,33 +14,40 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
-package fcds
+package leveldb_test
 
 import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/storage/fcds"
+	"github.com/ethersphere/swarm/storage/fcds/leveldb"
 )
 
 const (
 	ConcurrentThreads = 128
 )
 
-func newDB(b *testing.B) (db Storer, clean func()) {
+func newDB(b *testing.B) (db fcds.Storer, clean func()) {
 	b.Helper()
 
 	path, err := ioutil.TempDir("/tmp/swarm", "swarm-shed")
 	if err != nil {
 		b.Fatal(err)
 	}
+	metaStore, err := leveldb.NewMetaStore(filepath.Join(path, "meta"))
+	if err != nil {
+		b.Fatal(err)
+	}
 
-	db, err = New(path)
+	db, err = fcds.New(path, 4096, metaStore)
 	if err != nil {
 		os.RemoveAll(path)
 		b.Fatal(err)
@@ -81,7 +88,7 @@ func GenerateTestRandomChunk() chunk.Chunk {
 	return chunk.NewChunk(key, data)
 }
 
-func createBenchBaseline(b *testing.B, baseChunksCount int) (db Storer, clean func(), baseChunks []chunk.Chunk) {
+func createBenchBaseline(b *testing.B, baseChunksCount int) (db fcds.Storer, clean func(), baseChunks []chunk.Chunk) {
 	db, clean = newDB(b)
 
 	if baseChunksCount > 0 {
@@ -97,7 +104,7 @@ func createBenchBaseline(b *testing.B, baseChunksCount int) (db Storer, clean fu
 					<-sem
 					wg.Done()
 				}()
-				if err := db.Put(ch); err != nil {
+				if _, err := db.Put(ch); err != nil {
 					panic(err)
 				}
 			}(i, ch)
@@ -116,7 +123,7 @@ func createBenchBaseline(b *testing.B, baseChunksCount int) (db Storer, clean fu
 
 // Benchmarkings
 
-func runBenchmark(b *testing.B, db Storer, basechunks []chunk.Chunk, baseChunksCount int, writeChunksCount int, readChunksCount int, deleteChunksCount int) {
+func runBenchmark(b *testing.B, db fcds.Storer, basechunks []chunk.Chunk, baseChunksCount int, writeChunksCount int, readChunksCount int, deleteChunksCount int) {
 	var writeElapsed time.Duration
 	var readElapsed time.Duration
 	var deleteElapsed time.Duration
@@ -140,14 +147,14 @@ func runBenchmark(b *testing.B, db Storer, basechunks []chunk.Chunk, baseChunksC
 						<-sem
 						wg.Done()
 					}()
-					if err := db.Put(ch); err != nil {
+					if _, err := db.Put(ch); err != nil {
 						panic(err)
 					}
 				}(i, ch)
 			}
 			wg.Wait()
 			elapsed := time.Since(start)
-			fmt.Println("-- writing chunks took , ", elapsed)
+			//fmt.Println("-- writing chunks took , ", elapsed)
 			writeElapsed += elapsed
 			jobWg.Done()
 		}()
@@ -230,8 +237,8 @@ func runBenchmark(b *testing.B, db Storer, basechunks []chunk.Chunk, baseChunksC
 }
 
 func BenchmarkWrite_Add10K(b *testing.B) {
-	for i := 10000; i <= 1000000; i *= 10 {
-		b.Run(fmt.Sprintf("Baseline_%d", i), func(b *testing.B) {
+	for i := 50000; i <= 5000000; i *= 10 {
+		b.Run(fmt.Sprintf("baseline_%d", i), func(b *testing.B) {
 			for j := 0; j < b.N; j++ {
 				b.StopTimer()
 				db, clean, baseChunks := createBenchBaseline(b, i)
@@ -247,18 +254,22 @@ func BenchmarkWrite_Add10K(b *testing.B) {
 }
 
 func BenchmarkReadOverClean(b *testing.B) {
-	for i := 10000; i <= 1000000; i *= 10 {
-		b.Run(fmt.Sprintf("Baseline_%d", i), func(b *testing.B) {
-			for j := 0; j < b.N; j++ {
-				b.StopTimer()
-				db, clean, baseChunks := createBenchBaseline(b, i)
-				b.StartTimer()
+	for i := 50000; i <= 5000000; i *= 10 {
+		b.Run(fmt.Sprintf("baseline_%d", i), func(b *testing.B) {
+			b.StopTimer()
+			db, clean, baseChunks := createBenchBaseline(b, i)
+			b.StartTimer()
 
-				runBenchmark(b, db, baseChunks, 0, 0, 10000, 0)
-				b.StopTimer()
-				clean()
-				b.StartTimer()
+			for k := 50000; k <= i; k *= 10 {
+				b.Run(fmt.Sprintf("read_%d", k), func(b *testing.B) {
+					for j := 0; j < b.N; j++ {
+						runBenchmark(b, db, baseChunks, 0, 0, k, 0)
+					}
+				})
 			}
+			b.StopTimer()
+			clean()
+			b.StartTimer()
 		})
 	}
 }
