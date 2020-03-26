@@ -147,7 +147,7 @@ func runBenchmark(b *testing.B, db Storer, basechunks []chunk.Chunk, baseChunksC
 			}
 			wg.Wait()
 			elapsed := time.Since(start)
-			fmt.Println("-- writing chunks took , ", elapsed)
+			//fmt.Println("-- writing chunks took , ", elapsed)
 			writeElapsed += elapsed
 			jobWg.Done()
 		}()
@@ -230,8 +230,8 @@ func runBenchmark(b *testing.B, db Storer, basechunks []chunk.Chunk, baseChunksC
 }
 
 func BenchmarkWrite_Add10K(b *testing.B) {
-	for i := 10000; i <= 1000000; i *= 10 {
-		b.Run(fmt.Sprintf("Baseline_%d", i), func(b *testing.B) {
+	for i := 50000; i <= 5000000; i *= 10 {
+		b.Run(fmt.Sprintf("baseline_%d", i), func(b *testing.B) {
 			for j := 0; j < b.N; j++ {
 				b.StopTimer()
 				db, clean, baseChunks := createBenchBaseline(b, i)
@@ -247,18 +247,22 @@ func BenchmarkWrite_Add10K(b *testing.B) {
 }
 
 func BenchmarkReadOverClean(b *testing.B) {
-	for i := 10000; i <= 1000000; i *= 10 {
-		b.Run(fmt.Sprintf("Baseline_%d", i), func(b *testing.B) {
-			for j := 0; j < b.N; j++ {
-				b.StopTimer()
-				db, clean, baseChunks := createBenchBaseline(b, i)
-				b.StartTimer()
+	for i := 50000; i <= 5000000; i *= 10 {
+		b.Run(fmt.Sprintf("baseline_%d", i), func(b *testing.B) {
+			b.StopTimer()
+			db, clean, baseChunks := createBenchBaseline(b, i)
+			b.StartTimer()
 
-				runBenchmark(b, db, baseChunks, 0, 0, 10000, 0)
-				b.StopTimer()
-				clean()
-				b.StartTimer()
+			for k := 50000; k <= i; k *= 10 {
+				b.Run(fmt.Sprintf("read_%d", k), func(b *testing.B) {
+					for j := 0; j < b.N; j++ {
+						runBenchmark(b, db, baseChunks, 0, 0, k, 0)
+					}
+				})
 			}
+			b.StopTimer()
+			clean()
+			b.StartTimer()
 		})
 	}
 }
