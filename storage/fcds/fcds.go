@@ -40,7 +40,7 @@ type BadgerStore struct {
 	db *badger.DB
 }
 
-func NewBadgerStore(path string) (s *BadgerStore, err error) {
+func New(path string) (s *BadgerStore, err error) {
 	o := badger.DefaultOptions(path)
 	o.SyncWrites = false
 	o.ValueLogMaxEntries = 50000

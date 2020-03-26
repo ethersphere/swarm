@@ -32,7 +32,7 @@ const (
 	ConcurrentThreads = 128
 )
 
-func newBadger(b *testing.B) (db Storer, clean func()) {
+func newDB(b *testing.B) (db Storer, clean func()) {
 	b.Helper()
 
 	path, err := ioutil.TempDir("", "swarm-shed")
@@ -40,7 +40,7 @@ func newBadger(b *testing.B) (db Storer, clean func()) {
 		b.Fatal(err)
 	}
 
-	db, err = NewBadgerStore(path)
+	db, err = New(path)
 	if err != nil {
 		os.RemoveAll(path)
 		b.Fatal(err)
@@ -90,7 +90,7 @@ func runBenchmark(b *testing.B, baseChunksCount int, writeChunksCount int, readC
 	var readElapsed time.Duration
 	var deleteElapsed time.Duration
 
-	db, clean := newBadger(b)
+	db, clean := newDB(b)
 	var basechunks []chunk.Chunk
 
 	b.StopTimer()
