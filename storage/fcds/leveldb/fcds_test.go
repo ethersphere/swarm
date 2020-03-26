@@ -249,12 +249,11 @@ func BenchmarkWrite(b *testing.B) {
 						runBenchmark(b, db, baseChunks, 0, k, 0, 0)
 					}
 				})
+
+				b.StopTimer()
+				clean()
+				b.StartTimer()
 			}
-
-			b.StopTimer()
-			clean()
-			b.StartTimer()
-
 		})
 	}
 }
