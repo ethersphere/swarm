@@ -826,51 +826,51 @@ func GetClientTrace(traceMsg, metricPrefix, ruid string, tn *time.Time) *httptra
 	trace := &httptrace.ClientTrace{
 		GetConn: func(_ string) {
 			log.Trace(traceMsg+" - http get", "event", "GetConn", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".getconn", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/getconn", nil).Update(time.Since(*tn))
 		},
 		GotConn: func(_ httptrace.GotConnInfo) {
 			log.Trace(traceMsg+" - http get", "event", "GotConn", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".gotconn", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/gotconn", nil).Update(time.Since(*tn))
 		},
 		PutIdleConn: func(err error) {
 			log.Trace(traceMsg+" - http get", "event", "PutIdleConn", "ruid", ruid, "err", err)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".putidle", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/putidle", nil).Update(time.Since(*tn))
 		},
 		GotFirstResponseByte: func() {
 			log.Trace(traceMsg+" - http get", "event", "GotFirstResponseByte", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".firstbyte", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/firstbyte", nil).Update(time.Since(*tn))
 		},
 		Got100Continue: func() {
 			log.Trace(traceMsg, "event", "Got100Continue", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".got100continue", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/got100continue", nil).Update(time.Since(*tn))
 		},
 		DNSStart: func(_ httptrace.DNSStartInfo) {
 			log.Trace(traceMsg, "event", "DNSStart", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".dnsstart", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/dnsstart", nil).Update(time.Since(*tn))
 		},
 		DNSDone: func(_ httptrace.DNSDoneInfo) {
 			log.Trace(traceMsg, "event", "DNSDone", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".dnsdone", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/dnsdone", nil).Update(time.Since(*tn))
 		},
 		ConnectStart: func(network, addr string) {
 			log.Trace(traceMsg, "event", "ConnectStart", "ruid", ruid, "network", network, "addr", addr)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".connectstart", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/connectstart", nil).Update(time.Since(*tn))
 		},
 		ConnectDone: func(network, addr string, err error) {
 			log.Trace(traceMsg, "event", "ConnectDone", "ruid", ruid, "network", network, "addr", addr, "err", err)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".connectdone", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/connectdone", nil).Update(time.Since(*tn))
 		},
 		WroteHeaders: func() {
 			log.Trace(traceMsg, "event", "WroteHeaders(request)", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".wroteheaders", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/wroteheaders", nil).Update(time.Since(*tn))
 		},
 		Wait100Continue: func() {
 			log.Trace(traceMsg, "event", "Wait100Continue", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".wait100continue", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/wait100continue", nil).Update(time.Since(*tn))
 		},
 		WroteRequest: func(_ httptrace.WroteRequestInfo) {
 			log.Trace(traceMsg, "event", "WroteRequest", "ruid", ruid)
-			metrics.GetOrRegisterResettingTimer(metricPrefix+".wroterequest", nil).Update(time.Since(*tn))
+			metrics.GetOrRegisterResettingTimer(metricPrefix+"/wroterequest", nil).Update(time.Since(*tn))
 		},
 	}
 	return trace

@@ -132,14 +132,14 @@ func (c *CashoutProcessor) submitCheque(ctx context.Context, request *CashoutReq
 
 		txRequest, err := otherSwap.CashChequeBeneficiaryRequest(cheque.Beneficiary, cheque.CumulativePayout, cheque.Signature)
 		if err != nil {
-			metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
+			metrics.GetOrRegisterCounter("swap/cheques/cashed/errors", nil).Inc(1)
 			c.logger.Error(CashChequeAction, "cashing cheque:", "error", err)
 			return
 		}
 
 		_, err = c.txScheduler.ScheduleRequest(CashoutRequestHandlerID, *txRequest, request)
 		if err != nil {
-			metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
+			metrics.GetOrRegisterCounter("swap/cheques/cashed/errors", nil).Inc(1)
 			c.logger.Error(CashChequeAction, "cashing cheque:", "error", err)
 		}
 	}

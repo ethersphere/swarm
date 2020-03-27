@@ -41,11 +41,11 @@ func uploadSpeedCmd(ctx *cli.Context) error {
 	select {
 	case err := <-errc:
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s/fail", commandName), nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s/timeout", commandName), nil).Inc(1)
 
 		// trigger debug functionality on randomBytes
 
@@ -60,7 +60,7 @@ func uploadSpeed(c *cli.Context, data []byte) error {
 		log.Error(err.Error())
 		return err
 	}
-	metrics.GetOrRegisterCounter("upload-speed.upload-time", nil).Inc(int64(time.Since(t1)))
+	metrics.GetOrRegisterCounter("upload-speed/upload-time", nil).Inc(int64(time.Since(t1)))
 
 	fhash, err := digest(bytes.NewReader(data))
 	if err != nil {

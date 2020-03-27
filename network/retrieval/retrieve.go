@@ -49,12 +49,12 @@ var (
 	_ node.Service = &Retrieval{}
 
 	// Metrics
-	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.retrieve.received_chunks_handled", nil)
-	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.retrieve.handle_retrieve_request_msg", nil)
-	retrieveChunkFail             = metrics.NewRegisteredCounter("network.retrieve.retrieve_chunks_fail", nil)
-	unsolicitedChunkDelivery      = metrics.NewRegisteredCounter("network.retrieve.unsolicited_delivery", nil)
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network/retrieve/received_chunks_handled", nil)
+	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network/retrieve/handle_retrieve_request_msg", nil)
+	retrieveChunkFail             = metrics.NewRegisteredCounter("network/retrieve/retrieve_chunks_fail", nil)
+	unsolicitedChunkDelivery      = metrics.NewRegisteredCounter("network/retrieve/unsolicited_delivery", nil)
 
-	retrievalPeers = metrics.GetOrRegisterGauge("network.retrieve.peers", nil)
+	retrievalPeers = metrics.GetOrRegisterGauge("network/retrieve/peers", nil)
 
 	spec = &protocols.Spec{
 		Name:       "bzz-retrieve",
@@ -354,7 +354,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 	processReceivedChunksCount.Inc(1)
 
 	// count how many chunks we receive for retrieve requests per peer
-	peermetric := fmt.Sprintf("network.retrieve.chunk.delivery.%x", p.BzzAddr.Over()[:16])
+	peermetric := fmt.Sprintf("network/retrieve/chunk/delivery/%x", p.BzzAddr.Over()[:16])
 	metrics.GetOrRegisterCounter(peermetric, nil).Inc(1)
 
 	peerPO := chunk.Proximity(p.BzzAddr.Over(), msg.Addr)
@@ -387,7 +387,7 @@ func (r *Retrieval) handleChunkDelivery(ctx context.Context, p *Peer, msg *Chunk
 // returns the next peer to try, a cleanup function to expire retrievals that were never delivered
 func (r *Retrieval) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
 	r.logger.Debug("retrieval.requestFromPeers", "req.Addr", req.Addr, "localID", localID)
-	metrics.GetOrRegisterCounter("network.retrieve.request_from_peers", nil).Inc(1)
+	metrics.GetOrRegisterCounter("network/retrieve/request_from_peers", nil).Inc(1)
 
 	const maxFindPeerRetries = 5
 	retries := 0
@@ -401,11 +401,11 @@ FINDPEER:
 
 	protoPeer := r.getPeer(sp.ID())
 	if protoPeer == nil {
-		r.logger.Warn("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
+		r.logger.Trace("findPeer returned a peer to skip", "peer", sp.String(), "retry", retries, "ref", req.Addr)
 		req.PeersToSkip.Store(sp.ID().String(), time.Now())
 		retries++
 		if retries == maxFindPeerRetries {
-			r.logger.Error("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
+			r.logger.Trace("max find peer retries reached", "max retries", maxFindPeerRetries, "ref", req.Addr)
 			return nil, func() {}, ErrNoPeerFound
 		}
 
@@ -423,7 +423,7 @@ FINDPEER:
 	}
 	err = protoPeer.Send(ctx, ret)
 	if err != nil {
-		protoPeer.logger.Error("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
+		protoPeer.logger.Trace("error sending retrieve request to peer", "ruid", ret.Ruid, "err", err)
 		cleanup()
 		return nil, func() {}, err
 	}

@@ -44,7 +44,7 @@ func slidingWindowCmd(ctx *cli.Context) error {
 
 	err := <-errc
 	if err != nil {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s/fail", commandName), nil).Inc(1)
 	}
 	return err
 }
@@ -72,8 +72,8 @@ outer:
 			return err
 		}
 
-		metrics.GetOrRegisterResettingTimer("sliding-window.upload-time", nil).UpdateSince(t1)
-		metrics.GetOrRegisterGauge("sliding-window.upload-depth", nil).Update(int64(len(hashes)))
+		metrics.GetOrRegisterResettingTimer("sliding-window/upload-time", nil).UpdateSince(t1)
+		metrics.GetOrRegisterGauge("sliding-window/upload-depth", nil).Update(int64(len(hashes)))
 
 		fhash, err := digest(bytes.NewReader(randomBytes))
 		if err != nil {
@@ -118,7 +118,7 @@ outer:
 							}
 							done = true
 						}
-						metrics.GetOrRegisterResettingTimer("sliding-window.single.fetch-time", nil).UpdateSince(start)
+						metrics.GetOrRegisterResettingTimer("sliding-window/single/fetch-time", nil).UpdateSince(start)
 						d <- struct{}{}
 					}()
 				case <-d:
@@ -127,14 +127,14 @@ outer:
 				case <-timeoutC:
 					errored = true
 					log.Error("error retrieving hash. timeout", "hash idx", i)
-					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
+					metrics.GetOrRegisterCounter("sliding-window/single/error", nil).Inc(1)
 					break outer
 				default:
 				}
 			}
 
 			networkDepth = i
-			metrics.GetOrRegisterGauge("sliding-window.network-depth", nil).Update(int64(networkDepth))
+			metrics.GetOrRegisterGauge("sliding-window/network-depth", nil).Update(int64(networkDepth))
 			log.Info("sliding window test successfully fetched file", "currentDepth", networkDepth)
 			// this test might take a long time to finish - but we'd like to see metrics while they accumulate and not just when
 			// the test finishes. therefore emit the metrics on each iteration

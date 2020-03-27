@@ -384,8 +384,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(fmt.Errorf("updating balance: %w", err))
 	}
 
-	metrics.GetOrRegisterCounter("swap.cheques.received.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.received.honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap/cheques/received/num", nil).Inc(1)
+	metrics.GetOrRegisterCounter("swap/cheques/received/honey", nil).Inc(honeyAmount)
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
@@ -675,10 +675,10 @@ func (s *Swap) saveChequebook(chequebook common.Address) error {
 
 // HandleCashoutResult is the handler function called by the CashoutProcessor in case of a successful cashing transaction
 func (s *Swap) HandleCashoutResult(request *CashoutRequest, result *contract.CashChequeResult, receipt *types.Receipt) error {
-	metrics.GetOrRegisterCounter("swap.cheques.cashed.honey", nil).Inc(result.TotalPayout.Int64())
+	metrics.GetOrRegisterCounter("swap/cheques/cashed/honey", nil).Inc(result.TotalPayout.Int64())
 
 	if result.Bounced {
-		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
+		metrics.GetOrRegisterCounter("swap/cheques/cashed/bounced", nil).Inc(1)
 		s.logger.Warn(CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
 	}
 

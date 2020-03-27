@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	setCacheMissCount = metrics.GetOrRegisterCounter("network.stream.sync_provider.set.cachemiss", nil)
-	setCacheHitCount  = metrics.GetOrRegisterCounter("network.stream.sync_provider.set.cachehit", nil)
+	setCacheMissCount = metrics.GetOrRegisterCounter("network/stream/sync_provider/set/cachemiss", nil)
+	setCacheHitCount  = metrics.GetOrRegisterCounter("network/stream/sync_provider/set/cachehit", nil)
 )
 
 type syncProvider struct {
@@ -113,11 +113,11 @@ func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]
 			// chunk is not in the cache - check in the localstore and if its not there - we want it
 			check = append(check, addr)
 			indexes = append(indexes, i)
-			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachemiss", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network/stream/sync_provider/multi_need_data/cachemiss", nil).Inc(1)
 		} else {
 			// chunk is in the cache - we don't want it
 			wants[i] = false
-			metrics.GetOrRegisterCounter("network.stream.sync_provider.multi_need_data.cachehit", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network/stream/sync_provider/multi_need_data/cachehit", nil).Inc(1)
 		}
 	}
 	s.cacheMtx.RUnlock()
@@ -140,9 +140,9 @@ func (s *syncProvider) NeedData(ctx context.Context, addrs ...chunk.Address) ([]
 			go func() {
 				select {
 				case <-fi.Delivered:
-					metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
+					metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher/%s/syncer", fi.CreatedBy), nil).UpdateSince(start)
 				case <-time.After(timeouts.SyncerClientWaitTimeout):
-					metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
+					metrics.GetOrRegisterCounter("fetcher/syncer/timeout", nil).Inc(1)
 				}
 			}()
 		} else {
@@ -163,7 +163,7 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 	)
 
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.sync_provider.get.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network/stream/sync_provider/get/total-time", nil).UpdateSince(start)
 	}(start)
 
 	s.cacheMtx.RLock()
@@ -172,11 +172,11 @@ func (s *syncProvider) Get(ctx context.Context, addr ...chunk.Address) ([]chunk.
 	for i, a := range addr {
 		if v, ok := s.cache.Get(a.Hex()); ok {
 			retChunks[i] = chunk.NewChunk(a, v.([]byte))
-			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachehit", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network/stream/sync_provider/get/cachehit", nil).Inc(1)
 		} else {
 			lsChunks = append(lsChunks, a)
 			indices = append(indices, i)
-			metrics.GetOrRegisterCounter("network.stream.sync_provider.get.cachemiss", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network/stream/sync_provider/get/cachemiss", nil).Inc(1)
 		}
 	}
 	s.cacheMtx.RUnlock()
@@ -215,7 +215,7 @@ func (s *syncProvider) Set(ctx context.Context, addrs ...chunk.Address) error {
 
 	err := s.netStore.Set(ctx, chunk.ModeSetSyncPull, chunksToSet...)
 	if err != nil {
-		metrics.GetOrRegisterCounter("syncProvider.set-sync-err", nil).Inc(1)
+		metrics.GetOrRegisterCounter("syncProvider/set-sync-err", nil).Inc(1)
 		return err
 	}
 
