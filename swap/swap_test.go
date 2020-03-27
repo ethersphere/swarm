@@ -1152,34 +1152,35 @@ func TestPeerVerifyChequeAgainstLastInvalid(t *testing.T) {
 
 // TestPeerProcessAndVerifyCheque tests that processAndVerifyCheque accepts a valid cheque and also saves it
 func TestPeerProcessAndVerifyCheque(t *testing.T) {
-	////////////////////////////
 	testBackend := newTestBackend(t)
 	defer testBackend.Close()
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
-	defer clean()
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
+	swap, cleanup := newTestSwap(t, beneficiaryKey, testBackend)
+	defer cleanup()
 
-	// deploy a chequebook
-	err := testDeploy(context.TODO(), swap, depositAmount)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// create a peer
-	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
-	if err != nil {
+	ctx := context.Background()
+	if err := testDeploy(ctx, swap, uint256.FromUint64(0)); err != nil {
 		t.Fatal(err)
 	}
 
-	/////////////////////////
-	//swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
-	//defer clean()
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, uint256.FromUint64((DefaultPaymentThreshold * 2)))
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// create test cheque and process
-	cheque := newTestCheque()
-	cheque.Signature, _ = cheque.Sign(ownerKey)
+	debitorDummyPeer := newDummyPeerWithSpec(Spec)
+	peer, err := swap.addPeer(debitorDummyPeer.Peer, ownerAddress, debitorChequebook.ContractParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chequeAmount := uint256.FromUint64(42)
+	cheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, swap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	actualAmount, err := swap.processAndVerifyCheque(cheque, peer)
 	if err != nil {
@@ -1195,14 +1196,18 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
-	// create another cheque with higher amount
-	otherCheque := newTestCheque()
-	_, err = otherCheque.CumulativePayout.Add(cheque.CumulativePayout, uint256.FromUint64(10))
+	otherChequeAmount := uint256.FromUint64(42)
+	_, err = otherChequeAmount.Add(otherChequeAmount, uint256.FromUint64(10))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	otherCheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, swap.owner.address, otherChequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	otherCheque.Honey = 10
-	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
 	if _, err := swap.processAndVerifyCheque(otherCheque, peer); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)

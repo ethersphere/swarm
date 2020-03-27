@@ -119,19 +119,19 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return err
 	}
 
-	bounced, err := s.getBouncedCheque()
+	swapPeer, err := s.addPeer(protoPeer, beneficiary, response.ContractAddress)
+	if err != nil {
+		return err
+	}
+	defer s.removePeer(swapPeer)
+
+	bounced, err := swapPeer.getBouncedCheque()
 	if err != nil {
 		return err
 	}
 	if bounced {
 		return ErrBouncedCheque
 	}
-
-	swapPeer, err := s.addPeer(protoPeer, beneficiary, response.ContractAddress)
-	if err != nil {
-		return err
-	}
-	defer s.removePeer(swapPeer)
 
 	return swapPeer.Run(s.handleMsg(swapPeer))
 }

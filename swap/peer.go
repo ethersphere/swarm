@@ -221,3 +221,13 @@ func (p *Peer) sendCheque() error {
 		Cheque: cheque,
 	})
 }
+
+// getBouncedCheque retrieves if a bounced cheque exists at address from the blockchain
+func (p *Peer) getBouncedCheque() (bool, error) {
+	bounced, err := p.swap.contract.Bounced(nil)
+	if err != nil {
+		return false, err
+	}
+
+	return bounced, nil
+}

@@ -463,7 +463,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256
 		return nil, err
 	}
 
-	bounced, err := s.getBouncedCheque()
+	bounced, err := p.getBouncedCheque()
 	if err != nil {
 		return nil, err
 	}
@@ -589,16 +589,6 @@ func (s *Swap) getContractOwner(ctx context.Context, address common.Address) (co
 	}
 
 	return contr.Issuer(nil)
-}
-
-// getBouncedCheque retrieves if a bounced cheque exists at address from the blockchain
-func (s *Swap) getBouncedCheque() (bool, error) {
-	bounced, err := s.contract.Bounced(nil)
-	if err != nil {
-		return false, err
-	}
-
-	return bounced, nil
 }
 
 // promptDepositAmount blocks and asks the user how much ERC20 he wants to deposit
