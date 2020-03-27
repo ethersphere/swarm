@@ -42,7 +42,9 @@ func TestNewPersistentQueue(t *testing.T) {
 
 	count := 200
 
+	var errlock sync.Mutex
 	var errout error // stores the last error that occurred in one of the routines
+
 	go func() {
 		defer wg.Done()
 		for i := 0; i < count; i++ {
@@ -50,18 +52,24 @@ func TestNewPersistentQueue(t *testing.T) {
 				var value uint64
 				key, err := queue.next(ctx, &value, &lock)
 				if err != nil {
+					errlock.Lock()
 					errout = fmt.Errorf("failed to get next item: %v", err)
+					errlock.Unlock()
 					return
 				}
 				defer lock.Unlock()
 
 				if key == "" {
+					errlock.Lock()
 					errout = errors.New("key is empty")
+					errlock.Unlock()
 					return
 				}
 
 				if value != uint64(i) {
+					errlock.Lock()
 					errout = fmt.Errorf("values don't match: got %v, expected %v", value, i)
+					errlock.Unlock()
 					return
 				}
 
@@ -69,7 +77,9 @@ func TestNewPersistentQueue(t *testing.T) {
 				queue.delete(batch, key)
 				err = store.WriteBatch(batch)
 				if err != nil {
+					errlock.Lock()
 					errout = fmt.Errorf("could not write batch: %v", err)
+					errlock.Unlock()
 					return
 				}
 			}()
@@ -87,12 +97,16 @@ func TestNewPersistentQueue(t *testing.T) {
 				batch := new(state.StoreBatch)
 				_, trigger, err := queue.enqueue(batch, value)
 				if err != nil {
+					errlock.Lock()
 					errout = fmt.Errorf("failed to queue item: %v", err)
+					errlock.Unlock()
 					return
 				}
 				err = store.WriteBatch(batch)
 				if err != nil {
+					errlock.Lock()
 					errout = fmt.Errorf("failed to write batch: %v", err)
+					errlock.Unlock()
 					return
 				}
 
