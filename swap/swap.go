@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -52,6 +53,7 @@ var ErrSkipDeposit = errors.New("swap-deposit-amount non-zero, but swap-skip-dep
 // a peer to peer micropayment system
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
+// Swap implements the CashoutResultHandler interface
 type Swap struct {
 	store             state.Store                // store is needed in order to keep balances and cheques across sessions
 	peers             map[enode.ID]*Peer         // map of all swap Peers
@@ -64,6 +66,7 @@ type Swap struct {
 	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
 	honeyPriceOracle  HoneyOracle                // oracle which resolves the price of honey (in Wei)
 	cashoutProcessor  *CashoutProcessor          // processor for cashing out
+	txScheduler       chain.TxScheduler          // transaction scheduler to use
 	logger            Logger                     //Swap Logger
 }
 
@@ -84,8 +87,8 @@ type Params struct {
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
-func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory, logger Logger) *Swap {
-	return &Swap{
+func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend, chainID uint64, params *Params, chequebookFactory contract.SimpleSwapFactory, txScheduler chain.TxScheduler, logger Logger) *Swap {
+	s := &Swap{
 		store:             stateStore,
 		peers:             make(map[enode.ID]*Peer),
 		backend:           backend,
@@ -94,9 +97,11 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend
 		chequebookFactory: chequebookFactory,
 		honeyPriceOracle:  NewHoneyPriceOracle(),
 		chainID:           chainID,
-		cashoutProcessor:  newCashoutProcessor(backend, owner.privateKey),
+		txScheduler:       txScheduler,
 		logger:            logger,
 	}
+	s.cashoutProcessor = newCashoutProcessor(txScheduler, backend, owner.privateKey, s, logger)
+	return s
 }
 
 // New prepares and creates all fields to create a swap instance:
@@ -158,12 +163,17 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 		chainID.Uint64(),
 		params,
 		factory,
+		chain.NewTxQueue(stateStore, "chain", &chain.DefaultTxSchedulerBackend{
+			Backend: backend,
+		}, owner.privateKey),
 		swapLogger,
 	)
 	// start the chequebook
 	if swap.contract, err = swap.StartChequebook(chequebookAddressFlag); err != nil {
 		return nil, err
 	}
+
+	swap.txScheduler.Start()
 
 	// deposit money in the chequebook if desired
 	if !skipDepositFlag {
@@ -342,8 +352,6 @@ func (s *Swap) handleMsg(p *Peer) func(ctx context.Context, msg interface{}) err
 	}
 }
 
-var defaultCashCheque = cashCheque
-
 // handleEmitChequeMsg should be handled by the creditor when it receives
 // a cheque from a debitor
 func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitChequeMsg) error {
@@ -386,21 +394,10 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	expectedPayout, transactionCosts, err := s.cashoutProcessor.estimatePayout(context.TODO(), cheque)
-	if err != nil {
-		return protocols.Break(err)
-	}
-
-	costsMultiplier := uint256.FromUint64(2)
-	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
-	if err != nil {
-		return err
-	}
-
-	// do a payout transaction if we get 2 times the gas costs
-	if expectedPayout.Cmp(costThreshold) == 1 {
-		go defaultCashCheque(s, cheque)
-	}
+	s.cashoutProcessor.submitCheque(ctx, &CashoutRequest{
+		Cheque:      *cheque,
+		Destination: s.GetParams().ContractAddress,
+	})
 
 	return nil
 }
@@ -438,21 +435,6 @@ func (s *Swap) handleConfirmChequeMsg(ctx context.Context, p *Peer, msg *Confirm
 	p.pendingCheque = nil
 
 	return nil
-}
-
-// cashCheque should be called async as it blocks until the transaction(s) are mined
-// The function cashes the cheque by sending it to the blockchain
-func cashCheque(s *Swap, cheque *Cheque) {
-	err := s.cashoutProcessor.cashCheque(context.Background(), &CashoutRequest{
-		Cheque:      *cheque,
-		Destination: s.GetParams().ContractAddress,
-		Logger:      s.logger,
-	})
-
-	if err != nil {
-		metrics.GetOrRegisterCounter("swap/cheques/cashed/errors", nil).Inc(1)
-		s.logger.Error(CashChequeAction, "cashing cheque:", err)
-	}
 }
 
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
@@ -565,6 +547,7 @@ func (s *Swap) saveBalance(p enode.ID, balance int64) error {
 
 // Close cleans up swap
 func (s *Swap) Close() error {
+	s.txScheduler.Stop()
 	return s.store.Close()
 }
 
@@ -688,4 +671,17 @@ func (s *Swap) loadChequebook() (common.Address, error) {
 
 func (s *Swap) saveChequebook(chequebook common.Address) error {
 	return s.store.Put(connectedChequebookKey, chequebook)
+}
+
+// HandleCashoutResult is the handler function called by the CashoutProcessor in case of a successful cashing transaction
+func (s *Swap) HandleCashoutResult(request *CashoutRequest, result *contract.CashChequeResult, receipt *types.Receipt) error {
+	metrics.GetOrRegisterCounter("swap/cheques/cashed/honey", nil).Inc(result.TotalPayout.Int64())
+
+	if result.Bounced {
+		metrics.GetOrRegisterCounter("swap/cheques/cashed/bounced", nil).Inc(1)
+		s.logger.Warn(CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
+	}
+
+	s.logger.Info(CashChequeAction, "cheque cashed", "cheque", &request.Cheque)
+	return nil
 }

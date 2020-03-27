@@ -15,10 +15,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
+	contract "github.com/ethersphere/swarm/contracts/swap"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
@@ -34,8 +36,6 @@ type swapTestBackend struct {
 	*mock.TestBackend
 	factoryAddress common.Address // address of the SimpleSwapFactory in the simulated network
 	tokenAddress   common.Address // address of the token in the simulated network
-	// the async cashing go routine needs synchronization for tests
-	cashDone chan struct{}
 }
 
 var defaultBackend = backends.NewSimulatedBackend(core.GenesisAlloc{
@@ -67,7 +67,6 @@ func newTestBackend(t *testing.T) *swapTestBackend {
 		TestBackend:    backend,
 		factoryAddress: factoryAddress,
 		tokenAddress:   tokenAddress,
-		cashDone:       make(chan struct{}),
 	}
 }
 
@@ -106,7 +105,11 @@ func newBaseTestSwapWithParams(t *testing.T, key *ecdsa.PrivateKey, params *Para
 	if err != nil {
 		t.Fatal(err)
 	}
-	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory, swapLogger)
+
+	txqueue := chain.NewTxQueue(stateStore, "chain", &chain.DefaultTxSchedulerBackend{
+		Backend: backend,
+	}, owner.privateKey)
+	swap := newSwapInstance(stateStore, owner, backend, 10, params, factory, txqueue, swapLogger)
 	return swap, dir
 }
 
@@ -127,6 +130,7 @@ func newTestSwap(t *testing.T, key *ecdsa.PrivateKey, backend *swapTestBackend) 
 		usedBackend = newTestBackend(t)
 	}
 	swap, dir := newBaseTestSwap(t, key, usedBackend)
+	swap.txScheduler.Start()
 	clean := func() {
 		swap.Close()
 		// only close if created by newTestSwap to avoid double close
@@ -207,32 +211,6 @@ func newRandomTestCheque() *Cheque {
 	return cheque
 }
 
-// During tests, because the cashing in of cheques is async, we should wait for the function to be returned
-// Otherwise if we call `handleEmitChequeMsg` manually, it will return before the TX has been committed to the `SimulatedBackend`,
-// causing subsequent TX to possibly fail due to nonce mismatch
-func testCashCheque(s *Swap, cheque *Cheque) {
-	cashCheque(s, cheque)
-	// send to the channel, signals to clients that this function actually finished
-	if stb, ok := s.backend.(*swapTestBackend); ok {
-		if stb.cashDone != nil {
-			stb.cashDone <- struct{}{}
-		}
-	}
-}
-
-// setupContractTest is a helper function for setting up the
-// blockchain wait function for testing
-func setupContractTest() func() {
-	// we also need to store the previous cashCheque function in case this is called multiple times
-	currentCashCheque := defaultCashCheque
-	defaultCashCheque = testCashCheque
-	// overwrite only for the duration of the test, so...
-	return func() {
-		// ...we need to set it back to original when done
-		defaultCashCheque = currentCashCheque
-	}
-}
-
 // deploy for testing (needs simulated backend commit)
 func testDeployWithPrivateKey(ctx context.Context, backend chain.Backend, privateKey *ecdsa.PrivateKey, ownerAddress common.Address, depositAmount *uint256.Uint256) (cswap.Contract, error) {
 	opts := bind.NewKeyedTransactor(privateKey)
@@ -249,9 +227,6 @@ func testDeployWithPrivateKey(ctx context.Context, backend chain.Backend, privat
 		return nil, err
 	}
 
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
 	contract, err := factory.DeploySimpleSwap(opts, ownerAddress, big.NewInt(int64(defaultHarddepositTimeoutDuration)))
 	if err != nil {
 		return nil, err
@@ -315,4 +290,46 @@ func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
 // WriteMsg is from the MessageWriter interface
 func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 	return nil
+}
+
+// struct used by the testCashoutResultHandler
+type cashChequeDoneData struct {
+	request *CashoutRequest
+	result  *contract.CashChequeResult
+	receipt *types.Receipt
+}
+
+// testCashoutResultHandler is a CashoutResultHandler which writes to a channel after forwarding the result to swap
+type testCashoutResultHandler struct {
+	swap           *Swap
+	cashChequeDone chan cashChequeDoneData
+}
+
+func newTestCashoutResultHandler(swap *Swap) *testCashoutResultHandler {
+	return &testCashoutResultHandler{
+		swap:           swap,
+		cashChequeDone: make(chan cashChequeDoneData),
+	}
+}
+
+// HandleCashoutResult forwards the result to swap if set and afterwards sends it to its channel
+func (h *testCashoutResultHandler) HandleCashoutResult(request *CashoutRequest, result *contract.CashChequeResult, receipt *types.Receipt) error {
+	if h.swap != nil {
+		if err := h.swap.HandleCashoutResult(request, result, receipt); err != nil {
+			return err
+		}
+	}
+	h.cashChequeDone <- cashChequeDoneData{
+		request: request,
+		result:  result,
+		receipt: receipt,
+	}
+	return nil
+}
+
+// helper function to override the cashoutHandler for a cashout processor of swap instance
+func overrideCashoutResultHandler(swap *Swap) *testCashoutResultHandler {
+	cashoutResultHandler := newTestCashoutResultHandler(swap)
+	swap.cashoutProcessor.cashoutResultHandler = cashoutResultHandler
+	return cashoutResultHandler
 }

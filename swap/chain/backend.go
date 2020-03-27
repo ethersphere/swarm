@@ -1,8 +1,23 @@
+// Copyright 2020 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package chain
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -10,11 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-)
-
-var (
-	// ErrTransactionReverted is given when the transaction that cashes a cheque is reverted
-	ErrTransactionReverted = errors.New("Transaction reverted")
 )
 
 // Backend is the minimum amount of functionality required by the underlying ethereum backend
@@ -30,12 +40,10 @@ func WaitMined(ctx context.Context, b Backend, hash common.Hash) (*types.Receipt
 	for {
 		receipt, err := b.TransactionReceipt(ctx, hash)
 		if err != nil {
-			log.Error("receipt retrieval failed", "err", err)
+			// some clients treat an unconfirmed transaction as an error, other simply return null
+			log.Trace("receipt retrieval failed", "err", err)
 		}
 		if receipt != nil {
-			if receipt.Status != types.ReceiptStatusSuccessful {
-				return nil, ErrTransactionReverted
-			}
 			return receipt, nil
 		}
 

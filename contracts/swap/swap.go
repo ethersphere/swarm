@@ -22,7 +22,9 @@ package swap
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,8 +39,8 @@ type Contract interface {
 	Withdraw(auth *bind.TransactOpts, amount *big.Int) (*types.Receipt, error)
 	// Deposit sends a raw transaction to the chequebook, triggering the fallback—depositing amount
 	Deposit(auth *bind.TransactOpts, amout *big.Int) (*types.Receipt, error)
-	// CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
-	CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*types.Transaction, error)
+	// CashChequeBeneficiaryRequest generates a TxRequest for a CashChequeBeneficiary transaction
+	CashChequeBeneficiaryRequest(beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*chain.TxRequest, error)
 	// CashChequeBeneficiaryResult processes the receipt from a CashChequeBeneficiary transaction
 	CashChequeBeneficiaryResult(receipt *types.Receipt) *CashChequeResult
 	// LiquidBalance returns the LiquidBalance (total balance in ERC20-token - total hard deposits in ERC20-token) of the chequebook
@@ -75,19 +77,30 @@ type Params struct {
 
 type simpleContract struct {
 	instance *contract.ERC20SimpleSwap
+	abi      abi.ABI
 	address  common.Address
 	backend  chain.Backend
 }
 
 // InstanceAt creates a new instance of a contract at a specific address.
-// It assumes that there is an existing contract instance at the given address, or an error is returned
+// It assumes that there is an existing contract instance at the given address
 // This function is needed to communicate with remote Swap contracts (e.g. sending a cheque)
 func InstanceAt(address common.Address, backend chain.Backend) (Contract, error) {
 	instance, err := contract.NewERC20SimpleSwap(address, backend)
 	if err != nil {
 		return nil, err
 	}
-	c := simpleContract{instance: instance, address: address, backend: backend}
+
+	contractABI, err := abi.JSON(strings.NewReader(contract.ERC20SimpleSwapABI))
+	if err != nil {
+		return nil, err
+	}
+	c := simpleContract{
+		abi:      contractABI,
+		instance: instance,
+		address:  address,
+		backend:  backend,
+	}
 	return c, err
 }
 
@@ -130,15 +143,19 @@ func (s simpleContract) Deposit(auth *bind.TransactOpts, amount *big.Int) (*type
 	return chain.WaitMined(auth.Context, s.backend, tx.Hash())
 }
 
-// CashChequeBeneficiaryStart sends the transaction to cash a cheque as the beneficiary
-func (s simpleContract) CashChequeBeneficiaryStart(opts *bind.TransactOpts, beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*types.Transaction, error) {
+// CashChequeBeneficiaryRequest generates a TxRequest for a CashChequeBeneficiary transaction
+func (s simpleContract) CashChequeBeneficiaryRequest(beneficiary common.Address, cumulativePayout *uint256.Uint256, ownerSig []byte) (*chain.TxRequest, error) {
 	payout := cumulativePayout.Value()
-	// send a copy of cumulativePayout to instance as it modifies the supplied big int internally
-	tx, err := s.instance.CashChequeBeneficiary(opts, beneficiary, big.NewInt(0).Set(&payout), ownerSig)
+	callData, err := s.abi.Pack("cashChequeBeneficiary", beneficiary, big.NewInt(0).Set(&payout), ownerSig)
 	if err != nil {
 		return nil, err
 	}
-	return tx, nil
+
+	return &chain.TxRequest{
+		To:    s.address,
+		Value: big.NewInt(0),
+		Data:  callData,
+	}, nil
 }
 
 // CashChequeBeneficiaryResult processes the receipt from a CashChequeBeneficiary transaction
