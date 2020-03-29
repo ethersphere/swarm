@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -126,7 +127,8 @@ func (u *Int256) String() string {
 // MarshalJSON implements the json.Marshaler interface
 // it specifies how to marshal a Int256 struct so that it can be written to disk
 func (u *Int256) MarshalJSON() ([]byte, error) {
-	return []byte(u.value.String()), nil
+	// number is wrapped in quotes to prevent json number overflowing
+	return []byte(strconv.Quote(u.value.String())), nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
@@ -137,11 +139,16 @@ func (u *Int256) UnmarshalJSON(b []byte) error {
 	}
 
 	var value big.Int
-	_, ok := (&value).SetString(string(b), 10)
+	// value string must be unquoted due to marshaling
+	strValue, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	_, ok := (&value).SetString(strValue, 10)
 	if !ok {
 		return fmt.Errorf("not a valid integer value: %s", b)
 	}
-	_, err := u.set(&value)
+	_, err = u.set(&value)
 	return err
 }
 

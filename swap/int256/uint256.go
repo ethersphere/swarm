@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -33,7 +34,7 @@ var minUint256 = big.NewInt(0)
 var maxUint256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)) // 2^256 - 1
 
 // NewUint256 creates a Uint256 struct with an initial underlying value of the given param
-// returns an error when the result falls outside of the unsigned 256-bit integer range
+// returns an error when the value cannot be correctly set
 func NewUint256(value *big.Int) (*Uint256, error) {
 	u := new(Uint256)
 	return u.set(value)
@@ -126,7 +127,8 @@ func (u *Uint256) String() string {
 // MarshalJSON implements the json.Marshaler interface
 // it specifies how to marshal a Uint256 struct so that it can be written to disk
 func (u *Uint256) MarshalJSON() ([]byte, error) {
-	return []byte(u.value.String()), nil
+	// number is wrapped in quotes to prevent json number overflowing
+	return []byte(strconv.Quote(u.value.String())), nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
@@ -137,7 +139,12 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 	}
 
 	var value big.Int
-	_, ok := (&value).SetString(string(b), 10)
+	// value string must be unquoted due to marshaling
+	strValue, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	_, ok := (&value).SetString(strValue, 10)
 	if !ok {
 		return fmt.Errorf("not a valid integer value: %s", b)
 	}
@@ -145,7 +152,7 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 	if err := checkUint256Bounds(&value); err != nil {
 		return err
 	}
-	_, err := u.set(&value)
+	_, err = u.set(&value)
 	return err
 }
 
