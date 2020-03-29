@@ -24,7 +24,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
@@ -253,8 +252,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.FormatUint(paymentThreshold.Uint64(), 10),
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.FormatUint(disconnectThreshold.Uint64(), 10),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), paymentThreshold.String(),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), disconnectThreshold.String(),
 		fmt.Sprintf("--%s", SwarmEnablePinningFlag.Name),
 	}
 
