@@ -144,10 +144,6 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 	if !ok {
 		return fmt.Errorf("not a valid integer value: %s", b)
 	}
-
-	if err := checkUint256Bounds(&value); err != nil {
-		return err
-	}
 	_, err = u.set(&value)
 	return err
 }
