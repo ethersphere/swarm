@@ -34,7 +34,7 @@ var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2),
 var maxInt256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1))  // 2^255 - 1
 
 // NewInt256 creates a Int256 struct with an initial underlying value of the given param
-// returns an error when the result falls outside of the signed 256-bit integer range
+// returns an error when the value cannot be correctly set
 func NewInt256(value *big.Int) (*Int256, error) {
 	u := new(Int256)
 	return u.set(value)
@@ -134,10 +134,6 @@ func (u *Int256) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements the json.Unmarshaler interface
 // it specifies how to unmarshal a Int256 struct so that it can be reconstructed from disk
 func (u *Int256) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
-	}
-
 	var value big.Int
 	// value string must be unquoted due to marshaling
 	strValue, err := strconv.Unquote(string(b))

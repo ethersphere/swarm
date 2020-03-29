@@ -134,10 +134,6 @@ func (u *Uint256) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements the json.Unmarshaler interface
 // it specifies how to unmarshal a Uint256 struct so that it can be reconstructed from disk
 func (u *Uint256) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
-	}
-
 	var value big.Int
 	// value string must be unquoted due to marshaling
 	strValue, err := strconv.Unquote(string(b))
