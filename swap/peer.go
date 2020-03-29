@@ -214,8 +214,8 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while updating balance: %v", err)
 	}
 
-	metrics.GetOrRegisterCounter("swap.cheques.emitted.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.emitted.honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap/cheques/emitted/num", nil).Inc(1)
+	metrics.GetOrRegisterCounter("swap/cheques/emitted/honey", nil).Inc(honeyAmount)
 	p.logger.Info(SendChequeAction, "sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,

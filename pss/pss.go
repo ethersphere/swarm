@@ -187,7 +187,7 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		Interval: params.CacheTTL,
 		Callback: func() {
 			ps.forwardCache.GC()
-			metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
+			metrics.GetOrRegisterCounter("pss/cleanfwdcache", nil).Inc(1)
 		},
 	})
 	ps.outbox = outbox.NewOutbox(&outbox.Config{
@@ -436,11 +436,11 @@ func (p *Pss) handle(ctx context.Context, peer *protocols.Peer, msg interface{})
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.handle", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/handle", nil).UpdateSince(time.Now())
 
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
-		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
+		metrics.GetOrRegisterCounter("pss/expire", nil).Inc(1)
 		log.Warn("pss filtered expired message", "from", hex.EncodeToString(p.Kademlia.BaseAddr()), "to", hex.EncodeToString(pssmsg.To))
 		return nil
 	}
@@ -488,7 +488,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, pssmsg *message.Message) error {
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
 func (p *Pss) process(pssmsg *message.Message, raw bool, prox bool) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.process", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/process", nil).UpdateSince(time.Now())
 
 	var payload []byte
 	var from PssAddress
@@ -533,7 +533,7 @@ func (p *Pss) getHandlers(topic message.Topic) (ret []*handler) {
 }
 
 func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
-	defer metrics.GetOrRegisterResettingTimer("pss.execute-handlers", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/execute-handlers", nil).UpdateSince(time.Now())
 
 	handlers := p.getHandlers(topic)
 	peer := p2p.NewPeer(enode.ID{}, hex.EncodeToString(from), []p2p.Cap{})
@@ -583,7 +583,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) enqueue(msg *message.Message) {
-	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/enqueue", nil).UpdateSince(time.Now())
 
 	// TODO: create and enqueue in one outbox method
 	outboxMsg := p.outbox.NewOutboxMessage(msg)
@@ -594,7 +594,7 @@ func (p *Pss) enqueue(msg *message.Message) {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messageTTL time.Duration) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.send.raw", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/send/raw", nil).UpdateSince(time.Now())
 
 	if err := validateAddress(address); err != nil {
 		return err
@@ -650,7 +650,7 @@ func (p *Pss) SendAsym(pubkeyid string, topic message.Topic, msg []byte) error {
 // and wraps the message payload in it.
 // TODO: Implement proper message padding
 func (p *Pss) send(to []byte, topic message.Topic, msg []byte, asymmetric bool, key []byte) error {
-	metrics.GetOrRegisterCounter("pss.send", nil).Inc(1)
+	metrics.GetOrRegisterCounter("pss/send", nil).Inc(1)
 
 	if key == nil || bytes.Equal(key, []byte{}) {
 		return fmt.Errorf("Zero length key passed to pss send")
@@ -694,7 +694,7 @@ var sendFunc = sendMsg
 
 // tries to send a message, returns true if successful
 func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
-	defer metrics.GetOrRegisterResettingTimer("pss.pp.send", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/pp/send", nil).UpdateSince(time.Now())
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
@@ -717,7 +717,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 
 	err := pp.Send(context.TODO(), msg)
 	if err != nil {
-		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
+		metrics.GetOrRegisterCounter("pss/pp/send/error", nil).Inc(1)
 		log.Error(err.Error())
 	}
 	return err == nil
@@ -734,7 +734,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *message.Message) bool {
 //// forwarding fails, the node should try to forward it to the next best peer, until the message is
 //// successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *message.Message) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.forward", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/forward", nil).UpdateSince(time.Now())
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
@@ -806,7 +806,7 @@ func label(b []byte) string {
 
 // add a message to the cache
 func (p *Pss) addFwdCache(msg *message.Message) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/addfwdcache", nil).UpdateSince(time.Now())
 	return p.forwardCache.Add(msg.Digest())
 }
 
@@ -814,9 +814,9 @@ func (p *Pss) addFwdCache(msg *message.Message) error {
 func (p *Pss) checkFwdCache(msg *message.Message) bool {
 	hit := p.forwardCache.Has(msg.Digest())
 	if hit {
-		metrics.GetOrRegisterCounter("pss.checkfwdcache.hit", nil).Inc(1)
+		metrics.GetOrRegisterCounter("pss/checkfwdcachexi/hit", nil).Inc(1)
 	} else {
-		metrics.GetOrRegisterCounter("pss.checkfwdcache.miss", nil).Inc(1)
+		metrics.GetOrRegisterCounter("pss/checkfwdcache/miss", nil).Inc(1)
 	}
 	return hit
 }

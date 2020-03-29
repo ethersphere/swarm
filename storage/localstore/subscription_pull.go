@@ -38,7 +38,7 @@ import (
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
 func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
-	metricName := "localstore.SubscribePull"
+	metricName := "localstore/SubscribePull"
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 
 	chunkDescriptors := make(chan chunk.Descriptor)
@@ -64,7 +64,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 	db.subscritionsWG.Add(1)
 	go func() {
 		defer db.subscritionsWG.Done()
-		defer metrics.GetOrRegisterCounter(metricName+".stop", nil).Inc(1)
+		defer metrics.GetOrRegisterCounter(metricName+"/stop", nil).Inc(1)
 		// close the returned chunk.Descriptor channel at the end to
 		// signal that the subscription is done
 		defer close(chunkDescriptors)
@@ -85,7 +85,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				// - last index Item is reached
 				// - subscription stop is called
 				// - context is done
-				metrics.GetOrRegisterCounter(metricName+".iter", nil).Inc(1)
+				metrics.GetOrRegisterCounter(metricName+"/iter", nil).Inc(1)
 
 				iterStart := time.Now()
 				var count int
@@ -129,7 +129,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					Prefix:            []byte{bin},
 				})
 
-				totalTimeMetric(metricName+".iter", iterStart)
+				totalTimeMetric(metricName+"/iter", iterStart)
 
 				if err != nil {
 					if err == errStopSubscription {
@@ -137,7 +137,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 						// if until is reached
 						return
 					}
-					metrics.GetOrRegisterCounter(metricName+".iter.error", nil).Inc(1)
+					metrics.GetOrRegisterCounter(metricName+"/iter/error", nil).Inc(1)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
@@ -185,7 +185,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 // in pull syncing index for a provided bin. If there are no chunks in
 // that bin, 0 value is returned.
 func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
-	metrics.GetOrRegisterCounter("localstore.LastPullSubscriptionBinID", nil).Inc(1)
+	metrics.GetOrRegisterCounter("localstore/LastPullSubscriptionBinID", nil).Inc(1)
 
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {

@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -233,7 +234,7 @@ func (p *Peer) readMsg() (p2p.Msg, error) {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		if err != io.EOF {
-			metrics.GetOrRegisterCounter("peer.readMsg.error", nil).Inc(1)
+			metrics.GetOrRegisterCounter("peer/readMsg/error", nil).Inc(1)
 			return msg, fmt.Errorf("peer.readMsg, err: %w", err)
 		}
 	}
@@ -280,9 +281,9 @@ func (p *Peer) Stop(timeout time.Duration) error {
 // this low level call will be wrapped by libraries providing routed or broadcast sends
 // but often just used to forward and push messages to directly connected peers
 func (p *Peer) Send(ctx context.Context, msg interface{}) error {
-	defer metrics.GetOrRegisterResettingTimer("peer.send_t", nil).UpdateSince(time.Now())
-	metrics.GetOrRegisterCounter("peer.send", nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.send.%T", msg), nil).Inc(1)
+	defer metrics.GetOrRegisterResettingTimer("peer/send_t", nil).UpdateSince(time.Now())
+	metrics.GetOrRegisterCounter("peer/send", nil).Inc(1)
+	metrics.GetOrRegisterCounter(strings.ReplaceAll(fmt.Sprintf("peer/send/%T", msg), ".", "/"), nil).Inc(1)
 
 	code, found := p.spec.GetCode(msg)
 	if !found {

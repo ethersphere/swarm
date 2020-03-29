@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethersphere/swarm/metrics/influxdb"
 
 	"github.com/ethersphere/swarm/internal/flags"
 	"github.com/ethersphere/swarm/log"

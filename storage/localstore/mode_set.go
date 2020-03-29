@@ -33,13 +33,13 @@ import (
 // Set is required to implement chunk.Store
 // interface.
 func (db *DB) Set(ctx context.Context, mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
-	metricName := fmt.Sprintf("localstore.Set.%s", mode)
+	metricName := fmt.Sprintf("localstore/Set/%s", mode)
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 	err = db.set(mode, addrs...)
 	if err != nil {
-		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+		metrics.GetOrRegisterCounter(metricName+"/error", nil).Inc(1)
 	}
 	return err
 }
