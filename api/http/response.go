@@ -30,9 +30,9 @@ import (
 )
 
 var (
-	htmlCounter      = metrics.NewRegisteredCounter("api.http.errorpage.html.count", nil)
-	jsonCounter      = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
-	plaintextCounter = metrics.NewRegisteredCounter("api.http.errorpage.plaintext.count", nil)
+	htmlCounter      = metrics.NewRegisteredCounter("api/http/errorpage/html/count", nil)
+	jsonCounter      = metrics.NewRegisteredCounter("api/http/errorpage/json/count", nil)
+	plaintextCounter = metrics.NewRegisteredCounter("api/http/errorpage/plaintext/count", nil)
 )
 
 type ResponseParams struct {

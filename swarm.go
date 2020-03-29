@@ -64,9 +64,9 @@ import (
 
 var (
 	updateGaugesPeriod = 5 * time.Second
-	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
-	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
-	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
+	startCounter       = metrics.NewRegisteredCounter("stack/start", nil)
+	stopCounter        = metrics.NewRegisteredCounter("stack/stop", nil)
+	uptimeGauge        = metrics.NewRegisteredGauge("stack/uptime", nil)
 )
 
 // Swarm abstracts the complete Swarm stack

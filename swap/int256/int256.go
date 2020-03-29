@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -38,7 +39,7 @@ var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2),
 var maxInt256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1))  // 2^255 - 1
 
 // NewInt256 creates a Int256 struct with an initial underlying value of the given param
-// returns an error when the result falls outside of the signed 256-bit integer range
+// returns an error when the value cannot be correctly set
 func NewInt256(value *big.Int) (*Int256, error) {
 	u := new(Int256)
 	return u.set(value)
@@ -77,9 +78,12 @@ func (u *Int256) set(value *big.Int) (*Int256, error) {
 	return u, nil
 }
 
-// checkInt256Bounds returns an error when the given value falls outside of the signed 256-bit integer range
+// checkInt256Bounds returns an error when the given value falls outside of the signed 256-bit integer range or is nil
 // returns nil otherwise
 func checkInt256Bounds(value *big.Int) error {
+	if value == nil {
+		return fmt.Errorf("cannot set Int256 to a nil value")
+	}
 	if value.Cmp(maxInt256) == 1 {
 		return fmt.Errorf("cannot set Int256 to %v as it overflows max value of %v", value, maxInt256)
 	}
@@ -128,22 +132,24 @@ func (u *Int256) String() string {
 // MarshalJSON implements the json.Marshaler interface
 // it specifies how to marshal a Int256 struct so that it can be written to disk
 func (u *Int256) MarshalJSON() ([]byte, error) {
-	return []byte(u.value.String()), nil
+	// number is wrapped in quotes to prevent json number overflowing
+	return []byte(strconv.Quote(u.value.String())), nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
 // it specifies how to unmarshal a Int256 struct so that it can be reconstructed from disk
 func (u *Int256) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
-	}
-
 	var value big.Int
-	_, ok := (&value).SetString(string(b), 10)
+	// value string must be unquoted due to marshaling
+	strValue, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	_, ok := (&value).SetString(strValue, 10)
 	if !ok {
 		return fmt.Errorf("not a valid integer value: %s", b)
 	}
-	_, err := u.set(&value)
+	_, err = u.set(&value)
 	return err
 }
 

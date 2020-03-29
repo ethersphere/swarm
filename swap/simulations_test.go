@@ -291,7 +291,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	metricsReg := metrics.AccountingRegistry
 	// testMsgSmallPrice is paid by the sender, so the credit counter will only be
 	// increased when receiving the message, which is what we want for this test
-	cter := metricsReg.Get("account.msg.credit")
+	cter := metricsReg.Get("account/msg/credit")
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
@@ -500,10 +500,10 @@ func TestBasicSwapSimulation(t *testing.T) {
 	allMessagesArrived := make(chan struct{})
 
 	metricsReg := metrics.AccountingRegistry
-	creditCter := metricsReg.Get("account.msg.credit")
+	creditCter := metricsReg.Get("account/msg/credit")
 	creditCounter := creditCter.(metrics.Counter)
 	creditCounter.Clear()
-	debitCter := metricsReg.Get("account.msg.debit")
+	debitCter := metricsReg.Get("account/msg/debit")
 	debitCounter := debitCter.(metrics.Counter)
 	debitCounter.Clear()
 

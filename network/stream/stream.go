@@ -56,27 +56,27 @@ var (
 	_ node.Service = (*Registry)(nil)
 
 	// Metrics
-	processReceivedChunksMsgCount = metrics.GetOrRegisterCounter("network.stream.received_chunks_msg", nil)
-	processReceivedChunksCount    = metrics.GetOrRegisterCounter("network.stream.received_chunks_handled", nil)
-	streamSeenChunkDelivery       = metrics.GetOrRegisterCounter("network.stream.seen_chunk_delivery", nil)
-	streamEmptyWantedHashes       = metrics.GetOrRegisterCounter("network.stream.empty_wanted_hashes", nil)
-	streamWantedHashes            = metrics.GetOrRegisterCounter("network.stream.wanted_hashes", nil)
+	processReceivedChunksMsgCount = metrics.GetOrRegisterCounter("network/stream/received_chunks_msg", nil)
+	processReceivedChunksCount    = metrics.GetOrRegisterCounter("network/stream/received_chunks_handled", nil)
+	streamSeenChunkDelivery       = metrics.GetOrRegisterCounter("network/stream/seen_chunk_delivery", nil)
+	streamEmptyWantedHashes       = metrics.GetOrRegisterCounter("network/stream/empty_wanted_hashes", nil)
+	streamWantedHashes            = metrics.GetOrRegisterCounter("network/stream/wanted_hashes", nil)
 
-	streamBatchFail               = metrics.GetOrRegisterCounter("network.stream.batch_fail", nil)
-	streamChunkDeliveryFail       = metrics.GetOrRegisterCounter("network.stream.delivery_fail", nil)
-	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network.stream.next_interval_fail", nil)
+	streamBatchFail               = metrics.GetOrRegisterCounter("network/stream/batch_fail", nil)
+	streamChunkDeliveryFail       = metrics.GetOrRegisterCounter("network/stream/delivery_fail", nil)
+	streamRequestNextIntervalFail = metrics.GetOrRegisterCounter("network/stream/next_interval_fail", nil)
 
-	headBatchSizeGauge = metrics.GetOrRegisterGauge("network.stream.batch_size_head", nil)
-	batchSizeGauge     = metrics.GetOrRegisterGauge("network.stream.batch_size", nil)
+	headBatchSizeGauge = metrics.GetOrRegisterGauge("network/stream/batch_size_head", nil)
+	batchSizeGauge     = metrics.GetOrRegisterGauge("network/stream/batch_size", nil)
 
-	streamPeersCount = metrics.GetOrRegisterGauge("network.stream.peers", nil)
+	streamPeersCount = metrics.GetOrRegisterGauge("network/stream/peers", nil)
 
-	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch_head.total-time", nil)
-	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network.stream.server_collect_batch.total-time", nil)
-	providerGetTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_get.total-time", nil)
-	providerPutTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_put.total-time", nil)
-	providerSetTimer         = metrics.GetOrRegisterResettingTimer("network.stream.provider_set.total-time", nil)
-	providerNeedDataTimer    = metrics.GetOrRegisterResettingTimer("network.stream.provider_need_data.total-time", nil)
+	collectBatchLiveTimer    = metrics.GetOrRegisterResettingTimer("network/stream/server_collect_batch_head/total-time", nil)
+	collectBatchHistoryTimer = metrics.GetOrRegisterResettingTimer("network/stream/server_collect_batch/total-time", nil)
+	providerGetTimer         = metrics.GetOrRegisterResettingTimer("network/stream/provider_get/total-time", nil)
+	providerPutTimer         = metrics.GetOrRegisterResettingTimer("network/stream/provider_put/total-time", nil)
+	providerSetTimer         = metrics.GetOrRegisterResettingTimer("network/stream/provider_set/total-time", nil)
+	providerNeedDataTimer    = metrics.GetOrRegisterResettingTimer("network/stream/provider_need_data/total-time", nil)
 
 	// Protocol spec
 	Spec = &protocols.Spec{
@@ -368,9 +368,9 @@ func (r *Registry) serverHandleGetRange(ctx context.Context, p *Peer, msg *GetRa
 	start := time.Now()
 	defer func(start time.Time) {
 		if msg.To == nil {
-			metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range_head.total-time", nil).UpdateSince(start)
+			metrics.GetOrRegisterResettingTimer("network/stream/handle_get_range_head/total-time", nil).UpdateSince(start)
 		} else {
-			metrics.GetOrRegisterResettingTimer("network.stream.handle_get_range.total-time", nil).UpdateSince(start)
+			metrics.GetOrRegisterResettingTimer("network/stream/handle_get_range/total-time", nil).UpdateSince(start)
 		}
 	}(start)
 
@@ -466,7 +466,7 @@ func (r *Registry) clientHandleOfferedHashes(ctx context.Context, p *Peer, msg *
 	p.logger.Debug("clientHandleOfferedHashes", "ruid", msg.Ruid, "msg.lastIndex", msg.LastIndex)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_offered_hashes.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network/stream/handle_offered_hashes/total-time", nil).UpdateSince(start)
 	}(start)
 
 	var (
@@ -619,7 +619,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	p.logger.Debug("serverHandleWantedHashes", "ruid", msg.Ruid)
 	start := time.Now()
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_wanted_hashes.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network/stream/handle_wanted_hashes/total-time", nil).UpdateSince(start)
 	}(start)
 
 	defer func() {
@@ -660,7 +660,7 @@ func (r *Registry) serverHandleWantedHashes(ctx context.Context, p *Peer, msg *W
 	for i := 0; i < l; i++ {
 		hash := o.hashes[i*HashSize : (i+1)*HashSize]
 		if want.Get(i) {
-			metrics.GetOrRegisterCounter("network.stream.handle_wanted.want_get", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network/stream/handle_wanted/want_get", nil).Inc(1)
 			wantHashes = append(wantHashes, hash)
 		}
 		allHashes[i] = hash
@@ -748,7 +748,7 @@ func (r *Registry) clientHandleChunkDelivery(ctx context.Context, p *Peer, msg *
 	r.setLastReceivedChunkTime() // needed for IsPullSyncing
 
 	defer func(start time.Time) {
-		metrics.GetOrRegisterResettingTimer("network.stream.handle_chunk_delivery.total-time", nil).UpdateSince(start)
+		metrics.GetOrRegisterResettingTimer("network/stream/handle_chunk_delivery/total-time", nil).UpdateSince(start)
 	}(time.Now())
 
 	chunks := make([]chunk.Chunk, len(msg.Chunks))
@@ -805,7 +805,7 @@ func (r *Registry) clientSealBatch(ctx context.Context, p *Peer, provider Stream
 	go func() {
 		start := time.Now()
 		defer func(start time.Time) {
-			metrics.GetOrRegisterResettingTimer("network.stream.client_seal_batch.total-time", nil).UpdateSince(start)
+			metrics.GetOrRegisterResettingTimer("network/stream/client_seal_batch/total-time", nil).UpdateSince(start)
 		}(start)
 		for {
 			select {
@@ -891,7 +891,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 			batchEndID = d.BinID
 			if batchSize >= BatchSize {
 				iterate = false
-				metrics.GetOrRegisterCounter("network.stream.server_collect_batch.full-batch", nil).Inc(1)
+				metrics.GetOrRegisterCounter("network/stream/server_collect_batch/full-batch", nil).Inc(1)
 			}
 			if timer == nil {
 				timer = time.NewTimer(timeouts.BatchTimeout)
@@ -905,7 +905,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 		case <-timerC:
 			// return batch if new chunks are not received after some time
 			iterate = false
-			metrics.GetOrRegisterCounter("network.stream.server_collect_batch.timer-expire", nil).Inc(1)
+			metrics.GetOrRegisterCounter("network/stream/server_collect_batch/timer-expire", nil).Inc(1)
 		case <-p.quit:
 			iterate = false
 		case <-r.quit:
@@ -923,7 +923,7 @@ func (r *Registry) serverCollectBatch(ctx context.Context, p *Peer, provider Str
 func (r *Registry) requestSubsequentRange(ctx context.Context, p *Peer, provider StreamProvider, w *want, lastIndex uint64) error {
 	cur, ok := p.getCursor(w.stream)
 	if !ok {
-		metrics.GetOrRegisterCounter("network.stream.quit_unwanted", nil).Inc(1)
+		metrics.GetOrRegisterCounter("network/stream/quit_unwanted", nil).Inc(1)
 		p.logger.Debug("no longer interested in stream. quitting", "stream", w.stream)
 		p.mtx.Lock()
 		delete(p.openWants, w.ruid)

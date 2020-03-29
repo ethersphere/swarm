@@ -146,10 +146,10 @@ func (c *CashoutProcessor) waitForAndProcessActiveCashout(activeCashout *ActiveC
 
 	result := otherSwap.CashChequeBeneficiaryResult(receipt)
 
-	metrics.GetOrRegisterCounter("swap.cheques.cashed.honey", nil).Inc(result.TotalPayout.Int64())
+	metrics.GetOrRegisterCounter("swap/cheques/cashed/honey", nil).Inc(result.TotalPayout.Int64())
 
 	if result.Bounced {
-		metrics.GetOrRegisterCounter("swap.cheques.cashed.bounced", nil).Inc(1)
+		metrics.GetOrRegisterCounter("swap/cheques/cashed/bounced", nil).Inc(1)
 		activeCashout.Logger.Warn(CashChequeAction, "cheque bounced", "tx", receipt.TxHash)
 	}
 
