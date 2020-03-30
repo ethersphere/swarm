@@ -147,12 +147,12 @@ func runCheck(mode pssMode, count int, msgSizeBytes int) error {
 		successCount = int64(sc)
 		failCount = int64(count - sc)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.msgs.fail", mode), nil).Inc(failCount)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.msgs.success", mode), nil).Inc(successCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/msgs/fail", mode), nil).Inc(failCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/msgs/success", mode), nil).Inc(successCount)
 
 		totalTime := time.Since(t)
 
-		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("pss.%s.total-time", mode), nil).Update(totalTime)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("pss/%s/total-time", mode), nil).Update(totalTime)
 		log.Info(fmt.Sprintf("pss.%s test ended", mode), "time", totalTime, "success", successCount, "failures", failCount)
 
 		if failCount > 0 {
@@ -165,11 +165,11 @@ func runCheck(mode pssMode, count int, msgSizeBytes int) error {
 	select {
 	case err := <-errC:
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.fail", mode), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/fail", mode), nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.timeout", mode), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/timeout", mode), nil).Inc(1)
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 

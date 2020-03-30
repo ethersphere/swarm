@@ -48,7 +48,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	mock "github.com/ethersphere/swarm/swap/chain/mock"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 /*
@@ -161,7 +161,7 @@ func newSimServiceMap(params *swapSimulationParams) map[string]simulation.Servic
 			ts.spec.Hook = protocols.NewAccounting(balance)
 			ts.swap = balance
 			// deploy the accounting to the `SimulatedBackend`
-			err = testDeploy(context.Background(), balance, uint256.FromUint64(100000*RetrieveRequestPrice))
+			err = testDeploy(context.Background(), balance, int256.Uint256From(100000*RetrieveRequestPrice))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -288,7 +288,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 	metricsReg := metrics.AccountingRegistry
 	// testMsgSmallPrice is paid by the sender, so the credit counter will only be
 	// increased when receiving the message, which is what we want for this test
-	cter := metricsReg.Get("account.msg.credit")
+	cter := metricsReg.Get("account/msg/credit")
 	counter := cter.(metrics.Counter)
 	counter.Clear()
 	var lastCount int64
@@ -428,7 +428,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		t.Fatalf("Expected symmetric cheques payout, but they are not: %v vs %v", cheque1.CumulativePayout, cheque2.CumulativePayout)
 	}
 
-	if !cheque2.CumulativePayout.Equals(uint256.FromUint64(expectedPayout)) {
+	if !cheque2.CumulativePayout.Equals(int256.Uint256From(expectedPayout)) {
 		t.Fatalf("Expected %d in cumulative payout, got %v", expectedPayout, cheque1.CumulativePayout)
 	}
 
@@ -474,10 +474,10 @@ func TestBasicSwapSimulation(t *testing.T) {
 	allMessagesArrived := make(chan struct{})
 
 	metricsReg := metrics.AccountingRegistry
-	creditCter := metricsReg.Get("account.msg.credit")
+	creditCter := metricsReg.Get("account/msg/credit")
 	creditCounter := creditCter.(metrics.Counter)
 	creditCounter.Clear()
-	debitCter := metricsReg.Get("account.msg.debit")
+	debitCter := metricsReg.Get("account/msg/debit")
 	debitCounter := debitCter.(metrics.Counter)
 	debitCounter.Clear()
 
@@ -664,7 +664,7 @@ func waitForChequeProcessed(t *testing.T, backend *swapTestBackend, counter metr
 				p.lock.Lock()
 				lastPayout := p.getLastSentCumulativePayout()
 				p.lock.Unlock()
-				if !lastPayout.Equals(uint256.FromUint64(expectedLastPayout)) {
+				if !lastPayout.Equals(int256.Uint256From(expectedLastPayout)) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {

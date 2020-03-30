@@ -146,11 +146,11 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, chs ...Chunk) ([
 			fii := fi.(*Fetcher)
 			n.logger.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
 
-			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore/fetcher/lifetime/%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
 			// helper snippet to log if a chunk took way to long to be delivered
 			if time.Since(fii.CreatedAt) > timeouts.FetcherSlowChunkDeliveryThreshold {
-				metrics.GetOrRegisterCounter("netstore.slow_chunk_delivery", nil).Inc(1)
+				metrics.GetOrRegisterCounter("netstore/slow_chunk_delivery", nil).Inc(1)
 				n.logger.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 			}
 			n.fetchers.Remove(ch.Address().String())
@@ -168,7 +168,7 @@ func (n *NetStore) Close() error {
 // Get retrieves a chunk
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
-	metrics.GetOrRegisterCounter("netstore.get", nil).Inc(1)
+	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
 	start := time.Now()
 
 	ref := req.Addr
@@ -199,7 +199,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 
 			// fi could be nil (when ok == false) if the chunk was added to the NetStore between n.store.Get and the call to n.GetOrCreateFetcher
 			if fi != nil {
-				metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.request", fi.CreatedBy), nil).UpdateSince(start)
+				metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher/%s/request", fi.CreatedBy), nil).UpdateSince(start)
 			}
 
 			return ch, nil
@@ -231,12 +231,12 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) (chunk.Chunk, error) {
 	// while we haven't timed-out, and while we don't have a chunk,
 	// iterate over peers and try to find a chunk
-	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
+	metrics.GetOrRegisterCounter("remote/fetch", nil).Inc(1)
 
 	ref := req.Addr
 
 	for {
-		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
+		metrics.GetOrRegisterCounter("remote/fetch/inner", nil).Inc(1)
 
 		ctx, osp := spancontext.StartSpan(
 			ctx,
@@ -268,14 +268,14 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) (
 			osp.Finish()
 			return fi.Chunk, nil
 		case <-time.After(timeouts.SearchTimeout):
-			metrics.GetOrRegisterCounter("remote.fetch.timeout.search", nil).Inc(1)
+			metrics.GetOrRegisterCounter("remote/fetch/timeout/search", nil).Inc(1)
 
 			osp.LogFields(olog.Bool("timeout", true))
 			osp.Finish()
 			break
 		case <-ctx.Done(): // global fetcher timeout
-			n.logger.Warn("remote.fetch, global timeout fail", "ref", ref, "err", ctx.Err())
-			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
+			n.logger.Trace("remote.fetch, global timeout fail", "ref", ref, "err", ctx.Err())
+			metrics.GetOrRegisterCounter("remote/fetch/timeout/global", nil).Inc(1)
 
 			osp.LogFields(olog.Bool("fail", true))
 			osp.Finish()

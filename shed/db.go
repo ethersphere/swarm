@@ -89,10 +89,10 @@ func NewDB(path string, metricsPrefix string) (db *DB, err error) {
 func (db *DB) Put(key []byte, value []byte) (err error) {
 	err = db.ldb.Put(key, value, nil)
 	if err != nil {
-		metrics.GetOrRegisterCounter("DB.putFail", nil).Inc(1)
+		metrics.GetOrRegisterCounter("DB/putFail", nil).Inc(1)
 		return err
 	}
-	metrics.GetOrRegisterCounter("DB.put", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB/put", nil).Inc(1)
 	return nil
 }
 
@@ -101,13 +101,13 @@ func (db *DB) Get(key []byte) (value []byte, err error) {
 	value, err = db.ldb.Get(key, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			metrics.GetOrRegisterCounter("DB.getNotFound", nil).Inc(1)
+			metrics.GetOrRegisterCounter("DB/getNotFound", nil).Inc(1)
 		} else {
-			metrics.GetOrRegisterCounter("DB.getFail", nil).Inc(1)
+			metrics.GetOrRegisterCounter("DB/getFail", nil).Inc(1)
 		}
 		return nil, err
 	}
-	metrics.GetOrRegisterCounter("DB.get", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB/get", nil).Inc(1)
 	return value, nil
 }
 
@@ -115,10 +115,10 @@ func (db *DB) Get(key []byte) (value []byte, err error) {
 func (db *DB) Has(key []byte) (yes bool, err error) {
 	yes, err = db.ldb.Has(key, nil)
 	if err != nil {
-		metrics.GetOrRegisterCounter("DB.hasFail", nil).Inc(1)
+		metrics.GetOrRegisterCounter("DB/hasFail", nil).Inc(1)
 		return false, err
 	}
-	metrics.GetOrRegisterCounter("DB.has", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB/has", nil).Inc(1)
 	return yes, nil
 }
 
@@ -126,16 +126,16 @@ func (db *DB) Has(key []byte) (yes bool, err error) {
 func (db *DB) Delete(key []byte) (err error) {
 	err = db.ldb.Delete(key, nil)
 	if err != nil {
-		metrics.GetOrRegisterCounter("DB.deleteFail", nil).Inc(1)
+		metrics.GetOrRegisterCounter("DB/deleteFail", nil).Inc(1)
 		return err
 	}
-	metrics.GetOrRegisterCounter("DB.delete", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB/delete", nil).Inc(1)
 	return nil
 }
 
 // NewIterator wraps LevelDB NewIterator method to increment metrics counter.
 func (db *DB) NewIterator() iterator.Iterator {
-	metrics.GetOrRegisterCounter("DB.newiterator", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB/newiterator", nil).Inc(1)
 
 	return db.ldb.NewIterator(nil, nil)
 }
@@ -144,10 +144,10 @@ func (db *DB) NewIterator() iterator.Iterator {
 func (db *DB) WriteBatch(batch *leveldb.Batch) (err error) {
 	err = db.ldb.Write(batch, nil)
 	if err != nil {
-		metrics.GetOrRegisterCounter("DB.writebatchFail", nil).Inc(1)
+		metrics.GetOrRegisterCounter("DB/writebatchFail", nil).Inc(1)
 		return err
 	}
-	metrics.GetOrRegisterCounter("DB.writebatch", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB/writebatch", nil).Inc(1)
 	return nil
 }
 

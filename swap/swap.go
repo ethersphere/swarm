@@ -39,7 +39,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
@@ -376,8 +376,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(fmt.Errorf("updating balance: %w", err))
 	}
 
-	metrics.GetOrRegisterCounter("swap.cheques.received.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.received.honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap/cheques/received/num", nil).Inc(1)
+	metrics.GetOrRegisterCounter("swap/cheques/received/honey", nil).Inc(honeyAmount)
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
@@ -391,8 +391,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	costsMultiplier := uint256.FromUint64(2)
-	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
+	costsMultiplier := int256.Uint256From(2)
+	costThreshold, err := new(int256.Uint256).Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
@@ -450,7 +450,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 	})
 
 	if err != nil {
-		metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
+		metrics.GetOrRegisterCounter("swap/cheques/cashed/errors", nil).Inc(1)
 		s.logger.Error(CashChequeAction, "cashing cheque:", err)
 	}
 }
@@ -458,7 +458,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
 // the caller is expected to hold p.lock
-func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256, error) {
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256, error) {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*uint256.Uint256
 		return nil, err
 	}
 
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, uint256.FromUint64(expectedAmount))
+	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, int256.Uint256From(expectedAmount))
 	if err != nil {
 		return nil, err
 	}
