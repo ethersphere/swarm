@@ -549,7 +549,10 @@ func TestSwapRPC(t *testing.T) {
 	defer clean()
 
 	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
-	swap.contract, err = contract.InstanceAt(common.Address{}, swap.backend)
+	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
+
+	// deploy a chequebook
+	err = testDeploy(context.TODO(), swap, depositAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -594,7 +597,7 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatalf("Expected balance to be 0 but it is %d", balance)
 	}
 
-	peer1, err := swap.addPeer(dummyPeer1.Peer, common.Address{}, common.Address{})
+	peer1, err := swap.addPeer(dummyPeer1.Peer, common.Address{}, swap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -603,7 +606,7 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	peer2, err := swap.addPeer(dummyPeer2.Peer, common.Address{}, common.Address{})
+	peer2, err := swap.addPeer(dummyPeer2.Peer, common.Address{}, swap.GetParams().ContractAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
