@@ -1161,11 +1161,11 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := testDeploy(ctx, swap, uint256.FromUint64(0)); err != nil {
+	if err := testDeploy(ctx, swap, int256.Uint256From(0)); err != nil {
 		t.Fatal(err)
 	}
 
-	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, uint256.FromUint64((DefaultPaymentThreshold * 2)))
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, int256.Uint256From((DefaultPaymentThreshold * 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1176,7 +1176,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chequeAmount := uint256.FromUint64(42)
+	chequeAmount := int256.Uint256From(42)
 	cheque, err := newSignedTestCheque(debitorChequebook.ContractParams().ContractAddress, swap.owner.address, chequeAmount, ownerKey)
 	if err != nil {
 		t.Fatal(err)
@@ -1196,7 +1196,7 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 		t.Fatalf("last received cheque has wrong cumulative payout, was: %v, expected: %v", peer.lastReceivedCheque.CumulativePayout, cheque.CumulativePayout)
 	}
 
-	otherChequeAmount := uint256.FromUint64(42)
+	otherChequeAmount := int256.Uint256From(42)
 	_, err = otherChequeAmount.Add(otherChequeAmount, int256.Uint256From(10))
 	if err != nil {
 		t.Fatal(err)
@@ -1233,11 +1233,11 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := testDeploy(ctx, swap, uint256.FromUint64(0)); err != nil {
+	if err := testDeploy(ctx, swap, int256.Uint256From(0)); err != nil {
 		t.Fatal(err)
 	}
 
-	chequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, uint256.FromUint64((DefaultPaymentThreshold * 2)))
+	chequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, int256.Uint256From((DefaultPaymentThreshold * 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1248,7 +1248,7 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chequeAmount := uint64(42)
+	chequeAmount := int256.Uint256From(42)
 	// invalid cheque because wrong recipient
 	cheque, err := newSignedTestCheque(chequebook.ContractParams().ContractAddress, ownerAddress, chequeAmount, ownerKey)
 	if err != nil {
@@ -1576,11 +1576,11 @@ func TestBouncedCheque(t *testing.T) {
 	testAmount := DefaultPaymentThreshold + 42
 
 	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap, uint256.FromUint64(0))
+	err := testDeploy(ctx, creditorSwap, int256.Uint256From(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, uint256.FromUint64(testAmount))
+	err = testDeploy(ctx, debitorSwap, int256.Uint256From(testAmount))
 	if err != nil {
 		t.Fatal(err)
 	}

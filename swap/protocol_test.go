@@ -549,7 +549,7 @@ func TestSwapRPC(t *testing.T) {
 	defer clean()
 
 	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
-	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
+	depositAmount := int256.Uint256From(9000 * RetrieveRequestPrice)
 
 	// deploy a chequebook
 	err = testDeploy(context.TODO(), swap, depositAmount)
