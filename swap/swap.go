@@ -494,7 +494,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 	}
 
 	chequeHoney := new(big.Int).SetUint64(cheque.Honey)
-	honey, err := int256.NewInt256(*chequeHoney)
+	honey, err := int256.NewInt256(chequeHoney)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +506,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 	}
 
 	debtTolerance := big.NewInt(-int64(ChequeDebtTolerance))
-	tolerance, err := int256.NewInt256(*debtTolerance)
+	tolerance, err := int256.NewInt256(debtTolerance)
 	if err != nil {
 		return nil, err
 	}

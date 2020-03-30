@@ -405,7 +405,7 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 	}
 
 	ea := expectedAmount.Value()
-	if pending.Honey != (&ea).Uint64() {
+	if pending.Honey != ea.Uint64() {
 		t.Fatalf("Expected cheque honey to be %v, but is %v", expectedAmount, pending.Honey)
 	}
 
@@ -614,7 +614,7 @@ func TestSwapRPC(t *testing.T) {
 	log.Debug("servicenode balance", "balance", balance)
 
 	// ...thus balance should be empty
-	if !balance.Equals(new(int256.Int256)) {
+	if balance.Value() != nil {
 		t.Fatalf("Expected balance to be empty but it is %v", balance)
 	}
 
@@ -663,7 +663,7 @@ func TestSwapRPC(t *testing.T) {
 	}
 	log.Debug("received balances", "allBalances", allBalances)
 
-	sum := new(int256.Int256)
+	sum := int256.Int256From(0)
 	for _, v := range allBalances {
 		sum.Add(sum, v)
 	}

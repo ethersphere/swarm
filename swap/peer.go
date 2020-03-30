@@ -164,7 +164,7 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	}
 	// the balance should be negative here, we take the absolute value:
 	b := p.getBalance().Value()
-	balance := new(big.Int).Mul(&b, big.NewInt(-1))
+	balance := new(big.Int).Mul(b, big.NewInt(-1))
 	honey := balance.Uint64()
 
 	oraclePrice, err := p.swap.honeyPriceOracle.GetPrice(honey)

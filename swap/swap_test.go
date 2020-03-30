@@ -560,7 +560,7 @@ func TestDisconnectThreshold(t *testing.T) {
 
 	amount := DefaultDisconnectThreshold.Value()
 	// leave balance exactly at disconnect threshold
-	swap.Add((&amount).Int64(), testPeer.Peer)
+	swap.Add(amount.Int64(), testPeer.Peer)
 	// account for traffic which increases debt
 	err := swap.Add(1, testPeer.Peer)
 	if err == nil {
@@ -584,7 +584,7 @@ func TestPaymentThreshold(t *testing.T) {
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 	amount := DefaultPaymentThreshold.Value()
-	if err := swap.Add(-(&amount).Int64(), testPeer.Peer); err != nil {
+	if err := swap.Add(-amount.Int64(), testPeer.Peer); err != nil {
 		t.Fatal()
 	}
 
@@ -646,7 +646,7 @@ func TestResetBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	creditorBalance, err := int256.NewInt256(*new(big.Int).Mul(big.NewInt(-1), &amount))
+	creditorBalance, err := int256.NewInt256(new(big.Int).Mul(big.NewInt(-1), amount))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -835,7 +835,7 @@ func calculateExpectedBalances(t *testing.T, swap *Swap, bookings []booking) map
 		peerID := booking.peer.ID()
 		peerBalance, ok := expectedBalances[peerID]
 		if !ok {
-			peerBalance = new(int256.Int256)
+			peerBalance = int256.Int256From(0)
 		}
 		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
 		if peerBalance.Cmp(swap.params.DisconnectThreshold) < 0 || booking.amount.Cmp(int256.Int256From(0)) < 0 {
@@ -1328,7 +1328,7 @@ func TestSwapLogToFile(t *testing.T) {
 
 	ta := testAmount.Value()
 	debitorAmount, err := int256.NewInt256(ta)
-	creditorAmount, err := int256.NewInt256(*new(big.Int).Mul(big.NewInt(-1), &ta))
+	creditorAmount, err := int256.NewInt256(new(big.Int).Mul(big.NewInt(-1), ta))
 	// set balances arbitrarily
 	if err = debitor.setBalance(debitorAmount); err != nil {
 		t.Fatal(err)

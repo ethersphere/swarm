@@ -62,6 +62,10 @@ func (u *Int256) Copy() *Int256 {
 
 // Value returns the underlying private value for a Int256 struct
 func (u *Int256) Value() *big.Int {
+	if u.value == nil {
+		return nil
+	}
+	// clone the value to avoid external modification
 	return new(big.Int).Set(u.value)
 }
 

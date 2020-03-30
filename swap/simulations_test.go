@@ -386,7 +386,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 		}
 
 		mp := new(big.Int).SetUint64(msgPrice)
-		price, err := int256.NewInt256(*mp)
+		price, err := int256.NewInt256(mp)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -409,7 +409,7 @@ func TestMultiChequeSimulation(t *testing.T) {
 				t.Fatal(err)
 			}
 			b := balanceAfterMessage.Value()
-			expectedPayout += (&b).Uint64()
+			expectedPayout += b.Uint64()
 		}
 
 		lastCount++
