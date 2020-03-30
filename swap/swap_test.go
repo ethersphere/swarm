@@ -1224,21 +1224,47 @@ func TestPeerProcessAndVerifyCheque(t *testing.T) {
 // then it processes a valid cheque
 // then rejects one with lower amount
 func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
-	swap, peer, clean := newTestSwapAndPeer(t, ownerKey)
-	defer clean()
+	testBackend := newTestBackend(t)
+	defer testBackend.Close()
+	cleanup := setupContractTest()
+	defer cleanup()
 
+	swap, cleanup := newTestSwap(t, beneficiaryKey, testBackend)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := testDeploy(ctx, swap, uint256.FromUint64(0)); err != nil {
+		t.Fatal(err)
+	}
+
+	chequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, uint256.FromUint64((DefaultPaymentThreshold * 2)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dummyPeer := newDummyPeerWithSpec(Spec)
+	peer, err := swap.addPeer(dummyPeer.Peer, ownerAddress, chequebook.ContractParams().ContractAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chequeAmount := uint256.FromUint64(42)
 	// invalid cheque because wrong recipient
-	cheque := newTestCheque()
-	cheque.Beneficiary = ownerAddress
-	cheque.Signature, _ = cheque.Sign(ownerKey)
+	cheque, err := newSignedTestCheque(chequebook.ContractParams().ContractAddress, ownerAddress, chequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	/// ===================================
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err == nil {
 		t.Fatal("accecpted an invalid cheque as first cheque")
 	}
 
 	// valid cheque
-	cheque = newTestCheque()
-	cheque.Signature, _ = cheque.Sign(ownerKey)
+	cheque, err = newSignedTestCheque(chequebook.ContractParams().ContractAddress, swap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err != nil {
 		t.Fatalf("failed to process cheque: %s", err)
@@ -1249,13 +1275,16 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	}
 
 	// invalid cheque because amount is lower
-	otherCheque := newTestCheque()
-	_, err := otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, uint256.FromUint64(10))
+	otherCheque, err := newSignedTestCheque(chequebook.ContractParams().ContractAddress, swap.owner.address, chequeAmount, ownerKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = otherCheque.CumulativePayout.Sub(cheque.CumulativePayout, uint256.FromUint64(10))
 	if err != nil {
 		t.Fatal(err)
 	}
 	otherCheque.Honey = 10
-	otherCheque.Signature, _ = otherCheque.Sign(ownerKey)
 
 	if _, err := swap.processAndVerifyCheque(otherCheque, peer); err == nil {
 		t.Fatal("accepted a cheque with lower amount")
