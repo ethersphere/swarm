@@ -72,6 +72,15 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 		return nil, err
 	}
 
+	bounced := false
+	bounced, err = peer.getBouncedCheque()
+	if err != nil {
+		return nil, err
+	}
+	if bounced {
+		return nil, ErrBouncedCheque
+	}
+
 	return peer, nil
 }
 
@@ -224,9 +233,15 @@ func (p *Peer) sendCheque() error {
 
 // getBouncedCheque retrieves if a bounced cheque exists at address from the blockchain
 func (p *Peer) getBouncedCheque() (bool, error) {
-	bounced, err := p.swap.contract.Bounced(nil)
-	if err != nil {
-		return false, err
+	bounced := false
+	var err error
+
+	// if chequebook not defined don't call contract methods
+	if p.swap.contract != nil {
+		bounced, err = p.swap.contract.Bounced(nil)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	return bounced, nil

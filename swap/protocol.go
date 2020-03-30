@@ -125,14 +125,6 @@ func (s *Swap) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	}
 	defer s.removePeer(swapPeer)
 
-	bounced, err := swapPeer.getBouncedCheque()
-	if err != nil {
-		return err
-	}
-	if bounced {
-		return ErrBouncedCheque
-	}
-
 	return swapPeer.Run(s.handleMsg(swapPeer))
 }
 

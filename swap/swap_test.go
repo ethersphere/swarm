@@ -1565,88 +1565,114 @@ func TestAvailableBalance(t *testing.T) {
 
 }
 func TestBouncedCheque(t *testing.T) {
-	// TODO: REPLACE WITH TEST
-	// ON CONNECT TO PEER NO BOUNCED CHEQUE
-	// ON CONNECT TO PEER BOUNCED CHEQUE
-	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE AFTER A COUPLE OF MESSAGES
-	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE AFTER A COUPLE OF MESSAGES
-
 	testBackend := newTestBackend(t)
 	defer testBackend.Close()
-	swap, clean := newTestSwap(t, ownerKey, testBackend)
-	defer clean()
+	// create both test swap accounts
+	creditorSwap, clean1 := newTestSwap(t, beneficiaryKey, testBackend)
+	debitorSwap, clean2 := newTestSwap(t, ownerKey, testBackend)
+	defer clean1()
+	defer clean2()
+
+	testAmount := DefaultPaymentThreshold + 42
+
+	ctx := context.Background()
+	err := testDeploy(ctx, creditorSwap, uint256.FromUint64(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap, uint256.FromUint64(testAmount))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create Peer instances
+	// NOTE: remember that these are peer instances representing each **a model of the remote peer** for every local node
+	// so creditor is the model of the remote mode for the debitor! (and vice versa)
+	cPeer := newDummyPeerWithSpec(Spec)
+	dPeer := newDummyPeerWithSpec(Spec)
+	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		// ON CONNECT TO PEER NO BOUNCED CHEQUE
+		if err == ErrBouncedCheque {
+			t.Fatalf("Bounced cheque in chequebook")
+		} else {
+			t.Fatal(err)
+		}
+	}
+
+	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != nil {
+		// ON CONNECT TO PEER NO BOUNCED CHEQUE
+		if err == ErrBouncedCheque {
+			t.Fatalf("Bounced cheque in chequebook")
+		} else {
+			t.Fatal(err)
+		}
+	}
+
+	// set balances arbitrarily
+	if err = debitor.setBalance(int64(ChequeDebtTolerance * 1000)); err != nil {
+		t.Fatal(err)
+	}
+	if err = creditor.setBalance(int64(-testAmount * 100)); err != nil {
+		t.Fatal(err)
+	}
+
+	// setup the wait for mined transaction function for testing
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	depositAmount := uint256.FromUint64(9000 * RetrieveRequestPrice)
-
-	// deploy a chequebook
-	err := testDeploy(context.TODO(), swap, depositAmount)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// create a peer
-	peer, err := swap.addPeer(newDummyPeerWithSpec(Spec).Peer, swap.owner.address, swap.GetParams().ContractAddress)
-	if err != nil {
+	// now simulate sending the cheque to the creditor from the debitor
+	if err = creditor.sendCheque(); err != nil {
 		t.Fatal(err)
 	}
 
-	// verify that available balance equals depositAmount (we deposit during deployment)
-	availableBalance, err := swap.AvailableBalance()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !availableBalance.Equals(depositAmount) {
-		t.Fatalf("available balance not equal to deposited amount. available balance: %v, deposit amount: %v", availableBalance, depositAmount)
-	}
-	// withdraw 50
-	withdrawAmount := uint256.FromUint64(50)
-	netDeposit, err := uint256.New().Sub(depositAmount, withdrawAmount)
-	if err != nil {
-		t.Fatal(err)
-	}
-	withdraw := withdrawAmount.Value()
-
-	opts := bind.NewKeyedTransactor(swap.owner.privateKey)
-	opts.Context = context.TODO()
-	rec, err := swap.contract.Withdraw(opts, &withdraw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.Status != types.ReceiptStatusSuccessful {
-		t.Fatal("Transaction reverted")
+	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
+		Cheque: creditor.getPendingCheque(),
+	})
+	// the debitor should have already reset its balance
+	if creditor.getBalance() != 0 {
+		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
 	}
 
-	// verify available balance
-	availableBalance, err = swap.AvailableBalance()
+	// now load the cheque that the debitor created...
+	cheque := creditor.getLastSentCheque()
+	if cheque == nil {
+		t.Fatal("expected to find a cheque, but it was empty")
+	}
+	// ...create a message...
+	msg := &EmitChequeMsg{
+		Cheque: cheque,
+	}
+
+	// ...and trigger message handling on the receiver side (creditor)
+	// remember that debitor is the model of the remote node for the creditor...
+	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !availableBalance.Equals(netDeposit) {
-		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, deposit minus withdrawn: %v", availableBalance, netDeposit)
+	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
+	select {
+	case <-testBackend.cashDone:
+		creditorSwap.logger.Debug(CashChequeAction, "cash transaction completed and committed")
+	case <-time.After(4 * time.Second):
+		t.Fatalf("Timeout waiting for cash transactions to complete")
+	}
+	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE
+	if cBounced, _ := creditor.getBouncedCheque(); !cBounced {
+		t.Fatalf("Creditor should have bounced cheques")
 	}
 
-	// send a cheque worth 42
-	chequeAmount := uint64(42)
-	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
-	if err = peer.setBalance(int64(-chequeAmount)); err != nil {
-		t.Fatal(err)
-	}
-	if err = peer.sendCheque(); err != nil {
-		t.Fatal(err)
-	}
+	// ON CONNECT TO PEER BOUNCED CHEQUE
+	// Disconnect from peer and connect again
+	// There should be a bounced cheque
+	//creditor.Disconnect(p2p.DiscUselessPeer)
+	//creditorSwap.removePeer(creditor)
 
-	availableBalance, err = swap.AvailableBalance()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// verify available balance
-	expectedBalance, err := uint256.New().Sub(netDeposit, uint256.FromUint64(chequeAmount))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !availableBalance.Equals(expectedBalance) {
-		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
-	}
+	//creditor, err = debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	//if cBounced, _ := creditor.getBouncedCheque(); !cBounced {
+	//	t.Fatalf("Creditor should have bounced cheques")
+	//}
 
+	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE AFTER A COUPLE OF MESSAGES
 }
