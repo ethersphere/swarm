@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	contract "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/swap/chain"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // CashChequeBeneficiaryTransactionCost is the expected gas cost of a CashChequeBeneficiary transaction
@@ -86,7 +86,7 @@ func (c *CashoutProcessor) cashCheque(ctx context.Context, request *CashoutReque
 }
 
 // estimatePayout estimates the payout for a given cheque as well as the transaction cost
-func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout *uint256.Uint256, transactionCosts *uint256.Uint256, err error) {
+func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (expectedPayout *int256.Uint256, transactionCosts *int256.Uint256, err error) {
 	otherSwap, err := contract.InstanceAt(cheque.Contract, c.backend)
 	if err != nil {
 		return nil, nil, err
@@ -97,7 +97,7 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	paidOut, err := uint256.New().Set(*po)
+	paidOut, err := int256.NewUint256(po)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,21 +107,21 @@ func (c *CashoutProcessor) estimatePayout(ctx context.Context, cheque *Cheque) (
 		return nil, nil, err
 	}
 
-	gasPrice, err := uint256.New().Set(*gp)
+	gasPrice, err := int256.NewUint256(gp)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	transactionCosts, err = uint256.New().Mul(gasPrice, uint256.FromUint64(CashChequeBeneficiaryTransactionCost))
+	transactionCosts, err = new(int256.Uint256).Mul(gasPrice, int256.Uint256From(CashChequeBeneficiaryTransactionCost))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if paidOut.Cmp(cheque.CumulativePayout) > 0 {
-		return uint256.New(), transactionCosts, nil
+		return new(int256.Uint256), transactionCosts, nil
 	}
 
-	expectedPayout, err = uint256.New().Sub(cheque.CumulativePayout, paidOut)
+	expectedPayout, err = new(int256.Uint256).Sub(cheque.CumulativePayout, paidOut)
 	if err != nil {
 		return nil, nil, err
 	}
