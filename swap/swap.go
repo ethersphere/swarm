@@ -324,6 +324,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 func (s *Swap) checkPaymentThresholdAndSendCheque(swapPeer *Peer) error {
 	balance := swapPeer.getBalance()
 	thresholdValue := s.params.PaymentThreshold.Value()
+	// transform Uint256 to Int256
 	threshold, err := int256.NewInt256(thresholdValue)
 	if err != nil {
 		return err

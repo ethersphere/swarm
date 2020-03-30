@@ -306,7 +306,7 @@ func TestEmitCheque(t *testing.T) {
 	}
 
 	// check that the balance has been reset
-	if debitor.getBalance().Cmp(int256.Int256From(0)) != 0 {
+	if !debitor.getBalance().Equals(int256.Int256From(0)) {
 		t.Fatalf("Expected debitor balance to have been reset to %d, but it is %v", 0, debitor.getBalance())
 	}
 	recvCheque := debitor.getLastReceivedCheque()
@@ -365,8 +365,8 @@ func TestTriggerPaymentThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	paymentThreshold := DefaultPaymentThreshold.Value()
-	newBalance, err := int256.NewInt256(paymentThreshold)
+	// transform Uint256 to Int256
+	newBalance, err := int256.NewInt256(DefaultPaymentThreshold.Value())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,6 +515,7 @@ func TestTriggerDisconnectThreshold(t *testing.T) {
 
 	// set the balance to manually be at DisconnectThreshold
 	overDraft := 42
+	// transform Uint256 to Int256
 	expectedBalance, err := int256.NewInt256((DefaultDisconnectThreshold).Value())
 	if err != nil {
 		t.Fatal(err)
