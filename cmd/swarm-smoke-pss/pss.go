@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/pss"
-	"github.com/ethersphere/swarm/pss/message"
+	"github.com/ethersphere/swarm/oldpss"
+	"github.com/ethersphere/swarm/oldpss/message"
 	"github.com/ethersphere/swarm/testutil"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -82,7 +82,7 @@ func (n *pssNode) knowsPeerPublicKey(peer *pssNode) bool {
 
 type pssSession struct {
 	topic message.Topic
-	msgC  chan pss.APIMsg
+	msgC  chan oldpss.APIMsg
 	nodes []*pssNode
 	jobs  map[string]*pssJob
 }
@@ -120,7 +120,7 @@ func pssAllCheck(ctx *cli.Context) error {
 }
 
 func runCheck(mode pssMode, count int, msgSizeBytes int) error {
-	log.Info(fmt.Sprintf("pss.%s test started", mode), "msgCount", count, "msgBytes", msgSizeBytes)
+	log.Info(fmt.Sprintf("oldpss.%s test started", mode), "msgCount", count, "msgBytes", msgSizeBytes)
 
 	session := pssSetup()
 
@@ -147,13 +147,13 @@ func runCheck(mode pssMode, count int, msgSizeBytes int) error {
 		successCount = int64(sc)
 		failCount = int64(count - sc)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/msgs/fail", mode), nil).Inc(failCount)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/msgs/success", mode), nil).Inc(successCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("oldpss/%s/msgs/fail", mode), nil).Inc(failCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("oldpss/%s/msgs/success", mode), nil).Inc(successCount)
 
 		totalTime := time.Since(t)
 
-		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("pss/%s/total-time", mode), nil).Update(totalTime)
-		log.Info(fmt.Sprintf("pss.%s test ended", mode), "time", totalTime, "success", successCount, "failures", failCount)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("oldpss/%s/total-time", mode), nil).Update(totalTime)
+		log.Info(fmt.Sprintf("oldpss.%s test ended", mode), "time", totalTime, "success", successCount, "failures", failCount)
 
 		if failCount > 0 {
 			errC <- errors.New("some messages were not delivered")
@@ -165,11 +165,11 @@ func runCheck(mode pssMode, count int, msgSizeBytes int) error {
 	select {
 	case err := <-errC:
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/fail", mode), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("oldpss/%s/fail", mode), nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss/%s/timeout", mode), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("oldpss/%s/timeout", mode), nil).Inc(1)
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 
@@ -179,15 +179,15 @@ func pssSetup() *pssSession {
 	// random topic, one per session,  same for all msgs
 	topic := message.NewTopic(testutil.RandomBytes(seed, 4))
 
-	log.Trace("pss random topic", "topic", topic.String())
+	log.Trace("oldpss random topic", "topic", topic.String())
 
 	session := &pssSession{
-		msgC:  make(chan pss.APIMsg),
+		msgC:  make(chan oldpss.APIMsg),
 		jobs:  make(map[string]*pssJob),
 		topic: topic,
 	}
 
-	// set up the necessary info for each pss node
+	// set up the necessary info for each oldpss node
 	for i, host := range hosts {
 		wsHost := fmt.Sprintf("ws://%s:%d", host, wsPort)
 
@@ -205,7 +205,7 @@ func pssSetup() *pssSession {
 			continue
 		}
 
-		// get pss public key
+		// get oldpss public key
 		var pubkey string
 		err = rpcClient.Call(&pubkey, "pss_getPublicKey")
 		if err != nil {
@@ -218,7 +218,7 @@ func pssSetup() *pssSession {
 		// any message received with this topic comes on the channel
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
-		sub, err := rpcClient.Subscribe(ctx, "pss", session.msgC, "receive", session.topic, true, false)
+		sub, err := rpcClient.Subscribe(ctx, "oldpss", session.msgC, "receive", session.topic, true, false)
 		if err != nil {
 			log.Error("error calling host for subscribe", "err", err)
 			continue

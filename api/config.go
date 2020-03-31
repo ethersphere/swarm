@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/oldpss"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/swap"
 )
@@ -65,7 +65,7 @@ type Config struct {
 	// end of Swap configs
 
 	*network.HiveParams
-	Pss                *pss.Params
+	Pss                *oldpss.Params
 	EnsRoot            common.Address
 	EnsAPIs            []string
 	RnsAPI             string
@@ -101,7 +101,7 @@ func NewConfig() *Config {
 		SwapLogPath:             "",
 		SwapLogLevel:            swap.DefaultSwapLogLevel,
 		HiveParams:              network.NewHiveParams(),
-		Pss:                     pss.NewParams(),
+		Pss:                     oldpss.NewParams(),
 		EnsRoot:                 ens.Address,
 		EnsAPIs:                 nil,
 		RnsAPI:                  "",
