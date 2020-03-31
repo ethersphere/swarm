@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	psses map[string]*pss.Pss
+	psses map[string]*oldpss.Pss
 	crypt crypto.Crypto
 )
 
@@ -31,7 +31,7 @@ func init() {
 	testutil.Init()
 
 	crypt = crypto.New()
-	psses = make(map[string]*pss.Pss)
+	psses = make(map[string]*oldpss.Pss)
 }
 
 // Creates a client node and notifier node
@@ -114,7 +114,7 @@ func TestStart(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	rmsgC := make(chan *pss.APIMsg)
+	rmsgC := make(chan *oldpss.APIMsg)
 	rightSub, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", controlTopic, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func TestStart(t *testing.T) {
 		return nil
 	})
 
-	var inMsg *pss.APIMsg
+	var inMsg *oldpss.APIMsg
 	select {
 	case inMsg = <-rmsgC:
 	case err := <-ctrlClientError:
@@ -225,11 +225,11 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			pssp := pss.NewParams().WithPrivateKey(privkey)
+			pssp := oldpss.NewParams().WithPrivateKey(privkey)
 			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
-			ps, err := pss.New(pskad, pssp)
+			ps, err := oldpss.New(pskad, pssp)
 			if err != nil {
 				return nil, err
 			}

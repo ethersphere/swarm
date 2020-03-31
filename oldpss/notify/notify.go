@@ -72,7 +72,7 @@ func NewMsgFromPayload(payload []byte) (*Msg, error) {
 
 // a notifier has one sendBin entry for each address space it sends messages to
 type sendBin struct {
-	address  pss.PssAddress
+	address  oldpss.PssAddress
 	symKeyId string
 	count    int
 }
@@ -94,26 +94,26 @@ func (n *notifier) removeSubscription() {
 // represents an individual subscription made by a public key at a specific address/neighborhood
 type subscription struct {
 	pubkeyId string
-	address  pss.PssAddress
+	address  oldpss.PssAddress
 	handler  func(string, []byte) error
 }
 
 // Controller is the interface to control, add and remove notification services and subscriptions
 type Controller struct {
-	pss           *pss.Pss
+	pss           *oldpss.Pss
 	notifiers     map[string]*notifier
 	subscriptions map[string]*subscription
 	mu            sync.Mutex
 }
 
 // NewController creates a new Controller object
-func NewController(ps *pss.Pss) *Controller {
+func NewController(ps *oldpss.Pss) *Controller {
 	ctrl := &Controller{
 		pss:           ps,
 		notifiers:     make(map[string]*notifier),
 		subscriptions: make(map[string]*subscription),
 	}
-	ctrl.pss.Register(&controlTopic, pss.NewHandler(ctrl.Handler))
+	ctrl.pss.Register(&controlTopic, oldpss.NewHandler(ctrl.Handler))
 	return ctrl
 }
 
@@ -134,7 +134,7 @@ func (c *Controller) isActive(name string) bool {
 // It will create a MsgCodeStart message and send asymmetrically to the provider using its public key and routing address
 // The handler function is a callback that will be called when notifications are received
 // Fails if the request pss cannot be sent or if the update message could not be serialized
-func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
+func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address oldpss.PssAddress, handler func(string, []byte) error) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, c.pss.BaseAddr())
@@ -257,14 +257,14 @@ func (c *Controller) notify(name string, data []byte) error {
 // check if we already have the bin
 // if we do, retrieve the symkey from it and increment the count
 // if we dont make a new symkey and a new bin entry
-func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress pss.PssAddress, err error) {
+func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress oldpss.PssAddress, err error) {
 
 	// parse the address from the message and truncate if longer than our bins threshold
 	if len(address) > ntfr.threshold {
 		address = address[:ntfr.threshold]
 	}
 
-	pssAddress = pss.PssAddress(address)
+	pssAddress = oldpss.PssAddress(address)
 	hexAddress := fmt.Sprintf("%x", address)
 	currentBin, ok := ntfr.bins[hexAddress]
 	if ok {
@@ -334,9 +334,9 @@ func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	topic := message.NewTopic(msg.Name)
 
 	// \TODO keep track of and add actual address
-	updaterAddr := pss.PssAddress([]byte{})
+	updaterAddr := oldpss.PssAddress([]byte{})
 	c.pss.SetSymmetricKey(symkey, topic, updaterAddr, true)
-	c.pss.Register(&topic, pss.NewHandler(c.Handler))
+	c.pss.Register(&topic, oldpss.NewHandler(c.Handler))
 	return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
 }
 
