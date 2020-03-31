@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-3/simpleswapfactory"
@@ -1610,6 +1611,30 @@ func TestBouncedCheque(t *testing.T) {
 		}
 	}
 
+	// setup the wait for mined transaction function for testing
+	cleanup := setupContractTest()
+	defer cleanup()
+
+	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE
+	// set balances arbitrarily
+	if err = debitor.setBalance(int64(testAmount)); err != nil {
+		t.Fatal(err)
+	}
+	if err = creditor.setBalance(int64(-testAmount)); err != nil {
+		t.Fatal(err)
+	}
+
+	err = sendAndHandleCheque(ctx, testBackend, creditorSwap, debitorSwap, creditor, debitor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE
+	if cBounced, _ := creditor.getBouncedCheque(); cBounced {
+		t.Fatalf("Creditor should NOT have bounced cheques")
+	}
+
+	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE
 	// set balances arbitrarily
 	if err = debitor.setBalance(int64(ChequeDebtTolerance * 1000)); err != nil {
 		t.Fatal(err)
@@ -1618,13 +1643,33 @@ func TestBouncedCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// setup the wait for mined transaction function for testing
-	cleanup := setupContractTest()
-	defer cleanup()
+	err = sendAndHandleCheque(ctx, testBackend, creditorSwap, debitorSwap, creditor, debitor)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE
+	if cBounced, _ := creditor.getBouncedCheque(); !cBounced {
+		t.Fatalf("Creditor should have bounced cheques")
+	}
+
+	// ON CONNECT TO PEER BOUNCED CHEQUE
+	// Disconnect from peer and connect again
+	// There should be a bounced cheque
+	creditor.Disconnect(p2p.DiscUselessPeer)
+	debitorSwap.removePeer(creditor)
+
+	creditor, err = debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
+	if err != ErrBouncedCheque {
+		t.Fatal(err)
+	}
+
+}
+
+func sendAndHandleCheque(ctx context.Context, testBackend *swapTestBackend, creditorSwap *Swap, debitorSwap *Swap, creditor *Peer, debitor *Peer) (err error) {
 	// now simulate sending the cheque to the creditor from the debitor
 	if err = creditor.sendCheque(); err != nil {
-		t.Fatal(err)
+		return err
 	}
 
 	debitorSwap.handleConfirmChequeMsg(ctx, creditor, &ConfirmChequeMsg{
@@ -1632,13 +1677,13 @@ func TestBouncedCheque(t *testing.T) {
 	})
 	// the debitor should have already reset its balance
 	if creditor.getBalance() != 0 {
-		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
+		return fmt.Errorf("unexpected balance to be 0, but it is %d", creditor.getBalance())
 	}
 
 	// now load the cheque that the debitor created...
 	cheque := creditor.getLastSentCheque()
 	if cheque == nil {
-		t.Fatal("expected to find a cheque, but it was empty")
+		return fmt.Errorf("expected to find a cheque, but it was empty")
 	}
 	// ...create a message...
 	msg := &EmitChequeMsg{
@@ -1649,30 +1694,14 @@ func TestBouncedCheque(t *testing.T) {
 	// remember that debitor is the model of the remote node for the creditor...
 	err = creditorSwap.handleEmitChequeMsg(ctx, debitor, msg)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	// ...on which we wait until the cashCheque is actually terminated (ensures proper nonce count)
 	select {
 	case <-testBackend.cashDone:
 		creditorSwap.logger.Debug(CashChequeAction, "cash transaction completed and committed")
 	case <-time.After(4 * time.Second):
-		t.Fatalf("Timeout waiting for cash transactions to complete")
+		return fmt.Errorf("Timeout waiting for cash transactions to complete")
 	}
-	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE
-	if cBounced, _ := creditor.getBouncedCheque(); !cBounced {
-		t.Fatalf("Creditor should have bounced cheques")
-	}
-
-	// ON CONNECT TO PEER BOUNCED CHEQUE
-	// Disconnect from peer and connect again
-	// There should be a bounced cheque
-	//creditor.Disconnect(p2p.DiscUselessPeer)
-	//creditorSwap.removePeer(creditor)
-
-	//creditor, err = debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
-	//if cBounced, _ := creditor.getBouncedCheque(); !cBounced {
-	//	t.Fatalf("Creditor should have bounced cheques")
-	//}
-
-	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE AFTER A COUPLE OF MESSAGES
+	return nil
 }
