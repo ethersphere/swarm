@@ -463,11 +463,11 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 		return nil, err
 	}
 
-	bounced, err := p.getBouncedCheque()
+	bouncedCheque, err := p.hasBouncedCheque()
 	if err != nil {
 		return nil, err
 	}
-	if bounced {
+	if bouncedCheque {
 		return nil, ErrBouncedCheque
 	}
 

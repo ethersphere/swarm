@@ -93,8 +93,8 @@ func InstanceAt(address common.Address, backend chain.Backend) (Contract, error)
 	return c, err
 }
 
-// Bounced obtains if a cheque has been bounced previously of a contract at a specific address.
-// Once it's bounced, it will not change it's state again, unless re deployed.
+// Bounced returns the boolean indicating if a cheque attempted to be cashed has been bounced it in the receiver contract
+// Once its bounced, it will not change it's state again, unless re deployed.
 func (s simpleContract) Bounced(opts *bind.CallOpts) (bool, error) {
 	return s.instance.Bounced(opts)
 }

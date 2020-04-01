@@ -548,10 +548,10 @@ func TestSwapRPC(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
 
-	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
 	depositAmount := int256.Uint256From(9000 * RetrieveRequestPrice)
 
-	// deploy a chequebook
+	// need to have a dummy contract or the call will fail at `GetParams` due to `NewAPI`
+	// deploy a chequebook due to bouncedCheque verification or it will fail
 	err = testDeploy(context.TODO(), swap, depositAmount)
 	if err != nil {
 		t.Fatal(err)

@@ -1255,7 +1255,6 @@ func TestPeerProcessAndVerifyChequeInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	/// ===================================
 
 	if _, err := swap.processAndVerifyCheque(cheque, peer); err == nil {
 		t.Fatal("accecpted an invalid cheque as first cheque")
@@ -1593,7 +1592,7 @@ func TestBouncedCheque(t *testing.T) {
 	dPeer := newDummyPeerWithSpec(Spec)
 	creditor, err := debitorSwap.addPeer(cPeer.Peer, creditorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
-		// ON CONNECT TO PEER NO BOUNCED CHEQUE
+		// On connection to peer fail if a bounced cheque exists
 		if err == ErrBouncedCheque {
 			t.Fatalf("Bounced cheque in chequebook")
 		} else {
@@ -1603,7 +1602,7 @@ func TestBouncedCheque(t *testing.T) {
 
 	debitor, err := creditorSwap.addPeer(dPeer.Peer, debitorSwap.owner.address, debitorSwap.GetParams().ContractAddress)
 	if err != nil {
-		// ON CONNECT TO PEER NO BOUNCED CHEQUE
+		// On connection to peer fail if a bounced cheque exists
 		if err == ErrBouncedCheque {
 			t.Fatalf("Bounced cheque in chequebook")
 		} else {
@@ -1615,7 +1614,7 @@ func TestBouncedCheque(t *testing.T) {
 	cleanup := setupContractTest()
 	defer cleanup()
 
-	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE
+	// Verifies no bounced cheque after correct cheque sent
 	// set balances arbitrarily
 	if err = debitor.setBalance(int64(testAmount)); err != nil {
 		t.Fatal(err)
@@ -1629,13 +1628,13 @@ func TestBouncedCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ON RECEIVE EmitChequeMsg NO BOUNCED CHEQUE
-	if cBounced, _ := creditor.getBouncedCheque(); cBounced {
+	// Verifies no bounced cheque after correct cheque sent
+	if creditorBouncedCheque, _ := creditor.hasBouncedCheque(); creditorBouncedCheque {
 		t.Fatalf("Creditor should NOT have bounced cheques")
 	}
 
-	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE
-	// set balances arbitrarily
+	// Verifies bounced cheque after incorrect cheque sent
+	// set balances that will cause a bounce cheque
 	if err = debitor.setBalance(int64(ChequeDebtTolerance * 1000)); err != nil {
 		t.Fatal(err)
 	}
@@ -1648,14 +1647,13 @@ func TestBouncedCheque(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ON RECEIVE EmitChequeMsg BOUNCED CHEQUE
-	if cBounced, _ := creditor.getBouncedCheque(); !cBounced {
+	// Verify that bounced cheque is detected
+	if creditorBouncedCheque, _ := creditor.hasBouncedCheque(); !creditorBouncedCheque {
 		t.Fatalf("Creditor should have bounced cheques")
 	}
 
-	// ON CONNECT TO PEER BOUNCED CHEQUE
 	// Disconnect from peer and connect again
-	// There should be a bounced cheque
+	// There should still be a bounced cheque
 	creditor.Disconnect(p2p.DiscUselessPeer)
 	debitorSwap.removePeer(creditor)
 
