@@ -28,30 +28,44 @@ type pssEnvelope struct {
 	message []byte
 }
 
+type trojanHeaders struct {
+	span           []byte
+	nonce          []byte
+	decryptionHint []byte
+}
+
 type trojanMessage struct {
-	span             []byte
-	nonce            []byte
-	decryptionHint   []byte
+	trojanHeaders
 	pssMsgCyphertext message.Message
 }
 
 // creates a new trojan message structure
 // determines the nonce so that when the message is hashed, it falls in the neighbourhood of the given address
-func newTrojanMessage(address chunk.Address, pssMessage message.Message) trojanMessage {
+func newTrojanMessage(address chunk.Address, pssMessage message.Message) *trojanMessage {
+	// set initial headers
+	trojanHeaders := newTrojanHeaders(pssMessage)
+	// find nonce for headers and address
+	findMessageNonce(address, trojanHeaders)
+	// cypher pss message, plain for now
+	pssMsgCyphertext := pssMessage
+	return &trojanMessage{
+		trojanHeaders:    trojanHeaders,
+		pssMsgCyphertext: pssMsgCyphertext,
+	}
+}
+
+func newTrojanHeaders(pssMessage message.Message) *trojanHeaders {
 	// create span, empty for now
 	span := make([]byte, 8)
-	// create nonce
+	// create initial nonce
 	nonce := make([]byte, 32)
 	// create decryption hint, empty for now
 	decryptionHint := make([]byte, 32)
-	// cypher pss message, plain for now
-	pssMsgCyphertext := pssMessage
 
-	return trojanMessage{
-		span:             span,
-		nonce:            nonce,
-		decryptionHint:   decryptionHint,
-		pssMsgCyphertext: pssMsgCyphertext,
+	return &trojanHeaders{
+		span:           span,
+		nonce:          nonce,
+		decryptionHint: decryptionHint,
 	}
 }
 
