@@ -218,7 +218,7 @@ func pssSetup() *pssSession {
 		// any message received with this topic comes on the channel
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
-		sub, err := rpcClient.Subscribe(ctx, "oldpss", session.msgC, "receive", session.topic, true, false)
+		sub, err := rpcClient.Subscribe(ctx, "pss", session.msgC, "receive", session.topic, true, false)
 		if err != nil {
 			log.Error("error calling host for subscribe", "err", err)
 			continue
