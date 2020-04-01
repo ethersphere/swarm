@@ -82,13 +82,13 @@ var (
 	}
 
 	// placeholder for cases where a hasher is not necessary
-	noHashFunc = func(_ context.Context) file.SectionWriter {
-		return nil
-	}
-
-	logErrFunc = func(err error) {
-		log.Error("SectionWriter pipeline error", "err", err)
-	}
+//	noHashFunc = func(_ context.Context) file.SectionWriter {
+//		return nil
+//	}
+//
+//	logErrFunc = func(err error) {
+//		log.Error("SectionWriter pipeline error", "err", err)
+//	}
 )
 
 // simple file.SectionWriter hasher that keeps the data written to it
