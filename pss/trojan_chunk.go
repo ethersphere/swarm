@@ -29,14 +29,30 @@ type pssEnvelope struct {
 }
 
 type trojanMessage struct {
-	span             [8]byte
-	nonce            [32]byte
-	decryptionHint   [32]byte
+	span             []byte
+	nonce            []byte
+	decryptionHint   []byte
 	pssMsgCyphertext message.Message
+}
+
+// creates a new trojan message structure
+// determines the nonce so that when the message is hashed, it falls in the neighbourhood of the given address
+func newTrojanMessage(address chunk.Address, pssMessage message.Message) trojanMessage {
+	span := make([]byte, 8)
+	nonce := make([]byte, 32)
+	decryptionHint := make([]byte, 32)
+
+	return trojanMessage{
+		span:             span,
+		nonce:            nonce,
+		decryptionHint:   decryptionHint,
+		pssMsgCyphertext: pssMessage,
+	}
 }
 
 var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
 
+// creates a new addressed chunk structure with the given trojan message content serialized as its data
 func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
 	chunkData, err := json.Marshal(message) // what is the correct way of serializing a trojan message?
 	if err != nil {
