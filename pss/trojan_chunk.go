@@ -38,15 +38,20 @@ type trojanMessage struct {
 // creates a new trojan message structure
 // determines the nonce so that when the message is hashed, it falls in the neighbourhood of the given address
 func newTrojanMessage(address chunk.Address, pssMessage message.Message) trojanMessage {
+	// create span, empty for now
 	span := make([]byte, 8)
+	// create nonce
 	nonce := make([]byte, 32)
+	// create decryption hint, empty for now
 	decryptionHint := make([]byte, 32)
+	// cypher pss message, plain for now
+	pssMsgCyphertext := pssMessage
 
 	return trojanMessage{
 		span:             span,
 		nonce:            nonce,
 		decryptionHint:   decryptionHint,
-		pssMsgCyphertext: pssMessage,
+		pssMsgCyphertext: pssMsgCyphertext,
 	}
 }
 
