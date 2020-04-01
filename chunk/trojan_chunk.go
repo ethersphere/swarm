@@ -15,3 +15,17 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package chunk
+
+import "github.com/ethersphere/swarm/pss/message"
+
+type pssEnvelope struct {
+	// headers ? missing
+	message []byte
+}
+
+type trojan struct {
+	span             [8]byte
+	nonce            [32]byte
+	decryptionHint   [32]byte
+	pssMsgCyphertext message.Message
+}
