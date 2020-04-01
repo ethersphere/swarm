@@ -17,10 +17,12 @@
 package pss
 
 import (
+	"crypto/rand"
 	"encoding/json"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss/message"
+	"github.com/ethersphere/swarm/storage"
 )
 
 type pssEnvelope struct {
@@ -39,22 +41,24 @@ type trojanMessage struct {
 	pssMsgCyphertext message.Message
 }
 
-// creates a new trojan message structure
-// determines the nonce so that when the message is hashed, it falls in the neighbourhood of the given address
-func newTrojanMessage(address chunk.Address, pssMessage message.Message) *trojanMessage {
-	// set initial headers
-	trojanHeaders := newTrojanHeaders(pssMessage)
+// creates a new trojan message structure for the given address
+func newTrojanMessage(address chunk.Address, pssMessage message.Message) (*trojanMessage, error) {
+	// create initial trojan headers
+	trojanHeaders := newTrojanHeaders()
 	// find nonce for headers and address
-	findMessageNonce(address, trojanHeaders)
+	if err := findMessageNonce(address, trojanHeaders); err != nil {
+		return nil, err
+	}
 	// cypher pss message, plain for now
 	pssMsgCyphertext := pssMessage
 	return &trojanMessage{
-		trojanHeaders:    trojanHeaders,
+		trojanHeaders:    *trojanHeaders,
 		pssMsgCyphertext: pssMsgCyphertext,
-	}
+	}, nil
 }
 
-func newTrojanHeaders(pssMessage message.Message) *trojanHeaders {
+// creates empty trojan headers struct
+func newTrojanHeaders() *trojanHeaders {
 	// create span, empty for now
 	span := make([]byte, 8)
 	// create initial nonce
@@ -67,6 +71,19 @@ func newTrojanHeaders(pssMessage message.Message) *trojanHeaders {
 		nonce:          nonce,
 		decryptionHint: decryptionHint,
 	}
+}
+
+// determines the nonce so that when the trojan message is hashed, it falls in the neighbourhood of the given address
+func findMessageNonce(address chunk.Address, headers *trojanHeaders) error {
+	// init BMT hash function
+	hashFunc := storage.MakeHashFunc(storage.BMTHash)
+	// start out with random nonce
+	nonce := make([]byte, 32)
+	_, err := rand.Read(nonce)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
