@@ -16,16 +16,31 @@
 
 package pss
 
-import "github.com/ethersphere/swarm/pss/message"
+import (
+	"encoding/json"
+
+	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/pss/message"
+)
 
 type pssEnvelope struct {
 	// headers ? missing
 	message []byte
 }
 
-type trojan struct {
+type trojanMessage struct {
 	span             [8]byte
 	nonce            [32]byte
 	decryptionHint   [32]byte
 	pssMsgCyphertext message.Message
+}
+
+var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
+
+func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
+	chunkData, err := json.Marshal(message) // what is the correct way of serializing a trojan message?
+	if err != nil {
+		return emptyChunk, err
+	}
+	return chunk.NewChunk(address, chunkData), nil
 }
