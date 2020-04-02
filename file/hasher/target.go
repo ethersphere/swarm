@@ -6,7 +6,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 )
 
-// passed to a job to determine at which data lengths and levels a job should terminate
+// target is passed to a job to determine at which data lengths and levels a job should terminate
 type target struct {
 	size     int32         // bytes written
 	sections int32         // sections written
@@ -16,6 +16,7 @@ type target struct {
 	mu       sync.Mutex
 }
 
+// target constructor
 func newTarget() *target {
 	return &target{
 		resultC: make(chan []byte),
@@ -24,6 +25,7 @@ func newTarget() *target {
 }
 
 // Set is called when the final length of the data to be written is known
+//
 // TODO: method can be simplified to calculate sections and level internally
 func (t *target) Set(size int, sections int, level int) {
 	t.mu.Lock()
@@ -36,6 +38,7 @@ func (t *target) Set(size int, sections int, level int) {
 }
 
 // Count returns the total section count for the target
+//
 // it should only be called after Set()
 func (t *target) Count() int {
 	t.mu.Lock()
@@ -43,12 +46,18 @@ func (t *target) Count() int {
 	return int(t.sections) + 1
 }
 
+// Level returns the level of the target
+//
+// it should only be called after Set()
 func (t *target) Level() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return int(t.level)
 }
 
+// Size returns the byte count for the target
+//
+// it should only be called after Set()
 func (t *target) Size() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -287,13 +287,6 @@ func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
 	}
 }
 
-//
-//// SetWriter implements file.SectionWriter
-//func (h *Hasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
-//	log.Warn("Synchasher does not currently support SectionWriter chaining")
-//	return h
-//}
-
 // SectionSize implements file.SectionWriter
 func (h *Hasher) SectionSize() int {
 	return h.pool.SegmentSize

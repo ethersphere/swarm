@@ -66,6 +66,7 @@ github.com/elastic/gosigar v0.0.0-20180330100440-37f05ff46ffa/go.mod h1:cdorVVzy
 github.com/elazarl/goproxy v0.0.0-20170405201442-c4fc26588b6e/go.mod h1:/Zj4wYkgs4iZTTu3o/KG3Itv/qCCa8VVMlb3i9OVuzc=
 github.com/ethereum/go-ethereum v1.9.2 h1:RMIHDO/diqXEgORSVzYx8xW9x2+S32PoAX5lQwya0Lw=
 github.com/ethereum/go-ethereum v1.9.2/go.mod h1:PwpWDrCLZrV+tfrhqqF6kPknbISMHaJv9Ln3kPCZLwY=
+github.com/ethersphere/bmt v0.0.0-20200401123433-67173b18a663 h1:MXvgOFHffdlMLiwKrfiVIda9/OCBZhjus02w9z3rIds=
 github.com/ethersphere/go-sw3 v0.2.1 h1:+i660uWzhRbT1YO7MAeuxzn+jUeYOTc8rGRVjsKaw+4=
 github.com/ethersphere/go-sw3 v0.2.1/go.mod h1:HukT0aZ6QdW/d7zuD/0g5xlw6ewu9QeqHojxLDsaERQ=
 github.com/evanphx/json-patch v4.2.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
@@ -186,6 +187,8 @@ github.com/naoina/go-stringutil v0.1.0 h1:rCUeRUHjBjGTSHl0VC00jUPLz8/F9dDzYI70Hz
 github.com/naoina/go-stringutil v0.1.0/go.mod h1:XJ2SJL9jCtBh+P9q5btrd/Ylo8XwT/h1USek5+NqSA0=
 github.com/naoina/toml v0.0.0-20170918210437-9fafd6967416 h1:9M852Z3gvzUmyFvy+TruhDWCwcIG3cZWg/+Eh8VkR7M=
 github.com/naoina/toml v0.0.0-20170918210437-9fafd6967416/go.mod h1:NBIhNtsFMo3G2szEBne+bO4gS192HuIYRqfvOWb4i1E=
+github.com/nolash/mockbytes v0.0.0-20200401133213-4cadbd154ff6 h1:3VxaUbphSn8+igZjC75xdy4okZdRbE9u8QlfgrzIty4=
+github.com/nolash/mockbytes v0.0.0-20200401133213-4cadbd154ff6/go.mod h1:yRWDp8wo0IXx2FReB9wTh/0E8oezBIDFdhYE1qUQMM0=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/olekukonko/tablewriter v0.0.0-20190409134802-7e037d187b0c h1:2j4kdCOg5xiOVCTQpv0SgbzndaVJKliD6oRbMxTw6v4=
 github.com/olekukonko/tablewriter v0.0.0-20190409134802-7e037d187b0c/go.mod h1:vsDQFd/mU46D+Z4whnwzcISnGGzXWMclvtLoiIKAKIo=
@@ -273,6 +276,8 @@ github.com/vbauerster/mpb v3.4.0+incompatible h1:mfiiYw87ARaeRW6x5gWwYRUawxaW1tL
 github.com/vbauerster/mpb v3.4.0+incompatible/go.mod h1:zAHG26FUhVKETRu+MWqYXcI70POlC6N8up9p1dID7SU=
 github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208 h1:1cngl9mPEoITZG8s8cVcUy5CeIBYhEESkOB7m6Gmkrk=
 github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208/go.mod h1:IotVbo4F+mw0EzQ08zFqg7pK3FebNXpaMsRy2RT+Ees=
+gitlab.com/nolash/go-mockbytes v0.0.2 h1:qGF5eH+eBxCfNdw+6v5U1Z4ddkPOdVx01Aczp10jCEY=
+gitlab.com/nolash/go-mockbytes v0.0.2/go.mod h1:3iOEPU9bRvF/FBBmiBdWCxvuPmKqQ6cPoX8Ro2yoILc=
 go.uber.org/atomic v1.4.0 h1:cxzIVoETapQEqDhQu3QfnvXAV4AlzcvUCxkVUFw3+EU=
 go.uber.org/atomic v1.4.0/go.mod h1:gD2HeocX3+yG+ygLZcrzQJaqmWj9AIm7n08wl/qW/PE=
 golang.org/x/crypto v0.0.0-20180904163835-0709b304e793/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

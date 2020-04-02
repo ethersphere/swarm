@@ -13,6 +13,7 @@ var (
 	branches = 128
 )
 
+// NewBMTHasherFunc is a test helper that creates a new asynchronous hasher with a specified poolsize
 func NewBMTHasherFunc(poolSize int) file.SectionWriterFunc {
 	if poolSize == 0 {
 		poolSize = bmt.PoolSize

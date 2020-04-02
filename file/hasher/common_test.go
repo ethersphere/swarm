@@ -80,15 +80,6 @@ var (
 	dummyHashFunc = func(_ context.Context) file.SectionWriter {
 		return newDummySectionWriter(chunkSize*branches, sectionSize, sectionSize, branches)
 	}
-
-	// placeholder for cases where a hasher is not necessary
-//	noHashFunc = func(_ context.Context) file.SectionWriter {
-//		return nil
-//	}
-//
-//	logErrFunc = func(err error) {
-//		log.Error("SectionWriter pipeline error", "err", err)
-//	}
 )
 
 // simple file.SectionWriter hasher that keeps the data written to it
@@ -109,6 +100,7 @@ type dummySectionWriter struct {
 	wg          sync.WaitGroup
 }
 
+// dummySectionWriter constructor
 func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int) *dummySectionWriter {
 	log.Trace("creating dummy writer", "sectionsize", sectionSize, "digestsize", digestSize, "branches", branches)
 	return &dummySectionWriter{
@@ -121,9 +113,7 @@ func newDummySectionWriter(cp int, sectionSize int, digestSize int, branches int
 	}
 }
 
-func (d *dummySectionWriter) Init(_ context.Context, _ func(error)) {
-}
-
+// implements file.SectionWriter
 func (d *dummySectionWriter) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
 	log.Error("dummySectionWriter does not support SectionWriter chaining")
 	return d
@@ -175,6 +165,7 @@ func (d *dummySectionWriter) Sum(_ []byte) []byte {
 	return d.digest
 }
 
+// invokes sum on the underlying writer
 func (d *dummySectionWriter) sum() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -221,10 +212,12 @@ func (d *dummySectionWriter) Branches() int {
 	return d.branches
 }
 
+// returns true if hasher is written to the capacity limit
 func (d *dummySectionWriter) isFull() bool {
 	return d.size == d.sectionSize*d.branches
 }
 
+// implements file.SectionWriter
 func (d *dummySectionWriter) SumIndexed(b []byte, l int) []byte {
 	//log.Trace("dummy sum indexed", "d", d.data[:l], "l", l, "b", b, "s", d.span)
 	d.writer.Write(d.span)
@@ -232,6 +225,7 @@ func (d *dummySectionWriter) SumIndexed(b []byte, l int) []byte {
 	return d.writer.Sum(b)
 }
 
+// implements file.SectionWriter
 func (d *dummySectionWriter) WriteIndexed(i int, b []byte) {
 	//log.Trace("dummy write indexed", "i", i, "b", len(b))
 	copy(d.data[i*d.sectionSize:], b)

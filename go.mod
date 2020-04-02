@@ -36,6 +36,7 @@ require (
 	github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.0.0-20170918210437-9fafd6967416
+	github.com/nolash/mockbytes v0.0.0-20200401133213-4cadbd154ff6 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v0.1.1 // indirect
@@ -51,6 +52,7 @@ require (
 	github.com/uber/jaeger-client-go v0.0.0-20180607151842-f7e0d4744fa6
 	github.com/uber/jaeger-lib v0.0.0-20180615202729-a51202d6f4a7 // indirect
 	github.com/vbauerster/mpb v3.4.0+incompatible
+	gitlab.com/nolash/go-mockbytes v0.0.2 // indirect
 	go.uber.org/atomic v1.4.0 // indirect
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 	golang.org/x/net v0.0.0-20190724013045-ca1201d0de80
