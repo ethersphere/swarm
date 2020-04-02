@@ -76,26 +76,29 @@ func newTrojanHeaders() *trojanHeaders {
 
 // determines the nonce so that when the trojan message is hashed, it falls in the neighbourhood of the given address
 func findMessageNonce(address chunk.Address, headers *trojanHeaders) error {
-	// start out with random nonce
-	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		return err
-	}
 	// init BMT hash function
 	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)()
 	// iterate nonce
-	if err := iterateNonce(nonce, address, BMThashFunc); err != nil {
+	nonce, err := iterateNonce(address, BMThashFunc)
+	if err != nil {
 		return err
 	}
+	headers.nonce = nonce
 	return nil
 }
 
-func iterateNonce(nonce []byte, address chunk.Address, hashFunc storage.SwarmHash) error {
-	if _, err := hashFunc.Write(nonce); err != nil {
-		return err
+func iterateNonce(address chunk.Address, hashFunc storage.SwarmHash) ([]byte, error) {
+	var emptyNonce []byte
+	// start out with random nonce
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return emptyNonce, err
 	}
-	hashFunc.Sum(nil)
-	return nil
+	if _, err := hashFunc.Write(nonce); err != nil {
+		return emptyNonce, err
+	}
+	nonce = hashFunc.Sum(nil)
+	return nonce, nil
 }
 
 var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
