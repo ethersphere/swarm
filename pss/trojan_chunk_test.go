@@ -35,11 +35,11 @@ var addr = chunk.Address{
 	56, 171, 92, 229, 242, 98, 51, 179, 180, 35,
 	191, 140}
 
-// arbitrary message for tests
+// newTrojanMessage creates an arbitrary message for tests
 func newTrojanMessage(t *testing.T) trojanMessage {
 	// arbitrary payload
 	payload := []byte("foopayload")
-	payloadLength := int32(len(payload))
+	payloadLength := int64(len(payload))
 
 	// get length as bytes
 	lengthBuffer := new(bytes.Buffer)
@@ -62,6 +62,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 	}
 }
 
+// TestNewTrojanChunk tests the creation of a trojan chunk
 func TestNewTrojanChunk(t *testing.T) {
 	_, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {
@@ -69,6 +70,7 @@ func TestNewTrojanChunk(t *testing.T) {
 	}
 }
 
+// TestNewTrojanChunk tests getting the correct nonce for a trojan chunk
 func TestSetNonce(t *testing.T) {
 	tc, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {
@@ -77,6 +79,7 @@ func TestSetNonce(t *testing.T) {
 	tc.setNonce()
 }
 
+// TestTrojanDataSerialization tests that the trojanData type can be correctly serialized and deserialized
 func TestTrojanDataSerialization(t *testing.T) {
 	tc, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {
@@ -85,7 +88,7 @@ func TestTrojanDataSerialization(t *testing.T) {
 	tc.setNonce()
 	td := tc.trojanData
 
-	std, err := json.Marshal(td)
+	std, err := json.Marshal(&td)
 	if err != nil {
 		t.Fatal(err)
 	}
