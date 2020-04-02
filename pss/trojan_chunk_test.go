@@ -17,7 +17,10 @@
 package pss
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"math/rand"
 	"reflect"
 	"testing"
 
@@ -33,22 +36,41 @@ var addr = chunk.Address{
 	191, 140}
 
 // arbitrary message for tests
-var msg = trojanMessage{
-	length:  []byte{}, // TODO: how to set this value?
-	topic:   crypto.Keccak256([]byte("RECOVERY")),
-	payload: []byte("foopayload"),
-	padding: []byte{}, // TODO: how to set this value?
+func newTrojanMessage(t *testing.T) trojanMessage {
+	// arbitrary payload
+	payload := []byte("foopayload")
+	payloadLength := int32(len(payload))
+
+	// get length as bytes
+	lengthBuffer := new(bytes.Buffer)
+	if err := binary.Write(lengthBuffer, binary.BigEndian, payloadLength); err != nil {
+		t.Fatal(err)
+	}
+
+	// set random bytes as padding
+	paddingLength := 4056 - payloadLength
+	padding := make([]byte, paddingLength)
+	if _, err := rand.Read(padding); err != nil {
+		t.Fatal(err)
+	}
+
+	return trojanMessage{
+		length:  lengthBuffer.Bytes(),
+		topic:   crypto.Keccak256([]byte("RECOVERY")), // TODO: will this always hash to 32 bytes?
+		payload: payload,
+		padding: padding,
+	}
 }
 
 func TestNewTrojanChunk(t *testing.T) {
-	_, err := newTrojanChunk(addr, msg)
+	_, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestSetNonce(t *testing.T) {
-	tc, err := newTrojanChunk(addr, msg)
+	tc, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,10 +78,11 @@ func TestSetNonce(t *testing.T) {
 }
 
 func TestTrojanDataSerialization(t *testing.T) {
-	tc, err := newTrojanChunk(addr, msg)
+	tc, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	tc.setNonce()
 	td := tc.trojanData
 
 	std, err := json.Marshal(td)
