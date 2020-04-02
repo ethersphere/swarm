@@ -46,9 +46,9 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/stream"
+	"github.com/ethersphere/swarm/oldpss"
+	oldpssmessage "github.com/ethersphere/swarm/oldpss/message"
 	"github.com/ethersphere/swarm/p2p/protocols"
-	"github.com/ethersphere/swarm/pss"
-	pssmessage "github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -83,7 +83,7 @@ type Swarm struct {
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
-	ps                *pss.Pss
+	ps                *oldpss.Pss
 	pushSync          *pushsync.Pusher
 	storer            *pushsync.Storer
 	swap              *swap.Swap
@@ -261,17 +261,17 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.bzzEth = bzzeth.New(self.netStore, to)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	self.ps, err = pss.New(to, config.Pss)
+	self.ps, err = oldpss.New(to, config.OldPss)
 	if err != nil {
 		return nil, err
 	}
-	if pss.IsActiveHandshake {
-		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
+	if oldpss.IsActiveHandshake {
+		oldpss.SetHandshakeController(self.ps, oldpss.NewHandshakeParams())
 	}
 
 	if config.PushSyncEnabled {
 		// expire time for push-sync messages should be lower than regular chat-like messages to avoid network flooding
-		pubsub := pss.NewPubSub(self.ps, 20*time.Second)
+		pubsub := oldpss.NewPubSub(self.ps, 20*time.Second)
 		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
@@ -579,8 +579,8 @@ func (s *Swarm) APIs() []rpc.API {
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
-func (s *Swarm) RegisterPssProtocol(topic *pssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
-	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
+func (s *Swarm) RegisterPssProtocol(topic *oldpssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *oldpss.ProtocolParams) (*oldpss.Protocol, error) {
+	return oldpss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
 // Info represents the current Swarm node's configuration
