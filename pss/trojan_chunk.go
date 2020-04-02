@@ -41,7 +41,7 @@ type trojanMessage struct {
 	pssMsgCyphertext message.Message
 }
 
-// creates a new trojan message structure for the given address
+// newTrojanMessage creates a new trojan message structure for the given address
 func newTrojanMessage(address chunk.Address, pssMessage message.Message) (*trojanMessage, error) {
 	// create initial trojan headers
 	headers := newTrojanHeaders()
@@ -58,7 +58,7 @@ func newTrojanMessage(address chunk.Address, pssMessage message.Message) (*troja
 	}, nil
 }
 
-// creates empty trojan headers struct
+// newTrojanHeaders creates an empty trojan headers struct
 func newTrojanHeaders() *trojanHeaders {
 	// create span, empty for now
 	span := make([]byte, 8)
@@ -74,12 +74,12 @@ func newTrojanHeaders() *trojanHeaders {
 	}
 }
 
-// determines the nonce so that when the trojan message is hashed, it falls in the neighbourhood of the given address
+// findMessageNonce determines the nonce so that when the trojan message is hashed, it falls in the neighbourhood of the given address
 func findMessageNonce(address chunk.Address, headers *trojanHeaders) error {
 	// init BMT hash function
 	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)()
 	// iterate nonce
-	nonce, err := iterateNonce(address, BMThashFunc)
+	nonce, err := iterateNonce(address, headers, BMThashFunc)
 	if err != nil {
 		return err
 	}
@@ -87,23 +87,28 @@ func findMessageNonce(address chunk.Address, headers *trojanHeaders) error {
 	return nil
 }
 
-func iterateNonce(address chunk.Address, hashFunc storage.SwarmHash) ([]byte, error) {
+// iterateNonce iterates the BMT hash of the trojan headers until the desired nonce is found
+func iterateNonce(address chunk.Address, headers *trojanHeaders, hashFunc storage.SwarmHash) ([]byte, error) {
 	var emptyNonce []byte
-	// start out with random nonce
 	nonce := make([]byte, 32)
+
+	// start out with random nonce
 	if _, err := rand.Read(nonce); err != nil {
 		return emptyNonce, err
 	}
+
+	// hash nonce
 	if _, err := hashFunc.Write(nonce); err != nil {
 		return emptyNonce, err
 	}
 	nonce = hashFunc.Sum(nil)
+
 	return nonce, nil
 }
 
 var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
 
-// creates a new addressed chunk structure with the given trojan message content serialized as its data
+// newTrojanChunk creates a new addressed chunk structure with the given trojan message content serialized as its data
 func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
 	chunkData, err := json.Marshal(message) // what is the correct way of serializing a trojan message?
 	if err != nil {
