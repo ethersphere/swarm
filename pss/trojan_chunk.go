@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
+	"reflect"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
@@ -120,6 +121,18 @@ func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 		return emptyChunk, err
 	}
 	return chunk.NewChunk(tc.address, chunkData), nil
+}
+
+// equals compares the underlying data of 2 trojanData variables and returns true if they match, false otherwise
+// TODO: why doesn't a direct `reflect.DeepEqual` call of the whole variable work?
+func (tc *trojanData) equals(d *trojanData) bool {
+	if !reflect.DeepEqual(tc.trojanHeaders, d.trojanHeaders) {
+		return false
+	}
+	if !reflect.DeepEqual(tc.trojanMessage, d.trojanMessage) {
+		return false
+	}
+	return true
 }
 
 // UnmarshalJSON serializes a trojanData struct

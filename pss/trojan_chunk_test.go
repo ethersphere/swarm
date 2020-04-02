@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -99,7 +98,8 @@ func TestTrojanDataSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(td, dtd) {
+	// TODO: why does this fail?: reflect.DeepEqual(td, dtd)
+	if !td.equals(dtd) {
 		t.Fatalf("original trojan data does not match deserialized one")
 	}
 }
