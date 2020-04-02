@@ -15,19 +15,23 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// referenceBmtWrapper encapsulates the bmt hasher in order to implement the SectionWriter interface
 type referenceBmtWrapper struct {
 	*bmt.Hasher
 }
 
+// implements file.SectionWriter
 func (r *referenceBmtWrapper) SetWriter(hashFunc file.SectionWriterFunc) file.SectionWriter {
 	log.Warn("BMT hasher does not currently support SectionWriter chaining")
 	return r
 }
 
+// implements file.SectionWriter
 func (r *referenceBmtWrapper) SumIndexed(b []byte, _ int) []byte {
 	return r.Sum(b)
 }
 
+// implements file.SectionWriter
 func (r *referenceBmtWrapper) WriteIndexed(_ int, b []byte) {
 	r.Write(b)
 }
