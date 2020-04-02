@@ -47,7 +47,7 @@ import (
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/stream"
 	"github.com/ethersphere/swarm/oldpss"
-	pssmessage "github.com/ethersphere/swarm/oldpss/message"
+	oldpssmessage "github.com/ethersphere/swarm/oldpss/message"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
@@ -261,7 +261,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.bzzEth = bzzeth.New(self.netStore, to)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	self.ps, err = oldpss.New(to, config.Pss)
+	self.ps, err = oldpss.New(to, config.OldPss)
 	if err != nil {
 		return nil, err
 	}
@@ -579,7 +579,7 @@ func (s *Swarm) APIs() []rpc.API {
 }
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
-func (s *Swarm) RegisterPssProtocol(topic *pssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *oldpss.ProtocolParams) (*oldpss.Protocol, error) {
+func (s *Swarm) RegisterPssProtocol(topic *oldpssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *oldpss.ProtocolParams) (*oldpss.Protocol, error) {
 	return oldpss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 

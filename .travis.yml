@@ -4,7 +4,7 @@ sudo: false
 env:
   global:
     - GOFLAGS=-mod=vendor
-# To run on only specific, not ll branches, comment out the code below.
+# To run on only specific, not all branches, comment out the code below.
 # branches:
 #   only:
 #     - master
