@@ -76,6 +76,7 @@ func TestSetNonce(t *testing.T) {
 		t.Fatal(err)
 	}
 	tc.setNonce()
+	// TODO: check nonce is correct for address
 }
 
 // TestTrojanDataSerialization tests that the trojanData type can be correctly serialized and deserialized
