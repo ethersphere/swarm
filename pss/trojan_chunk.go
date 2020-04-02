@@ -25,15 +25,9 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-type pssEnvelope struct {
-	// headers ? missing
-	message []byte
-}
-
 type trojanHeaders struct {
-	span           []byte
-	nonce          []byte
-	decryptionHint []byte
+	span  []byte
+	nonce []byte
 }
 
 type trojanMessage struct {
@@ -64,13 +58,10 @@ func newTrojanHeaders() *trojanHeaders {
 	span := make([]byte, 8)
 	// create initial nonce
 	nonce := make([]byte, 32)
-	// create decryption hint, empty for now
-	decryptionHint := make([]byte, 32)
 
 	return &trojanHeaders{
-		span:           span,
-		nonce:          nonce,
-		decryptionHint: decryptionHint,
+		span:  span,
+		nonce: nonce,
 	}
 }
 
@@ -110,9 +101,37 @@ var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
 
 // newTrojanChunk creates a new addressed chunk structure with the given trojan message content serialized as its data
 func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
-	chunkData, err := json.Marshal(message) // what is the correct way of serializing a trojan message?
+	chunkData, err := json.Marshal(message)
 	if err != nil {
 		return emptyChunk, err
 	}
 	return chunk.NewChunk(address, chunkData), nil
+}
+
+func (tm *trojanMessage) MarshalJSON() ([]byte, error) {
+	// append first 40 bytes
+	s := append(tm.span, tm.nonce...)
+	m, err := json.Marshal(tm.pssMsgCyphertext)
+	if err != nil {
+		return []byte{}, err
+	}
+	// append with marshalled message
+	return json.Marshal(append(s, m...))
+}
+
+func (tm *trojanMessage) UnmarshalJSON(data []byte) error {
+	var b []byte
+	if err := json.Unmarshal(data, &b); err != nil {
+		return err
+	}
+	tm.span = b[0:8]   // first 8 bytes are span
+	tm.nonce = b[8:40] // following 32 bytes are nonce
+
+	// rest of the bytes are message
+	var m message.Message
+	if err := json.Unmarshal(b[40:], &m); err != nil {
+		return err
+	}
+	tm.pssMsgCyphertext = m
+	return nil
 }

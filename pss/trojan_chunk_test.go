@@ -17,19 +17,19 @@
 package pss
 
 import (
-	"io/ioutil"
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss/message"
-	"github.com/ethersphere/swarm/state"
 )
 
 func TestFindMessageNonce(T *testing.T) {
 	findMessageNonce(chunk.Address{}, newTrojanHeaders())
 }
 
-func TestMarshaling(t *testing.T) {
+func TestTrojanMessageSerialization(t *testing.T) {
 	addr := chunk.Address{
 		67, 120, 209, 156, 38, 89, 15, 26, 129, 142,
 		215, 214, 166, 44, 56, 9, 225, 73, 176, 153,
@@ -47,39 +47,18 @@ func TestMarshaling(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// stm, err := json.Marshal(tm)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-
-	// var dtm *trojanMessage
-	// err = json.Unmarshal(stm, &dtm)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-
-	// if tm != dtm {
-	// 	t.Fatalf("original trojan message does not match deserialized one")
-	// }
-
-	////
-	testDir, err := ioutil.TempDir("", "trojan_test_store")
+	stm, err := json.Marshal(tm)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	stateStore, err := state.NewDBStore(testDir)
-	defer stateStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	k := "trojan"
-
-	stateStore.Put(k, tm)
 	var dtm *trojanMessage
-	err = stateStore.Get(k, &dtm)
+	err = json.Unmarshal(stm, &dtm)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(tm, dtm) {
+		t.Fatalf("original trojan message does not match deserialized one")
 	}
 }
