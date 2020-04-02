@@ -40,7 +40,7 @@ import (
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/simulation"
-	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/oldpss"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"golang.org/x/sync/errgroup"
@@ -65,7 +65,7 @@ func init() {
 	}
 }
 
-// test syncer using pss
+// test syncer using oldpss
 // the test
 // * creates a simulation with connectivity loaded from a snapshot
 // * for each test case, two nodes are chosen randomly, an uploader and a downloader
@@ -166,7 +166,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, nodeCnt,
 }
 
 // newServiceFunc constructs a minimal service needed for a simulation test for Push Sync, namely:
-// localstore, netstore, retrieval and pss. Bzz service is required on the same node.
+// localstore, netstore, retrieval and oldpss. Bzz service is required on the same node.
 func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 	// setup localstore
 	n := ctx.Config.Node()
@@ -188,13 +188,13 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	// setup netstore
 	netStore := storage.NewNetStore(lstore, addr)
 
-	// setup pss
+	// setup oldpss
 	k, _ := bucket.LoadOrStore(simulation.BucketKeyKademlia, network.NewKademlia(addr.Over(), network.NewKadParams()))
 	kad := k.(*network.Kademlia)
 
 	privKey, err := crypto.GenerateKey()
-	pssp := pss.NewParams().WithPrivateKey(privKey)
-	ps, err := pss.New(kad, pssp)
+	pssp := oldpss.NewParams().WithPrivateKey(privKey)
+	ps, err := oldpss.New(kad, pssp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -204,7 +204,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	r := retrieval.New(kad, netStore, addr, nil)
 	netStore.RemoteGet = r.RequestFromPeers
 
-	pubSub := pss.NewPubSub(ps, 1*time.Second)
+	pubSub := oldpss.NewPubSub(ps, 1*time.Second)
 	// setup pusher
 	p := NewPusher(lstore, pubSub, tags)
 	bucket.Store(bucketKeyPushSyncer, p)
@@ -225,7 +225,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 // implements the node.Service interface
 type RetrievalAndPss struct {
 	retrieval *retrieval.Retrieval
-	pss       *pss.Pss
+	oldpss    *oldpss.Pss
 }
 
 func (s *RetrievalAndPss) APIs() []rpc.API {
@@ -233,7 +233,7 @@ func (s *RetrievalAndPss) APIs() []rpc.API {
 }
 
 func (s *RetrievalAndPss) Protocols() []p2p.Protocol {
-	return append(s.retrieval.Protocols(), s.pss.Protocols()...)
+	return append(s.retrieval.Protocols(), s.oldpss.Protocols()...)
 }
 
 func (s *RetrievalAndPss) Start(srv *p2p.Server) error {
@@ -241,7 +241,7 @@ func (s *RetrievalAndPss) Start(srv *p2p.Server) error {
 	if err != nil {
 		return err
 	}
-	return s.pss.Start(srv)
+	return s.oldpss.Start(srv)
 }
 
 func (s *RetrievalAndPss) Stop() error {
@@ -249,7 +249,7 @@ func (s *RetrievalAndPss) Stop() error {
 	if err != nil {
 		return err
 	}
-	return s.pss.Stop()
+	return s.oldpss.Stop()
 }
 
 func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, n int) (tag *chunk.Tag, addrs []storage.Address, err error) {
