@@ -44,15 +44,16 @@ type trojanMessage struct {
 // creates a new trojan message structure for the given address
 func newTrojanMessage(address chunk.Address, pssMessage message.Message) (*trojanMessage, error) {
 	// create initial trojan headers
-	trojanHeaders := newTrojanHeaders()
+	headers := newTrojanHeaders()
 	// find nonce for headers and address
-	if err := findMessageNonce(address, trojanHeaders); err != nil {
+	if err := findMessageNonce(address, headers); err != nil {
 		return nil, err
 	}
 	// cypher pss message, plain for now
 	pssMsgCyphertext := pssMessage
+
 	return &trojanMessage{
-		trojanHeaders:    *trojanHeaders,
+		trojanHeaders:    *headers,
 		pssMsgCyphertext: pssMsgCyphertext,
 	}, nil
 }
@@ -75,14 +76,25 @@ func newTrojanHeaders() *trojanHeaders {
 
 // determines the nonce so that when the trojan message is hashed, it falls in the neighbourhood of the given address
 func findMessageNonce(address chunk.Address, headers *trojanHeaders) error {
-	// init BMT hash function
-	hashFunc := storage.MakeHashFunc(storage.BMTHash)
 	// start out with random nonce
 	nonce := make([]byte, 32)
-	_, err := rand.Read(nonce)
-	if err != nil {
+	if _, err := rand.Read(nonce); err != nil {
 		return err
 	}
+	// init BMT hash function
+	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)()
+	// iterate nonce
+	if err := iterateNonce(nonce, address, BMThashFunc); err != nil {
+		return err
+	}
+	return nil
+}
+
+func iterateNonce(nonce []byte, address chunk.Address, hashFunc storage.SwarmHash) error {
+	if _, err := hashFunc.Write(nonce); err != nil {
+		return err
+	}
+	hashFunc.Sum(nil)
 	return nil
 }
 
