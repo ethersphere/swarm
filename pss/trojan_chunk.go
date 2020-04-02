@@ -125,11 +125,11 @@ func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 
 // equals compares the underlying data of 2 trojanData variables and returns true if they match, false otherwise
 // TODO: why doesn't a direct `reflect.DeepEqual` call of the whole variable work?
-func (tc *trojanData) equals(d *trojanData) bool {
-	if !reflect.DeepEqual(tc.trojanHeaders, d.trojanHeaders) {
+func (td *trojanData) equals(d *trojanData) bool {
+	if !reflect.DeepEqual(td.trojanHeaders, d.trojanHeaders) {
 		return false
 	}
-	if !reflect.DeepEqual(tc.trojanMessage, d.trojanMessage) {
+	if !reflect.DeepEqual(td.trojanMessage, d.trojanMessage) {
 		return false
 	}
 	return true
