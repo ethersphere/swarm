@@ -83,7 +83,6 @@ func newTrojanHeaders() trojanHeaders {
 func (tc *trojanChunk) setNonce() error {
 	// init BMT hash function
 	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)()
-	// iterate nonce
 	nonce, err := iterateNonce(tc, BMThashFunc)
 	if err != nil {
 		return err
@@ -183,9 +182,10 @@ func (tm *trojanMessage) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &b); err != nil {
 		return err
 	}
-	tm.length = b[0:8] // first 8 bytes are span
-	tm.topic = b[8:40] // following 32 bytes are nonce
+	tm.length = b[0:8] // first 8 bytes are length
+	tm.topic = b[8:40] // following 32 bytes are topic
 
+	// rest of the bytes are payload and padding
 	length := binary.BigEndian.Uint64(tm.length)
 	payloadEnd := 40 + length
 	tm.payload = b[40:payloadEnd]
