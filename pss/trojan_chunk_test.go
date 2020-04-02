@@ -21,44 +21,59 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/pss/message"
 )
 
-func TestFindMessageNonce(T *testing.T) {
-	findMessageNonce(chunk.Address{}, newTrojanHeaders())
+// arbitrary address for tests
+var addr = chunk.Address{
+	67, 120, 209, 156, 38, 89, 15, 26, 129, 142,
+	215, 214, 166, 44, 56, 9, 225, 73, 176, 153,
+	56, 171, 92, 229, 242, 98, 51, 179, 180, 35,
+	191, 140}
+
+// arbitrary message for tests
+var msg = trojanMessage{
+	length:  []byte{}, // TODO: how to set this value?
+	topic:   crypto.Keccak256([]byte("RECOVERY")),
+	payload: []byte("foopayload"),
+	padding: []byte{}, // TODO: how to set this value?
 }
 
-func TestTrojanMessageSerialization(t *testing.T) {
-	addr := chunk.Address{
-		67, 120, 209, 156, 38, 89, 15, 26, 129, 142,
-		215, 214, 166, 44, 56, 9, 225, 73, 176, 153,
-		56, 171, 92, 229, 242, 98, 51, 179, 180, 35,
-		191, 140}
-	msg := message.Message{
-		To:      []byte{},
-		Flags:   message.Flags{},
-		Expire:  0,
-		Topic:   message.NewTopic([]byte("footopic")),
-		Payload: []byte("foopayload"),
+func TestNewTrojanChunk(t *testing.T) {
+	_, err := newTrojanChunk(addr, msg)
+	if err != nil {
+		t.Fatal(err)
 	}
-	tm, err := newTrojanMessage(addr, msg)
+}
+
+func TestSetNonce(t *testing.T) {
+	tc, err := newTrojanChunk(addr, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tc.setNonce()
+}
+
+func TestTrojanDataSerialization(t *testing.T) {
+	tc, err := newTrojanChunk(addr, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	td := tc.trojanData
+
+	std, err := json.Marshal(td)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	stm, err := json.Marshal(tm)
+	var dtd *trojanData
+	err = json.Unmarshal(std, &dtd)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var dtm *trojanMessage
-	err = json.Unmarshal(stm, &dtm)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(tm, dtm) {
-		t.Fatalf("original trojan message does not match deserialized one")
+	if !reflect.DeepEqual(td, dtd) {
+		t.Fatalf("original trojan data does not match deserialized one")
 	}
 }

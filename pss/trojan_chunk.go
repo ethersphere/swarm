@@ -21,69 +21,81 @@ import (
 	"encoding/json"
 
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/storage"
 )
 
+// TODO: can we re-use some types here?
 type trojanHeaders struct {
 	span  []byte
 	nonce []byte
 }
 
+// TODO: can we re-use some types here?
 type trojanMessage struct {
-	trojanHeaders
-	pssMsgCyphertext message.Message
+	length  []byte
+	topic   []byte
+	payload []byte
+	padding []byte
 }
 
-// newTrojanMessage creates a new trojan message structure for the given address
-func newTrojanMessage(address chunk.Address, pssMessage message.Message) (*trojanMessage, error) {
-	// create initial trojan headers
-	headers := newTrojanHeaders()
-	// find nonce for headers and address
-	if err := findMessageNonce(address, headers); err != nil {
+type trojanData struct {
+	trojanHeaders
+	trojanMessage // TODO: this should be encrypted
+}
+
+type trojanChunk struct {
+	address chunk.Address
+	trojanData
+}
+
+// newTrojanChunk creates a new trojan chunk structure for the given address and message
+func newTrojanChunk(address chunk.Address, message trojanMessage) (*trojanChunk, error) {
+	chunk := &trojanChunk{
+		address: address,
+		trojanData: trojanData{
+			trojanHeaders: newTrojanHeaders(),
+			trojanMessage: message,
+		},
+	}
+	// find nonce for chunk
+	if err := chunk.setNonce(); err != nil {
 		return nil, err
 	}
-	// cypher pss message, plain for now
-	pssMsgCyphertext := pssMessage
-
-	return &trojanMessage{
-		trojanHeaders:    *headers,
-		pssMsgCyphertext: pssMsgCyphertext,
-	}, nil
+	return chunk, nil
 }
 
 // newTrojanHeaders creates an empty trojan headers struct
-func newTrojanHeaders() *trojanHeaders {
-	// create span, empty for now
+func newTrojanHeaders() trojanHeaders {
+	// TODO: what should be the value of this?
 	span := make([]byte, 8)
 	// create initial nonce
 	nonce := make([]byte, 32)
 
-	return &trojanHeaders{
+	return trojanHeaders{
 		span:  span,
 		nonce: nonce,
 	}
 }
 
-// findMessageNonce determines the nonce so that when the trojan message is hashed, it falls in the neighbourhood of the given address
-func findMessageNonce(address chunk.Address, headers *trojanHeaders) error {
+// setNonce determines the nonce so that when the trojan chunk fields are hashed, it falls in the neighbourhood of the trojan chunk address
+func (tc *trojanChunk) setNonce() error {
 	// init BMT hash function
 	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)()
 	// iterate nonce
-	nonce, err := iterateNonce(address, headers, BMThashFunc)
+	nonce, err := iterateNonce(tc, BMThashFunc)
 	if err != nil {
 		return err
 	}
-	headers.nonce = nonce
+	tc.nonce = nonce
 	return nil
 }
 
-// iterateNonce iterates the BMT hash of the trojan headers until the desired nonce is found
-func iterateNonce(address chunk.Address, headers *trojanHeaders, hashFunc storage.SwarmHash) ([]byte, error) {
+// iterateNonce iterates the BMT hash of the trojan chunk fields until the desired nonce is found
+func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) ([]byte, error) {
 	var emptyNonce []byte
-	nonce := make([]byte, 32)
 
 	// start out with random nonce
+	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
 		return emptyNonce, err
 	}
@@ -94,44 +106,45 @@ func iterateNonce(address chunk.Address, headers *trojanHeaders, hashFunc storag
 	}
 	nonce = hashFunc.Sum(nil)
 
+	// TODO: iterate nonce
 	return nonce, nil
 }
 
-var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
+// toContentAddressedChunk creates a new addressed chunk structure with the given trojan message content serialized as its data
+func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
+	var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
 
-// newTrojanChunk creates a new addressed chunk structure with the given trojan message content serialized as its data
-func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
-	chunkData, err := json.Marshal(message)
+	chunkData, err := json.Marshal(tc.trojanData)
 	if err != nil {
 		return emptyChunk, err
 	}
-	return chunk.NewChunk(address, chunkData), nil
+	return chunk.NewChunk(tc.address, chunkData), nil
 }
 
-func (tm *trojanMessage) MarshalJSON() ([]byte, error) {
-	// append first 40 bytes
-	s := append(tm.span, tm.nonce...)
-	m, err := json.Marshal(tm.pssMsgCyphertext)
-	if err != nil {
-		return []byte{}, err
-	}
-	// append with marshalled message
-	return json.Marshal(append(s, m...))
-}
+// func (tm *trojanData) MarshalJSON() ([]byte, error) {
+// 	// append first 40 bytes
+// 	s := append(tm.span, tm.nonce...)
+// 	m, err := json.Marshal(tm.messageCyphertext)
+// 	if err != nil {
+// 		return []byte{}, err
+// 	}
+// 	// append with marshalled message
+// 	return json.Marshal(append(s, m...))
+// }
 
-func (tm *trojanMessage) UnmarshalJSON(data []byte) error {
-	var b []byte
-	if err := json.Unmarshal(data, &b); err != nil {
-		return err
-	}
-	tm.span = b[0:8]   // first 8 bytes are span
-	tm.nonce = b[8:40] // following 32 bytes are nonce
+// func (tm *trojanChunk) UnmarshalJSON(data []byte) error {
+// 	var b []byte
+// 	if err := json.Unmarshal(data, &b); err != nil {
+// 		return err
+// 	}
+// 	tm.span = b[0:8]   // first 8 bytes are span
+// 	tm.nonce = b[8:40] // following 32 bytes are nonce
 
-	// rest of the bytes are message
-	var m message.Message
-	if err := json.Unmarshal(b[40:], &m); err != nil {
-		return err
-	}
-	tm.pssMsgCyphertext = m
-	return nil
-}
+// 	// rest of the bytes are message
+// 	var m message.Message
+// 	if err := json.Unmarshal(b[40:], &m); err != nil {
+// 		return err
+// 	}
+// 	tm.messageCyphertext = m
+// 	return nil
+// }
