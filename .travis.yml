@@ -4,10 +4,11 @@ sudo: false
 env:
   global:
     - GOFLAGS=-mod=vendor
-branches:
-  only:
-    - master
-    - /v(\d+\.)(\d+\.)(\d)/
+# To run on only specific, not ll branches, comment out the code below.
+# branches:
+#   only:
+#     - master
+#     - /v(\d+\.)(\d+\.)(\d)/
 jobs:
   include:
     # This builder only tests code linters on latest version of Go
