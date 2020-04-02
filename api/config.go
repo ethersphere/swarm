@@ -65,7 +65,7 @@ type Config struct {
 	// end of Swap configs
 
 	*network.HiveParams
-	Pss                *oldpss.Params
+	OldPss             *oldpss.Params
 	EnsRoot            common.Address
 	EnsAPIs            []string
 	RnsAPI             string
@@ -101,7 +101,7 @@ func NewConfig() *Config {
 		SwapLogPath:             "",
 		SwapLogLevel:            swap.DefaultSwapLogLevel,
 		HiveParams:              network.NewHiveParams(),
-		Pss:                     oldpss.NewParams(),
+		OldPss:                  oldpss.NewParams(),
 		EnsRoot:                 ens.Address,
 		EnsAPIs:                 nil,
 		RnsAPI:                  "",
@@ -143,7 +143,7 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey, nodeKey *ecdsa.PrivateKey) error
 	c.ChunkDbPath = filepath.Join(c.Path, "chunks")
 	c.BaseKey = common.FromHex(c.BzzKey)
 
-	c.Pss = c.Pss.WithPrivateKey(c.privateKey)
+	c.OldPss = c.OldPss.WithPrivateKey(c.privateKey)
 	return nil
 }
 
