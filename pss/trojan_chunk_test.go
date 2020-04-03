@@ -40,7 +40,8 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 	payload := []byte("foopayload")
 	payloadLength := int64(len(payload))
 
-	// get length as bytes
+	// get length as array of 8 bytes
+	// TODO: better way of doing this?
 	lengthBuffer := new(bytes.Buffer)
 	if err := binary.Write(lengthBuffer, binary.BigEndian, payloadLength); err != nil {
 		t.Fatal(err)
@@ -55,7 +56,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 
 	return trojanMessage{
 		length:  lengthBuffer.Bytes(),
-		topic:   crypto.Keccak256([]byte("RECOVERY")), // TODO: will this always hash to 32 bytes?
+		topic:   crypto.Keccak256([]byte("RECOVERY")),
 		payload: payload,
 		padding: padding,
 	}

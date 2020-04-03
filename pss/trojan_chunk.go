@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
+	"math/big"
 	"reflect"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -81,34 +82,52 @@ func newTrojanHeaders() trojanHeaders {
 
 // setNonce determines the nonce so that when the trojan chunk fields are hashed, it falls in the neighbourhood of the trojan chunk address
 func (tc *trojanChunk) setNonce() error {
-	// init BMT hash function
-	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)()
-	nonce, err := iterateNonce(tc, BMThashFunc)
+	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)() // init BMT hash function
+	err := iterateNonce(tc, BMThashFunc)
 	if err != nil {
 		return err
 	}
-	tc.nonce = nonce
 	return nil
 }
 
 // iterateNonce iterates the BMT hash of the trojan chunk fields until the desired nonce is found
-func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) ([]byte, error) {
-	var emptyNonce []byte
-
+func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
-		return emptyNonce, err
+		return err
+	}
+	tc.nonce = nonce
+
+	hashWithinNeighbourhood := false
+	// TODO: add limit to tries
+	for hashWithinNeighbourhood != true {
+		serializedTrojanData, err := json.Marshal(tc.trojanData)
+		if err != nil {
+			return err
+		}
+		if _, err := hashFunc.Write(serializedTrojanData); err != nil {
+			return err
+		}
+		hash := hashFunc.Sum(nil)
+
+		// TODO: is there another way to check if hash is in the same neighbourhood as trojan chunk address?
+		_ = chunk.Proximity(tc.address, hash)
+
+		// TODO: replace placeholder condition
+		if false {
+			// if nonce found, stop loop
+			hashWithinNeighbourhood = true
+		} else {
+			// else, add 1 to nonce and try again
+			// TODO: find non sinful way of adding 1 to byte slice
+			// TODO: implement loop-around
+			nonceInt := new(big.Int).SetBytes(tc.nonce)
+			tc.nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
+		}
 	}
 
-	// hash nonce
-	if _, err := hashFunc.Write(nonce); err != nil {
-		return emptyNonce, err
-	}
-	nonce = hashFunc.Sum(nil)
-
-	// TODO: iterate nonce
-	return nonce, nil
+	return nil
 }
 
 // toContentAddressedChunk creates a new addressed chunk structure with the given trojan message content serialized as its data
