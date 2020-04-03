@@ -34,7 +34,7 @@ var addr = chunk.Address{
 	36, 111, 93, 229, 222, 88, 51, 179, 181, 35,
 	181, 144}
 
-// newTrojanMessage creates an arbitrary message for tests
+// newTrojanMessage creates an arbitrary trojan message for tests
 func newTrojanMessage(t *testing.T) trojanMessage {
 	// arbitrary payload
 	payload := []byte("foopayload")
@@ -70,7 +70,7 @@ func TestNewTrojanChunk(t *testing.T) {
 	}
 }
 
-// TestNewTrojanChunk tests getting the correct nonce for a trojan chunk
+// TestSetNonce tests getting the correct nonce for a trojan chunk
 func TestSetNonce(t *testing.T) {
 	tc, err := newTrojanChunk(addr, newTrojanMessage(t))
 	if err != nil {

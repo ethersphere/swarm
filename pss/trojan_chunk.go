@@ -99,7 +99,8 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 	}
 	tc.nonce = nonce
 
-	hashWithinNeighbourhood := false
+	// hash trojan chunk fields with different nonces until a desired one is found
+	hashWithinNeighbourhood := false // TODO: this could be correct on the 1st try
 	// TODO: add limit to tries
 	for hashWithinNeighbourhood != true {
 		serializedTrojanData, err := json.Marshal(tc.trojanData)
@@ -111,7 +112,7 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 		}
 		hash := hashFunc.Sum(nil)
 
-		// TODO: is there another way to check if hash is in the same neighbourhood as trojan chunk address?
+		// TODO: what is the correct way to check if hash is in the same neighbourhood as trojan chunk address?
 		_ = chunk.Proximity(tc.address, hash)
 
 		// TODO: replace placeholder condition
