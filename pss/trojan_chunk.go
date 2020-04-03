@@ -115,7 +115,7 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 		_ = chunk.Proximity(tc.address, hash)
 
 		// TODO: replace placeholder condition
-		if false {
+		if true {
 			// if nonce found, stop loop
 			hashWithinNeighbourhood = true
 		} else {
