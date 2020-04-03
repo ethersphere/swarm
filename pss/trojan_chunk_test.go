@@ -29,10 +29,10 @@ import (
 
 // arbitrary address for tests
 var addr = chunk.Address{
-	67, 120, 209, 156, 38, 89, 15, 26, 129, 142,
-	215, 214, 166, 44, 56, 9, 225, 73, 176, 153,
-	56, 171, 92, 229, 242, 98, 51, 179, 180, 35,
-	191, 140}
+	57, 120, 209, 156, 38, 89, 19, 22, 129, 142,
+	115, 215, 166, 45, 56, 9, 215, 73, 178, 153,
+	36, 111, 93, 229, 222, 88, 51, 179, 181, 35,
+	181, 144}
 
 // newTrojanMessage creates an arbitrary message for tests
 func newTrojanMessage(t *testing.T) trojanMessage {
