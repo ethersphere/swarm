@@ -18,8 +18,8 @@ package pss
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -101,4 +101,16 @@ func TestTrojanDataSerialization(t *testing.T) {
 	if !td.equals(dtd) {
 		t.Fatalf("original trojan data does not match deserialized one")
 	}
+}
+
+// equals compares the underlying data of 2 trojanData variables and returns true if they match, false otherwise
+// TODO: why doesn't a direct `reflect.DeepEqual` call of the whole variable work?
+func (td *trojanData) equals(d *trojanData) bool {
+	if !reflect.DeepEqual(td.trojanHeaders, d.trojanHeaders) {
+		return false
+	}
+	if !reflect.DeepEqual(td.trojanMessage, d.trojanMessage) {
+		return false
+	}
+	return true
 }
