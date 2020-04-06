@@ -17,9 +17,9 @@
 package pss
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -68,46 +68,49 @@ func TestNewTrojanChunk(t *testing.T) {
 
 // TestSetNonce tests getting the correct nonce for a trojan message
 func TestSetNonce(t *testing.T) {
-	td := &trojanData{
-		trojanHeaders: newTrojanHeaders(),
-		trojanMessage: newTestTrojanMessage(t),
-	}
-	td.setNonce(testAddr)
+	tm := newTestTrojanMessage(t)
+
+	span := make([]byte, 8)
+	binary.BigEndian.PutUint64(span, 4096) // TODO: should this be little-endian?
+
+	tm.findNonce(span, testAddr)
 	// TODO: check nonce is correct for address
 }
 
-// TestTrojanDataSerialization tests that the trojanData type can be correctly serialized and deserialized
-func TestTrojanDataSerialization(t *testing.T) {
-	td := &trojanData{
-		trojanHeaders: newTrojanHeaders(),
-		trojanMessage: newTestTrojanMessage(t),
-	}
-	td.setNonce(testAddr)
+// TestTrojanMessageSerialization tests that the trojanData type can be correctly serialized and deserialized
+func TestTrojanMessageSerialization(t *testing.T) {
+	tm := newTestTrojanMessage(t)
 
-	std, err := td.MarshalBinary()
+	stm, err := tm.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dtd := new(trojanData)
-	err = dtd.UnmarshalBinary(std)
+	dtm := new(trojanMessage)
+	err = dtm.UnmarshalBinary(stm)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// TODO: why does this fail?: reflect.DeepEqual(td, dtd)
-	if !td.equals(dtd) {
-		t.Fatalf("original trojan data does not match deserialized one")
+	// TODO: why does this fail?: reflect.DeepEqual(tm, dtm)
+	if !tm.equals(*dtm) {
+		t.Fatalf("original trojan message does not match deserialized one")
 	}
 }
 
 // equals compares the underlying data of 2 trojanData variables and returns true if they match, false otherwise
 // TODO: why doesn't a direct `reflect.DeepEqual` call of the whole variable work?
-func (td *trojanData) equals(d *trojanData) bool {
-	if !reflect.DeepEqual(td.trojanHeaders, d.trojanHeaders) {
+func (tm trojanMessage) equals(v trojanMessage) bool {
+	if !bytes.Equal(tm.length[:], v.length[:]) {
 		return false
 	}
-	if !reflect.DeepEqual(td.trojanMessage, d.trojanMessage) {
+	if !bytes.Equal(tm.topic[:], v.topic[:]) {
+		return false
+	}
+	if !bytes.Equal(tm.payload, v.payload) {
+		return false
+	}
+	if !bytes.Equal(tm.padding, v.padding) {
 		return false
 	}
 	return true
