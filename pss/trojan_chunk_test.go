@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 )
 
@@ -52,7 +51,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 
 	tm := new(trojanMessage)
 	copy(tm.length[:], lengthBuffer[:])
-	copy(tm.topic[:], crypto.Keccak256([]byte("RECOVERY")))
+	tm.topic = newMessageTopic("RECOVERY")
 	tm.payload = payload
 	tm.padding = padding
 
