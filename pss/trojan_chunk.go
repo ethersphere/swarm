@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
 )
@@ -51,6 +52,12 @@ type trojanData struct {
 type trojanChunk struct {
 	address chunk.Address
 	trojanData
+}
+
+// newMessageTopic creates a new MessageTopic variable with the input string
+// the input string is taken as a byte slice and hashed
+func newMessageTopic(topic string) MessageTopic {
+	return MessageTopic(crypto.Keccak256Hash([]byte(topic)))
 }
 
 // newTrojanChunk creates a new trojan chunk structure for the given address and message
