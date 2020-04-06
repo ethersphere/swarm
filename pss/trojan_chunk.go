@@ -47,31 +47,31 @@ type trojanData struct {
 	trojanMessage
 }
 
-type trojanChunk struct {
-	address chunk.Address
-	trojanData
-}
-
 // newMessageTopic creates a new MessageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func newMessageTopic(topic string) MessageTopic {
+	// TODO: is it ok to use this instead of `crypto.Keccak256`?
 	return MessageTopic(crypto.Keccak256Hash([]byte(topic)))
 }
 
-// newTrojanChunk creates a new trojan chunk structure for the given address and message
-func newTrojanChunk(address chunk.Address, message trojanMessage) (*trojanChunk, error) {
-	chunk := &trojanChunk{
-		address: address,
-		trojanData: trojanData{
-			trojanHeaders: newTrojanHeaders(),
-			trojanMessage: message, // TODO: this should be encrypted
-		},
+// newTrojanChunk creates a new trojan chunk for the given address and trojanMessage
+// TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
+func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
+	td := &trojanData{
+		trojanHeaders: newTrojanHeaders(),
+		trojanMessage: message, // TODO: this should be encrypted
 	}
-	// find nonce for chunk
-	if err := chunk.setNonce(); err != nil {
+	// find nonce for trojan chunk
+	if err := td.setNonce(address); err != nil {
 		return nil, err
 	}
-	return chunk, nil
+
+	chunkData, err := td.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return chunk.NewChunk(address, chunkData), nil
 }
 
 // newTrojanHeaders creates an empty trojan headers struct
@@ -90,9 +90,9 @@ func newTrojanHeaders() trojanHeaders {
 }
 
 // setNonce determines the nonce so that when the trojan chunk fields are hashed, it falls in the neighbourhood of the trojan chunk address
-func (tc *trojanChunk) setNonce() error {
+func (td *trojanData) setNonce(addr chunk.Address) error {
 	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)() // init BMT hash function
-	err := iterateNonce(tc, BMThashFunc)
+	err := iterateNonce(td, addr, BMThashFunc)
 	if err != nil {
 		return err
 	}
@@ -100,19 +100,19 @@ func (tc *trojanChunk) setNonce() error {
 }
 
 // iterateNonce iterates the BMT hash of the trojan chunk fields until the desired nonce is found
-func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
+func iterateNonce(td *trojanData, addr chunk.Address, hashFunc storage.SwarmHash) error {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
 		return err
 	}
-	copy(tc.nonce[:], nonce[:])
+	copy(td.nonce[:], nonce[:])
 
 	// hash trojan chunk fields with different nonces until a desired one is found
 	hashWithinNeighbourhood := false // TODO: this could be correct on the 1st try
 	// TODO: add limit to tries
 	for hashWithinNeighbourhood != true {
-		serializedTrojanData, err := json.Marshal(tc.trojanData)
+		serializedTrojanData, err := json.Marshal(td)
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 		hash := hashFunc.Sum(nil)
 
 		// TODO: what is the correct way to check if hash is in the same neighbourhood as trojan chunk address?
-		_ = chunk.Proximity(tc.address, hash)
+		_ = chunk.Proximity(addr, hash)
 
 		// TODO: replace placeholder condition
 		if true {
@@ -132,23 +132,12 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 			// else, add 1 to nonce and try again
 			// TODO: find non sinful way of adding 1 to byte slice
 			// TODO: implement loop-around
-			nonceInt := new(big.Int).SetBytes(tc.nonce[:])
-			copy(tc.nonce[:], nonceInt.Add(nonceInt, big.NewInt(1)).Bytes())
+			nonceInt := new(big.Int).SetBytes(td.nonce[:])
+			copy(td.nonce[:], nonceInt.Add(nonceInt, big.NewInt(1)).Bytes())
 		}
 	}
 
 	return nil
-}
-
-// toContentAddressedChunk creates a new addressed chunk structure with the given trojan message content serialized as its data
-func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
-	var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
-
-	chunkData, err := tc.trojanMessage.MarshalBinary()
-	if err != nil {
-		return emptyChunk, err
-	}
-	return chunk.NewChunk(tc.address, chunkData), nil
 }
 
 // MarshalBinary serializes a trojanData struct

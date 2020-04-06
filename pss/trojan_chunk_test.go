@@ -66,24 +66,23 @@ func TestNewTrojanChunk(t *testing.T) {
 	}
 }
 
-// TestSetNonce tests getting the correct nonce for a trojan chunk
+// TestSetNonce tests getting the correct nonce for a trojan message
 func TestSetNonce(t *testing.T) {
-	tc, err := newTrojanChunk(testAddr, newTestTrojanMessage(t))
-	if err != nil {
-		t.Fatal(err)
+	td := &trojanData{
+		trojanHeaders: newTrojanHeaders(),
+		trojanMessage: newTestTrojanMessage(t),
 	}
-	tc.setNonce()
+	td.setNonce(testAddr)
 	// TODO: check nonce is correct for address
 }
 
 // TestTrojanDataSerialization tests that the trojanData type can be correctly serialized and deserialized
 func TestTrojanDataSerialization(t *testing.T) {
-	tc, err := newTrojanChunk(testAddr, newTestTrojanMessage(t))
-	if err != nil {
-		t.Fatal(err)
+	td := &trojanData{
+		trojanHeaders: newTrojanHeaders(),
+		trojanMessage: newTestTrojanMessage(t),
 	}
-	tc.setNonce()
-	td := tc.trojanData
+	td.setNonce(testAddr)
 
 	std, err := td.MarshalBinary()
 	if err != nil {
