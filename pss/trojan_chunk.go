@@ -29,14 +29,13 @@ import (
 
 // TODO: can we re-use some existing types here?
 type trojanHeaders struct {
-	span  []byte
+	span  [8]byte
 	nonce []byte
 }
 
 // MessageTopic is an alias for a 32 fixed-size byte-array which contains an encoding of a message topic
 type MessageTopic [32]byte
 
-// TODO: can we re-use some existing types here?
 type trojanMessage struct {
 	length  [2]byte
 	topic   MessageTopic
@@ -54,7 +53,7 @@ type trojanChunk struct {
 	trojanData
 }
 
-// newMessageTopic creates a new MessageTopic variable with the input string
+// newMessageTopic creates a new MessageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func newMessageTopic(topic string) MessageTopic {
 	return MessageTopic(crypto.Keccak256Hash([]byte(topic)))
@@ -78,15 +77,16 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (*trojanChunk,
 
 // newTrojanHeaders creates an empty trojan headers struct
 func newTrojanHeaders() trojanHeaders {
-	// TODO: what should be the value of this?
 	span := make([]byte, 8)
+	binary.BigEndian.PutUint32(span, 4096)
 	// create initial nonce
 	nonce := make([]byte, 32)
 
-	return trojanHeaders{
-		span:  span,
-		nonce: nonce,
-	}
+	th := new(trojanHeaders)
+	copy(th.span[:], span[:])
+	th.nonce = nonce
+
+	return *th
 }
 
 // setNonce determines the nonce so that when the trojan chunk fields are hashed, it falls in the neighbourhood of the trojan chunk address
@@ -154,7 +154,7 @@ func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 // MarshalBinary serializes a trojanData struct
 func (td *trojanData) MarshalBinary() (data []byte, err error) {
 	// append first 40 bytes: span & nonce
-	h := append(td.span, td.nonce...)
+	h := append(td.span[:], td.nonce...)
 	// serialize trojan message fields
 	m, err := td.trojanMessage.MarshalBinary()
 	if err != nil {
@@ -166,8 +166,8 @@ func (td *trojanData) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary deserializes a trojanData struct
 func (td *trojanData) UnmarshalBinary(data []byte) (err error) {
-	td.span = data[0:8]   // first 8 bytes are span
-	td.nonce = data[8:40] // following 32 bytes are nonce
+	copy(td.span[:], data[0:8]) // first 8 bytes are span
+	td.nonce = data[8:40]       // following 32 bytes are nonce
 
 	// rest of the bytes are message
 	var m trojanMessage

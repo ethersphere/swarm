@@ -51,7 +51,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 	}
 
 	tm := new(trojanMessage)
-	copy(tm.length[:], lengthBuffer[:2])
+	copy(tm.length[:], lengthBuffer[:])
 	copy(tm.topic[:], crypto.Keccak256([]byte("RECOVERY")))
 	tm.payload = payload
 	tm.padding = padding
