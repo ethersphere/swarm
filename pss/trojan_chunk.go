@@ -30,7 +30,7 @@ import (
 // TODO: can we re-use some existing types here?
 type trojanHeaders struct {
 	span  [8]byte
-	nonce []byte
+	nonce [32]byte
 }
 
 // MessageTopic is an alias for a 32 fixed-size byte-array which contains an encoding of a message topic
@@ -84,7 +84,7 @@ func newTrojanHeaders() trojanHeaders {
 
 	th := new(trojanHeaders)
 	copy(th.span[:], span[:])
-	th.nonce = nonce
+	copy(th.nonce[:], nonce[:])
 
 	return *th
 }
@@ -106,7 +106,7 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 	if _, err := rand.Read(nonce); err != nil {
 		return err
 	}
-	tc.nonce = nonce
+	copy(tc.nonce[:], nonce[:])
 
 	// hash trojan chunk fields with different nonces until a desired one is found
 	hashWithinNeighbourhood := false // TODO: this could be correct on the 1st try
@@ -132,8 +132,8 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 			// else, add 1 to nonce and try again
 			// TODO: find non sinful way of adding 1 to byte slice
 			// TODO: implement loop-around
-			nonceInt := new(big.Int).SetBytes(tc.nonce)
-			tc.nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
+			nonceInt := new(big.Int).SetBytes(tc.nonce[:])
+			copy(tc.nonce[:], nonceInt.Add(nonceInt, big.NewInt(1)).Bytes())
 		}
 	}
 
@@ -154,7 +154,7 @@ func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 // MarshalBinary serializes a trojanData struct
 func (td *trojanData) MarshalBinary() (data []byte, err error) {
 	// append first 40 bytes: span & nonce
-	h := append(td.span[:], td.nonce...)
+	h := append(td.span[:], td.nonce[:]...)
 	// serialize trojan message fields
 	m, err := td.trojanMessage.MarshalBinary()
 	if err != nil {
@@ -166,8 +166,8 @@ func (td *trojanData) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary deserializes a trojanData struct
 func (td *trojanData) UnmarshalBinary(data []byte) (err error) {
-	copy(td.span[:], data[0:8]) // first 8 bytes are span
-	td.nonce = data[8:40]       // following 32 bytes are nonce
+	copy(td.span[:], data[0:8])   // first 8 bytes are span
+	copy(td.nonce[:], data[8:40]) // following 32 bytes are nonce
 
 	// rest of the bytes are message
 	var m trojanMessage
