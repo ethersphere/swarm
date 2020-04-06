@@ -33,10 +33,13 @@ type trojanHeaders struct {
 	nonce []byte
 }
 
+// MessageTopic is an alias for a 32 fixed-size byte-array which contains an encoding of a message topic
+type MessageTopic [32]byte
+
 // TODO: can we re-use some existing types here?
 type trojanMessage struct {
 	length  [2]byte
-	topic   [32]byte
+	topic   MessageTopic
 	payload []byte
 	padding []byte
 }
