@@ -19,7 +19,6 @@ package pss
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -27,24 +26,14 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-type trojanHeaders struct {
-	span  [8]byte
-	nonce [32]byte
-}
-
 // MessageTopic is an alias for a 32 fixed-size byte-array which contains an encoding of a message topic
 type MessageTopic [32]byte
 
 type trojanMessage struct {
-	length  [2]byte
+	length  [2]byte // big-endian encoding of message length
 	topic   MessageTopic
 	payload []byte
 	padding []byte
-}
-
-type trojanData struct {
-	trojanHeaders
-	trojanMessage
 }
 
 // newMessageTopic creates a new MessageTopic variable with the given input string
@@ -54,19 +43,27 @@ func newMessageTopic(topic string) MessageTopic {
 	return MessageTopic(crypto.Keccak256Hash([]byte(topic)))
 }
 
-// newTrojanChunk creates a new trojan chunk for the given address and trojanMessage
+// newTrojanChunk creates a new trojan chunk for the given address and trojan message
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
 func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
-	td := &trojanData{
-		trojanHeaders: newTrojanHeaders(),
-		trojanMessage: message, // TODO: this should be encrypted
-	}
+	// create span
+	span := make([]byte, 8)
+	binary.BigEndian.PutUint64(span, 4096) // TODO: should this be little-endian?
+
 	// find nonce for trojan chunk
-	if err := td.setNonce(address); err != nil {
+	nonce, err := message.findNonce(span, address)
+	if err != nil {
 		return nil, err
 	}
 
-	chunkData, err := td.MarshalBinary()
+	// serialize trojan message
+	m, err := message.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	// serialize trojan chunk
+	chunkData, err := serializeTrojanChunk(span, nonce, m)
 	if err != nil {
 		return nil, err
 	}
@@ -74,50 +71,46 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, 
 	return chunk.NewChunk(address, chunkData), nil
 }
 
-// newTrojanHeaders creates an empty trojan headers struct
-func newTrojanHeaders() trojanHeaders {
-	span := make([]byte, 8)
-	binary.BigEndian.PutUint64(span, 4096)
+func serializeTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
+	// serialize headers: span & nonce
+	h := append(span, nonce...)
+	// append payload to result
+	s := append(h, payload...)
 
-	// create initial nonce
-	nonce := make([]byte, 32)
-
-	th := new(trojanHeaders)
-	copy(th.span[:], span[:])
-	copy(th.nonce[:], nonce[:])
-
-	return *th
+	return s, nil
 }
 
 // setNonce determines the nonce so that when the trojan chunk fields are hashed, it falls in the neighbourhood of the trojan chunk address
-func (td *trojanData) setNonce(addr chunk.Address) error {
-	BMThashFunc := storage.MakeHashFunc(storage.BMTHash)() // init BMT hash function
-	err := iterateNonce(td, addr, BMThashFunc)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // iterateNonce iterates the BMT hash of the trojan chunk fields until the desired nonce is found
-func iterateNonce(td *trojanData, addr chunk.Address, hashFunc storage.SwarmHash) error {
+func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, error) {
+	emptyNonce := []byte{}
+
+	// init BMT hash function
+	hashFunc := storage.MakeHashFunc(storage.BMTHash)()
+
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
-		return err
+		return emptyNonce, err
 	}
-	copy(td.nonce[:], nonce[:])
+
+	// serialize trojan message
+	m, err := tm.MarshalBinary()
+	if err != nil {
+		return emptyNonce, err
+	}
 
 	// hash trojan chunk fields with different nonces until a desired one is found
 	hashWithinNeighbourhood := false // TODO: this could be correct on the 1st try
 	// TODO: add limit to tries
 	for hashWithinNeighbourhood != true {
-		serializedTrojanData, err := json.Marshal(td)
+		s, err := serializeTrojanChunk(span, nonce, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if _, err := hashFunc.Write(serializedTrojanData); err != nil {
-			return err
+
+		if _, err := hashFunc.Write(s); err != nil {
+			return emptyNonce, err
 		}
 		hash := hashFunc.Sum(nil)
 
@@ -132,39 +125,12 @@ func iterateNonce(td *trojanData, addr chunk.Address, hashFunc storage.SwarmHash
 			// else, add 1 to nonce and try again
 			// TODO: find non sinful way of adding 1 to byte slice
 			// TODO: implement loop-around
-			nonceInt := new(big.Int).SetBytes(td.nonce[:])
-			copy(td.nonce[:], nonceInt.Add(nonceInt, big.NewInt(1)).Bytes())
+			nonceInt := new(big.Int).SetBytes(nonce)
+			nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
 		}
 	}
 
-	return nil
-}
-
-// MarshalBinary serializes a trojanData struct
-func (td *trojanData) MarshalBinary() (data []byte, err error) {
-	// append first 40 bytes: span & nonce
-	h := append(td.span[:], td.nonce[:]...)
-	// serialize trojan message fields
-	m, err := td.trojanMessage.MarshalBinary()
-	if err != nil {
-		return []byte{}, err
-	}
-
-	return append(h, m...), nil
-}
-
-// UnmarshalBinary deserializes a trojanData struct
-func (td *trojanData) UnmarshalBinary(data []byte) (err error) {
-	copy(td.span[:], data[0:8])   // first 8 bytes are span
-	copy(td.nonce[:], data[8:40]) // following 32 bytes are nonce
-
-	// rest of the bytes are message
-	var m trojanMessage
-	if err := m.UnmarshalBinary(data[40:]); err != nil {
-		return err
-	}
-	td.trojanMessage = m
-	return nil
+	return nonce, nil
 }
 
 // MarshalBinary serializes a trojanMessage struct
