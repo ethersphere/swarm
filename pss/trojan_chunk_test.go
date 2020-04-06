@@ -44,7 +44,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
 
 	// set random bytes as padding
-	paddingLength := 4056 - payloadLength
+	paddingLength := 4064 - payloadLength
 	padding := make([]byte, paddingLength)
 	if _, err := rand.Read(padding); err != nil {
 		t.Fatal(err)
