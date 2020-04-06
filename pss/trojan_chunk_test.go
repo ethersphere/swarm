@@ -38,7 +38,7 @@ var addr = chunk.Address{
 func newTrojanMessage(t *testing.T) trojanMessage {
 	// arbitrary payload
 	payload := []byte("foopayload")
-	payloadLength := int64(len(payload))
+	payloadLength := uint16(len(payload))
 
 	// get length as array of 8 bytes
 	// TODO: better way of doing this?

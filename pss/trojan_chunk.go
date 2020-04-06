@@ -202,13 +202,13 @@ func (tm *trojanMessage) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &b); err != nil {
 		return err
 	}
-	tm.length = b[0:8] // first 8 bytes are length
-	tm.topic = b[8:40] // following 32 bytes are topic
+	tm.length = b[0:2] // first 2 bytes are length
+	tm.topic = b[2:34] // following 32 bytes are topic
 
 	// rest of the bytes are payload and padding
-	length := binary.BigEndian.Uint64(tm.length)
-	payloadEnd := 40 + length
-	tm.payload = b[40:payloadEnd]
+	length := binary.BigEndian.Uint16(tm.length)
+	payloadEnd := 34 + length
+	tm.payload = b[34:payloadEnd]
 	tm.padding = b[payloadEnd:]
 	return nil
 }
