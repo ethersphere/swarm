@@ -78,7 +78,8 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (*trojanChunk,
 // newTrojanHeaders creates an empty trojan headers struct
 func newTrojanHeaders() trojanHeaders {
 	span := make([]byte, 8)
-	binary.BigEndian.PutUint32(span, 4096)
+	binary.BigEndian.PutUint64(span, 4096)
+
 	// create initial nonce
 	nonce := make([]byte, 32)
 
