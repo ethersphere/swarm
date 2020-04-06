@@ -27,7 +27,6 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-// TODO: can we re-use some existing types here?
 type trojanHeaders struct {
 	span  [8]byte
 	nonce [32]byte
@@ -45,7 +44,7 @@ type trojanMessage struct {
 
 type trojanData struct {
 	trojanHeaders
-	trojanMessage // TODO: this should be encrypted
+	trojanMessage
 }
 
 type trojanChunk struct {
@@ -65,7 +64,7 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (*trojanChunk,
 		address: address,
 		trojanData: trojanData{
 			trojanHeaders: newTrojanHeaders(),
-			trojanMessage: message,
+			trojanMessage: message, // TODO: this should be encrypted
 		},
 	}
 	// find nonce for chunk
@@ -145,7 +144,7 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 	var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
 
-	chunkData, err := tc.trojanData.MarshalBinary()
+	chunkData, err := tc.trojanMessage.MarshalBinary()
 	if err != nil {
 		return emptyChunk, err
 	}
