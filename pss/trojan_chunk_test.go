@@ -66,12 +66,10 @@ func TestNewTrojanChunk(t *testing.T) {
 	}
 }
 
-// TestSetNonce tests getting the correct nonce for a trojan message
-func TestSetNonce(t *testing.T) {
+// TestFindNonce tests getting the correct nonce for a trojan chunk
+func TestFindNonce(t *testing.T) {
 	tm := newTestTrojanMessage(t)
-
-	span := make([]byte, 8)
-	binary.BigEndian.PutUint64(span, 4096) // TODO: should this be little-endian?
+	span := newTrojanChunkSpan()
 
 	tm.findNonce(span, testAddr)
 	// TODO: check nonce is correct for address
@@ -98,7 +96,7 @@ func TestTrojanMessageSerialization(t *testing.T) {
 	}
 }
 
-// equals compares the underlying data of 2 trojanData variables and returns true if they match, false otherwise
+// equals compares the underlying data of 2 trojan messages variables and returns true if they match, false otherwise
 // TODO: why doesn't a direct `reflect.DeepEqual` call of the whole variable work?
 func (tm trojanMessage) equals(v trojanMessage) bool {
 	if !bytes.Equal(tm.length[:], v.length[:]) {

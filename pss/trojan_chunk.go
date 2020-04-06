@@ -47,8 +47,7 @@ func newMessageTopic(topic string) MessageTopic {
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
 func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
 	// create span
-	span := make([]byte, 8)
-	binary.BigEndian.PutUint64(span, 4096) // TODO: should this be little-endian?
+	span := newTrojanChunkSpan()
 
 	// find nonce for trojan chunk
 	nonce, err := message.findNonce(span, address)
@@ -71,17 +70,26 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, 
 	return chunk.NewChunk(address, chunkData), nil
 }
 
+// newTrojanChunkSpan creates a pre-set 8-byte span for a trojan chunk
+func newTrojanChunkSpan() []byte {
+	span := make([]byte, 8)
+	binary.BigEndian.PutUint64(span, 4096) // TODO: should this be little-endian?
+	return span
+}
+
+// serializeTrojanChunk appends the span, nonce and payload of a trojan message and returns the result
+// this can be used:
+// - to form the payload for a regular chunk
+// - to be used as the input for trojan chunk hash calculation
 func serializeTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
-	// serialize headers: span & nonce
 	h := append(span, nonce...)
-	// append payload to result
 	s := append(h, payload...)
 
 	return s, nil
 }
 
-// setNonce determines the nonce so that when the trojan chunk fields are hashed, it falls in the neighbourhood of the trojan chunk address
-// iterateNonce iterates the BMT hash of the trojan chunk fields until the desired nonce is found
+// findNonce determines the nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of the given address
+// this is done iterating a BMT hash of the serialization of a trojan chunk until the desired nonce is found
 func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, error) {
 	emptyNonce := []byte{}
 
