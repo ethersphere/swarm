@@ -39,8 +39,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 	payload := []byte("foopayload")
 	payloadLength := uint16(len(payload))
 
-	// get length as array of 8 bytes
-	// TODO: better way of doing this?
+	// get length as array of 2 bytes
 	lengthBuffer := make([]byte, 2)
 	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
 
@@ -51,12 +50,13 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 		t.Fatal(err)
 	}
 
-	return trojanMessage{
-		length:  lengthBuffer,
-		topic:   crypto.Keccak256([]byte("RECOVERY")),
-		payload: payload,
-		padding: padding,
-	}
+	tm := new(trojanMessage)
+	copy(tm.length[:], lengthBuffer[:2])
+	tm.topic = crypto.Keccak256([]byte("RECOVERY"))
+	tm.payload = payload
+	tm.padding = padding
+
+	return *tm
 }
 
 // TestNewTrojanChunk tests the creation of a trojan chunk

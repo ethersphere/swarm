@@ -35,7 +35,7 @@ type trojanHeaders struct {
 
 // TODO: can we re-use some existing types here?
 type trojanMessage struct {
-	length  []byte
+	length  [2]byte
 	topic   []byte
 	payload []byte
 	padding []byte
@@ -190,7 +190,7 @@ func (td *trojanData) UnmarshalJSON(data []byte) error {
 // UnmarshalJSON serializes a trojanMessage struct
 // TODO: find a more elegant way of serializing trojan messages
 func (tm *trojanMessage) MarshalJSON() ([]byte, error) {
-	s := append(tm.length, tm.topic...)
+	s := append(tm.length[:], tm.topic...)
 	s = append(s, tm.payload...)
 	return json.Marshal(append(s, tm.padding...))
 }
@@ -202,11 +202,11 @@ func (tm *trojanMessage) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &b); err != nil {
 		return err
 	}
-	tm.length = b[0:2] // first 2 bytes are length
+	copy(tm.length[:], b[:2])
 	tm.topic = b[2:34] // following 32 bytes are topic
 
 	// rest of the bytes are payload and padding
-	length := binary.BigEndian.Uint16(tm.length)
+	length := binary.BigEndian.Uint16(tm.length[:])
 	payloadEnd := 34 + length
 	tm.payload = b[34:payloadEnd]
 	tm.padding = b[payloadEnd:]
