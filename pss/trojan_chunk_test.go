@@ -86,13 +86,13 @@ func TestTrojanDataSerialization(t *testing.T) {
 	tc.setNonce()
 	td := tc.trojanData
 
-	std, err := json.Marshal(&td)
+	std, err := td.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var dtd *trojanData
-	err = json.Unmarshal(std, &dtd)
+	dtd := new(trojanData)
+	err = dtd.UnmarshalBinary(std)
 	if err != nil {
 		t.Fatal(err)
 	}

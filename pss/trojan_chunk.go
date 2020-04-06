@@ -144,61 +144,50 @@ func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 	return chunk.NewChunk(tc.address, chunkData), nil
 }
 
-// UnmarshalJSON serializes a trojanData struct
-// TODO: find a more elegant way of serializing trojan data
-func (td *trojanData) MarshalJSON() ([]byte, error) {
-	// append first 40 bytes, span & nonce
-	s := append(td.span, td.nonce...)
-	// marshal message
-	m, err := json.Marshal(&td.trojanMessage)
+// MarshalBinary serializes a trojanData struct
+func (td *trojanData) MarshalBinary() (data []byte, err error) {
+	// append first 40 bytes: span & nonce
+	h := append(td.span, td.nonce...)
+	// serialize trojan message fields
+	m, err := td.trojanMessage.MarshalBinary()
 	if err != nil {
 		return []byte{}, err
 	}
-	// marshal appended result
-	return json.Marshal(append(s, m...))
+
+	return append(h, m...), nil
 }
 
-// UnmarshalJSON deserializes a trojanData struct
-// TODO: find a more elegant way of de-serializing trojan data
-func (td *trojanData) UnmarshalJSON(data []byte) error {
-	var b []byte
-	if err := json.Unmarshal(data, &b); err != nil {
-		return err
-	}
-	td.span = b[0:8]   // first 8 bytes are span
-	td.nonce = b[8:40] // following 32 bytes are nonce
+// UnmarshalBinary deserializes a trojanData struct
+func (td *trojanData) UnmarshalBinary(data []byte) (err error) {
+	td.span = data[0:8]   // first 8 bytes are span
+	td.nonce = data[8:40] // following 32 bytes are nonce
 
 	// rest of the bytes are message
 	var m trojanMessage
-	if err := json.Unmarshal(b[40:], &m); err != nil {
+	if err := m.UnmarshalBinary(data[40:]); err != nil {
 		return err
 	}
 	td.trojanMessage = m
 	return nil
 }
 
-// UnmarshalJSON serializes a trojanMessage struct
-// TODO: find a more elegant way of serializing trojan messages
-func (tm *trojanMessage) MarshalJSON() ([]byte, error) {
-	s := append(tm.length[:], tm.topic[:]...)
-	s = append(s, tm.payload...)
-	return json.Marshal(append(s, tm.padding...))
+// MarshalBinary serializes a trojanMessage struct
+func (tm *trojanMessage) MarshalBinary() (data []byte, err error) {
+	m := append(tm.length[:], tm.topic[:]...)
+	m = append(m, tm.payload...)
+	m = append(m, tm.padding...)
+	return m, nil
 }
 
-// UnmarshalJSON deserializes a trojanMesage struct
-// TODO: find a more elegant way of de-serializing trojan messages
-func (tm *trojanMessage) UnmarshalJSON(data []byte) error {
-	var b []byte
-	if err := json.Unmarshal(data, &b); err != nil {
-		return err
-	}
-	copy(tm.length[:], b[:2])  // first 2 bytes are length
-	copy(tm.topic[:], b[2:34]) // following 32 bytes are topic
+// UnmarshalBinary deserializes a trojanMesage struct
+func (tm *trojanMessage) UnmarshalBinary(data []byte) (err error) {
+	copy(tm.length[:], data[:2])  // first 2 bytes are length
+	copy(tm.topic[:], data[2:34]) // following 32 bytes are topic
 
 	// rest of the bytes are payload and padding
 	length := binary.BigEndian.Uint16(tm.length[:])
 	payloadEnd := 34 + length
-	tm.payload = b[34:payloadEnd]
-	tm.padding = b[payloadEnd:]
+	tm.payload = data[34:payloadEnd]
+	tm.padding = data[payloadEnd:]
 	return nil
 }
