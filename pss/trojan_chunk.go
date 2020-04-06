@@ -137,7 +137,7 @@ func iterateNonce(tc *trojanChunk, hashFunc storage.SwarmHash) error {
 func (tc *trojanChunk) toContentAddressedChunk() (chunk.Chunk, error) {
 	var emptyChunk = chunk.NewChunk([]byte{}, []byte{})
 
-	chunkData, err := json.Marshal(tc.trojanData)
+	chunkData, err := tc.trojanData.MarshalBinary()
 	if err != nil {
 		return emptyChunk, err
 	}
