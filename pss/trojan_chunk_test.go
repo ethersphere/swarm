@@ -17,7 +17,6 @@
 package pss
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"math/rand"
@@ -42,10 +41,8 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 
 	// get length as array of 8 bytes
 	// TODO: better way of doing this?
-	lengthBuffer := new(bytes.Buffer)
-	if err := binary.Write(lengthBuffer, binary.BigEndian, payloadLength); err != nil {
-		t.Fatal(err)
-	}
+	lengthBuffer := make([]byte, 2)
+	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
 
 	// set random bytes as padding
 	paddingLength := 4056 - payloadLength
@@ -55,7 +52,7 @@ func newTrojanMessage(t *testing.T) trojanMessage {
 	}
 
 	return trojanMessage{
-		length:  lengthBuffer.Bytes(),
+		length:  lengthBuffer,
 		topic:   crypto.Keccak256([]byte("RECOVERY")),
 		payload: payload,
 		padding: padding,
