@@ -42,6 +42,8 @@ func newTestTrojanMessage(t *testing.T) trojanMessage {
 }
 
 // TestNewTrojanChunk tests the creation of a trojan chunk
+// its resulting address should have a prefix which matches one of the given targets
+// its resulting payload should have a hash that matches its address exactly
 func TestNewTrojanChunk(t *testing.T) {
 	tc, err := newTrojanChunk(testTargets, newTestTrojanMessage(t))
 	if err != nil {
