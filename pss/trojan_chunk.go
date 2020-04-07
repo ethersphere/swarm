@@ -17,6 +17,7 @@
 package pss
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -73,14 +74,14 @@ func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error)
 	return *tm, nil
 }
 
-// newTrojanChunk creates a new trojan chunk for the given address and trojan message
+// newTrojanChunk creates a new trojan chunk for the given targets and trojan message
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
-func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, error) {
+func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error) {
 	// create span
 	span := newTrojanChunkSpan()
 
 	// find nonce for trojan chunk
-	nonce, err := message.findNonce(span, address)
+	nonce, target, err := message.findNonce(span, targets)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +98,7 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, 
 		return nil, err
 	}
 
-	return chunk.NewChunk(address, chunkData), nil
+	return chunk.NewChunk(target, chunkData), nil
 }
 
 // newTrojanChunkSpan creates a pre-set 8-byte span for a trojan chunk
@@ -120,50 +121,58 @@ func serializeTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
 
 // findNonce determines the nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of the given address
 // this is done by iterating the BMT hash of the serialization of a trojan chunk until the desired nonce is found
-func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, error) {
-	emptyNonce := []byte{}
-
+// the matching hash is also returned as the target
+func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, target []byte, err error) {
+	emptyNonce, emptyTarget := []byte{}, []byte{}
 	// init BMT hash function
 	hashFunc := storage.MakeHashFunc(storage.BMTHash)()
 
 	// start out with random nonce
-	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		return emptyNonce, err
+	nonce = make([]byte, 32)
+	if _, randErr := rand.Read(nonce); randErr != nil {
+		return emptyNonce, emptyTarget, randErr
 	}
 
 	// serialize trojan message
-	m, err := tm.MarshalBinary()
-	if err != nil {
-		return emptyNonce, err
+	m, marshalErr := tm.MarshalBinary()
+	if marshalErr != nil {
+		return emptyNonce, emptyTarget, marshalErr
 	}
 
 	// hash trojan chunk fields with different nonces until an acceptable one is found
-	prefixMatch := false // TODO: this could be correct on the 1st try
 	// TODO: prevent infinite loop
-	for prefixMatch != true {
-		s, _ := serializeTrojanChunk(span, nonce, m) // err always nil here
-		if _, err := hashFunc.Write(s); err != nil {
-			return emptyNonce, err
+	for {
+		hash, hashErr := hashTrojanChunk(span, nonce, m, hashFunc)
+		if hashErr != nil {
+			return emptyNonce, emptyTarget, hashErr
 		}
-		hash := hashFunc.Sum(nil)
 
-		// TODO: what is the correct way to check if hash is in the same neighbourhood as trojan chunk address?
-		_ = chunk.Proximity(addr, hash)
+		if hashInTargets(hash, targets) {
+			// if nonce found, stop loop and return matching hash as target
+			return nonce, target, nil
+		}
+		// else, add 1 to nonce and try again
+		// TODO: test loop-around
+		nonceInt := new(big.Int).SetBytes(nonce)
+		nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
+	}
+}
 
-		// TODO: replace placeholder condition
-		if true {
-			// if nonce found, stop loop
-			prefixMatch = true
-		} else {
-			// else, add 1 to nonce and try again
-			// TODO: test loop-around
-			nonceInt := new(big.Int).SetBytes(nonce)
-			nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
+func hashTrojanChunk(span, nonce, payload []byte, hashFunc storage.SwarmHash) ([]byte, error) {
+	s, _ := serializeTrojanChunk(span, nonce, payload) // err always nil here
+	if _, err := hashFunc.Write(s); err != nil {
+		return []byte{}, err
+	}
+	return hashFunc.Sum(nil), nil
+}
+
+func hashInTargets(hash []byte, targets [][]byte) bool {
+	for i := range targets {
+		if bytes.Equal(hash, targets[i]) {
+			return true
 		}
 	}
-
-	return nonce, nil
+	return false
 }
 
 // MarshalBinary serializes a trojanMessage struct
