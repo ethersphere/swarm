@@ -48,7 +48,7 @@ func newMessageTopic(topic string) MessageTopic {
 
 // newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
 func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error) {
-	if len(payload) > 4064 {
+	if len(payload) > trojanPayloadMaxSize {
 		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanPayloadMaxSize)
 	}
 
@@ -138,10 +138,10 @@ func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, err
 		return emptyNonce, err
 	}
 
-	// hash trojan chunk fields with different nonces until a desired one is found
-	hashWithinNeighbourhood := false // TODO: this could be correct on the 1st try
+	// hash trojan chunk fields with different nonces until an acceptable one is found
+	prefixMatch := false // TODO: this could be correct on the 1st try
 	// TODO: prevent infinite loop
-	for hashWithinNeighbourhood != true {
+	for prefixMatch != true {
 		s, _ := serializeTrojanChunk(span, nonce, m) // err always nil here
 		if _, err := hashFunc.Write(s); err != nil {
 			return emptyNonce, err
@@ -154,7 +154,7 @@ func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, err
 		// TODO: replace placeholder condition
 		if true {
 			// if nonce found, stop loop
-			hashWithinNeighbourhood = true
+			prefixMatch = true
 		} else {
 			// else, add 1 to nonce and try again
 			// TODO: test loop-around
