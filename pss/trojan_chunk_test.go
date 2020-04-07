@@ -17,7 +17,7 @@
 package pss
 
 import (
-	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -73,26 +73,7 @@ func TestTrojanMessageSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// TODO: why does this fail?: reflect.DeepEqual(tm, dtm)
-	if !tm.equals(*dtm) {
+	if !reflect.DeepEqual(tm, *dtm) {
 		t.Fatalf("original trojan message does not match deserialized one")
 	}
-}
-
-// equals compares the underlying data of 2 trojan messages variables and returns true if they match, false otherwise
-// TODO: why doesn't a direct `reflect.DeepEqual` call of the whole variable work?
-func (tm trojanMessage) equals(v trojanMessage) bool {
-	if !bytes.Equal(tm.length[:], v.length[:]) {
-		return false
-	}
-	if !bytes.Equal(tm.topic[:], v.topic[:]) {
-		return false
-	}
-	if !bytes.Equal(tm.payload, v.payload) {
-		return false
-	}
-	if !bytes.Equal(tm.padding, v.padding) {
-		return false
-	}
-	return true
 }
