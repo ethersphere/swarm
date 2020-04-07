@@ -167,8 +167,7 @@ func serializeTrojanChunk(span, nonce, message []byte) ([]byte, error) {
 	return s, nil
 }
 
-// hashTrojanChunk serializes trojan chunk fields and hashes them with the trojan hashing func
-// returns the resulting hash or a hashing error if it occurs
+// hashTrojanChunk hashes the serialization of trojan chunk fields with the trojan hashing func
 func hashTrojanChunk(s []byte) ([]byte, error) {
 	trojanHashingFunc.Reset() // TODO: why do we need to do this?
 	if _, err := trojanHashingFunc.Write(s); err != nil {

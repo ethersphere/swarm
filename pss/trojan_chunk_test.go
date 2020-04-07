@@ -17,6 +17,7 @@
 package pss
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 )
@@ -47,11 +48,21 @@ func TestNewTrojanChunk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tcAddr := tc.Address()
-	tcAddrPrefix := tcAddr[:len(testTargets[0])]
+	addr := tc.Address()
+	addrPrefix := addr[:len(testTargets[0])]
 
-	if !hashPrefixInTargets(tcAddrPrefix, testTargets) {
+	if !hashPrefixInTargets(addrPrefix, testTargets) {
 		t.Fatal("trojan chunk address prefix does not match any of the targets")
+	}
+
+	payload := tc.Data()
+	payloadHash, err := hashTrojanChunk(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(addr, payloadHash) {
+		t.Fatal("trojan chunk address does not match its payload hash")
 	}
 }
 
