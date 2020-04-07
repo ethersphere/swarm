@@ -77,6 +77,10 @@ func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error)
 // newTrojanChunk creates a new trojan chunk for the given targets and trojan message
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
 func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error) {
+	if err := checkTargets(targets); err != nil {
+		return nil, err
+	}
+
 	// create span
 	span := newTrojanChunkSpan()
 
@@ -101,10 +105,23 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 	return chunk.NewChunk(target, chunkData), nil
 }
 
+func checkTargets(targets [][]byte) error {
+	if len(targets) == 0 {
+		return fmt.Errorf("target list cannot be empty")
+	}
+	lenFirstTarget := len(targets[0])
+	for i := 1; i < len(targets); i++ {
+		if lenFirstTarget != len(targets[i]) {
+			return fmt.Errorf("target list cannot have targets of different length")
+		}
+	}
+	return nil
+}
+
 // newTrojanChunkSpan creates a pre-set 8-byte span for a trojan chunk
 func newTrojanChunkSpan() []byte {
 	span := make([]byte, 8)
-	binary.BigEndian.PutUint64(span, 4096) // TODO: should this be little-endian?
+	binary.BigEndian.PutUint64(span, chunk.DefaultSize) // TODO: should this be little-endian?
 	return span
 }
 
