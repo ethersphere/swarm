@@ -27,7 +27,7 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-// MessageTopic is an alias for a 32 fixed-size byte-array which contains an encoding of a message topic
+// MessageTopic is an alias for a 32 byte fixed-size array which contains an encoding of a message topic
 type MessageTopic [32]byte
 
 type trojanMessage struct {
@@ -118,7 +118,7 @@ func serializeTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
 }
 
 // findNonce determines the nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of the given address
-// this is done iterating a BMT hash of the serialization of a trojan chunk until the desired nonce is found
+// this is done by iterating the BMT hash of the serialization of a trojan chunk until the desired nonce is found
 func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, error) {
 	emptyNonce := []byte{}
 
