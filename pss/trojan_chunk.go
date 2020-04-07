@@ -163,7 +163,6 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 func serializeTrojanChunk(span, nonce, message []byte) ([]byte, error) {
 	h := append(span, nonce...)
 	s := append(h, message...)
-
 	return s, nil
 }
 
