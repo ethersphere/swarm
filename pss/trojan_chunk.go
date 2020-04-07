@@ -105,6 +105,7 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 	return chunk.NewChunk(target, chunkData), nil
 }
 
+// checkTargets verifies that the list of given targets is non empty and with elements of matching size
 func checkTargets(targets [][]byte) error {
 	if len(targets) == 0 {
 		return fmt.Errorf("target list cannot be empty")
