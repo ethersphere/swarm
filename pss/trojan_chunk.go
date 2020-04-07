@@ -28,12 +28,12 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-// MessageTopic is an alias for a 32 byte fixed-size array which contains an encoding of a message topic
-type MessageTopic [32]byte
+// messageTopic is an alias for a 32 byte fixed-size array which contains an encoding of a message topic
+type messageTopic [32]byte
 
 type trojanMessage struct {
 	length  [2]byte // big-endian encoding of message length
-	topic   MessageTopic
+	topic   messageTopic
 	payload []byte
 	padding []byte
 }
@@ -41,16 +41,16 @@ type trojanMessage struct {
 const trojanPayloadMaxSize = 4064                                // in bytes
 var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash)() // TODO: make this work with storage.BMTHash
 
-// newMessageTopic creates a new MessageTopic variable with the given input string
+// newMessageTopic creates a new messageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
-func newMessageTopic(topic string) MessageTopic {
+func newMessageTopic(topic string) messageTopic {
 	// TODO: is it ok to use this instead of `crypto.Keccak256`?
-	return MessageTopic(crypto.Keccak256Hash([]byte(topic)))
+	return messageTopic(crypto.Keccak256Hash([]byte(topic)))
 }
 
 // newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
 // it finds a length and nonce for the trojanMessage according to the given input and maximum payload size
-func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error) {
+func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error) {
 	if len(payload) > trojanPayloadMaxSize {
 		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanPayloadMaxSize)
 	}
