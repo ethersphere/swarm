@@ -58,7 +58,7 @@ func TestFindNonce(t *testing.T) {
 	// TODO: check nonce is correct for address
 }
 
-// TestTrojanMessageSerialization tests that the trojanData type can be correctly serialized and deserialized
+// TestTrojanMessageSerialization tests that the trojanMessage type can be correctly serialized and deserialized
 func TestTrojanMessageSerialization(t *testing.T) {
 	tm := newTestTrojanMessage(t)
 

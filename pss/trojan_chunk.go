@@ -64,6 +64,7 @@ func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error)
 		return trojanMessage{}, err
 	}
 
+	// create new trojan message var and set fields
 	tm := new(trojanMessage)
 	copy(tm.length[:], lengthBuffer[:])
 	tm.payload = payload
@@ -84,13 +85,13 @@ func newTrojanChunk(address chunk.Address, message trojanMessage) (chunk.Chunk, 
 		return nil, err
 	}
 
-	// serialize trojan message
+	// serialize trojan message struct
 	m, err := message.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	// serialize trojan chunk
+	// serialize trojan chunk fields to be used as payload for chunk
 	chunkData, err := serializeTrojanChunk(span, nonce, m)
 	if err != nil {
 		return nil, err
