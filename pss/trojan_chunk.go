@@ -182,6 +182,7 @@ func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, addres
 // returns the resulting hash or a hashing error if it occurs
 func hashTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
 	s, _ := serializeTrojanChunk(span, nonce, payload) // err always nil here
+	trojanHashingFunc.Reset()                          // TODO: why do we need to do this?
 	if _, err := trojanHashingFunc.Write(s); err != nil {
 		return []byte{}, err
 	}
