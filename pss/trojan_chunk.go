@@ -19,6 +19,7 @@ package pss
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -36,11 +37,39 @@ type trojanMessage struct {
 	padding []byte
 }
 
+const trojanPayloadMaxSize = 4064 // in bytes
+
 // newMessageTopic creates a new MessageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func newMessageTopic(topic string) MessageTopic {
 	// TODO: is it ok to use this instead of `crypto.Keccak256`?
 	return MessageTopic(crypto.Keccak256Hash([]byte(topic)))
+}
+
+// newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
+func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error) {
+	if len(payload) > 4064 {
+		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanPayloadMaxSize)
+	}
+
+	// get length as array of 2 bytes
+	payloadLength := uint16(len(payload))
+	lengthBuffer := make([]byte, 2)
+	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
+
+	// set random bytes as padding
+	paddingLength := trojanPayloadMaxSize - payloadLength
+	padding := make([]byte, paddingLength)
+	if _, err := rand.Read(padding); err != nil {
+		return trojanMessage{}, err
+	}
+
+	tm := new(trojanMessage)
+	copy(tm.length[:], lengthBuffer[:])
+	tm.payload = payload
+	tm.padding = padding
+
+	return *tm, nil
 }
 
 // newTrojanChunk creates a new trojan chunk for the given address and trojan message
@@ -110,13 +139,9 @@ func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, err
 
 	// hash trojan chunk fields with different nonces until a desired one is found
 	hashWithinNeighbourhood := false // TODO: this could be correct on the 1st try
-	// TODO: add limit to tries
+	// TODO: prevent infinite loop
 	for hashWithinNeighbourhood != true {
-		s, err := serializeTrojanChunk(span, nonce, m)
-		if err != nil {
-			return nil, err
-		}
-
+		s, _ := serializeTrojanChunk(span, nonce, m) // err always nil here
 		if _, err := hashFunc.Write(s); err != nil {
 			return emptyNonce, err
 		}
@@ -131,8 +156,7 @@ func (tm *trojanMessage) findNonce(span []byte, addr chunk.Address) ([]byte, err
 			hashWithinNeighbourhood = true
 		} else {
 			// else, add 1 to nonce and try again
-			// TODO: find non sinful way of adding 1 to byte slice
-			// TODO: implement loop-around
+			// TODO: test loop-around
 			nonceInt := new(big.Int).SetBytes(nonce)
 			nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
 		}

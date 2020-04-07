@@ -18,8 +18,6 @@ package pss
 
 import (
 	"bytes"
-	"encoding/binary"
-	"math/rand"
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -34,28 +32,13 @@ var testAddr = chunk.Address{
 
 // newTestTrojanMessage creates an arbitrary trojan message for tests
 func newTestTrojanMessage(t *testing.T) trojanMessage {
-	// arbitrary payload
 	payload := []byte("foopayload")
-	payloadLength := uint16(len(payload))
-
-	// get length as array of 2 bytes
-	lengthBuffer := make([]byte, 2)
-	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
-
-	// set random bytes as padding
-	paddingLength := 4064 - payloadLength
-	padding := make([]byte, paddingLength)
-	if _, err := rand.Read(padding); err != nil {
+	tm, err := newTrojanMessage(newMessageTopic("RECOVERY"), payload)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	tm := new(trojanMessage)
-	copy(tm.length[:], lengthBuffer[:])
-	tm.topic = newMessageTopic("RECOVERY")
-	tm.payload = payload
-	tm.padding = padding
-
-	return *tm
+	return tm
 }
 
 // TestNewTrojanChunk tests the creation of a trojan chunk
