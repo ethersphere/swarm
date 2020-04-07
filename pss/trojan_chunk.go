@@ -39,7 +39,7 @@ type trojanMessage struct {
 }
 
 const trojanPayloadMaxSize = 4064                                // in bytes
-var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash)() // TOOD: make this work with storage.BMTHash
+var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash)() // TODO: make this work with storage.BMTHash
 
 // newMessageTopic creates a new MessageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
