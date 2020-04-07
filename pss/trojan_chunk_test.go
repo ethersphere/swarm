@@ -17,7 +17,6 @@
 package pss
 
 import (
-	"bytes"
 	"reflect"
 	"testing"
 )
@@ -52,33 +51,7 @@ func TestNewTrojanChunk(t *testing.T) {
 	tcAddrPrefix := tcAddr[:len(testTargets[0])]
 
 	if !hashPrefixInTargets(tcAddrPrefix, testTargets) {
-		t.Fatal(err)
-	}
-}
-
-// TestFindNonce tests getting the correct nonce for a trojan chunk
-func TestFindNonce(t *testing.T) {
-	tm := newTestTrojanMessage(t)
-
-	span := newTrojanChunkSpan()
-
-	nonce, address, err := tm.findNonce(span, testTargets)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	payload, err := tm.MarshalBinary()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	hash, err := hashTrojanChunk(span, nonce, payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(hash, address) {
-		t.Fatalf("trojan chunk hash %x does not equal trojan chunk address %x", hash, address)
+		t.Fatal("trojan chunk address prefix does not match any of the targets")
 	}
 }
 

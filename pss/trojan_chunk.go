@@ -49,6 +49,7 @@ func newMessageTopic(topic string) MessageTopic {
 }
 
 // newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
+// it finds a length and nonce for the trojanMessage according to the given input and maximum payload size
 func newTrojanMessage(topic MessageTopic, payload []byte) (trojanMessage, error) {
 	if len(payload) > trojanPayloadMaxSize {
 		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanPayloadMaxSize)
@@ -85,25 +86,13 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 	// create span
 	span := newTrojanChunkSpan()
 
-	// find nonce for trojan chunk
-	nonce, addr, err := message.findNonce(span, targets)
+	// iterate trojan chunk fields to find coherent address and payload for chunk
+	addr, payload, err := iterateTrojanChunk(targets, span, message)
 	if err != nil {
 		return nil, err
 	}
 
-	// serialize trojan message struct
-	m, err := message.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	// serialize trojan chunk fields to be used as payload for chunk
-	chunkData, err := serializeTrojanChunk(span, nonce, m)
-	if err != nil {
-		return nil, err
-	}
-
-	return chunk.NewChunk(addr, chunkData), nil
+	return chunk.NewChunk(addr, payload), nil
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
@@ -127,49 +116,40 @@ func newTrojanChunkSpan() []byte {
 	return span
 }
 
-// serializeTrojanChunk appends the span, nonce and payload of a trojan message and returns the result
-// this can be used:
-// - to form the payload for a regular chunk
-// - to be used as the input for trojan chunk hash calculation
-func serializeTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
-	h := append(span, nonce...)
-	s := append(h, payload...)
-
-	return s, nil
-}
-
-// findNonce determines the nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of the given address
-// this is done by iterating the BMT hash of the serialization of a trojan chunk until the desired nonce is found
-// the matching hash is also returned as the target address
-func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, address []byte, err error) {
-	emptyNonce, emptyAddress := []byte{}, []byte{}
+// iterateTrojanChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
+// this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
+// the function returns the matching hash to be used as an address for a regular chunk, plus its payload
+// the payload is the serialization of the trojan chunk fields which correctly hash into the matching address
+func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (addr, payload []byte, err error) {
+	emptyAddr, emptyPayload := []byte{}, []byte{}
 
 	// start out with random nonce
-	nonce = make([]byte, 32)
-	if _, randErr := rand.Read(nonce); randErr != nil {
-		return emptyNonce, emptyAddress, randErr
+	nonce := make([]byte, 32)
+	if _, errRand := rand.Read(nonce); err != nil {
+		return emptyAddr, emptyPayload, errRand
 	}
 	nonceInt := new(big.Int).SetBytes(nonce)
 	targetsLength := len(targets[0])
 
 	// serialize trojan message
-	m, marshalErr := tm.MarshalBinary()
+	m, marshalErr := message.MarshalBinary() // TODO: this should be encrypted
 	if marshalErr != nil {
-		return emptyNonce, emptyAddress, marshalErr
+		return emptyAddr, emptyPayload, marshalErr
 	}
 
 	// hash trojan chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		hash, hashErr := hashTrojanChunk(span, nonce, m)
+		s, _ := serializeTrojanChunk(span, nonce, m) // err always nil here
+		hash, hashErr := hashTrojanChunk(s)
 		if hashErr != nil {
-			return emptyNonce, emptyAddress, hashErr
+			return emptyAddr, emptyPayload, hashErr
 		}
 
 		// take as much of the hash as the targets are long
 		if hashPrefixInTargets(hash[:targetsLength], targets) {
 			// if nonce found, stop loop and return matching hash as address
-			return nonce, hash, nil
+			return hash, s, nil
 		}
 		// else, add 1 to nonce and try again
 		// TODO: test loop-around
@@ -178,11 +158,19 @@ func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, addres
 	}
 }
 
+// serializeTrojanChunk appends the span, nonce and trojan message fields of a trojan chunk and returns the result
+// this can be used as the input for trojan chunk hash calculation
+func serializeTrojanChunk(span, nonce, message []byte) ([]byte, error) {
+	h := append(span, nonce...)
+	s := append(h, message...)
+
+	return s, nil
+}
+
 // hashTrojanChunk serializes trojan chunk fields and hashes them with the trojan hashing func
 // returns the resulting hash or a hashing error if it occurs
-func hashTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
-	s, _ := serializeTrojanChunk(span, nonce, payload) // err always nil here
-	trojanHashingFunc.Reset()                          // TODO: why do we need to do this?
+func hashTrojanChunk(s []byte) ([]byte, error) {
+	trojanHashingFunc.Reset() // TODO: why do we need to do this?
 	if _, err := trojanHashingFunc.Write(s); err != nil {
 		return []byte{}, err
 	}
