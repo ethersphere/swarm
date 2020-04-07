@@ -17,18 +17,18 @@
 package pss
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
-
-	"github.com/ethersphere/swarm/chunk"
 )
 
-// arbitrary address for tests
-var testAddr = chunk.Address{
-	57, 120, 209, 156, 38, 89, 19, 22, 129, 142,
-	115, 215, 166, 45, 56, 9, 215, 73, 178, 153,
-	36, 111, 93, 229, 222, 88, 51, 179, 181, 35,
-	181, 144}
+// arbitrary targets for tests
+var testTargets = [][]byte{
+	[]byte{57, 120},
+	[]byte{209, 156},
+	[]byte{156, 38},
+	[]byte{89, 19},
+	[]byte{22, 129}}
 
 // newTestTrojanMessage creates an arbitrary trojan message for tests
 func newTestTrojanMessage(t *testing.T) trojanMessage {
@@ -43,8 +43,15 @@ func newTestTrojanMessage(t *testing.T) trojanMessage {
 
 // TestNewTrojanChunk tests the creation of a trojan chunk
 func TestNewTrojanChunk(t *testing.T) {
-	_, err := newTrojanChunk(testAddr, newTestTrojanMessage(t))
+	tc, err := newTrojanChunk(testTargets, newTestTrojanMessage(t))
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	tcAddr := tc.Address()
+	tcAddrPrefix := tcAddr[:len(testTargets[0])]
+
+	if !hashPrefixInTargets(tcAddrPrefix, testTargets) {
 		t.Fatal(err)
 	}
 }
@@ -52,10 +59,27 @@ func TestNewTrojanChunk(t *testing.T) {
 // TestFindNonce tests getting the correct nonce for a trojan chunk
 func TestFindNonce(t *testing.T) {
 	tm := newTestTrojanMessage(t)
+
 	span := newTrojanChunkSpan()
 
-	tm.findNonce(span, testAddr)
-	// TODO: check nonce is correct for address
+	nonce, address, err := tm.findNonce(span, testTargets)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	payload, err := tm.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := hashTrojanChunk(span, nonce, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(hash, address) {
+		t.Fatalf("trojan chunk hash %x does not equal trojan chunk address %x", hash, address)
+	}
 }
 
 // TestTrojanMessageSerialization tests that the trojanMessage type can be correctly serialized and deserialized

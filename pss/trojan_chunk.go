@@ -39,6 +39,7 @@ type trojanMessage struct {
 }
 
 const trojanPayloadMaxSize = 4064 // in bytes
+var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash)()
 
 // newMessageTopic creates a new MessageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
@@ -85,7 +86,7 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 	span := newTrojanChunkSpan()
 
 	// find nonce for trojan chunk
-	nonce, target, err := message.findNonce(span, targets)
+	nonce, addr, err := message.findNonce(span, targets)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +103,7 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 		return nil, err
 	}
 
-	return chunk.NewChunk(target, chunkData), nil
+	return chunk.NewChunk(addr, chunkData), nil
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
@@ -139,57 +140,58 @@ func serializeTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
 
 // findNonce determines the nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of the given address
 // this is done by iterating the BMT hash of the serialization of a trojan chunk until the desired nonce is found
-// the matching hash is also returned as the target
-func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, target []byte, err error) {
-	emptyNonce, emptyTarget := []byte{}, []byte{}
-	// init BMT hash function
-	hashFunc := storage.MakeHashFunc(storage.BMTHash)()
+// the matching hash is also returned as the target address
+func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, address []byte, err error) {
+	emptyNonce, emptyAddress := []byte{}, []byte{}
 
 	// start out with random nonce
 	nonce = make([]byte, 32)
 	if _, randErr := rand.Read(nonce); randErr != nil {
-		return emptyNonce, emptyTarget, randErr
+		return emptyNonce, emptyAddress, randErr
 	}
+	nonceInt := new(big.Int).SetBytes(nonce)
+	targetsLength := len(targets[0])
 
 	// serialize trojan message
 	m, marshalErr := tm.MarshalBinary()
 	if marshalErr != nil {
-		return emptyNonce, emptyTarget, marshalErr
+		return emptyNonce, emptyAddress, marshalErr
 	}
 
 	// hash trojan chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		hash, hashErr := hashTrojanChunk(span, nonce, m, hashFunc)
+		hash, hashErr := hashTrojanChunk(span, nonce, m)
 		if hashErr != nil {
-			return emptyNonce, emptyTarget, hashErr
+			return emptyNonce, emptyAddress, hashErr
 		}
 
-		if hashInTargets(hash, targets) {
-			// if nonce found, stop loop and return matching hash as target
-			return nonce, target, nil
+		// take as much of the hash as the targets are long
+		if hashPrefixInTargets(hash[:targetsLength], targets) {
+			// if nonce found, stop loop and return matching hash as address
+			return nonce, hash, nil
 		}
 		// else, add 1 to nonce and try again
 		// TODO: test loop-around
-		nonceInt := new(big.Int).SetBytes(nonce)
-		nonce = nonceInt.Add(nonceInt, big.NewInt(1)).Bytes()
+		nonceInt.Add(nonceInt, big.NewInt(1))
+		nonce = nonceInt.Bytes()
 	}
 }
 
-// hashTrojanChunk serializes trojan chunk fields and hashes them with the given func
+// hashTrojanChunk serializes trojan chunk fields and hashes them with the trojan hashing func
 // returns the resulting hash or a hashing error if it occurs
-func hashTrojanChunk(span, nonce, payload []byte, hashFunc storage.SwarmHash) ([]byte, error) {
+func hashTrojanChunk(span, nonce, payload []byte) ([]byte, error) {
 	s, _ := serializeTrojanChunk(span, nonce, payload) // err always nil here
-	if _, err := hashFunc.Write(s); err != nil {
+	if _, err := trojanHashingFunc.Write(s); err != nil {
 		return []byte{}, err
 	}
-	return hashFunc.Sum(nil), nil
+	return trojanHashingFunc.Sum(nil), nil
 }
 
-// hashInTargets returns whether the given hash in byte slice form appears in the given targets as collection of byte slices
-func hashInTargets(hash []byte, targets [][]byte) bool {
+// hashPrefixInTargets returns whether the given hash prefix appears in the targets given as a collection of byte slices
+func hashPrefixInTargets(hashPrefix []byte, targets [][]byte) bool {
 	for i := range targets {
-		if bytes.Equal(hash, targets[i]) {
+		if bytes.Equal(hashPrefix, targets[i]) {
 			return true
 		}
 	}
