@@ -553,30 +553,34 @@ func (p *Pss) executeHandlers(topic message.Topic, payload []byte, from PssAddre
 	}
 }
 
-// will return false if using partial address
-func (p *Pss) isSelfRecipient(msg *message.Message) bool {
-	return bytes.Equal(msg.To, p.Kademlia.BaseAddr())
-}
+// TODO: REMOVE
+// DEPRICATED
+// // will return false if using partial address
+// func (p *Pss) isSelfRecipient(msg *message.Message) bool {
+// 	return bytes.Equal(msg.To, p.Kademlia.BaseAddr())
+// }
 
-// test match of leftmost bytes in given message to node's Kademlia address
-func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
-	local := p.Kademlia.BaseAddr()
+// TODO: REMOVE
+// DEPRICATED
+// // test match of leftmost bytes in given message to node's Kademlia address
+// func (p *Pss) isSelfPossibleRecipient(msg *message.Message, prox bool) bool {
+// 	local := p.Kademlia.BaseAddr()
 
-	// if a partial address matches we are possible recipient regardless of prox
-	// if not and prox is not set, we are surely not
-	if bytes.Equal(msg.To, local[:len(msg.To)]) {
+// 	// if a partial address matches we are possible recipient regardless of prox
+// 	// if not and prox is not set, we are surely not
+// 	if bytes.Equal(msg.To, local[:len(msg.To)]) {
 
-		return true
-	} else if !prox {
-		return false
-	}
+// 		return true
+// 	} else if !prox {
+// 		return false
+// 	}
 
-	depth := p.NeighbourhoodDepth()
-	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
-	log.Trace("selfpossible", "po", po, "depth", depth)
+// 	depth := p.NeighbourhoodDepth()
+// 	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
+// 	log.Trace("selfpossible", "po", po, "depth", depth)
 
-	return depth <= po
-}
+// 	return depth <= po
+// }
 
 /////////////////////////////////////////////////////////////////////
 // SECTION: Message sending
@@ -590,46 +594,50 @@ func (p *Pss) enqueue(msg *message.Message) {
 	p.outbox.Enqueue(outboxMsg)
 }
 
-// Send a raw message (any encryption is responsibility of calling client)
-//
-// Will fail if raw messages are disallowed
-func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messageTTL time.Duration) error {
-	defer metrics.GetOrRegisterResettingTimer("pss/send/raw", nil).UpdateSince(time.Now())
+// TODO: REMOVE
+// DEPRICATED
+// // Send a raw message (any encryption is responsibility of calling client)
+// //
+// // Will fail if raw messages are disallowed
+// func (p *Pss) SendRaw(address PssAddress, topic message.Topic, msg []byte, messageTTL time.Duration) error {
+// 	defer metrics.GetOrRegisterResettingTimer("pss/send/raw", nil).UpdateSince(time.Now())
 
-	if err := validateAddress(address); err != nil {
-		return err
-	}
+// 	if err := validateAddress(address); err != nil {
+// 		return err
+// 	}
 
-	pssMsgParams := message.Flags{
-		Raw: true,
-	}
+// 	pssMsgParams := message.Flags{
+// 		Raw: true,
+// 	}
 
-	pssMsg := message.New(pssMsgParams)
-	pssMsg.To = address
-	pssMsg.Expire = uint32(time.Now().Add(messageTTL).Unix())
-	pssMsg.Payload = msg
-	pssMsg.Topic = topic
+// 	pssMsg := message.New(pssMsgParams)
+// 	pssMsg.To = address
+// 	pssMsg.Expire = uint32(time.Now().Add(messageTTL).Unix())
+// 	pssMsg.Payload = msg
+// 	pssMsg.Topic = topic
 
-	p.addFwdCache(pssMsg)
+// 	p.addFwdCache(pssMsg)
 
-	p.enqueue(pssMsg)
-	return nil
-}
+// 	p.enqueue(pssMsg)
+// 	return nil
+// }
 
-// Send a message using symmetric encryption
-//
-// Fails if the key id does not match any of the stored symmetric keys
-func (p *Pss) SendSym(symkeyid string, topic message.Topic, msg []byte) error {
-	symkey, err := p.GetSymmetricKey(symkeyid)
-	if err != nil {
-		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
-	}
-	psp, ok := p.getPeerSym(symkeyid, topic)
-	if !ok {
-		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
-	}
-	return p.send(psp.address, topic, msg, false, symkey)
-}
+// TODO: REMOVE
+// DEPRICATED
+// // Send a message using symmetric encryption
+// //
+// // Fails if the key id does not match any of the stored symmetric keys
+// func (p *Pss) SendSym(symkeyid string, topic message.Topic, msg []byte) error {
+// 	symkey, err := p.GetSymmetricKey(symkeyid)
+// 	if err != nil {
+// 		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
+// 	}
+// 	psp, ok := p.getPeerSym(symkeyid, topic)
+// 	if !ok {
+// 		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
+// 	}
+// 	return p.send(psp.address, topic, msg, false, symkey)
+// }
 
 // Send a message using asymmetric encryption
 //

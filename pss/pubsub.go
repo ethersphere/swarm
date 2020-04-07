@@ -25,52 +25,54 @@ import (
 	"github.com/ethersphere/swarm/pss/message"
 )
 
+// TODO: REMOVE
+// DEPRICATED
 // PubSub implements the pushsync.PubSub interface using pss
-type PubSub struct {
-	pss        *Pss
-	messageTTL time.Duration // expire duration of a pubsub message. Depends on the use case.
-}
+// type PubSub struct {
+// 	pss        *Pss
+// 	messageTTL time.Duration // expire duration of a pubsub message. Depends on the use case.
+// }
 
-// NewPubSub creates a new PubSub
-func NewPubSub(p *Pss, messageTTL time.Duration) *PubSub {
-	return &PubSub{
-		pss:        p,
-		messageTTL: messageTTL,
-	}
-}
+// // NewPubSub creates a new PubSub
+// func NewPubSub(p *Pss, messageTTL time.Duration) *PubSub {
+// 	return &PubSub{
+// 		pss:        p,
+// 		messageTTL: messageTTL,
+// 	}
+// }
 
-// BaseAddr returns Kademlia base address
-func (p *PubSub) BaseAddr() []byte {
-	return p.pss.BaseAddr()
-}
+// // BaseAddr returns Kademlia base address
+// func (p *PubSub) BaseAddr() []byte {
+// 	return p.pss.BaseAddr()
+// }
 
-func isPssPeer(bp *network.BzzPeer) bool {
-	return bp.HasCap(protocolName)
-}
+// func isPssPeer(bp *network.BzzPeer) bool {
+// 	return bp.HasCap(protocolName)
+// }
 
-// IsClosestTo returns true is self is the closest known node to addr
-// as uniquely defined by the MSB XOR distance
-// among pss capable peers
-func (p *PubSub) IsClosestTo(addr []byte) bool {
-	return p.pss.IsClosestTo(addr, isPssPeer)
-}
+// // IsClosestTo returns true is self is the closest known node to addr
+// // as uniquely defined by the MSB XOR distance
+// // among pss capable peers
+// func (p *PubSub) IsClosestTo(addr []byte) bool {
+// 	return p.pss.IsClosestTo(addr, isPssPeer)
+// }
 
-// Register registers a handler
-func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p2p.Peer) error) func() {
-	f := func(msg []byte, peer *p2p.Peer, _ bool, _ string) error {
-		return handler(msg, peer)
-	}
-	h := NewHandler(f).WithRaw()
-	if prox {
-		h = h.WithProxBin()
-	}
-	pt := message.NewTopic([]byte(topic))
-	return p.pss.Register(&pt, h)
-}
+// // Register registers a handler
+// func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p2p.Peer) error) func() {
+// 	f := func(msg []byte, peer *p2p.Peer, _ bool, _ string) error {
+// 		return handler(msg, peer)
+// 	}
+// 	h := NewHandler(f).WithRaw()
+// 	if prox {
+// 		h = h.WithProxBin()
+// 	}
+// 	pt := message.NewTopic([]byte(topic))
+// 	return p.pss.Register(&pt, h)
+// }
 
-// Send sends a message using pss SendRaw
-func (p *PubSub) Send(to []byte, topic string, msg []byte) error {
-	defer metrics.GetOrRegisterResettingTimer("pss/pubsub/send", nil).UpdateSince(time.Now())
-	pt := message.NewTopic([]byte(topic))
-	return p.pss.SendRaw(PssAddress(to), pt, msg, p.messageTTL)
-}
+// // Send sends a message using pss SendRaw
+// func (p *PubSub) Send(to []byte, topic string, msg []byte) error {
+// 	defer metrics.GetOrRegisterResettingTimer("pss/pubsub/send", nil).UpdateSince(time.Now())
+// 	pt := message.NewTopic([]byte(topic))
+// 	return p.pss.SendRaw(PssAddress(to), pt, msg, p.messageTTL)
+// }

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -42,7 +41,6 @@ import (
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pot"
-	"github.com/ethersphere/swarm/pss/crypto"
 	"github.com/ethersphere/swarm/pss/message"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/testutil"
@@ -76,7 +74,7 @@ func initTest() {
 
 // test that API topic conversion functions give predictable results
 
-func TestAPITopic(t *testing.T) {
+/* func TestAPITopic(t *testing.T) {
 
 	api := &API{}
 
@@ -100,12 +98,12 @@ func TestAPITopic(t *testing.T) {
 	if topichex != pingtopichex {
 		t.Fatalf("protocol topic conversion mismatch; %s != %s", topichex, pingtopichex)
 	}
-}
+} */
 
 // test if we can insert into cache, match items with cache and cache expiry
 
 // matching of address hints; whether a message could be or is for the node
-func TestAddressMatch(t *testing.T) {
+/* func TestAddressMatch(t *testing.T) {
 
 	localaddr := network.RandomBzzAddr().Over()
 	copy(localaddr[:8], []byte("deadbeef"))
@@ -152,7 +150,7 @@ func TestAddressMatch(t *testing.T) {
 		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
 	}
 
-}
+} */
 
 // verify that node can be set as recipient regardless of explicit message address match if minimum one handler of a topic is explicitly set to allow it
 // note that in these tests we use the raw capability on handlers for convenience
@@ -356,7 +354,7 @@ func TestAddressMatchProx(t *testing.T) {
 }
 
 // set and generate pubkeys and symkeys
-func TestKeys(t *testing.T) {
+/* func TestKeys(t *testing.T) {
 	// make our key and init pss with it
 	ourprivkey, err := ethCrypto.GenerateKey()
 	if err != nil {
@@ -407,10 +405,10 @@ func TestKeys(t *testing.T) {
 	if !bytes.Equal(psp.address, addr) {
 		t.Fatalf("inkey address does not match; %p != %p", psp.address, addr)
 	}
-}
+} */
 
 // check that we can retrieve previously added public key entires per topic and peer
-func TestGetPublickeyEntries(t *testing.T) {
+/* func TestGetPublickeyEntries(t *testing.T) {
 
 	privkey, err := ethCrypto.GenerateKey()
 	if err != nil {
@@ -467,7 +465,7 @@ OUTER:
 	if len(topicaddr) != 0 {
 		t.Fatalf("%d topics were not matched", len(topicaddr))
 	}
-}
+} */
 
 // forwarding should skip peers that do not have matching pss capabilities
 func TestPeerCapabilityMismatch(t *testing.T) {
@@ -639,13 +637,13 @@ func TestApi(t *testing.T) {
 }
 
 // verifies that nodes can send and receive raw (verbatim) messages
-func TestSendRaw(t *testing.T) {
+/* func TestSendRaw(t *testing.T) {
 	t.Run("32", testSendRaw)
 	t.Run("8", testSendRaw)
 	t.Run("0", testSendRaw)
-}
+} */
 
-func testSendRaw(t *testing.T) {
+/* func testSendRaw(t *testing.T) {
 
 	var addrsize int64
 	var err error
@@ -720,9 +718,9 @@ func testSendRaw(t *testing.T) {
 	case cerr := <-rctx.Done():
 		t.Fatalf("test message (right) timed out: %v", cerr)
 	}
-}
+} */
 
-// send symmetrically encrypted message between two directly connected peers
+/* // send symmetrically encrypted message between two directly connected peers
 func TestSendSym(t *testing.T) {
 	t.Run("32", testSendSym)
 	t.Run("8", testSendSym)
@@ -836,7 +834,7 @@ func testSendSym(t *testing.T) {
 	case cerr := <-rctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
-}
+} */
 
 // send asymmetrically encrypted message between two directly connected peers
 func TestSendAsym(t *testing.T) {
@@ -967,7 +965,7 @@ func TestNetwork(t *testing.T) {
 // params in run name:
 // nodes/recipientAddresses/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
-func TestNetwork2000(t *testing.T) {
+/* func TestNetwork2000(t *testing.T) {
 	if !*testutil.Longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
@@ -1467,7 +1465,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
-}
+} */
 
 func testRandomMessage() *message.Message {
 	addr := make([]byte, 32)
@@ -1642,6 +1640,7 @@ func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
+/*
 func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic message.Topic, to hexutil.Bytes) ([2]string, error) {
 
 	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, PssAddress(to), true)
@@ -1657,4 +1656,4 @@ func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymke
 
 func (apitest *APITest) Clean() (int, error) {
 	return apitest.Pss.cleanKeys(), nil
-}
+} */
