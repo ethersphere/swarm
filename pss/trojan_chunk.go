@@ -158,6 +158,8 @@ func (tm *trojanMessage) findNonce(span []byte, targets [][]byte) (nonce, target
 	}
 }
 
+// hashTrojanChunk serializes trojan chunk fields and hashes them with the given func
+// returns the resulting hash or a hashing error if it occurs
 func hashTrojanChunk(span, nonce, payload []byte, hashFunc storage.SwarmHash) ([]byte, error) {
 	s, _ := serializeTrojanChunk(span, nonce, payload) // err always nil here
 	if _, err := hashFunc.Write(s); err != nil {
@@ -166,6 +168,7 @@ func hashTrojanChunk(span, nonce, payload []byte, hashFunc storage.SwarmHash) ([
 	return hashFunc.Sum(nil), nil
 }
 
+// hashInTargets returns whether the given hash in byte slice form appears in the given targets as collection of byte slices
 func hashInTargets(hash []byte, targets [][]byte) bool {
 	for i := range targets {
 		if bytes.Equal(hash, targets[i]) {
