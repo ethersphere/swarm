@@ -110,9 +110,9 @@ func checkTargets(targets [][]byte) error {
 	if len(targets) == 0 {
 		return fmt.Errorf("target list cannot be empty")
 	}
-	lenFirstTarget := len(targets[0])
+	validLength := len(targets[0]) // take first element as allowed length
 	for i := 1; i < len(targets); i++ {
-		if lenFirstTarget != len(targets[i]) {
+		if len(targets[i]) != validLength {
 			return fmt.Errorf("target list cannot have targets of different length")
 		}
 	}
