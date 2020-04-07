@@ -70,7 +70,7 @@ func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p
 
 // Send sends a message using pss SendRaw
 func (p *PubSub) Send(to []byte, topic string, msg []byte) error {
-	defer metrics.GetOrRegisterResettingTimer("pss.pubsub.send", nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer("pss/pubsub/send", nil).UpdateSince(time.Now())
 	pt := message.NewTopic([]byte(topic))
 	return p.pss.SendRaw(PssAddress(to), pt, msg, p.messageTTL)
 }

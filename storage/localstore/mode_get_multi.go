@@ -32,14 +32,14 @@ import (
 // required by the Getter Mode. GetMulti is required to implement chunk.Store
 // interface.
 func (db *DB) GetMulti(ctx context.Context, mode chunk.ModeGet, addrs ...chunk.Address) (chunks []chunk.Chunk, err error) {
-	metricName := fmt.Sprintf("localstore.GetMulti.%s", mode)
+	metricName := fmt.Sprintf("localstore/GetMulti/%s", mode)
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
 	defer func() {
 		if err != nil {
-			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+			metrics.GetOrRegisterCounter(metricName+"/error", nil).Inc(1)
 		}
 	}()
 

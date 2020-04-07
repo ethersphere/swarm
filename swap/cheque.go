@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // encodeForSignature encodes the cheque params in the format used in the signing procedure
@@ -31,8 +31,7 @@ func (cheque *ChequeParams) encodeForSignature() []byte {
 	cumulativePayoutBytes := make([]byte, 32)
 	// we need to write the last 8 bytes as we write a uint64 into a 32-byte array
 	// encoded in BigEndian because EVM uses BigEndian encoding
-	cumulativePayout := cheque.CumulativePayout.Value()
-	chequePayoutBytes := (&cumulativePayout).Bytes()
+	chequePayoutBytes := cheque.CumulativePayout.Value().Bytes()
 	copy(cumulativePayoutBytes[32-len(chequePayoutBytes):], chequePayoutBytes)
 
 	// construct the actual cheque
@@ -132,8 +131,9 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 }
 
 // verifyChequeAgainstLast verifies that the amount is higher than in the previous cheque and the increase is as expected
-func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *uint256.Uint256) error {
-	actualAmount := uint256.New().Copy(cheque.CumulativePayout)
+// returns the actual amount received in this cheque
+func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *int256.Uint256) error {
+	actualAmount := cheque.CumulativePayout.Copy()
 
 	if lastCheque != nil {
 		if cheque.CumulativePayout.Cmp(lastCheque.CumulativePayout) < 1 {

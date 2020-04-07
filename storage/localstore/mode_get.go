@@ -34,14 +34,14 @@ import (
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
 func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
-	metricName := fmt.Sprintf("localstore.Get.%s", mode)
+	metricName := fmt.Sprintf("localstore/Get/%s", mode)
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
 	defer func() {
 		if err != nil {
-			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+			metrics.GetOrRegisterCounter(metricName+"/error", nil).Inc(1)
 		}
 	}()
 
@@ -103,14 +103,14 @@ func (db *DB) updateGCItems(items ...shed.Item) {
 			defer func() { <-db.updateGCSem }()
 		}
 
-		metricName := "localstore.updateGC"
+		metricName := "localstore/updateGC"
 		metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 		defer totalTimeMetric(metricName, time.Now())
 
 		for _, item := range items {
 			err := db.updateGC(item)
 			if err != nil {
-				metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+				metrics.GetOrRegisterCounter(metricName+"/error", nil).Inc(1)
 				log.Error("localstore update gc", "err", err)
 			}
 		}

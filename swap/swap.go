@@ -39,7 +39,7 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/swap/chain"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // ErrInvalidChequeSignature indicates the signature on the cheque was invalid
@@ -374,8 +374,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(fmt.Errorf("updating balance: %w", err))
 	}
 
-	metrics.GetOrRegisterCounter("swap.cheques.received.num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap.cheques.received.honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap/cheques/received/num", nil).Inc(1)
+	metrics.GetOrRegisterCounter("swap/cheques/received/honey", nil).Inc(honeyAmount)
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
@@ -389,8 +389,8 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		return protocols.Break(err)
 	}
 
-	costsMultiplier := uint256.FromUint64(2)
-	costThreshold, err := uint256.New().Mul(transactionCosts, costsMultiplier)
+	costsMultiplier := int256.Uint256From(2)
+	costThreshold, err := new(int256.Uint256).Mul(transactionCosts, costsMultiplier)
 	if err != nil {
 		return err
 	}
@@ -448,7 +448,7 @@ func cashCheque(s *Swap, cheque *Cheque) {
 	})
 
 	if err != nil {
-		metrics.GetOrRegisterCounter("swap.cheques.cashed.errors", nil).Inc(1)
+		metrics.GetOrRegisterCounter("swap/cheques/cashed/errors", nil).Inc(1)
 		s.logger.Error(CashChequeAction, "cashing cheque:", err)
 	}
 }
@@ -463,7 +463,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) error {
 
 	lastCheque := p.getLastReceivedCheque()
 
-	if err := cheque.verifyChequeAgainstLast(lastCheque, uint256.FromUint64(cheque.Honey)); err != nil {
+	if err := cheque.verifyChequeAgainstLast(lastCheque, int256.Uint256From(cheque.Honey)); err != nil {
 		return err
 	}
 
@@ -587,7 +587,7 @@ func (s *Swap) promptDepositAmount() (*big.Int, error) {
 	}
 	// log available balance and ERC20 balance
 	s.logger.Info(InitAction, "Balance information", "chequebook available balance", availableBalance, "ERC20 balance", balance)
-	promptMessage := fmt.Sprintf("Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): ")
+	promptMessage := "Please provide the amount in HONEY which will deposited to your chequebook (0 for skipping deposit): "
 	// need to prompt user for deposit amount
 	prompter := console.Stdin
 	// ask user for input

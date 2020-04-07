@@ -96,7 +96,7 @@ func (o *Outbox) Enqueue(outboxMsg *outboxMsg) {
 		return
 	case slot := <-o.slots:
 		o.queue[slot] = outboxMsg
-		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
+		metrics.GetOrRegisterGauge("pss/outbox/len", nil).Update(int64(o.Len()))
 		// we send this message slot to process.
 		select {
 		case <-o.stopC:
@@ -127,25 +127,25 @@ func (o *Outbox) processOutbox() {
 			return
 		case slot := <-o.process:
 			workerLimitC <- struct{}{}
-			metrics.GetOrRegisterGauge("pss.outbox.workers", nil).Update(int64(len(workerLimitC)))
+			metrics.GetOrRegisterGauge("pss/outbox/workers", nil).Update(int64(len(workerLimitC)))
 			go func(slot int) {
 				//Free worker space
 				defer func() {
 					<-workerLimitC
-					metrics.GetOrRegisterGauge("pss.outbox.workers", nil).Update(int64(len(workerLimitC)))
+					metrics.GetOrRegisterGauge("pss/outbox/workers", nil).Update(int64(len(workerLimitC)))
 				}()
 				msg := o.queue[slot]
-				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+				metrics.GetOrRegisterResettingTimer("pss/handle/outbox", nil).UpdateSince(msg.startedAt)
 				if err := o.forwardFunc(msg.msg); err != nil {
-					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+					metrics.GetOrRegisterCounter("pss/forward/err", nil).Inc(1)
 					log.Debug(err.Error())
 					limit := msg.startedAt.Add(o.maxRetryTime)
 					now := o.clock.Now()
 					if now.After(limit) {
-						metrics.GetOrRegisterCounter("pss.forward.expired", nil).Inc(1)
+						metrics.GetOrRegisterCounter("pss/forward/expired", nil).Inc(1)
 						log.Warn("Message expired, won't be requeued", "limit", limit, "now", now)
 						o.free(slot)
-						metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
+						metrics.GetOrRegisterGauge("pss/outbox/len", nil).Update(int64(o.Len()))
 						return
 					}
 					// requeue the message for processing
@@ -155,7 +155,7 @@ func (o *Outbox) processOutbox() {
 				}
 				//message processed, free the outbox slot
 				o.free(slot)
-				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(o.Len()))
+				metrics.GetOrRegisterGauge("pss/outbox/len", nil).Update(int64(o.Len()))
 			}(slot)
 		}
 	}

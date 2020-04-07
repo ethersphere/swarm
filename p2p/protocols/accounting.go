@@ -27,21 +27,21 @@ var (
 	// All metrics are cumulative
 
 	// total amount of units credited
-	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", metrics.AccountingRegistry)
+	mBalanceCredit = metrics.NewRegisteredCounterForced("account/balance/credit", metrics.AccountingRegistry)
 	// total amount of units debited
-	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", metrics.AccountingRegistry)
+	mBalanceDebit = metrics.NewRegisteredCounterForced("account/balance/debit", metrics.AccountingRegistry)
 	// total amount of bytes credited
-	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", metrics.AccountingRegistry)
+	mBytesCredit = metrics.NewRegisteredCounterForced("account/bytes/credit", metrics.AccountingRegistry)
 	// total amount of bytes debited
-	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", metrics.AccountingRegistry)
+	mBytesDebit = metrics.NewRegisteredCounterForced("account/bytes/debit", metrics.AccountingRegistry)
 	// total amount of credited messages
-	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", metrics.AccountingRegistry)
+	mMsgCredit = metrics.NewRegisteredCounterForced("account/msg/credit", metrics.AccountingRegistry)
 	// total amount of debited messages
-	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", metrics.AccountingRegistry)
+	mMsgDebit = metrics.NewRegisteredCounterForced("account/msg/debit", metrics.AccountingRegistry)
 	// how many times local node had to drop remote peers
-	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", metrics.AccountingRegistry)
+	mPeerDrops = metrics.NewRegisteredCounterForced("account/peerdrops", metrics.AccountingRegistry)
 	// how many times local node overdrafted and dropped
-	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", metrics.AccountingRegistry)
+	mSelfDrops = metrics.NewRegisteredCounterForced("account/selfdrops", metrics.AccountingRegistry)
 )
 
 // PricedMessage defines how a message type identifies itself as to be accounted

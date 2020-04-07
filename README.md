@@ -33,7 +33,7 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 ## Building the source
 
-It's recommended to use Go 1.13 to build Swarm.
+It's recommended to use Go 1.14 to build Swarm.
 
 To simply compile the `swarm` binary without a `GOPATH`:
 
@@ -248,11 +248,11 @@ The most common types of measurements we use in Swarm are `counters` and `resett
 
 ```go
 // incrementing a counter
-metrics.GetOrRegisterCounter("network.stream.received_chunks", nil).Inc(1)
+metrics.GetOrRegisterCounter("network/stream/received_chunks", nil).Inc(1)
 
 // measuring latency with a resetting timer
 start := time.Now()
-t := metrics.GetOrRegisterResettingTimer("http.request.GET.time"), nil)
+t := metrics.GetOrRegisterResettingTimer("http/request/GET/time"), nil)
 ...
 t := UpdateSince(start)
 ```
