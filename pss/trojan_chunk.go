@@ -38,7 +38,7 @@ type trojanMessage struct {
 	padding []byte
 }
 
-const trojanPayloadMaxSize = 4064                              // in bytes
+const trojanMessagePayloadMaxSize = 4030                       // in bytes
 var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
 
 // newMessageTopic creates a new messageTopic variable with the given input string
@@ -51,8 +51,8 @@ func newMessageTopic(topic string) messageTopic {
 // newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
 // it finds a length and nonce for the trojanMessage according to the given input and maximum payload size
 func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error) {
-	if len(payload) > trojanPayloadMaxSize {
-		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanPayloadMaxSize)
+	if len(payload) > trojanMessagePayloadMaxSize {
+		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMessagePayloadMaxSize)
 	}
 
 	// get length as array of 2 bytes
@@ -61,7 +61,7 @@ func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error)
 	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
 
 	// set random bytes as padding
-	paddingLength := trojanPayloadMaxSize - payloadLength
+	paddingLength := trojanMessagePayloadMaxSize - payloadLength
 	padding := make([]byte, paddingLength)
 	if _, err := rand.Read(padding); err != nil {
 		return trojanMessage{}, err
@@ -87,12 +87,12 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 	span := newTrojanChunkSpan()
 
 	// iterate trojan chunk fields to find coherent address and payload for chunk
-	addr, payload, err := iterateTrojanChunk(targets, span, message)
+	chunk, err := iterateTrojanChunk(targets, span, message)
 	if err != nil {
 		return nil, err
 	}
 
-	return chunk.NewChunk(addr, payload), nil
+	return chunk, nil
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
@@ -118,36 +118,36 @@ func newTrojanChunkSpan() []byte {
 
 // iterateTrojanChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
 // this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
-// the function returns the matching hash to be used as an address for a regular chunk, plus its payload
-// the payload is the serialization of the trojan chunk fields which correctly hash into the matching address
-func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (addr, payload []byte, err error) {
+// the function returns a new chunk, with the matching hash to be used as its address,
+// and its payload set to the serialization of the trojan chunk fields which correctly hash into the matching address
+func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
-	if _, errRand := rand.Read(nonce); err != nil {
-		return nil, nil, errRand
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
 	}
 	nonceInt := new(big.Int).SetBytes(nonce)
 	targetsLength := len(targets[0])
 
 	// serialize trojan message
-	m, marshalErr := message.MarshalBinary() // TODO: this should be encrypted
-	if marshalErr != nil {
-		return nil, nil, marshalErr
+	m, err := message.MarshalBinary() // TODO: this should be encrypted
+	if err != nil {
+		return nil, err
 	}
 
 	// hash trojan chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		s := append(append(span, nonce...), m...) // err always nil here
+		s := append(append(span, nonce...), m...)
 		hash, hashErr := hashTrojanChunk(s)
 		if hashErr != nil {
-			return nil, nil, hashErr
+			return nil, hashErr
 		}
 
 		// take as much of the hash as the targets are long
 		if hashPrefixInTargets(hash[:targetsLength], targets) {
-			// if nonce found, stop loop and return matching hash as address
-			return hash, s, nil
+			// if nonce found, stop loop and return chunk
+			return chunk.NewChunk(hash, s), nil
 		}
 		// else, add 1 to nonce and try again
 		// TODO: test loop-around
