@@ -92,7 +92,9 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 		return nil, err
 	}
 
-	span := newSpan()
+	span := make([]byte, 8)
+	// 4064 bytes for message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
+	binary.BigEndian.PutUint64(span, chunk.DefaultSize)
 
 	// iterate fields to build torjan chunk with coherent address and payload
 	chunk, err := iterTrojanChunk(targets, span, *m)
@@ -115,14 +117,6 @@ func checkTargets(targets [][]byte) error {
 		}
 	}
 	return nil
-}
-
-// newSpan creates a pre-set 8-byte span for a chunk
-func newSpan() []byte {
-	span := make([]byte, 8)
-	// 4064 bytes for message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
-	binary.BigEndian.PutUint64(span, chunk.DefaultSize) // TODO: should this be little-endian?
-	return span
 }
 
 // iterTrojanChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
