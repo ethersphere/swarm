@@ -38,7 +38,7 @@ type trojanMessage struct {
 	padding []byte
 }
 
-const trojanMessagePayloadMaxSize = 4030                       // in bytes
+const trojanMsgPayloadMaxSize = 4030                           // in bytes
 var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
 
 // newMessageTopic creates a new messageTopic variable with the given input string
@@ -51,8 +51,8 @@ func newMessageTopic(topic string) messageTopic {
 // newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
 // it finds a length and nonce for the trojanMessage according to the given input and maximum payload size
 func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error) {
-	if len(payload) > trojanMessagePayloadMaxSize {
-		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMessagePayloadMaxSize)
+	if len(payload) > trojanMsgPayloadMaxSize {
+		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
 	}
 
 	// get length as array of 2 bytes
@@ -61,7 +61,7 @@ func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error)
 	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
 
 	// set random bytes as padding
-	paddingLength := trojanMessagePayloadMaxSize - payloadLength
+	paddingLength := trojanMsgPayloadMaxSize - payloadLength
 	padding := make([]byte, paddingLength)
 	if _, err := rand.Read(padding); err != nil {
 		return trojanMessage{}, err
