@@ -63,11 +63,11 @@ func TestNewMessage(t *testing.T) {
 	// the creation should fail if the payload is too big
 	invalidPayload := make([]byte, MaxPayloadSize+1)
 	if _, err := newMessage(testTopic, invalidPayload); err != errPayloadTooBig {
-		t.Fatalf("expected error when creating trojan message of invalid payload size to be %q, but got %v", errPayloadTooBig, err)
+		t.Fatalf("expected error when creating message of invalid payload size to be %q, but got %v", errPayloadTooBig, err)
 	}
 }
 
-// TestWrap tests the creation of a trojan chunk
+// TestWrap tests the creation of a chunk
 // its fields as a regular chunk should be correct
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
@@ -81,13 +81,13 @@ func TestWrap(t *testing.T) {
 	addrLen := len(addr)
 
 	if addrLen != chunk.AddressLength {
-		t.Fatalf("trojan chunk has an unexpected address length of %d rather than %d", addrLen, chunk.AddressLength)
+		t.Fatalf("chunk has an unexpected address length of %d rather than %d", addrLen, chunk.AddressLength)
 	}
 
 	addrPrefix := addr[:len(testTargets[0])]
 
 	if !contains(testTargets, addrPrefix) {
-		t.Fatal("trojan chunk address prefix does not match any of the targets")
+		t.Fatal("chunk address prefix does not match any of the targets")
 	}
 
 	payload := c.Data()
@@ -95,14 +95,14 @@ func TestWrap(t *testing.T) {
 	expectedSize := chunk.DefaultSize + 8 // payload + span
 
 	if payloadSize != expectedSize {
-		t.Fatalf("trojan chunk payload has an unexpected size of %d rather than %d", payloadSize, expectedSize)
+		t.Fatalf("chunk payload has an unexpected size of %d rather than %d", payloadSize, expectedSize)
 	}
 
 	span := binary.LittleEndian.Uint64(payload[:8])
 	remPayloadLen := len(payload[8:])
 
 	if int(span) != remPayloadLen {
-		t.Fatalf("trojan chunk span set to %d, but the rest of the chunk payload is of size %d", span, remPayloadLen)
+		t.Fatalf("chunk span set to %d, but the rest of the chunk payload is of size %d", span, remPayloadLen)
 	}
 
 	payloadHash, err := hash(payload)
@@ -111,17 +111,17 @@ func TestWrap(t *testing.T) {
 	}
 
 	if !bytes.Equal(addr, payloadHash) {
-		t.Fatal("trojan chunk address does not match its payload hash")
+		t.Fatal("chunk address does not match its payload hash")
 	}
 }
 
-// TestNewTrojanChunk tests the creation of a trojan chunk fails when given targets are invalid
+// TestNewTrojanChunk tests the creation of a chunk fails when given targets are invalid
 func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
 	emptyTargets := [][]byte{}
 	if _, err := Wrap(emptyTargets, m); err != errEmptyTargets {
-		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
+		t.Fatalf("expected error when creating chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
 	}
 
 	varLenTargets := [][]byte{
@@ -130,7 +130,7 @@ func TestWrapFail(t *testing.T) {
 		[]byte{180, 18, 255},
 	}
 	if _, err := Wrap(varLenTargets, m); err != errVarLenTargets {
-		t.Fatalf("expected error when creating trojan chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
+		t.Fatalf("expected error when creating chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
 	}
 }
 
@@ -182,6 +182,6 @@ func TestMessageSerialization(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(m, *dsm) {
-		t.Fatalf("original trojan message does not match deserialized one")
+		t.Fatalf("original message does not match deserialized one")
 	}
 }
