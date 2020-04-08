@@ -112,6 +112,7 @@ func checkTargets(targets [][]byte) error {
 // newSpan creates a pre-set 8-byte span for a trojan chunk
 func newSpan() []byte {
 	span := make([]byte, 8)
+	// 4064 bytes for trojan message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
 	binary.BigEndian.PutUint64(span, chunk.DefaultSize) // TODO: should this be little-endian?
 	return span
 }
