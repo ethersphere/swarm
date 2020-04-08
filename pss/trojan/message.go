@@ -93,7 +93,7 @@ func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 
 	span := make([]byte, 8)
 	// 4064 bytes for message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
-	binary.BigEndian.PutUint64(span, chunk.DefaultSize)
+	binary.LittleEndian.PutUint64(span, chunk.DefaultSize)
 
 	// iterate fields to build torjan chunk with coherent address and payload
 	chunk, err := toChunk(targets, span, m)

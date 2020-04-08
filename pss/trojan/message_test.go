@@ -98,7 +98,7 @@ func TestWrap(t *testing.T) {
 		t.Fatalf("trojan chunk payload has an unexpected size of %d rather than %d", payloadSize, expectedSize)
 	}
 
-	span := binary.BigEndian.Uint64(payload[:8])
+	span := binary.LittleEndian.Uint64(payload[:8])
 	remPayloadLen := len(payload[8:])
 
 	if int(span) != remPayloadLen {
