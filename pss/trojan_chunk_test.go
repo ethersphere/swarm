@@ -30,10 +30,10 @@ var testTargets = [][]byte{
 	[]byte{89, 19},
 	[]byte{22, 129}}
 
-// newTestTrojanMessage creates an arbitrary trojan message for tests
-func newTestTrojanMessage(t *testing.T) trojanMessage {
+// newTestTrojanMsg creates an arbitrary trojan message for tests
+func newTestTrojanMsg(t *testing.T) trojanMsg {
 	payload := []byte("foopayload")
-	tm, err := newTrojanMessage(newMessageTopic("RECOVERY"), payload)
+	tm, err := newTrojanMsg(newMsgTopic("RECOVERY"), payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func newTestTrojanMessage(t *testing.T) trojanMessage {
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
 func TestNewTrojanChunk(t *testing.T) {
-	tc, err := newTrojanChunk(testTargets, newTestTrojanMessage(t))
+	tc, err := newTrojanChunk(testTargets, newTestTrojanMsg(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +55,12 @@ func TestNewTrojanChunk(t *testing.T) {
 	addr := tc.Address()
 	addrPrefix := addr[:len(testTargets[0])]
 
-	if !hashPrefixInTargets(addrPrefix, testTargets) {
+	if !contains(testTargets, addrPrefix) {
 		t.Fatal("trojan chunk address prefix does not match any of the targets")
 	}
 
 	payload := tc.Data()
-	payloadHash, err := hashTrojanChunk(payload)
+	payloadHash, err := hash(payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,16 +70,16 @@ func TestNewTrojanChunk(t *testing.T) {
 	}
 }
 
-// TestTrojanMessageSerialization tests that the trojanMessage type can be correctly serialized and deserialized
-func TestTrojanMessageSerialization(t *testing.T) {
-	tm := newTestTrojanMessage(t)
+// TestTrojanMsgSerialization tests that the trojanMessage type can be correctly serialized and deserialized
+func TestTrojanMsgSerialization(t *testing.T) {
+	tm := newTestTrojanMsg(t)
 
 	stm, err := tm.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dtm := new(trojanMessage)
+	dtm := new(trojanMsg)
 	err = dtm.UnmarshalBinary(stm)
 	if err != nil {
 		t.Fatal(err)

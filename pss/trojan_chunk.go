@@ -28,48 +28,48 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-// messageTopic is an alias for a 32 byte fixed-size array which contains an encoding of a message topic
-type messageTopic [32]byte
+// msgTopic is an alias for a 32 byte fixed-size array which contains an encoding of a message topic
+type msgTopic [32]byte
 
-type trojanMessage struct {
+type trojanMsg struct {
 	length  [2]byte // big-endian encoding of message length
-	topic   messageTopic
+	topic   msgTopic
 	payload []byte
 	padding []byte
 }
 
-const trojanMsgPayloadMaxSize = 4030                           // in bytes
-var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
+const trojanMsgPayloadMaxSize = 4030                  // maximum allowed payload size for trojan message, in bytes
+var hashFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
 
-// newMessageTopic creates a new messageTopic variable with the given input string
+// newMsgTopic creates a new messageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
-func newMessageTopic(topic string) messageTopic {
+func newMsgTopic(topic string) msgTopic {
 	// TODO: is it ok to use this instead of `crypto.Keccak256`?
-	return messageTopic(crypto.Keccak256Hash([]byte(topic)))
+	return msgTopic(crypto.Keccak256Hash([]byte(topic)))
 }
 
-// newTrojanMessage creates a new trojanMessage variable with the given topic and message payload
-// it finds a length and nonce for the trojanMessage according to the given input and maximum payload size
-func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error) {
+// newTrojanMsg creates a new trojanMsg variable with the given topic and message payload
+// it finds a length and nonce for the trojanMsg according to the given input and maximum payload size
+func newTrojanMsg(topic msgTopic, payload []byte) (trojanMsg, error) {
 	if len(payload) > trojanMsgPayloadMaxSize {
-		return trojanMessage{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
+		return trojanMsg{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
 	}
 
 	// get length as array of 2 bytes
-	payloadLength := uint16(len(payload))
-	lengthBuffer := make([]byte, 2)
-	binary.BigEndian.PutUint16(lengthBuffer, payloadLength)
+	payloadLen := uint16(len(payload))
+	lengthBuf := make([]byte, 2)
+	binary.BigEndian.PutUint16(lengthBuf, payloadLen)
 
 	// set random bytes as padding
-	paddingLength := trojanMsgPayloadMaxSize - payloadLength
-	padding := make([]byte, paddingLength)
+	paddingLen := trojanMsgPayloadMaxSize - payloadLen
+	padding := make([]byte, paddingLen)
 	if _, err := rand.Read(padding); err != nil {
-		return trojanMessage{}, err
+		return trojanMsg{}, err
 	}
 
 	// create new trojan message var and set fields
-	tm := new(trojanMessage)
-	copy(tm.length[:], lengthBuffer[:])
+	tm := new(trojanMsg)
+	copy(tm.length[:], lengthBuf[:])
 	tm.payload = payload
 	tm.padding = padding
 
@@ -77,17 +77,17 @@ func newTrojanMessage(topic messageTopic, payload []byte) (trojanMessage, error)
 }
 
 // newTrojanChunk creates a new trojan chunk for the given targets and trojan message
+// a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
-func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error) {
+func newTrojanChunk(targets [][]byte, msg trojanMsg) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
 
-	// create span
-	span := newTrojanChunkSpan()
+	span := newSpan()
 
 	// iterate fields to build torjan chunk with coherent address and payload
-	chunk, err := iterateTrojanChunk(targets, span, message)
+	chunk, err := iterTrojanChunk(targets, span, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -100,37 +100,37 @@ func checkTargets(targets [][]byte) error {
 	if len(targets) == 0 {
 		return fmt.Errorf("target list cannot be empty")
 	}
-	validLength := len(targets[0]) // take first element as allowed length
+	validLen := len(targets[0]) // take first element as allowed length
 	for i := 1; i < len(targets); i++ {
-		if len(targets[i]) != validLength {
+		if len(targets[i]) != validLen {
 			return fmt.Errorf("target list cannot have targets of different length")
 		}
 	}
 	return nil
 }
 
-// newTrojanChunkSpan creates a pre-set 8-byte span for a trojan chunk
-func newTrojanChunkSpan() []byte {
+// newSpan creates a pre-set 8-byte span for a trojan chunk
+func newSpan() []byte {
 	span := make([]byte, 8)
 	binary.BigEndian.PutUint64(span, chunk.DefaultSize) // TODO: should this be little-endian?
 	return span
 }
 
-// iterateTrojanChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
+// iterTrojanChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
 // this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
 // the function returns a new chunk, with the matching hash to be used as its address,
 // and its payload set to the serialization of the trojan chunk fields which correctly hash into the matching address
-func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (chunk.Chunk, error) {
+func iterTrojanChunk(targets [][]byte, span []byte, msg trojanMsg) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
 	nonceInt := new(big.Int).SetBytes(nonce)
-	targetsLength := len(targets[0])
+	targetsLen := len(targets[0])
 
 	// serialize trojan message
-	m, err := message.MarshalBinary() // TODO: this should be encrypted
+	m, err := msg.MarshalBinary() // TODO: this should be encrypted
 	if err != nil {
 		return nil, err
 	}
@@ -138,14 +138,14 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (c
 	// hash trojan chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		s := append(append(span, nonce...), m...)
-		hash, hashErr := hashTrojanChunk(s)
-		if hashErr != nil {
-			return nil, hashErr
+		s := append(append(span, nonce...), m...) // serialize trojan chunk fields
+		hash, err := hash(s)
+		if err != nil {
+			return nil, err
 		}
 
 		// take as much of the hash as the targets are long
-		if hashPrefixInTargets(hash[:targetsLength], targets) {
+		if contains(targets, hash[:targetsLen]) {
 			// if nonce found, stop loop and return chunk
 			return chunk.NewChunk(hash, s), nil
 		}
@@ -159,9 +159,9 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (c
 	}
 }
 
-// hashTrojanChunk hashes the serialization of trojan chunk fields with the trojan hashing func
-func hashTrojanChunk(s []byte) ([]byte, error) {
-	hasher := trojanHashingFunc()
+// hash hashes the serialization of trojan chunk fields with the trojan hashing func
+func hash(s []byte) ([]byte, error) {
+	hasher := hashFunc()
 	hasher.Reset()
 	if _, err := hasher.Write(s); err != nil {
 		return nil, err
@@ -169,10 +169,10 @@ func hashTrojanChunk(s []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
-// hashPrefixInTargets returns whether the given hash prefix appears in the targets given as a collection of byte slices
-func hashPrefixInTargets(hashPrefix []byte, targets [][]byte) bool {
-	for i := range targets {
-		if bytes.Equal(hashPrefix, targets[i]) {
+// contains returns whether the given collection contains the given elem
+func contains(col [][]byte, elem []byte) bool {
+	for i := range col {
+		if bytes.Equal(elem, col[i]) {
 			return true
 		}
 	}
@@ -192,16 +192,16 @@ func padBytes(b []byte) []byte {
 	return bb
 }
 
-// MarshalBinary serializes a trojanMessage struct
-func (tm *trojanMessage) MarshalBinary() (data []byte, err error) {
+// MarshalBinary serializes a trojanMsg struct
+func (tm *trojanMsg) MarshalBinary() (data []byte, err error) {
 	m := append(tm.length[:], tm.topic[:]...)
 	m = append(m, tm.payload...)
 	m = append(m, tm.padding...)
 	return m, nil
 }
 
-// UnmarshalBinary deserializes a trojanMesage struct
-func (tm *trojanMessage) UnmarshalBinary(data []byte) (err error) {
+// UnmarshalBinary deserializes a trojanMsg struct
+func (tm *trojanMsg) UnmarshalBinary(data []byte) (err error) {
 	copy(tm.length[:], data[:2])  // first 2 bytes are length
 	copy(tm.topic[:], data[2:34]) // following 32 bytes are topic
 
