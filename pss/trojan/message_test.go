@@ -67,13 +67,12 @@ func TestNewMessage(t *testing.T) {
 	}
 }
 
-// TestWarp tests the creation of a trojan chunk
+// TestWrap tests the creation of a trojan chunk
 // its fields as a regular chunk should be correct
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
-func TestWarp(t *testing.T) {
-	m := newTestMessage(t)
-	c, err := m.Wrap(testTargets)
+func TestWrap(t *testing.T) {
+	c, err := Wrap(testTargets, newTestMessage(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +120,7 @@ func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
 	emptyTargets := [][]byte{}
-	if _, err := m.Wrap(emptyTargets); err != errEmptyTargets {
+	if _, err := Wrap(emptyTargets, m); err != errEmptyTargets {
 		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
 	}
 
@@ -130,7 +129,7 @@ func TestWrapFail(t *testing.T) {
 		[]byte{25, 120},
 		[]byte{180, 18, 255},
 	}
-	if _, err := m.Wrap(varLenTargets); err != errVarLenTargets {
+	if _, err := Wrap(varLenTargets, m); err != errVarLenTargets {
 		t.Fatalf("expected error when creating trojan chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
 	}
 }

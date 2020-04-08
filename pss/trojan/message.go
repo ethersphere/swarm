@@ -86,8 +86,7 @@ func newMessage(topic Topic, payload []byte) (Message, error) {
 
 // Wrap creates a new trojan chunk for the given targets and trojan message
 // a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload
-// TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
-func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
+func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
@@ -97,7 +96,7 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 	binary.BigEndian.PutUint64(span, chunk.DefaultSize)
 
 	// iterate fields to build torjan chunk with coherent address and payload
-	chunk, err := toChunk(targets, span, *m)
+	chunk, err := toChunk(targets, span, m)
 	if err != nil {
 		return nil, err
 	}
