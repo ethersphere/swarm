@@ -39,8 +39,8 @@ type trojanMsg struct {
 	padding []byte
 }
 
-const trojanMsgPayloadMaxSize = 4030                  // maximum allowed payload size for trojan message, in bytes
-var hashFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
+const trojanMsgPayloadMaxSize = 4030 // maximum allowed payload size for trojan message, in bytes
+var hashFunc = storage.MakeHashFunc(storage.BMTHash)
 
 var errPayloadTooBig = fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
 var errEmptyTargets = errors.New("target list cannot be empty")
@@ -168,8 +168,8 @@ func iterTrojanChunk(targets [][]byte, span []byte, msg trojanMsg) (chunk.Chunk,
 // hash hashes the serialization of trojan chunk fields with the trojan hashing func
 func hash(s []byte) ([]byte, error) {
 	hasher := hashFunc()
-	hasher.Reset()
-	if _, err := hasher.Write(s); err != nil {
+	hasher.SetSpanBytes(s[:8])
+	if _, err := hasher.Write(s[8:]); err != nil {
 		return nil, err
 	}
 	return hasher.Sum(nil), nil
