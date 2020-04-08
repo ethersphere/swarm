@@ -140,7 +140,7 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 	// hash trojan chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		s, _ := serializeTrojanChunk(span, nonce, m) // err always nil here
+		s := append(append(span, nonce...), m...) // err always nil here
 		hash, hashErr := hashTrojanChunk(s)
 		if hashErr != nil {
 			return emptyAddr, emptyPayload, hashErr
@@ -156,14 +156,6 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 		nonceInt.Add(nonceInt, big.NewInt(1))
 		nonce = nonceInt.Bytes()
 	}
-}
-
-// serializeTrojanChunk appends the span, nonce and trojan message fields of a trojan chunk and returns the result
-// this can be used as the input for trojan chunk hash calculation
-func serializeTrojanChunk(span, nonce, message []byte) ([]byte, error) {
-	h := append(span, nonce...)
-	s := append(h, message...)
-	return s, nil
 }
 
 // hashTrojanChunk hashes the serialization of trojan chunk fields with the trojan hashing func
