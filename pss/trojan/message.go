@@ -39,12 +39,12 @@ type message struct {
 	padding []byte
 }
 
-// MaxPayloadSize is the maximum allowed payload size for trojan message, in bytes
+// MaxPayloadSize is the maximum allowed payload size for message, in bytes
 const MaxPayloadSize = 4030
 
 var hashFunc = storage.MakeHashFunc(storage.BMTHash)
 
-var errPayloadTooBig = fmt.Errorf("trojan message payload cannot be greater than %d bytes", MaxPayloadSize)
+var errPayloadTooBig = fmt.Errorf("message payload cannot be greater than %d bytes", MaxPayloadSize)
 var errEmptyTargets = errors.New("target list cannot be empty")
 var errVarLenTargets = errors.New("target list cannot have targets of different length")
 
@@ -55,9 +55,9 @@ func NewTopic(topic string) Topic {
 	return Topic(crypto.Keccak256Hash([]byte(topic)))
 }
 
-// newMsg creates a new message variable with the given topic and message payload
+// newMessage creates a new message variable with the given topic and message payload
 // it finds a length and nonce for the message according to the given input and maximum payload size
-func newMsg(topic Topic, payload []byte) (message, error) {
+func newMessage(topic Topic, payload []byte) (message, error) {
 	if len(payload) > MaxPayloadSize {
 		return message{}, errPayloadTooBig
 	}
@@ -74,7 +74,7 @@ func newMsg(topic Topic, payload []byte) (message, error) {
 		return message{}, err
 	}
 
-	// create new trojan message var and invalidTargetsset fields
+	// create new message var and set fields
 	tm := new(message)
 	copy(tm.length[:], lengthBuf[:])
 	tm.payload = payload
@@ -116,10 +116,10 @@ func checkTargets(targets [][]byte) error {
 	return nil
 }
 
-// newSpan creates a pre-set 8-byte span for a trojan chunk
+// newSpan creates a pre-set 8-byte span for a chunk
 func newSpan() []byte {
 	span := make([]byte, 8)
-	// 4064 bytes for trojan message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
+	// 4064 bytes for message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
 	binary.BigEndian.PutUint64(span, chunk.DefaultSize) // TODO: should this be little-endian?
 	return span
 }
@@ -137,16 +137,16 @@ func iterTrojanChunk(targets [][]byte, span []byte, msg message) (chunk.Chunk, e
 	nonceInt := new(big.Int).SetBytes(nonce)
 	targetsLen := len(targets[0])
 
-	// serialize trojan message
+	// serialize message
 	m, err := msg.MarshalBinary() // TODO: this should be encrypted
 	if err != nil {
 		return nil, err
 	}
 
-	// hash trojan chunk fields with different nonces until an acceptable one is found
+	// hash chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		s := append(append(span, nonce...), m...) // serialize trojan chunk fields
+		s := append(append(span, nonce...), m...) // serialize chunk fields
 		hash, err := hash(s)
 		if err != nil {
 			return nil, err
@@ -167,7 +167,7 @@ func iterTrojanChunk(targets [][]byte, span []byte, msg message) (chunk.Chunk, e
 	}
 }
 
-// hash hashes the serialization of trojan chunk fields with the trojan hashing func
+// hash hashes the serialization of chunk fields with the hashing func
 func hash(s []byte) ([]byte, error) {
 	hasher := hashFunc()
 	hasher.SetSpanBytes(s[:8])
