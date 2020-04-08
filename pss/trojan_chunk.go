@@ -150,9 +150,12 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (c
 			return chunk.NewChunk(hash, s), nil
 		}
 		// else, add 1 to nonce and try again
-		// TODO: test loop-around
 		nonceInt.Add(nonceInt, big.NewInt(1))
-		nonce = nonceInt.Bytes()
+		// loop around in case of overflow
+		if nonceInt.BitLen() > 256 {
+			nonceInt = big.NewInt(0)
+		}
+		nonce = padBytes(nonceInt.Bytes()) // pad in case Bytes call is not long enough
 	}
 }
 
@@ -174,6 +177,19 @@ func hashPrefixInTargets(hashPrefix []byte, targets [][]byte) bool {
 		}
 	}
 	return false
+}
+
+// padBytes adds 0s to the given byte slice as left padding,
+// returning this as a new byte slice with a length of exactly 32
+// given param is assumed to be at most 32 bytes long
+func padBytes(b []byte) []byte {
+	l := len(b)
+	if l == 32 {
+		return b
+	}
+	bb := make([]byte, 32)
+	copy(bb[32-l:], b)
+	return bb
 }
 
 // MarshalBinary serializes a trojanMessage struct
