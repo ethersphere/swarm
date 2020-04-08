@@ -36,31 +36,31 @@ var testTargets = [][]byte{
 // arbitrary topic for tests
 var testTopic = newTopic("foo")
 
-// newTestTrojanMsg creates an arbitrary trojan message for tests
-func newTestTrojanMsg(t *testing.T) trojanMsg {
+// newTestMsg creates an arbitrary trojan message for tests
+func newTestMsg(t *testing.T) message {
 	payload := []byte("foopayload")
-	tm, err := newTrojanMsg(testTopic, payload)
+	m, err := newMsg(testTopic, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return tm
+	return m
 }
 
-// TestNewTrojanMsg tests the creation of a trojan message
-func TestNewTrojanMsg(t *testing.T) {
+// TestNewMsg tests the creation of a trojan message
+func TestNewMsg(t *testing.T) {
 	smallPayload := make([]byte, 32)
-	if _, err := newTrojanMsg(testTopic, smallPayload); err != nil {
+	if _, err := newMsg(testTopic, smallPayload); err != nil {
 		t.Fatal(err)
 	}
 
-	maxPayload := make([]byte, trojanMsgPayloadMaxSize)
-	if _, err := newTrojanMsg(testTopic, maxPayload); err != nil {
+	maxPayload := make([]byte, MaxPayloadSize)
+	if _, err := newMsg(testTopic, maxPayload); err != nil {
 		t.Fatal(err)
 	}
 
-	invalidPayload := make([]byte, trojanMsgPayloadMaxSize+1)
-	if _, err := newTrojanMsg(testTopic, invalidPayload); err != errPayloadTooBig {
+	invalidPayload := make([]byte, MaxPayloadSize+1)
+	if _, err := newMsg(testTopic, invalidPayload); err != errPayloadTooBig {
 		t.Fatalf("expected error when creating trojan message of invalid size to be %q, but got %v", errPayloadTooBig, err)
 	}
 }
@@ -70,7 +70,7 @@ func TestNewTrojanMsg(t *testing.T) {
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
 func TestNewTrojanChunk(t *testing.T) {
-	tc, err := newTrojanChunk(testTargets, newTestTrojanMsg(t))
+	tc, err := newTrojanChunk(testTargets, newTestMsg(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestNewTrojanChunk(t *testing.T) {
 // TestNewTrojanChunk tests the creation of a trojan chunk fails when given targets are invalid
 func TestNewTrojanChunkFailure(t *testing.T) {
 	emptyTargets := [][]byte{}
-	if _, err := newTrojanChunk(emptyTargets, newTestTrojanMsg(t)); err != errEmptyTargets {
+	if _, err := newTrojanChunk(emptyTargets, newTestMsg(t)); err != errEmptyTargets {
 		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
 	}
 
@@ -125,27 +125,27 @@ func TestNewTrojanChunkFailure(t *testing.T) {
 		[]byte{25, 120},
 		[]byte{180, 18, 255},
 	}
-	if _, err := newTrojanChunk(varLenTargets, newTestTrojanMsg(t)); err != errVarLenTargets {
+	if _, err := newTrojanChunk(varLenTargets, newTestMsg(t)); err != errVarLenTargets {
 		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errVarLenTargets, err)
 	}
 }
 
-// TestTrojanMsgSerialization tests that the trojanMessage type can be correctly serialized and deserialized
-func TestTrojanMsgSerialization(t *testing.T) {
-	tm := newTestTrojanMsg(t)
+// TestMessageSerialization tests that the message type can be correctly serialized and deserialized
+func TestMessageSerialization(t *testing.T) {
+	m := newTestMsg(t)
 
-	stm, err := tm.MarshalBinary()
+	sm, err := m.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dtm := new(trojanMsg)
-	err = dtm.UnmarshalBinary(stm)
+	dsm := new(message)
+	err = dsm.UnmarshalBinary(sm)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(tm, *dtm) {
+	if !reflect.DeepEqual(m, *dsm) {
 		t.Fatalf("original trojan message does not match deserialized one")
 	}
 }
