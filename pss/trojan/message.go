@@ -84,10 +84,10 @@ func newMessage(topic Topic, payload []byte) (Message, error) {
 	return *m, nil
 }
 
-// newTrojanChunk creates a new trojan chunk for the given targets and trojan message
+// Wrap creates a new trojan chunk for the given targets and trojan message
 // a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
-func newTrojanChunk(targets [][]byte, msg Message) (chunk.Chunk, error) {
+func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func newTrojanChunk(targets [][]byte, msg Message) (chunk.Chunk, error) {
 	span := newSpan()
 
 	// iterate fields to build torjan chunk with coherent address and payload
-	chunk, err := iterTrojanChunk(targets, span, msg)
+	chunk, err := iterTrojanChunk(targets, span, *m)
 	if err != nil {
 		return nil, err
 	}
@@ -202,22 +202,22 @@ func padBytes(b []byte) []byte {
 }
 
 // MarshalBinary serializes a message struct
-func (tm *Message) MarshalBinary() (data []byte, err error) {
-	m := append(tm.length[:], tm.topic[:]...)
-	m = append(m, tm.payload...)
-	m = append(m, tm.padding...)
-	return m, nil
+func (m *Message) MarshalBinary() (data []byte, err error) {
+	data = append(m.length[:], m.topic[:]...)
+	data = append(data, m.payload...)
+	data = append(data, m.padding...)
+	return
 }
 
 // UnmarshalBinary deserializes a message struct
-func (tm *Message) UnmarshalBinary(data []byte) (err error) {
-	copy(tm.length[:], data[:2])  // first 2 bytes are length
-	copy(tm.topic[:], data[2:34]) // following 32 bytes are topic
+func (m *Message) UnmarshalBinary(data []byte) (err error) {
+	copy(m.length[:], data[:2])  // first 2 bytes are length
+	copy(m.topic[:], data[2:34]) // following 32 bytes are topic
 
 	// rest of the bytes are payload and padding
-	length := binary.BigEndian.Uint16(tm.length[:])
+	length := binary.BigEndian.Uint16(m.length[:])
 	payloadEnd := 34 + length
-	tm.payload = data[34:payloadEnd]
-	tm.padding = data[payloadEnd:]
+	m.payload = data[34:payloadEnd]
+	m.padding = data[payloadEnd:]
 	return nil
 }

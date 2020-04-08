@@ -71,12 +71,13 @@ func TestNewMessage(t *testing.T) {
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
 func TestNewTrojanChunk(t *testing.T) {
-	tc, err := newTrojanChunk(testTargets, newTestMessage(t))
+	m := newTestMessage(t)
+	c, err := m.Wrap(testTargets)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	addr := tc.Address()
+	addr := c.Address()
 	addrLen := len(addr)
 
 	if addrLen != chunk.AddressLength {
@@ -89,7 +90,7 @@ func TestNewTrojanChunk(t *testing.T) {
 		t.Fatal("trojan chunk address prefix does not match any of the targets")
 	}
 
-	payload := tc.Data()
+	payload := c.Data()
 	payloadSize := len(payload)
 	expectedSize := chunk.DefaultSize + 8 // payload + span
 
@@ -116,8 +117,10 @@ func TestNewTrojanChunk(t *testing.T) {
 
 // TestNewTrojanChunk tests the creation of a trojan chunk fails when given targets are invalid
 func TestNewTrojanChunkFailure(t *testing.T) {
+	m := newTestMessage(t)
+
 	emptyTargets := [][]byte{}
-	if _, err := newTrojanChunk(emptyTargets, newTestMessage(t)); err != errEmptyTargets {
+	if _, err := m.Wrap(emptyTargets); err != errEmptyTargets {
 		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
 	}
 
@@ -126,7 +129,7 @@ func TestNewTrojanChunkFailure(t *testing.T) {
 		[]byte{25, 120},
 		[]byte{180, 18, 255},
 	}
-	if _, err := newTrojanChunk(varLenTargets, newTestMessage(t)); err != errVarLenTargets {
+	if _, err := m.Wrap(varLenTargets); err != errVarLenTargets {
 		t.Fatalf("expected error when creating trojan chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
 	}
 }
