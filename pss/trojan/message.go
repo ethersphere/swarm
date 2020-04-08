@@ -97,7 +97,7 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 	binary.BigEndian.PutUint64(span, chunk.DefaultSize)
 
 	// iterate fields to build torjan chunk with coherent address and payload
-	chunk, err := iterTrojanChunk(targets, span, *m)
+	chunk, err := toChunk(targets, span, *m)
 	if err != nil {
 		return nil, err
 	}
@@ -119,11 +119,11 @@ func checkTargets(targets [][]byte) error {
 	return nil
 }
 
-// iterTrojanChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
+// toChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
 // this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
 // the function returns a new chunk, with the matching hash to be used as its address,
 // and its payload set to the serialization of the trojan chunk fields which correctly hash into the matching address
-func iterTrojanChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
+func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
