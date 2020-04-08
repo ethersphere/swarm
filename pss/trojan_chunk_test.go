@@ -33,6 +33,7 @@ var testTargets = [][]byte{
 	[]byte{89, 19},
 	[]byte{22, 129}}
 
+// arbitrary topic for tests
 var testTopic = newMsgTopic("foo")
 
 // newTestTrojanMsg creates an arbitrary trojan message for tests
@@ -59,8 +60,8 @@ func TestNewTrojanMsg(t *testing.T) {
 	}
 
 	invalidPayload := make([]byte, trojanMsgPayloadMaxSize+1)
-	if _, err := newTrojanMsg(testTopic, invalidPayload); err != trojanMsgPayloadErr {
-		t.Fatalf("expected error when creating trojan message of invalid size to be %s, but got %s", trojanMsgPayloadErr, err)
+	if _, err := newTrojanMsg(testTopic, invalidPayload); err != errPayloadTooBig {
+		t.Fatalf("expected error when creating trojan message of invalid size to be %q, but got %v", errPayloadTooBig, err)
 	}
 }
 
@@ -112,8 +113,21 @@ func TestNewTrojanChunk(t *testing.T) {
 	}
 }
 
+// TestNewTrojanChunk tests the creation of a trojan chunk fails when given targets are invalid
 func TestNewTrojanChunkFailure(t *testing.T) {
+	emptyTargets := [][]byte{}
+	if _, err := newTrojanChunk(emptyTargets, newTestTrojanMsg(t)); err != errEmptyTargets {
+		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
+	}
 
+	varLenTargets := [][]byte{
+		[]byte{34},
+		[]byte{25, 120},
+		[]byte{180, 18, 255},
+	}
+	if _, err := newTrojanChunk(varLenTargets, newTestTrojanMsg(t)); err != errVarLenTargets {
+		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errVarLenTargets, err)
+	}
 }
 
 // TestTrojanMsgSerialization tests that the trojanMessage type can be correctly serialized and deserialized

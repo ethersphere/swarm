@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -41,7 +42,9 @@ type trojanMsg struct {
 const trojanMsgPayloadMaxSize = 4030                  // maximum allowed payload size for trojan message, in bytes
 var hashFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
 
-var trojanMsgPayloadErr = fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
+var errPayloadTooBig = fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
+var errEmptyTargets = errors.New("target list cannot be empty")
+var errVarLenTargets = errors.New("target list cannot have targets of different length")
 
 // newMsgTopic creates a new messageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
@@ -54,7 +57,7 @@ func newMsgTopic(topic string) msgTopic {
 // it finds a length and nonce for the trojanMsg according to the given input and maximum payload size
 func newTrojanMsg(topic msgTopic, payload []byte) (trojanMsg, error) {
 	if len(payload) > trojanMsgPayloadMaxSize {
-		return trojanMsg{}, trojanMsgPayloadErr
+		return trojanMsg{}, errPayloadTooBig
 	}
 
 	// get length as array of 2 bytes
@@ -69,7 +72,7 @@ func newTrojanMsg(topic msgTopic, payload []byte) (trojanMsg, error) {
 		return trojanMsg{}, err
 	}
 
-	// create new trojan message var and set fields
+	// create new trojan message var and invalidTargetsset fields
 	tm := new(trojanMsg)
 	copy(tm.length[:], lengthBuf[:])
 	tm.payload = payload
@@ -100,12 +103,12 @@ func newTrojanChunk(targets [][]byte, msg trojanMsg) (chunk.Chunk, error) {
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
 func checkTargets(targets [][]byte) error {
 	if len(targets) == 0 {
-		return fmt.Errorf("target list cannot be empty")
+		return errEmptyTargets
 	}
 	validLen := len(targets[0]) // take first element as allowed length
 	for i := 1; i < len(targets); i++ {
 		if len(targets[i]) != validLen {
-			return fmt.Errorf("target list cannot have targets of different length")
+			return errVarLenTargets
 		}
 	}
 	return nil
