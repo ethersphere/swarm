@@ -86,7 +86,7 @@ func newTrojanChunk(targets [][]byte, message trojanMessage) (chunk.Chunk, error
 	// create span
 	span := newTrojanChunkSpan()
 
-	// iterate trojan chunk fields to find coherent address and payload for chunk
+	// iterate fields to build torjan chunk with coherent address and payload
 	chunk, err := iterateTrojanChunk(targets, span, message)
 	if err != nil {
 		return nil, err
