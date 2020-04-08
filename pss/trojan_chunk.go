@@ -121,12 +121,10 @@ func newTrojanChunkSpan() []byte {
 // the function returns the matching hash to be used as an address for a regular chunk, plus its payload
 // the payload is the serialization of the trojan chunk fields which correctly hash into the matching address
 func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (addr, payload []byte, err error) {
-	emptyAddr, emptyPayload := []byte{}, []byte{}
-
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, errRand := rand.Read(nonce); err != nil {
-		return emptyAddr, emptyPayload, errRand
+		return nil, nil, errRand
 	}
 	nonceInt := new(big.Int).SetBytes(nonce)
 	targetsLength := len(targets[0])
@@ -134,7 +132,7 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 	// serialize trojan message
 	m, marshalErr := message.MarshalBinary() // TODO: this should be encrypted
 	if marshalErr != nil {
-		return emptyAddr, emptyPayload, marshalErr
+		return nil, nil, marshalErr
 	}
 
 	// hash trojan chunk fields with different nonces until an acceptable one is found
@@ -143,7 +141,7 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 		s := append(append(span, nonce...), m...) // err always nil here
 		hash, hashErr := hashTrojanChunk(s)
 		if hashErr != nil {
-			return emptyAddr, emptyPayload, hashErr
+			return nil, nil, hashErr
 		}
 
 		// take as much of the hash as the targets are long
@@ -162,7 +160,7 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 func hashTrojanChunk(s []byte) ([]byte, error) {
 	trojanHashingFunc.Reset() // TODO: why do we need to do this?
 	if _, err := trojanHashingFunc.Write(s); err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 	return trojanHashingFunc.Sum(nil), nil
 }
