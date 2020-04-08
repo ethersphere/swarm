@@ -19,6 +19,7 @@ package trojan
 import (
 	"bytes"
 	"encoding/binary"
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -66,11 +67,11 @@ func TestNewMessage(t *testing.T) {
 	}
 }
 
-// TestNewTrojanChunk tests the creation of a trojan chunk
+// TestWarp tests the creation of a trojan chunk
 // its fields as a regular chunk should be correct
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
-func TestNewTrojanChunk(t *testing.T) {
+func TestWarp(t *testing.T) {
 	m := newTestMessage(t)
 	c, err := m.Wrap(testTargets)
 	if err != nil {
@@ -116,7 +117,7 @@ func TestNewTrojanChunk(t *testing.T) {
 }
 
 // TestNewTrojanChunk tests the creation of a trojan chunk fails when given targets are invalid
-func TestNewTrojanChunkFailure(t *testing.T) {
+func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
 	emptyTargets := [][]byte{}
@@ -131,6 +132,38 @@ func TestNewTrojanChunkFailure(t *testing.T) {
 	}
 	if _, err := m.Wrap(varLenTargets); err != errVarLenTargets {
 		t.Fatalf("expected error when creating trojan chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
+	}
+}
+
+// TestPadBytes tests that different types of byte slices are correctly padded with leading 0s
+// all slices are interpreted as big-endian
+func TestPadBytes(t *testing.T) {
+	s := make([]byte, 32)
+
+	// empty slice should be unchanged
+	p := padBytes(s)
+	if !bytes.Equal(p, s) {
+		t.Fatalf("expected byte padding to result in %x, but is %x", s, p)
+	}
+
+	// slice of length 3
+	s = []byte{255, 128, 64}
+	p = padBytes(s)
+	e := append(make([]byte, 29), s...) // 29 zeros plus the 3 original bytes
+	if !bytes.Equal(p, e) {
+		t.Fatalf("expected byte padding to result in %x, but is %x", e, p)
+	}
+
+	// simulate toChunk behavior
+	s = []byte{255, 255, 255}
+	i := new(big.Int).SetBytes(s) // byte slice to big.Int
+	i.Add(i, big.NewInt(1))       // add 1 to slice as big.Int
+	s = i.Bytes()                 // []byte{1, 0, 0, 0}
+
+	p = padBytes(s)
+	e = append(make([]byte, 28), s...) // 28 zeros plus the 4 original bytes
+	if !bytes.Equal(p, e) {
+		t.Fatalf("expected byte padding to result in %x, but is %x", e, p)
 	}
 }
 
