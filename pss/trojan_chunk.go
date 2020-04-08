@@ -38,8 +38,8 @@ type trojanMessage struct {
 	padding []byte
 }
 
-const trojanPayloadMaxSize = 4064                                // in bytes
-var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash)() // TODO: make this work with storage.BMTHash
+const trojanPayloadMaxSize = 4064                              // in bytes
+var trojanHashingFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
 
 // newMessageTopic creates a new messageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
@@ -158,11 +158,12 @@ func iterateTrojanChunk(targets [][]byte, span []byte, message trojanMessage) (a
 
 // hashTrojanChunk hashes the serialization of trojan chunk fields with the trojan hashing func
 func hashTrojanChunk(s []byte) ([]byte, error) {
-	trojanHashingFunc.Reset() // TODO: why do we need to do this?
-	if _, err := trojanHashingFunc.Write(s); err != nil {
+	hasher := trojanHashingFunc()
+	hasher.Reset()
+	if _, err := hasher.Write(s); err != nil {
 		return nil, err
 	}
-	return trojanHashingFunc.Sum(nil), nil
+	return hasher.Sum(nil), nil
 }
 
 // hashPrefixInTargets returns whether the given hash prefix appears in the targets given as a collection of byte slices
