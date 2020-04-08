@@ -48,9 +48,9 @@ var errPayloadTooBig = fmt.Errorf("trojan message payload cannot be greater than
 var errEmptyTargets = errors.New("target list cannot be empty")
 var errVarLenTargets = errors.New("target list cannot have targets of different length")
 
-// newTopic creates a new messageTopic variable with the given input string
+// NewTopic creates a new messageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
-func newTopic(topic string) Topic {
+func NewTopic(topic string) Topic {
 	// TODO: is it ok to use this instead of `crypto.Keccak256`?
 	return Topic(crypto.Keccak256Hash([]byte(topic)))
 }

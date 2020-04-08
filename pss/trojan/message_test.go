@@ -34,7 +34,7 @@ var testTargets = [][]byte{
 	[]byte{22, 129}}
 
 // arbitrary topic for tests
-var testTopic = newTopic("foo")
+var testTopic = NewTopic("foo")
 
 // newTestMsg creates an arbitrary trojan message for tests
 func newTestMsg(t *testing.T) message {
