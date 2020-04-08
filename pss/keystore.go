@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss/crypto"
+	"github.com/ethersphere/swarm/pss/message"
 )
 
 type KeyStore struct {
