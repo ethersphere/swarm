@@ -40,7 +40,7 @@ type Message struct {
 	padding []byte
 }
 
-// MaxPayloadSize is the maximum allowed payload size for Message, in bytes
+// MaxPayloadSize is the maximum allowed payload size for the Message type, in bytes
 const MaxPayloadSize = 4030
 
 var hashFunc = storage.MakeHashFunc(storage.BMTHash)
@@ -52,11 +52,10 @@ var errVarLenTargets = errors.New("target list cannot have targets of different 
 // NewTopic creates a new Topic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func NewTopic(topic string) Topic {
-	// TODO: is it ok to use this instead of `crypto.Keccak256`?
 	return Topic(crypto.Keccak256Hash([]byte(topic)))
 }
 
-// newMessage creates a new message variable with the given topic and message payload
+// newMessage creates a new Message variable with the given topic and payload
 // it finds a length and nonce for the message according to the given input and maximum payload size
 func newMessage(topic Topic, payload []byte) (Message, error) {
 	if len(payload) > MaxPayloadSize {
@@ -75,7 +74,7 @@ func newMessage(topic Topic, payload []byte) (Message, error) {
 		return Message{}, err
 	}
 
-	// create new message var and set fields
+	// create new Message var and set fields
 	m := new(Message)
 	copy(m.length[:], lengthBuf[:])
 	m.payload = payload
@@ -84,18 +83,18 @@ func newMessage(topic Topic, payload []byte) (Message, error) {
 	return *m, nil
 }
 
-// Wrap creates a new trojan chunk for the given targets and trojan message
-// a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload
+// Wrap creates a new trojan chunk for the given targets and Message
+// a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload which contains the Message
+// the chunk address will have a matching prefix with one of the targets
 func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
 
 	span := make([]byte, 8)
-	// 4064 bytes for message payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
+	// 4064 bytes for trojan message as payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
 	binary.LittleEndian.PutUint64(span, chunk.DefaultSize)
 
-	// iterate fields to build torjan chunk with coherent address and payload
 	chunk, err := toChunk(targets, span, m)
 	if err != nil {
 		return nil, err
@@ -120,7 +119,7 @@ func checkTargets(targets [][]byte) error {
 
 // toChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
 // this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
-// the function returns a new chunk, with the matching hash to be used as its address,
+// the function returns a new chunk, with the found matching hash to be used as its address,
 // and its payload set to the serialization of the trojan chunk fields which correctly hash into the matching address
 func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 	// start out with random nonce
@@ -157,11 +156,11 @@ func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 		if nonceInt.BitLen() > 256 {
 			nonceInt = big.NewInt(0)
 		}
-		nonce = padBytes(nonceInt.Bytes()) // pad in case Bytes call is not long enough
+		nonce = padBytes(nonceInt.Bytes()) // pad in case Bytes call is not 32 bytes long
 	}
 }
 
-// hash hashes the serialization of chunk fields with the hashing func
+// hash hashes the given serialization of chunk fields with the hashing func
 func hash(s []byte) ([]byte, error) {
 	hasher := hashFunc()
 	hasher.SetSpanBytes(s[:8])
