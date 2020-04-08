@@ -48,7 +48,7 @@ func newTestMessage(t *testing.T) Message {
 	return m
 }
 
-// TestNewMessage tests the creation of a Message struct
+// TestNewMessage tests the correct and incorrect creation of a Message struct
 func TestNewMessage(t *testing.T) {
 	smallPayload := make([]byte, 32)
 	if _, err := newMessage(testTopic, smallPayload); err != nil {
@@ -67,8 +67,8 @@ func TestNewMessage(t *testing.T) {
 	}
 }
 
-// TestWrap tests the creation of a chunk
-// its fields as a regular chunk should be correct
+// TestWrap tests the creation of a chunk from a list of targets
+// its address length and span should be correct
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting payload should have a hash that matches its address exactly
 func TestWrap(t *testing.T) {
@@ -115,7 +115,7 @@ func TestWrap(t *testing.T) {
 	}
 }
 
-// TestNewTrojanChunk tests the creation of a chunk fails when given targets are invalid
+// TestWrapFail tests that the creation of a chunk fails when given targets are invalid
 func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
