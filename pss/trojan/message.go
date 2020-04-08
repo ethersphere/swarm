@@ -32,23 +32,24 @@ import (
 // Topic is an alias for a 32 byte fixed-size array which contains an encoding of a message topic
 type Topic [32]byte
 
-type message struct {
-	length  [2]byte // big-endian encoding of message length
+// Message represents a trojan message, which is a message that will be hidden within a chunk payload as part of its data
+type Message struct {
+	length  [2]byte // big-endian encoding of Message payload length
 	topic   Topic
 	payload []byte
 	padding []byte
 }
 
-// MaxPayloadSize is the maximum allowed payload size for message, in bytes
+// MaxPayloadSize is the maximum allowed payload size for Message, in bytes
 const MaxPayloadSize = 4030
 
 var hashFunc = storage.MakeHashFunc(storage.BMTHash)
 
-var errPayloadTooBig = fmt.Errorf("message payload cannot be greater than %d bytes", MaxPayloadSize)
+var errPayloadTooBig = fmt.Errorf("message payload size cannot be greater than %d bytes", MaxPayloadSize)
 var errEmptyTargets = errors.New("target list cannot be empty")
 var errVarLenTargets = errors.New("target list cannot have targets of different length")
 
-// NewTopic creates a new messageTopic variable with the given input string
+// NewTopic creates a new Topic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func NewTopic(topic string) Topic {
 	// TODO: is it ok to use this instead of `crypto.Keccak256`?
@@ -57,36 +58,36 @@ func NewTopic(topic string) Topic {
 
 // newMessage creates a new message variable with the given topic and message payload
 // it finds a length and nonce for the message according to the given input and maximum payload size
-func newMessage(topic Topic, payload []byte) (message, error) {
+func newMessage(topic Topic, payload []byte) (Message, error) {
 	if len(payload) > MaxPayloadSize {
-		return message{}, errPayloadTooBig
+		return Message{}, errPayloadTooBig
 	}
 
 	// get length as array of 2 bytes
-	payloadLen := uint16(len(payload))
+	payloadSize := uint16(len(payload))
 	lengthBuf := make([]byte, 2)
-	binary.BigEndian.PutUint16(lengthBuf, payloadLen)
+	binary.BigEndian.PutUint16(lengthBuf, payloadSize)
 
 	// set random bytes as padding
-	paddingLen := MaxPayloadSize - payloadLen
+	paddingLen := MaxPayloadSize - payloadSize
 	padding := make([]byte, paddingLen)
 	if _, err := rand.Read(padding); err != nil {
-		return message{}, err
+		return Message{}, err
 	}
 
 	// create new message var and set fields
-	tm := new(message)
-	copy(tm.length[:], lengthBuf[:])
-	tm.payload = payload
-	tm.padding = padding
+	m := new(Message)
+	copy(m.length[:], lengthBuf[:])
+	m.payload = payload
+	m.padding = padding
 
-	return *tm, nil
+	return *m, nil
 }
 
 // newTrojanChunk creates a new trojan chunk for the given targets and trojan message
 // a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload
 // TODO: discuss if instead of receiving a trojan message, we should receive a byte slice as payload
-func newTrojanChunk(targets [][]byte, msg message) (chunk.Chunk, error) {
+func newTrojanChunk(targets [][]byte, msg Message) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
@@ -128,7 +129,7 @@ func newSpan() []byte {
 // this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
 // the function returns a new chunk, with the matching hash to be used as its address,
 // and its payload set to the serialization of the trojan chunk fields which correctly hash into the matching address
-func iterTrojanChunk(targets [][]byte, span []byte, msg message) (chunk.Chunk, error) {
+func iterTrojanChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
@@ -201,7 +202,7 @@ func padBytes(b []byte) []byte {
 }
 
 // MarshalBinary serializes a message struct
-func (tm *message) MarshalBinary() (data []byte, err error) {
+func (tm *Message) MarshalBinary() (data []byte, err error) {
 	m := append(tm.length[:], tm.topic[:]...)
 	m = append(m, tm.payload...)
 	m = append(m, tm.padding...)
@@ -209,7 +210,7 @@ func (tm *message) MarshalBinary() (data []byte, err error) {
 }
 
 // UnmarshalBinary deserializes a message struct
-func (tm *message) UnmarshalBinary(data []byte) (err error) {
+func (tm *Message) UnmarshalBinary(data []byte) (err error) {
 	copy(tm.length[:], data[:2])  // first 2 bytes are length
 	copy(tm.topic[:], data[2:34]) // following 32 bytes are topic
 

@@ -36,8 +36,8 @@ var testTargets = [][]byte{
 // arbitrary topic for tests
 var testTopic = NewTopic("foo")
 
-// newTestMessage creates an arbitrary message for tests
-func newTestMessage(t *testing.T) message {
+// newTestMessage creates an arbitrary Message for tests
+func newTestMessage(t *testing.T) Message {
 	payload := []byte("foopayload")
 	m, err := newMessage(testTopic, payload)
 	if err != nil {
@@ -47,7 +47,7 @@ func newTestMessage(t *testing.T) message {
 	return m
 }
 
-// TestNewMessage tests the creation of a message
+// TestNewMessage tests the creation of a Message struct
 func TestNewMessage(t *testing.T) {
 	smallPayload := make([]byte, 32)
 	if _, err := newMessage(testTopic, smallPayload); err != nil {
@@ -59,9 +59,10 @@ func TestNewMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// the creation should fail if the payload is too big
 	invalidPayload := make([]byte, MaxPayloadSize+1)
 	if _, err := newMessage(testTopic, invalidPayload); err != errPayloadTooBig {
-		t.Fatalf("expected error when creating trojan message of invalid size to be %q, but got %v", errPayloadTooBig, err)
+		t.Fatalf("expected error when creating trojan message of invalid payload size to be %q, but got %v", errPayloadTooBig, err)
 	}
 }
 
@@ -79,7 +80,7 @@ func TestNewTrojanChunk(t *testing.T) {
 	addrLen := len(addr)
 
 	if addrLen != chunk.AddressLength {
-		t.Fatalf("trojan chunk payload has an unexpected address len of %d rather than %d", addrLen, chunk.AddressLength)
+		t.Fatalf("trojan chunk has an unexpected address length of %d rather than %d", addrLen, chunk.AddressLength)
 	}
 
 	addrPrefix := addr[:len(testTargets[0])]
@@ -126,11 +127,11 @@ func TestNewTrojanChunkFailure(t *testing.T) {
 		[]byte{180, 18, 255},
 	}
 	if _, err := newTrojanChunk(varLenTargets, newTestMessage(t)); err != errVarLenTargets {
-		t.Fatalf("expected error when creating trojan chunk for empty targets to be %q, but got %v", errVarLenTargets, err)
+		t.Fatalf("expected error when creating trojan chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
 	}
 }
 
-// TestMessageSerialization tests that the message type can be correctly serialized and deserialized
+// TestMessageSerialization tests that the Message type can be correctly serialized and deserialized
 func TestMessageSerialization(t *testing.T) {
 	m := newTestMessage(t)
 
@@ -139,7 +140,7 @@ func TestMessageSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dsm := new(message)
+	dsm := new(Message)
 	err = dsm.UnmarshalBinary(sm)
 	if err != nil {
 		t.Fatal(err)
