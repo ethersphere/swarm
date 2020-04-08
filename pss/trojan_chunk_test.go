@@ -33,10 +33,12 @@ var testTargets = [][]byte{
 	[]byte{89, 19},
 	[]byte{22, 129}}
 
+var testTopic = newMsgTopic("foo")
+
 // newTestTrojanMsg creates an arbitrary trojan message for tests
 func newTestTrojanMsg(t *testing.T) trojanMsg {
 	payload := []byte("foopayload")
-	tm, err := newTrojanMsg(newMsgTopic("RECOVERY"), payload)
+	tm, err := newTrojanMsg(testTopic, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +46,23 @@ func newTestTrojanMsg(t *testing.T) trojanMsg {
 	return tm
 }
 
-// TODO: add failure tests
+// TestNewTrojanMsg tests the creation of a trojan message
+func TestNewTrojanMsg(t *testing.T) {
+	smallPayload := make([]byte, 32)
+	if _, err := newTrojanMsg(testTopic, smallPayload); err != nil {
+		t.Fatal(err)
+	}
+
+	maxPayload := make([]byte, trojanMsgPayloadMaxSize)
+	if _, err := newTrojanMsg(testTopic, maxPayload); err != nil {
+		t.Fatal(err)
+	}
+
+	invalidPayload := make([]byte, trojanMsgPayloadMaxSize+1)
+	if _, err := newTrojanMsg(testTopic, invalidPayload); err != trojanMsgPayloadErr {
+		t.Fatalf("expected error when creating trojan message of invalid size to be %s, but got %s", trojanMsgPayloadErr, err)
+	}
+}
 
 // TestNewTrojanChunk tests the creation of a trojan chunk
 // its fields as a regular chunk should be correct
@@ -92,6 +110,10 @@ func TestNewTrojanChunk(t *testing.T) {
 	if !bytes.Equal(addr, payloadHash) {
 		t.Fatal("trojan chunk address does not match its payload hash")
 	}
+}
+
+func TestNewTrojanChunkFailure(t *testing.T) {
+
 }
 
 // TestTrojanMsgSerialization tests that the trojanMessage type can be correctly serialized and deserialized

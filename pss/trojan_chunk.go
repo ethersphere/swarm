@@ -41,6 +41,8 @@ type trojanMsg struct {
 const trojanMsgPayloadMaxSize = 4030                  // maximum allowed payload size for trojan message, in bytes
 var hashFunc = storage.MakeHashFunc(storage.SHA3Hash) // TODO: make this work with storage.BMTHash
 
+var trojanMsgPayloadErr = fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
+
 // newMsgTopic creates a new messageTopic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func newMsgTopic(topic string) msgTopic {
@@ -52,7 +54,7 @@ func newMsgTopic(topic string) msgTopic {
 // it finds a length and nonce for the trojanMsg according to the given input and maximum payload size
 func newTrojanMsg(topic msgTopic, payload []byte) (trojanMsg, error) {
 	if len(payload) > trojanMsgPayloadMaxSize {
-		return trojanMsg{}, fmt.Errorf("trojan message payload cannot be greater than %d bytes", trojanMsgPayloadMaxSize)
+		return trojanMsg{}, trojanMsgPayloadErr
 	}
 
 	// get length as array of 2 bytes
