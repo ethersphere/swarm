@@ -18,38 +18,16 @@ package pss
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"errors"
-	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/pot"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
 )
-
-const (
-	defaultSymKeyCacheCapacity = 512
-)
-
-var (
-	addressLength = len(pot.Address{})
-)
-
-// per-key peer related information
-// member `protected` prevents garbage collection of the instance
-type peer struct {
-	lastSeen  time.Time
-	address   PssAddress
-	protected bool
-}
 
 // Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
 // and message forwarding. Implements node.Service
 type Pss struct {
 	localStore chunk.Store
-	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
-	*KeyStore
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -82,11 +60,4 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic string, payload 
 	}
 
 	return tc, nil
-}
-
-func validateAddress(addr PssAddress) error {
-	if len(addr) > addressLength {
-		return errors.New("address too long")
-	}
-	return nil
 }
