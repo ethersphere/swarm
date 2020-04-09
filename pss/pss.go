@@ -122,11 +122,11 @@ type Pss struct {
 
 // Send a message without encryption
 // Generate a trojan chunk envelope and is stored in localstore for desired targets to mine this chunk and retrieve message
-func Send(ctx context.Context, localStore chunk.Store, targets [][]byte, topic string, msg []byte) (chunk.Chunk, error) {
+func Send(ctx context.Context, localStore chunk.Store, targets [][]byte, topic string, payload []byte) (chunk.Chunk, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
 	t := trojan.NewTopic(topic)
-	m, err := trojan.NewMessage(t, msg)
+	m, err := trojan.NewMessage(t, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -136,14 +136,11 @@ func Send(ctx context.Context, localStore chunk.Store, targets [][]byte, topic s
 		return nil, err
 	}
 
-	//SAVE trojanChunk to localstore, if already present do not throw error
+	//SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
 	//TODO: for second phase, use tags --> listen for response of recipient, recipient offline
-	_, err = localStore.Put(ctx, chunk.ModePutUpload, tc)
-	if err != nil {
+	if _, err = localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
 		return nil, err
 	}
-
-	//TODO: verify correctness of tc?, that it will hit it's targets, should this be in the trojan package?
 
 	return tc, nil
 }

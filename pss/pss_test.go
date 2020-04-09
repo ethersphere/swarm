@@ -14,47 +14,51 @@ import (
 
 func TestTrojanChunkRetrieval(t *testing.T) {
 	ctx := context.TODO()
-	dir, err := ioutil.TempDir("", "swarm-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
 
-	baseKey := make([]byte, 32)
-	_, err = rand.Read(baseKey)
+	localStore, err := newMockLocalStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//Mock the store
-	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var testTargets = [][]byte{
+	testTargets := [][]byte{
 		{57, 120},
 		{209, 156},
 		{156, 38},
 		{89, 19},
 		{22, 129}}
-	msg := []byte("RECOVERY")
+	payload := []byte("RECOVERY CHUNK")
 	//call Send to store trojanChunk in store
 	var ch chunk.Chunk
-	ch, err = Send(ctx, localStore, testTargets, "RECOVERY", msg)
-	if err != nil {
+	if ch, err = Send(ctx, localStore, testTargets, "RECOVERY", payload); err != nil {
 		t.Fatal(err)
 	}
 
 	//verify store, that trojan chunk has been stored correctly
-	var chStored chunk.Chunk
-	chStored, err = localStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
-	if err != nil {
+	var storedChunk chunk.Chunk
+	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, ch.Address()); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(ch, chStored) {
+
+	if !reflect.DeepEqual(ch, storedChunk) {
 		t.Fatalf("Trojan chunk not stored properly")
 	}
 
+}
+
+func newMockLocalStore() (*localstore.DB, error) {
+	dir, err := ioutil.TempDir("", "swarm-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+
+	baseKey := make([]byte, 32)
+	if _, err = rand.Read(baseKey); err != nil {
+		return nil, err
+	}
+
+	//Mock the store
+	return localstore.New(dir, baseKey, &localstore.Options{})
 }
 
 //TODO: later test could be a simulation test for 2 nodes, localstore + netstore
