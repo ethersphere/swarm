@@ -32,11 +32,11 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		t.Fatal(err)
 	}
 	var testTargets = [][]byte{
-		[]byte{57, 120},
-		[]byte{209, 156},
-		[]byte{156, 38},
-		[]byte{89, 19},
-		[]byte{22, 129}}
+		{57, 120},
+		{209, 156},
+		{156, 38},
+		{89, 19},
+		{22, 129}}
 	msg := []byte("RECOVERY")
 	//call Send to store trojanChunk in store
 	var ch chunk.Chunk

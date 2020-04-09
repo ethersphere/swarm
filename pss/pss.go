@@ -43,9 +43,6 @@ const (
 	defaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 30
 	defaultSymKeyCacheCapacity = 512
-	defaultMaxMsgSize          = 1024 * 1024
-	protocolName               = "pss"
-	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
 )
 
