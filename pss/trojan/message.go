@@ -45,9 +45,14 @@ const MaxPayloadSize = 4030
 
 var hashFunc = storage.MakeHashFunc(storage.BMTHash)
 
-var errPayloadTooBig = fmt.Errorf("message payload size cannot be greater than %d bytes", MaxPayloadSize)
-var errEmptyTargets = errors.New("target list cannot be empty")
-var errVarLenTargets = errors.New("target list cannot have targets of different length")
+// ErrPayloadTooBig is returned when a given payload for a Message type is longer than the maximum amount allowed
+var ErrPayloadTooBig = fmt.Errorf("message payload size cannot be greater than %d bytes", MaxPayloadSize)
+
+// ErrEmptyTargets is returned when the given target list for a trojan chunk is empty
+var ErrEmptyTargets = errors.New("target list cannot be empty")
+
+// ErrVarLenTargets is returned when the given target list for a trojan chunk has addresses of different lengths
+var ErrVarLenTargets = errors.New("target list cannot have targets of different length")
 
 // NewTopic creates a new Topic variable with the given input string
 // the input string is taken as a byte slice and hashed
@@ -55,11 +60,11 @@ func NewTopic(topic string) Topic {
 	return Topic(crypto.Keccak256Hash([]byte(topic)))
 }
 
-// newMessage creates a new Message variable with the given topic and payload
+// NewMessage creates a new Message variable with the given topic and payload
 // it finds a length and nonce for the message according to the given input and maximum payload size
-func newMessage(topic Topic, payload []byte) (Message, error) {
+func NewMessage(topic Topic, payload []byte) (Message, error) {
 	if len(payload) > MaxPayloadSize {
-		return Message{}, errPayloadTooBig
+		return Message{}, ErrPayloadTooBig
 	}
 
 	// get length as array of 2 bytes
@@ -106,12 +111,12 @@ func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
 func checkTargets(targets [][]byte) error {
 	if len(targets) == 0 {
-		return errEmptyTargets
+		return ErrEmptyTargets
 	}
 	validLen := len(targets[0]) // take first element as allowed length
 	for i := 1; i < len(targets); i++ {
 		if len(targets[i]) != validLen {
-			return errVarLenTargets
+			return ErrVarLenTargets
 		}
 	}
 	return nil
