@@ -36,6 +36,7 @@ import (
 	"github.com/ethersphere/swarm/pss/internal/ticker"
 	"github.com/ethersphere/swarm/pss/internal/ttlset"
 	"github.com/ethersphere/swarm/pss/message"
+	trojan "github.com/ethersphere/swarm/pss/trojan"
 )
 
 const (
@@ -140,35 +141,30 @@ type Pss struct {
 
 // Send a message without encryption
 // Generate a trojan chunk envelope and is stored in localstore for desired targets to mine this chunk and retrieve message
-func Send(localStore *localStore.DB, targets [][]byte, topic string, msg []byte) error {
+func Send(ctx context.Context, localStore chunk.Store, targets [][]byte, topic string, msg []byte) (chunk.Chunk, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
-	t := NewTopic(topic)
-	m, err := newMessage(t, msg)
+	t := trojan.NewTopic(topic)
+	m, err := trojan.NewMessage(t, msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var tc chunk.Chunk
-	tc, err = m.Wrap(targets)
+	tc, err = trojan.Wrap(targets, m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	//TODO: verify correctness of tc, that it will hit it's targets, should this be in the trojan package?
-	//SAVE TO localstore
+	//SAVE trojanChunk to localstore, if already present do not throw error
+	//TODO: for second phase, use tags --> listen for response of recipient, recipient offline
+	_, err = localStore.Put(ctx, chunk.ModePutUpload, tc)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil
+	//TODO: verify correctness of tc?, that it will hit it's targets, should this be in the trojan package?
 
-	//send chunk via localstore
-	//Asymetric Crypto ()
-	//Register Api
-	//no Api for the moment
-	//for second stage, use tags --> listen for response of recipient, recipient offline
-	//Mock store
-	//Call send
-
-	//construct message with tc
-	//send chunk via localstore
+	return tc, nil
 }
 
 func validateAddress(addr PssAddress) error {
