@@ -90,7 +90,7 @@ func NewMessage(topic Topic, payload []byte) (Message, error) {
 
 // Wrap creates a new trojan chunk for the given targets and Message
 // a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload which contains the Message
-// the chunk address will have a matching prefix with one of the targets
+// the chunk address will have one of the targets as its prefix and thus will be forwarded to the neighbourhood of the recipient overlay address the target is derived from
 func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
