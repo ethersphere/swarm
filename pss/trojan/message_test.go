@@ -70,7 +70,7 @@ func TestNewMessage(t *testing.T) {
 // TestWrap tests the creation of a chunk from a list of targets
 // its address length and span should be correct
 // its resulting address should have a prefix which matches one of the given targets
-// its resulting payload should have a hash that matches its address exactly
+// its resulting data should have a hash that matches its address exactly
 func TestWrap(t *testing.T) {
 	c, err := Wrap(testTargets, newTestMessage(t))
 	if err != nil {
@@ -79,39 +79,34 @@ func TestWrap(t *testing.T) {
 
 	addr := c.Address()
 	addrLen := len(addr)
-
 	if addrLen != chunk.AddressLength {
 		t.Fatalf("chunk has an unexpected address length of %d rather than %d", addrLen, chunk.AddressLength)
 	}
 
 	addrPrefix := addr[:len(testTargets[0])]
-
 	if !contains(testTargets, addrPrefix) {
 		t.Fatal("chunk address prefix does not match any of the targets")
 	}
 
-	payload := c.Data()
-	payloadSize := len(payload)
-	expectedSize := chunk.DefaultSize + 8 // payload + span
-
-	if payloadSize != expectedSize {
-		t.Fatalf("chunk payload has an unexpected size of %d rather than %d", payloadSize, expectedSize)
+	data := c.Data()
+	dataSize := len(data)
+	expectedSize := 8 + chunk.DefaultSize // span + payload
+	if dataSize != expectedSize {
+		t.Fatalf("chunk data has an unexpected size of %d rather than %d", dataSize, expectedSize)
 	}
 
-	span := binary.LittleEndian.Uint64(payload[:8])
-	remPayloadLen := len(payload[8:])
-
-	if int(span) != remPayloadLen {
-		t.Fatalf("chunk span set to %d, but the rest of the chunk payload is of size %d", span, remPayloadLen)
+	span := binary.LittleEndian.Uint64(data[:8])
+	remDataLen := len(data[8:])
+	if int(span) != remDataLen {
+		t.Fatalf("chunk span set to %d, but rest of chunk data is of size %d", span, remDataLen)
 	}
 
-	payloadHash, err := hash(payload)
+	dataHash, err := hash(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if !bytes.Equal(addr, payloadHash) {
-		t.Fatal("chunk address does not match its payload hash")
+	if !bytes.Equal(addr, dataHash) {
+		t.Fatal("chunk address does not match its data hash")
 	}
 }
 

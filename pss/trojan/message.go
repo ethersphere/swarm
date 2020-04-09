@@ -92,7 +92,7 @@ func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 	}
 
 	span := make([]byte, 8)
-	// 4064 bytes for trojan message as payload + 32 byts for nonce = 4096 bytes as payload for resulting chunk
+	// 4064 bytes for trojan message + 32 bytes for nonce = 4096 bytes as payload for resulting chunk
 	binary.LittleEndian.PutUint64(span, chunk.DefaultSize)
 
 	chunk, err := toChunk(targets, span, m)
@@ -120,7 +120,7 @@ func checkTargets(targets [][]byte) error {
 // toChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
 // this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
 // the function returns a new chunk, with the found matching hash to be used as its address,
-// and its payload set to the serialization of the trojan chunk fields which correctly hash into the matching address
+// and its data set to the serialization of the trojan chunk fields which correctly hash into the matching address
 func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
@@ -198,7 +198,7 @@ func (m *Message) MarshalBinary() (data []byte, err error) {
 	data = append(m.length[:], m.topic[:]...)
 	data = append(data, m.payload...)
 	data = append(data, m.padding...)
-	return
+	return data, nil
 }
 
 // UnmarshalBinary deserializes a message struct
