@@ -57,4 +57,4 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 
 }
 
-//TODO: later test could be a sim test for 2 nodes, localstore + netstore
+//TODO: later test could be a simulation test for 2 nodes, localstore + netstore
