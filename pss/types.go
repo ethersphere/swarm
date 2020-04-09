@@ -21,11 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethersphere/swarm/pss/message"
-)
-
-var (
-	rawTopic = message.Topic{}
 )
 
 // PssAddress is an alias for []byte. It represents a variable length address

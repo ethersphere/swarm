@@ -44,30 +44,14 @@ const (
 	defaultDigestCacheTTL      = time.Second * 30
 	defaultSymKeyCacheCapacity = 512
 	defaultMaxMsgSize          = 1024 * 1024
-	defaultCleanInterval       = time.Minute * 10
-	defaultOutboxCapacity      = 50
 	protocolName               = "pss"
 	protocolVersion            = 2
 	CapabilityID               = capability.CapabilityID(1)
-	capabilitiesSend           = 0 // node sends pss messages
-	capabilitiesReceive        = 1 // node processes pss messages
-	capabilitiesForward        = 4 // node forwards pss messages on behalf of network
-	capabilitiesPartial        = 5 // node accepts partially addressed messages
-	capabilitiesEmpty          = 6 // node accepts messages with empty address
 )
 
 var (
 	addressLength = len(pot.Address{})
 )
-
-var spec = &protocols.Spec{
-	Name:       protocolName,
-	Version:    protocolVersion,
-	MaxMsgSize: defaultMaxMsgSize,
-	Messages: []interface{}{
-		message.Message{},
-	},
-}
 
 // abstraction to enable access to p2p.protocols.Peer.Send
 type senderPeer interface {
