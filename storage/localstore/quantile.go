@@ -7,17 +7,17 @@ import (
 	"github.com/ethersphere/swarm/shed"
 )
 
-type fraction struct {
-	numerator   uint64
-	denominator uint64
+type Fraction struct {
+	Numerator   uint64
+	Denominator uint64
 }
 
-func (f fraction) Decimal() float64 {
-	return float64(f.numerator) / float64(f.denominator)
+func (f Fraction) Decimal() float64 {
+	return float64(f.Numerator) / float64(f.Denominator)
 }
 
 type quantile struct {
-	fraction
+	Fraction
 	Item     shed.Item
 	Position uint64
 }
@@ -30,25 +30,25 @@ func (q quantiles) Len() int {
 
 func (q quantiles) Less(i, j int) bool {
 	// TODO(tzdybal) - is it reasonable to use common denominator instead of Decimal() function?
-	return q[i].fraction.Decimal() < q[j].fraction.Decimal()
+	return q[i].Fraction.Decimal() < q[j].Fraction.Decimal()
 }
 
 func (q quantiles) Swap(i, j int) {
 	q[i], q[j] = q[j], q[i]
 }
 
-func (q quantiles) Get(f fraction) (item shed.Item, position uint64, found bool) {
+func (q quantiles) Get(f Fraction) (item shed.Item, position uint64, found bool) {
 	for _, x := range q {
-		if x.fraction == f {
+		if x.Fraction == f {
 			return x.Item, x.Position, true
 		}
 	}
 	return item, 0, false
 }
 
-func (q quantiles) Closest(f fraction) (closest *quantile) {
+func (q quantiles) Closest(f Fraction) (closest *quantile) {
 	for i, x := range q {
-		if x.fraction == f {
+		if x.Fraction == f {
 			return &q[i]
 		}
 		if closest == nil || math.Abs(x.Decimal()-f.Decimal()) < math.Abs(closest.Decimal()-f.Decimal()) {
@@ -58,19 +58,20 @@ func (q quantiles) Closest(f fraction) (closest *quantile) {
 	return closest
 }
 
-func (q quantiles) Set(f fraction, item shed.Item, position uint64) {
+func (q quantiles) Set(f Fraction, item shed.Item, position uint64) quantiles {
 	for i := range q {
-		if q[i].fraction == f {
+		if q[i].Fraction == f {
 			q[i].Item = item
 			q[i].Position = position
-			return
+			return q
 		}
 	}
 	q = append(q, quantile{
-		fraction: f,
+		Fraction: f,
 		Item:     item,
 	})
 	sort.Sort(q)
+	return q
 }
 
 func quantilePosition(total, numerator, denominator uint64) uint64 {
@@ -79,12 +80,12 @@ func quantilePosition(total, numerator, denominator uint64) uint64 {
 
 // based on https://hackmd.io/t-OQFK3mTsGfrpLCqDrdlw#Synced-chunks
 // TODO: review and document exact quantiles for chunks
-func chunkQuantileFraction(po, responsibilityRadius int) fraction {
+func chunkQuantileFraction(po, responsibilityRadius int) Fraction {
 	if po < responsibilityRadius {
 		// More Distant Chunks
 		n := uint64(responsibilityRadius - po)
-		return fraction{numerator: n, denominator: n + 1}
+		return Fraction{Numerator: n, Denominator: n + 1}
 	}
 	// Most Proximate Chunks
-	return fraction{numerator: 1, denominator: 3}
+	return Fraction{Numerator: 1, Denominator: 3}
 }

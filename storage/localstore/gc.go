@@ -275,11 +275,11 @@ func (db *DB) updateGCQuantiles() (err error) {
 	}
 	var newQuantiles quantiles
 	for _, q := range gcQuantiles {
-		item, position, found := gcQuantiles.Get(q.fraction)
+		item, position, found := gcQuantiles.Get(q.Fraction)
 		if !found {
 			continue
 		}
-		newPosition := quantilePosition(gcSize, q.numerator, q.denominator)
+		newPosition := quantilePosition(gcSize, q.Numerator, q.Denominator)
 		diff := uint64Diff(position, newPosition)
 		if diff == 0 {
 			continue
@@ -288,7 +288,7 @@ func (db *DB) updateGCQuantiles() (err error) {
 		if err != nil {
 			return err
 		}
-		newQuantiles.Set(q.fraction, newItem, newPosition)
+		newQuantiles.Set(q.Fraction, newItem, newPosition)
 	}
 	return db.gcQuantiles.Put(newQuantiles)
 }

@@ -313,7 +313,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		if err != nil {
 			return 0, err
 		}
-		position := quantilePosition(gcSize, f.numerator, f.denominator)
+		position := quantilePosition(gcSize, f.Numerator, f.Denominator)
 		var gcQuantiles quantiles
 		err = db.gcQuantiles.Get(&gcQuantiles)
 		if err != nil && err != leveldb.ErrNotFound {
@@ -321,7 +321,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		}
 		var found bool
 		for _, q := range gcQuantiles {
-			if q.fraction == f {
+			if q.Fraction == f {
 				item.AccessTimestamp = q.Item.AccessTimestamp + 1
 				found = true
 				break
@@ -340,7 +340,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 			}
 			item.AccessTimestamp = i.AccessTimestamp + 1
 		}
-		gcQuantiles.Set(f, item, position)
+		gcQuantiles = gcQuantiles.Set(f, item, position)
 		db.gcQuantiles.PutInBatch(batch, gcQuantiles)
 
 		db.retrievalAccessIndex.PutInBatch(batch, item)

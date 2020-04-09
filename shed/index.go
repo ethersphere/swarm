@@ -19,6 +19,7 @@ package shed
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -485,7 +486,7 @@ func (f Index) Offset(start *Item, shift int64) (i Item, err error) {
 		shift--
 	}
 	if shift != 0 {
-		return i, errors.New("key not found")
+		return i, fmt.Errorf("key not found, start: %p, shift: %d", start, shift)
 	}
 
 	keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
