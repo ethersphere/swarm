@@ -28,11 +28,11 @@ import (
 
 // arbitrary targets for tests
 var testTargets = [][]byte{
-	[]byte{57, 120},
-	[]byte{209, 156},
-	[]byte{156, 38},
-	[]byte{89, 19},
-	[]byte{22, 129}}
+	{57, 120},
+	{209, 156},
+	{156, 38},
+	{89, 19},
+	{22, 129}}
 
 // arbitrary topic for tests
 var testTopic = NewTopic("foo")
@@ -120,9 +120,9 @@ func TestWrapFail(t *testing.T) {
 	}
 
 	varLenTargets := [][]byte{
-		[]byte{34},
-		[]byte{25, 120},
-		[]byte{180, 18, 255},
+		{34},
+		{25, 120},
+		{180, 18, 255},
 	}
 	if _, err := Wrap(varLenTargets, m); err != errVarLenTargets {
 		t.Fatalf("expected error when creating chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
