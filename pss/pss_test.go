@@ -29,7 +29,10 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	payload := []byte("RECOVERY CHUNK")
 	//call Send to store trojanChunk in store
 	var ch chunk.Chunk
-	if ch, err = Send(ctx, localStore, testTargets, "RECOVERY", payload); err != nil {
+
+	pss := NewPss(localStore)
+
+	if ch, err = pss.Send(ctx, testTargets, "RECOVERY", payload); err != nil {
 		t.Fatal(err)
 	}
 

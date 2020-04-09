@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,28 +16,18 @@
 
 package pss
 
-import (
-	"encoding/json"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
-)
-
-// PssAddress is an alias for []byte. It represents a variable length address
-type PssAddress []byte
-
-// MarshalJSON implements the json.Marshaler interface
-func (a PssAddress) MarshalJSON() ([]byte, error) {
-	return json.Marshal(hexutil.Encode(a[:]))
+// API exposes additional public methods for pss
+type API struct {
+	*Pss
 }
 
-// UnmarshalJSON implements the json.Marshaler interface
-func (a *PssAddress) UnmarshalJSON(input []byte) error {
-	b, err := hexutil.Decode(string(input[1 : len(input)-1]))
-	if err != nil {
-		return err
-	}
-	for _, bb := range b {
-		*a = append(*a, bb)
-	}
+// NewAPI returns the Api for consumption
+func NewAPI(ps *Pss) *API {
+	return &API{Pss: ps}
+}
+
+// Send is used for trojanChunk delivery
+func (pssapi *API) Send() error {
+	//TODO: CALL pss method
 	return nil
 }
