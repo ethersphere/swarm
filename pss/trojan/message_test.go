@@ -72,7 +72,8 @@ func TestNewMessage(t *testing.T) {
 // its resulting address should have a prefix which matches one of the given targets
 // its resulting data should have a hash that matches its address exactly
 func TestWrap(t *testing.T) {
-	c, err := Wrap(testTargets, newTestMessage(t))
+	m := newTestMessage(t)
+	c, err := m.Wrap(testTargets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
 	emptyTargets := [][]byte{}
-	if _, err := Wrap(emptyTargets, m); err != ErrEmptyTargets {
+	if _, err := m.Wrap(emptyTargets); err != ErrEmptyTargets {
 		t.Fatalf("expected error when creating chunk for empty targets to be %q, but got %v", ErrEmptyTargets, err)
 	}
 
@@ -124,7 +125,7 @@ func TestWrapFail(t *testing.T) {
 		{25, 120},
 		{180, 18, 255},
 	}
-	if _, err := Wrap(varLenTargets, m); err != ErrVarLenTargets {
+	if _, err := m.Wrap(varLenTargets); err != ErrVarLenTargets {
 		t.Fatalf("expected error when creating chunk for variable-length targets to be %q, but got %v", ErrVarLenTargets, err)
 	}
 }
