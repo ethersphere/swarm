@@ -40,7 +40,7 @@ var testTopic = NewTopic("foo")
 // newTestMessage creates an arbitrary Message for tests
 func newTestMessage(t *testing.T) Message {
 	payload := []byte("foopayload")
-	m, err := newMessage(testTopic, payload)
+	m, err := NewMessage(testTopic, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,19 +51,19 @@ func newTestMessage(t *testing.T) Message {
 // TestNewMessage tests the correct and incorrect creation of a Message struct
 func TestNewMessage(t *testing.T) {
 	smallPayload := make([]byte, 32)
-	if _, err := newMessage(testTopic, smallPayload); err != nil {
+	if _, err := NewMessage(testTopic, smallPayload); err != nil {
 		t.Fatal(err)
 	}
 
 	maxPayload := make([]byte, MaxPayloadSize)
-	if _, err := newMessage(testTopic, maxPayload); err != nil {
+	if _, err := NewMessage(testTopic, maxPayload); err != nil {
 		t.Fatal(err)
 	}
 
 	// the creation should fail if the payload is too big
 	invalidPayload := make([]byte, MaxPayloadSize+1)
-	if _, err := newMessage(testTopic, invalidPayload); err != errPayloadTooBig {
-		t.Fatalf("expected error when creating message of invalid payload size to be %q, but got %v", errPayloadTooBig, err)
+	if _, err := NewMessage(testTopic, invalidPayload); err != ErrPayloadTooBig {
+		t.Fatalf("expected error when creating message of invalid payload size to be %q, but got %v", ErrPayloadTooBig, err)
 	}
 }
 
@@ -115,8 +115,8 @@ func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
 	emptyTargets := [][]byte{}
-	if _, err := Wrap(emptyTargets, m); err != errEmptyTargets {
-		t.Fatalf("expected error when creating chunk for empty targets to be %q, but got %v", errEmptyTargets, err)
+	if _, err := Wrap(emptyTargets, m); err != ErrEmptyTargets {
+		t.Fatalf("expected error when creating chunk for empty targets to be %q, but got %v", ErrEmptyTargets, err)
 	}
 
 	varLenTargets := [][]byte{
@@ -124,8 +124,8 @@ func TestWrapFail(t *testing.T) {
 		{25, 120},
 		{180, 18, 255},
 	}
-	if _, err := Wrap(varLenTargets, m); err != errVarLenTargets {
-		t.Fatalf("expected error when creating chunk for variable-length targets to be %q, but got %v", errVarLenTargets, err)
+	if _, err := Wrap(varLenTargets, m); err != ErrVarLenTargets {
+		t.Fatalf("expected error when creating chunk for variable-length targets to be %q, but got %v", ErrVarLenTargets, err)
 	}
 }
 
