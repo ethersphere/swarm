@@ -29,6 +29,9 @@ import (
 	"github.com/ethersphere/swarm/storage/localstore"
 )
 
+// TestTrojanChunkRetrieval creates a trojan chunk
+// mocks the localstore
+// calls pss.Send method and verifies it's properly stored
 func TestTrojanChunkRetrieval(t *testing.T) {
 	var err error
 	ctx := context.TODO()
