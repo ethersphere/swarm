@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2020 The Swarm Authors
+// This file is part of the Swarm library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The Swarm library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The Swarm library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package pss
 
@@ -24,8 +24,7 @@ import (
 	trojan "github.com/ethersphere/swarm/pss/trojan"
 )
 
-// Pss is the top-level struct, which takes care of message sending, receiving, decryption and encryption, message handler dispatchers
-// and message forwarding. Implements node.Service
+// Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
 }
@@ -37,8 +36,7 @@ func NewPss(localStore chunk.Store) *Pss {
 	}
 }
 
-// Send a message without encryption
-// Generate a trojan chunk envelope and is stored in localstore for desired targets to mine this chunk and retrieve message
+// Send generates a trojan chunk and is stored in localstore for desired targets to mine this chunk and retrieve message
 func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk

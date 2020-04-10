@@ -1,3 +1,19 @@
+// Copyright 2020 The Swarm Authors
+// This file is part of the Swarm library.
+//
+// The Swarm library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Swarm library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
+
 package pss
 
 import (
@@ -28,11 +44,11 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
-	// call Send to store trojanChunk in store
 	var ch chunk.Chunk
 
 	pss := NewPss(localStore)
 
+	// call Send to store trojan chunk in localstore
 	if ch, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +62,8 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	if !reflect.DeepEqual(ch, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
+
+	// check if pinning makes a difference
 
 }
 
@@ -61,7 +79,6 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 		t.Fatal(err)
 	}
 
-	// Mock the store
 	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
 	if err != nil {
 		t.Fatal(err)
