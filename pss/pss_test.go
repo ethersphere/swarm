@@ -14,12 +14,10 @@ import (
 )
 
 func TestTrojanChunkRetrieval(t *testing.T) {
+	var err error
 	ctx := context.TODO()
 
-	localStore, err := newMockLocalStore()
-	if err != nil {
-		t.Fatal(err)
-	}
+	localStore := newMockLocalStore(t)
 
 	testTargets := [][]byte{
 		{57, 120},
@@ -51,20 +49,25 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 
 }
 
-func newMockLocalStore() (*localstore.DB, error) {
+func newMockLocalStore(t *testing.T) *localstore.DB {
 	dir, err := ioutil.TempDir("", "swarm-")
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
 	baseKey := make([]byte, 32)
 	if _, err = rand.Read(baseKey); err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 
 	// Mock the store
-	return localstore.New(dir, baseKey, &localstore.Options{})
+	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return localStore
 }
 
 // TODO: later test could be a simulation test for 2 nodes, localstore + netstore
