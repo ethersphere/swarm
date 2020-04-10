@@ -36,7 +36,9 @@ func NewPss(localStore chunk.Store) *Pss {
 	}
 }
 
-// Send generates a trojan chunk and is stored in localstore for desired targets to mine this chunk and retrieve message
+// Send constructs a padded message with topic and payload,
+// wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
+// stores this in localstore for push-sync to pick up and deliver
 func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
