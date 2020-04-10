@@ -47,7 +47,7 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 		return nil, err
 	}
 	var tc chunk.Chunk
-	tc, err = trojan.Wrap(targets, m)
+	tc, err = m.Wrap(targets)
 	if err != nil {
 		return nil, err
 	}
