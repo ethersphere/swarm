@@ -39,11 +39,10 @@ func NewPss(localStore chunk.Store) *Pss {
 
 // Send a message without encryption
 // Generate a trojan chunk envelope and is stored in localstore for desired targets to mine this chunk and retrieve message
-func (p *Pss) Send(ctx context.Context, targets [][]byte, topic string, payload []byte) (chunk.Chunk, error) {
+func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
-	t := trojan.NewTopic(topic)
-	m, err := trojan.NewMessage(t, payload)
+	m, err := trojan.NewMessage(topic, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -53,8 +52,8 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic string, payload 
 		return nil, err
 	}
 
-	//SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
-	//TODO: for second phase, use tags --> listen for response of recipient, recipient offline
+	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
+	// TODO: for second phase, use tags --> listen for response of recipient, recipient offline
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
 		return nil, err
 	}

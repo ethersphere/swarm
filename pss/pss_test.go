@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
+	trojan "github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/localstore"
 )
 
@@ -27,23 +28,25 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		{89, 19},
 		{22, 129}}
 	payload := []byte("RECOVERY CHUNK")
-	//call Send to store trojanChunk in store
+	topic := trojan.NewTopic("RECOVERY")
+
+	// call Send to store trojanChunk in store
 	var ch chunk.Chunk
 
 	pss := NewPss(localStore)
 
-	if ch, err = pss.Send(ctx, testTargets, "RECOVERY", payload); err != nil {
+	if ch, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
 		t.Fatal(err)
 	}
 
-	//verify store, that trojan chunk has been stored correctly
+	// verify store, that trojan chunk has been stored correctly
 	var storedChunk chunk.Chunk
 	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, ch.Address()); err != nil {
 		t.Fatal(err)
 	}
 
 	if !reflect.DeepEqual(ch, storedChunk) {
-		t.Fatalf("Trojan chunk not stored properly")
+		t.Fatalf("store chunk does not match sent chunk")
 	}
 
 }
@@ -60,8 +63,8 @@ func newMockLocalStore() (*localstore.DB, error) {
 		return nil, err
 	}
 
-	//Mock the store
+	// Mock the store
 	return localstore.New(dir, baseKey, &localstore.Options{})
 }
 
-//TODO: later test could be a simulation test for 2 nodes, localstore + netstore
+// TODO: later test could be a simulation test for 2 nodes, localstore + netstore
