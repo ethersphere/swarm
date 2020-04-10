@@ -90,8 +90,8 @@ func NewMessage(topic Topic, payload []byte) (Message, error) {
 
 // Wrap creates a new trojan chunk for the given targets and Message
 // a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload which contains the Message
-// the chunk address will have a matching prefix with one of the targets
-func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
+// the chunk address will have one of the targets as its prefix and thus will be forwarded to the neighbourhood of the recipient overlay address the target is derived from
+func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func Wrap(targets [][]byte, m Message) (chunk.Chunk, error) {
 	// 4064 bytes for trojan message + 32 bytes for nonce = 4096 bytes as payload for resulting chunk
 	binary.LittleEndian.PutUint64(span, chunk.DefaultSize)
 
-	chunk, err := toChunk(targets, span, m)
+	chunk, err := m.toChunk(targets, span)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +123,10 @@ func checkTargets(targets [][]byte) error {
 }
 
 // toChunk finds a nonce so that when the given trojan chunk fields are hashed, the result will fall in the neighbourhood of one of the given targets
-// this is done by iterating the BMT hash of the serialization of the trojan chunk fields until the desired nonce is found
+// this is done by iteratively enumerating different nonces until the BMT hash of the serialization of the trojan chunk fields results in a chunk address that has one of the targets as its prefix
 // the function returns a new chunk, with the found matching hash to be used as its address,
 // and its data set to the serialization of the trojan chunk fields which correctly hash into the matching address
-func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
+func (m *Message) toChunk(targets [][]byte, span []byte) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
@@ -136,7 +136,7 @@ func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 	targetsLen := len(targets[0])
 
 	// serialize message
-	m, err := msg.MarshalBinary() // TODO: this should be encrypted
+	b, err := m.MarshalBinary() // TODO: this should be encrypted
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func toChunk(targets [][]byte, span []byte, msg Message) (chunk.Chunk, error) {
 	// hash chunk fields with different nonces until an acceptable one is found
 	// TODO: prevent infinite loop
 	for {
-		s := append(append(span, nonce...), m...) // serialize chunk fields
+		s := append(append(span, nonce...), b...) // serialize chunk fields
 		hash, err := hash(s)
 		if err != nil {
 			return nil, err
