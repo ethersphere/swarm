@@ -162,7 +162,7 @@ func TestPadBytes(t *testing.T) {
 	}
 }
 
-// TestUnwwwrap tests the correct unwrapping of chunks as trojan messages
+// TestUnwrap tests the correct unwrapping of chunks as trojan messages
 func TestUnwrap(t *testing.T) {
 	m := newTestMessage(t)
 	c, err := m.Wrap(testTargets)
@@ -170,8 +170,14 @@ func TestUnwrap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Unwrap(c); err != nil {
+	um, err := Unwrap(c)
+
+	if err != nil {
 		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(m, *um) {
+		t.Fatalf("original message does not match unwrapped one")
 	}
 }
 

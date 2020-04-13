@@ -116,19 +116,19 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 // TODO: move this to PSS API?
 func Unwrap(c chunk.Chunk) (*Message, error) {
 	d := c.Data()
-	payload := d[40:] // first 40 bytes are span + nonce
 
-	m := new(Message)
 	// unmarshal chunk payload into message
-	if err := m.UnmarshalBinary(payload); err != nil {
+	m := new(Message)
+	// first 40 bytes are span + nonce
+	if err := m.UnmarshalBinary(d[40:]); err != nil {
 		return nil, err
 	}
 
+	// check for trojan message correctness
 	hash, err := hash(d)
 	if err != nil {
 		return nil, err
 	}
-
 	if !bytes.Equal(hash, c.Address()) {
 		return nil, ErrChunkNotTrojan
 	}
