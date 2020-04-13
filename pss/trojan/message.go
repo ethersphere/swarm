@@ -111,7 +111,7 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 // Unwrap attemps to determine whether the given chunk is a trojan chunk
 // it will return the resulting trojan message if the unwrapping is successful, and an error otherwise
 func Unwrap(c chunk.Chunk) (Message, error) {
-	return Message{}, nil
+	return Message{}, errors.New("unimplemented func")
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
