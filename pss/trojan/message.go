@@ -54,6 +54,9 @@ var ErrEmptyTargets = errors.New("target list cannot be empty")
 // ErrVarLenTargets is returned when the given target list for a trojan chunk has addresses of different lengths
 var ErrVarLenTargets = errors.New("target list cannot have targets of different length")
 
+// ErrChunkNotTrojan is returned when attempting to unwrap a chunk into a trojan message but the chunk is not trojan
+var ErrChunkNotTrojan = errors.New("cannot unwrap chunk as it is not trojan")
+
 // NewTopic creates a new Topic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func NewTopic(topic string) Topic {
@@ -111,13 +114,26 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 // Unwrap attemps to determine whether the given chunk is a trojan chunk
 // it will return the resulting trojan message if the unwrapping is successful, and an error otherwise
 // TODO: move this to PSS API?
-func Unwrap(c chunk.Chunk) (Message, error) {
+func Unwrap(c chunk.Chunk) (*Message, error) {
 	d := c.Data()
-	m := new(Message)
-	// first 40 bytes are span + nonce
-	err := m.UnmarshalBinary(d[40:])
+	payload := d[40:] // first 40 bytes are span + nonce
 
-	return *m, err
+	m := new(Message)
+	// unmarshal chunk payload into message
+	if err := m.UnmarshalBinary(payload); err != nil {
+		return nil, err
+	}
+
+	hash, err := hash(d)
+	if err != nil {
+		return nil, err
+	}
+
+	if !bytes.Equal(hash, c.Address()) {
+		return nil, ErrChunkNotTrojan
+	}
+
+	return m, err
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
