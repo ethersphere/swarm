@@ -162,7 +162,7 @@ func TestPadBytes(t *testing.T) {
 	}
 }
 
-// TestUnwrap tests the correct unwrapping of chunks as trojan messages
+// TestUnwrap tests the correct unwrapping of a trojan chunk to obtain a message
 func TestUnwrap(t *testing.T) {
 	m := newTestMessage(t)
 	c, err := m.Wrap(testTargets)
