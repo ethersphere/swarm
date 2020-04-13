@@ -181,6 +181,26 @@ func TestUnwrap(t *testing.T) {
 	}
 }
 
+// TestUnwrapFail tests that the uwnrapping of a chunk into a message fails if the chunk is not trojan
+func TestUnwrapFail(t *testing.T) {
+	// start from correct trojan chunk
+	m := newTestMessage(t)
+	c, err := m.Wrap(testTargets)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// annul chunk nonce
+	copy(c.Data()[8:40], make([]byte, 32))
+
+	// attempt unwrapping
+	_, err = Unwrap(c)
+	if err != ErrChunkNotTrojan {
+		t.Fatalf("expected error when unwrapping non-trojan chunk be %q, but got %v", ErrChunkNotTrojan, err)
+	}
+
+}
+
 // TestMessageSerialization tests that the Message type can be correctly serialized and deserialized
 func TestMessageSerialization(t *testing.T) {
 	m := newTestMessage(t)
