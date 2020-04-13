@@ -110,8 +110,14 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 
 // Unwrap attemps to determine whether the given chunk is a trojan chunk
 // it will return the resulting trojan message if the unwrapping is successful, and an error otherwise
+// TODO: move this to PSS API?
 func Unwrap(c chunk.Chunk) (Message, error) {
-	return Message{}, errors.New("unimplemented func")
+	d := c.Data()
+	m := new(Message)
+	// first 40 bytes are span + nonce
+	err := m.UnmarshalBinary(d[40:])
+
+	return *m, err
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
