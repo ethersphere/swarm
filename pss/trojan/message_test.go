@@ -171,7 +171,6 @@ func TestUnwrap(t *testing.T) {
 	}
 
 	um, err := Unwrap(c)
-
 	if err != nil {
 		t.Fatal(err)
 	}
