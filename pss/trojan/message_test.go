@@ -182,7 +182,7 @@ func TestUnwrap(t *testing.T) {
 
 // TestUnwrapFail tests that the uwnrapping of a chunk into a message fails if the chunk is not trojan
 func TestUnwrapFail(t *testing.T) {
-	// start from correct trojan chunk
+	// start out from a valid trojan chunk
 	m := newTestMessage(t)
 	c, err := m.Wrap(testTargets)
 	if err != nil {
