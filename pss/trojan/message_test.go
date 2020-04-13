@@ -162,6 +162,11 @@ func TestPadBytes(t *testing.T) {
 	}
 }
 
+// TestUnwwwrap tests the correct unwrapping of chunks as trojan messages
+func TestUnwrap(t *testing.T) {
+
+}
+
 // TestMessageSerialization tests that the Message type can be correctly serialized and deserialized
 func TestMessageSerialization(t *testing.T) {
 	m := newTestMessage(t)
