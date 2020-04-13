@@ -33,6 +33,7 @@ import (
 // Put is required to implement chunk.Store
 // interface.
 func (db *DB) Put(ctx context.Context, mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err error) {
+	// TODO: add hook here?
 	metricName := fmt.Sprintf("localstore/Put/%s", mode)
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
