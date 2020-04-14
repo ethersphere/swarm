@@ -113,7 +113,6 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 
 // Unwrap attemps to determine whether the given chunk is a trojan chunk
 // it will return the resulting message if the unwrapping is successful, and an error otherwise
-// TODO: move this to PSS API?
 func Unwrap(c chunk.Chunk) (*Message, error) {
 	d := c.Data()
 
