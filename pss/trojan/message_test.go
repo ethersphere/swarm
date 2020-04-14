@@ -195,7 +195,7 @@ func TestUnwrapFail(t *testing.T) {
 	// attempt unwrapping
 	_, err = Unwrap(c)
 	if err != ErrChunkNotTrojan {
-		t.Fatalf("expected error when unwrapping non-trojan chunk be %q, but got %v", ErrChunkNotTrojan, err)
+		t.Fatalf("expected error when unwrapping non-trojan chunk to be %q, but got %v", ErrChunkNotTrojan, err)
 	}
 
 }
