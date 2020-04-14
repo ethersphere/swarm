@@ -27,12 +27,21 @@ import (
 // Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
+	tag        *chunk.Tag
+}
+
+// State exposes underling chunk states
+type State struct {
+	stateStored chunk.State // chunk stored locally
+	stateSent   chunk.State // chunk sent to neighbourhood
+	stateSynced chunk.State // proof is received; chunk removed from sync db; chunk is available everywhere
 }
 
 // NewPss inits the Pss struct with the localstore
 func NewPss(localStore chunk.Store) *Pss {
 	return &Pss{
 		localStore: localStore,
+		tag:        chunk.NewTag(1, "pss-chunks-tag", 0, false),
 	}
 }
 
@@ -52,11 +61,27 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 		return nil, err
 	}
 
+	tc.WithTagID(p.tag.Uid)
+
 	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
-	// TODO: for second phase, use tags --> listen for response of recipient, recipient offline
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
 		return nil, err
 	}
+	p.tag.Inc(chunk.StateStored)
 
 	return tc, nil
+}
+
+// GetState return the state of a pss message sent
+// TODO: tag should be received as param?
+// TODO: this looks as one tag for all
+func (p *Pss) GetState() *State {
+	tStored := uint32(p.tag.Get(chunk.StateStored))
+	tSent := uint32(p.tag.Get(chunk.StateSent))
+	tSynced := uint32(p.tag.Get(chunk.StateSynced))
+	return &State{
+		stateStored: tStored,
+		stateSent:   tSent,
+		stateSynced: tSynced,
+	}
 }

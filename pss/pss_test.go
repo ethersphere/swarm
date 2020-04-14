@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethersphere/swarm/chunk"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
+	"github.com/ethersphere/swarm/shed"
 	"github.com/ethersphere/swarm/storage/localstore"
 )
 
@@ -68,6 +69,117 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 
 	// check if pinning makes a difference
 
+}
+
+func TestPssMonitor(t *testing.T) {
+	var err error
+	ctx := context.TODO()
+
+	db, cleanupFunc := newTestDB(t, &Options{Tags: chunk.NewTags()})
+	defer cleanupFunc()
+
+	testTargets := [][]byte{
+		{57, 120},
+		{209, 156},
+		{156, 38},
+		{89, 19},
+		{22, 129}}
+	payload := []byte("RECOVERY CHUNK")
+	topic := trojan.NewTopic("RECOVERY")
+
+	var ch chunk.Chunk
+
+	pss := NewPss(db.localStore)
+
+	// call Send to store trojan chunk in localstore
+	if ch, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
+		t.Fatal(err)
+	}
+
+	item, err := db.localStore.pullIndex.Get(shed.Item{
+		Address: ch.Address(),
+		BinID:   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.localStore.Set(context.Background(), chunk.ModeSetSyncPull, ch.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checkTag(t, tag, 0, 1, 0, 1, 0, 1)
+
+}
+
+// CheckTag checks the first tag in the api struct to be in a certain state
+// TODO: reuse existing tag CheckTag instead of this
+func checkTag(t *testing.T, tag *chunk.Tag, split, stored, seen, sent, synced, total int64) {
+	t.Helper()
+	if tag == nil {
+		t.Fatal("no tag found")
+	}
+	tSplit := tag.Get(chunk.StateSplit)
+	if tSplit != split {
+		t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
+	}
+
+	tSeen := tag.Get(chunk.StateSeen)
+	if tSeen != seen {
+		t.Fatalf("should have had seen chunks, got %d want %d", tSeen, seen)
+	}
+
+	tStored := tag.Get(chunk.StateStored)
+	if tStored != stored {
+		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
+	}
+
+	tSent := tag.Get(chunk.StateSent)
+	if tStored != stored {
+		t.Fatalf("mismatch sent chunks, got %d want %d", tSent, sent)
+	}
+
+	tSynced := tag.Get(chunk.StateSynced)
+	if tSynced != synced {
+		t.Fatalf("mismatch synced chunks, got %d want %d", tSynced, synced)
+	}
+
+	tTotal := tag.TotalCounter()
+	if tTotal != total {
+		t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)
+	}
+}
+
+// newTestDB is a helper function that constructs a
+// temporary database and returns a cleanup function that must
+// be called to remove the data.
+// TODO: refactor into common newTestDB for all test
+func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
+	t.Helper()
+
+	dir, err := ioutil.TempDir("", "localstore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanupFunc = func() { os.RemoveAll(dir) }
+	baseKey := make([]byte, 32)
+	if _, err := rand.Read(baseKey); err != nil {
+		t.Fatal(err)
+	}
+	db, err = New(dir, baseKey, o)
+	if err != nil {
+		cleanupFunc()
+		t.Fatal(err)
+	}
+	cleanupFunc = func() {
+		err := db.Close()
+		if err != nil {
+			t.Error(err)
+		}
+		os.RemoveAll(dir)
+	}
+	return db, cleanupFunc
 }
 
 func newMockLocalStore(t *testing.T) *localstore.DB {
