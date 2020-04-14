@@ -1262,10 +1262,9 @@ func TestIndexOffset(t *testing.T) {
 		checkItem(t, item, items[1])
 
 		item, err = index1.Offset(nil, -1)
-		if err != nil {
-			t.Error(err)
+		if err == nil {
+			t.Error("Error was expected!")
 		}
-		checkItem(t, item, items[1])
 
 		item, err = index2.Offset(nil, 10)
 		if err != nil {
