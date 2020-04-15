@@ -100,6 +100,9 @@ func TestNewSwarm(t *testing.T) {
 				if s.oldpss == nil {
 					t.Error("old pss not initialized")
 				}
+				if s.pss == nil {
+					t.Error("pss not initialized")
+				}
 				if s.api == nil {
 					t.Error("api not initialized")
 				}

@@ -49,6 +49,7 @@ import (
 	"github.com/ethersphere/swarm/oldpss"
 	oldpssmessage "github.com/ethersphere/swarm/oldpss/message"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -83,6 +84,7 @@ type Swarm struct {
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
+	pss               *pss.Pss
 	oldpss            *oldpss.Pss
 	pushSync          *pushsync.Pusher
 	storer            *pushsync.Storer
@@ -275,6 +277,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
+
+	self.pss = pss.NewPss(localStore)
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
 
