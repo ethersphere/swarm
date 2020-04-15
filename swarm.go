@@ -83,7 +83,7 @@ type Swarm struct {
 	privateKey        *ecdsa.PrivateKey
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
-	ps                *oldpss.Pss
+	oldpss            *oldpss.Pss
 	pushSync          *pushsync.Pusher
 	storer            *pushsync.Storer
 	swap              *swap.Swap
@@ -261,17 +261,17 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.bzzEth = bzzeth.New(self.netStore, to)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	self.ps, err = oldpss.New(to, config.OldPss)
+	self.oldpss, err = oldpss.New(to, config.OldPss)
 	if err != nil {
 		return nil, err
 	}
 	if oldpss.IsActiveHandshake {
-		oldpss.SetHandshakeController(self.ps, oldpss.NewHandshakeParams())
+		oldpss.SetHandshakeController(self.oldpss, oldpss.NewHandshakeParams())
 	}
 
 	if config.PushSyncEnabled {
 		// expire time for push-sync messages should be lower than regular chat-like messages to avoid network flooding
-		pubsub := oldpss.NewPubSub(self.ps, 20*time.Second)
+		pubsub := oldpss.NewPubSub(self.oldpss, 20*time.Second)
 		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
@@ -384,8 +384,8 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 		return err
 	}
 
-	if s.ps != nil {
-		s.ps.Start(srv)
+	if s.oldpss != nil {
+		s.oldpss.Start(srv)
 	}
 	// start swarm http proxy server
 	if s.config.Port != "" {
@@ -454,8 +454,8 @@ func (s *Swarm) Stop() error {
 		s.pushSync.Close()
 	}
 
-	if s.ps != nil {
-		s.ps.Stop()
+	if s.oldpss != nil {
+		s.oldpss.Stop()
 	}
 	if s.swap != nil {
 		s.swap.Stop()
@@ -515,8 +515,8 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 	} else {
 		protos = append(protos, s.bzz.Protocols()...)
 		protos = append(protos, s.bzzEth.Protocols()...)
-		if s.ps != nil {
-			protos = append(protos, s.ps.Protocols()...)
+		if s.oldpss != nil {
+			protos = append(protos, s.oldpss.Protocols()...)
 		}
 
 		if s.swap != nil {
@@ -567,8 +567,8 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 	apis = append(apis, s.bzzEth.APIs()...)
 
-	if s.ps != nil {
-		apis = append(apis, s.ps.APIs()...)
+	if s.oldpss != nil {
+		apis = append(apis, s.oldpss.APIs()...)
 	}
 
 	if s.config.SwapEnabled {
@@ -580,7 +580,7 @@ func (s *Swarm) APIs() []rpc.API {
 
 // RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
 func (s *Swarm) RegisterPssProtocol(topic *oldpssmessage.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *oldpss.ProtocolParams) (*oldpss.Protocol, error) {
-	return oldpss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
+	return oldpss.RegisterProtocol(s.oldpss, topic, spec, targetprotocol, options)
 }
 
 // Info represents the current Swarm node's configuration

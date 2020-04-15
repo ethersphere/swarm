@@ -77,7 +77,8 @@ func (p *Pss) Register(topic trojan.Topic, hndlr *handler) {
 func (p *Pss) getHandler(topic trojan.Topic) *handler {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
-	return &(p.handlers[topic])
+	h := p.handlers[topic]
+	return &h
 }
 
 func (p *Pss) executeHandler(topic trojan.Topic) error {
