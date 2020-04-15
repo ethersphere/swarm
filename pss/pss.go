@@ -40,7 +40,7 @@ func NewPss(localStore chunk.Store) *Pss {
 }
 
 type handler struct {
-	f func()
+	f func() error
 }
 
 // Send constructs a padded message with topic and payload,
@@ -78,4 +78,9 @@ func (p *Pss) getHandler(topic trojan.Topic) *handler {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	return &(p.handlers[topic])
+}
+
+func (p *Pss) executeHandler(topic trojan.Topic) error {
+	handler := p.getHandler(topic)
+	return handler.f()
 }
