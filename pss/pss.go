@@ -18,6 +18,7 @@ package pss
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
@@ -27,6 +28,8 @@ import (
 // Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
+	handlers   map[trojan.Topic]map[*handler]bool
+	handlersMu sync.RWMutex
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -34,6 +37,10 @@ func NewPss(localStore chunk.Store) *Pss {
 	return &Pss{
 		localStore: localStore,
 	}
+}
+
+type handler struct {
+	f func()
 }
 
 // Send constructs a padded message with topic and payload,
@@ -59,4 +66,16 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	}
 
 	return tc, nil
+}
+
+func (p *Pss) Register(topic trojan.Topic, hndlr *handler) {
+	p.handlersMu.Lock()
+	defer p.handlersMu.Unlock()
+	handlers := p.handlers[topic]
+	if handlers == nil {
+		handlers = make(map[*handler]bool)
+		p.handlers[topic] = handlers
+	}
+	handlers[hndlr] = true
+
 }
