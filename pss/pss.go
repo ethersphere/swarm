@@ -41,7 +41,6 @@ type State struct {
 func NewPss(localStore chunk.Store) *Pss {
 	return &Pss{
 		localStore: localStore,
-		tag:        chunk.NewTag(1, "pss-chunks-tag", 0, false),
 	}
 }
 
@@ -61,13 +60,14 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 		return nil, err
 	}
 
-	tc.WithTagID(p.tag.Uid)
+	tag := chunk.NewTag(1, "pss-chunks-tag", 0, false)
+	tc.WithTagID(tag.Uid)
 
 	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
 		return nil, err
 	}
-	p.tag.Inc(chunk.StateStored)
+	//p.tag.Inc(chunk.StateStored)
 
 	return tc, nil
 }
