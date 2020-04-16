@@ -28,7 +28,7 @@ import (
 // Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
-	handlers   map[trojan.Topic]handler
+	handlers   map[trojan.Topic]Handler
 	handlersMu sync.RWMutex
 }
 
@@ -39,8 +39,14 @@ func NewPss(localStore chunk.Store) *Pss {
 	}
 }
 
-type handler struct {
+type Handler struct {
 	f func() error
+}
+
+func NewHandler(f func() error) *Handler {
+	return &Handler{
+		f: f,
+	}
 }
 
 // Send constructs a padded message with topic and payload,
@@ -68,13 +74,13 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	return tc, nil
 }
 
-func (p *Pss) Register(topic trojan.Topic, hndlr *handler) {
+func (p *Pss) Register(topic trojan.Topic, hndlr *Handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	p.handlers[topic] = *hndlr
 }
 
-func (p *Pss) getHandler(topic trojan.Topic) *handler {
+func (p *Pss) getHandler(topic trojan.Topic) *Handler {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	h := p.handlers[topic]
