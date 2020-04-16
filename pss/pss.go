@@ -29,11 +29,11 @@ type Pss struct {
 	localStore chunk.Store
 }
 
-// State exposes underlying chunk states
-type State struct {
-	stateStored chunk.State // chunk stored locally
-	stateSent   chunk.State // chunk sent to neighbourhood
-	stateSynced chunk.State // proof is received; chunk removed from sync db; chunk is available everywhere
+// Monitor is used for tracking status changes in sent messages
+type Monitor struct {
+	states map[chunk.State]string
+	tag    *chunk.Tag
+	chunk  chunk.Chunk
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -46,17 +46,17 @@ func NewPss(localStore chunk.Store) *Pss {
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
 // stores this in localstore for push-sync to pick up and deliver
-func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, *chunk.Tag, error) {
+func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*Monitor, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
 	m, err := trojan.NewMessage(topic, payload)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var tc chunk.Chunk
 	tc, err = m.Wrap(targets)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	tag := chunk.NewTag(1, "pss-chunks-tag", 0, false)
@@ -64,9 +64,34 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 
 	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	//p.tag.Inc(chunk.StateStored)
+	monitor := &Monitor{
+		chunk:  tc,
+		tag:    tag,
+		states: make(map[chunk.State]string),
+	}
 
-	return tc, tag, nil
+	monitor.updateState()
+
+	return monitor, nil
+}
+
+func (m *Monitor) updateState() {
+	if m.tag == nil {
+		return
+	}
+	// chunk stored locally
+	if m.tag.Stored > 0 {
+		m.states[chunk.StateStored] = "stored"
+	}
+	// chunk sent to neighbourhood
+	if m.tag.Sent > 0 {
+		m.states[chunk.StateSent] = "sent"
+	}
+	// proof is received; chunk removed from sync db; chunk is available everywhere
+	if m.tag.Synced > 0 {
+		m.states[chunk.StateSynced] = "synced"
+	}
 }

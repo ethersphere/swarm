@@ -48,22 +48,22 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
-	var ch chunk.Chunk
+	var monitor *Monitor
 
 	pss := NewPss(localStore)
 
 	// call Send to store trojan chunk in localstore
-	if ch, _, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
+	if monitor, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
 		t.Fatal(err)
 	}
 
 	// verify store, that trojan chunk has been stored correctly
 	var storedChunk chunk.Chunk
-	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, ch.Address()); err != nil {
+	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, monitor.chunk.Address()); err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(ch, storedChunk) {
+	if !reflect.DeepEqual(monitor.chunk, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
 
@@ -86,19 +86,23 @@ func TestPssMonitor(t *testing.T) {
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
-	var tag *chunk.Tag
+	var monitor *Monitor
 
 	pss := NewPss(localStore)
 
 	// call Send to store trojan chunk in localstore
-	if _, tag, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
+	if monitor, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
 		t.Fatal(err)
+	}
+
+	for state := range monitor.states {
+		t.Log("message has been ", state)
 	}
 
 	//tag, _ := p.tags.Get(ch.TagID())
 
 	// verifies if tag is stored, sent, total count of chunks
-	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
+	tagtesting.CheckTag(t, monitor.tag, 0, 1, 0, 1, 0, 1)
 
 }
 
