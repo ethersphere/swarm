@@ -95,7 +95,7 @@ func TestPssMonitor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tag, _ := p.tags.Get(ch.TagID())
+	//tag, _ := p.tags.Get(ch.TagID())
 
 	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
 

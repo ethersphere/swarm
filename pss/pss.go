@@ -27,7 +27,6 @@ import (
 // Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
-	tag        *chunk.Tag
 }
 
 // State exposes underling chunk states
@@ -75,10 +74,10 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 // GetState return the state of a pss message sent
 // TODO: tag should be received as param?
 // TODO: this looks as one tag for all
-func (p *Pss) GetState() *State {
-	tStored := uint32(p.tag.Get(chunk.StateStored))
-	tSent := uint32(p.tag.Get(chunk.StateSent))
-	tSynced := uint32(p.tag.Get(chunk.StateSynced))
+func GetState(tag chunk.Tag) *State {
+	tStored := uint32(tag.Get(chunk.StateStored))
+	tSent := uint32(tag.Get(chunk.StateSent))
+	tSynced := uint32(tag.Get(chunk.StateSynced))
 	return &State{
 		stateStored: tStored,
 		stateSent:   tSent,
