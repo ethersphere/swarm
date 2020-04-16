@@ -29,7 +29,7 @@ type Pss struct {
 	localStore chunk.Store
 }
 
-// State exposes underling chunk states
+// State exposes underlying chunk states
 type State struct {
 	stateStored chunk.State // chunk stored locally
 	stateSent   chunk.State // chunk sent to neighbourhood

@@ -97,6 +97,7 @@ func TestPssMonitor(t *testing.T) {
 
 	//tag, _ := p.tags.Get(ch.TagID())
 
+	// verifies if tag is stored, sent, total count of chunks
 	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
 
 }
