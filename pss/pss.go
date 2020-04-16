@@ -46,17 +46,17 @@ func NewPss(localStore chunk.Store) *Pss {
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
 // stores this in localstore for push-sync to pick up and deliver
-func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, error) {
+func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, *chunk.Tag, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
 	m, err := trojan.NewMessage(topic, payload)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var tc chunk.Chunk
 	tc, err = m.Wrap(targets)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	tag := chunk.NewTag(1, "pss-chunks-tag", 0, false)
@@ -64,23 +64,9 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 
 	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	//p.tag.Inc(chunk.StateStored)
 
-	return tc, nil
-}
-
-// GetState return the state of a pss message sent
-// TODO: tag should be received as param?
-// TODO: this looks as one tag for all
-func GetState(tag chunk.Tag) *State {
-	tStored := uint32(tag.Get(chunk.StateStored))
-	tSent := uint32(tag.Get(chunk.StateSent))
-	tSynced := uint32(tag.Get(chunk.StateSynced))
-	return &State{
-		stateStored: tStored,
-		stateSent:   tSent,
-		stateSynced: tSynced,
-	}
+	return tc, tag, nil
 }
