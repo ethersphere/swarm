@@ -36,6 +36,7 @@ type Pss struct {
 func NewPss(localStore chunk.Store) *Pss {
 	return &Pss{
 		localStore: localStore,
+		handlers:   make(map[trojan.Topic]Handler),
 	}
 }
 
