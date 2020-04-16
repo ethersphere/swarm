@@ -29,7 +29,7 @@ type Pss struct {
 	localStore chunk.Store
 }
 
-// Monitor is used for tracking status changes in sent messages
+// Monitor is used for tracking status changes in sent trojan chunks
 type Monitor struct {
 	states map[chunk.State]string
 	tag    *chunk.Tag

@@ -95,12 +95,13 @@ func TestPssMonitor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for state := range monitor.states {
+	for _, state := range monitor.states {
 		t.Log("message has been ", state)
 	}
 
-	//tag, _ := p.tags.Get(ch.TagID())
-
+	// we expect the chunk to be stored in localstore
+	// with a sent status
+	// and the total amount of chunk to be 1
 	var split, seen, synced, stored, sent, total int64 = 0, 0, 0, 1, 1, 1
 
 	// verifies if tag has been stored, sent and the total count of chunks
