@@ -66,7 +66,9 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
 		return nil, err
 	}
-	//p.tag.Inc(chunk.StateStored)
+	tag.Inc(chunk.StateStored)
+	tag.Total = 1
+
 	monitor := &Monitor{
 		chunk:  tc,
 		tag:    tag,
