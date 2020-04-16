@@ -50,6 +50,7 @@ import (
 	oldpssmessage "github.com/ethersphere/swarm/oldpss/message"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -279,6 +280,15 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	self.pss = pss.NewPss(localStore)
+	global_pinner := true // TODO: temporary, should be taken from CLI
+	if global_pinner {
+		recoveryFunc := func() error {
+			// TODO: add missing chunk re-upload
+			return nil
+		}
+		recoveryHandler := pss.NewHandler(recoveryFunc)
+		self.pss.Register(trojan.NewTopic("RECOVERY"), recoveryHandler)
+	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
 
