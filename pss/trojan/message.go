@@ -111,7 +111,8 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 	return chunk, nil
 }
 
-// Unwrap attemps to determine whether the given chunk is a trojan chunk
+// Unwrap creates a new trojan message from the given chunk payload
+// this function assumes the chunk has been validated as a content-addressed chunk
 // it will return the resulting message if the unwrapping is successful, and an error otherwise
 func Unwrap(c chunk.Chunk) (*Message, error) {
 	d := c.Data()
@@ -119,18 +120,7 @@ func Unwrap(c chunk.Chunk) (*Message, error) {
 	// unmarshal chunk payload into message
 	m := new(Message)
 	// first 40 bytes are span + nonce
-	if err := m.UnmarshalBinary(d[40:]); err != nil {
-		return nil, err
-	}
-
-	// check for message correctness
-	hash, err := hash(d)
-	if err != nil {
-		return nil, err
-	}
-	if !bytes.Equal(hash, c.Address()) {
-		return nil, ErrChunkNotTrojan
-	}
+	err := m.UnmarshalBinary(d[40:])
 
 	return m, err
 }
