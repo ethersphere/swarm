@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/chunk"
 	tagtesting "github.com/ethersphere/swarm/chunk/testing"
@@ -77,6 +78,7 @@ func TestPssMonitor(t *testing.T) {
 	var err error
 	ctx := context.TODO()
 	tags := chunk.NewTags()
+	timeout := 10 * time.Second
 
 	localStore := newMockLocalStore(t, tags)
 
@@ -98,8 +100,24 @@ func TestPssMonitor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for state := range monitor.state {
-		t.Log("message has been ", state)
+loop:
+	for {
+		select {
+		case state := <-monitor.state:
+			if state == chunk.StateStored {
+				t.Log("message has been stored")
+			}
+			if state == chunk.StateSent {
+				t.Log("message has been sent")
+			}
+			if state == chunk.StateSynced {
+				t.Log("message has been synced")
+			}
+		case <-time.After(timeout):
+			t.Log("no message received")
+			close(monitor.state)
+			break loop
+		}
 	}
 
 	// we expect the chunk to be stored in localstore

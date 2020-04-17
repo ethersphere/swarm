@@ -89,7 +89,7 @@ func (m *Monitor) updateState() {
 		for {
 			n, total, err := m.tag.Status(state)
 			if err == nil && n == total {
-				m.state <- chunk.State(n)
+				m.state <- state
 				break
 			}
 		}
