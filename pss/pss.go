@@ -40,6 +40,7 @@ func NewPss(localStore chunk.Store) *Pss {
 	}
 }
 
+// Handler defines code to be executed upon reception of a trojan message
 type Handler func(trojan.Message) error
 
 // Send constructs a padded message with topic and payload,
@@ -67,13 +68,14 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	return tc, nil
 }
 
+// Register allows the definition of a Handler func for a specific topic on the pss struct
 func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	p.handlers[topic] = hndlr
 }
 
-func (p *Pss) GetHandler(topic trojan.Topic) Handler {
+func (p *Pss) getHandler(topic trojan.Topic) Handler {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	return p.handlers[topic]
