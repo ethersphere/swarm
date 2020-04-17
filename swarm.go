@@ -282,12 +282,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.pss = pss.NewPss(localStore)
 
 	if self.config.GlobalPinner {
-		recoveryFunc := func() error {
+		recoveryFunc := func(trojan.Message) error {
 			// TODO: add missing chunk re-upload
 			return nil
 		}
-		recoveryHandler := pss.NewHandler(recoveryFunc)
-		self.pss.Register(trojan.NewTopic("RECOVERY"), recoveryHandler)
+		self.pss.Register(trojan.NewTopic("RECOVERY"), recoveryFunc)
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)

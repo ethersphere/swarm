@@ -40,15 +40,7 @@ func NewPss(localStore chunk.Store) *Pss {
 	}
 }
 
-type Handler struct {
-	f func() error
-}
-
-func NewHandler(f func() error) *Handler {
-	return &Handler{
-		f: f,
-	}
-}
+type Handler func(trojan.Message) error
 
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
@@ -75,20 +67,18 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	return tc, nil
 }
 
-func (p *Pss) Register(topic trojan.Topic, hndlr *Handler) {
+func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
-	p.handlers[topic] = *hndlr
+	p.handlers[topic] = hndlr
 }
 
-func (p *Pss) getHandler(topic trojan.Topic) *Handler {
+func (p *Pss) getHandler(topic trojan.Topic) Handler {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
-	h := p.handlers[topic]
-	return &h
+	return p.handlers[topic]
 }
 
-func (p *Pss) executeHandler(topic trojan.Topic) error {
-	handler := p.getHandler(topic)
-	return handler.f()
+func (p *Pss) executeHandler(topic trojan.Topic, m trojan.Message) error {
+	return p.getHandler(topic)(m)
 }
