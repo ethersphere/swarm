@@ -278,7 +278,8 @@ type Validator interface {
 // with validators check.
 type ValidatorStore struct {
 	Store
-	validators []Validator
+	pssCallback func(Chunk) error
+	validators  []Validator
 }
 
 // NewValidatorStore returns a new ValidatorStore which uses
@@ -288,6 +289,11 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 		Store:      store,
 		validators: validators,
 	}
+}
+
+// SetPssCallback allows injecting a callback func on the ValidatorStore struct
+func (s *ValidatorStore) SetPssCallback(f func(Chunk) error) {
+	s.pssCallback = f
 }
 
 // Put overrides Store put method with validators check. For Put to succeed,
@@ -307,6 +313,9 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
+			if s.pssCallback != nil {
+				go s.pssCallback(ch) // TODO: needs error handling
+			}
 			return true
 		}
 	}
