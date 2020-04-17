@@ -280,8 +280,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	self.pss = pss.NewPss(localStore)
-	global_pinner := true // TODO: temporary, should be taken from CLI
-	if global_pinner {
+
+	if self.config.GlobalPinner {
 		recoveryFunc := func() error {
 			// TODO: add missing chunk re-upload
 			return nil
