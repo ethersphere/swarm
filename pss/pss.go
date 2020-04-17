@@ -27,19 +27,21 @@ import (
 // Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
+	tags       *chunk.Tags
 }
 
 // Monitor is used for tracking status changes in sent trojan chunks
 type Monitor struct {
-	states map[chunk.State]string
-	tag    *chunk.Tag
-	chunk  chunk.Chunk
+	state chan chunk.State
+	tag   *chunk.Tag
+	chunk chunk.Chunk
 }
 
 // NewPss inits the Pss struct with the localstore
-func NewPss(localStore chunk.Store) *Pss {
+func NewPss(localStore chunk.Store, tags *chunk.Tags) *Pss {
 	return &Pss{
 		localStore: localStore,
+		tags:       tags,
 	}
 }
 
@@ -59,41 +61,37 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 		return nil, err
 	}
 
-	tag := chunk.NewTag(1, "pss-chunks-tag", 0, false)
-	tc.WithTagID(tag.Uid)
+	tag, err := p.tags.Create("pss-chunks-tag", 1, false)
+	if err != nil {
+		return nil, err
+	}
 
 	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
-	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
+	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc.WithTagID(tag.Uid)); err != nil {
 		return nil, err
 	}
 	tag.Inc(chunk.StateStored)
 	tag.Total = 1
 
 	monitor := &Monitor{
-		chunk:  tc,
-		tag:    tag,
-		states: make(map[chunk.State]string),
+		chunk: tc,
+		tag:   tag,
+		state: make(chan chunk.State, 3),
 	}
 
-	monitor.updateState()
+	go monitor.updateState()
 
 	return monitor, nil
 }
 
 func (m *Monitor) updateState() {
-	if m.tag == nil {
-		return
-	}
-	// chunk stored locally
-	if m.tag.Stored > 0 {
-		m.states[chunk.StateStored] = "stored"
-	}
-	// chunk sent to neighbourhood
-	if m.tag.Sent > 0 {
-		m.states[chunk.StateSent] = "sent"
-	}
-	// proof is received; chunk removed from sync db; chunk is available everywhere
-	if m.tag.Synced > 0 {
-		m.states[chunk.StateSynced] = "synced"
+	for _, state := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
+		for {
+			n, total, err := m.tag.Status(state)
+			if err == nil && n == total {
+				m.state <- chunk.State(n)
+				break
+			}
+		}
 	}
 }

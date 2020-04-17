@@ -36,8 +36,9 @@ import (
 func TestTrojanChunkRetrieval(t *testing.T) {
 	var err error
 	ctx := context.TODO()
+	tags := chunk.NewTags()
 
-	localStore := newMockLocalStore(t)
+	localStore := newMockLocalStore(t, tags)
 
 	testTargets := [][]byte{
 		{57, 120},
@@ -50,7 +51,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 
 	var monitor *Monitor
 
-	pss := NewPss(localStore)
+	pss := NewPss(localStore, tags)
 
 	// call Send to store trojan chunk in localstore
 	if monitor, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
@@ -62,6 +63,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, monitor.chunk.Address()); err != nil {
 		t.Fatal(err)
 	}
+	storedChunk = storedChunk.WithTagID(monitor.chunk.TagID())
 
 	if !reflect.DeepEqual(monitor.chunk, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
@@ -74,8 +76,9 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 func TestPssMonitor(t *testing.T) {
 	var err error
 	ctx := context.TODO()
+	tags := chunk.NewTags()
 
-	localStore := newMockLocalStore(t)
+	localStore := newMockLocalStore(t, tags)
 
 	testTargets := [][]byte{
 		{57, 120},
@@ -88,14 +91,14 @@ func TestPssMonitor(t *testing.T) {
 
 	var monitor *Monitor
 
-	pss := NewPss(localStore)
+	pss := NewPss(localStore, tags)
 
 	// call Send to store trojan chunk in localstore
 	if monitor, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, state := range monitor.states {
+	for state := range monitor.state {
 		t.Log("message has been ", state)
 	}
 
@@ -109,7 +112,7 @@ func TestPssMonitor(t *testing.T) {
 
 }
 
-func newMockLocalStore(t *testing.T) *localstore.DB {
+func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
 	dir, err := ioutil.TempDir("", "swarm-")
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +124,7 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 		t.Fatal(err)
 	}
 
-	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
+	localStore, err := localstore.New(dir, baseKey, &localstore.Options{Tags: tags})
 	if err != nil {
 		t.Fatal(err)
 	}
