@@ -59,9 +59,6 @@ var ErrEmptyTargets = errors.New("target list cannot be empty")
 // ErrVarLenTargets is returned when the given target list for a trojan chunk has addresses of different lengths
 var ErrVarLenTargets = errors.New("target list cannot have targets of different length")
 
-// ErrChunkNotTrojan is returned when attempting to unwrap a chunk into a trojan message when the chunk is not trojan
-var ErrChunkNotTrojan = errors.New("cannot unwrap chunk as it is not trojan")
-
 // NewTopic creates a new Topic variable with the given input string
 // the input string is taken as a byte slice and hashed
 func NewTopic(topic string) Topic {
