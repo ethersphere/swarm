@@ -78,7 +78,3 @@ func (p *Pss) getHandler(topic trojan.Topic) Handler {
 	defer p.handlersMu.RUnlock()
 	return p.handlers[topic]
 }
-
-func (p *Pss) executeHandler(topic trojan.Topic, m trojan.Message) error {
-	return p.getHandler(topic)(m)
-}
