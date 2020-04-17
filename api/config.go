@@ -82,6 +82,7 @@ type Config struct {
 	BootnodeMode       bool
 	DisableAutoConnect bool
 	EnablePinning      bool
+	GlobalPinner       bool
 	Cors               string
 	BzzAccount         string
 	GlobalStoreAPI     string

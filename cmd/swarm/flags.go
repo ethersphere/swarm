@@ -236,6 +236,10 @@ var (
 		Name:  "enable-pinning",
 		Usage: "Use this flag to enable the pinning feature",
 	}
+	SwarmGlobalPinnerFlag = cli.BoolFlag{
+		Name:  "global-pinner",
+		Usage: "Use this flag to mark the running node as a global pinner",
+	}
 	SwarmProgressFlag = cli.BoolFlag{
 		Name:  "progress",
 		Usage: "Use this flag to enable tracking of the upload progress through the CLI",
