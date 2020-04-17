@@ -79,7 +79,9 @@ func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 func (p *Pss) Deliver(c chunk.Chunk) error {
 	m, _ := trojan.Unwrap(c) // TODO: handle error
 	h := p.getHandler(m.GetTopic())
-	h(*m)
+	if h != nil {
+		h(*m)
+	}
 	return nil
 }
 
