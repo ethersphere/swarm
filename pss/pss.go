@@ -73,7 +73,7 @@ func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 	p.handlers[topic] = hndlr
 }
 
-func (p *Pss) getHandler(topic trojan.Topic) Handler {
+func (p *Pss) GetHandler(topic trojan.Topic) Handler {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	return p.handlers[topic]
