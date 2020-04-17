@@ -40,6 +40,11 @@ type Message struct {
 	padding []byte
 }
 
+// GetTopic exposes the underlying topic of a Message type
+func (m *Message) GetTopic() Topic {
+	return m.topic
+}
+
 // MaxPayloadSize is the maximum allowed payload size for the Message type, in bytes
 const MaxPayloadSize = 4030
 
