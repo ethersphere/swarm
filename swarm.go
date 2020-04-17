@@ -282,6 +282,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.pss = pss.NewPss(localStore)
 
 	if self.config.GlobalPinner {
+		lstore.SetPssCallback(self.pss.Deliver)
 		recoveryFunc := func(trojan.Message) error {
 			// TODO: add missing chunk re-upload
 			return nil
