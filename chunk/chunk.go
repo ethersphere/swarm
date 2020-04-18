@@ -278,7 +278,7 @@ type Validator interface {
 // with validators check.
 type ValidatorStore struct {
 	Store
-	pssCallback func(Chunk) error
+	deliverHook func(Chunk)
 	validators  []Validator
 }
 
@@ -291,9 +291,9 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 	}
 }
 
-// SetPssCallback allows injecting a callback func on the ValidatorStore struct
-func (s *ValidatorStore) SetPssCallback(f func(Chunk) error) {
-	s.pssCallback = f
+// SetDeliverHook allows injecting a callback func on the ValidatorStore struct
+func (s *ValidatorStore) SetDeliverHook(f func(Chunk)) {
+	s.deliverHook = f
 }
 
 // Put overrides Store put method with validators check. For Put to succeed,
@@ -313,8 +313,8 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
-			if s.pssCallback != nil {
-				go s.pssCallback(ch) // TODO: needs error handling
+			if s.deliverHook != nil {
+				go s.deliverHook(ch)
 			}
 			return true
 		}
