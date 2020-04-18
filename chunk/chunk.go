@@ -278,8 +278,8 @@ type Validator interface {
 // with validators check.
 type ValidatorStore struct {
 	Store
-	deliverHook func(Chunk)
-	validators  []Validator
+	deliverCallback func(Chunk)
+	validators      []Validator
 }
 
 // NewValidatorStore returns a new ValidatorStore which uses
@@ -291,9 +291,10 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 	}
 }
 
-// SetDeliverHook allows injecting a callback func on the ValidatorStore struct
-func (s *ValidatorStore) SetDeliverHook(f func(Chunk)) {
-	s.deliverHook = f
+// WithDeliverCallback allows injecting a callback func on the ValidatorStore struct
+func (s *ValidatorStore) WithDeliverCallback(f func(Chunk)) *ValidatorStore {
+	s.deliverCallback = f
+	return s
 }
 
 // Put overrides Store put method with validators check. For Put to succeed,
@@ -313,8 +314,8 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
-			if s.deliverHook != nil {
-				go s.deliverHook(ch)
+			if s.deliverCallback != nil {
+				go s.deliverCallback(ch)
 			}
 			return true
 		}
