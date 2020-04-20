@@ -98,7 +98,8 @@ func TestRegister(t *testing.T) {
 		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.handlers))
 	}
 
-	handlerVerifier := 0
+	handlerVerifier := 0 // test variable to check retrieved hanlder funcs are correct
+
 	// register first handler
 	testHandler := func(m trojan.Message) error {
 		handlerVerifier = 1
@@ -112,7 +113,7 @@ func TestRegister(t *testing.T) {
 	}
 
 	registeredHandler := pss.getHandler(testTopic)
-	registeredHandler(trojan.Message{}) // call hanlder to verify the retrieved func is correct
+	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
 
 	if handlerVerifier != 1 {
 		t.Fatal("unexpected handler retrieved")
@@ -123,18 +124,52 @@ func TestRegister(t *testing.T) {
 		handlerVerifier = 2
 		return nil
 	}
-	testTopic = trojan.NewTopic("SECPMD_HANDLER")
+	testTopic = trojan.NewTopic("SECOND_HANDLER")
 	pss.Register(testTopic, testHandler)
 	if len(pss.handlers) != 2 {
 		t.Fatalf("expected pss handlers to contain 2 elements, but its length is %d", len(pss.handlers))
 	}
 
 	registeredHandler = pss.getHandler(testTopic)
-	registeredHandler(trojan.Message{}) // call hanlder to verify the retrieved func is correct
+	registeredHandler(trojan.Message{}) // call handder to verify the retrieved func is correct
 
 	if handlerVerifier != 2 {
 		t.Fatal("unexpected handler retrieved")
 	}
+}
+
+func TestDeliver(t *testing.T) {
+	localStore := newMockLocalStore(t)
+	pss := NewPss(localStore)
+
+	// test message
+	topic := trojan.NewTopic("footopic")
+	payload := []byte("foopayload")
+	msg, err := trojan.NewMessage(topic, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// test chunk
+	targets := [][]byte{{255}}
+	chunk, err := msg.Wrap(targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create and register handler
+	var tt trojan.Topic // test variable to check handler func was called
+	hndlr := func(m trojan.Message) error {
+		tt = m.Topic // copy the message topic to the test variable
+		return nil
+	}
+	pss.Register(topic, hndlr)
+
+	// deliver on chunk and verify test topic variable value change
+	pss.Deliver(chunk)
+	if tt != msg.Topic {
+		t.Fatalf("expected test topic to have a value of %v but is %v instead", msg.Topic, tt)
+	}
+
 }
 
 // TODO: later test could be a simulation test for 2 nodes, localstore + netstore
