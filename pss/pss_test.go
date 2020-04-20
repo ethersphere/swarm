@@ -37,6 +37,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	ctx := context.TODO()
 
 	localStore := newMockLocalStore(t)
+	pss := NewPss(localStore)
 
 	testTargets := [][]byte{
 		{57, 120},
@@ -48,8 +49,6 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	topic := trojan.NewTopic("RECOVERY")
 
 	var ch chunk.Chunk
-
-	pss := NewPss(localStore)
 
 	// call Send to store trojan chunk in localstore
 	if ch, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
@@ -88,6 +87,89 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 	}
 
 	return localStore
+}
+
+// TestRegister verifies that handler funcs are able to be registered correctly in pss
+func TestRegister(t *testing.T) {
+	localStore := newMockLocalStore(t)
+	pss := NewPss(localStore)
+
+	// pss handlers should be empty
+	if len(pss.handlers) != 0 {
+		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.handlers))
+	}
+
+	handlerVerifier := 0 // test variable to check handler funcs are correctly retrieved
+
+	// register first handler
+	testHandler := func(m trojan.Message) {
+		handlerVerifier = 1
+	}
+	testTopic := trojan.NewTopic("FIRST_HANDLER")
+	pss.Register(testTopic, testHandler)
+
+	if len(pss.handlers) != 1 {
+		t.Fatalf("expected pss handlers to contain 1 element, but its length is %d", len(pss.handlers))
+	}
+
+	registeredHandler := pss.getHandler(testTopic)
+	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
+
+	if handlerVerifier != 1 {
+		t.Fatalf("unexpected handler retrieved, verifier variable should be 1 but is %d instead", handlerVerifier)
+	}
+
+	// register second handler
+	testHandler = func(m trojan.Message) {
+		handlerVerifier = 2
+	}
+	testTopic = trojan.NewTopic("SECOND_HANDLER")
+	pss.Register(testTopic, testHandler)
+	if len(pss.handlers) != 2 {
+		t.Fatalf("expected pss handlers to contain 2 elements, but its length is %d", len(pss.handlers))
+	}
+
+	registeredHandler = pss.getHandler(testTopic)
+	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
+
+	if handlerVerifier != 2 {
+		t.Fatalf("unexpected handler retrieved, verifier variable should be 2 but is %d instead", handlerVerifier)
+	}
+}
+
+// TestDeliver verifies that registering a handler on pss for a given topic and then submitting a trojan chunk with said topic to it
+// results in the execution of the expected handler func
+func TestDeliver(t *testing.T) {
+	localStore := newMockLocalStore(t)
+	pss := NewPss(localStore)
+
+	// test message
+	topic := trojan.NewTopic("footopic")
+	payload := []byte("foopayload")
+	msg, err := trojan.NewMessage(topic, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// test chunk
+	targets := [][]byte{{255}}
+	chunk, err := msg.Wrap(targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create and register handler
+	var tt trojan.Topic // test variable to check handler func was correctly called
+	hndlr := func(m trojan.Message) {
+		tt = m.Topic // copy the message topic to the test variable
+	}
+	pss.Register(topic, hndlr)
+
+	// call pss Deliver on chunk and verify test topic variable value changes
+	pss.Deliver(chunk)
+	if tt != msg.Topic {
+		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
+	}
+
 }
 
 // TODO: later test could be a simulation test for 2 nodes, localstore + netstore

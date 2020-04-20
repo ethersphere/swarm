@@ -51,8 +51,14 @@ func newTestMessage(t *testing.T) Message {
 // TestNewMessage tests the correct and incorrect creation of a Message struct
 func TestNewMessage(t *testing.T) {
 	smallPayload := make([]byte, 32)
-	if _, err := NewMessage(testTopic, smallPayload); err != nil {
+	m, err := NewMessage(testTopic, smallPayload)
+	if err != nil {
 		t.Fatal(err)
+	}
+
+	// verify topic
+	if m.Topic != testTopic {
+		t.Fatalf("expected message topic to be %v but is %v instead", testTopic, m.Topic)
 	}
 
 	maxPayload := make([]byte, MaxPayloadSize)
@@ -159,6 +165,24 @@ func TestPadBytes(t *testing.T) {
 	e = append(make([]byte, 28), s...) // 28 zeros plus the 4 original bytes
 	if !bytes.Equal(p, e) {
 		t.Fatalf("expected byte padding to result in %x, but is %x", e, p)
+	}
+}
+
+// TestUnwrap tests the correct unwrapping of a trojan chunk to obtain a message
+func TestUnwrap(t *testing.T) {
+	m := newTestMessage(t)
+	c, err := m.Wrap(testTargets)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	um, err := Unwrap(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(m, *um) {
+		t.Fatalf("original message does not match unwrapped one")
 	}
 }
 

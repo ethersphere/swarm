@@ -273,6 +273,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if ctx.GlobalBool(SwarmEnablePinningFlag.Name) {
 		currentConfig.EnablePinning = true
 	}
+	if ctx.GlobalBool(SwarmGlobalPinnerFlag.Name) {
+		currentConfig.GlobalPinner = true
+	}
 	return currentConfig
 }
 
