@@ -41,7 +41,7 @@ func NewPss(localStore chunk.Store) *Pss {
 }
 
 // Handler defines code to be executed upon reception of a trojan message
-type Handler func(trojan.Message) error
+type Handler func(trojan.Message)
 
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
@@ -77,10 +77,10 @@ func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 
 // Deliver allows unwrapping a chunk as a trojan message and calling its handler func based on its topic
 func (p *Pss) Deliver(c chunk.Chunk) {
-	m, _ := trojan.Unwrap(c) // TODO: handle error
+	m, _ := trojan.Unwrap(c)
 	h := p.getHandler(m.Topic)
 	if h != nil {
-		h(*m) // TODO: handle error
+		h(*m)
 	}
 }
 

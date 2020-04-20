@@ -102,9 +102,8 @@ func TestRegister(t *testing.T) {
 	handlerVerifier := 0 // test variable to check handler funcs are correctly retrieved
 
 	// register first handler
-	testHandler := func(m trojan.Message) error {
+	testHandler := func(m trojan.Message) {
 		handlerVerifier = 1
-		return nil
 	}
 	testTopic := trojan.NewTopic("FIRST_HANDLER")
 	pss.Register(testTopic, testHandler)
@@ -121,9 +120,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	// register second handler
-	testHandler = func(m trojan.Message) error {
+	testHandler = func(m trojan.Message) {
 		handlerVerifier = 2
-		return nil
 	}
 	testTopic = trojan.NewTopic("SECOND_HANDLER")
 	pss.Register(testTopic, testHandler)
@@ -161,9 +159,8 @@ func TestDeliver(t *testing.T) {
 
 	// create and register handler
 	var tt trojan.Topic // test variable to check handler func was correctly called
-	hndlr := func(m trojan.Message) error {
+	hndlr := func(m trojan.Message) {
 		tt = m.Topic // copy the message topic to the test variable
-		return nil
 	}
 	pss.Register(topic, hndlr)
 
