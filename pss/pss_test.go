@@ -93,15 +93,47 @@ func TestRegister(t *testing.T) {
 	localStore := newMockLocalStore(t)
 	pss := NewPss(localStore)
 
+	// pss handlers should be empty
 	if len(pss.handlers) != 0 {
 		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.handlers))
 	}
 
-	testHandler := func(m trojan.Message) error { return nil }
-	pss.Register(trojan.NewTopic("TEST"), testHandler)
+	handlerVerifier := 0
+	// register first handler
+	testHandler := func(m trojan.Message) error {
+		handlerVerifier = 1
+		return nil
+	}
+	testTopic := trojan.NewTopic("FIRST_HANDLER")
+	pss.Register(testTopic, testHandler)
 
 	if len(pss.handlers) != 1 {
 		t.Fatalf("expected pss handlers to contain 1 element, but its length is %d", len(pss.handlers))
+	}
+
+	registeredHandler := pss.getHandler(testTopic)
+	registeredHandler(trojan.Message{}) // call hanlder to verify the retrieved func is correct
+
+	if handlerVerifier != 1 {
+		t.Fatal("unexpected handler retrieved")
+	}
+
+	// register second handler
+	testHandler = func(m trojan.Message) error {
+		handlerVerifier = 2
+		return nil
+	}
+	testTopic = trojan.NewTopic("SECPMD_HANDLER")
+	pss.Register(testTopic, testHandler)
+	if len(pss.handlers) != 2 {
+		t.Fatalf("expected pss handlers to contain 2 elements, but its length is %d", len(pss.handlers))
+	}
+
+	registeredHandler = pss.getHandler(testTopic)
+	registeredHandler(trojan.Message{}) // call hanlder to verify the retrieved func is correct
+
+	if handlerVerifier != 2 {
+		t.Fatal("unexpected handler retrieved")
 	}
 }
 
