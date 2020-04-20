@@ -117,7 +117,7 @@ func TestRegister(t *testing.T) {
 	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
 
 	if handlerVerifier != 1 {
-		t.Fatalf("unexpected handler retrieved, verifier variable should be %d but is %d instead", 1, handlerVerifier)
+		t.Fatalf("unexpected handler retrieved, verifier variable should be 1 but is %d instead", handlerVerifier)
 	}
 
 	// register second handler
@@ -135,7 +135,7 @@ func TestRegister(t *testing.T) {
 	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
 
 	if handlerVerifier != 2 {
-		t.Fatalf("unexpected handler retrieved, verifier variable should be %d but is %d instead", 2, handlerVerifier)
+		t.Fatalf("unexpected handler retrieved, verifier variable should be 2 but is %d instead", handlerVerifier)
 	}
 }
 
