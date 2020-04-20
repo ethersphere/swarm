@@ -117,7 +117,7 @@ func TestRegister(t *testing.T) {
 	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
 
 	if handlerVerifier != 1 {
-		t.Fatal("unexpected handler retrieved")
+		t.Fatalf("unexpected handler retrieved, verifier variable should be %d but is %d instead", 1, handlerVerifier)
 	}
 
 	// register second handler
@@ -139,6 +139,8 @@ func TestRegister(t *testing.T) {
 	}
 }
 
+// TestDeliver verifies that registering a handler on pss for a given topic and then submitting a trojan chunk with said topic to it
+// results in the execution of the expected handler func
 func TestDeliver(t *testing.T) {
 	localStore := newMockLocalStore(t)
 	pss := NewPss(localStore)
@@ -165,7 +167,7 @@ func TestDeliver(t *testing.T) {
 	}
 	pss.Register(topic, hndlr)
 
-	// deliver on chunk and verify test topic variable value change
+	// call pss Deliver on chunk and verify test topic variable value changes
 	pss.Deliver(chunk)
 	if tt != msg.Topic {
 		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
