@@ -51,8 +51,14 @@ func newTestMessage(t *testing.T) Message {
 // TestNewMessage tests the correct and incorrect creation of a Message struct
 func TestNewMessage(t *testing.T) {
 	smallPayload := make([]byte, 32)
-	if _, err := NewMessage(testTopic, smallPayload); err != nil {
+	m, err := NewMessage(testTopic, smallPayload)
+	if err != nil {
 		t.Fatal(err)
+	}
+
+	// verify topic
+	if m.Topic != testTopic {
+		t.Fatalf("expected message topic to be %v but is %v instead", testTopic, m.Topic)
 	}
 
 	maxPayload := make([]byte, MaxPayloadSize)

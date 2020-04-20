@@ -82,6 +82,7 @@ func NewMessage(topic Topic, payload []byte) (Message, error) {
 	// create new Message var and set fields
 	m := new(Message)
 	copy(m.length[:], lengthBuf[:])
+	m.Topic = topic
 	m.payload = payload
 	m.padding = padding
 
