@@ -96,6 +96,13 @@ func TestRegister(t *testing.T) {
 	if len(pss.handlers) != 0 {
 		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.handlers))
 	}
+
+	testHandler := func(m trojan.Message) error { return nil }
+	pss.Register(trojan.NewTopic("TEST"), testHandler)
+
+	if len(pss.handlers) != 1 {
+		t.Fatalf("expected pss handlers to contain 1 element, but its length is %d", len(pss.handlers))
+	}
 }
 
 // TODO: later test could be a simulation test for 2 nodes, localstore + netstore

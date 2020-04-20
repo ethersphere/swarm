@@ -80,7 +80,7 @@ func (p *Pss) Deliver(c chunk.Chunk) {
 	m, _ := trojan.Unwrap(c) // TODO: handle error
 	h := p.getHandler(m.Topic)
 	if h != nil {
-		h(*m)
+		h(*m) // TODO: handle error
 	}
 }
 
