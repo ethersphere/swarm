@@ -78,7 +78,7 @@ func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 // Deliver allows unwrapping a chunk as a trojan message and calling its handler func based on its topic
 func (p *Pss) Deliver(c chunk.Chunk) {
 	m, _ := trojan.Unwrap(c) // TODO: handle error
-	h := p.getHandler(m.GetTopic())
+	h := p.getHandler(m.Topic)
 	if h != nil {
 		h(*m)
 	}

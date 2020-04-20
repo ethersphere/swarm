@@ -35,14 +35,9 @@ type Topic [32]byte
 // Message represents a trojan message, which is a message that will be hidden within a chunk payload as part of its data
 type Message struct {
 	length  [2]byte // big-endian encoding of Message payload length
-	topic   Topic
+	Topic   Topic
 	payload []byte
 	padding []byte
-}
-
-// GetTopic exposes the underlying topic of a Message type
-func (m *Message) GetTopic() Topic {
-	return m.topic
 }
 
 // MaxPayloadSize is the maximum allowed payload size for the Message type, in bytes
@@ -219,7 +214,7 @@ func padBytes(b []byte) []byte {
 
 // MarshalBinary serializes a message struct
 func (m *Message) MarshalBinary() (data []byte, err error) {
-	data = append(m.length[:], m.topic[:]...)
+	data = append(m.length[:], m.Topic[:]...)
 	data = append(data, m.payload...)
 	data = append(data, m.padding...)
 	return data, nil
@@ -228,7 +223,7 @@ func (m *Message) MarshalBinary() (data []byte, err error) {
 // UnmarshalBinary deserializes a message struct
 func (m *Message) UnmarshalBinary(data []byte) (err error) {
 	copy(m.length[:], data[:2])  // first 2 bytes are length
-	copy(m.topic[:], data[2:34]) // following 32 bytes are topic
+	copy(m.Topic[:], data[2:34]) // following 32 bytes are topic
 
 	// rest of the bytes are payload and padding
 	length := binary.BigEndian.Uint16(m.length[:])
