@@ -37,6 +37,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	ctx := context.TODO()
 
 	localStore := newMockLocalStore(t)
+	pss := NewPss(localStore)
 
 	testTargets := [][]byte{
 		{57, 120},
@@ -48,8 +49,6 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	topic := trojan.NewTopic("RECOVERY")
 
 	var ch chunk.Chunk
-
-	pss := NewPss(localStore)
 
 	// call Send to store trojan chunk in localstore
 	if ch, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
@@ -88,6 +87,15 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 	}
 
 	return localStore
+}
+
+func TestRegister(t *testing.T) {
+	localStore := newMockLocalStore(t)
+	pss := NewPss(localStore)
+
+	if len(pss.handlers) != 0 {
+		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.handlers))
+	}
 }
 
 // TODO: later test could be a simulation test for 2 nodes, localstore + netstore
