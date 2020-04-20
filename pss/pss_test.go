@@ -89,6 +89,7 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 	return localStore
 }
 
+// TestRegister verifies that handler funcs are able to be registered correctly in pss
 func TestRegister(t *testing.T) {
 	localStore := newMockLocalStore(t)
 	pss := NewPss(localStore)
@@ -98,7 +99,7 @@ func TestRegister(t *testing.T) {
 		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.handlers))
 	}
 
-	handlerVerifier := 0 // test variable to check retrieved hanlder funcs are correct
+	handlerVerifier := 0 // test variable to check handler funcs are correctly retrieved
 
 	// register first handler
 	testHandler := func(m trojan.Message) error {
@@ -131,10 +132,10 @@ func TestRegister(t *testing.T) {
 	}
 
 	registeredHandler = pss.getHandler(testTopic)
-	registeredHandler(trojan.Message{}) // call handder to verify the retrieved func is correct
+	registeredHandler(trojan.Message{}) // call handler to verify the retrieved func is correct
 
 	if handlerVerifier != 2 {
-		t.Fatal("unexpected handler retrieved")
+		t.Fatalf("unexpected handler retrieved, verifier variable should be %d but is %d instead", 2, handlerVerifier)
 	}
 }
 
@@ -157,7 +158,7 @@ func TestDeliver(t *testing.T) {
 	}
 
 	// create and register handler
-	var tt trojan.Topic // test variable to check handler func was called
+	var tt trojan.Topic // test variable to check handler func was correctly called
 	hndlr := func(m trojan.Message) error {
 		tt = m.Topic // copy the message topic to the test variable
 		return nil
@@ -167,7 +168,7 @@ func TestDeliver(t *testing.T) {
 	// deliver on chunk and verify test topic variable value change
 	pss.Deliver(chunk)
 	if tt != msg.Topic {
-		t.Fatalf("expected test topic to have a value of %v but is %v instead", msg.Topic, tt)
+		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
 	}
 
 }
