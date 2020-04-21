@@ -116,8 +116,8 @@ func TestModeSetSyncPullNormalTag(t *testing.T) {
 		t.Fatalf("unexpected tag id value got %d want %d", item.Tag, tag.Uid)
 	}
 
-	// 1 stored (because incremented manually in test), 1 sent, 1 total
-	tagtesting.CheckTag(t, tag, 0, 1, 0, 1, 0, 1)
+	// 1 stored (because incremented manually in test), 1 total
+	tagtesting.CheckTag(t, tag, 0, 1, 0, 0, 0, 1)
 }
 
 // TestModeSetSyncPullAnonymousTag checks that pull sync correcly increments
