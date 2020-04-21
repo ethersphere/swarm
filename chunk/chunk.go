@@ -190,6 +190,8 @@ func (m ModePut) String() string {
 		return "Sync"
 	case ModePutUpload:
 		return "Upload"
+	case ModePutReUpload:
+		return "ReUpload"
 	default:
 		return "Unknown"
 	}
@@ -203,6 +205,8 @@ const (
 	ModePutSync
 	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
+	// ModePutReUpload: when a pinned chunk is repaired
+	ModePutReUpload
 )
 
 // ModeSet enumerates different Setter modes.
