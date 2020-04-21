@@ -109,7 +109,7 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 			gcSizeChange += c
 		}
 	case chunk.ModePutReUpload:
-		// TODO: this should do the same as `ModePutUpload`, but add the chunk hash to the pushindex
+		// TODO: this should do the same as `ModePutUpload`, but also add the chunk hash to the pushindex
 		for i, ch := range chs {
 			if containsChunk(ch.Address(), chs[:i]...) {
 				exist[i] = true
