@@ -74,12 +74,13 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 
 // TestPssMonitor creates a trojan chunk
 // mocks the localstore
-// calls pss.Send method and monitors it's state for updates
+// calls pss.Send method
+// updates the tag state (Stored/Sent/Synced)
+// waits for the monitor to notify the changed state
 func TestPssMonitor(t *testing.T) {
 	var err error
 	ctx := context.TODO()
 	tags := chunk.NewTags()
-	timeout := 10 * time.Second
 
 	localStore := newMockLocalStore(t, tags)
 
@@ -101,22 +102,38 @@ func TestPssMonitor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-loop:
+	// increment stored on the tag, expect state stored on the channel
+	monitor.tag.Inc(chunk.StateStored)
+	if stateChangeValid(t, monitor, chunk.StateStored) {
+		t.Log("message has been stored")
+	}
+
+	// increment sent on the tag, expect state sent on the channel
+	monitor.tag.Inc(chunk.StateSent)
+	if stateChangeValid(t, monitor, chunk.StateSent) {
+		t.Log("message has been sent")
+	}
+
+	// increment synced on the tag, expect synced on the channel
+	monitor.tag.Inc(chunk.StateSynced)
+	if stateChangeValid(t, monitor, chunk.StateSynced) {
+		t.Log("message has been synced")
+	}
+
+}
+
+// stateChangeValid waits until the monitor state has changed or timeouts
+func stateChangeValid(t *testing.T, monitor *Monitor, expectedState chunk.State) bool {
+	timeout := 10 * time.Second
+
 	for {
 		select {
 		case state := <-monitor.state:
-			if state == chunk.StateStored {
-				t.Log("message has been stored")
-			}
-			if state == chunk.StateSent {
-				t.Log("message has been sent")
-			}
-			if state == chunk.StateSynced {
-				t.Log("message has been synced")
+			if state == expectedState {
+				return true
 			}
 		case <-time.After(timeout):
-			t.Log("no message received")
-			break loop
+			t.Errorf("no message received")
 		}
 	}
 }
