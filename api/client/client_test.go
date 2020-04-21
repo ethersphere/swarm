@@ -408,17 +408,17 @@ func TestClientQueryTagByHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tagg, err := client.TagByHash(hash)
+	tagAPI, err := client.TagByHash(hash)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check the tag was created successfully
 	tag := srv.Tags.All()[0]
-	chunktesting.CheckTag(t, tag, 1, 1, 0, 1, 0, 1)
+	chunktesting.CheckTag(t, tag, 1, 1, 0, 0, 0, 1)
 
 	// check that the tag we got back from the API is also correct
-	chunktesting.CheckTag(t, tagg, 1, 1, 0, 1, 0, 1)
+	chunktesting.CheckTag(t, tagAPI, 1, 1, 0, 0, 0, 1)
 }
 
 func newTestSigner() (*feed.GenericSigner, error) {

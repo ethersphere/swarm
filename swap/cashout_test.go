@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/swap/chain"
-	"github.com/ethersphere/swarm/uint256"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // TestContractIntegration tests a end-to-end cheque interaction.
@@ -37,7 +37,8 @@ func TestContractIntegration(t *testing.T) {
 	reset := setupContractTest()
 	defer reset()
 
-	payout := uint256.FromUint64(42)
+	payout := int256.Uint256From(42)
+
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +74,7 @@ func TestContractIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paidOut, err := uint256.New().Set(*result)
+	paidOut, err := int256.NewUint256(result)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestContractIntegration(t *testing.T) {
 	log.Debug("cheques result", "result", result)
 
 	// create a cheque that will bounce
-	_, err = payout.Add(payout, uint256.FromUint64(10000*RetrieveRequestPrice))
+	_, err = payout.Add(payout, int256.Uint256From(10000*RetrieveRequestPrice))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestCashCheque(t *testing.T) {
 	defer reset()
 
 	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := uint256.FromUint64(42)
+	payout := int256.Uint256From(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -149,7 +150,7 @@ func TestCashCheque(t *testing.T) {
 	}
 
 	cumulativePayout := testCheque.CumulativePayout.Value()
-	if paidOut.Cmp(&cumulativePayout) != 0 {
+	if paidOut.Cmp(cumulativePayout) != 0 {
 		t.Fatalf("paidOut does not equal the CumulativePayout: paidOut=%v expected=%v", paidOut, testCheque.CumulativePayout)
 	}
 }
@@ -161,7 +162,7 @@ func TestEstimatePayout(t *testing.T) {
 	defer reset()
 
 	cashoutProcessor := newCashoutProcessor(backend, ownerKey)
-	payout := uint256.FromUint64(42)
+	payout := int256.Uint256From(42)
 
 	chequebook, err := testDeployWithPrivateKey(context.Background(), backend, ownerKey, ownerAddress, payout)
 	if err != nil {
@@ -183,7 +184,7 @@ func TestEstimatePayout(t *testing.T) {
 	}
 
 	// the gas price in the simulated backend is 1 therefore the total transactionCost should be 50000 * 1 = 50000
-	if !transactionCost.Equals(uint256.FromUint64(CashChequeBeneficiaryTransactionCost)) {
+	if !transactionCost.Equals(int256.Uint256From(CashChequeBeneficiaryTransactionCost)) {
 		t.Fatalf("unexpected transaction cost: got %v, wanted: %d", transactionCost, 0)
 	}
 }
