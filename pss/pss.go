@@ -18,6 +18,7 @@ package pss
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
@@ -32,9 +33,11 @@ type Pss struct {
 
 // Monitor is used for tracking status changes in sent trojan chunks
 type Monitor struct {
-	state chan chunk.State
-	tag   *chunk.Tag
-	chunk chunk.Chunk
+	state      chan chunk.State
+	tag        *chunk.Tag
+	chunk      chunk.Chunk
+	handlers   map[trojan.Topic]Handler
+	handlersMu sync.RWMutex
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -42,8 +45,12 @@ func NewPss(localStore chunk.Store, tags *chunk.Tags) *Pss {
 	return &Pss{
 		localStore: localStore,
 		tags:       tags,
+		handlers:   make(map[trojan.Topic]Handler),
 	}
 }
+
+// Handler defines code to be executed upon reception of a trojan message
+type Handler func(trojan.Message)
 
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
@@ -94,4 +101,27 @@ func (m *Monitor) updateState() {
 			}
 		}
 	}
+}
+
+// Register allows the definition of a Handler func for a specific topic on the pss struct
+func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
+	p.handlersMu.Lock()
+	defer p.handlersMu.Unlock()
+	p.handlers[topic] = hndlr
+}
+
+// Deliver allows unwrapping a chunk as a trojan message and calling its handler func based on its topic
+func (p *Pss) Deliver(c chunk.Chunk) {
+	m, _ := trojan.Unwrap(c)
+	h := p.getHandler(m.Topic)
+	if h != nil {
+		h(*m)
+	}
+}
+
+// getHandler returns the Handler func registered in pss for the given topic
+func (p *Pss) getHandler(topic trojan.Topic) Handler {
+	p.handlersMu.RLock()
+	defer p.handlersMu.RUnlock()
+	return p.handlers[topic]
 }

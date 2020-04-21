@@ -35,7 +35,7 @@ type Topic [32]byte
 // Message represents a trojan message, which is a message that will be hidden within a chunk payload as part of its data
 type Message struct {
 	length  [2]byte // big-endian encoding of Message payload length
-	topic   Topic
+	Topic   Topic
 	payload []byte
 	padding []byte
 }
@@ -82,6 +82,7 @@ func NewMessage(topic Topic, payload []byte) (Message, error) {
 	// create new Message var and set fields
 	m := new(Message)
 	copy(m.length[:], lengthBuf[:])
+	m.Topic = topic
 	m.payload = payload
 	m.padding = padding
 
@@ -106,6 +107,20 @@ func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
 	}
 
 	return chunk, nil
+}
+
+// Unwrap creates a new trojan message from the given chunk payload
+// this function assumes the chunk has been validated as a content-addressed chunk
+// it will return the resulting message if the unwrapping is successful, and an error otherwise
+func Unwrap(c chunk.Chunk) (*Message, error) {
+	d := c.Data()
+
+	// unmarshal chunk payload into message
+	m := new(Message)
+	// first 40 bytes are span + nonce
+	err := m.UnmarshalBinary(d[40:])
+
+	return m, err
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
@@ -200,7 +215,7 @@ func padBytes(b []byte) []byte {
 
 // MarshalBinary serializes a message struct
 func (m *Message) MarshalBinary() (data []byte, err error) {
-	data = append(m.length[:], m.topic[:]...)
+	data = append(m.length[:], m.Topic[:]...)
 	data = append(data, m.payload...)
 	data = append(data, m.padding...)
 	return data, nil
@@ -209,7 +224,7 @@ func (m *Message) MarshalBinary() (data []byte, err error) {
 // UnmarshalBinary deserializes a message struct
 func (m *Message) UnmarshalBinary(data []byte) (err error) {
 	copy(m.length[:], data[:2])  // first 2 bytes are length
-	copy(m.topic[:], data[2:34]) // following 32 bytes are topic
+	copy(m.Topic[:], data[2:34]) // following 32 bytes are topic
 
 	// rest of the bytes are payload and padding
 	length := binary.BigEndian.Uint16(m.length[:])
