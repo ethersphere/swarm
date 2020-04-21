@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
-	tagtesting "github.com/ethersphere/swarm/chunk/testing"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/localstore"
 )
@@ -39,7 +38,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	ctx := context.TODO()
 	tags := chunk.NewTags()
 
-	localStore := newMockLocalStore(t)
+	localStore := newMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
 	testTargets := [][]byte{
@@ -73,6 +72,9 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 
 }
 
+// TestPssMonitor creates a trojan chunk
+// mocks the localstore
+// calls pss.Send method and monitors it's state for updates
 func TestPssMonitor(t *testing.T) {
 	var err error
 	ctx := context.TODO()
@@ -114,19 +116,9 @@ loop:
 			}
 		case <-time.After(timeout):
 			t.Log("no message received")
-			close(monitor.state)
 			break loop
 		}
 	}
-
-	// we expect the chunk to be stored in localstore
-	// with a sent status
-	// and the total amount of chunk to be 1
-	var split, seen, synced, stored, sent, total int64 = 0, 0, 0, 1, 1, 1
-
-	// verifies if tag has been stored, sent and the total count of chunks
-	tagtesting.CheckTag(t, monitor.tag, split, stored, seen, sent, synced, total)
-
 }
 
 func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
@@ -151,8 +143,9 @@ func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
 
 // TestRegister verifies that handler funcs are able to be registered correctly in pss
 func TestRegister(t *testing.T) {
-	localStore := newMockLocalStore(t)
-	pss := NewPss(localStore)
+	tags := chunk.NewTags()
+	localStore := newMockLocalStore(t, tags)
+	pss := NewPss(localStore, tags)
 
 	// pss handlers should be empty
 	if len(pss.handlers) != 0 {
@@ -200,8 +193,9 @@ func TestRegister(t *testing.T) {
 // TestDeliver verifies that registering a handler on pss for a given topic and then submitting a trojan chunk with said topic to it
 // results in the execution of the expected handler func
 func TestDeliver(t *testing.T) {
-	localStore := newMockLocalStore(t)
-	pss := NewPss(localStore)
+	tags := chunk.NewTags()
+	localStore := newMockLocalStore(t, tags)
+	pss := NewPss(localStore, tags)
 
 	// test message
 	topic := trojan.NewTopic("footopic")

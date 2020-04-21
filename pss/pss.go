@@ -19,6 +19,7 @@ package pss
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
@@ -29,15 +30,15 @@ import (
 type Pss struct {
 	localStore chunk.Store
 	tags       *chunk.Tags
+	handlers   map[trojan.Topic]Handler
+	handlersMu sync.RWMutex
 }
 
 // Monitor is used for tracking status changes in sent trojan chunks
 type Monitor struct {
-	state      chan chunk.State
-	tag        *chunk.Tag
-	chunk      chunk.Chunk
-	handlers   map[trojan.Topic]Handler
-	handlersMu sync.RWMutex
+	state chan chunk.State
+	tag   *chunk.Tag
+	chunk chunk.Chunk
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -77,7 +78,6 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc.WithTagID(tag.Uid)); err != nil {
 		return nil, err
 	}
-	tag.Inc(chunk.StateStored)
 	tag.Total = 1
 
 	monitor := &Monitor{
@@ -99,6 +99,7 @@ func (m *Monitor) updateState() {
 				m.state <- state
 				break
 			}
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
