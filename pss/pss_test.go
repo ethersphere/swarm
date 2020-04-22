@@ -50,25 +50,48 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
-	var monitor *Monitor
-
 	// call Send to store trojan chunk in localstore
-	if monitor, err = pss.Send(ctx, targets, topic, payload); err != nil {
+	if _, err = pss.Send(ctx, targets, topic, payload); err != nil {
 		t.Fatal(err)
+	}
+
+	var chunkAddress chunk.Address
+	for po := uint8(0); po <= chunk.MaxPO; po++ {
+		last, err := localStore.LastPullSubscriptionBinID(po)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if last == 0 {
+			continue
+		}
+		// iter for chunk in localstore
+		ch, _ := localStore.SubscribePull(context.Background(), po, 0, last)
+		for c := range ch {
+			chunkAddress = c.Address
+			break
+		}
 	}
 
 	// verify store, that trojan chunk has been stored correctly
 	var storedChunk chunk.Chunk
-	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, monitor.chunk.Address()); err != nil {
+	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, chunkAddress); err != nil {
 		t.Fatal(err)
 	}
-	storedChunk = storedChunk.WithTagID(monitor.chunk.TagID())
 
-	if !reflect.DeepEqual(monitor.chunk, storedChunk) {
-		t.Fatalf("store chunk does not match sent chunk")
+	//create a stored chunk artificially
+	m, err := trojan.NewMessage(topic, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tc chunk.Chunk
+	tc, err = m.Wrap(targets)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// check if pinning makes a difference
+	if !reflect.DeepEqual(tc, storedChunk) {
+		t.Fatalf("store chunk does not match sent chunk")
+	}
 
 }
 

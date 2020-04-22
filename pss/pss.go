@@ -38,7 +38,6 @@ type Pss struct {
 type Monitor struct {
 	state chan chunk.State
 	tag   *chunk.Tag
-	chunk chunk.Chunk
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -81,7 +80,6 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	tag.Total = 1
 
 	monitor := &Monitor{
-		chunk: tc,
 		tag:   tag,
 		state: make(chan chunk.State, 3),
 	}
