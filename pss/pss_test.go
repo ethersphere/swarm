@@ -41,7 +41,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	localStore := newMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
-	testTargets := [][]byte{
+	targets := [][]byte{
 		{57, 120},
 		{209, 156},
 		{156, 38},
@@ -53,7 +53,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	var monitor *Monitor
 
 	// call Send to store trojan chunk in localstore
-	if monitor, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
+	if monitor, err = pss.Send(ctx, targets, topic, payload); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +84,7 @@ func TestPssMonitor(t *testing.T) {
 
 	localStore := newMockLocalStore(t, tags)
 
-	testTargets := [][]byte{
+	targets := [][]byte{
 		{57, 120},
 		{209, 156},
 		{156, 38},
@@ -98,44 +98,27 @@ func TestPssMonitor(t *testing.T) {
 	pss := NewPss(localStore, tags)
 
 	// call Send to store trojan chunk in localstore
-	if monitor, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
+	if monitor, err = pss.Send(ctx, targets, topic, payload); err != nil {
 		t.Fatal(err)
 	}
 
-	// increment stored on the tag, expect state stored on the channel
-	monitor.tag.Inc(chunk.StateStored)
-	if stateChangeValid(t, monitor, chunk.StateStored) {
-		t.Log("message has been stored")
-	}
-
-	// increment sent on the tag, expect state sent on the channel
-	monitor.tag.Inc(chunk.StateSent)
-	if stateChangeValid(t, monitor, chunk.StateSent) {
-		t.Log("message has been sent")
-	}
-
-	// increment synced on the tag, expect synced on the channel
-	monitor.tag.Inc(chunk.StateSynced)
-	if stateChangeValid(t, monitor, chunk.StateSynced) {
-		t.Log("message has been synced")
-	}
-
-}
-
-// stateChangeValid waits until the monitor state has changed or timeouts
-func stateChangeValid(t *testing.T, monitor *Monitor, expectedState chunk.State) bool {
-	timeout := 10 * time.Second
-
-	for {
-		select {
-		case state := <-monitor.state:
-			if state == expectedState {
-				return true
+	timeout := 1 * time.Second
+	for _, expectedState := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
+		monitor.tag.Inc(expectedState)
+	loop:
+		for {
+			// waits until the monitor state has changed or timeouts
+			select {
+			case state := <-monitor.state:
+				if state == expectedState {
+					break loop
+				}
+			case <-time.After(timeout):
+				t.Fatalf("no message received")
 			}
-		case <-time.After(timeout):
-			t.Errorf("no message received")
 		}
 	}
+
 }
 
 func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {

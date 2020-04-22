@@ -99,7 +99,7 @@ func (m *Monitor) updateState() {
 				m.state <- state
 				break
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
