@@ -109,24 +109,12 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 			gcSizeChange += c
 		}
 	case chunk.ModePutReUpload:
-		// TODO: this should do the same as `ModePutUpload`, but also add the chunk hash to the pushindex
-		for i, ch := range chs {
-			if containsChunk(ch.Address(), chs[:i]...) {
-				exist[i] = true
-				continue
-			}
-			exists, c, err := db.putUpload(batch, binIDs, chunkToItem(ch))
-			if err != nil {
-				return nil, err
-			}
-			exist[i] = exists
-			if !exists {
-				// chunk is new so, trigger subscription feeds
-				// after the batch is successfully written
-				triggerPullFeed[db.po(ch.Address())] = struct{}{}
-				triggerPushFeed = true
-			}
-			gcSizeChange += c
+		// TODO: check this, entirely unsure if correct
+		for _, ch := range chs {
+			item := chunkToItem(ch)
+			item.StoreTimestamp = now()
+			item.BinID, err = db.incBinID(binIDs, db.po(item.Address))
+			db.pushIndex.PutInBatch(batch, item)
 		}
 	case chunk.ModePutSync:
 		for i, ch := range chs {
