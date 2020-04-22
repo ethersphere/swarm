@@ -18,6 +18,7 @@ package swarm
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -283,8 +284,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	if self.config.GlobalPinner {
 		lstore.WithDeliverCallback(self.pss.Deliver)
-		recoveryFunc := func(trojan.Message) {
-			// TODO: add missing chunk re-upload
+		recoveryFunc := func(m trojan.Message) {
+			// retrieve chunk from local store
+			chAddr := m.Payload // TODO: for now we assume payload = chunk address
+			ch, _ := lstore.Get(context.Background(), chunk.ModeGetLookup, chAddr)
+			// re-upload chunk to network
+			lstore.Put(context.Background(), chunk.ModePutReUpload, ch) // ignoring output for now
 		}
 		self.pss.Register(trojan.NewTopic("RECOVERY"), recoveryFunc)
 	}
