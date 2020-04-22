@@ -89,9 +89,17 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tag, err := tags.Create("pss-chunks-tag", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedChunk = tc.WithTagID(tag.Uid)
+
 	if !reflect.DeepEqual(tc, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
+
+	// check if pinning makes a difference
 
 }
 
