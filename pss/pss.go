@@ -37,7 +37,6 @@ type Pss struct {
 // Monitor is used for tracking status changes in sent trojan chunks
 type Monitor struct {
 	state chan chunk.State
-	tag   *chunk.Tag
 }
 
 // NewPss inits the Pss struct with the localstore
@@ -80,19 +79,18 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	tag.Total = 1
 
 	monitor := &Monitor{
-		tag:   tag,
 		state: make(chan chunk.State, 3),
 	}
 
-	go monitor.updateState()
+	go monitor.updateState(tag)
 
 	return monitor, nil
 }
 
-func (m *Monitor) updateState() {
+func (m *Monitor) updateState(tag *chunk.Tag) {
 	for _, state := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
 		for {
-			n, total, err := m.tag.Status(state)
+			n, total, err := tag.Status(state)
 			if err == nil && n == total {
 				m.state <- state
 				break

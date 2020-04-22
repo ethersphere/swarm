@@ -99,8 +99,6 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
 
-	// check if pinning makes a difference
-
 }
 
 // TestPssMonitor creates a trojan chunk
@@ -133,9 +131,14 @@ func TestPssMonitor(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	storeTags := tags.All()
+	if len(storeTags) != 1 {
+		t.Fatalf("expected %d tags got %d", 1, len(storeTags))
+	}
+
 	timeout := 1 * time.Second
 	for _, expectedState := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
-		monitor.tag.Inc(expectedState)
+		storeTags[0].Inc(expectedState)
 	loop:
 		for {
 			// waits until the monitor state has changed or timeouts
