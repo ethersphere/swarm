@@ -36,7 +36,7 @@ type Topic [32]byte
 type Message struct {
 	length  [2]byte // big-endian encoding of Message payload length
 	Topic   Topic
-	payload []byte
+	Payload []byte
 	padding []byte
 }
 
@@ -83,7 +83,7 @@ func NewMessage(topic Topic, payload []byte) (Message, error) {
 	m := new(Message)
 	copy(m.length[:], lengthBuf[:])
 	m.Topic = topic
-	m.payload = payload
+	m.Payload = payload
 	m.padding = padding
 
 	return *m, nil
@@ -216,7 +216,7 @@ func padBytes(b []byte) []byte {
 // MarshalBinary serializes a message struct
 func (m *Message) MarshalBinary() (data []byte, err error) {
 	data = append(m.length[:], m.Topic[:]...)
-	data = append(data, m.payload...)
+	data = append(data, m.Payload...)
 	data = append(data, m.padding...)
 	return data, nil
 }
@@ -229,7 +229,7 @@ func (m *Message) UnmarshalBinary(data []byte) (err error) {
 	// rest of the bytes are payload and padding
 	length := binary.BigEndian.Uint16(m.length[:])
 	payloadEnd := 34 + length
-	m.payload = data[34:payloadEnd]
+	m.Payload = data[34:payloadEnd]
 	m.padding = data[payloadEnd:]
 	return nil
 }
