@@ -143,7 +143,7 @@ func TestPssMonitor(t *testing.T) {
 		for {
 			// waits until the monitor state has changed or timeouts
 			select {
-			case state := <-monitor.state:
+			case state := <-monitor.State:
 				if state == expectedState {
 					break loop
 				}
