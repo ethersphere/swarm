@@ -56,6 +56,8 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	}
 
 	var chunkAddress chunk.Address
+	// this code iterates over the localstore
+	// this will get the chunk that was stored in pss.Send
 	for po := uint8(0); po <= chunk.MaxPO; po++ {
 		last, err := localStore.LastPullSubscriptionBinID(po)
 		if err != nil {
