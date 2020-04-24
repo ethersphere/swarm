@@ -88,6 +88,8 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 	return monitor, nil
 }
 
+// updateState sends the change of state thru the State channel
+// this is what enables monitoring the trojan chunk after it's sent
 func (m *Monitor) updateState(tag *chunk.Tag) {
 	for _, state := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
 		for {
