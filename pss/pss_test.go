@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethersphere/swarm/chunk"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
@@ -35,11 +36,12 @@ import (
 func TestTrojanChunkRetrieval(t *testing.T) {
 	var err error
 	ctx := context.TODO()
+	tags := chunk.NewTags()
 
-	localStore := newMockLocalStore(t)
-	pss := NewPss(localStore)
+	localStore := newMockLocalStore(t, tags)
+	pss := NewPss(localStore, tags)
 
-	testTargets := [][]byte{
+	targets := [][]byte{
 		{57, 120},
 		{209, 156},
 		{156, 38},
@@ -48,28 +50,114 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
-	var ch chunk.Chunk
-
 	// call Send to store trojan chunk in localstore
-	if ch, err = pss.Send(ctx, testTargets, topic, payload); err != nil {
+	if _, err = pss.Send(ctx, targets, topic, payload); err != nil {
 		t.Fatal(err)
+	}
+
+	var chunkAddress chunk.Address
+	// this code iterates over the localstore
+	// this will get the chunk that was stored in pss.Send
+	for po := uint8(0); po <= chunk.MaxPO; po++ {
+		last, err := localStore.LastPullSubscriptionBinID(po)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if last == 0 {
+			continue
+		}
+		// iter for chunk in localstore
+		ch, _ := localStore.SubscribePull(context.Background(), po, 0, last)
+		for c := range ch {
+			chunkAddress = c.Address
+			break
+		}
 	}
 
 	// verify store, that trojan chunk has been stored correctly
 	var storedChunk chunk.Chunk
-	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, ch.Address()); err != nil {
+	if storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, chunkAddress); err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(ch, storedChunk) {
+	//create a stored chunk artificially
+	m, err := trojan.NewMessage(topic, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tc chunk.Chunk
+	tc, err = m.Wrap(targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tag, err := tags.Create("pss-chunks-tag", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedChunk = tc.WithTagID(tag.Uid)
+
+	if !reflect.DeepEqual(tc, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
 
-	// check if pinning makes a difference
+}
+
+// TestPssMonitor creates a trojan chunk
+// mocks the localstore
+// calls pss.Send method
+// updates the tag state (Stored/Sent/Synced)
+// waits for the monitor to notify the changed state
+func TestPssMonitor(t *testing.T) {
+	var err error
+	ctx := context.TODO()
+	tags := chunk.NewTags()
+
+	localStore := newMockLocalStore(t, tags)
+
+	targets := [][]byte{
+		{57, 120},
+		{209, 156},
+		{156, 38},
+		{89, 19},
+		{22, 129}}
+	payload := []byte("RECOVERY CHUNK")
+	topic := trojan.NewTopic("RECOVERY")
+
+	var monitor *Monitor
+
+	pss := NewPss(localStore, tags)
+
+	// call Send to store trojan chunk in localstore
+	if monitor, err = pss.Send(ctx, targets, topic, payload); err != nil {
+		t.Fatal(err)
+	}
+
+	storeTags := tags.All()
+	if len(storeTags) != 1 {
+		t.Fatalf("expected %d tags got %d", 1, len(storeTags))
+	}
+
+	timeout := 1 * time.Second
+	for _, expectedState := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
+		storeTags[0].Inc(expectedState)
+	loop:
+		for {
+			// waits until the monitor state has changed or timeouts
+			select {
+			case state := <-monitor.State:
+				if state == expectedState {
+					break loop
+				}
+			case <-time.After(timeout):
+				t.Fatalf("no message received")
+			}
+		}
+	}
 
 }
 
-func newMockLocalStore(t *testing.T) *localstore.DB {
+func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
 	dir, err := ioutil.TempDir("", "swarm-")
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +169,7 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 		t.Fatal(err)
 	}
 
-	localStore, err := localstore.New(dir, baseKey, &localstore.Options{})
+	localStore, err := localstore.New(dir, baseKey, &localstore.Options{Tags: tags})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +179,9 @@ func newMockLocalStore(t *testing.T) *localstore.DB {
 
 // TestRegister verifies that handler funcs are able to be registered correctly in pss
 func TestRegister(t *testing.T) {
-	localStore := newMockLocalStore(t)
-	pss := NewPss(localStore)
+	tags := chunk.NewTags()
+	localStore := newMockLocalStore(t, tags)
+	pss := NewPss(localStore, tags)
 
 	// pss handlers should be empty
 	if len(pss.handlers) != 0 {
@@ -140,8 +229,9 @@ func TestRegister(t *testing.T) {
 // TestDeliver verifies that registering a handler on pss for a given topic and then submitting a trojan chunk with said topic to it
 // results in the execution of the expected handler func
 func TestDeliver(t *testing.T) {
-	localStore := newMockLocalStore(t)
-	pss := NewPss(localStore)
+	tags := chunk.NewTags()
+	localStore := newMockLocalStore(t, tags)
+	pss := NewPss(localStore, tags)
 
 	// test message
 	topic := trojan.NewTopic("footopic")
