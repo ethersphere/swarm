@@ -113,7 +113,7 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 		}
 	case chunk.ModeSetReUpload:
 		for _, addr := range addrs {
-			err := db.setReupload(batch, addr)
+			err := db.setReUpload(batch, addr)
 			if err != nil {
 				return err
 			}
@@ -400,6 +400,6 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	return nil
 }
 
-func (db *DB) setReupload(batch *leveldb.Batch, addr chunk.Address) (err error) {
+func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	return nil
 }

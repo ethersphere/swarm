@@ -113,6 +113,8 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 		for _, ch := range chs {
 			item := chunkToItem(ch)
 			item.StoreTimestamp = now()
+			// ask: what happens when the proc that sweps through the pushindex
+			// what does it do with this bin index
 			item.BinID, err = db.incBinID(binIDs, db.po(item.Address))
 			db.pushIndex.PutInBatch(batch, item)
 		}

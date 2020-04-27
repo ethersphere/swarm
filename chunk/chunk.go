@@ -226,6 +226,8 @@ func (m ModeSet) String() string {
 		return "ModeSetPin"
 	case ModeSetUnpin:
 		return "ModeSetUnpin"
+	case ModeSetReUpload:
+		return "ModeSetReUpload"
 	default:
 		return "Unknown"
 	}
