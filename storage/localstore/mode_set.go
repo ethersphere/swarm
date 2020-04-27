@@ -412,7 +412,6 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 		return err
 	}
 
-	// get retrieval data
 	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
 		return err
