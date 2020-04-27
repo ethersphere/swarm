@@ -280,7 +280,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.storer = pushsync.NewStorer(self.netStore, pubsub)
 	}
 
-	self.pss = pss.NewPss(localStore)
+	self.pss = pss.NewPss(localStore, self.tags)
 
 	if self.config.GlobalPinner {
 		lstore.WithDeliverCallback(self.pss.Deliver)
