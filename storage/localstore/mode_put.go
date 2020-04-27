@@ -108,6 +108,7 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 			}
 			gcSizeChange += c
 		}
+
 	case chunk.ModePutSync:
 		for i, ch := range chs {
 			if containsChunk(ch.Address(), chs[:i]...) {
