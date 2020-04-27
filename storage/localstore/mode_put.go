@@ -108,16 +108,6 @@ func (db *DB) put(mode chunk.ModePut, chs ...chunk.Chunk) (exist []bool, err err
 			}
 			gcSizeChange += c
 		}
-	case chunk.ModePutReUpload:
-		// TODO: check this, entirely unsure if correct
-		for _, ch := range chs {
-			item := chunkToItem(ch)
-			item.StoreTimestamp = now()
-			// ask: what happens when the proc that sweps through the pushindex
-			// what does it do with this bin index
-			item.BinID, err = db.incBinID(binIDs, db.po(item.Address))
-			db.pushIndex.PutInBatch(batch, item)
-		}
 	case chunk.ModePutSync:
 		for i, ch := range chs {
 			if containsChunk(ch.Address(), chs[:i]...) {

@@ -419,5 +419,6 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	}
 
 	item.StoreTimestamp = retrievalDataIndexItem.StoreTimestamp
+	// TODO: do we need to do anything about bin ids?
 	return db.pushIndex.PutInBatch(batch, item)
 }
