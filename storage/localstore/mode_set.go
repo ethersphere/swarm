@@ -111,7 +111,13 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 				return err
 			}
 		}
-
+	case chunk.ModeSetReUpload:
+		for _, addr := range addrs {
+			err := db.setReupload(batch, addr)
+			if err != nil {
+				return err
+			}
+		}
 	default:
 		return ErrInvalidMode
 	}
@@ -391,5 +397,9 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 		db.pinIndex.DeleteInBatch(batch, item)
 	}
 
+	return nil
+}
+
+func (db *DB) setReupload(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	return nil
 }
