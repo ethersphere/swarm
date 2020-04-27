@@ -400,7 +400,7 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	return nil
 }
 
-// setReUpload adds a pinned chunk to the push index so that it can be re-upuloaded to the network
+// setReUpload adds a pinned chunk to the push index so that it can be re-uploaded to the network
 func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	item := addressToItem(addr)
 
