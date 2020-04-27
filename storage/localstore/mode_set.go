@@ -401,5 +401,14 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 }
 
 func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) {
-	return nil
+	item := addressToItem(addr)
+
+	// only pinned chunks should be re-uploaded, this also prevents GC race condition
+	_, err = db.pinIndex.Get(item)
+	if err != nil {
+		return err
+	}
+
+	item.StoreTimestamp = now() // TODO: get from retrieval
+	return db.pushIndex.PutInBatch(batch, item)
 }
