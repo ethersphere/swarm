@@ -19,6 +19,7 @@ package pss
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
@@ -28,14 +29,22 @@ import (
 // Pss is the top-level struct, which takes care of message sending
 type Pss struct {
 	localStore chunk.Store
+	tags       *chunk.Tags
 	handlers   map[trojan.Topic]Handler
 	handlersMu sync.RWMutex
 }
 
+// Monitor is used for tracking status changes in sent trojan chunks
+type Monitor struct {
+	// returns the state of the trojan chunk that is being monitored
+	State chan chunk.State
+}
+
 // NewPss inits the Pss struct with the localstore
-func NewPss(localStore chunk.Store) *Pss {
+func NewPss(localStore chunk.Store, tags *chunk.Tags) *Pss {
 	return &Pss{
 		localStore: localStore,
+		tags:       tags,
 		handlers:   make(map[trojan.Topic]Handler),
 	}
 }
@@ -46,7 +55,7 @@ type Handler func(trojan.Message)
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
 // stores this in localstore for push-sync to pick up and deliver
-func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (chunk.Chunk, error) {
+func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*Monitor, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
 	m, err := trojan.NewMessage(topic, payload)
@@ -59,13 +68,39 @@ func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, pa
 		return nil, err
 	}
 
-	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
-	// TODO: for second phase, use tags --> listen for response of recipient, recipient offline
-	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc); err != nil {
+	tag, err := p.tags.Create("pss-chunks-tag", 1, false)
+	if err != nil {
 		return nil, err
 	}
 
-	return tc, nil
+	// SAVE trojanChunk to localstore, if it exists do nothing as it's already peristed
+	if _, err = p.localStore.Put(ctx, chunk.ModePutUpload, tc.WithTagID(tag.Uid)); err != nil {
+		return nil, err
+	}
+	tag.Total = 1
+
+	monitor := &Monitor{
+		State: make(chan chunk.State, 3),
+	}
+
+	go monitor.updateState(tag)
+
+	return monitor, nil
+}
+
+// updateState sends the change of state thru the State channel
+// this is what enables monitoring the trojan chunk after it's sent
+func (m *Monitor) updateState(tag *chunk.Tag) {
+	for _, state := range []chunk.State{chunk.StateStored, chunk.StateSent, chunk.StateSynced} {
+		for {
+			n, total, err := tag.Status(state)
+			if err == nil && n == total {
+				m.State <- state
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }
 
 // Register allows the definition of a Handler func for a specific topic on the pss struct
