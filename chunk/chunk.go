@@ -245,6 +245,8 @@ const (
 	ModeSetPin
 	// ModeSetUnpin: when a chunk is unpinned using a command locally
 	ModeSetUnpin
+	// ModeSetReUpload: when a globally pinned chunk is repaired
+	ModeSetReUpload
 )
 
 // Descriptor holds information required for Pull syncing. This struct
