@@ -15,3 +15,22 @@
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package prod
+
+import (
+	"context"
+
+	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/trojan"
+)
+
+// Sender defines code to be executed upon trigger of lost TODO: chunk????
+type Sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
+
+// Recover invokes underlying pss.Send as the first step of global pinning
+func Recover(send Sender) {
+
+}
+
+// func Register?
+// based of topic?
+// maybe the sender

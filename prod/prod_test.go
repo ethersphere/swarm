@@ -15,3 +15,22 @@
 // along with the Swarm library. If not, see <http://www.gnu.org/licenses/>.
 
 package prod
+
+import "testing"
+
+// TestRecoveryHook tests that a timeout in netstore
+// invokes correctly recovery hook
+func TestRecoveryHookCalled(t *testing.T) {
+	// setup netstore
+	// setup recovery hook
+	// wait for timeout
+	// verify that hook is correctly invoked
+}
+
+// TestSenderCall veryfies that pss send is being called correctly
+func TestSenderCall(t *testing.T) {
+	// setup netstore
+	// setup recovery hook with pss Sender
+	// wait for timeout
+	// verify that pss was actually called
+}
