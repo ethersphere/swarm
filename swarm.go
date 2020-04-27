@@ -285,7 +285,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if self.config.GlobalPinner {
 		lstore.WithDeliverCallback(self.pss.Deliver)
 		recoveryFunc := func(m trojan.Message) {
-			// retrieve chunk from local store
 			chAddr := m.Payload // TODO: for now we assume payload = chunk address
 			// re-upload chunk to network
 			lstore.Set(context.Background(), chunk.ModeSetReUpload, chAddr) // TODO: ignoring output for now
