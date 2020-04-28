@@ -16,18 +16,52 @@
 
 package prod
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/pss"
+	"github.com/ethersphere/swarm/pss/trojan"
+)
 
 // TestRecoveryHook tests that a timeout in netstore
 // invokes correctly recovery hook
-func TestRecoveryHookCalled(t *testing.T) {
-	// setup netstore
+func TestRecoveryHook(t *testing.T) {
 	// setup recovery hook
-	// wait for timeout
 	// verify that hook is correctly invoked
+	prod := NewProd()
+	ctx := context.TODO()
+
+	// pss handlers should be empty
+	if len(prod.handlers) != 0 {
+		t.Fatalf("expected prod senders to contain 0 elements, but its length is %d", len(prod.handlers))
+	}
+
+	handlerVerifier := 0 // test variable to check handler funcs are correctly retrieved
+
+	// register first handler
+	testHandler := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+		handlerVerifier = 1
+		// what should I return?
+		return nil, nil
+	}
+
+	prod.register(chunk.ZeroAddr, testHandler)
+
+	if len(prod.handlers) != 1 {
+		t.Fatalf("expected prod handlers to contain 1 element, but its length is %d", len(prod.handlers))
+	}
+
+	// call prod Recovery and verify it's been called
+	prod.Recover(ctx, chunk.ZeroAddr)
+	if handlerVerifier != 1 {
+		t.Fatalf("unexpected result for prod Recover func, expected test variable to have a value of %v but is %v instead", 1, handlerVerifier)
+	}
+
 }
 
-// TestSenderCall veryfies that pss send is being called correctly
+// TestSenderCall verifies that pss send is being called correctly
 func TestSenderCall(t *testing.T) {
 	// setup netstore
 	// setup recovery hook with pss Sender

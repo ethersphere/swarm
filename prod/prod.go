@@ -18,6 +18,7 @@ package prod
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -30,14 +31,14 @@ type Sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payl
 
 // Prod todo: define comment
 type Prod struct {
-	senders   map[*chunk.Address]Sender
-	sendersMu sync.RWMutex
+	handlers   map[chunk.Chunk]Sender //todo: could be *chunk.Address maybe not the correct type
+	handlersMu sync.RWMutex
 }
 
 // NewProd inits the Prod struct
 func NewProd() *Prod {
 	return &Prod{
-		senders: make(map[*chunk.Address]Sender),
+		handlers: make(map[chunk.Chunk]Sender),
 	}
 }
 
@@ -47,8 +48,6 @@ func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) (chunk.C
 	var err error
 	h := p.getSender(chunkAddress)
 
-	// pss := NewPss(localStore, tags)
-
 	//are the targets injected in the send or is it when it's called
 	targets, err := p.getTargets(chunkAddress)
 	if err != nil {
@@ -57,11 +56,24 @@ func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) (chunk.C
 	payload := chunkAddress
 	topic := trojan.NewTopic("RECOVERY")
 
-	if h != nil {
-		if _, err = h(ctx, targets, topic, payload); err != nil {
-			return nil, err
-		}
+	if h == nil {
+		return nil, errors.New("no handler registered for chunk")
 	}
+	if _, err := h(ctx, targets, topic, payload); err != nil {
+		return nil, err
+	}
+
+	// TODO: wait until tag changes state?
+	// TODO: where to get chunk from??, localstore/netstore etc?
+	// TODO: does it obtain it from RequestFromPeer?
+	// for {
+	// 	select {
+	// 	case <-time.After(timeouts.FetcherGlobalTimeout):
+	// 		return nil, errors.New("unable to retreive globally pinned chunk")
+	// 	case <-time.After(timeouts.SearchTimeout):
+	// 		break
+	// 	}
+	// }
 
 	// should it wait for the chunk and timeout if not
 	// using the monitor of pss until this is received
@@ -81,16 +93,18 @@ func (p *Prod) getTargets(chunkAddress chunk.Address) ([][]byte, error) {
 // Register should be called internally
 // for every chunk that is globally pinned thru the feed
 
-// register
+// register, TODO: add better comment
 func (p *Prod) register(chunkAddress chunk.Address, sender Sender) {
-	p.sendersMu.Lock()
-	defer p.sendersMu.Unlock()
-	p.senders[&chunkAddress] = sender
+	p.handlersMu.Lock()
+	defer p.handlersMu.Unlock()
+	chunk := chunk.NewChunk(chunkAddress, nil)
+	p.handlers[chunk] = sender
 }
 
 // getSender returns the Sender func registered in prod for the given chunk address
 func (p *Prod) getSender(chunkAddress chunk.Address) Sender {
-	p.sendersMu.RLock()
-	defer p.sendersMu.RUnlock()
-	return p.senders[&chunkAddress]
+	p.handlersMu.RLock()
+	defer p.handlersMu.RUnlock()
+	chunk := chunk.NewChunk(chunkAddress, nil)
+	return p.handlers[chunk]
 }
