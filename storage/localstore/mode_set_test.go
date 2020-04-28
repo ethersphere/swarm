@@ -374,26 +374,22 @@ func TestModeSetReUpload(t *testing.T) {
 			chunks := generateTestRandomChunks(tc.count)
 
 			// re-upload should fail if the chunk is not in the store
-			err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
-			if err != leveldb.ErrNotFound {
-				t.Fatal(err)
+			if err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...); err != leveldb.ErrNotFound {
+				t.Fatalf("expected error when re-uploading chunks to be %q, but got %v", leveldb.ErrNotFound, err)
 			}
 
 			// put the chunks in the db
-			_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
-			if err != err {
+			if _, err := db.Put(context.Background(), chunk.ModePutUpload, chunks...); err != nil {
 				t.Fatal(err)
 			}
 
 			// re-upload should fail if the chunk is not pinned
-			err = db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
-			if err != leveldb.ErrNotFound {
-				t.Fatal(err)
+			if err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...); err != leveldb.ErrNotFound {
+				t.Fatalf("expected error when re-uploading chunks to be %q, but got %v", leveldb.ErrNotFound, err)
 			}
 
 			// pin the chunks
-			err = db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...)
-			if err != nil {
+			if err := db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...); err != nil {
 				t.Fatal(err)
 			}
 
@@ -410,8 +406,7 @@ func TestModeSetReUpload(t *testing.T) {
 			t.Run("push index count", newItemsCountTest(db.pushIndex, 0))
 
 			// re-upload should go through at this point
-			err = db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
-			if err != nil {
+			if err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...); err != nil {
 				t.Fatal(err)
 			}
 
