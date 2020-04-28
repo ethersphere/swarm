@@ -36,7 +36,7 @@ type Topic [32]byte
 type Message struct {
 	length  [2]byte // big-endian encoding of Message payload length
 	Topic   Topic
-	Payload []byte
+	Payload []byte // contains the chunk address to be repaired
 	padding []byte
 }
 

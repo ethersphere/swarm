@@ -284,12 +284,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	if self.config.GlobalPinner {
 		lstore.WithDeliverCallback(self.pss.Deliver)
-		recoveryFunc := func(m trojan.Message) {
-			chAddr := m.Payload // TODO: for now we assume payload = chunk address
-			// re-upload chunk to network
-			lstore.Set(context.Background(), chunk.ModeSetReUpload, chAddr) // TODO: ignoring output for now
+		// repairFunc takes care of re-uploading a globally pinned chunk to the network
+		repairFunc := func(m trojan.Message) {
+			chAddr := m.Payload
+			lstore.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
 		}
-		self.pss.Register(trojan.NewTopic("RECOVERY"), recoveryFunc)
+		self.pss.Register(trojan.NewTopic("RECOVERY"), repairFunc)
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
