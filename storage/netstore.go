@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network/timeouts"
+	"github.com/ethersphere/swarm/prod"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -99,6 +100,7 @@ type NetStore struct {
 	requestGroup singleflight.Group
 	RemoteGet    RemoteGetFunc
 	logger       log.Logger
+	prod         *prod.Prod
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -111,6 +113,11 @@ func NewNetStore(store chunk.Store, baseAddr *network.BzzAddr) *NetStore {
 		LocalID:  baseAddr.ID(),
 		logger:   log.NewBaseAddressLogger(baseAddr.ShortString()),
 	}
+}
+
+// SetProd defined prod for recovery in global pinning
+func (n *NetStore) SetProd(prod *prod.Prod) {
+	n.prod = prod
 }
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
@@ -193,6 +200,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
+					n.prod.Recover(ctx, ref)
 					// RemoteFetch again, see the timeouts
 					// delay
 					// global timeout after this
