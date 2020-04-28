@@ -363,3 +363,59 @@ func TestModeSetRemove(t *testing.T) {
 		})
 	}
 }
+
+// TestModeSetReUpload validates ModeSetReUpload index values on the provided DB
+func TestModeSetReUpload(t *testing.T) {
+	for _, tc := range multiChunkTestCases[:1] {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
+
+			chunks := generateTestRandomChunks(tc.count)
+
+			// re-upload should fail if the chunk is not in the store
+			err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
+			if err == nil {
+				t.Fatal(err)
+			}
+
+			// put the chunks in the db
+			_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// re-upload should fail if the chunk is not pinned
+			err = db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
+			if err == nil {
+				t.Fatal(err)
+			}
+
+			// pin the chunks
+			err = db.Set(context.Background(), chunk.ModeSetPin, chunkAddresses(chunks)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// clear push index caused by PutUpload to test Re-Upload push index count
+			for _, c := range chunks {
+				i, err := db.retrievalDataIndex.Get(chunkToItem(c))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := db.pushIndex.Delete(i); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Run("push index count", newItemsCountTest(db.pushIndex, 0))
+
+			// re-upload should go through at this point
+			err = db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			t.Run("push index count", newItemsCountTest(db.pushIndex, tc.count))
+		})
+	}
+}
