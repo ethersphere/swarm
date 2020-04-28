@@ -30,13 +30,7 @@ import (
 func TestRecoveryHook(t *testing.T) {
 	// setup recovery hook
 	// verify that hook is correctly invoked
-	prod := NewProd()
 	ctx := context.TODO()
-
-	// pss handlers should be empty
-	if len(prod.handlers) != 0 {
-		t.Fatalf("expected prod senders to contain 0 elements, but its length is %d", len(prod.handlers))
-	}
 
 	handlerVerifier := 0 // test variable to check handler funcs are correctly retrieved
 
@@ -47,11 +41,7 @@ func TestRecoveryHook(t *testing.T) {
 		return nil, nil
 	}
 
-	prod.register(chunk.ZeroAddr, testHandler)
-
-	if len(prod.handlers) != 1 {
-		t.Fatalf("expected prod handlers to contain 1 element, but its length is %d", len(prod.handlers))
-	}
+	prod := NewProd(testHandler)
 
 	// call prod Recovery and verify it's been called
 	prod.Recover(ctx, chunk.ZeroAddr)

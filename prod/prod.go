@@ -19,7 +19,6 @@ package prod
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss"
@@ -31,39 +30,38 @@ type Sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payl
 
 // Prod todo: define comment
 type Prod struct {
-	handlers   map[chunk.Chunk]Sender //todo: could be *chunk.Address maybe not the correct type
-	handlersMu sync.RWMutex
+	sender Sender
 }
 
 // NewProd inits the Prod struct
-func NewProd() *Prod {
+func NewProd(sender Sender) *Prod {
 	return &Prod{
-		handlers: make(map[chunk.Chunk]Sender),
+		sender: sender,
 	}
 }
 
+//Prod is defined in swarm.go
+
 // Recover invokes underlying pss.Send as the first step of global pinning
-// Does it return the chunk or the monitor?
-func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) (chunk.Chunk, error) {
+func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) error {
 	var err error
-	h := p.getSender(chunkAddress)
 
 	//are the targets injected in the send or is it when it's called
 	targets, err := p.getTargets(chunkAddress)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	payload := chunkAddress
 	topic := trojan.NewTopic("RECOVERY")
 
-	if h == nil {
-		return nil, errors.New("no handler registered for chunk")
+	if p.sender == nil {
+		return errors.New("no sender registered for chunk")
 	}
-	if _, err := h(ctx, targets, topic, payload); err != nil {
-		return nil, err
+	if _, err := p.sender(ctx, targets, topic, payload); err != nil {
+		return err
 	}
 
-	// TODO: wait until tag changes state?
+	// TODO: REMOVE FROM HERE DO IT OUTSIDE
 	// TODO: where to get chunk from??, localstore/netstore etc?
 	// TODO: does it obtain it from RequestFromPeer?
 	// for {
@@ -77,7 +75,7 @@ func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) (chunk.C
 
 	// should it wait for the chunk and timeout if not
 	// using the monitor of pss until this is received
-	return nil, nil
+	return nil
 }
 
 func (p *Prod) getTargets(chunkAddress chunk.Address) ([][]byte, error) {
@@ -88,23 +86,4 @@ func (p *Prod) getTargets(chunkAddress chunk.Address) ([][]byte, error) {
 		{156, 38},
 		{89, 19},
 		{22, 129}}, nil
-}
-
-// Register should be called internally
-// for every chunk that is globally pinned thru the feed
-
-// register, TODO: add better comment
-func (p *Prod) register(chunkAddress chunk.Address, sender Sender) {
-	p.handlersMu.Lock()
-	defer p.handlersMu.Unlock()
-	chunk := chunk.NewChunk(chunkAddress, nil)
-	p.handlers[chunk] = sender
-}
-
-// getSender returns the Sender func registered in prod for the given chunk address
-func (p *Prod) getSender(chunkAddress chunk.Address) Sender {
-	p.handlersMu.RLock()
-	defer p.handlersMu.RUnlock()
-	chunk := chunk.NewChunk(chunkAddress, nil)
-	return p.handlers[chunk]
 }

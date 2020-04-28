@@ -193,6 +193,10 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
+					// prod.Recover
+					// RemoteFetch again, see the timeouts
+					// delay
+					// global timeout after this
 					return nil, err
 				}
 			}
