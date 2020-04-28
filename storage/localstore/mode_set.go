@@ -417,6 +417,5 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 		return err
 	}
 
-	item.StoreTimestamp = retrievalDataIndexItem.StoreTimestamp
-	return db.pushIndex.PutInBatch(batch, item)
+	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
 }
