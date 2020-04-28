@@ -366,7 +366,7 @@ func TestModeSetRemove(t *testing.T) {
 
 // TestModeSetReUpload validates ModeSetReUpload index values on the provided DB
 func TestModeSetReUpload(t *testing.T) {
-	for _, tc := range multiChunkTestCases[:1] {
+	for _, tc := range multiChunkTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db, cleanupFunc := newTestDB(t, nil)
 			defer cleanupFunc()
@@ -375,19 +375,19 @@ func TestModeSetReUpload(t *testing.T) {
 
 			// re-upload should fail if the chunk is not in the store
 			err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
-			if err == nil {
+			if err != leveldb.ErrNotFound {
 				t.Fatal(err)
 			}
 
 			// put the chunks in the db
 			_, err = db.Put(context.Background(), chunk.ModePutUpload, chunks...)
-			if err != nil {
+			if err != err {
 				t.Fatal(err)
 			}
 
 			// re-upload should fail if the chunk is not pinned
 			err = db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...)
-			if err == nil {
+			if err != leveldb.ErrNotFound {
 				t.Fatal(err)
 			}
 
