@@ -412,10 +412,18 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 		return err
 	}
 
+	// put chunk item with retrieval data into the push index if not already present
 	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
 		return err
 	}
+	itemPresent, err := db.pushIndex.Has(retrievalDataIndexItem)
+	if err != nil {
+		return err
+	}
+	if !itemPresent {
+		return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
+	}
 
-	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
+	return nil
 }
