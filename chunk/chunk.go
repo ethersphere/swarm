@@ -243,7 +243,7 @@ const (
 	ModeSetPin
 	// ModeSetUnpin: when a chunk is unpinned using a command locally
 	ModeSetUnpin
-	// ModeSetReUpload: when a globally pinned chunk is repaired
+	// ModeSetReUpload: when a push sync is forced for a chunk
 	ModeSetReUpload
 )
 
