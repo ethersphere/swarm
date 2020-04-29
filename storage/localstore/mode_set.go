@@ -421,9 +421,9 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	if err != nil {
 		return err
 	}
-	if !itemPresent {
-		return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
+	if itemPresent {
+	    return nil
 	}
 
-	return nil
+	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
 }
