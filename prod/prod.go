@@ -27,9 +27,10 @@ import (
 // RecoveryHook defines code to be executed upon trigger of lost chunks
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 
+// sender is the function call for sending trojan chunks
 type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
-// NewRecoveryHook TODO: better comment please
+// NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
 		targets, err := getPinners(chunkAddress)
@@ -46,26 +47,7 @@ func NewRecoveryHook(send sender) RecoveryHook {
 	}
 }
 
-// // Recover invokes underlying pss.Send as the first step of global pinning
-// func Recover(ctx context.Context, chunkAddress chunk.Address) error {
-
-// 	// TODO: REMOVE FROM HERE DO IT OUTSIDE
-// 	// TODO: where to get chunk from??, localstore/netstore etc?
-// 	// TODO: does it obtain it from RequestFromPeer?
-// 	// for {
-// 	// 	select {
-// 	// 	case <-time.After(timeouts.FetcherGlobalTimeout):
-// 	// 		return nil, errors.New("unable to retreive globally pinned chunk")
-// 	// 	case <-time.After(timeouts.SearchTimeout):
-// 	// 		break
-// 	// 	}
-// 	// }
-
-// 	// should it wait for the chunk and timeout if not
-// 	// using the monitor of pss until this is received
-// 	return nil
-// }
-
+// getPinners returns the specific target pinners for a corresponding chunk address
 func getPinners(chunkAddress chunk.Address) ([][]byte, error) {
 	//this should get the feed and return correct target of pinners
 	return [][]byte{
