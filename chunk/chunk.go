@@ -33,6 +33,7 @@ const (
 var (
 	ErrChunkNotFound = errors.New("chunk not found")
 	ErrChunkInvalid  = errors.New("invalid chunk")
+	ErrNotPinned     = errors.New("chunk not pinned")
 )
 
 type Chunk interface {

@@ -384,8 +384,8 @@ func TestModeSetReUpload(t *testing.T) {
 			}
 
 			// re-upload should fail if the chunk is not pinned
-			if err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...); err != leveldb.ErrNotFound {
-				t.Fatalf("expected error when re-uploading chunks to be %q, but got %v", leveldb.ErrNotFound, err)
+			if err := db.Set(context.Background(), chunk.ModeSetReUpload, chunkAddresses(chunks)...); err != chunk.ErrNotPinned {
+				t.Fatalf("expected error when re-uploading chunks to be %q, but got %v", chunk.ErrNotPinned, err)
 			}
 
 			// pin the chunks

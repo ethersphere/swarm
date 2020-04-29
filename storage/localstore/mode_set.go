@@ -404,28 +404,30 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	item := addressToItem(addr)
 
+	// get chunk retrieval data
+	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
+	if err != nil {
+		return err
+	}
+
 	// only pinned chunks should be re-uploaded
 	// this also prevents a race condition: a non-pinned chunk could be gc'd after it's put in the push index
 	// but before it is actually re-uploaded to the network
 	_, err = db.pinIndex.Get(item)
 	if err != nil {
-                 if err == leveldb.ErrNotFound {
-                     return chunk.ErrNotPinned
-                 }
+		if err == leveldb.ErrNotFound {
+			return chunk.ErrNotPinned
+		}
 		return err
 	}
 
-	// put chunk item with retrieval data into the push index if not already present
-	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
-	if err != nil {
-		return err
-	}
+	// put chunk item into the push index if not already present
 	itemPresent, err := db.pushIndex.Has(retrievalDataIndexItem)
 	if err != nil {
 		return err
 	}
 	if itemPresent {
-	    return nil
+		return nil
 	}
 
 	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
