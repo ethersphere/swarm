@@ -94,13 +94,13 @@ type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*e
 // on request it initiates remote cloud retrieval
 type NetStore struct {
 	chunk.Store
-	LocalID      enode.ID // our local enode - used when issuing RetrieveRequests
-	fetchers     *lru.Cache
-	putMu        sync.Mutex
-	requestGroup singleflight.Group
-	RemoteGet    RemoteGetFunc
-	logger       log.Logger
-	prod         *prod.Prod
+	LocalID          enode.ID // our local enode - used when issuing RetrieveRequests
+	fetchers         *lru.Cache
+	putMu            sync.Mutex
+	requestGroup     singleflight.Group
+	RemoteGet        RemoteGetFunc
+	logger           log.Logger
+	recoveryCallback prod.RecoveryHook
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -113,11 +113,6 @@ func NewNetStore(store chunk.Store, baseAddr *network.BzzAddr) *NetStore {
 		LocalID:  baseAddr.ID(),
 		logger:   log.NewBaseAddressLogger(baseAddr.ShortString()),
 	}
-}
-
-// SetProd defined prod for recovery in global pinning
-func (n *NetStore) SetProd(prod *prod.Prod) {
-	n.prod = prod
 }
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
@@ -172,6 +167,12 @@ func (n *NetStore) Close() error {
 	return n.Store.Close()
 }
 
+// WithRecoveryCallback allows injecting a callback func on the ValidatorStore struct
+func (n *NetStore) WithRecoveryCallback(f prod.RecoveryHook) *NetStore {
+	n.recoveryCallback = f
+	return n
+}
+
 // Get retrieves a chunk
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
@@ -200,7 +201,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
-					n.prod.Recover(ctx, ref)
+					//n.prod.Recover(ctx, ref)
 					// RemoteFetch again, see the timeouts
 					// delay
 					// global timeout after this

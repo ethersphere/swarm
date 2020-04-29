@@ -288,8 +288,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			// TODO: add missing chunk re-upload
 		}
 		self.pss.Register(trojan.NewTopic("RECOVERY"), recoveryFunc)
-		prod := prod.NewProd(self.pss.Send)
-		self.netStore.SetProd(prod)
+		recoverFunc := prod.NewRecoveryHook(self.pss.Send)
+		self.netStore.WithRecoveryCallback(recoverFunc)
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)

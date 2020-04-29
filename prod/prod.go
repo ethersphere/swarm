@@ -18,65 +18,55 @@ package prod
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 )
 
-// Sender defines code to be executed upon trigger of lost TODO: chunk????
-type Sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
+// RecoveryHook defines code to be executed upon trigger of lost chunks
+type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 
-// Prod todo: define comment
-type Prod struct {
-	sender Sender
-}
+type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
-// NewProd inits the Prod struct
-func NewProd(sender Sender) *Prod {
-	return &Prod{
-		sender: sender,
+// NewRecoveryHook TODO: better comment please
+func NewRecoveryHook(send sender) RecoveryHook {
+	return func(ctx context.Context, chunkAddress chunk.Address) error {
+		targets, err := getPinners(chunkAddress)
+		if err != nil {
+			return err
+		}
+		payload := chunkAddress
+		topic := trojan.NewTopic("RECOVERY")
+
+		if _, err := send(ctx, targets, topic, payload); err != nil {
+			return err
+		}
+		return nil
 	}
 }
 
-// Recover invokes underlying pss.Send as the first step of global pinning
-func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) error {
-	var err error
+// // Recover invokes underlying pss.Send as the first step of global pinning
+// func Recover(ctx context.Context, chunkAddress chunk.Address) error {
 
-	//are the targets injected in the send or is it when it's called
-	targets, err := p.getTargets(chunkAddress)
-	if err != nil {
-		return err
-	}
-	payload := chunkAddress
-	topic := trojan.NewTopic("RECOVERY")
+// 	// TODO: REMOVE FROM HERE DO IT OUTSIDE
+// 	// TODO: where to get chunk from??, localstore/netstore etc?
+// 	// TODO: does it obtain it from RequestFromPeer?
+// 	// for {
+// 	// 	select {
+// 	// 	case <-time.After(timeouts.FetcherGlobalTimeout):
+// 	// 		return nil, errors.New("unable to retreive globally pinned chunk")
+// 	// 	case <-time.After(timeouts.SearchTimeout):
+// 	// 		break
+// 	// 	}
+// 	// }
 
-	if p.sender == nil {
-		return errors.New("no sender registered for chunk")
-	}
-	if _, err := p.sender(ctx, targets, topic, payload); err != nil {
-		return err
-	}
+// 	// should it wait for the chunk and timeout if not
+// 	// using the monitor of pss until this is received
+// 	return nil
+// }
 
-	// TODO: REMOVE FROM HERE DO IT OUTSIDE
-	// TODO: where to get chunk from??, localstore/netstore etc?
-	// TODO: does it obtain it from RequestFromPeer?
-	// for {
-	// 	select {
-	// 	case <-time.After(timeouts.FetcherGlobalTimeout):
-	// 		return nil, errors.New("unable to retreive globally pinned chunk")
-	// 	case <-time.After(timeouts.SearchTimeout):
-	// 		break
-	// 	}
-	// }
-
-	// should it wait for the chunk and timeout if not
-	// using the monitor of pss until this is received
-	return nil
-}
-
-func (p *Prod) getTargets(chunkAddress chunk.Address) ([][]byte, error) {
+func getPinners(chunkAddress chunk.Address) ([][]byte, error) {
 	//this should get the feed and return correct target of pinners
 	return [][]byte{
 		{57, 120},
