@@ -200,10 +200,16 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
-					//n.prod.Recover(ctx, ref)
-					// RemoteFetch again, see the timeouts
-					// delay
-					// global timeout after this
+					if n.recoveryCallback != nil {
+						n.recoveryCallback(ctx, ref)
+						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
+						ch, err = n.RemoteFetch(ctx, req, fi)
+						if err != nil {
+							// timeout and not found
+							return nil, err
+						}
+						return ch, nil
+					}
 					return nil, err
 				}
 			}
