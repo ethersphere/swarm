@@ -111,7 +111,13 @@ func (db *DB) set(mode chunk.ModeSet, addrs ...chunk.Address) (err error) {
 				return err
 			}
 		}
-
+	case chunk.ModeSetReUpload:
+		for _, addr := range addrs {
+			err := db.setReUpload(batch, addr)
+			if err != nil {
+				return err
+			}
+		}
 	default:
 		return ErrInvalidMode
 	}
@@ -392,4 +398,37 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 	}
 
 	return nil
+}
+
+// setReUpload adds a pinned chunk to the push index so that it can be re-uploaded to the network
+func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) {
+	item := addressToItem(addr)
+
+	// get chunk retrieval data
+	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
+	if err != nil {
+		return err
+	}
+
+	// only pinned chunks should be re-uploaded
+	// this also prevents a race condition: a non-pinned chunk could be gc'd after it's put in the push index
+	// but before it is actually re-uploaded to the network
+	_, err = db.pinIndex.Get(item)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return chunk.ErrNotPinned
+		}
+		return err
+	}
+
+	// put chunk item into the push index if not already present
+	itemPresent, err := db.pushIndex.Has(retrievalDataIndexItem)
+	if err != nil {
+		return err
+	}
+	if itemPresent {
+		return nil
+	}
+
+	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
 }
