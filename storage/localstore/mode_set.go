@@ -409,6 +409,9 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	// but before it is actually re-uploaded to the network
 	_, err = db.pinIndex.Get(item)
 	if err != nil {
+                 if err == leveldb.ErrNotFound {
+                     return chunk.ErrNotPinned
+                 }
 		return err
 	}
 
