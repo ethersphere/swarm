@@ -320,7 +320,10 @@ func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
 			if s.deliverCallback != nil {
-				go s.deliverCallback(ch)
+				chPresent, err := s.Has(context.Background(), ch.Address())
+				if !chPresent && err != nil {
+					go s.deliverCallback(ch)
+				}
 			}
 			return true
 		}
