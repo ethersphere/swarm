@@ -40,8 +40,6 @@ func NewProd(sender Sender) *Prod {
 	}
 }
 
-//Prod is defined in swarm.go
-
 // Recover invokes underlying pss.Send as the first step of global pinning
 func (p *Prod) Recover(ctx context.Context, chunkAddress chunk.Address) error {
 	var err error
