@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network/timeouts"
-	"github.com/ethersphere/swarm/prod"
 	"github.com/ethersphere/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -100,7 +99,7 @@ type NetStore struct {
 	requestGroup     singleflight.Group
 	RemoteGet        RemoteGetFunc
 	logger           log.Logger
-	recoveryCallback prod.RecoveryHook
+	recoveryCallback func(ctx context.Context, chunkAddress chunk.Address) error
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -168,7 +167,7 @@ func (n *NetStore) Close() error {
 }
 
 // WithRecoveryCallback allows injecting a callback func on the ValidatorStore struct
-func (n *NetStore) WithRecoveryCallback(f prod.RecoveryHook) *NetStore {
+func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress chunk.Address) error) *NetStore {
 	n.recoveryCallback = f
 	return n
 }
