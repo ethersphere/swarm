@@ -38,7 +38,7 @@ type Store interface {
 // Storer is the object used by the push-sync server side protocol
 type Storer struct {
 	store      Store       // store to put chunks in, and retrieve them from
-	ps         TopicFilter // pubsub interface to receive chunks and send receipts
+	ps         TopicFilter // TopicFilter interface to receive chunks and send receipts
 	deregister func()      // deregister the registered handler when Storer is closed
 	logger     log.Logger  // custom logger
 }

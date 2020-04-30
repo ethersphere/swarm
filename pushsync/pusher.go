@@ -73,7 +73,7 @@ type pushedItem struct {
 // NewPusher constructs a Pusher and starts up the push sync protocol
 // takes
 // - a DB interface to subscribe to push sync index to allow iterating over recently stored chunks
-// - a pubsub interface to send chunks and receive statements of custody
+// - a TopicFilter interface to send chunks and receive statements of custody
 // - tags that hold the tags
 func NewPusher(store DB, ps TopicFilter, tags *chunk.Tags) *Pusher {
 	p := &Pusher{
