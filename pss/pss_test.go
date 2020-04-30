@@ -242,7 +242,7 @@ func TestDeliver(t *testing.T) {
 	}
 	// test chunk
 	targets := [][]byte{{255}}
-	chunk, err := msg.Wrap(targets)
+	c, err := msg.Wrap(targets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,8 +254,16 @@ func TestDeliver(t *testing.T) {
 	}
 	pss.Register(topic, hndlr)
 
-	// call pss Deliver on chunk and verify test topic variable value changes
-	pss.Deliver(chunk)
+	deliverFunc := func(c chunk.Chunk) {
+		m, _ := trojan.Unwrap(c)
+		h := pss.getHandler(m.Topic)
+		if h != nil {
+			h(*m)
+		}
+	}
+
+	// call deliverFunc on chunk and verify test topic variable value changes
+	deliverFunc(c)
 	if tt != msg.Topic {
 		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
 	}
