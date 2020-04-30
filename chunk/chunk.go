@@ -322,6 +322,7 @@ func (s *ValidatorStore) validate(ch Chunk) bool {
 			if s.deliverCallback != nil {
 				go s.deliverCallback(ch)
 			}
+			return true
 		}
 	}
 	return false
