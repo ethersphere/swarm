@@ -30,8 +30,8 @@ const (
 	pssReceiptTopic = "PUSHSYNC_RECEIPTS" // pss topic for statement of custody receipts
 )
 
-// PubSub is a Postal Service interface needed to send/receive chunks and receipts for push syncing
-type PubSub interface {
+// TopicFilter is a Postal Service interface needed to send/receive chunks and receipts for push syncing
+type TopicFilter interface {
 	Register(topic string, prox bool, handler func(msg []byte, p *p2p.Peer) error) func()
 	Send(to []byte, topic string, msg []byte) error
 	BaseAddr() []byte

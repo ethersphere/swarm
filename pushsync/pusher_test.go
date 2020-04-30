@@ -95,7 +95,7 @@ func TestPusher(t *testing.T) {
 	// construct the mock push sync index iterator
 	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
 	// start push syncing in a go routine
-	p := NewPusher(tp, &testPubSub{lb, func([]byte) bool { return false }}, tags)
+	p := NewPusher(tp, &testTopicFilter{lb, func([]byte) bool { return false }}, tags)
 	defer p.Close()
 	// collect synced chunks until all chunks synced
 	// wait on errc for errors on any thread
@@ -121,25 +121,25 @@ func TestPusher(t *testing.T) {
 
 }
 
-type testPubSub struct {
+type testTopicFilter struct {
 	*loopBack
 	isClosestTo func([]byte) bool
 }
 
 var testBaseAddr = make([]byte, 32)
 
-// BaseAddr needed to implement PubSub interface
-// in the testPubSub, this address has no relevant and is given only for logging
-func (tps *testPubSub) BaseAddr() []byte {
+// BaseAddr needed to implement TopicFilter interface
+// in the testTopicFilter, this address has no relevant and is given only for logging
+func (tps *testTopicFilter) BaseAddr() []byte {
 	return testBaseAddr
 }
 
-// IsClosestTo needed to implement PubSub interface
-func (tps *testPubSub) IsClosestTo(addr []byte) bool {
+// IsClosestTo needed to implement TopicFilter interface
+func (tps *testTopicFilter) IsClosestTo(addr []byte) bool {
 	return tps.isClosestTo(addr)
 }
 
-// loopback implements PubSub as a central subscription engine,
+// loopback implements TopicFilter as a central subscription engine,
 // ie a msg sent is received by all handlers registered for the topic
 type loopBack struct {
 	handlers map[string][]func(msg []byte, p *p2p.Peer) error

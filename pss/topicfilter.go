@@ -25,22 +25,22 @@ import (
 	"github.com/ethersphere/swarm/pss/message"
 )
 
-// PubSub implements the pushsync.PubSub interface using pss
-type PubSub struct {
+// TopicFilter implements the pushsync.TopicFilter interface using pss
+type TopicFilter struct {
 	pss        *Pss
-	messageTTL time.Duration // expire duration of a pubsub message. Depends on the use case.
+	messageTTL time.Duration // expire duration of a topic filter message. Depends on the use case.
 }
 
-// NewPubSub creates a new PubSub
-func NewPubSub(p *Pss, messageTTL time.Duration) *PubSub {
-	return &PubSub{
+// NewTopicFilter creates a new TopicFilter
+func NewTopicFilter(p *Pss, messageTTL time.Duration) *TopicFilter {
+	return &TopicFilter{
 		pss:        p,
 		messageTTL: messageTTL,
 	}
 }
 
 // BaseAddr returns Kademlia base address
-func (p *PubSub) BaseAddr() []byte {
+func (p *TopicFilter) BaseAddr() []byte {
 	return p.pss.BaseAddr()
 }
 
@@ -51,12 +51,12 @@ func isPssPeer(bp *network.BzzPeer) bool {
 // IsClosestTo returns true is self is the closest known node to addr
 // as uniquely defined by the MSB XOR distance
 // among pss capable peers
-func (p *PubSub) IsClosestTo(addr []byte) bool {
+func (p *TopicFilter) IsClosestTo(addr []byte) bool {
 	return p.pss.IsClosestTo(addr, isPssPeer)
 }
 
 // Register registers a handler
-func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p2p.Peer) error) func() {
+func (p *TopicFilter) Register(topic string, prox bool, handler func(msg []byte, p *p2p.Peer) error) func() {
 	f := func(msg []byte, peer *p2p.Peer, _ bool, _ string) error {
 		return handler(msg, peer)
 	}
@@ -69,8 +69,8 @@ func (p *PubSub) Register(topic string, prox bool, handler func(msg []byte, p *p
 }
 
 // Send sends a message using pss SendRaw
-func (p *PubSub) Send(to []byte, topic string, msg []byte) error {
-	defer metrics.GetOrRegisterResettingTimer("pss/pubsub/send", nil).UpdateSince(time.Now())
+func (p *TopicFilter) Send(to []byte, topic string, msg []byte) error {
+	defer metrics.GetOrRegisterResettingTimer("pss/topicfilter/send", nil).UpdateSince(time.Now())
 	pt := message.NewTopic([]byte(topic))
 	return p.pss.SendRaw(PssAddress(to), pt, msg, p.messageTTL)
 }
