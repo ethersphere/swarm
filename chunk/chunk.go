@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethersphere/swarm/storage"
 )
 
 const (
@@ -318,33 +317,12 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 // return true. If all validators return false,
 // the chunk is considered invalid.
 func (s *ValidatorStore) validate(ch Chunk) bool {
-	hasContentAddressValidator, cav := s.hasContentAddressValidator()
-	// do contennt-address validator first to call deliver callback
-	if hasContentAddressValidator && cav.Validate(ch) && s.deliverCallback != nil {
-		// only invoke callback for new chunks
-		chPresent, err := s.Has(context.Background(), ch.Address())
-		if !chPresent && err != nil {
-			go s.deliverCallback(ch)
-		}
-		return true
-	}
-	// go through the rest of the validators
 	for _, v := range s.validators {
 		if v.Validate(ch) {
-			return true
+			if s.deliverCallback != nil {
+				go s.deliverCallback(ch)
+			}
 		}
 	}
 	return false
-}
-
-// returns true if the storage validators include a content address validator, and the validator var itself
-// returns false and nil otherwise
-func (s *ValidatorStore) hasContentAddressValidator() (bool, storage.ContentAddressValidator) {
-	for _, v := range s.validators {
-		cav, ok := v.(storage.ContentAddressValidator)
-		if ok {
-			return true, cav
-		}
-	}
-	return false, nil
 }
