@@ -236,9 +236,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err != nil {
 		return nil, err
 	}
+	cav := storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash))
 	lstore := chunk.NewValidatorStore(
 		localStore,
-		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
+		cav,
 		feedsHandler,
 	)
 
@@ -283,7 +284,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.pss = pss.NewPss(localStore, self.tags)
 
 	if self.config.GlobalPinner {
-		lstore.WithDeliverCallback(self.pss.Deliver)
+		lstore.WithDeliverCallback(self.pss.NewDeliverFunc(lstore, *cav))
 		// repairFunc takes care of re-uploading a globally pinned chunk to the network
 		// TODO: move this anonymous function into the prod package
 		repairFunc := func(m trojan.Message) {
