@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
+	"github.com/ethersphere/swarm/storage"
 )
 
 // Pss is the top-level struct, which takes care of message sending
@@ -110,12 +111,21 @@ func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 	p.handlers[topic] = hndlr
 }
 
-// Deliver allows unwrapping a chunk as a trojan message and calling its handler func based on its topic
-func (p *Pss) Deliver(c chunk.Chunk) {
-	m, _ := trojan.Unwrap(c)
-	h := p.getHandler(m.Topic)
-	if h != nil {
-		h(*m)
+// NewDeliverFunc allows creating a func for unwrapping a chunk as a trojan message and calling its handler func based on its topic
+func (p *Pss) NewDeliverFunc(s chunk.Store, v storage.ContentAddressValidator) func(chunk.Chunk) {
+	return func(c chunk.Chunk) {
+		// only deliver in case of new chunks
+		chPresent, err := s.Has(context.Background(), c.Address())
+		if err != nil && !chPresent {
+			// only deliver in case of valid content-addressed chunk
+			if v.Validate(c) {
+				m, _ := trojan.Unwrap(c)
+				h := p.getHandler(m.Topic)
+				if h != nil {
+					h(*m)
+				}
+			}
+		}
 	}
 }
 
