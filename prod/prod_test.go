@@ -45,7 +45,7 @@ func TestRecoveryHook(t *testing.T) {
 		return nil, nil
 	}
 
-	// setup recovery hook with testHandler
+	// setup recovery hook with testHook
 	recoverFunc := NewRecoveryHook(testHook)
 
 	recoverFunc(ctx, chunk.ZeroAddr)
