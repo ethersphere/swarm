@@ -24,7 +24,7 @@ import (
 	"github.com/ethersphere/swarm/pss/trojan"
 )
 
-// RecoveryHook defines code to be executed upon trigger of lost chunks
+// RecoveryHook defines code to be executed upon trigger of failed to be retrieved chunks
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 
 // sender is the function call for sending trojan chunks
@@ -40,6 +40,7 @@ func NewRecoveryHook(send sender) RecoveryHook {
 		payload := chunkAddress
 		topic := trojan.NewTopic("RECOVERY")
 
+		// TODO: monitor return should
 		if _, err := send(ctx, targets, topic, payload); err != nil {
 			return err
 		}
@@ -47,6 +48,7 @@ func NewRecoveryHook(send sender) RecoveryHook {
 	}
 }
 
+// TODO: refactor this method to implement feed of target pinners
 // getPinners returns the specific target pinners for a corresponding chunk address
 func getPinners(chunkAddress chunk.Address) ([][]byte, error) {
 	//this should get the feed and return correct target of pinners

@@ -19,72 +19,49 @@ package prod
 import (
 	"context"
 	"crypto/rand"
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	ctest "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/pss"
+	psstest "github.com/ethersphere/swarm/pss/testing"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/storage/localstore"
 )
 
-// TestRecoveryHook tests that a timeout in netstore
-// invokes correctly recovery hook
+// TestRecoveryHook tests that NewRecoveryHook has been properly invoked
 func TestRecoveryHook(t *testing.T) {
-	// setup recovery hook
-	// verify that hook is correctly invoked
 	ctx := context.TODO()
 
-	handlerWasCalled := false // test variable to check handler funcs are correctly retrieved
+	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
-	// register first handler
-	testHandler := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
-		handlerWasCalled = true
+	// setup the hook
+	testHook := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+		hookWasCalled = true
 		return nil, nil
 	}
 
-	recoverFunc := NewRecoveryHook(testHandler)
-	// call recoverFunc
+	// setup recovery hook with testHandler
+	recoverFunc := NewRecoveryHook(testHook)
+
 	recoverFunc(ctx, chunk.ZeroAddr)
 
-	// verify the hook has been called
-	if handlerWasCalled != true {
-		t.Fatalf("unexpected result for prod Recover func, expected test variable to have a value of %v but is %v instead", true, handlerWasCalled)
+	// verify the hook has been called correctly
+	if hookWasCalled != true {
+		t.Fatalf("unexpected result for prod Recover func, expected test variable to have a value of %t but is %t instead", true, hookWasCalled)
 	}
 
 }
 
-func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
-	dir, err := ioutil.TempDir("", "swarm-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	baseKey := make([]byte, 32)
-	if _, err = rand.Read(baseKey); err != nil {
-		t.Fatal(err)
-	}
-
-	localStore, err := localstore.New(dir, baseKey, &localstore.Options{Tags: tags})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return localStore
-}
-
-// TestSenderCall verifies that pss send is being called correctly
+// TestSenderCall verifies that a hook is being called correctly within the netstore
 func TestSenderCall(t *testing.T) {
 	ctx := context.TODO()
 	tags := chunk.NewTags()
-	localStore := newMockLocalStore(t, tags)
+	localStore := psstest.NewMockLocalStore(t, tags)
 
 	lstore := chunk.NewValidatorStore(
 		localStore,
@@ -101,19 +78,18 @@ func TestSenderCall(t *testing.T) {
 	// setup netstore
 	netStore := storage.NewNetStore(lstore, baseAddress)
 
-	handlerWasCalled := false // test variable to check handler funcs are correctly retrieved
+	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
 	// setup recovery hook
-	testHandler := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
-		handlerWasCalled = true
+	testHook := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+		hookWasCalled = true
 		return nil, nil
 	}
 
-	//func(ctx context.Context, chunkAddress chunk.Address)
-	recoverFunc := NewRecoveryHook(testHandler)
+	recoverFunc := NewRecoveryHook(testHook)
 	netStore.WithRecoveryCallback(recoverFunc)
 
-	c := GenerateTestRandomChunk()
+	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
 
 	kad := network.NewKademlia(baseAddress.Over(), network.NewKadParams())
@@ -126,21 +102,13 @@ func TestSenderCall(t *testing.T) {
 		// waits until the callback is called or timeout
 		select {
 		default:
-			if handlerWasCalled {
+			if hookWasCalled {
 				return
 			}
 		// TODO: change the timeout
 		case <-time.After(timeouts.FetcherGlobalTimeout):
-			t.Fatalf("no handler was called")
+			t.Fatalf("no hook was called")
 		}
 	}
 
-}
-
-func GenerateTestRandomChunk() chunk.Chunk {
-	data := make([]byte, chunk.DefaultSize)
-	rand.Read(data)
-	key := make([]byte, 32)
-	rand.Read(key)
-	return chunk.NewChunk(key, data)
 }
