@@ -30,14 +30,14 @@ import (
 )
 
 // RecoveryHook defines code to be executed upon trigger of failed to be retrieved chunks
-type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
+type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publisher string) error
 
 // sender is the function call for sending trojan chunks
 type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender) RecoveryHook {
-	return func(ctx context.Context, chunkAddress chunk.Address) error {
+	return func(ctx context.Context, chunkAddress chunk.Address, publisher string) error {
 		targets, err := getPinners(publisher)
 		if err != nil {
 			return err
