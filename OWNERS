@@ -15,7 +15,7 @@ swarm
 │       ├── intervals ───── @janos
 │       └── testing ─────── @zelig
 ├── pot ─────────────────── @zelig
-├── pss ─────────────────── @nolash, @zelig, @nonsense
+├── pss ─────────────────── @zelig, @nonsense
 ├── services ────────────── @zelig
 ├── state ───────────────── @justelad
 ├── storage ─────────────── ethersphere
