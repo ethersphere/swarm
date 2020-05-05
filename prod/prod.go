@@ -19,9 +19,7 @@ package prod
 import (
 	"context"
 	"encoding/hex"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
@@ -70,21 +68,25 @@ func getPinners(publisher string, handler *feed.Handler) ([][]byte, error) {
 	// TODO: resolve sinful type conversions
 	fd := feed.Feed{
 		Topic: feed.Topic(trojan.NewTopic("RECOVERY")),
-		User:  common.Address(addr),
+		User:  addr,
 	}
 
-	query := feed.NewQuery(&fd, uint64(time.Now().Unix()), lookup.NoClue)
-	// TODO: context.WithCancel?
-	_, err = handler.Lookup(context.Background(), query)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	query := feed.NewQueryLatest(&fd, lookup.NoClue)
+	// TODO: do we need WithCancel?
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = handler.Lookup(ctx, query)
+	if err != nil {
+		// TODO: what does this error mean?
+		return nil, err
+	}
 
 	// TODO: time-outs?
 	_, content, err := handler.GetContent(&fd)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	if err != nil {
+		// TODO: what does this error mean?
+		return nil, err
+	}
 
 	// TODO: transform content into actual list of targets
 	return [][]byte{content}, nil

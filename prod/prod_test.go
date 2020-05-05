@@ -19,13 +19,10 @@ package prod
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"io/ioutil"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	ctest "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/network"
@@ -36,7 +33,6 @@ import (
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
 )
 
 // TestRecoveryHook tests that NewRecoveryHook has been properly invoked
@@ -50,9 +46,9 @@ func TestRecoveryHook(t *testing.T) {
 		hookWasCalled = true
 		return nil, nil
 	}
+	testHandler := newTestHandler(t)
 
 	// setup recovery hook with testHook
-	testHandler := newTestHandler(t)
 	recoverFunc := NewRecoveryHook(testHook, testHandler)
 
 	// TODO: replace publisher byte string with equivalent zero value
@@ -123,26 +119,14 @@ func TestSenderCall(t *testing.T) {
 }
 
 func newTestHandler(t *testing.T) *feed.Handler {
-	datadir, err := ioutil.TempDir("", "fh")
+	datadir, err := ioutil.TempDir("", "prod")
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(datadir, "prod")
 	fhParams := &feed.HandlerParams{}
-	fh := feed.NewHandler(fhParams)
-
-	db, err := localstore.New(path, make([]byte, 32), nil)
+	testHandler, err := feed.NewTestHandler(datadir, fhParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.SHA3Hash)), fh)
-
-	netStore := storage.NewNetStore(localStore, network.NewBzzAddr(make([]byte, 32), nil))
-	netStore.RemoteGet = func(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, func(), error) {
-		return nil, func() {}, errors.New("not found")
-	}
-	fh.SetStore(netStore)
-
-	return fh
+	return testHandler.Handler
 }
