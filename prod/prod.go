@@ -19,6 +19,7 @@ package prod
 import (
 	"context"
 	"encoding/hex"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
 
 // RecoveryHook defines code to be executed upon trigger of failed to be retrieved chunks
@@ -36,9 +38,9 @@ type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publishe
 type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
-func NewRecoveryHook(send sender) RecoveryHook {
+func NewRecoveryHook(send sender, handler *feed.Handler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address, publisher string) error {
-		targets, err := getPinners(publisher)
+		targets, err := getPinners(publisher, handler)
 		if err != nil {
 			return err
 		}
@@ -54,7 +56,8 @@ func NewRecoveryHook(send sender) RecoveryHook {
 }
 
 // getPinners returns the specific target pinners for a corresponding chunk address
-func getPinners(publisher string) ([][]byte, error) {
+// TODO: find a way around passing handler as param
+func getPinners(publisher string, handler *feed.Handler) ([][]byte, error) {
 	// get feed user from publisher
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
@@ -63,10 +66,6 @@ func getPinners(publisher string) ([][]byte, error) {
 	pubKey, err := crypto.DecompressPubkey(publisherBytes)
 	addr := crypto.PubkeyToAddress(*pubKey)
 
-	// TODO: use existing swarm handler
-	fhParams := &feed.HandlerParams{}
-	fh := feed.NewHandler(fhParams)
-
 	// read feed
 	// TODO: resolve sinful type conversions
 	fd := feed.Feed{
@@ -74,19 +73,18 @@ func getPinners(publisher string) ([][]byte, error) {
 		User:  common.Address(addr),
 	}
 
-	// TODO: do we need query lookup before content fetch?
-	// query := feed.NewQuery(&fd, uint64(time.Now().Unix()), lookup.NoClue)
+	query := feed.NewQuery(&fd, uint64(time.Now().Unix()), lookup.NoClue)
 	// TODO: context.WithCancel?
-	// _, err = fh.Lookup(context.Background(), query)
+	_, err = handler.Lookup(context.Background(), query)
 	// if err != nil {
 	// 	return nil, err
 	// }
 
 	// TODO: time-outs?
-	_, content, err := fh.GetContent(&fd)
-	if err != nil {
-		return nil, err
-	}
+	_, content, err := handler.GetContent(&fd)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// TODO: transform content into actual list of targets
 	return [][]byte{content}, nil
