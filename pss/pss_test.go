@@ -18,16 +18,13 @@ package pss
 
 import (
 	"context"
-	"crypto/rand"
-	"io/ioutil"
-	"os"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ethersphere/swarm/chunk"
+	psstest "github.com/ethersphere/swarm/pss/testing"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
-	"github.com/ethersphere/swarm/storage/localstore"
 )
 
 // TestTrojanChunkRetrieval creates a trojan chunk
@@ -38,7 +35,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	ctx := context.TODO()
 	tags := chunk.NewTags()
 
-	localStore := newMockLocalStore(t, tags)
+	localStore := psstest.NewMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
 	targets := [][]byte{
@@ -113,7 +110,7 @@ func TestPssMonitor(t *testing.T) {
 	ctx := context.TODO()
 	tags := chunk.NewTags()
 
-	localStore := newMockLocalStore(t, tags)
+	localStore := psstest.NewMockLocalStore(t, tags)
 
 	targets := [][]byte{
 		{57, 120},
@@ -157,30 +154,10 @@ func TestPssMonitor(t *testing.T) {
 
 }
 
-func newMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
-	dir, err := ioutil.TempDir("", "swarm-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	baseKey := make([]byte, 32)
-	if _, err = rand.Read(baseKey); err != nil {
-		t.Fatal(err)
-	}
-
-	localStore, err := localstore.New(dir, baseKey, &localstore.Options{Tags: tags})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return localStore
-}
-
 // TestRegister verifies that handler funcs are able to be registered correctly in pss
 func TestRegister(t *testing.T) {
 	tags := chunk.NewTags()
-	localStore := newMockLocalStore(t, tags)
+	localStore := psstest.NewMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
 	// pss handlers should be empty
@@ -230,7 +207,7 @@ func TestRegister(t *testing.T) {
 // results in the execution of the expected handler func
 func TestDeliver(t *testing.T) {
 	tags := chunk.NewTags()
-	localStore := newMockLocalStore(t, tags)
+	localStore := psstest.NewMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
 	// test message

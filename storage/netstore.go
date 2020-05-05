@@ -93,12 +93,13 @@ type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*e
 // on request it initiates remote cloud retrieval
 type NetStore struct {
 	chunk.Store
-	LocalID      enode.ID // our local enode - used when issuing RetrieveRequests
-	fetchers     *lru.Cache
-	putMu        sync.Mutex
-	requestGroup singleflight.Group
-	RemoteGet    RemoteGetFunc
-	logger       log.Logger
+	LocalID          enode.ID // our local enode - used when issuing RetrieveRequests
+	fetchers         *lru.Cache
+	putMu            sync.Mutex
+	requestGroup     singleflight.Group
+	RemoteGet        RemoteGetFunc
+	logger           log.Logger
+	recoveryCallback func(ctx context.Context, chunkAddress chunk.Address) error // this is the function callback when a chunk failed to be retrieved
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -165,6 +166,12 @@ func (n *NetStore) Close() error {
 	return n.Store.Close()
 }
 
+// WithRecoveryCallback allows injecting a callback func on the NetStore struct
+func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress chunk.Address) error) *NetStore {
+	n.recoveryCallback = f
+	return n
+}
+
 // Get retrieves a chunk
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
@@ -193,6 +200,11 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
+					if n.recoveryCallback != nil {
+						n.recoveryCallback(ctx, ref)
+						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
+						return n.RemoteFetch(ctx, req, fi)
+					}
 					return nil, err
 				}
 			}

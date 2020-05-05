@@ -50,6 +50,7 @@ import (
 	"github.com/ethersphere/swarm/oldpss"
 	oldpssmessage "github.com/ethersphere/swarm/oldpss/message"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/prod"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/pushsync"
@@ -292,6 +293,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			lstore.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
 		}
 		self.pss.Register(trojan.NewTopic("RECOVERY"), repairFunc)
+		recoverFunc := prod.NewRecoveryHook(self.pss.Send)
+		self.netStore.WithRecoveryCallback(recoverFunc)
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
