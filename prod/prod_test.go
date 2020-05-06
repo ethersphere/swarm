@@ -50,8 +50,11 @@ func TestRecoveryHook(t *testing.T) {
 	// setup recovery hook with testHook
 	recoverFunc := NewRecoveryHook(testHook, testHandler)
 
-	// TODO: replace publisher byte string with equivalent zero value
-	recoverFunc(ctx, chunk.ZeroAddr, "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	testChunk := "aacca8d446af47ebcab582ca2188fa73dfa871eb0a35eda798f47d4f91a575e9"
+	testPublisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
+	if err := recoverFunc(ctx, chunk.Address([]byte(testChunk)), testPublisher); err != nil {
+		t.Fatal(err)
+	}
 
 	// verify the hook has been called correctly
 	if hookWasCalled != true {

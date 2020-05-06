@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
@@ -65,7 +64,7 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 	// get feed user from publisher
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
-		return nil, api.ErrDecrypt
+		return nil, err
 	}
 	pubKey, err := crypto.DecompressPubkey(publisherBytes)
 	addr := crypto.PubkeyToAddress(*pubKey)
