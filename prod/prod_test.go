@@ -19,7 +19,6 @@ package prod
 import (
 	"context"
 	"crypto/rand"
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -46,7 +45,7 @@ func TestRecoveryHook(t *testing.T) {
 		hookWasCalled = true
 		return nil, nil
 	}
-	testHandler := newTestHandler(t)
+	testHandler := &feed.DummyHandler{}
 
 	// setup recovery hook with testHook
 	recoverFunc := NewRecoveryHook(testHook, testHandler)
@@ -89,7 +88,7 @@ func TestSenderCall(t *testing.T) {
 		hookWasCalled = true
 		return nil, nil
 	}
-	testHandler := newTestHandler(t)
+	testHandler := &feed.DummyHandler{}
 
 	recoverFunc := NewRecoveryHook(testHook, testHandler)
 	netStore.WithRecoveryCallback(recoverFunc)
@@ -116,17 +115,4 @@ func TestSenderCall(t *testing.T) {
 		}
 	}
 
-}
-
-func newTestHandler(t *testing.T) *feed.Handler {
-	datadir, err := ioutil.TempDir("", "prod")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fhParams := &feed.HandlerParams{}
-	testHandler, err := feed.NewTestHandler(datadir, fhParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return testHandler.Handler
 }

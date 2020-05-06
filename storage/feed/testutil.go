@@ -17,6 +17,7 @@
 package feed
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -32,8 +33,40 @@ const (
 	testDbDirName = "feeds"
 )
 
+type FeedsHandler interface {
+	Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
+	GetContent(feed *Feed) (storage.Address, []byte, error)
+}
+
 type TestHandler struct {
 	*Handler
+}
+
+type DummyHandler struct {
+}
+
+func newDummyCacheEntry() *cacheEntry {
+	topic := Topic{0x1}             // dummy topic
+	key := chunk.Address([]byte{2}) // dummy byte
+	data := []byte{3}               // dummy data
+
+	request := NewFirstRequest(topic)
+	entry := &cacheEntry{}
+	entry.lastKey = key
+	entry.Update = request.Update
+
+	entry.Reader = bytes.NewReader(data)
+
+	return entry
+}
+
+func (d *DummyHandler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
+	return newDummyCacheEntry(), nil
+}
+
+func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
+	cacheEntry := newDummyCacheEntry()
+	return cacheEntry.lastKey, cacheEntry.data, nil
 }
 
 func (t *TestHandler) Close() {
