@@ -45,8 +45,11 @@ const MaxPayloadSize = 4030
 
 var hashFunc = storage.MakeHashFunc(storage.BMTHash)
 
+// RecoveryTopicText is the string used to construct the RecoveryTopic var
+const RecoveryTopicText = "RECOVERY"
+
 // RecoveryTopic is the topic used for repairing globally pinned chunks
-var RecoveryTopic = NewTopic("RECOVERY")
+var RecoveryTopic = NewTopic(RecoveryTopicText)
 
 // ErrPayloadTooBig is returned when a given payload for a Message type is longer than the maximum amount allowed
 var ErrPayloadTooBig = fmt.Errorf("message payload size cannot be greater than %d bytes", MaxPayloadSize)

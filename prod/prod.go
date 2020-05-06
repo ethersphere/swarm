@@ -70,9 +70,13 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 	pubKey, err := crypto.DecompressPubkey(publisherBytes)
 	addr := crypto.PubkeyToAddress(*pubKey)
 
+	// get feed topic from trojan recovery topic
+	topic, err := feed.NewTopic(trojan.RecoveryTopicText, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	// read feed
-	// TODO: resolve sinful type conversions
-	var topic feed.Topic
 	fd := feed.Feed{
 		Topic: topic,
 		User:  addr,
