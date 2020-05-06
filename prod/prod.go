@@ -19,6 +19,8 @@ package prod
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/api"
@@ -28,6 +30,12 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
+
+// ErrFeedLookup is used when the recovery feed cannot be successefully looked up
+var ErrFeedLookup = errors.New("failed to look up recovery feed")
+
+// ErrFeedContent is used when there is a failure to retrieve content from the recovery feed
+var ErrFeedContent = errors.New("failed to get content for recovery feed")
 
 // RecoveryHook defines code to be executed upon failing to retrieve pinned chunks
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publisher string) error
@@ -74,17 +82,17 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 	// TODO: do we need WithCancel?
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	_, err = handler.Lookup(ctx, query)
-	if err != nil {
-		// TODO: what does this error mean?
-		return nil, err
+	// feed can still be queried even if there are no updates
+	if err != nil && err.Error() != "no feed updates found" {
+		return nil, fmt.Errorf("%s : %s", ErrFeedLookup, err)
 	}
 
 	// TODO: time-outs?
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
-		// TODO: what does this error mean?
-		return nil, err
+		return nil, fmt.Errorf("%s : %s", ErrFeedContent, err)
 	}
 
 	// TODO: transform content into actual list of targets
