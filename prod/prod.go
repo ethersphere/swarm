@@ -29,10 +29,10 @@ import (
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
 
-// RecoveryHook defines code to be executed upon trigger of failed to be retrieved chunks
+// RecoveryHook defines code to be executed upon failing to retrieve pinned chunks
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publisher string) error
 
-// sender is the function call for sending trojan chunks
+// sender is the function type for sending trojan chunks
 type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
@@ -53,8 +53,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	}
 }
 
-// getPinners returns the specific target pinners for a corresponding chunk address
-// TODO: find a way around passing handler as param
+// getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error) {
 	// get feed user from publisher
 	publisherBytes, err := hex.DecodeString(publisher)
