@@ -98,7 +98,7 @@ func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
 // newDummyCacheEntry returns a dummy cacheEntry pointer to be used by dummy handlers
 func newDummyCacheEntry() *cacheEntry {
 	topic := Topic{0x1}               // dummy topic
-	key := chunk.Address([]byte{2})   // dummy byte
+	key := chunk.Address([]byte{2})   // dummy key
 	data := []byte{3}                 // dummy data
 	request := NewFirstRequest(topic) // dummy request
 
