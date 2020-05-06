@@ -36,10 +36,10 @@ var ErrPublisher = errors.New("failed to decode publisher")
 // ErrPubKey is returned when the publisher bytes cannot be decompressed as a public key
 var ErrPubKey = errors.New("failed to decompress public key")
 
-// ErrFeedLookup is used when the recovery feed cannot be successefully looked up
+// ErrFeedLookup is returned when the recovery feed cannot be successefully looked up
 var ErrFeedLookup = errors.New("failed to look up recovery feed")
 
-// ErrFeedContent is used when there is a failure to retrieve content from the recovery feed
+// ErrFeedContent is returned when there is a failure to retrieve content from the recovery feed
 var ErrFeedContent = errors.New("failed to get content for recovery feed")
 
 // RecoveryHook defines code to be executed upon failing to retrieve pinned chunks
