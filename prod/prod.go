@@ -91,17 +91,19 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 	}
 
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	// TODO: do we need WithCancel?
+	// TODO: do we need this ctx.WithCancel? why?
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// TODO: not exactly sure what to do with the `feed.cacheEntry` value returned here
+	// TODO: in fact, not even sure if we need to call `Lookup` first before calling `GetContent`
 	_, err = handler.Lookup(ctx, query)
 	// feed can still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
 		return nil, fmt.Errorf("%s : %s", ErrFeedLookup, err)
 	}
 
-	// TODO: time-outs?
+	// TODO: how do we handle time-outs here?
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
 		return nil, fmt.Errorf("%s : %s", ErrFeedContent, err)
