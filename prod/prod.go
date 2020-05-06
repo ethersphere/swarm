@@ -43,10 +43,9 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 			return err
 		}
 		payload := chunkAddress
-		topic := trojan.NewTopic("RECOVERY")
 
 		// TODO: monitor return should
-		if _, err := send(ctx, targets, topic, payload); err != nil {
+		if _, err := send(ctx, targets, trojan.RecoveryTopic, payload); err != nil {
 			return err
 		}
 		return nil
@@ -65,8 +64,9 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 
 	// read feed
 	// TODO: resolve sinful type conversions
+	var topic feed.Topic
 	fd := feed.Feed{
-		Topic: feed.Topic(trojan.NewTopic("RECOVERY")),
+		Topic: topic,
 		User:  addr,
 	}
 

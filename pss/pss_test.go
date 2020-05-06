@@ -45,10 +45,9 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		{89, 19},
 		{22, 129}}
 	payload := []byte("RECOVERY CHUNK")
-	topic := trojan.NewTopic("RECOVERY")
 
 	// call Send to store trojan chunk in localstore
-	if _, err = pss.Send(ctx, targets, topic, payload); err != nil {
+	if _, err = pss.Send(ctx, targets, trojan.RecoveryTopic, payload); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,14 +118,13 @@ func TestPssMonitor(t *testing.T) {
 		{89, 19},
 		{22, 129}}
 	payload := []byte("RECOVERY CHUNK")
-	topic := trojan.NewTopic("RECOVERY")
 
 	var monitor *Monitor
 
 	pss := NewPss(localStore, tags)
 
 	// call Send to store trojan chunk in localstore
-	if monitor, err = pss.Send(ctx, targets, topic, payload); err != nil {
+	if monitor, err = pss.Send(ctx, targets, trojan.RecoveryTopic, payload); err != nil {
 		t.Fatal(err)
 	}
 
