@@ -30,6 +30,12 @@ import (
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
 
+// ErrPublisher is returned when the publisher string cannot be decoded into bytes
+var ErrPublisher = errors.New("failed to decode publisher")
+
+// ErrPubKey is returned when the publisher bytes cannot be decompressed as a public key
+var ErrPubKey = errors.New("failed to decompress public key")
+
 // ErrFeedLookup is used when the recovery feed cannot be successefully looked up
 var ErrFeedLookup = errors.New("failed to look up recovery feed")
 
@@ -64,9 +70,12 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 	// get feed user from publisher
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
-		return nil, err
+		return nil, ErrPublisher
 	}
 	pubKey, err := crypto.DecompressPubkey(publisherBytes)
+	if err != nil {
+		return nil, ErrPubKey
+	}
 	addr := crypto.PubkeyToAddress(*pubKey)
 
 	// get feed topic from trojan recovery topic
