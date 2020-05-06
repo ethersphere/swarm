@@ -33,47 +33,12 @@ const (
 	testDbDirName = "feeds"
 )
 
-type FeedsHandler interface {
-	Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
-	GetContent(feed *Feed) (storage.Address, []byte, error)
-}
-
+// TestHandler is a stuct to be used for testing purposes
 type TestHandler struct {
 	*Handler
 }
 
-type DummyHandler struct {
-}
-
-func newDummyCacheEntry() *cacheEntry {
-	topic := Topic{0x1}             // dummy topic
-	key := chunk.Address([]byte{2}) // dummy byte
-	data := []byte{3}               // dummy data
-
-	request := NewFirstRequest(topic)
-	entry := &cacheEntry{}
-	entry.lastKey = key
-	entry.Update = request.Update
-
-	entry.Reader = bytes.NewReader(data)
-
-	return entry
-}
-
-func (d *DummyHandler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
-	return newDummyCacheEntry(), nil
-}
-
-func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
-	cacheEntry := newDummyCacheEntry()
-	return cacheEntry.lastKey, cacheEntry.data, nil
-}
-
-func (t *TestHandler) Close() {
-	t.chunkStore.Close()
-}
-
-// NewTestHandler creates Handler object to be used for testing purposes.
+// NewTestHandler creates a new TestHandler
 func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
 	path := filepath.Join(datadir, testDbDirName)
 	fh := NewHandler(params)
@@ -93,6 +58,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	return &TestHandler{fh}, nil
 }
 
+// NewTestHandlerWithStore creates a new TestHandler with a set chunk store
 func NewTestHandlerWithStore(datadir string, db chunk.Store, params *HandlerParams) (*TestHandler, error) {
 	fh := NewHandler(params)
 	return newTestHandlerWithStore(fh, datadir, db, params)
@@ -107,4 +73,40 @@ func newTestHandlerWithStore(fh *Handler, datadir string, db chunk.Store, params
 	}
 	fh.SetStore(netStore)
 	return &TestHandler{fh}, nil
+}
+
+// Close closes the chunk store field for the test handler receiver
+func (t *TestHandler) Close() {
+	t.chunkStore.Close()
+}
+
+// DummyHandler is a test handler with dummy Lookup and GetContent funcs
+type DummyHandler struct {
+}
+
+// Lookup is the dummy func for DummyHandler structs
+func (d *DummyHandler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
+	return newDummyCacheEntry(), nil
+}
+
+// GetContent is the dummy func for DummyHandler structs
+func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
+	cacheEntry := newDummyCacheEntry()
+	return cacheEntry.lastKey, cacheEntry.data, nil
+}
+
+// newDummyCacheEntry returns a dummy cacheEntry pointer to be used by dummy handlers
+func newDummyCacheEntry() *cacheEntry {
+	topic := Topic{0x1}             // dummy topic
+	key := chunk.Address([]byte{2}) // dummy byte
+	data := []byte{3}               // dummy data
+
+	request := NewFirstRequest(topic)
+	entry := &cacheEntry{}
+	entry.lastKey = key
+	entry.Update = request.Update
+
+	entry.Reader = bytes.NewReader(data)
+
+	return entry
 }

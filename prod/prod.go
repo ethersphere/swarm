@@ -36,7 +36,7 @@ type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publishe
 type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
-func NewRecoveryHook(send sender, handler feed.FeedsHandler) RecoveryHook {
+func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address, publisher string) error {
 		targets, err := getPinners(publisher, handler)
 		if err != nil {
@@ -55,7 +55,7 @@ func NewRecoveryHook(send sender, handler feed.FeedsHandler) RecoveryHook {
 
 // getPinners returns the specific target pinners for a corresponding chunk address
 // TODO: find a way around passing handler as param
-func getPinners(publisher string, handler feed.FeedsHandler) ([][]byte, error) {
+func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error) {
 	// get feed user from publisher
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
