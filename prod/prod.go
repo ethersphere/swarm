@@ -111,6 +111,7 @@ func getPinners(publisher string, handler feed.GenericHandler) (trojan.Targets, 
 		return nil, ErrFeedContent
 	}
 
+	// extract targets from feed content
 	targets := new(trojan.Targets)
 	err = json.Unmarshal(content, targets)
 	if err != nil {
