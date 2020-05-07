@@ -32,7 +32,7 @@ const (
 	testDbDirName = "feeds"
 )
 
-// TestHandler is a stuct to be used for testing purposes
+// TestHandler is a struct which contains a Handler to be used for testing purposes
 type TestHandler struct {
 	*Handler
 }
