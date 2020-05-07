@@ -37,7 +37,7 @@ type TestHandler struct {
 	*Handler
 }
 
-// NewTestHandler creates a new TestHandler
+// NewTestHandler creates a new TestHandler struct and returns an error otherwise
 func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
 	path := filepath.Join(datadir, testDbDirName)
 	fh := NewHandler(params)
