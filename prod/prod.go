@@ -19,6 +19,7 @@ package prod
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -45,7 +46,7 @@ var ErrFeedContent = errors.New("failed to get content for recovery feed")
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publisher string) error
 
 // sender is the function type for sending trojan chunks
-type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
+type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
@@ -65,7 +66,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 }
 
 // getPinners returns the specific target pinners for a corresponding chunk
-func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error) {
+func getPinners(publisher string, handler feed.GenericHandler) (trojan.Targets, error) {
 	// get feed user from publisher
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
@@ -107,6 +108,11 @@ func getPinners(publisher string, handler feed.GenericHandler) ([][]byte, error)
 		return nil, ErrFeedContent
 	}
 
-	// TODO: transform content into actual list of targets
-	return [][]byte{content}, nil
+	targets := new(trojan.Targets)
+	json.Unmarshal(content, targets)
+	if err != nil {
+		return nil, err
+	}
+
+	return *targets, nil
 }
