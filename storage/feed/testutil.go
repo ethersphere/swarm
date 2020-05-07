@@ -17,7 +17,6 @@
 package feed
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -82,30 +81,30 @@ func (t *TestHandler) Close() {
 
 // DummyHandler is a test handler with dummy Lookup and GetContent funcs
 type DummyHandler struct {
+	cacheEntry *cacheEntry // mock content for feed retrieval
+}
+
+// NewDummyHandler initializes and returns a DummyHandler struct
+func NewDummyHandler() *DummyHandler {
+	d := &DummyHandler{}
+	d.cacheEntry = &cacheEntry{}
+
+	return d
 }
 
 // Lookup is the dummy func for DummyHandler structs
 func (d *DummyHandler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
-	return newDummyCacheEntry(), nil
+	return d.cacheEntry, nil
 }
 
 // GetContent is the dummy func for DummyHandler structs
 func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
-	cacheEntry := newDummyCacheEntry()
-	return cacheEntry.lastKey, cacheEntry.data, nil
+	return d.cacheEntry.lastKey, d.cacheEntry.data, nil
 }
 
-// newDummyCacheEntry returns a dummy cacheEntry pointer to be used by dummy handlers
-func newDummyCacheEntry() *cacheEntry {
-	topic := Topic{0x1}               // dummy topic
-	key := chunk.Address([]byte{2})   // dummy key
-	data := []byte{3}                 // dummy data
-	request := NewFirstRequest(topic) // dummy request
-
-	entry := &cacheEntry{}
-	entry.lastKey = key
-	entry.Update = request.Update
-	entry.Reader = bytes.NewReader(data)
-
-	return entry
+// SetContent sets the binary data to be returned by a dummy handler
+func (d *DummyHandler) SetContent(b []byte) {
+	key := chunk.Address([]byte{1}) // dummy key
+	d.cacheEntry.lastKey = key
+	d.cacheEntry.data = b
 }
