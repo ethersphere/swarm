@@ -38,7 +38,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	localStore := psstest.NewMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
-	targets := trojan.Targets([]trojan.Target{[]byte{128, 108}})
+	targets := trojan.Targets([]trojan.Target{[]byte{1}}) // arbitrary test targets
 	payload := []byte("RECOVERY CHUNK")
 
 	// call Send to store trojan chunk in localstore
@@ -91,7 +91,6 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	if !reflect.DeepEqual(tc, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
-
 }
 
 // TestPssMonitor creates a trojan chunk
@@ -106,7 +105,7 @@ func TestPssMonitor(t *testing.T) {
 
 	localStore := psstest.NewMockLocalStore(t, tags)
 
-	targets := trojan.Targets([]trojan.Target{[]byte{31, 72}})
+	targets := trojan.Targets([]trojan.Target{[]byte{1}}) // arbitrary test targets
 	payload := []byte("RECOVERY CHUNK")
 
 	var monitor *Monitor
@@ -139,7 +138,6 @@ func TestPssMonitor(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 // TestRegister verifies that handler funcs are able to be registered correctly in pss
@@ -206,7 +204,7 @@ func TestDeliver(t *testing.T) {
 		t.Fatal(err)
 	}
 	// test chunk
-	targets := trojan.Targets([]trojan.Target{[]byte{255, 1}})
+	targets := trojan.Targets([]trojan.Target{[]byte{1}}) // arbitrary test targets
 	chunk, err := msg.Wrap(targets)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +222,6 @@ func TestDeliver(t *testing.T) {
 	if tt != msg.Topic {
 		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
 	}
-
 }
 
 // TODO: later test could be a simulation test for 2 nodes, localstore + netstore
