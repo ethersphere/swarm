@@ -71,7 +71,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//c reate a stored chunk artificially
+	// create a stored chunk artificially
 	m, err := trojan.NewMessage(trojan.RecoveryTopic, payload)
 	if err != nil {
 		t.Fatal(err)

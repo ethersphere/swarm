@@ -40,7 +40,7 @@ type Message struct {
 	padding []byte
 }
 
-// Target is an alias for an addresses which can be mined to construct a trojan message
+// Target is an alias for an address which can be mined to construct a trojan message
 type Target []byte
 
 // Targets is an alias for a collection of targets
