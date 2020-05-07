@@ -60,7 +60,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 		}
 		payload := chunkAddress
 
-		// TODO: monitor return should
+		// TODO: returned monitor should be made use of
 		if _, err := send(ctx, targets, trojan.RecoveryTopic, payload); err != nil {
 			return err
 		}
@@ -93,12 +93,9 @@ func getPinners(publisher string, handler feed.GenericHandler) (trojan.Targets, 
 		User:  addr,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	// TODO: do we need this ctx.WithCancel? why?
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// TODO: not exactly sure what to do with the `feed.cacheEntry` value returned here
-	// TODO: in fact, not even sure if we need to call `Lookup` first before calling `GetContent`
 	_, err = handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
