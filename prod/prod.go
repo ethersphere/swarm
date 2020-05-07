@@ -42,6 +42,9 @@ var ErrFeedLookup = errors.New("failed to look up recovery feed")
 // ErrFeedContent is returned when there is a failure to retrieve content from the recovery feed
 var ErrFeedContent = errors.New("failed to get content for recovery feed")
 
+// ErrTargets is returned when there is a failure to unmarshal the feed content as a trojan.Targets variable
+var ErrTargets = errors.New("failed to unmarshal targets in recovery feed content")
+
 // RecoveryHook defines code to be executed upon failing to retrieve pinned chunks
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publisher string) error
 
@@ -109,9 +112,9 @@ func getPinners(publisher string, handler feed.GenericHandler) (trojan.Targets, 
 	}
 
 	targets := new(trojan.Targets)
-	json.Unmarshal(content, targets)
+	err = json.Unmarshal(content, targets)
 	if err != nil {
-		return nil, err
+		return nil, ErrTargets
 	}
 
 	return *targets, nil
