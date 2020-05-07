@@ -92,17 +92,17 @@ func NewDummyHandler() *DummyHandler {
 	return d
 }
 
-// Lookup is the dummy func for DummyHandler structs
+// Lookup is the dummy func which mocks a feed handler lookup
 func (d *DummyHandler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
 	return d.cacheEntry, nil
 }
 
-// GetContent is the dummy func for DummyHandler structs
+// GetContent is the dummy which mocks a feed handler content fetch
 func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
 	return d.cacheEntry.lastKey, d.cacheEntry.data, nil
 }
 
-// SetContent sets the binary data to be returned by a dummy handler
+// SetContent sets the binary data to be returned as mock feed content
 func (d *DummyHandler) SetContent(b []byte) {
 	key := chunk.Address([]byte{1}) // dummy key
 	d.cacheEntry.lastKey = key
