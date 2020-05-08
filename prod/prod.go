@@ -46,15 +46,15 @@ var ErrFeedContent = errors.New("failed to get content for recovery feed")
 var ErrTargets = errors.New("failed to unmarshal targets in recovery feed content")
 
 // RecoveryHook defines code to be executed upon failing to retrieve pinned chunks
-type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address, publisher string) error
+type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 
 // sender is the function type for sending trojan chunks
 type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
-	return func(ctx context.Context, chunkAddress chunk.Address, publisher string) error {
-		targets, err := getPinners(publisher, handler)
+	return func(ctx context.Context, chunkAddress chunk.Address) error {
+		targets, err := getPinners(ctx, handler)
 		if err != nil {
 			return err
 		}
@@ -69,8 +69,9 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 }
 
 // getPinners returns the specific target pinners for a corresponding chunk
-func getPinners(publisher string, handler feed.GenericHandler) (trojan.Targets, error) {
+func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
 	// get feed user from publisher
+	publisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a" // TODO: Dummy for now
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
 		return nil, ErrPublisher

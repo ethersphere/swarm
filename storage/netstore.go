@@ -99,7 +99,7 @@ type NetStore struct {
 	requestGroup     singleflight.Group
 	RemoteGet        RemoteGetFunc
 	logger           log.Logger
-	recoveryCallback func(ctx context.Context, chunkAddress chunk.Address, publisher string) error // this is the callback to be executed when a chunk fails to be retrieved
+	recoveryCallback func(ctx context.Context, chunkAddress chunk.Address) error // this is the callback to be executed when a chunk fails to be retrieved
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -167,7 +167,7 @@ func (n *NetStore) Close() error {
 }
 
 // WithRecoveryCallback allows injecting a callback func on the NetStore struct
-func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress chunk.Address, publisher string) error) *NetStore {
+func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress chunk.Address) error) *NetStore {
 	n.recoveryCallback = f
 	return n
 }
@@ -201,8 +201,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					if n.recoveryCallback != nil {
-						// TODO: get actual publisher, dummy for now
-						n.recoveryCallback(ctx, ref, "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+						n.recoveryCallback(ctx, ref)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
 						return n.RemoteFetch(ctx, req, fi)
 					}

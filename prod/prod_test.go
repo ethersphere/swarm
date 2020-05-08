@@ -52,8 +52,7 @@ func TestRecoveryHook(t *testing.T) {
 	recoverFunc := NewRecoveryHook(testHook, testHandler)
 
 	testChunk := "aacca8d446af47ebcab582ca2188fa73dfa871eb0a35eda798f47d4f91a575e9"
-	testPublisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
-	if err := recoverFunc(ctx, chunk.Address([]byte(testChunk)), testPublisher); err != nil {
+	if err := recoverFunc(ctx, chunk.Address([]byte(testChunk))); err != nil {
 		t.Fatal(err)
 	}
 
