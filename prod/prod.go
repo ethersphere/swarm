@@ -30,6 +30,12 @@ import (
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
 
+// RecoveryTopicText is the string used to construct the recovery topics
+const RecoveryTopicText = "RECOVERY"
+
+// RecoveryTopic is the topic used for repairing globally pinned chunks
+var RecoveryTopic = trojan.NewTopic("RECOVERY")
+
 // ErrPublisher is returned when the publisher string cannot be decoded into bytes
 var ErrPublisher = errors.New("failed to decode publisher")
 
@@ -61,7 +67,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 		payload := chunkAddress
 
 		// TODO: returned monitor should be made use of
-		if _, err := send(ctx, targets, trojan.RecoveryTopic, payload); err != nil {
+		if _, err := send(ctx, targets, RecoveryTopic, payload); err != nil {
 			return err
 		}
 		return nil
@@ -83,7 +89,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 	addr := crypto.PubkeyToAddress(*pubKey)
 
 	// get feed topic from trojan recovery topic
-	topic, err := feed.NewTopic(trojan.RecoveryTopicText, nil)
+	topic, err := feed.NewTopic(RecoveryTopicText, nil)
 	if err != nil {
 		return nil, err
 	}
