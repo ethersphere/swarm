@@ -424,6 +424,11 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
+		log.Info("ACCESS", "type", entry.Access)
+
+		if len(entry.Publisher) != 0 {
+			ctx = context.WithValue(ctx, "publisher", entry.Publisher)
+		}
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
@@ -633,6 +638,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		entry := newManifestTrieEntry(&ManifestEntry{
 			Path:        path,
 			ContentType: contentType,
+			Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
 		}, nil)
 		entry.Hash = contentHash
 		trie.addEntry(entry, quitC)
@@ -673,6 +679,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		Mode:        0700,
 		Size:        int64(len(content)),
 		ModTime:     time.Now(),
+		Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
 	}
 
 	mw, err := a.NewManifestWriter(ctx, mkey, nil)
@@ -730,6 +737,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			Mode:        hdr.Mode,
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
+			Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
 		}
 		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
@@ -749,6 +757,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 				Mode:        hdr.Mode,
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
+				Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
 			}
 			contentKey, err = mw.AddEntry(ctx, nil, entry)
 			if err != nil {
@@ -869,6 +878,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		Mode:        0700,
 		Size:        totalSize,
 		ModTime:     time.Now(),
+		Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
 	}
 
 	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)
