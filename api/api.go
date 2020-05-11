@@ -717,7 +717,6 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 	tr := tar.NewReader(bodyReader)
 	defer bodyReader.Close()
 	var defaultPathFound bool
-	log.Info("this is it", "done", ctx.Value("Publisher"))
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
