@@ -633,10 +633,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
-	publisher, ok := ctx.Value("publisher").(string)
-	if !ok {
-		publisher = ""
-	}
+	publisher, _ := ctx.Value("publisher").(string)
 	if contentHash != "" {
 		entry := newManifestTrieEntry(&ManifestEntry{
 			Path:        path,
@@ -676,10 +673,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		path = path[1:]
 	}
 
-	publisher, ok := ctx.Value("publisher").(string)
-	if !ok {
-		publisher = ""
-	}
+	publisher, _ := ctx.Value("publisher").(string)
 	entry := &ManifestEntry{
 		Path:        filepath.Join(path, fname),
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
@@ -878,10 +872,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		return nil, "", err
 	}
 
-	publisher, ok := ctx.Value("publisher").(string)
-	if !ok {
-		publisher = ""
-	}
+	publisher, _ := ctx.Value("publisher").(string)
 	entry := &ManifestEntry{
 		Path:        filepath.Join(path, fname),
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
