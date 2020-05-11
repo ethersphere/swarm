@@ -77,7 +77,10 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
 	// get feed user from publisher
-	publisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a" // TODO: Dummy for now
+	publisher, ok := ctx.Value("publisher").(string)
+	if !ok {
+		return nil, ErrPublisher
+	}
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
 		return nil, ErrPublisher

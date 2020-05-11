@@ -38,6 +38,7 @@ import (
 // TestRecoveryHook tests that NewRecoveryHook has been properly invoked
 func TestRecoveryHook(t *testing.T) {
 	ctx := context.TODO()
+	ctx = context.WithValue(ctx, "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 
 	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
@@ -66,6 +67,7 @@ func TestRecoveryHook(t *testing.T) {
 // TestSenderCall verifies that a hook is being called correctly within the netstore
 func TestSenderCall(t *testing.T) {
 	ctx := context.TODO()
+	ctx = context.WithValue(ctx, "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 	tags := chunk.NewTags()
 	localStore := psstest.NewMockLocalStore(t, tags)
 

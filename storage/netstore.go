@@ -176,15 +176,6 @@ func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
-	// REMOVE THIS
-	publisher := ctx.Value("publisher")
-	n.logger.Info("PUBLISHER", "address", publisher)
-	// if publisher == nil {
-	// 	n.logger.Info("STACK START")
-	// 	debug.PrintStack()
-	// 	n.logger.Info("STACK FINISH")
-	// }
-	// UP TO HERE
 
 	start := time.Now()
 

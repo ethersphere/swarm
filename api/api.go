@@ -424,8 +424,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		log.Info("ACCESS", "type", entry.Access)
-
+		// TODO: obtain Publisher from cli flag if no Publisher found in Manifest
 		if len(entry.Publisher) != 0 {
 			ctx = context.WithValue(ctx, "publisher", entry.Publisher)
 		}
@@ -634,11 +633,15 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
+	publisher, ok := ctx.Value("publisher").(string)
+	if !ok {
+		publisher = ""
+	}
 	if contentHash != "" {
 		entry := newManifestTrieEntry(&ManifestEntry{
 			Path:        path,
 			ContentType: contentType,
-			Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
+			Publisher:   publisher,
 		}, nil)
 		entry.Hash = contentHash
 		trie.addEntry(entry, quitC)
@@ -673,13 +676,17 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		path = path[1:]
 	}
 
+	publisher, ok := ctx.Value("publisher").(string)
+	if !ok {
+		publisher = ""
+	}
 	entry := &ManifestEntry{
 		Path:        filepath.Join(path, fname),
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
 		Mode:        0700,
 		Size:        int64(len(content)),
 		ModTime:     time.Now(),
-		Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
+		Publisher:   publisher,
 	}
 
 	mw, err := a.NewManifestWriter(ctx, mkey, nil)
@@ -704,12 +711,13 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	return fkey, newMkey.String(), nil
 }
 
-func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter) (storage.Address, error) {
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter, publisher string) (storage.Address, error) {
 	apiUploadTarCount.Inc(1)
 	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
 	defer bodyReader.Close()
 	var defaultPathFound bool
+	log.Info("this is it", "done", ctx.Value("Publisher"))
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -737,7 +745,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			Mode:        hdr.Mode,
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
-			Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
+			Publisher:   publisher,
 		}
 		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
@@ -749,7 +757,6 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			if contentType == "" {
 				contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
 			}
-
 			entry := &ManifestEntry{
 				Hash:        contentKey.Hex(),
 				Path:        "", // default entry
@@ -757,7 +764,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 				Mode:        hdr.Mode,
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
-				Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
+				Publisher:   publisher,
 			}
 			contentKey, err = mw.AddEntry(ctx, nil, entry)
 			if err != nil {
@@ -872,13 +879,17 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		return nil, "", err
 	}
 
+	publisher, ok := ctx.Value("publisher").(string)
+	if !ok {
+		publisher = ""
+	}
 	entry := &ManifestEntry{
 		Path:        filepath.Join(path, fname),
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
 		Mode:        0700,
 		Size:        totalSize,
 		ModTime:     time.Now(),
-		Publisher:   "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
+		Publisher:   publisher,
 	}
 
 	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)

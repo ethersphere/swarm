@@ -153,6 +153,10 @@ var (
 		Name:  "stdin",
 		Usage: "reads data to be uploaded from stdin",
 	}
+	SwarmUploadPublisher = cli.StringFlag{
+		Name:  "publisher",
+		Usage: "Manually specify Publisher",
+	}
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
 		Usage: "Manually specify MIME type",
