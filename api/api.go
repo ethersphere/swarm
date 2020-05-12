@@ -424,7 +424,6 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		// TODO: obtain Publisher from cli flag if no Publisher found in Manifest
 		if len(entry.Publisher) > 0 {
 			ctx = context.WithValue(ctx, "publisher", entry.Publisher)
 		}

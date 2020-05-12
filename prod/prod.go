@@ -76,6 +76,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
+	// TODO: obtain fallback Publisher from cli flag if no Publisher found in Manifest
 	// get feed user from publisher
 	publisher, _ := ctx.Value("publisher").(string)
 	publisherBytes, err := hex.DecodeString(publisher)
