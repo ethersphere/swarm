@@ -27,12 +27,12 @@ import (
 )
 
 // arbitrary targets for tests
-var testTargets = [][]byte{
-	{57, 120},
-	{209, 156},
-	{156, 38},
-	{89, 19},
-	{22, 129}}
+var t1 = Target([]byte{57, 120})
+var t2 = Target([]byte{209, 156})
+var t3 = Target([]byte{156, 38})
+var t4 = Target([]byte{89, 19})
+var t5 = Target([]byte{22, 129})
+var testTargets = Targets([]Target{t1, t2, t3, t4, t5})
 
 // arbitrary topic for tests
 var testTopic = NewTopic("foo")
@@ -121,16 +121,15 @@ func TestWrap(t *testing.T) {
 func TestWrapFail(t *testing.T) {
 	m := newTestMessage(t)
 
-	emptyTargets := [][]byte{}
+	emptyTargets := Targets([]Target{})
 	if _, err := m.Wrap(emptyTargets); err != ErrEmptyTargets {
 		t.Fatalf("expected error when creating chunk for empty targets to be %q, but got %v", ErrEmptyTargets, err)
 	}
 
-	varLenTargets := [][]byte{
-		{34},
-		{25, 120},
-		{180, 18, 255},
-	}
+	t1 := Target([]byte{34})
+	t2 := Target([]byte{25, 120})
+	t3 := Target([]byte{180, 18, 255})
+	varLenTargets := Targets([]Target{t1, t2, t3})
 	if _, err := m.Wrap(varLenTargets); err != ErrVarLenTargets {
 		t.Fatalf("expected error when creating chunk for variable-length targets to be %q, but got %v", ErrVarLenTargets, err)
 	}

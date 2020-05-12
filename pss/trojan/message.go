@@ -40,6 +40,12 @@ type Message struct {
 	padding []byte
 }
 
+// Target is an alias for an address which can be mined to construct a trojan message
+type Target []byte
+
+// Targets is an alias for a collection of targets
+type Targets []Target
+
 // MaxPayloadSize is the maximum allowed payload size for the Message type, in bytes
 const MaxPayloadSize = 4030
 
@@ -92,7 +98,7 @@ func NewMessage(topic Topic, payload []byte) (Message, error) {
 // Wrap creates a new trojan chunk for the given targets and Message
 // a trojan chunk is a content-addressed chunk made up of span, a nonce, and a payload which contains the Message
 // the chunk address will have one of the targets as its prefix and thus will be forwarded to the neighbourhood of the recipient overlay address the target is derived from
-func (m *Message) Wrap(targets [][]byte) (chunk.Chunk, error) {
+func (m *Message) Wrap(targets Targets) (chunk.Chunk, error) {
 	if err := checkTargets(targets); err != nil {
 		return nil, err
 	}
@@ -124,7 +130,7 @@ func Unwrap(c chunk.Chunk) (*Message, error) {
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
-func checkTargets(targets [][]byte) error {
+func checkTargets(targets Targets) error {
 	if len(targets) == 0 {
 		return ErrEmptyTargets
 	}
@@ -141,7 +147,7 @@ func checkTargets(targets [][]byte) error {
 // this is done by iteratively enumerating different nonces until the BMT hash of the serialization of the trojan chunk fields results in a chunk address that has one of the targets as its prefix
 // the function returns a new chunk, with the found matching hash to be used as its address,
 // and its data set to the serialization of the trojan chunk fields which correctly hash into the matching address
-func (m *Message) toChunk(targets [][]byte, span []byte) (chunk.Chunk, error) {
+func (m *Message) toChunk(targets Targets, span []byte) (chunk.Chunk, error) {
 	// start out with random nonce
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
@@ -191,7 +197,7 @@ func hash(s []byte) ([]byte, error) {
 }
 
 // contains returns whether the given collection contains the given elem
-func contains(col [][]byte, elem []byte) bool {
+func contains(col Targets, elem []byte) bool {
 	for i := range col {
 		if bytes.Equal(elem, col[i]) {
 			return true
