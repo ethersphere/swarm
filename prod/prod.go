@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
@@ -101,7 +102,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 		User:  addr,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 
 	_, err = handler.Lookup(ctx, query)
@@ -110,7 +111,6 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 		return nil, ErrFeedLookup
 	}
 
-	// TODO: how do we handle time-outs here?
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
 		return nil, ErrFeedContent
