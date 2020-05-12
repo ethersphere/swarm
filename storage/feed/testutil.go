@@ -32,15 +32,12 @@ const (
 	testDbDirName = "feeds"
 )
 
+// TestHandler is a struct which embeds a Handler to be used for testing purposes
 type TestHandler struct {
 	*Handler
 }
 
-func (t *TestHandler) Close() {
-	t.chunkStore.Close()
-}
-
-// NewTestHandler creates Handler object to be used for testing purposes.
+// NewTestHandler creates a new TestHandler struct and returns an error otherwise
 func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
 	path := filepath.Join(datadir, testDbDirName)
 	fh := NewHandler(params)
@@ -60,6 +57,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	return &TestHandler{fh}, nil
 }
 
+// NewTestHandlerWithStore creates a new TestHandler with a set chunk store
 func NewTestHandlerWithStore(datadir string, db chunk.Store, params *HandlerParams) (*TestHandler, error) {
 	fh := NewHandler(params)
 	return newTestHandlerWithStore(fh, datadir, db, params)
@@ -74,4 +72,39 @@ func newTestHandlerWithStore(fh *Handler, datadir string, db chunk.Store, params
 	}
 	fh.SetStore(netStore)
 	return &TestHandler{fh}, nil
+}
+
+// Close closes the chunk store field for the test handler receiver
+func (t *TestHandler) Close() {
+	t.chunkStore.Close()
+}
+
+// DummyHandler is a test handler with dummy Lookup and GetContent funcs
+type DummyHandler struct {
+	cacheEntry *cacheEntry // mock content for feed retrieval
+}
+
+// NewDummyHandler initializes and returns a DummyHandler struct
+func NewDummyHandler() *DummyHandler {
+	d := &DummyHandler{}
+	d.cacheEntry = &cacheEntry{}
+
+	return d
+}
+
+// Lookup is the dummy func which mocks a feed handler lookup
+func (d *DummyHandler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
+	return d.cacheEntry, nil
+}
+
+// GetContent is the dummy which mocks a feed handler content fetch
+func (d *DummyHandler) GetContent(feed *Feed) (storage.Address, []byte, error) {
+	return d.cacheEntry.lastKey, d.cacheEntry.data, nil
+}
+
+// SetContent sets the binary data to be returned as mock feed content
+func (d *DummyHandler) SetContent(b []byte) {
+	key := chunk.Address([]byte{1}) // dummy key
+	d.cacheEntry.lastKey = key
+	d.cacheEntry.data = b
 }
