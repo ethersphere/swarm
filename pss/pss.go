@@ -56,7 +56,7 @@ type Handler func(trojan.Message)
 // Send constructs a padded message with topic and payload,
 // wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
 // stores this in localstore for push-sync to pick up and deliver
-func (p *Pss) Send(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*Monitor, error) {
+func (p *Pss) Send(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*Monitor, error) {
 	metrics.GetOrRegisterCounter("trojanchunk/send", nil).Inc(1)
 	//construct Trojan Chunk
 	m, err := trojan.NewMessage(topic, payload)

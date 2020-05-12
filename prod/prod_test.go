@@ -40,7 +40,7 @@ func TestRecoveryHook(t *testing.T) {
 	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
 	// setup the hook
-	testHook := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+	testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
 		hookWasCalled = true
 		return nil, nil
 	}
@@ -81,7 +81,7 @@ func TestSenderCall(t *testing.T) {
 	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
 	// setup recovery hook
-	testHook := func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+	testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
 		hookWasCalled = true
 		return nil, nil
 	}

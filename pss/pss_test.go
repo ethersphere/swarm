@@ -38,12 +38,8 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	localStore := psstest.NewMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
-	targets := [][]byte{
-		{57, 120},
-		{209, 156},
-		{156, 38},
-		{89, 19},
-		{22, 129}}
+	target := trojan.Target([]byte{1}) // arbitrary test target
+	targets := trojan.Targets([]trojan.Target{target})
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
@@ -77,7 +73,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//create a stored chunk artificially
+	// create a stored chunk artificially
 	m, err := trojan.NewMessage(topic, payload)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +93,6 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	if !reflect.DeepEqual(tc, storedChunk) {
 		t.Fatalf("store chunk does not match sent chunk")
 	}
-
 }
 
 // TestPssMonitor creates a trojan chunk
@@ -112,12 +107,8 @@ func TestPssMonitor(t *testing.T) {
 
 	localStore := psstest.NewMockLocalStore(t, tags)
 
-	targets := [][]byte{
-		{57, 120},
-		{209, 156},
-		{156, 38},
-		{89, 19},
-		{22, 129}}
+	target := trojan.Target([]byte{1}) // arbitrary test target
+	targets := trojan.Targets([]trojan.Target{target})
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY")
 
@@ -151,7 +142,6 @@ func TestPssMonitor(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 // TestRegister verifies that handler funcs are able to be registered correctly in pss
@@ -218,8 +208,9 @@ func TestDeliver(t *testing.T) {
 		t.Fatal(err)
 	}
 	// test chunk
-	targets := [][]byte{{255}}
-	c, err := msg.Wrap(targets)
+	target := trojan.Target([]byte{1}) // arbitrary test target
+	targets := trojan.Targets([]trojan.Target{target})
+	chunk, err := msg.Wrap(targets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +235,4 @@ func TestDeliver(t *testing.T) {
 	if tt != msg.Topic {
 		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
 	}
-
 }
-
-// TODO: later test could be a simulation test for 2 nodes, localstore + netstore

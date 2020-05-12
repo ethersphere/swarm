@@ -28,7 +28,7 @@ import (
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 
 // sender is the function call for sending trojan chunks
-type sender func(ctx context.Context, targets [][]byte, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
+type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender) RecoveryHook {
@@ -50,12 +50,11 @@ func NewRecoveryHook(send sender) RecoveryHook {
 
 // TODO: refactor this method to implement feed of target pinners
 // getPinners returns the specific target pinners for a corresponding chunk address
-func getPinners(chunkAddress chunk.Address) ([][]byte, error) {
-	//this should get the feed and return correct target of pinners
-	return [][]byte{
-		{57, 120},
-		{209, 156},
-		{156, 38},
-		{89, 19},
-		{22, 129}}, nil
+func getPinners(chunkAddress chunk.Address) (trojan.Targets, error) {
+
+	// TODO: dummy targets for now
+	t1 := trojan.Target([]byte{57, 120})
+	t2 := trojan.Target([]byte{209, 156})
+	t3 := trojan.Target([]byte{156, 38})
+	return trojan.Targets([]trojan.Target{t1, t2, t3}), nil
 }

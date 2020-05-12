@@ -31,6 +31,13 @@ import (
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
 
+// GenericHandler is an interface which specifies funcs any feeds handler should use
+type GenericHandler interface {
+	Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
+	GetContent(feed *Feed) (storage.Address, []byte, error)
+}
+
+// Handler is the struct to be used as the API for feeds
 type Handler struct {
 	chunkStore *storage.NetStore
 	HashSize   int
