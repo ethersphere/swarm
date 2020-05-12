@@ -468,8 +468,8 @@ func (s *Server) handleTarUpload(r *http.Request, mw *api.ManifestWriter) (stora
 	log.Debug("handle.tar.upload", "ruid", GetRUID(r.Context()), "tag", sctx.GetTag(r.Context()))
 
 	defaultPath := r.URL.Query().Get("defaultpath")
-	publisher := ""
-	if len(r.Header["Publisher"]) != 0 {
+	var publisher string
+	if len(r.Header["Publisher"]) > 0 {
 		publisher = r.Header["Publisher"][0]
 	}
 
