@@ -41,7 +41,7 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	target := trojan.Target([]byte{1}) // arbitrary test target
 	targets := trojan.Targets([]trojan.Target{target})
 	payload := []byte("RECOVERY CHUNK")
-	topic := trojan.NewTopic("RECOVERY")
+	topic := trojan.NewTopic("RECOVERY TOPIC")
 
 	// call Send to store trojan chunk in localstore
 	if _, err = pss.Send(ctx, targets, topic, payload); err != nil {
@@ -110,7 +110,7 @@ func TestPssMonitor(t *testing.T) {
 	target := trojan.Target([]byte{1}) // arbitrary test target
 	targets := trojan.Targets([]trojan.Target{target})
 	payload := []byte("RECOVERY CHUNK")
-	topic := trojan.NewTopic("RECOVERY")
+	topic := trojan.NewTopic("RECOVERY TOPIC")
 
 	var monitor *Monitor
 

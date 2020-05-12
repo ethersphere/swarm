@@ -99,7 +99,7 @@ type NetStore struct {
 	requestGroup     singleflight.Group
 	RemoteGet        RemoteGetFunc
 	logger           log.Logger
-	recoveryCallback func(ctx context.Context, chunkAddress chunk.Address) error // this is the function callback when a chunk failed to be retrieved
+	recoveryCallback func(ctx context.Context, chunkAddress chunk.Address) error // this is the callback to be executed when a chunk fails to be retrieved
 }
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
@@ -176,6 +176,7 @@ func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
+
 	start := time.Now()
 
 	ref := req.Addr
