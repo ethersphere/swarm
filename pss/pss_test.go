@@ -38,7 +38,8 @@ func TestTrojanChunkRetrieval(t *testing.T) {
 	localStore := psstest.NewMockLocalStore(t, tags)
 	pss := NewPss(localStore, tags)
 
-	targets := trojan.Targets([]trojan.Target{[]byte{1}}) // arbitrary test targets
+	target := trojan.Target([]byte{1}) // arbitrary test target
+	targets := trojan.Targets([]trojan.Target{target})
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY TOPIC")
 
@@ -106,7 +107,8 @@ func TestPssMonitor(t *testing.T) {
 
 	localStore := psstest.NewMockLocalStore(t, tags)
 
-	targets := trojan.Targets([]trojan.Target{[]byte{1}}) // arbitrary test targets
+	target := trojan.Target([]byte{1}) // arbitrary test target
+	targets := trojan.Targets([]trojan.Target{target})
 	payload := []byte("RECOVERY CHUNK")
 	topic := trojan.NewTopic("RECOVERY TOPIC")
 
@@ -206,7 +208,8 @@ func TestDeliver(t *testing.T) {
 		t.Fatal(err)
 	}
 	// test chunk
-	targets := trojan.Targets([]trojan.Target{[]byte{1}}) // arbitrary test targets
+	target := trojan.Target([]byte{1}) // arbitrary test target
+	targets := trojan.Targets([]trojan.Target{target})
 	chunk, err := msg.Wrap(targets)
 	if err != nil {
 		t.Fatal(err)

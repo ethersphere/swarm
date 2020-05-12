@@ -54,7 +54,7 @@ var ErrTargets = errors.New("failed to unmarshal targets in recovery feed conten
 // RecoveryHook defines code to be executed upon failing to retrieve pinned chunks
 type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 
-// sender is the function type for sending trojan chunks
+// sender is the function call for sending trojan chunks
 type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
