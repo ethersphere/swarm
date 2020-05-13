@@ -283,7 +283,7 @@ type Validator interface {
 // with validators check.
 type ValidatorStore struct {
 	Store
-	deliverCallback func(Chunk) // callback hook used to validate chunk
+	deliverCallback func(Chunk) // callback func to be invoked for validated chunks
 	validators      []Validator
 }
 

@@ -292,8 +292,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			chAddr := m.Payload
 			lstore.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
 		}
-		self.pss.Register(trojan.NewTopic("RECOVERY"), repairFunc)
-		recoverFunc := prod.NewRecoveryHook(self.pss.Send)
+		self.pss.Register(prod.RecoveryTopic, repairFunc)
+		recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler)
 		self.netStore.WithRecoveryCallback(recoverFunc)
 	}
 

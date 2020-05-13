@@ -48,5 +48,3 @@ func NewMockLocalStore(t *testing.T, tags *chunk.Tags) *localstore.DB {
 
 	return localStore
 }
-
-// TODO: later test could be a simulation test for 2 nodes, localstore + netstore

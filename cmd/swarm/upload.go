@@ -48,7 +48,7 @@ var (
 		Name:               "up",
 		Usage:              "uploads a file or directory to swarm using the HTTP API",
 		ArgsUsage:          "<file>",
-		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmProgressFlag, SwarmVerboseFlag},
+		Flags:              []cli.Flag{SwarmEncryptedFlag, SwarmPinFlag, SwarmProgressFlag, SwarmVerboseFlag, SwarmUploadPublisher},
 		Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 	}
 
@@ -73,6 +73,7 @@ func upload(ctx *cli.Context) {
 		defaultPath     = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 		fromStdin       = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 		mimeType        = ctx.GlobalString(SwarmUploadMimeType.Name)
+		publisher       = ctx.String(SwarmUploadPublisher.Name)
 		verbose         = ctx.Bool(SwarmVerboseFlag.Name)
 		client          = swarm.NewClient(bzzapi)
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
@@ -160,7 +161,7 @@ func upload(ctx *cli.Context) {
 					defaultPath = strings.TrimPrefix(absDefaultPath, absFile)
 				}
 			}
-			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin, anon)
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt, toPin, anon, publisher)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -172,7 +173,7 @@ func upload(ctx *cli.Context) {
 			if mimeType != "" {
 				f.ContentType = mimeType
 			}
-			return client.Upload(f, "", toEncrypt, toPin, anon)
+			return client.Upload(f, "", toEncrypt, toPin, anon, publisher)
 		}
 	}
 	start := time.Now()

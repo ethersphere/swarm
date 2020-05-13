@@ -125,7 +125,7 @@ func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) string {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest, toEncrypt, toPin, true)
+		hash, err := client.Upload(file, manifest, toEncrypt, toPin, true, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,7 +221,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	// upload the directory
 	client := NewClient(srv.URL)
 	defaultPath := testDirFiles[0]
-	hash, err := client.UploadDirectory(dir, defaultPath, "", false, false, true)
+	hash, err := client.UploadDirectory(dir, defaultPath, "", false, false, true, "")
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -289,7 +289,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "", toEncrypt, false, true)
+	hash, err := client.UploadDirectory(dir, "", "", toEncrypt, false, true, "")
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -475,7 +475,7 @@ func TestClientBzzWithFeed(t *testing.T) {
 	}
 
 	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
-	manifestAddressHex, err := swarmClient.Upload(f, "", false, false, true)
+	manifestAddressHex, err := swarmClient.Upload(f, "", false, false, true, "")
 	if err != nil {
 		t.Fatalf("Error creating manifest: %s", err)
 	}

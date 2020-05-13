@@ -19,6 +19,7 @@ package prod
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -31,11 +32,12 @@ import (
 	psstest "github.com/ethersphere/swarm/pss/testing"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
 )
 
 // TestRecoveryHook tests that NewRecoveryHook has been properly invoked
 func TestRecoveryHook(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 
 	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
@@ -44,11 +46,15 @@ func TestRecoveryHook(t *testing.T) {
 		hookWasCalled = true
 		return nil, nil
 	}
+	testHandler := newTestRecoveryFeedHandler(t)
 
 	// setup recovery hook with testHook
-	recoverFunc := NewRecoveryHook(testHook)
+	recoverFunc := NewRecoveryHook(testHook, testHandler)
 
-	recoverFunc(ctx, chunk.ZeroAddr)
+	testChunk := "aacca8d446af47ebcab582ca2188fa73dfa871eb0a35eda798f47d4f91a575e9"
+	if err := recoverFunc(ctx, chunk.Address([]byte(testChunk))); err != nil {
+		t.Fatal(err)
+	}
 
 	// verify the hook has been called correctly
 	if hookWasCalled != true {
@@ -59,7 +65,7 @@ func TestRecoveryHook(t *testing.T) {
 
 // TestSenderCall verifies that a hook is being called correctly within the netstore
 func TestSenderCall(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 	tags := chunk.NewTags()
 	localStore := psstest.NewMockLocalStore(t, tags)
 
@@ -85,8 +91,9 @@ func TestSenderCall(t *testing.T) {
 		hookWasCalled = true
 		return nil, nil
 	}
+	testHandler := newTestRecoveryFeedHandler(t)
 
-	recoverFunc := NewRecoveryHook(testHook)
+	recoverFunc := NewRecoveryHook(testHook, testHandler)
 	netStore.WithRecoveryCallback(recoverFunc)
 
 	c := ctest.GenerateTestRandomChunk()
@@ -111,4 +118,24 @@ func TestSenderCall(t *testing.T) {
 		}
 	}
 
+}
+
+// newTestRecoveryFeedHandler returns a DummyHandler with binary content which can be correctly unmarshalled
+func newTestRecoveryFeedHandler(t *testing.T) *feed.DummyHandler {
+	h := feed.NewDummyHandler()
+
+	// test targets
+	t1 := trojan.Target([]byte{57, 120})
+	t2 := trojan.Target([]byte{209, 156})
+	t3 := trojan.Target([]byte{156, 38})
+	targets := trojan.Targets([]trojan.Target{t1, t2, t3})
+
+	// marshal into bytes and set as mock feed content
+	b, err := json.Marshal(targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetContent(b)
+
+	return h
 }
