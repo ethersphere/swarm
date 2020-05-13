@@ -223,6 +223,10 @@ var (
 		Name:  "user",
 		Usage: "Indicates the user who updates the feed",
 	}
+	SwarmRecoveryPublisherFlag = cli.StringFlag{
+		Name:  "recovery-publisher",
+		Usage: "Indicates the publisher for a fallback feed to be used for globally-pinned content repair",
+	}
 	SwarmGlobalStoreAPIFlag = cli.StringFlag{
 		Name:   "globalstore-api",
 		Usage:  "URL of the Global Store API provider (only for testing)",
