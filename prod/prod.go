@@ -31,11 +31,11 @@ import (
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 )
 
-// RecoveryTopicText is the string used to construct the recovery topics
+// RecoveryTopicText is the string used to construct the recovery topic
 const RecoveryTopicText = "RECOVERY"
 
 // RecoveryTopic is the topic used for repairing globally pinned chunks
-var RecoveryTopic = trojan.NewTopic("RECOVERY")
+var RecoveryTopic = trojan.NewTopic(RecoveryTopicText)
 
 // ErrPublisher is returned when the publisher string cannot be decoded into bytes
 var ErrPublisher = errors.New("failed to decode publisher")
