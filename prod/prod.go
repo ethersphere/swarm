@@ -93,20 +93,22 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 		content, err = getRecoveryFeedContent(ctx, handler, topic, user)
 	}
 
-	// if no fallback publisher is available, fail at this point
-	if err != nil && fallbackPublisher == "" {
-		return nil, err
-	} else {
-		// create fallback topic
-		hash, ok := ctx.Value("hash").(string) // TODO: is this the root hash?
-		topic, err := feed.NewTopic(RecoveryTopicText+"_"+hash, nil)
-		if err != nil {
+	// if there is an error and no fallback publisher is available, fail at this point
+	if err != nil {
+		if fallbackPublisher == "" {
 			return nil, err
 		}
+		// get feed topic from trojan recovery topic plus hash
+		hash, ok := ctx.Value("hash").(string) // TODO: is this the correct hash?
 		if !ok {
 			return nil, errors.New("cannot extract root hash from manifest")
 		}
-		user, err := publisherToAddress(fallbackPublisher)
+		topic, err = feed.NewTopic(RecoveryTopicText+"_"+hash, nil)
+		if err != nil {
+			return nil, err
+		}
+		// get feed user from fallback publisher
+		user, err = publisherToAddress(fallbackPublisher)
 		content, err = getRecoveryFeedContent(ctx, handler, topic, user)
 		if err != nil {
 			return nil, err
