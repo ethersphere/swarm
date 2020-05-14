@@ -279,7 +279,6 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if ctx.GlobalIsSet(SwarmRecoveryPublisherFlag.Name) {
 		currentConfig.RecoveryPublisher = ctx.GlobalString(SwarmRecoveryPublisherFlag.Name)
 	}
-
 	return currentConfig
 }
 
