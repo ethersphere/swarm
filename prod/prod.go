@@ -124,3 +124,11 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 
 	return *targets, nil
 }
+
+// NewRepairHandler creates a repair function to re-upload globally pinned chunks to the network with the given store
+func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
+	return func(m trojan.Message) {
+		chAddr := m.Payload
+		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
+	}
+}
