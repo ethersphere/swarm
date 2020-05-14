@@ -78,47 +78,39 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, fallbackPublisher
 
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublisher string) (trojan.Targets, error) {
-	// TODO: obtain fallback Publisher from cli flag if no Publisher found in Manifest
-	// get feed user from publisher
-	publisher, _ := ctx.Value("publisher").(string)
-	publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return nil, ErrPublisher
-	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
-	if err != nil {
-		return nil, ErrPubKey
-	}
-	addr := crypto.PubkeyToAddress(*pubKey)
-
 	// get feed topic from trojan recovery topic
 	topic, err := feed.NewTopic(RecoveryTopicText, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var content []byte
-	content, err = getRecoveryFeedContent(ctx, handler, topic, addr)
-	if err != nil {
-		// try fallback publisher
+	var content []byte // var for feed content
+
+	// get feed user from publisher
+	publisher, _ := ctx.Value("publisher").(string)
+	user, err := publisherToAddress(publisher)
+	if err == nil {
+		content, err = getRecoveryFeedContent(ctx, handler, topic, user)
+	}
+
+	// if no fallback publisher is available, fail at this point
+	if err != nil && fallbackPublisher == "" {
+		return nil, err
+	} else {
+		// create fallback topic
 		hash, ok := ctx.Value("hash").(string) // TODO: is this the root hash?
-		if !ok {
-			return nil, errors.New("cannot extract root hash from manifest")
-		}
 		topic, err := feed.NewTopic(RecoveryTopicText+"_"+hash, nil)
 		if err != nil {
 			return nil, err
 		}
-		publisherBytes, err := hex.DecodeString(fallbackPublisher)
-		if err != nil {
-			return nil, ErrPublisher
+		if !ok {
+			return nil, errors.New("cannot extract root hash from manifest")
 		}
-		pubKey, err := crypto.DecompressPubkey(publisherBytes)
+		user, err := publisherToAddress(fallbackPublisher)
+		content, err = getRecoveryFeedContent(ctx, handler, topic, user)
 		if err != nil {
-			return nil, ErrPubKey
+			return nil, err
 		}
-		addr := crypto.PubkeyToAddress(*pubKey)
-		content, err = getRecoveryFeedContent(ctx, handler, topic, addr)
 	}
 
 	// extract targets from feed content
@@ -128,6 +120,18 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 	}
 
 	return *targets, nil
+}
+
+func publisherToAddress(publisher string) (common.Address, error) {
+	publisherBytes, err := hex.DecodeString(publisher)
+	if err != nil {
+		return common.Address{}, ErrPublisher
+	}
+	pubKey, err := crypto.DecompressPubkey(publisherBytes)
+	if err != nil {
+		return common.Address{}, ErrPubKey
+	}
+	return crypto.PubkeyToAddress(*pubKey), nil
 }
 
 func getRecoveryFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed.Topic, user common.Address) ([]byte, error) {
