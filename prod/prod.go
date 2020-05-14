@@ -59,9 +59,9 @@ type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
-func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
+func NewRecoveryHook(send sender, handler feed.GenericHandler, fallbackPublisher string) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
-		targets, err := getPinners(ctx, handler)
+		targets, err := getPinners(ctx, handler, fallbackPublisher)
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 }
 
 // getPinners returns the specific target pinners for a corresponding chunk
-func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
+func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublisher string) (trojan.Targets, error) {
 	// TODO: obtain fallback Publisher from cli flag if no Publisher found in Manifest
 	// get feed user from publisher
 	publisher, _ := ctx.Value("publisher").(string)

@@ -47,9 +47,10 @@ func TestRecoveryHook(t *testing.T) {
 		return nil, nil
 	}
 	testHandler := newTestRecoveryFeedHandler(t)
+	testFallbackPublisher := ""
 
 	// setup recovery hook with testHook
-	recoverFunc := NewRecoveryHook(testHook, testHandler)
+	recoverFunc := NewRecoveryHook(testHook, testHandler, testFallbackPublisher)
 
 	testChunk := "aacca8d446af47ebcab582ca2188fa73dfa871eb0a35eda798f47d4f91a575e9"
 	if err := recoverFunc(ctx, chunk.Address([]byte(testChunk))); err != nil {
@@ -92,8 +93,9 @@ func TestSenderCall(t *testing.T) {
 		return nil, nil
 	}
 	testHandler := newTestRecoveryFeedHandler(t)
+	testFallbackPublisher := ""
 
-	recoverFunc := NewRecoveryHook(testHook, testHandler)
+	recoverFunc := NewRecoveryHook(testHook, testHandler, testFallbackPublisher)
 	netStore.WithRecoveryCallback(recoverFunc)
 
 	c := ctest.GenerateTestRandomChunk()
