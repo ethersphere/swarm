@@ -50,6 +50,9 @@ var ErrFeedLookup = errors.New("failed to look up recovery feed")
 // ErrFeedContent is returned when there is a failure to retrieve content from the recovery feed
 var ErrFeedContent = errors.New("failed to get content for recovery feed")
 
+// ErrContextHash is returned when a hash value cannot be extracted from the context
+var ErrContextHash = errors.New("failed to extract hash from context")
+
 // ErrTargets is returned when there is a failure to unmarshal the feed content as a trojan.Targets variable
 var ErrTargets = errors.New("failed to unmarshal targets in recovery feed content")
 
@@ -76,16 +79,15 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, fallbackPublisher
 	}
 }
 
-// getPinners returns the specific target pinners for a corresponding chunk
+// getPinners returns the specific target pinners for a corresponding chunk by consulting recovery feeds
 func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublisher string) (trojan.Targets, error) {
+	var content []byte // var for feed content
+
 	// get feed topic from trojan recovery topic
 	topic, err := feed.NewTopic(RecoveryTopicText, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	var content []byte // var for feed content
-
 	// get feed user from publisher
 	publisher, _ := ctx.Value("publisher").(string)
 	user, err := publisherToAddress(publisher)
@@ -101,7 +103,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 		// get feed topic from trojan recovery topic plus hash
 		hash, ok := ctx.Value("hash").(string) // TODO: is this the correct hash?
 		if !ok {
-			return nil, errors.New("cannot extract root hash from manifest")
+			return nil, ErrContextHash
 		}
 		topic, err = feed.NewTopic(RecoveryTopicText+"_"+hash, nil)
 		if err != nil {
