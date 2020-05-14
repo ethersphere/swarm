@@ -23,6 +23,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss"
@@ -96,16 +97,49 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 		return nil, err
 	}
 
-	// read feed
+	var content []byte
+	content, err = getRecoveryFeedContent(ctx, handler, topic, addr)
+	if err != nil {
+		// try fallback publisher
+		hash, ok := ctx.Value("hash").(string) // TODO: is this the root hash?
+		if !ok {
+			return nil, errors.New("cannot extract root hash from manifest")
+		}
+		topic, err := feed.NewTopic(RecoveryTopicText+"_"+hash, nil)
+		if err != nil {
+			return nil, err
+		}
+		publisherBytes, err := hex.DecodeString(fallbackPublisher)
+		if err != nil {
+			return nil, ErrPublisher
+		}
+		pubKey, err := crypto.DecompressPubkey(publisherBytes)
+		if err != nil {
+			return nil, ErrPubKey
+		}
+		addr := crypto.PubkeyToAddress(*pubKey)
+		content, err = getRecoveryFeedContent(ctx, handler, topic, addr)
+	}
+
+	// extract targets from feed content
+	targets := new(trojan.Targets)
+	if err := json.Unmarshal(content, targets); err != nil {
+		return nil, ErrTargets
+	}
+
+	return *targets, nil
+}
+
+func getRecoveryFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed.Topic, user common.Address) ([]byte, error) {
 	fd := feed.Feed{
 		Topic: topic,
-		User:  addr,
+		User:  user,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
 	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 
-	_, err = handler.Lookup(ctx, query)
+	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
 		return nil, ErrFeedLookup
@@ -116,11 +150,5 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 		return nil, ErrFeedContent
 	}
 
-	// extract targets from feed content
-	targets := new(trojan.Targets)
-	if err := json.Unmarshal(content, targets); err != nil {
-		return nil, ErrTargets
-	}
-
-	return *targets, nil
+	return content, nil
 }
