@@ -103,7 +103,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 		if fallbackPublisher == "" {
 			return nil, err
 		}
-		// query feed using prod recovery topic, hash and fallback publisher
+		// query feed using recovery topic + hash and fallback publisher
 		hash, ok := ctx.Value("hash").(string) // TODO: is this the correct hash?
 		if !ok {
 			return nil, ErrContextHash
