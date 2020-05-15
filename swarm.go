@@ -290,7 +290,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	// add recovery callback for content repair
-	recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler, "")
+	recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler, self.config.RecoveryPublisher)
 	self.netStore.WithRecoveryCallback(recoverFunc)
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
