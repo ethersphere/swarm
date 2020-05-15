@@ -210,7 +210,7 @@ func TestDeliver(t *testing.T) {
 	// test chunk
 	target := trojan.Target([]byte{1}) // arbitrary test target
 	targets := trojan.Targets([]trojan.Target{target})
-	chunk, err := msg.Wrap(targets)
+	c, err := msg.Wrap(targets)
 	if err != nil {
 		t.Fatal(err)
 	}

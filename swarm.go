@@ -18,7 +18,6 @@ package swarm
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -52,7 +51,6 @@ import (
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/prod"
 	"github.com/ethersphere/swarm/pss"
-	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/pushsync"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
@@ -285,17 +283,16 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.pss = pss.NewPss(localStore, self.tags)
 
 	if self.config.GlobalPinner {
+		// add callback to inspect valid chunks for trojan messages
 		lstore.WithDeliverCallback(self.pss.NewDeliverFunc(lstore, *cav))
-		// repairFunc takes care of re-uploading a globally pinned chunk to the network
-		// TODO: move this anonymous function into the prod package
-		repairFunc := func(m trojan.Message) {
-			chAddr := m.Payload
-			lstore.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
-		}
-		self.pss.Register(prod.RecoveryTopic, repairFunc)
-		recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler)
-		self.netStore.WithRecoveryCallback(recoverFunc)
+		// register function for chunk repair upon receiving a trojan message
+		repairHandler := prod.NewRepairHandler(lstore)
+		self.pss.Register(prod.RecoveryTopic, repairHandler)
 	}
+
+	// add recovery callback for content repair
+	recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler)
+	self.netStore.WithRecoveryCallback(recoverFunc)
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
 
