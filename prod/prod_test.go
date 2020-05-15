@@ -67,23 +67,7 @@ func TestRecoveryHook(t *testing.T) {
 // TestSenderCall verifies that a hook is being called correctly within the netstore
 func TestSenderCall(t *testing.T) {
 	ctx := context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
-	tags := chunk.NewTags()
-	localStore := psstest.NewMockLocalStore(t, tags)
-
-	lstore := chunk.NewValidatorStore(
-		localStore,
-		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
-	)
-
-	baseKey := make([]byte, 32)
-	_, err := rand.Read(baseKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	baseAddress := network.NewBzzAddr(baseKey, baseKey)
-	// setup netstore
-	netStore := storage.NewNetStore(lstore, baseAddress)
+	netStore, baseAddress := newTestNetStoreAndAddress(t)
 
 	hookWasCalled := false // test variable to check hook func are correctly retrieved
 
@@ -119,7 +103,32 @@ func TestSenderCall(t *testing.T) {
 			t.Fatalf("no hook was called")
 		}
 	}
+}
 
+func TestFallbackPublisher(t *testing.T) {
+	ctx := context.TODO() // start out with empty context
+	netStore, baseAddress := newTestNetStoreAndAddress(t)
+	_, _, _ = ctx, netStore, baseAddress
+}
+
+func newTestNetStoreAndAddress(t *testing.T) (*storage.NetStore, *network.BzzAddr) {
+	tags := chunk.NewTags()
+	localStore := psstest.NewMockLocalStore(t, tags)
+
+	lstore := chunk.NewValidatorStore(
+		localStore,
+		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
+	)
+
+	baseKey := make([]byte, 32)
+	_, err := rand.Read(baseKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	baseAddress := network.NewBzzAddr(baseKey, baseKey)
+	netStore := storage.NewNetStore(lstore, baseAddress)
+	return netStore, baseAddress
 }
 
 // newTestRecoveryFeedHandler returns a DummyHandler with binary content which can be correctly unmarshalled
