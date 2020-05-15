@@ -89,14 +89,9 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 
 // getPinners returns the specific target pinners for a corresponding chunk by consulting recovery feeds
 func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublisher string) (trojan.Targets, error) {
-	var feedContent []byte
-	var err error
-
 	// query feed using recovery topic and publisher if present
-	publisher, ok := ctx.Value("publisher").(string)
-	if ok {
-		feedContent, err = queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
-	}
+	publisher, _ := ctx.Value("publisher").(string)
+	feedContent, err := queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
 
 	// if there is an error and no fallback publisher is available, fail at this point
 	if err != nil {
