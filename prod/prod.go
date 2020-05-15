@@ -79,20 +79,23 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, fallbackPublisher
 	}
 }
 
+// NewRepairHandler creates a repair function to re-upload globally pinned chunks to the network with the given store
+func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
+	return func(m trojan.Message) {
+		chAddr := m.Payload
+		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
+	}
+}
+
 // getPinners returns the specific target pinners for a corresponding chunk by consulting recovery feeds
 func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublisher string) (trojan.Targets, error) {
-	var content []byte // var for feed content
+	var feedContent []byte
+	var err error
 
-	// get feed topic from trojan recovery topic
-	topic, err := feed.NewTopic(RecoveryTopicText, nil)
-	if err != nil {
-		return nil, err
-	}
-	// get feed user from publisher
-	publisher, _ := ctx.Value("publisher").(string)
-	user, err := publisherToAddress(publisher)
-	if err == nil {
-		content, err = getRecoveryFeedContent(ctx, handler, topic, user)
+	// query feed using recovery topic and publisher if present
+	publisher, ok := ctx.Value("publisher").(string)
+	if ok {
+		feedContent, err = queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
 	}
 
 	// if there is an error and no fallback publisher is available, fail at this point
@@ -100,18 +103,12 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 		if fallbackPublisher == "" {
 			return nil, err
 		}
-		// get feed topic from trojan recovery topic plus hash
+		// query feed using prod recovery topic, hash and fallback publisher
 		hash, ok := ctx.Value("hash").(string) // TODO: is this the correct hash?
 		if !ok {
 			return nil, ErrContextHash
 		}
-		topic, err = feed.NewTopic(RecoveryTopicText+"_"+hash, nil)
-		if err != nil {
-			return nil, err
-		}
-		// get feed user from fallback publisher
-		user, err = publisherToAddress(fallbackPublisher)
-		content, err = getRecoveryFeedContent(ctx, handler, topic, user)
+		feedContent, err = queryRecoveryFeed(ctx, RecoveryTopicText+"_"+hash, fallbackPublisher, handler)
 		if err != nil {
 			return nil, err
 		}
@@ -119,26 +116,40 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 
 	// extract targets from feed content
 	targets := new(trojan.Targets)
-	if err := json.Unmarshal(content, targets); err != nil {
+	if err := json.Unmarshal(feedContent, targets); err != nil {
 		return nil, ErrTargets
 	}
 
 	return *targets, nil
 }
 
-func publisherToAddress(publisher string) (common.Address, error) {
-	publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return common.Address{}, ErrPublisher
+func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, handler feed.GenericHandler) ([]byte, error) {
+	var content []byte
+	topic, user, err := getFeedTopicAndUser(topicText, publisher)
+	if err == nil {
+		content, err = getFeedContent(ctx, handler, topic, user)
 	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
 	if err != nil {
-		return common.Address{}, ErrPubKey
+		return nil, err
 	}
-	return crypto.PubkeyToAddress(*pubKey), nil
+	return content, err
 }
 
-func getRecoveryFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed.Topic, user common.Address) ([]byte, error) {
+func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common.Address, error) {
+	// get feed topic from topic text
+	topic, err := feed.NewTopic(topicText, nil)
+	if err != nil {
+		return feed.Topic{}, common.Address{}, err
+	}
+	// get feed user from publisher
+	user, err := publisherToAddress(publisher)
+	if err != nil {
+		return feed.Topic{}, common.Address{}, err
+	}
+	return topic, user, nil
+}
+
+func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed.Topic, user common.Address) ([]byte, error) {
 	fd := feed.Feed{
 		Topic: topic,
 		User:  user,
@@ -161,10 +172,14 @@ func getRecoveryFeedContent(ctx context.Context, handler feed.GenericHandler, to
 	return content, nil
 }
 
-// NewRepairHandler creates a repair function to re-upload globally pinned chunks to the network with the given store
-func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
-	return func(m trojan.Message) {
-		chAddr := m.Payload
-		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
+func publisherToAddress(publisher string) (common.Address, error) {
+	publisherBytes, err := hex.DecodeString(publisher)
+	if err != nil {
+		return common.Address{}, ErrPublisher
 	}
+	pubKey, err := crypto.DecompressPubkey(publisherBytes)
+	if err != nil {
+		return common.Address{}, ErrPubKey
+	}
+	return crypto.PubkeyToAddress(*pubKey), nil
 }
