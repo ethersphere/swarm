@@ -28,7 +28,6 @@ require (
 	github.com/googleapis/gnostic v0.0.0-20190624222214-25d8b0b66985 // indirect
 	github.com/gorilla/mux v1.7.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.3
-	github.com/influxdata/influxdb v0.0.0-20180221223340-01288bdb0883
 	github.com/json-iterator/go v1.1.7 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
