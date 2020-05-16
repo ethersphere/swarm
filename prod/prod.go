@@ -99,7 +99,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 			return nil, err
 		}
 		// query feed using recovery topic + hash and fallback publisher
-		hash, ok := ctx.Value("hash").(string) // TODO: is this the correct hash?
+		hash, ok := ctx.Value("hash").(string)
 		if !ok {
 			return nil, ErrContextHash
 		}

@@ -62,10 +62,11 @@ func TestRecoveryHook(t *testing.T) {
 
 // RecoveryHookTestCase is a struct used as test cases for the TestRecoveryHookCalls func
 type RecoveryHookTestCase struct {
-	name           string
-	ctx            context.Context
-	feedsHandler   feed.GenericHandler
-	expectsFailure bool
+	name              string
+	ctx               context.Context
+	fallbackPublisher string
+	feedsHandler      feed.GenericHandler
+	expectsFailure    bool
 }
 
 // TestRecoveryHookCalls verifies that recovery hooks are being called as expected when net store attempts to get a chunk
@@ -75,36 +76,52 @@ func TestRecoveryHookCalls(t *testing.T) {
 	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
 
-	// test cases variables
-	dummyContext := context.Background() // has no publisher
+	// test contexts
+	dummyContext := context.Background()
 	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	hashContext := context.WithValue(context.Background(), "hash", "0xfea11223344") // used for fallback publisher feed topic construction
+
+	dummyFallbackPublisher := "" // emulates the a non-set fallback publisher
+	fallbackPublisher := "02e6f8d5e28faaa899744972bb847b6eb805a160494690c9ee7197ae9f619181db"
+
 	dummyHandler := feed.NewDummyHandler() // returns empty content for feed
 	feedsHandler := newTestRecoveryFeedsHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
-			name:           "no publisher, no feed content",
-			ctx:            dummyContext,
-			feedsHandler:   dummyHandler,
-			expectsFailure: true,
+			name:              "no publisher, no fallback publisher, no feed content",
+			ctx:               dummyContext,
+			fallbackPublisher: dummyFallbackPublisher,
+			feedsHandler:      dummyHandler,
+			expectsFailure:    true,
 		},
 		{
-			name:           "publisher set, no feed content",
-			ctx:            publisherContext,
-			feedsHandler:   dummyHandler,
-			expectsFailure: true,
+			name:              "publisher set, no fallback publisher, no feed content",
+			ctx:               publisherContext,
+			fallbackPublisher: dummyFallbackPublisher,
+			feedsHandler:      dummyHandler,
+			expectsFailure:    true,
 		},
 		{
-			name:           "feed content set, no publisher",
-			ctx:            dummyContext,
-			feedsHandler:   feedsHandler,
-			expectsFailure: true,
+			name:              "feed content set, no publisher, no fallback publisher",
+			ctx:               dummyContext,
+			fallbackPublisher: dummyFallbackPublisher,
+			feedsHandler:      feedsHandler,
+			expectsFailure:    true,
 		},
 		{
-			name:           "publisher and feed content set",
-			ctx:            publisherContext,
-			feedsHandler:   feedsHandler,
-			expectsFailure: false,
+			name:              "publisher and feed content set, no fallback publisher",
+			ctx:               publisherContext,
+			fallbackPublisher: dummyFallbackPublisher,
+			feedsHandler:      feedsHandler,
+			expectsFailure:    false,
+		},
+		{
+			name:              "fallback publisher and feed content set, no publisher",
+			ctx:               hashContext,
+			fallbackPublisher: fallbackPublisher,
+			feedsHandler:      feedsHandler,
+			expectsFailure:    false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -115,7 +132,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 				hookWasCalled <- true
 				return nil, nil
 			}
-			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler, "")
+			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler, tc.fallbackPublisher)
 
 			// set hook in net store
 			netStore.WithRecoveryCallback(recoverFunc)
