@@ -63,9 +63,9 @@ func TestRecoveryHook(t *testing.T) {
 }
 
 type RecoveryHookTestCase struct {
-	name    string
-	ctx     context.Context
-	success bool
+	name           string
+	ctx            context.Context
+	expectsFailure bool
 }
 
 // TestRecoveryHookCalls verifies that a hook calls are being called as expected
@@ -78,22 +78,21 @@ func TestRecoveryHookCalls(t *testing.T) {
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
-			name:    "publisher set",
-			ctx:     context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
-			success: true,
+			name:           "publisher set",
+			ctx:            context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
+			expectsFailure: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// test channel to check hook func is correctly invoked
-			hookWasCalled := make(chan bool, 1)
+			hookWasCalled := make(chan bool, 1) // channel to check if hook is called
 
 			// setup recovery hook
 			testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
 				hookWasCalled <- true
 				return nil, nil
 			}
-
 			recoverFunc := NewRecoveryHook(testHook, feedsHandler)
+
 			// set hook in net store
 			netStore.WithRecoveryCallback(recoverFunc)
 
@@ -103,13 +102,13 @@ func TestRecoveryHookCalls(t *testing.T) {
 			// waits until the callback is called or the test times out
 			select {
 			case <-hookWasCalled:
-				if tc.success {
+				if !tc.expectsFailure {
 					return
 				} else {
 					t.Fatal("recovery hook was unexpectedly call")
 				}
 			case <-time.After(1 * time.Second):
-				if !tc.success {
+				if tc.expectsFailure {
 					return
 				} else {
 					t.Fatal("recovery hook was not called when expected")
