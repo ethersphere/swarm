@@ -27,7 +27,6 @@ import (
 	ctest "github.com/ethersphere/swarm/chunk/testing"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
-	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/pss"
 	psstest "github.com/ethersphere/swarm/pss/testing"
 	"github.com/ethersphere/swarm/pss/trojan"
@@ -63,9 +62,53 @@ func TestRecoveryHook(t *testing.T) {
 
 }
 
-// TestSenderCall verifies that a hook is being called correctly within the netstore
-func TestSenderCall(t *testing.T) {
-	ctx := context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+type RecoveryHookTestCase struct {
+	name string
+	ctx  context.Context
+}
+
+// TestRecoveryHookCalls verifies that a hook calls are being called as expected
+func TestRecoveryHookCalls(t *testing.T) {
+	// generate test chunk and store
+	netStore := newTestNetStore(t)
+	c := ctest.GenerateTestRandomChunk()
+	ref := c.Address()
+
+	for _, tc := range []RecoveryHookTestCase{
+		{
+			name: "publisher set",
+			ctx:  context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// test channel to check hook func is correctly invoked
+			hookWasCalled := make(chan bool, 1)
+
+			// setup recovery hook
+			testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+				hookWasCalled <- true
+				return nil, nil
+			}
+			testHandler := newTestRecoveryFeedHandler(t)
+			recoverFunc := NewRecoveryHook(testHook, testHandler)
+			// set hook in net store
+			netStore.WithRecoveryCallback(recoverFunc)
+
+			// fetch test chunk
+			netStore.Get(tc.ctx, chunk.ModeGetRequest, storage.NewRequest(ref))
+
+			// waits until the callback is called or the test times out
+			select {
+			case <-hookWasCalled:
+				return
+			case <-time.After(1 * time.Second):
+				t.Fatalf("no hook was called")
+			}
+		})
+	}
+}
+
+func newTestNetStore(t *testing.T) *storage.NetStore {
 	tags := chunk.NewTags()
 	localStore := psstest.NewMockLocalStore(t, tags)
 
@@ -81,43 +124,11 @@ func TestSenderCall(t *testing.T) {
 	}
 
 	baseAddress := network.NewBzzAddr(baseKey, baseKey)
-	// setup netstore
 	netStore := storage.NewNetStore(lstore, baseAddress)
-
-	hookWasCalled := false // test variable to check hook func are correctly retrieved
-
-	// setup recovery hook
-	testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
-		hookWasCalled = true
-		return nil, nil
-	}
-	testHandler := newTestRecoveryFeedHandler(t)
-
-	recoverFunc := NewRecoveryHook(testHook, testHandler)
-	netStore.WithRecoveryCallback(recoverFunc)
-
-	c := ctest.GenerateTestRandomChunk()
-	ref := c.Address()
-
 	kad := network.NewKademlia(baseAddress.Over(), network.NewKadParams())
 	ret := retrieval.New(kad, netStore, baseAddress, nil)
 	netStore.RemoteGet = ret.RequestFromPeers
-
-	netStore.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(ref))
-
-	for {
-		// waits until the callback is called or timeout
-		select {
-		default:
-			if hookWasCalled {
-				return
-			}
-		// TODO: change the timeout
-		case <-time.After(timeouts.FetcherGlobalTimeout):
-			t.Fatalf("no hook was called")
-		}
-	}
-
+	return netStore
 }
 
 // newTestRecoveryFeedHandler returns a DummyHandler with binary content which can be correctly unmarshalled
