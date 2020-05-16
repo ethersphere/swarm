@@ -64,16 +64,17 @@ func TestRecoveryHook(t *testing.T) {
 
 }
 
-// TestSenderCall verifies that a hook is being called correctly within the netstore
-func TestSenderCall(t *testing.T) {
+// TestRecoveryHookCalls verifies that a hook calls are being called as expected
+func TestRecoveryHookCalls(t *testing.T) {
 	ctx := context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 	netStore, baseAddress := newTestNetStoreAndAddress(t)
 
-	hookWasCalled := false // test variable to check hook func are correctly retrieved
+	// test variable to check hook func are correctly retrieved
+	hookWasCalled := make(chan bool, 1)
 
 	// setup recovery hook
 	testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
-		hookWasCalled = true
+		hookWasCalled <- true
 		return nil, nil
 	}
 	testHandler := newTestRecoveryFeedHandler(t)
@@ -91,18 +92,14 @@ func TestSenderCall(t *testing.T) {
 
 	netStore.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(ref))
 
-	for {
-		// waits until the callback is called or timeout
-		select {
-		default:
-			if hookWasCalled {
-				return
-			}
-		// TODO: change the timeout
-		case <-time.After(timeouts.FetcherGlobalTimeout):
-			t.Fatalf("no hook was called")
-		}
+	// waits until the callback is called or timeout
+	select {
+	case <-hookWasCalled:
+		return
+	case <-time.After(timeouts.FetcherGlobalTimeout):
+		t.Fatalf("no hook was called")
 	}
+
 }
 
 func TestFallbackPublisher(t *testing.T) {
