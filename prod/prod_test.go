@@ -63,27 +63,45 @@ func TestRecoveryHook(t *testing.T) {
 type RecoveryHookTestCase struct {
 	name           string
 	ctx            context.Context
+	feedsHandler   feed.GenericHandler
 	expectsFailure bool
 }
 
 // TestRecoveryHookCalls verifies that a hook calls are being called as expected when net store is called
 func TestRecoveryHookCalls(t *testing.T) {
-	// generate test chunk, store and feed handler
+	// generate test chunk, store, ctx and feed handlers
 	netStore := newTestNetStore(t)
 	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
+	dummyContext := context.Background()
+	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	dummyHandler := feed.NewDummyHandler()
 	feedsHandler := newTestRecoveryFeedHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
-			name:           "publisher set",
-			ctx:            context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
-			expectsFailure: false,
+			name:           "no publisher, no feeds handler",
+			ctx:            dummyContext,
+			feedsHandler:   dummyHandler,
+			expectsFailure: true,
 		},
 		{
-			name:           "no publisher",
-			ctx:            context.Background(),
+			name:           "publisher set, no feeds handler",
+			ctx:            publisherContext,
+			feedsHandler:   dummyHandler,
 			expectsFailure: true,
+		},
+		{
+			name:           "feeds handler set, no publisher",
+			ctx:            dummyContext,
+			feedsHandler:   feedsHandler,
+			expectsFailure: true,
+		},
+		{
+			name:           "publisher and feeds handler set",
+			ctx:            publisherContext,
+			feedsHandler:   feedsHandler,
+			expectsFailure: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -94,7 +112,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 				hookWasCalled <- true
 				return nil, nil
 			}
-			recoverFunc := NewRecoveryHook(testHook, feedsHandler)
+			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler)
 
 			// set hook in net store
 			netStore.WithRecoveryCallback(recoverFunc)
@@ -110,7 +128,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 				} else {
 					t.Fatal("recovery hook was unexpectedly call")
 				}
-			case <-time.After(1 * time.Second):
+			case <-time.After(100 * time.Millisecond):
 				if tc.expectsFailure {
 					return
 				} else {
