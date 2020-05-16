@@ -246,7 +246,7 @@ var (
 	}
 	SwarmRecoveryPublisherFlag = cli.StringFlag{
 		Name:  "recovery-publisher",
-		Usage: "Indicates the publisher for a fallback feed to be used for globally-pinned content repair",
+		Usage: "Use this flag to indicate the publisher for a fallback feed to be used for globally-pinned content repair",
 	}
 	SwarmProgressFlag = cli.BoolFlag{
 		Name:  "progress",
