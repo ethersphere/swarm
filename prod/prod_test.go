@@ -67,38 +67,40 @@ type RecoveryHookTestCase struct {
 	expectsFailure bool
 }
 
-// TestRecoveryHookCalls verifies that a hook calls are being called as expected when net store is called
+// TestRecoveryHookCalls verifies that recovery hook are being called as expected when net store attempts to get a chunk
 func TestRecoveryHookCalls(t *testing.T) {
-	// generate test chunk, store, ctx and feed handlers
+	// generate test chunk and store
 	netStore := newTestNetStore(t)
 	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
-	dummyContext := context.Background()
+
+	// test cases variables
+	dummyContext := context.Background() // has no publisher
 	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
-	dummyHandler := feed.NewDummyHandler()
+	dummyHandler := feed.NewDummyHandler() // returns empty content for feed
 	feedsHandler := newTestRecoveryFeedsHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
-			name:           "no publisher, no feeds handler",
+			name:           "no publisher, no feed content",
 			ctx:            dummyContext,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
 		{
-			name:           "publisher set, no feeds handler",
+			name:           "publisher set, no feed content",
 			ctx:            publisherContext,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
 		{
-			name:           "feeds handler set, no publisher",
+			name:           "feed content set, no publisher",
 			ctx:            dummyContext,
 			feedsHandler:   feedsHandler,
 			expectsFailure: true,
 		},
 		{
-			name:           "publisher and feeds handler set",
+			name:           "publisher and feed content set",
 			ctx:            publisherContext,
 			feedsHandler:   feedsHandler,
 			expectsFailure: false,
@@ -139,7 +141,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 	}
 }
 
-// newTestNetStore creates a testing store with a set RemoteGet func
+// newTestNetStore creates a test store with a set RemoteGet func
 func newTestNetStore(t *testing.T) *storage.NetStore {
 	// generate address
 	baseKey := make([]byte, 32)
