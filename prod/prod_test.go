@@ -62,6 +62,7 @@ func TestRecoveryHook(t *testing.T) {
 
 }
 
+// RecoveryHookTestCase is a struct used as test cases for the TestRecoveryHookCalls func
 type RecoveryHookTestCase struct {
 	name           string
 	ctx            context.Context
@@ -82,6 +83,11 @@ func TestRecoveryHookCalls(t *testing.T) {
 			ctx:            context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
 			expectsFailure: false,
 		},
+		{
+			name:           "no publisher",
+			ctx:            context.TODO(),
+			expectsFailure: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hookWasCalled := make(chan bool, 1) // channel to check if hook is called
@@ -99,7 +105,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 			// fetch test chunk
 			netStore.Get(tc.ctx, chunk.ModeGetRequest, storage.NewRequest(ref))
 
-			// waits until the callback is called or the test times out
+			// checks whether the callback is invoked or the test case times out
 			select {
 			case <-hookWasCalled:
 				if !tc.expectsFailure {
@@ -118,25 +124,30 @@ func TestRecoveryHookCalls(t *testing.T) {
 	}
 }
 
+// newTestNetStore creates a testing store with a set RemoteGet func
 func newTestNetStore(t *testing.T) *storage.NetStore {
-	tags := chunk.NewTags()
-	localStore := psstest.NewMockLocalStore(t, tags)
-
-	lstore := chunk.NewValidatorStore(
-		localStore,
-		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
-	)
-
+	// generate address
 	baseKey := make([]byte, 32)
 	_, err := rand.Read(baseKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	baseAddress := network.NewBzzAddr(baseKey, baseKey)
+
+	// generate net store
+	tags := chunk.NewTags()
+	localStore := psstest.NewMockLocalStore(t, tags)
+	lstore := chunk.NewValidatorStore(
+		localStore,
+		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
+	)
 	netStore := storage.NewNetStore(lstore, baseAddress)
+
+	// generate retrieval
 	kad := network.NewKademlia(baseAddress.Over(), network.NewKadParams())
 	ret := retrieval.New(kad, netStore, baseAddress, nil)
+
+	// set retrieval on netstore and return
 	netStore.RemoteGet = ret.RequestFromPeers
 	return netStore
 }
