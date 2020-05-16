@@ -118,6 +118,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, fallbackPublis
 	return *targets, nil
 }
 
+// queryRecoveryFeeds attempts to create a feed topic and user, and query a feed based on these to fetch its content
 func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, handler feed.GenericHandler) ([]byte, error) {
 	var content []byte
 	topic, user, err := getFeedTopicAndUser(topicText, publisher)
@@ -130,6 +131,7 @@ func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, 
 	return content, err
 }
 
+// getFeedTopicAndUser creates a feed topic and user from the given topic text and publisher strings
 func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common.Address, error) {
 	// get feed topic from topic text
 	topic, err := feed.NewTopic(topicText, nil)
@@ -144,6 +146,7 @@ func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common
 	return topic, user, nil
 }
 
+// getFeedContent creates a feed with the given topic and user, and attempts to fetch its content using the given handler
 func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed.Topic, user common.Address) ([]byte, error) {
 	fd := feed.Feed{
 		Topic: topic,
@@ -167,6 +170,7 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 	return content, nil
 }
 
+// publisherToAddress derives an address based on the given publisher string
 func publisherToAddress(publisher string) (common.Address, error) {
 	publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
