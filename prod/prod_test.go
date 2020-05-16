@@ -39,7 +39,7 @@ func TestRecoveryHook(t *testing.T) {
 	// test variables needed to be correctly set for any recovery hook to reach the sender func
 	chunkAddr := ctest.GenerateTestRandomChunk().Address()
 	ctx := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
-	handler := newTestRecoveryFeedHandler(t)
+	handler := newTestRecoveryFeedsHandler(t)
 
 	// setup the sender
 	hookWasCalled := false // test variable to check if hook is called
@@ -76,7 +76,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 	dummyContext := context.Background()
 	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 	dummyHandler := feed.NewDummyHandler()
-	feedsHandler := newTestRecoveryFeedHandler(t)
+	feedsHandler := newTestRecoveryFeedsHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
@@ -167,8 +167,8 @@ func newTestNetStore(t *testing.T) *storage.NetStore {
 	return netStore
 }
 
-// newTestRecoveryFeedHandler returns a DummyHandler with binary content which can be correctly unmarshalled
-func newTestRecoveryFeedHandler(t *testing.T) *feed.DummyHandler {
+// newTestRecoveryFeedsHandler returns a DummyHandler with binary content which can be correctly unmarshalled
+func newTestRecoveryFeedsHandler(t *testing.T) *feed.DummyHandler {
 	h := feed.NewDummyHandler()
 
 	// test targets
