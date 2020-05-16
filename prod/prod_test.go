@@ -34,32 +34,29 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 )
 
-// TestRecoveryHook tests that NewRecoveryHook has been properly invoked
+// TestRecoveryHook tests that a recovery hook can be created and called
 func TestRecoveryHook(t *testing.T) {
-	ctx := context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	// test variables needed to be correctly set for any recovery hook to reach the sender func
+	chunkAddr := ctest.GenerateTestRandomChunk().Address()
+	ctx := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	handler := newTestRecoveryFeedHandler(t)
 
-	hookWasCalled := false // test variable to check hook func are correctly retrieved
-
-	// setup the hook
-	testHook := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
+	// setup the sender
+	hookWasCalled := false // test variable to check if hook is called
+	testSender := func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error) {
 		hookWasCalled = true
 		return nil, nil
 	}
-	testHandler := newTestRecoveryFeedHandler(t)
 
-	// setup recovery hook with testHook
-	recoverFunc := NewRecoveryHook(testHook, testHandler)
-
-	testChunk := "aacca8d446af47ebcab582ca2188fa73dfa871eb0a35eda798f47d4f91a575e9"
-	if err := recoverFunc(ctx, chunk.Address([]byte(testChunk))); err != nil {
+	// create recovery hook and call it
+	recoveryHook := NewRecoveryHook(testSender, handler)
+	if err := recoveryHook(ctx, chunkAddr); err != nil {
 		t.Fatal(err)
 	}
 
-	// verify the hook has been called correctly
 	if hookWasCalled != true {
-		t.Fatalf("unexpected result for prod Recover func, expected test variable to have a value of %t but is %t instead", true, hookWasCalled)
+		t.Fatalf("recovery hook was not called")
 	}
-
 }
 
 // RecoveryHookTestCase is a struct used as test cases for the TestRecoveryHookCalls func
@@ -69,7 +66,7 @@ type RecoveryHookTestCase struct {
 	expectsFailure bool
 }
 
-// TestRecoveryHookCalls verifies that a hook calls are being called as expected
+// TestRecoveryHookCalls verifies that a hook calls are being called as expected when net store is called
 func TestRecoveryHookCalls(t *testing.T) {
 	// generate test chunk, store and feed handler
 	netStore := newTestNetStore(t)
@@ -80,12 +77,12 @@ func TestRecoveryHookCalls(t *testing.T) {
 	for _, tc := range []RecoveryHookTestCase{
 		{
 			name:           "publisher set",
-			ctx:            context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
+			ctx:            context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
 			expectsFailure: false,
 		},
 		{
 			name:           "no publisher",
-			ctx:            context.TODO(),
+			ctx:            context.Background(),
 			expectsFailure: true,
 		},
 	} {
