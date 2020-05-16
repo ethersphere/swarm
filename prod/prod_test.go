@@ -79,8 +79,8 @@ func TestRecoveryHookCalls(t *testing.T) {
 	// test contexts
 	dummyContext := context.Background()
 	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
-	hashContext := context.WithValue(context.Background(), "hash", "0xfea11223344") // used for fallback publisher feed topic construction
-	publisherAndHashContext := context.WithValue(publisherContext, "hash", "0xfea11223344")
+	hashContext := context.WithValue(context.Background(), "hash", "0xfea11223344")         // used for fallback publisher feed topic construction
+	publisherAndHashContext := context.WithValue(publisherContext, "hash", "0xfea11223344") // case of context with both publisher and fallback publisher
 
 	dummyFallbackPublisher := "" // emulates the a non-set fallback publisher
 	fallbackPublisher := "02e6f8d5e28faaa899744972bb847b6eb805a160494690c9ee7197ae9f619181db"
