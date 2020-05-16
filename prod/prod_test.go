@@ -80,6 +80,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 	dummyContext := context.Background()
 	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
 	hashContext := context.WithValue(context.Background(), "hash", "0xfea11223344") // used for fallback publisher feed topic construction
+	publisherAndHashContext := context.WithValue(publisherContext, "hash", "0xfea11223344")
 
 	dummyFallbackPublisher := "" // emulates the a non-set fallback publisher
 	fallbackPublisher := "02e6f8d5e28faaa899744972bb847b6eb805a160494690c9ee7197ae9f619181db"
@@ -96,6 +97,27 @@ func TestRecoveryHookCalls(t *testing.T) {
 			expectsFailure:    true,
 		},
 		{
+			name:              "no publisher, no fallback publisher, feed content set",
+			ctx:               dummyContext,
+			fallbackPublisher: dummyFallbackPublisher,
+			feedsHandler:      feedsHandler,
+			expectsFailure:    true,
+		},
+		{
+			name:              "no publisher, fallback publisher set, no feed content",
+			ctx:               hashContext,
+			fallbackPublisher: fallbackPublisher,
+			feedsHandler:      dummyHandler,
+			expectsFailure:    true,
+		},
+		{
+			name:              "no publisher, fallback publisher set, feed content set",
+			ctx:               hashContext,
+			fallbackPublisher: fallbackPublisher,
+			feedsHandler:      feedsHandler,
+			expectsFailure:    false,
+		},
+		{
 			name:              "publisher set, no fallback publisher, no feed content",
 			ctx:               publisherContext,
 			fallbackPublisher: dummyFallbackPublisher,
@@ -103,22 +125,22 @@ func TestRecoveryHookCalls(t *testing.T) {
 			expectsFailure:    true,
 		},
 		{
-			name:              "feed content set, no publisher, no fallback publisher",
-			ctx:               dummyContext,
-			fallbackPublisher: dummyFallbackPublisher,
-			feedsHandler:      feedsHandler,
-			expectsFailure:    true,
-		},
-		{
-			name:              "publisher and feed content set, no fallback publisher",
+			name:              "publisher set, no fallback publisher, feed content set",
 			ctx:               publisherContext,
 			fallbackPublisher: dummyFallbackPublisher,
 			feedsHandler:      feedsHandler,
 			expectsFailure:    false,
 		},
 		{
-			name:              "fallback publisher and feed content set, no publisher",
-			ctx:               hashContext,
+			name:              "publisher set, fallback publisher set, no feed content",
+			ctx:               publisherAndHashContext,
+			fallbackPublisher: fallbackPublisher,
+			feedsHandler:      dummyHandler,
+			expectsFailure:    true,
+		},
+		{
+			name:              "publisher set, fallback publisher set, feed content set",
+			ctx:               publisherAndHashContext,
 			fallbackPublisher: fallbackPublisher,
 			feedsHandler:      feedsHandler,
 			expectsFailure:    false,
