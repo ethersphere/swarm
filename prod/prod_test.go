@@ -67,7 +67,7 @@ type RecoveryHookTestCase struct {
 	expectsFailure bool
 }
 
-// TestRecoveryHookCalls verifies that recovery hook are being called as expected when net store attempts to get a chunk
+// TestRecoveryHookCalls verifies that recovery hooks are being called as expected when net store attempts to get a chunk
 func TestRecoveryHookCalls(t *testing.T) {
 	// generate test chunk and store
 	netStore := newTestNetStore(t)
