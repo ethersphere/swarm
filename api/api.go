@@ -427,6 +427,8 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		if len(entry.Publisher) > 0 {
 			ctx = context.WithValue(ctx, "publisher", entry.Publisher)
 		}
+		// add hash to context for fallback recovery
+		ctx = context.WithValue(ctx, "hash", entry.Hash)
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
