@@ -63,21 +63,24 @@ func TestRecoveryHook(t *testing.T) {
 }
 
 type RecoveryHookTestCase struct {
-	name string
-	ctx  context.Context
+	name    string
+	ctx     context.Context
+	success bool
 }
 
 // TestRecoveryHookCalls verifies that a hook calls are being called as expected
 func TestRecoveryHookCalls(t *testing.T) {
-	// generate test chunk and store
+	// generate test chunk, store and feed handler
 	netStore := newTestNetStore(t)
 	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
+	feedsHandler := newTestRecoveryFeedHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
-			name: "publisher set",
-			ctx:  context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
+			name:    "publisher set",
+			ctx:     context.WithValue(context.TODO(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"),
+			success: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -89,8 +92,8 @@ func TestRecoveryHookCalls(t *testing.T) {
 				hookWasCalled <- true
 				return nil, nil
 			}
-			testHandler := newTestRecoveryFeedHandler(t)
-			recoverFunc := NewRecoveryHook(testHook, testHandler)
+
+			recoverFunc := NewRecoveryHook(testHook, feedsHandler)
 			// set hook in net store
 			netStore.WithRecoveryCallback(recoverFunc)
 
@@ -100,9 +103,17 @@ func TestRecoveryHookCalls(t *testing.T) {
 			// waits until the callback is called or the test times out
 			select {
 			case <-hookWasCalled:
-				return
+				if tc.success {
+					return
+				} else {
+					t.Fatal("recovery hook was unexpectedly call")
+				}
 			case <-time.After(1 * time.Second):
-				t.Fatalf("no hook was called")
+				if !tc.success {
+					return
+				} else {
+					t.Fatal("recovery hook was not called when expected")
+				}
 			}
 		})
 	}
