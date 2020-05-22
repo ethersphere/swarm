@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
 )
 
@@ -115,6 +116,7 @@ func (p *Pss) Deliver(c chunk.Chunk) {
 	m, _ := trojan.Unwrap(c)
 	h := p.getHandler(m.Topic)
 	if h != nil {
+		log.Debug("gp calling repair function")
 		h(*m)
 	}
 }

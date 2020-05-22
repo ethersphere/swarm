@@ -23,8 +23,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -61,9 +62,14 @@ type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
+		log.Debug("gp recovery hook triggered", "chunk", hex.EncodeToString(chunkAddress))
 		targets, err := getPinners(ctx, handler)
 		if err != nil {
+			log.Debug("gp error recovering targets", "error", err.Error())
 			return err
+		}
+		for _, t := range targets {
+			log.Debug("gp target found", "target", t)
 		}
 		payload := chunkAddress
 
@@ -80,15 +86,18 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 	// TODO: obtain fallback Publisher from cli flag if no Publisher found in Manifest
 	// get feed user from publisher
 	publisher, _ := ctx.Value("publisher").(string)
-	publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return nil, ErrPublisher
-	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
-	if err != nil {
-		return nil, ErrPubKey
-	}
-	addr := crypto.PubkeyToAddress(*pubKey)
+	log.Debug("gp getPinner", "publisher", publisher)
+	/* 	publisherBytes, err := hex.DecodeString(publisher)
+	   	if err != nil {
+	   		return nil, ErrPublisher
+	   	}
+	   	pubKey, err := crypto.DecompressPubkey(publisherBytes)
+	   	if err != nil {
+	   		return nil, ErrPubKey
+	   	}
+	   	addr := crypto.PubkeyToAddress(*pubKey) */
+	addr := common.HexToAddress(publisher)
+	log.Debug("gp getPinners", "address", addr.String())
 
 	// get feed topic from trojan recovery topic
 	topic, err := feed.NewTopic(RecoveryTopicText, nil)

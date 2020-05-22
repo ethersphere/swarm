@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethersphere/swarm/log"
 )
 
 const (
@@ -320,6 +321,7 @@ func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
 			if s.deliverCallback != nil {
+				log.Debug("gp inspecting chunk")
 				go s.deliverCallback(ch)
 			}
 			return true

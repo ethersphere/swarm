@@ -426,6 +426,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
 		if len(entry.Publisher) > 0 {
 			ctx = context.WithValue(ctx, "publisher", entry.Publisher)
+			log.Debug("gp adding publisher", "publisher", entry.Publisher)
 		}
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {

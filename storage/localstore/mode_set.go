@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -380,6 +381,7 @@ func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 // setUnpin decrements pin counter for the chunk by updating pin index.
 // Provided batch is updated.
 func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
+	metricName := "localstore/gc/exclude"
 	item := addressToItem(addr)
 
 	// Get the existing pin counter of the chunk
@@ -395,6 +397,8 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 		db.pinIndex.PutInBatch(batch, item)
 	} else {
 		db.pinIndex.DeleteInBatch(batch, item)
+		db.gcExcludeIndex.DeleteInBatch(batch, item)
+		metrics.GetOrRegisterCounter(metricName+"/excluded-count", nil).Dec(int64(1))
 	}
 
 	return nil
@@ -402,6 +406,7 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 
 // setReUpload adds a pinned chunk to the push index so that it can be re-uploaded to the network
 func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) {
+	log.Debug("gp setReUpload triggered", "chunk", hex.EncodeToString(addr))
 	item := addressToItem(addr)
 
 	// get chunk retrieval data
@@ -416,6 +421,7 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	_, err = db.pinIndex.Get(item)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
+			log.Debug("gp pinning chunk is not pinned for re-upload" )
 			return chunk.ErrNotPinned
 		}
 		return err

@@ -23,8 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	ctest "github.com/ethersphere/swarm/chunk/testing"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/pss"
@@ -187,4 +189,15 @@ func newTestRecoveryFeedsHandler(t *testing.T) *feed.DummyHandler {
 	h.SetContent(b)
 
 	return h
+}
+
+func TestPubKey(t *testing.T) {
+	// TODO REMOVE THIS PLEASE
+	pub := "04de1909c84d13508a06bb2e75bdd80382a8d308ddfce35ea6e51f47fe2e9c5a2861f8792c61d2a09308625de82afe45bbee6a2b2189aa29df8c87e299e4e19d65"
+	ecdsaPub, err := crypto.UnmarshalPubkey([]byte(pub))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubcompressed := crypto.CompressPubkey(ecdsaPub)
+	log.Debug(string(pubcompressed))
 }

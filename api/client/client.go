@@ -540,6 +540,9 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 
 	req.Header.Set("Content-Type", "application/x-tar")
 	req.Header.Set("publisher", publisher)
+	if publisher != "" {
+		log.Debug("gp getting publisher from header", "publisher", publisher)
+	}
 	if defaultPath != "" {
 		q := req.URL.Query()
 		q.Set("defaultpath", defaultPath)
