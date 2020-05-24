@@ -324,7 +324,7 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 		chunkTypes[i] = chunkType
 	}
 	exist, err = s.Store.Put(ctx, mode, chs...)
-	// if callback is defined, call it for every valid, content-addressed chunk
+	// if callback is defined, call it for every new, valid, content-addressed chunk
 	if err != nil && s.deliverCallback != nil {
 		for i, exists := range exist {
 			if !exists && chunkTypes[i] == ContentAddressed {
