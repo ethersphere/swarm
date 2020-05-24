@@ -195,11 +195,11 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (v *ContentAddressValidator) Validate(ch Chunk) bool {
+func (v *ContentAddressValidator) Validate(ch Chunk) (bool, chunk.Type) {
 	data := ch.Data()
 	if l := len(data); l < 9 || l > chunk.DefaultSize+8 {
 		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
-		return false
+		return false, chunk.Unknown
 	}
 
 	hasher := v.Hasher()
@@ -208,7 +208,7 @@ func (v *ContentAddressValidator) Validate(ch Chunk) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	return bytes.Equal(hash, ch.Address())
+	return bytes.Equal(hash, ch.Address()), chunk.ContentAddressed
 }
 
 type ChunkStore = chunk.Store

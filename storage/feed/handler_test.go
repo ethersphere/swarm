@@ -364,7 +364,8 @@ func TestValidator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !rh.Validate(chunk) {
+	valid, _ := rh.Validate(chunk)
+	if !valid {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
@@ -373,7 +374,8 @@ func TestValidator(t *testing.T) {
 	address[0] = 11
 	address[15] = 99
 
-	if rh.Validate(storage.NewChunk(address, chunk.Data())) {
+	valid, _ = rh.Validate(storage.NewChunk(address, chunk.Data()))
+	if valid {
 		t.Fatal("Expected Validate to fail with false chunk address")
 	}
 }
