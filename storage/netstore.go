@@ -202,6 +202,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					if n.recoveryCallback != nil {
+						n.logger.Debug("gp ctx callback", "ctx", ctx)
 						n.logger.Debug("gp start recovery", "ref", ref.String())
 						n.recoveryCallback(ctx, ref)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is

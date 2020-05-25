@@ -199,6 +199,8 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		defer cancel()
 
 		r := storage.NewRequest(id.Addr())
+
+		log.Debug("gp ctx lookup", "ctx", ctx)
 		ch, err := h.chunkStore.Get(ctx, chunk.ModeGetLookup, r)
 		if err != nil {
 			if err == context.DeadlineExceeded || err == storage.ErrNoSuitablePeer { // chunk not found

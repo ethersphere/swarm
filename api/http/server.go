@@ -21,6 +21,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -897,6 +898,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
+	log.Debug("gp HANDLEGETFILE begin")
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
 	_, credentials, _ := r.BasicAuth()
@@ -923,9 +925,13 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Debug("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
-
+	log.Debug("gp HandleGetFile ctx", "ctx", r.Context())
 	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
-
+	log.Debug("gp FINISH API GET", "ctx", r.Context())
+	readerCtx := reader.Context()
+	newCtx := context.WithValue(r.Context(), "publisher", readerCtx.Value("publisher"))
+	r = r.WithContext(newCtx)
+	log.Debug("gp new r context", "ctx", r.Context())
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
 	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to actual content key.

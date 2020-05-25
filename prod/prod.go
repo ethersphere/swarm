@@ -86,6 +86,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 	// TODO: obtain fallback Publisher from cli flag if no Publisher found in Manifest
 	// get feed user from publisher
 	publisher, _ := ctx.Value("publisher").(string)
+	log.Debug("gp ctx getpinners", "ctx", ctx)
 	log.Debug("gp getPinner", "publisher", publisher)
 	/* 	publisherBytes, err := hex.DecodeString(publisher)
 	   	if err != nil {
