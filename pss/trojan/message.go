@@ -229,12 +229,6 @@ func (m *Message) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary deserializes a message struct
 func (m *Message) UnmarshalBinary(data []byte) (err error) {
-	// TODO: REMOVE THIS PLEASE
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.New("error unmarshalling")
-		}
-	}()
 	copy(m.length[:], data[:2])  // first 2 bytes are length
 	copy(m.Topic[:], data[2:34]) // following 32 bytes are topic
 
