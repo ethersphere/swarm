@@ -76,6 +76,14 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, publisher string)
 	}
 }
 
+// NewRepairHandler creates a repair function to re-upload globally pinned chunks to the network with the given store
+func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
+	return func(m trojan.Message) {
+		chAddr := m.Payload
+		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
+	}
+}
+
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler, publisher string) (trojan.Targets, error) {
 	// query feed using recovery topic and publisher
@@ -91,14 +99,6 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, publisher stri
 	}
 
 	return *targets, nil
-}
-
-// NewRepairHandler creates a repair function to re-upload globally pinned chunks to the network with the given store
-func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
-	return func(m trojan.Message) {
-		chAddr := m.Payload
-		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
-	}
 }
 
 // queryRecoveryFeed attempts to create a feed topic and user, and query a feed based on these to fetch its content
