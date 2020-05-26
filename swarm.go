@@ -289,10 +289,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.pss.Register(prod.RecoveryTopic, repairHandler)
 	}
 
-	// add recovery callback for content repair
-	recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler)
-	self.netStore.WithRecoveryCallback(recoverFunc)
-
+	if self.config.RecoveryPublisher != "" {
+		// add recovery callback for content repair
+		recoverFunc := prod.NewRecoveryHook(self.pss.Send, feedsHandler, self.config.RecoveryPublisher)
+		self.netStore.WithRecoveryCallback(recoverFunc)
+	}
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)
 
 	if config.EnablePinning {

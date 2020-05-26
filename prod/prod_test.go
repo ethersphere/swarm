@@ -40,8 +40,9 @@ import (
 func TestRecoveryHook(t *testing.T) {
 	// test variables needed to be correctly set for any recovery hook to reach the sender func
 	chunkAddr := ctest.GenerateTestRandomChunk().Address()
-	ctx := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	ctx := context.Background()
 	handler := newTestRecoveryFeedsHandler(t)
+	publisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
 
 	// setup the sender
 	hookWasCalled := false // test variable to check if hook is called
@@ -51,7 +52,7 @@ func TestRecoveryHook(t *testing.T) {
 	}
 
 	// create recovery hook and call it
-	recoveryHook := NewRecoveryHook(testSender, handler)
+	recoveryHook := NewRecoveryHook(testSender, handler, publisher)
 	if err := recoveryHook(ctx, chunkAddr); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestRecoveryHook(t *testing.T) {
 // RecoveryHookTestCase is a struct used as test cases for the TestRecoveryHookCalls func
 type RecoveryHookTestCase struct {
 	name           string
-	ctx            context.Context
+	publisher      string
 	feedsHandler   feed.GenericHandler
 	expectsFailure bool
 }
@@ -77,33 +78,33 @@ func TestRecoveryHookCalls(t *testing.T) {
 	ref := c.Address()
 
 	// test cases variables
-	dummyContext := context.Background() // has no publisher
-	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	dummyPublisher := ""
+	recoveryPublisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
 	dummyHandler := feed.NewDummyHandler() // returns empty content for feed
 	feedsHandler := newTestRecoveryFeedsHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
 			name:           "no publisher, no feed content",
-			ctx:            dummyContext,
+			publisher:      dummyPublisher,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
 		{
 			name:           "publisher set, no feed content",
-			ctx:            publisherContext,
+			publisher:      recoveryPublisher,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
 		{
 			name:           "feed content set, no publisher",
-			ctx:            dummyContext,
+			publisher:      dummyPublisher,
 			feedsHandler:   feedsHandler,
 			expectsFailure: true,
 		},
 		{
 			name:           "publisher and feed content set",
-			ctx:            publisherContext,
+			publisher:      recoveryPublisher,
 			feedsHandler:   feedsHandler,
 			expectsFailure: false,
 		},
@@ -116,28 +117,26 @@ func TestRecoveryHookCalls(t *testing.T) {
 				hookWasCalled <- true
 				return nil, nil
 			}
-			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler)
+			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler, tc.publisher)
 
 			// set hook in net store
 			netStore.WithRecoveryCallback(recoverFunc)
 
 			// fetch test chunk
-			netStore.Get(tc.ctx, chunk.ModeGetRequest, storage.NewRequest(ref))
+			netStore.Get(context.Background(), chunk.ModeGetRequest, storage.NewRequest(ref))
 
 			// checks whether the callback is invoked or the test case times out
 			select {
 			case <-hookWasCalled:
 				if !tc.expectsFailure {
 					return
-				} else {
-					t.Fatal("recovery hook was unexpectedly called")
 				}
+				t.Fatal("recovery hook was unexpectedly called")
 			case <-time.After(100 * time.Millisecond):
 				if tc.expectsFailure {
 					return
-				} else {
-					t.Fatal("recovery hook was not called when expected")
 				}
+				t.Fatal("recovery hook was not called when expected")
 			}
 		})
 	}

@@ -276,6 +276,9 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if ctx.GlobalBool(SwarmGlobalPinnerFlag.Name) {
 		currentConfig.GlobalPinner = true
 	}
+	if recoveryPublisher := ctx.GlobalString(SwarmRecoveryPublisherFlag.Name); recoveryPublisher != "" {
+		currentConfig.RecoveryPublisher = recoveryPublisher
+	}
 	return currentConfig
 }
 

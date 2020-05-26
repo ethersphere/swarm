@@ -83,6 +83,7 @@ type Config struct {
 	DisableAutoConnect bool
 	EnablePinning      bool
 	GlobalPinner       bool
+	RecoveryPublisher  string
 	Cors               string
 	BzzAccount         string
 	GlobalStoreAPI     string

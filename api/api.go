@@ -424,10 +424,6 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		if len(entry.Publisher) > 0 {
-			ctx = context.WithValue(ctx, "publisher", entry.Publisher)
-			log.Debug("gp adding publisher", "publisher", entry.Publisher)
-		}
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
@@ -633,12 +629,10 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
-	publisher, _ := ctx.Value("publisher").(string)
 	if contentHash != "" {
 		entry := newManifestTrieEntry(&ManifestEntry{
 			Path:        path,
 			ContentType: contentType,
-			Publisher:   publisher,
 		}, nil)
 		entry.Hash = contentHash
 		trie.addEntry(entry, quitC)
@@ -673,14 +667,12 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		path = path[1:]
 	}
 
-	publisher, _ := ctx.Value("publisher").(string)
 	entry := &ManifestEntry{
 		Path:        filepath.Join(path, fname),
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
 		Mode:        0700,
 		Size:        int64(len(content)),
 		ModTime:     time.Now(),
-		Publisher:   publisher,
 	}
 
 	mw, err := a.NewManifestWriter(ctx, mkey, nil)
@@ -705,7 +697,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	return fkey, newMkey.String(), nil
 }
 
-func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter, publisher string) (storage.Address, error) {
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter) (storage.Address, error) {
 	apiUploadTarCount.Inc(1)
 	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
@@ -738,7 +730,6 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			Mode:        hdr.Mode,
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
-			Publisher:   publisher,
 		}
 		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
@@ -757,7 +748,6 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 				Mode:        hdr.Mode,
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
-				Publisher:   publisher,
 			}
 			contentKey, err = mw.AddEntry(ctx, nil, entry)
 			if err != nil {
@@ -872,14 +862,12 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		return nil, "", err
 	}
 
-	publisher, _ := ctx.Value("publisher").(string)
 	entry := &ManifestEntry{
 		Path:        filepath.Join(path, fname),
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
 		Mode:        0700,
 		Size:        totalSize,
 		ModTime:     time.Now(),
-		Publisher:   publisher,
 	}
 
 	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)

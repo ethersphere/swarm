@@ -153,10 +153,6 @@ var (
 		Name:  "stdin",
 		Usage: "reads data to be uploaded from stdin",
 	}
-	SwarmUploadPublisher = cli.StringFlag{
-		Name:  "publisher",
-		Usage: "Manually specify Publisher",
-	}
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
 		Usage: "Manually specify MIME type",
@@ -243,6 +239,10 @@ var (
 	SwarmGlobalPinnerFlag = cli.BoolFlag{
 		Name:  "global-pinner",
 		Usage: "Use this flag to mark the running node as a global pinner",
+	}
+	SwarmRecoveryPublisherFlag = cli.StringFlag{
+		Name:  "publisher",
+		Usage: "Content recovery feed publisher",
 	}
 	SwarmProgressFlag = cli.BoolFlag{
 		Name:  "progress",

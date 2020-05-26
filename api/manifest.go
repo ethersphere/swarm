@@ -57,7 +57,6 @@ type ManifestEntry struct {
 	Status      int          `json:"status,omitempty"`
 	Access      *AccessEntry `json:"access,omitempty"`
 	Feed        *feed.Feed   `json:"feed,omitempty"`
-	Publisher   string       `json:"publisher,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
