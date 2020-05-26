@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/timeouts"
 )
 
@@ -42,6 +41,5 @@ func NewLNetStore(store *NetStore) *LNetStore {
 func (n *LNetStore) Get(ctx context.Context, mode chunk.ModeGet, ref Address) (ch Chunk, err error) {
 	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 	defer cancel()
-	log.Debug("gp ctx lnetstore", "ctx", ctx)
 	return n.NetStore.Get(ctx, mode, NewRequest(ref))
 }

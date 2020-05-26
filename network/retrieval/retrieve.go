@@ -314,7 +314,6 @@ func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *Ret
 		Origin: p.ID(),
 	}
 
-	log.Debug("gp ctx retrieve", "ctx", ctx)
 	chunk, err := r.netStore.Get(ctx, chunk.ModeGetRequest, req)
 	if err != nil {
 		retrieveChunkFail.Inc(1)

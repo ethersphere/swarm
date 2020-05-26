@@ -21,7 +21,6 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -920,14 +919,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
 
-	log.Debug("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
-	log.Debug("gp HandleGetFile ctx", "ctx", r.Context())
 	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
-	log.Debug("gp FINISH API GET", "ctx", r.Context())
-	readerCtx := reader.Context()
-	newCtx := context.WithValue(r.Context(), "publisher", readerCtx.Value("publisher"))
-	r = r.WithContext(newCtx)
-	log.Debug("gp new r context", "ctx", r.Context())
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
 	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to actual content key.
