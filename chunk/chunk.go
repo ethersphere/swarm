@@ -248,6 +248,15 @@ const (
 	ModeSetReUpload
 )
 
+// Type describes a kind of chunk, whether it is content-addressed or other
+type Type int
+
+const (
+	Unknown Type = iota
+	ContentAddressed
+	Other
+)
+
 // Descriptor holds information required for Pull syncing. This struct
 // is provided by subscribing to pull index.
 type Descriptor struct {
@@ -276,7 +285,7 @@ type Store interface {
 
 // Validator validates a chunk.
 type Validator interface {
-	Validate(ch Chunk) bool
+	Validate(ch Chunk) (bool, Type)
 }
 
 // ValidatorStore encapsulates Store by decorating the Put method
@@ -305,25 +314,39 @@ func (s *ValidatorStore) WithDeliverCallback(f func(Chunk)) *ValidatorStore {
 // Put overrides Store put method with validators check. For Put to succeed,
 // all provided chunks must be validated with true by one of the validators.
 func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (exist []bool, err error) {
-	for _, ch := range chs {
-		if !s.validate(ch) {
+	chunkTypes := make([]Type, len(chs))
+	for i, ch := range chs {
+		// register all valid chunk types, fail otherwise
+		valid, chunkType := s.validate(ch)
+		if !valid {
 			return nil, ErrChunkInvalid
 		}
+		chunkTypes[i] = chunkType
 	}
-	return s.Store.Put(ctx, mode, chs...)
+	exist, err = s.Store.Put(ctx, mode, chs...)
+	if err != nil {
+		return nil, err
+	}
+	// if callback is defined, call it for every new, valid, content-addressed chunk
+	if s.deliverCallback != nil {
+		for i, exists := range exist {
+			if !exists && chunkTypes[i] == ContentAddressed {
+				go s.deliverCallback(chs[i])
+			}
+		}
+	}
+	return exist, nil
 }
 
 // validate returns true if one of the validators
 // return true. If all validators return false,
 // the chunk is considered invalid.
-func (s *ValidatorStore) validate(ch Chunk) bool {
+func (s *ValidatorStore) validate(ch Chunk) (bool, Type) {
 	for _, v := range s.validators {
-		if v.Validate(ch) {
-			if s.deliverCallback != nil {
-				go s.deliverCallback(ch)
-			}
-			return true
+		valid, chunkType := v.Validate(ch)
+		if valid {
+			return true, chunkType
 		}
 	}
-	return false
+	return false, Unknown
 }
