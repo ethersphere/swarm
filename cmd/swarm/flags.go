@@ -155,7 +155,7 @@ var (
 	}
 	SwarmUploadPublisher = cli.StringFlag{
 		Name:  "publisher",
-		Usage: "Manually specify Publisher",
+		Usage: "Content recovery feed publisher",
 	}
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
