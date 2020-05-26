@@ -103,15 +103,11 @@ func getPinners(ctx context.Context, handler feed.GenericHandler, publisher stri
 
 // queryRecoveryFeed attempts to create a feed topic and user, and query a feed based on these to fetch its content
 func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, handler feed.GenericHandler) ([]byte, error) {
-	var content []byte
 	topic, user, err := getFeedTopicAndUser(topicText, publisher)
-	if err == nil {
-		content, err = getFeedContent(ctx, handler, topic, user)
-	}
 	if err != nil {
 		return nil, err
 	}
-	return content, err
+	return getFeedContent(ctx, handler, topic, user)
 }
 
 // getFeedTopicAndUser creates a feed topic and user from the given topic text and publisher strings
