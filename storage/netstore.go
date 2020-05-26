@@ -199,6 +199,12 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			// here - retrieve request
 			fi, _, ok := n.GetOrCreateFetcher(ctx, ref, "request")
 			if ok {
+				// TODO: REMOVE THIS
+				if hex.EncodeToString(ref) == "73ed9143ad9deea15c9b64c3e46101f7eb0296e62c0ccd22fb30e51bf5be3f49" {
+					n.logger.Debug("gp forced recovery")
+					n.recoveryCallback(ctx, ref)
+				}
+				///
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					if n.recoveryCallback != nil {

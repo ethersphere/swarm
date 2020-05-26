@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
@@ -115,6 +114,7 @@ func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, 
 	if err != nil {
 		return nil, err
 	}
+	log.Debug("gp queryRecoveryFeed", "user", user, "topic", topic)
 	return getFeedContent(ctx, handler, topic, user)
 }
 
@@ -159,7 +159,7 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 
 // publisherToAddress derives an address based on the given publisher string
 func publisherToAddress(publisher string) (common.Address, error) {
-	publisherBytes, err := hex.DecodeString(publisher)
+	/* publisherBytes, err := hex.DecodeString(publisher)
 	if err != nil {
 		return common.Address{}, ErrPublisher
 	}
@@ -167,5 +167,6 @@ func publisherToAddress(publisher string) (common.Address, error) {
 	if err != nil {
 		return common.Address{}, ErrPubKey
 	}
-	return crypto.PubkeyToAddress(*pubKey), nil
+	return crypto.PubkeyToAddress(*pubKey), nil */
+	return common.HexToAddress(publisher), nil
 }
