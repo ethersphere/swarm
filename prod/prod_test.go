@@ -77,7 +77,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 
 	// test cases variables
 	dummyPublisher := ""
-	publisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
+	recoveryPublisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
 	dummyHandler := feed.NewDummyHandler() // returns empty content for feed
 	feedsHandler := newTestRecoveryFeedsHandler(t)
 
@@ -90,7 +90,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 		},
 		{
 			name:           "publisher set, no feed content",
-			publisher:      publisher,
+			publisher:      recoveryPublisher,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
@@ -102,7 +102,7 @@ func TestRecoveryHookCalls(t *testing.T) {
 		},
 		{
 			name:           "publisher and feed content set",
-			publisher:      publisher,
+			publisher:      recoveryPublisher,
 			feedsHandler:   feedsHandler,
 			expectsFailure: false,
 		},

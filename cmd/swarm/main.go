@@ -200,6 +200,7 @@ func init() {
 		SwarmNetworkIdFlag,
 		SwarmEnablePinningFlag,
 		SwarmGlobalPinnerFlag,
+		SwarmRecoveryPublisherFlag,
 		// upload flags
 		SwarmApiFlag,
 		SwarmRecursiveFlag,
