@@ -23,6 +23,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss"
@@ -77,47 +78,17 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, publisher string)
 
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler, publisher string) (trojan.Targets, error) {
-	// TODO: obtain fallback Publisher from cli flag
-	// get feed user from publisher
-	publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return nil, ErrPublisher
-	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
-	if err != nil {
-		return nil, ErrPubKey
-	}
-	addr := crypto.PubkeyToAddress(*pubKey)
+	// query feed using recovery topic and publisher if present
+	feedContent, err := queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
 
-	// get feed topic from trojan recovery topic
-	topic, err := feed.NewTopic(RecoveryTopicText, nil)
+	// if there is an error and no fallback publisher is available, fail at this point
 	if err != nil {
 		return nil, err
 	}
 
-	// read feed
-	fd := feed.Feed{
-		Topic: topic,
-		User:  addr,
-	}
-	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer cancel()
-
-	_, err = handler.Lookup(ctx, query)
-	// feed should still be queried even if there are no updates
-	if err != nil && err.Error() != "no feed updates found" {
-		return nil, ErrFeedLookup
-	}
-
-	_, content, err := handler.GetContent(&fd)
-	if err != nil {
-		return nil, ErrFeedContent
-	}
-
 	// extract targets from feed content
 	targets := new(trojan.Targets)
-	if err := json.Unmarshal(content, targets); err != nil {
+	if err := json.Unmarshal(feedContent, targets); err != nil {
 		return nil, ErrTargets
 	}
 
@@ -130,4 +101,69 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 		chAddr := m.Payload
 		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
 	}
+}
+
+// queryRecoveryFeed attempts to create a feed topic and user, and query a feed based on these to fetch its content
+func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, handler feed.GenericHandler) ([]byte, error) {
+	var content []byte
+	topic, user, err := getFeedTopicAndUser(topicText, publisher)
+	if err == nil {
+		content, err = getFeedContent(ctx, handler, topic, user)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return content, err
+}
+
+// getFeedTopicAndUser creates a feed topic and user from the given topic text and publisher strings
+func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common.Address, error) {
+	// get feed topic from topic text
+	topic, err := feed.NewTopic(topicText, nil)
+	if err != nil {
+		return feed.Topic{}, common.Address{}, err
+	}
+	// get feed user from publisher
+	user, err := publisherToAddress(publisher)
+	if err != nil {
+		return feed.Topic{}, common.Address{}, err
+	}
+	return topic, user, nil
+}
+
+// getFeedContent creates a feed with the given topic and user, and attempts to fetch its content using the given handler
+func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed.Topic, user common.Address) ([]byte, error) {
+	fd := feed.Feed{
+		Topic: topic,
+		User:  user,
+	}
+	query := feed.NewQueryLatest(&fd, lookup.NoClue)
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	_, err := handler.Lookup(ctx, query)
+	// feed should still be queried even if there are no updates
+	if err != nil && err.Error() != "no feed updates found" {
+		return nil, ErrFeedLookup
+	}
+
+	_, content, err := handler.GetContent(&fd)
+	if err != nil {
+		return nil, ErrFeedContent
+	}
+
+	return content, nil
+}
+
+// publisherToAddress derives an address based on the given publisher string
+func publisherToAddress(publisher string) (common.Address, error) {
+	publisherBytes, err := hex.DecodeString(publisher)
+	if err != nil {
+		return common.Address{}, ErrPublisher
+	}
+	pubKey, err := crypto.DecompressPubkey(publisherBytes)
+	if err != nil {
+		return common.Address{}, ErrPubKey
+	}
+	return crypto.PubkeyToAddress(*pubKey), nil
 }
