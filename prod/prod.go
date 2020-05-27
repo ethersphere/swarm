@@ -63,20 +63,29 @@ type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic
 func NewRecoveryHook(send sender, handler feed.GenericHandler, publisher string) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
 		log.Debug("gp recovery hook triggered", "chunk", hex.EncodeToString(chunkAddress))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer func() {
+			log.Debug("gp canceling context", "chunk", hex.EncodeToString(chunkAddress))
+			cancel()
+		}()
+
 		targets, err := getPinners(ctx, handler, publisher)
 		if err != nil {
-			log.Debug("gp error recovering targets", "error", err.Error())
+			log.Debug("gp error recovering targets", "error", err.Error(), "chunk", hex.EncodeToString(chunkAddress))
 			return err
 		}
 		for _, t := range targets {
-			log.Debug("gp target found", "target", t)
+			log.Debug("gp target found", "target", t, "chunk", hex.EncodeToString(chunkAddress))
 		}
 		payload := chunkAddress
 
 		// TODO: returned monitor should be made use of
 		if _, err := send(ctx, targets, RecoveryTopic, payload); err != nil {
+			log.Debug("gp send err", "err", err.Error(), "chunk", hex.EncodeToString(chunkAddress))
 			return err
 		}
+		log.Debug("gp no send err", "chunk", hex.EncodeToString(chunkAddress))
 		return nil
 	}
 }
@@ -91,8 +100,6 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler, publisher string) (trojan.Targets, error) {
-	log.Debug("gp getPinner", "publisher", publisher)
-
 	// query feed using recovery topic and publisher
 	feedContent, err := queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
 	if err != nil {
@@ -114,7 +121,6 @@ func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, 
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("gp queryRecoveryFeed", "user", user, "topic", topic)
 	return getFeedContent(ctx, handler, topic, user)
 }
 
@@ -140,10 +146,6 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 		User:  user,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	deadline, done := ctx.Deadline()
-	log.Debug("gp getFeedContent ctx", "error", ctx.Err, "done", done, "deadline", deadline)
 	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
@@ -154,7 +156,6 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("gp getFeedContent", "content", content)
 
 	return content, nil
 }
