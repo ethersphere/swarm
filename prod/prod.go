@@ -140,19 +140,21 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 		User:  user,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
+	deadline, done := ctx.Deadline()
+	log.Debug("gp getFeedContent ctx", "error", ctx.Err, "done", done, "deadline", deadline)
 	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
-		return nil, ErrFeedLookup
+		return nil, err
 	}
 
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
-		return nil, ErrFeedContent
+		return nil, err
 	}
+	log.Debug("gp getFeedContent", "content", content)
 
 	return content, nil
 }
