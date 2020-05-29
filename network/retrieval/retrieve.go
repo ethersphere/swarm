@@ -297,6 +297,7 @@ func (r *Retrieval) findPeerLB(ctx context.Context, req *storage.Request) (retPe
 func (r *Retrieval) handleRetrieveRequest(ctx context.Context, p *Peer, msg *RetrieveRequest) error {
 	p.logger.Debug("retrieval.handleRetrieveRequest", "ref", msg.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
+	fmt.Println("12321312")
 
 	ctx, osp := spancontext.StartSpan(
 		ctx,

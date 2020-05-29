@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"bytes"
 	"sync"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
+
+var zeroEnode = enode.ID{}
 
 // Request encapsulates all the necessary arguments when making a request to NetStore.
 // These could have also been added as part of the interface of NetStore.Get, but a request struct seemed
@@ -55,4 +58,8 @@ func (r *Request) SkipPeer(nodeID string) bool {
 		return false
 	}
 	return true
+}
+
+func (r *Request) IsAtOrigin() bool {
+	return bytes.Equal(r.Origin[:], zeroEnode[:])
 }

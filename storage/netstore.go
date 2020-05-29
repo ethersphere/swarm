@@ -201,9 +201,10 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
-					if n.recoveryCallback != nil {
+					if n.recoveryCallback != nil && req.IsAtOrigin() {
 						go n.recoveryCallback(ctx, ref)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
+						fmt.Println(n.LocalID, "recovery initiated")
 						n.logger.Debug("gp RE attempting chunk fetch", "ref", ref.String())
 						return n.RemoteFetch(ctx, req, fi)
 					}
