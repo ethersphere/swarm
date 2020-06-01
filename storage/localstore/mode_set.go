@@ -421,7 +421,7 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	_, err = db.pinIndex.Get(item)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			log.Debug("gp pinning chunk is not pinned for re-upload" )
+			log.Debug("gp pinning chunk is not pinned for re-upload")
 			return chunk.ErrNotPinned
 		}
 		return err
