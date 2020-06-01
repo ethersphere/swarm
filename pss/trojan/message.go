@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -118,15 +119,22 @@ func (m *Message) Wrap(targets Targets) (chunk.Chunk, error) {
 // Unwrap creates a new trojan message from the given chunk payload
 // this function assumes the chunk has been validated as a content-addressed chunk
 // it will return the resulting message if the unwrapping is successful, and an error otherwise
-func Unwrap(c chunk.Chunk) (*Message, error) {
+func Unwrap(c chunk.Chunk) (m *Message, err error) {
+	defer func() {
+		log.Debug("unwrap panic recovery")
+		if r := recover(); r != nil {
+			err = errors.New("error unmarshalling")
+		}
+	}()
+
 	d := c.Data()
 
 	// unmarshal chunk payload into message
-	m := new(Message)
+	m = new(Message)
 	// first 40 bytes are span + nonce
-	err := m.UnmarshalBinary(d[40:])
+	err = m.UnmarshalBinary(d[40:])
 
-	return m, err
+	return
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
@@ -229,12 +237,6 @@ func (m *Message) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary deserializes a message struct
 func (m *Message) UnmarshalBinary(data []byte) (err error) {
-	// TODO: REMOVE THIS PLEASE
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.New("error unmarshalling")
-		}
-	}()
 	copy(m.length[:], data[:2])  // first 2 bytes are length
 	copy(m.Topic[:], data[2:34]) // following 32 bytes are topic
 
