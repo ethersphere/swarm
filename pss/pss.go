@@ -119,7 +119,7 @@ func (p *Pss) Deliver(c chunk.Chunk) {
 	}
 	h := p.getHandler(m.Topic)
 	if h != nil {
-		log.Debug("gp calling repair function")
+		log.Debug("gp calling handler function")
 		h(*m)
 	}
 }

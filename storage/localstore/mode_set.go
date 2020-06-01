@@ -412,6 +412,7 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	// get chunk retrieval data
 	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
+		log.Debug("gp retrieval data index error " + err.Error())
 		return err
 	}
 
@@ -424,17 +425,21 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 			log.Debug("gp pinning chunk is not pinned for re-upload")
 			return chunk.ErrNotPinned
 		}
+		log.Debug("gp pin index error " + err.Error())
 		return err
 	}
 
 	// put chunk item into the push index if not already present
 	itemPresent, err := db.pushIndex.Has(retrievalDataIndexItem)
 	if err != nil {
+		log.Debug("gp push index has error " + err.Error())
 		return err
 	}
 	if itemPresent {
+		log.Debug("gp item already present")
 		return nil
 	}
 
+	log.Debug("gp re upload putting in batch")
 	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
 }

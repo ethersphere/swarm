@@ -66,7 +66,6 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, publisher string)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer func() {
-			log.Debug("gp canceling context", "chunk", hex.EncodeToString(chunkAddress))
 			cancel()
 		}()
 
@@ -85,7 +84,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler, publisher string)
 			log.Debug("gp send err", "err", err.Error(), "chunk", hex.EncodeToString(chunkAddress))
 			return err
 		}
-		log.Debug("gp no send err", "chunk", hex.EncodeToString(chunkAddress))
+		log.Debug("gp send successful", "chunk", hex.EncodeToString(chunkAddress))
 		return nil
 	}
 }
