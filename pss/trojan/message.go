@@ -121,7 +121,7 @@ func (m *Message) Wrap(targets Targets) (chunk.Chunk, error) {
 // it will return the resulting message if the unwrapping is successful, and an error otherwise
 func Unwrap(c chunk.Chunk) (m *Message, err error) {
 	defer func() {
-		log.Debug("unwrap panic recovery")
+		log.Debug("unwrap panic recovery", "chunk", c.Address())
 		if r := recover(); r != nil {
 			err = errors.New("error unmarshalling")
 		}
