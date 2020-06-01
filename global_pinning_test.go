@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 )
@@ -59,7 +62,7 @@ func TestGlobalPinning(t *testing.T) {
 	//missingChunkAddress := pot.RandomAddress()
 
 	nodes := make([]string, 3)
-	pks := make(*ecdsa.PrivateKey, 3)
+	pks := make([]*ecdsa.PrivateKey, 3)
 	i := 0
 
 	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
@@ -124,14 +127,14 @@ func TestGlobalPinning(t *testing.T) {
 	// connect the nodes in a certain way
 
 	// generate a chunk address to retrieve
-	ch := storage.GenerateRandomChunk(1234)
+	chunkToRetrieve := storage.GenerateRandomChunk(1234)
 
 	//a0 := common.FromHex(nodes[0]) // global pinner
 	a1 := common.FromHex(nodes[1])
 	a2 := common.FromHex(nodes[2])
 	//p0 := chunk.Proximity(ch.Address(), a0)
-	p1 := chunk.Proximity(ch.Address(), a1)
-	p2 := chunk.Proximity(ch.Address(), a2)
+	p1 := chunk.Proximity(chunkToRetrieve.Address(), a1)
+	p2 := chunk.Proximity(chunkToRetrieve.Address(), a2)
 
 	c := 0
 
@@ -151,37 +154,46 @@ func TestGlobalPinning(t *testing.T) {
 	}
 
 	s := sim.Service("swarm", ids[c]).(*Swarm)
-	req := storage.NewRequest(ch.Address())
+	req := storage.NewRequest(chunkToRetrieve.Address())
 	_, err = s.netStore.Get(context.Background(), chunk.ModeGetRequest, req)
 
 	// check that err is ErrNoSuitablePeer
 
 	// create this feed chunk and store it even on the requester node
 	signer := feed.NewGenericSigner(pks[0])
-	topic, _ := NewTopic("RECOVERY")
-	fd := Feed{
+	topic, _ := feed.NewTopic("RECOVERY", nil)
+	fd := feed.Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
-	request := feed.NewFirstRequest(fd.Topic) // this timestamps the update at t = 4200 (start time)
-	chunkAddress := make(map[string]storage.Address)
-	data := []byte(nodes[0][0]) // TODO make this into a target
-	request.SetData(data)
-	if err := request.Sign(signer); err != nil {
+	feedRequest := feed.NewFirstRequest(fd.Topic)
+	pinnerAddr := nodes[0]
+	pinnerPrefix := pinnerAddr[:2]
+	target, err := hex.DecodeString(pinnerPrefix)
+
+	t1 := trojan.Target(target)
+	targets := trojan.Targets([]trojan.Target{t1})
+	feedData, err := json.Marshal(targets)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	addr, err := s.api.FeedsUpdate(context.Background(), request)
+	feedRequest.SetData(feedData)
+	if err := feedRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.api.FeedsUpdate(context.Background(), feedRequest)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// retrieve again
-	chunkk, err = s.netStore.Get(context.Background(), chunk.ModeGetRequest, req)
+	chunkk, err := s.netStore.Get(context.Background(), chunk.ModeGetRequest, req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(chunkk.Data(), ch.Address()) {
+	if !bytes.Equal(chunkk.Data(), chunkToRetrieve.Address()) {
 		t.Fatal("doesnt match")
 	}
 
