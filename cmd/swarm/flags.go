@@ -99,6 +99,11 @@ var (
 		Usage:  "disable syncing",
 		EnvVar: SwarmNoSync,
 	}
+	SwarmNoPushSyncFlag = cli.BoolFlag{
+		Name:   "no-push-sync",
+		Usage:  "disable push syncing",
+		EnvVar: SwarmNoPushSync,
+	}
 	SwarmSwapLogPathFlag = cli.StringFlag{
 		Name:   "swap-audit-logpath",
 		Usage:  "Write execution logs of swap audit to the given directory",
