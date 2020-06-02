@@ -94,7 +94,7 @@ var (
 		Usage:  "honey amount at which a peer disconnects",
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
-	SwarmNoSyncFlag = cli.BoolFlag{
+	SwarmNoPullSyncFlag = cli.BoolFlag{
 		Name:   "no-sync",
 		Usage:  "disable syncing",
 		EnvVar: SwarmNoSync,
