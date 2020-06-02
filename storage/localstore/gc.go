@@ -183,6 +183,7 @@ func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
 				gcSizeChange--
 			}
 			excludedCount++
+			db.gcExcludeIndex.DeleteInBatch(batch, item)
 		}
 
 		return false, nil
