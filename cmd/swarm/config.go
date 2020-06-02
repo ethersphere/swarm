@@ -230,8 +230,10 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
 	if ctx.GlobalIsSet(SwarmNoPullSyncFlag.Name) {
-		val := !ctx.GlobalBool(SwarmNoPullSyncFlag.Name)
-		currentConfig.PullSyncEnabled, currentConfig.PushSyncEnabled = val, val // if the flag is set (true) - push and pull sync should be disabled
+		currentConfig.PullSyncEnabled = !ctx.GlobalBool(SwarmNoPullSyncFlag.Name) // if the flag is set (true) - pull sync should be disabled
+	}
+	if ctx.GlobalIsSet(SwarmNoPushSyncFlag.Name) {
+		currentConfig.PushSyncEnabled = !ctx.GlobalBool(SwarmNoPushSyncFlag.Name) // if the flag is set (true) - push sync should be disabled
 	}
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true

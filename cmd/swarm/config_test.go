@@ -391,6 +391,10 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatal("Expected Pull Sync to be disabled, but is true")
 	}
 
+	if info.PushSyncEnabled {
+		t.Fatal("Expected Push Sync to be disabled, but is true")
+	}
+
 	if info.DbCapacity != 9000000 {
 		t.Fatalf("Expected DbCapacity to be %d, got %d", 9000000, info.DbCapacity)
 	}
