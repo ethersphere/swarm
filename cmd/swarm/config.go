@@ -231,7 +231,7 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	}
 	if ctx.GlobalIsSet(SwarmNoPullSyncFlag.Name) {
 		val := !ctx.GlobalBool(SwarmNoPullSyncFlag.Name)
-		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = val, val // if the flag is set (true) - push and pull sync should be disabled
+		currentConfig.PullSyncEnabled, currentConfig.PushSyncEnabled = val, val // if the flag is set (true) - push and pull sync should be disabled
 	}
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true

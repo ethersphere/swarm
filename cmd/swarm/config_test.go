@@ -276,8 +276,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkID)
 	}
 
-	if info.SyncEnabled {
-		t.Fatal("Expected Sync to be disabled, but is true")
+	if info.PullSyncEnabled {
+		t.Fatal("Expected Pull Sync to be disabled, but is true")
 	}
 
 	if info.PushSyncEnabled {
@@ -315,7 +315,8 @@ func TestConfigFileOverrides(t *testing.T) {
 	//first, create a default conf
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
-	defaultConf.SyncEnabled = false
+	defaultConf.PullSyncEnabled = false
+	defaultConf.PushSyncEnabled = false
 	defaultConf.NetworkID = 54
 	defaultConf.Port = httpPort
 	defaultConf.DbCapacity = 9000000
@@ -386,8 +387,8 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
 	}
 
-	if info.SyncEnabled {
-		t.Fatal("Expected Sync to be disabled, but is true")
+	if info.PullSyncEnabled {
+		t.Fatal("Expected Pull Sync to be disabled, but is true")
 	}
 
 	if info.DbCapacity != 9000000 {
@@ -491,8 +492,8 @@ func TestConfigEnvVars(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if info.SyncEnabled {
-		t.Fatal("Expected Sync to be disabled, but is true")
+	if info.PullSyncEnabled {
+		t.Fatal("Expected Pull Sync to be disabled, but is true")
 	}
 
 	if info.PushSyncEnabled {
@@ -515,7 +516,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	//first, create a default conf
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
-	defaultConf.SyncEnabled = true
+	defaultConf.PullSyncEnabled = true
 	defaultConf.PushSyncEnabled = true
 	defaultConf.NetworkID = 54
 	defaultConf.Port = "8588"
@@ -595,8 +596,8 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkID)
 	}
 
-	if info.SyncEnabled {
-		t.Fatal("Expected Sync to be disabled, but is true")
+	if info.PullSyncEnabled {
+		t.Fatal("Expected Pull Sync to be disabled, but is true")
 	}
 
 	if info.PushSyncEnabled {
