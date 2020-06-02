@@ -232,6 +232,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmNoPullSyncFlag.Name),
+		fmt.Sprintf("--%s", SwarmNoPushSyncFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
@@ -412,6 +413,7 @@ func TestConfigEnvVars(t *testing.T) {
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIdFlag.EnvVar, "999"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNoPullSyncFlag.EnvVar, "true"))
+	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNoPushSyncFlag.EnvVar, "true"))
 
 	dir, err := ioutil.TempDir("", "bzztest")
 	if err != nil {
@@ -553,6 +555,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "77",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", SwarmNoPullSyncFlag.Name),
+		fmt.Sprintf("--%s", SwarmNoPushSyncFlag.Name),
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",

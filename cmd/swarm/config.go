@@ -72,7 +72,7 @@ const (
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
-	SwarmNoSync                     = "SWARM_NO_SYNC"
+	SwarmNoPullSync                 = "SWARM_NO_PULL_SYNC"
 	SwarmNoPushSync                 = "SWARM_NO_PUSH_SYNC"
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
 	SwarmEnvSwapLogLevel            = "SWARM_SWAP_LOG_LEVEL"

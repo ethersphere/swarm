@@ -95,9 +95,9 @@ var (
 		EnvVar: SwarmEnvSwapDisconnectThreshold,
 	}
 	SwarmNoPullSyncFlag = cli.BoolFlag{
-		Name:   "no-sync",
-		Usage:  "disable syncing",
-		EnvVar: SwarmNoSync,
+		Name:   "no-pull-sync",
+		Usage:  "disable pull syncing",
+		EnvVar: SwarmNoPullSync,
 	}
 	SwarmNoPushSyncFlag = cli.BoolFlag{
 		Name:   "no-push-sync",
