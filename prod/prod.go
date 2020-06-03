@@ -18,13 +18,11 @@ package prod
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
@@ -120,7 +118,7 @@ func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common
 		return feed.Topic{}, common.Address{}, err
 	}
 	// get feed user from publisher
-	user, err := publisherToAddress(publisher)
+	user, err := common.HexToAddress(publisher)
 	if err != nil {
 		return feed.Topic{}, common.Address{}, err
 	}
@@ -149,17 +147,4 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 	}
 
 	return content, nil
-}
-
-// publisherToAddress derives an address based on the given publisher string
-func publisherToAddress(publisher string) (common.Address, error) {
-	publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return common.Address{}, ErrPublisher
-	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
-	if err != nil {
-		return common.Address{}, ErrPubKey
-	}
-	return crypto.PubkeyToAddress(*pubKey), nil
 }
