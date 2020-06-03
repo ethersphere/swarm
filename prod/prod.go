@@ -118,10 +118,7 @@ func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common
 		return feed.Topic{}, common.Address{}, err
 	}
 	// get feed user from publisher
-	user, err := common.HexToAddress(publisher)
-	if err != nil {
-		return feed.Topic{}, common.Address{}, err
-	}
+	user := common.HexToAddress(publisher)
 	return topic, user, nil
 }
 
