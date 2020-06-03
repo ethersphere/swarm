@@ -38,7 +38,8 @@ import (
 func TestRecoveryHook(t *testing.T) {
 	// test variables needed to be correctly set for any recovery hook to reach the sender func
 	chunkAddr := ctest.GenerateTestRandomChunk().Address()
-	ctx := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	publisher := "0xedC69a0F0E81394bb08F90F89e35F93287E99dc1"
+	ctx := context.WithValue(context.Background(), "publisher", publisher)
 	handler := newTestRecoveryFeedsHandler(t)
 
 	// setup the sender
@@ -69,14 +70,15 @@ type RecoveryHookTestCase struct {
 
 // TestRecoveryHookCalls verifies that recovery hooks are being called as expected when net store attempts to get a chunk
 func TestRecoveryHookCalls(t *testing.T) {
-	// generate test chunk and store
+	// generate test chunk, store and publisher
 	netStore := newTestNetStore(t)
 	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
+	p := "0xbE165fe06c03e4387F79615b7A0b79d535e8D325"
 
 	// test cases variables
 	dummyContext := context.Background() // has no publisher
-	publisherContext := context.WithValue(context.Background(), "publisher", "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a")
+	publisherContext := context.WithValue(context.Background(), "publisher", p)
 	dummyHandler := feed.NewDummyHandler() // returns empty content for feed
 	feedsHandler := newTestRecoveryFeedsHandler(t)
 
