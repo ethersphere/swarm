@@ -36,8 +36,8 @@ const RecoveryTopicText = "RECOVERY"
 // RecoveryTopic is the topic used for repairing globally pinned chunks
 var RecoveryTopic = trojan.NewTopic(RecoveryTopicText)
 
-// ErrPublisher is returned when the publisher string cannot be decoded into bytes
-var ErrPublisher = errors.New("failed to decode publisher")
+// ErrPublisher is returned when the publisher address turns out to be empty
+var ErrPublisher = errors.New("content publisher is empty")
 
 // ErrPubKey is returned when the publisher bytes cannot be decompressed as a public key
 var ErrPubKey = errors.New("failed to decompress public key")
@@ -119,6 +119,9 @@ func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common
 	}
 	// get feed user from publisher
 	user := common.HexToAddress(publisher)
+	if (user == common.Address{}) {
+		return feed.Topic{}, common.Address{}, ErrPublisher
+	}
 	return topic, user, nil
 }
 

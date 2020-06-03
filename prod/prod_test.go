@@ -127,15 +127,13 @@ func TestRecoveryHookCalls(t *testing.T) {
 			case <-hookWasCalled:
 				if !tc.expectsFailure {
 					return
-				} else {
-					t.Fatal("recovery hook was unexpectedly called")
 				}
+				t.Fatal("recovery hook was unexpectedly called")
 			case <-time.After(100 * time.Millisecond):
 				if tc.expectsFailure {
 					return
-				} else {
-					t.Fatal("recovery hook was not called when expected")
 				}
+				t.Fatal("recovery hook was not called when expected")
 			}
 		})
 	}
