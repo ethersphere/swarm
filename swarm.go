@@ -122,7 +122,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,
-		SyncEnabled:  config.PullSyncEnabled, // should config.PushSyncEnabled have an effect here as well?
+		SyncEnabled:  config.PullSyncEnabled && config.PushSyncEnabled,
 	}
 
 	// Swap initialization

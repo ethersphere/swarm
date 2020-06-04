@@ -114,7 +114,7 @@ type BzzConfig struct {
 	NetworkID    uint64
 	LightNode    bool // temporarily kept as we still only define light/full on operational level
 	BootnodeMode bool
-	SyncEnabled  bool // not sure if this one should also be renamed
+	SyncEnabled  bool
 }
 
 // Bzz is the swarm protocol bundle
