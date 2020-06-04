@@ -171,8 +171,18 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	item.AccessTimestamp = now()
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
-	db.gcIndex.PutInBatch(batch, item)
-	gcSizeChange++
+
+	ok, err := db.pinIndex.Has(item)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		err = db.gcIndex.PutInBatch(batch, item)
+		if err != nil {
+			return 0, err
+		}
+		gcSizeChange++
+	}
 
 	return gcSizeChange, nil
 }
@@ -296,7 +306,10 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		return 0, err
 	}
 	if !ok {
-		db.gcIndex.PutInBatch(batch, item)
+		err = db.gcIndex.PutInBatch(batch, item)
+		if err != nil {
+			return 0, err
+		}
 		gcSizeChange++
 	}
 
