@@ -613,6 +613,6 @@ func TestDBDebugIndexes(t *testing.T) {
 	}
 
 	// assert that there's a pin and gc exclude entry now
-	testIndexCounts(t, 1, 1, 1, 1, 1, 1, 1, indexCounts)
+	testIndexCounts(t, 1, 1, 0, 1, 1, 1, 1, indexCounts)
 
 }
