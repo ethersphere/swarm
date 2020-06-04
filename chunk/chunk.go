@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethersphere/swarm/log"
 )
 
 const (
@@ -331,6 +332,7 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 	if s.deliverCallback != nil {
 		for i, exists := range exist {
 			if !exists && chunkTypes[i] == ContentAddressed {
+				log.Debug("gp calling deliver callback for chunk", "chunk", chs[i].Address())
 				go s.deliverCallback(chs[i])
 			}
 		}

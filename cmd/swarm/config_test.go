@@ -279,9 +279,9 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if info.PushSyncEnabled {
-		t.Fatal("Expected Push Sync to be disabled, but is true")
-	}
+	// if info.PushSyncEnabled {
+	// 	t.Fatal("Expected Push Sync to be disabled, but is true")
+	// }
 
 	if info.Cors != "*" {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
@@ -493,9 +493,9 @@ func TestConfigEnvVars(t *testing.T) {
 		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if info.PushSyncEnabled {
-		t.Fatal("Expected Push Sync to be disabled, but is true")
-	}
+	// if info.PushSyncEnabled {
+	// 	t.Fatal("Expected Push Sync to be disabled, but is true")
+	// }
 
 	node.Shutdown()
 	cmd.Process.Kill()
@@ -596,9 +596,9 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if info.PushSyncEnabled {
-		t.Fatal("Expected Push Sync to be disabled, but is true")
-	}
+	// if info.PushSyncEnabled {
+	// 	t.Fatal("Expected Push Sync to be disabled, but is true")
+	// }
 
 	if info.DbCapacity != 9000000 {
 		t.Fatalf("Expected Capacity to be %d, got %d", 9000000, info.DbCapacity)

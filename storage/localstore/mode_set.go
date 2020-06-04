@@ -178,8 +178,17 @@ func (db *DB) setAccess(batch *leveldb.Batch, binIDs map[uint8]uint64, addr chun
 	item.AccessTimestamp = now()
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	db.pullIndex.PutInBatch(batch, item)
-	db.gcIndex.PutInBatch(batch, item)
-	gcSizeChange++
+	ok, err := db.pinIndex.Has(item)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		err = db.gcIndex.PutInBatch(batch, item)
+		if err != nil {
+			return 0, err
+		}
+		gcSizeChange++
+	}
 
 	return gcSizeChange, nil
 }
@@ -303,7 +312,10 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		return 0, err
 	}
 	if !ok {
-		db.gcIndex.PutInBatch(batch, item)
+		err = db.gcIndex.PutInBatch(batch, item)
+		if err != nil {
+			return 0, err
+		}
 		gcSizeChange++
 	}
 
@@ -381,7 +393,6 @@ func (db *DB) setPin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 // setUnpin decrements pin counter for the chunk by updating pin index.
 // Provided batch is updated.
 func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
-	metricName := "localstore/gc/exclude"
 	item := addressToItem(addr)
 
 	// Get the existing pin counter of the chunk
@@ -397,8 +408,6 @@ func (db *DB) setUnpin(batch *leveldb.Batch, addr chunk.Address) (err error) {
 		db.pinIndex.PutInBatch(batch, item)
 	} else {
 		db.pinIndex.DeleteInBatch(batch, item)
-		db.gcExcludeIndex.DeleteInBatch(batch, item)
-		metrics.GetOrRegisterCounter(metricName+"/excluded-count", nil).Dec(int64(1))
 	}
 
 	return nil
@@ -412,6 +421,7 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	// get chunk retrieval data
 	retrievalDataIndexItem, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
+		log.Debug("gp retrieval data index error " + err.Error())
 		return err
 	}
 
@@ -421,20 +431,24 @@ func (db *DB) setReUpload(batch *leveldb.Batch, addr chunk.Address) (err error) 
 	_, err = db.pinIndex.Get(item)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			log.Debug("gp pinning chunk is not pinned for re-upload" )
+			log.Debug("gp pinning chunk is not pinned for re-upload")
 			return chunk.ErrNotPinned
 		}
+		log.Debug("gp pin index error " + err.Error())
 		return err
 	}
 
 	// put chunk item into the push index if not already present
 	itemPresent, err := db.pushIndex.Has(retrievalDataIndexItem)
 	if err != nil {
+		log.Debug("gp push index has error " + err.Error())
 		return err
 	}
 	if itemPresent {
+		log.Debug("gp item already present")
 		return nil
 	}
 
+	log.Debug("gp re upload putting in batch")
 	return db.pushIndex.PutInBatch(batch, retrievalDataIndexItem)
 }

@@ -893,7 +893,6 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
-	log.Debug("gp HANDLEGETFILE begin")
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
 	_, credentials, _ := r.BasicAuth()
