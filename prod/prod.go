@@ -38,8 +38,8 @@ const RecoveryTopicText = "RECOVERY"
 // RecoveryTopic is the topic used for repairing globally pinned chunks
 var RecoveryTopic = trojan.NewTopic(RecoveryTopicText)
 
-// ErrPublisher is returned when the publisher string cannot be decoded into bytes
-var ErrPublisher = errors.New("failed to decode publisher")
+// ErrPublisher is returned when the publisher address turns out to be empty
+var ErrPublisher = errors.New("content publisher is empty")
 
 // ErrPubKey is returned when the publisher bytes cannot be decompressed as a public key
 var ErrPubKey = errors.New("failed to decompress public key")
@@ -131,9 +131,9 @@ func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common
 		return feed.Topic{}, common.Address{}, err
 	}
 	// get feed user from publisher
-	user, err := publisherToAddress(publisher)
-	if err != nil {
-		return feed.Topic{}, common.Address{}, err
+	user := common.HexToAddress(publisher)
+	if (user == common.Address{}) {
+		return feed.Topic{}, common.Address{}, ErrPublisher
 	}
 	return topic, user, nil
 }
@@ -145,6 +145,9 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 		User:  user,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
 	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
@@ -153,22 +156,8 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
-		return nil, err
+		return nil, ErrFeedContent
 	}
 
 	return content, nil
-}
-
-// publisherToAddress derives an address based on the given publisher string
-func publisherToAddress(publisher string) (common.Address, error) {
-	/* publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return common.Address{}, ErrPublisher
-	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
-	if err != nil {
-		return common.Address{}, ErrPubKey
-	}
-	return crypto.PubkeyToAddress(*pubKey), nil */
-	return common.HexToAddress(publisher), nil
 }
