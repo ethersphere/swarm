@@ -125,7 +125,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		HiveParams:   config.HiveParams,
 		LightNode:    config.LightNodeEnabled,
 		BootnodeMode: config.BootnodeMode,
-		SyncEnabled:  config.SyncEnabled,
+		SyncEnabled:  config.PullSyncEnabled && config.PushSyncEnabled,
 	}
 
 	// Swap initialization
@@ -248,7 +248,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	feedsHandler.SetStore(self.netStore)
 
 	syncing := true
-	if !config.SyncEnabled || config.LightNodeEnabled || config.BootnodeMode {
+	if !config.PullSyncEnabled || config.LightNodeEnabled || config.BootnodeMode {
 		syncing = false
 	}
 
@@ -579,7 +579,7 @@ func (s *Swarm) APIs() []rpc.API {
 
 	// this is a workaround disabling syncing altogether from a node but
 	// must be changed when multiple stream implementations are at hand
-	if s.config.SyncEnabled {
+	if s.config.PullSyncEnabled {
 		apis = append(apis, s.streamer.APIs()...)
 	}
 	apis = append(apis, s.bzzEth.APIs()...)
