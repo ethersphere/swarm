@@ -43,6 +43,8 @@ type Chunk interface {
 	WithPinCounter(p uint64) Chunk
 	TagID() uint32
 	WithTagID(t uint32) Chunk
+	Type() Type
+	WithType(t Type) Chunk
 }
 
 type chunk struct {
@@ -50,6 +52,7 @@ type chunk struct {
 	sdata      []byte
 	pinCounter uint64
 	tagID      uint32
+	chunkType  Type
 }
 
 func NewChunk(addr Address, data []byte) Chunk {
@@ -69,6 +72,11 @@ func (c *chunk) WithTagID(t uint32) Chunk {
 	return c
 }
 
+func (c *chunk) WithType(t Type) Chunk {
+	c.chunkType = t
+	return c
+}
+
 func (c *chunk) Address() Address {
 	return c.addr
 }
@@ -83,6 +91,10 @@ func (c *chunk) PinCounter() uint64 {
 
 func (c *chunk) TagID() uint32 {
 	return c.tagID
+}
+
+func (c *chunk) Type() Type {
+	return c.chunkType
 }
 
 func (self *chunk) String() string {
@@ -254,7 +266,6 @@ type Type int
 const (
 	Unknown Type = iota
 	ContentAddressed
-	Other
 )
 
 // Descriptor holds information required for Pull syncing. This struct
@@ -285,14 +296,14 @@ type Store interface {
 
 // Validator validates a chunk.
 type Validator interface {
-	Validate(ch Chunk) (bool, Type)
+	Validate(ch Chunk) bool
 }
 
 // ValidatorStore encapsulates Store by decorating the Put method
 // with validators check.
 type ValidatorStore struct {
 	Store
-	deliverCallback func(Chunk, Type) // callback func to be invoked for validated chunks
+	deliverCallback func(Chunk) // callback func to be invoked for validated chunks
 	validators      []Validator
 }
 
@@ -306,7 +317,7 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 }
 
 // WithDeliverCallback allows injecting a callback func on the ValidatorStore struct
-func (s *ValidatorStore) WithDeliverCallback(f func(Chunk, Type)) *ValidatorStore {
+func (s *ValidatorStore) WithDeliverCallback(f func(Chunk)) *ValidatorStore {
 	s.deliverCallback = f
 	return s
 }
@@ -314,24 +325,20 @@ func (s *ValidatorStore) WithDeliverCallback(f func(Chunk, Type)) *ValidatorStor
 // Put overrides Store put method with validators check. For Put to succeed,
 // all provided chunks must be validated with true by one of the validators.
 func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (exist []bool, err error) {
-	chunkTypes := make([]Type, len(chs))
-	for i, ch := range chs {
-		// register all valid chunk types, fail otherwise
-		valid, chunkType := s.validate(ch)
-		if !valid {
+	for _, ch := range chs {
+		if !s.validate(ch) {
 			return nil, ErrChunkInvalid
 		}
-		chunkTypes[i] = chunkType
 	}
 	exist, err = s.Store.Put(ctx, mode, chs...)
 	if err != nil {
 		return nil, err
 	}
-	// if callback is defined, call it for every new valid chunk
+	// if callback is defined, call it for every new, valid chunk
 	if s.deliverCallback != nil {
 		for i, exists := range exist {
 			if !exists {
-				go s.deliverCallback(chs[i], chunkTypes[i])
+				go s.deliverCallback(chs[i])
 			}
 		}
 	}
@@ -341,12 +348,11 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 // validate returns true if one of the validators
 // return true. If all validators return false,
 // the chunk is considered invalid.
-func (s *ValidatorStore) validate(ch Chunk) (bool, Type) {
+func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
-		valid, chunkType := v.Validate(ch)
-		if valid {
-			return true, chunkType
+		if v.Validate(ch) {
+			return true
 		}
 	}
-	return false, Unknown
+	return false
 }

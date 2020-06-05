@@ -26,7 +26,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethersphere/swarm/chunk"
-	c "github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
@@ -88,9 +87,9 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 // Validate is a chunk validation method
 // If it looks like a feed update, the chunk address is checked against the userAddr of the update's signature
 // It implements the storage.ChunkValidator interface
-func (h *Handler) Validate(chunk storage.Chunk) (bool, chunk.Type) {
+func (h *Handler) Validate(chunk storage.Chunk) bool {
 	if len(chunk.Data()) < minimumSignedUpdateLength {
-		return false, c.Unknown
+		return false
 	}
 
 	// check if it is a properly formatted update chunk with
@@ -101,7 +100,7 @@ func (h *Handler) Validate(chunk storage.Chunk) (bool, chunk.Type) {
 	var r Request
 	if err := r.fromChunk(chunk); err != nil {
 		log.Debug("Invalid feed update chunk", "addr", chunk.Address(), "err", err)
-		return false, c.Unknown
+		return false
 	}
 
 	// Verify signatures and that the signer actually owns the feed
@@ -109,10 +108,10 @@ func (h *Handler) Validate(chunk storage.Chunk) (bool, chunk.Type) {
 	// or someone is trying to update someone else's feed.
 	if err := r.Verify(); err != nil {
 		log.Debug("Invalid feed update signature", "err", err)
-		return false, c.Unknown
+		return false
 	}
 
-	return true, c.Other
+	return true
 }
 
 // GetContent retrieves the data payload of the last synced update of the feed

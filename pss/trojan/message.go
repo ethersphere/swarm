@@ -107,12 +107,12 @@ func (m *Message) Wrap(targets Targets) (chunk.Chunk, error) {
 	// 4064 bytes for trojan message + 32 bytes for nonce = 4096 bytes as payload for resulting chunk
 	binary.LittleEndian.PutUint64(span, chunk.DefaultSize)
 
-	chunk, err := m.toChunk(targets, span)
+	c, err := m.toChunk(targets, span)
 	if err != nil {
 		return nil, err
 	}
 
-	return chunk, nil
+	return c.WithType(chunk.ContentAddressed), nil
 }
 
 // Unwrap creates a new trojan message from the given chunk payload
