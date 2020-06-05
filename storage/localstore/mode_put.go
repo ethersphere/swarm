@@ -317,8 +317,17 @@ func (db *DB) setGC(batch *leveldb.Batch, item shed.Item) (gcSizeChange int64, e
 	item.AccessTimestamp = now()
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 
-	db.gcIndex.PutInBatch(batch, item)
-	gcSizeChange++
+	ok, err := db.pinIndex.Has(item)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		err = db.gcIndex.PutInBatch(batch, item)
+		if err != nil {
+			return 0, err
+		}
+		gcSizeChange++
+	}
 
 	return gcSizeChange, nil
 }
