@@ -292,7 +292,7 @@ type Validator interface {
 // with validators check.
 type ValidatorStore struct {
 	Store
-	deliverCallback func(Chunk) // callback func to be invoked for validated chunks
+	deliverCallback func(Chunk, Type) // callback func to be invoked for validated chunks
 	validators      []Validator
 }
 
@@ -306,7 +306,7 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 }
 
 // WithDeliverCallback allows injecting a callback func on the ValidatorStore struct
-func (s *ValidatorStore) WithDeliverCallback(f func(Chunk)) *ValidatorStore {
+func (s *ValidatorStore) WithDeliverCallback(f func(Chunk, Type)) *ValidatorStore {
 	s.deliverCallback = f
 	return s
 }
@@ -327,12 +327,11 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 	if err != nil {
 		return nil, err
 	}
-	// if callback is defined, call it for every new, valid, content-addressed chunk
+	// if callback is defined, call it for every new valid chunk
 	if s.deliverCallback != nil {
 		for i, exists := range exist {
-			c := chs[i]
-			if !exists && IsPotentialTrojan(c, chunkTypes[i]) {
-				go s.deliverCallback(c)
+			if !exists {
+				go s.deliverCallback(chs[i], chunkTypes[i])
 			}
 		}
 	}
@@ -350,14 +349,4 @@ func (s *ValidatorStore) validate(ch Chunk) (bool, Type) {
 		}
 	}
 	return false, Unknown
-}
-
-// isPotentialTrojan returns true if the given chunk could be trojan
-func isPotentialTrojan(c Chunk, t Type) bool {
-	if t != ContentAddressed { // chunk must be of the content-addressed type
-		return false
-	}
-	// check for minimum chunk data length
-	// span (8) + nonce (32) + length (2) + topic (32) = 74
-	return len(c.Data) >= 74
 }
