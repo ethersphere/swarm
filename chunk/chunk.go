@@ -330,8 +330,9 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 	// if callback is defined, call it for every new, valid, content-addressed chunk
 	if s.deliverCallback != nil {
 		for i, exists := range exist {
-			if !exists && chunkTypes[i] == ContentAddressed {
-				go s.deliverCallback(chs[i])
+			c := chs[i]
+			if !exists && IsPotentialTrojan(c, chunkTypes[i]) {
+				go s.deliverCallback(c)
 			}
 		}
 	}
@@ -349,4 +350,9 @@ func (s *ValidatorStore) validate(ch Chunk) (bool, Type) {
 		}
 	}
 	return false, Unknown
+}
+
+// isPotentialTrojan returns true if the given chunk could be trojan
+func isPotentialTrojan(c Chunk, t Type) bool {
+	return t == ContentAddressed
 }
