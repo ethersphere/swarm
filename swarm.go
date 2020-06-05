@@ -245,7 +245,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	feedsHandler.SetStore(self.netStore)
 
 	syncing := true
-	// should config.PushSyncEnabled have an effect here too?
 	if !config.PullSyncEnabled || config.LightNodeEnabled || config.BootnodeMode {
 		syncing = false
 	}
@@ -563,7 +562,7 @@ func (s *Swarm) APIs() []rpc.API {
 
 	// this is a workaround disabling syncing altogether from a node but
 	// must be changed when multiple stream implementations are at hand
-	if s.config.PullSyncEnabled { // should config.PushSyncEnabled have an effect here too?
+	if s.config.PullSyncEnabled {
 		apis = append(apis, s.streamer.APIs()...)
 	}
 	apis = append(apis, s.bzzEth.APIs()...)
