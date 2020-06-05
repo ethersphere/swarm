@@ -354,5 +354,11 @@ func (s *ValidatorStore) validate(ch Chunk) (bool, Type) {
 
 // isPotentialTrojan returns true if the given chunk could be trojan
 func isPotentialTrojan(c Chunk, t Type) bool {
-	return t == ContentAddressed
+	if t != ContentAddressed { // chunk must be of the content-addressed type
+		return false
+	}
+
+	// check for minimum chunk length
+	// span (8) + nonce (32) + length (2) + topic (32) = 74
+	return len(c.Data) >= 74
 }
