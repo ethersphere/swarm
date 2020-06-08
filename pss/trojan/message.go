@@ -140,11 +140,7 @@ func IsPotential(c chunk.Chunk) bool {
 
 	// check for valid trojan message length in bytes #41 and #42
 	messageLen := int(binary.BigEndian.Uint16(data[40:42]))
-	if 74+messageLen > len(data) {
-		return false
-	}
-
-	return true
+	return 74+messageLen <= len(data)
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
