@@ -215,6 +215,11 @@ func (v *ContentAddressValidator) Validate(ch Chunk) bool {
 	return valid
 }
 
+// Type returns the content addressed chunk type
+func (v *ContentAddressValidator) Type() chunk.Type {
+	return chunk.ContentAddressed
+}
+
 type ChunkStore = chunk.Store
 
 // FakeChunkStore doesn't store anything, just implements the ChunkStore interface

@@ -114,6 +114,11 @@ func (h *Handler) Validate(chunk storage.Chunk) bool {
 	return true
 }
 
+// Type returns the feed chunk type
+func (h *Handler) Type() chunk.Type {
+	return chunk.Feed
+}
+
 // GetContent retrieves the data payload of the last synced update of the feed
 func (h *Handler) GetContent(feed *Feed) (storage.Address, []byte, error) {
 	if feed == nil {

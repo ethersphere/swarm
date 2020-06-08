@@ -266,6 +266,7 @@ type Type int
 const (
 	Unknown Type = iota
 	ContentAddressed
+	Feed
 )
 
 // Descriptor holds information required for Pull syncing. This struct
@@ -294,9 +295,10 @@ type Store interface {
 	Close() (err error)
 }
 
-// Validator validates a chunk.
+// Validator validates a chunk and returns a chunk type
 type Validator interface {
 	Validate(ch Chunk) bool
+	Type() Type
 }
 
 // ValidatorStore encapsulates Store by decorating the Put method
