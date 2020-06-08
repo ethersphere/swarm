@@ -201,7 +201,7 @@ func TestIsPotential(t *testing.T) {
 	length := len(c.Data()) - 73 // go 1 byte over the maximum allowed
 	lengthBuf := make([]byte, 2)
 	binary.BigEndian.PutUint16(lengthBuf, uint16(length))
-	// put into bytes #41 and #42
+	// put invalid length into bytes #41 and #42
 	copy(c.Data()[40:42], lengthBuf[:])
 	if IsPotential(c) {
 		t.Fatal("chunk with invalid trojan message length marked as potential trojan")
