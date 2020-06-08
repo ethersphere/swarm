@@ -129,6 +129,16 @@ func Unwrap(c chunk.Chunk) (*Message, error) {
 	return m, err
 }
 
+// Valid returns true if the given chunk could be trojan
+func Valid(c chunk.Chunk) bool {
+	if c.Type() != chunk.ContentAddressed { // chunk must be of the content-addressed type
+		return false
+	}
+	// check for minimum chunk data length
+	// span (8) + nonce (32) + length (2) + topic (32) = 74
+	return len(c.Data()) >= 74
+}
+
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size
 func checkTargets(targets Targets) error {
 	if len(targets) == 0 {

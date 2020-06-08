@@ -112,23 +112,13 @@ func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
 
 // Deliver allows unwrapping a chunk as a trojan message and calling its handler func based on its topic
 func (p *Pss) Deliver(c chunk.Chunk) {
-	if isPotentialTrojan(c) {
+	if trojan.Valid(c) {
 		m, _ := trojan.Unwrap(c) // if err occurs unwrapping, there will be no handler
 		h := p.getHandler(m.Topic)
 		if h != nil {
 			h(*m)
 		}
 	}
-}
-
-// isPotentialTrojan returns true if the given chunk could be trojan
-func isPotentialTrojan(c chunk.Chunk) bool {
-	if c.Type() != chunk.ContentAddressed { // chunk must be of the content-addressed type
-		return false
-	}
-	// check for minimum chunk data length
-	// span (8) + nonce (32) + length (2) + topic (32) = 74
-	return len(c.Data()) >= 74
 }
 
 // getHandler returns the Handler func registered in pss for the given topic
