@@ -208,11 +208,7 @@ func (v *ContentAddressValidator) Validate(ch Chunk) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	valid := bytes.Equal(hash, ch.Address())
-	if valid {
-		ch.WithType(chunk.ContentAddressed)
-	}
-	return valid
+	return bytes.Equal(hash, ch.Address())
 }
 
 // Type returns the content addressed chunk type

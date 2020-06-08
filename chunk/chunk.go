@@ -353,6 +353,8 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 func (s *ValidatorStore) validate(ch Chunk) bool {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
+			// set type for valid chunks and return
+			ch.WithType(v.Type())
 			return true
 		}
 	}
