@@ -175,6 +175,9 @@ func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress
 // Get retrieves a chunk
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
+	log.Debug("api.get", "netstore", ctx)
+	test, _ := ctx.Value("test").(string)
+	log.Debug("api.get", "netstore test", test)
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
 
 	start := time.Now()
