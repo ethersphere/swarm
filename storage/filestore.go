@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage/localstore"
 )
 
@@ -88,6 +89,7 @@ func NewFileStore(store ChunkStore, putterStore ChunkStore, params *FileStorePar
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
 func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
+	log.Debug("api.get", "netstore Retrieve ctx", ctx)
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	tag, err := f.tags.GetFromContext(ctx)
 	if err != nil {
