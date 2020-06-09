@@ -337,7 +337,6 @@ func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (sto
 // to resolve basePath to content using FileStore retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
 func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
-	log.Debug("api.get", "ctx", ctx)
 	log.Debug("api.get", "key", manifestAddr, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, decrypt)
@@ -425,7 +424,6 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		ctx = context.WithValue(ctx, "test", "0x1234")
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
