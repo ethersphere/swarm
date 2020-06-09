@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethersphere/swarm/chunk"
+	chunktesting "github.com/ethersphere/swarm/chunk/testing"
 )
 
 // arbitrary targets for tests
@@ -182,6 +183,47 @@ func TestUnwrap(t *testing.T) {
 
 	if !reflect.DeepEqual(m, *um) {
 		t.Fatalf("original message does not match unwrapped one")
+	}
+}
+
+// TestIsPotential tests if chunks are correctly interpreted as potentially trojan
+func TestIsPotential(t *testing.T) {
+	c := chunktesting.GenerateTestRandomChunk()
+
+	// invalid type
+	c.WithType(chunk.Unknown)
+	if IsPotential(c) {
+		t.Fatal("non content-addressed chunk marked as potential trojan")
+	}
+
+	// valid type, but invalid trojan message length
+	c.WithType(chunk.ContentAddressed)
+	length := len(c.Data()) - 73 // go 1 byte over the maximum allowed
+	lengthBuf := make([]byte, 2)
+	binary.BigEndian.PutUint16(lengthBuf, uint16(length))
+	// put invalid length into bytes #41 and #42
+	copy(c.Data()[40:42], lengthBuf[:])
+	if IsPotential(c) {
+		t.Fatal("chunk with invalid trojan message length marked as potential trojan")
+	}
+
+	// valid type, but invalid chunk data length
+	data := make([]byte, 10)
+	c = chunk.NewChunk(nil, data)
+	c.WithType(chunk.ContentAddressed)
+	if IsPotential(c) {
+		t.Fatal("chunk with invalid data length marked as potential trojan")
+	}
+
+	// valid potential trojan
+	m := newTestMessage(t)
+	c, err := m.Wrap(testTargets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.WithType(chunk.ContentAddressed)
+	if !IsPotential(c) {
+		t.Fatal("valid test trojan chunk not marked as potential trojan")
 	}
 }
 

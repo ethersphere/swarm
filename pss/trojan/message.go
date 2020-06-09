@@ -108,12 +108,7 @@ func (m *Message) Wrap(targets Targets) (chunk.Chunk, error) {
 	// 4064 bytes for trojan message + 32 bytes for nonce = 4096 bytes as payload for resulting chunk
 	binary.LittleEndian.PutUint64(span, chunk.DefaultSize)
 
-	chunk, err := m.toChunk(targets, span)
-	if err != nil {
-		return nil, err
-	}
-
-	return chunk, nil
+	return m.toChunk(targets, span)
 }
 
 // Unwrap creates a new trojan message from the given chunk payload
@@ -135,6 +130,25 @@ func Unwrap(c chunk.Chunk) (m *Message, err error) {
 	err = m.UnmarshalBinary(d[40:])
 
 	return
+}
+
+// IsPotential returns true if the given chunk is a potential trojan
+func IsPotential(c chunk.Chunk) bool {
+	// chunk must be content-addressed to be trojan
+	if c.Type() != chunk.ContentAddressed {
+		return false
+	}
+
+	data := c.Data()
+	// check for minimum chunk data length
+	// span (8) + nonce (32) + length (2) + topic (32) = 74
+	if len(data) < 74 {
+		return false
+	}
+
+	// check for valid trojan message length in bytes #41 and #42
+	messageLen := int(binary.BigEndian.Uint16(data[40:42]))
+	return 74+messageLen <= len(data)
 }
 
 // checkTargets verifies that the list of given targets is non empty and with elements of matching size

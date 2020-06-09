@@ -76,7 +76,7 @@ type Config struct {
 	BzzKey             string
 	Enode              *enode.Node `toml:"-"`
 	NetworkID          uint64
-	SyncEnabled        bool
+	PullSyncEnabled    bool
 	PushSyncEnabled    bool
 	LightNodeEnabled   bool
 	BootnodeMode       bool
@@ -111,7 +111,7 @@ func NewConfig() *Config {
 		ListenAddr:              DefaultHTTPListenAddr,
 		Port:                    DefaultHTTPPort,
 		NetworkID:               network.DefaultNetworkID,
-		SyncEnabled:             true,
+		PullSyncEnabled:         true,
 		PushSyncEnabled:         true,
 		EnablePinning:           false,
 	}

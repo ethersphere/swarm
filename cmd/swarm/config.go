@@ -72,7 +72,8 @@ const (
 	SwarmEnvSwapBackendURL          = "SWARM_SWAP_BACKEND_URL"
 	SwarmEnvSwapPaymentThreshold    = "SWARM_SWAP_PAYMENT_THRESHOLD"
 	SwarmEnvSwapDisconnectThreshold = "SWARM_SWAP_DISCONNECT_THRESHOLD"
-	SwarmNoSync                     = "SWARM_NO_SYNC"
+	SwarmNoPullSync                 = "SWARM_NO_PULL_SYNC"
+	SwarmNoPushSync                 = "SWARM_NO_PUSH_SYNC"
 	SwarmEnvSwapLogPath             = "SWARM_SWAP_LOG_PATH"
 	SwarmEnvSwapLogLevel            = "SWARM_SWAP_LOG_LEVEL"
 	SwarmEnvLightNodeEnable         = "SWARM_LIGHT_NODE_ENABLE"
@@ -228,9 +229,11 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 	if disconnectThreshold := ctx.GlobalUint64(SwarmSwapDisconnectThresholdFlag.Name); disconnectThreshold != 0 {
 		currentConfig.SwapDisconnectThreshold = disconnectThreshold
 	}
-	if ctx.GlobalIsSet(SwarmNoSyncFlag.Name) {
-		val := !ctx.GlobalBool(SwarmNoSyncFlag.Name)
-		currentConfig.SyncEnabled, currentConfig.PushSyncEnabled = val, true // if the flag is set (true) - push and pull sync should be disabled
+	if ctx.GlobalIsSet(SwarmNoPullSyncFlag.Name) {
+		currentConfig.PullSyncEnabled = !ctx.GlobalBool(SwarmNoPullSyncFlag.Name) // if the flag is set (true) - pull sync should be disabled
+	}
+	if ctx.GlobalIsSet(SwarmNoPushSyncFlag.Name) {
+		currentConfig.PushSyncEnabled = !ctx.GlobalBool(SwarmNoPushSyncFlag.Name) // if the flag is set (true) - push sync should be disabled
 	}
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
