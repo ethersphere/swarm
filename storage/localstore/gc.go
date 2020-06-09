@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -39,6 +40,36 @@ var (
 	// leveldb batch on garbage collection.
 	gcBatchSize uint64 = 200
 )
+
+type GCPolicy interface {
+	GetEvictionMetric(addr chunk.Address) Fraction
+	GetAdmissionMetric(addr chunk.Address) Fraction
+}
+
+// based on https://hackmd.io/t-OQFK3mTsGfrpLCqDrdlw#Synced-chunks
+type DefaultGCPolicy struct {
+	db *DB
+}
+
+// based on https://hackmd.io/t-OQFK3mTsGfrpLCqDrdlw#Synced-chunks
+func (p *DefaultGCPolicy) GetEvictionMetric(addr chunk.Address) Fraction {
+	item := addressToItem(addr)
+	po := int(p.db.po(item.Address))
+	responsibilityRadius := p.db.getResponsibilityRadius()
+
+	if po < responsibilityRadius {
+		// More Distant Chunks
+		n := uint64(responsibilityRadius - po)
+		return Fraction{Numerator: n, Denominator: n + 1}
+	}
+	// Most Proximate Chunks
+	return Fraction{Numerator: 1, Denominator: 3}
+}
+
+// GetAdmissionMetric is currently not in use
+func (p *DefaultGCPolicy) GetAdmissionMetric(addr chunk.Address) Fraction {
+	return Fraction{1, 1}
+}
 
 // collectGarbageWorker is a long running function that waits for
 // collectGarbageTrigger channel to signal a garbage collection
@@ -96,7 +127,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 	// run through the recently pinned chunks and
 	// remove them from the gcIndex before iterating through gcIndex
-	err = db.removeChunksInExcludeIndexFromGC()
+	err = db.syncExcludeAndGCIndex()
 	if err != nil {
 		log.Error("localstore exclude pinned chunks", "err", err)
 		return 0, true, err
@@ -148,8 +179,8 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	return collectedCount, done, err
 }
 
-// removeChunksInExcludeIndexFromGC removed any recently chunks in the exclude Index, from the gcIndex.
-func (db *DB) removeChunksInExcludeIndexFromGC() (err error) {
+// syncExcludeAndGCIndex removes any chunks in the exclude Index, from the gcIndex.
+func (db *DB) syncExcludeAndGCIndex() (err error) {
 	metricName := "localstore/gc/exclude"
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
@@ -275,20 +306,8 @@ func (db *DB) updateGCQuantiles() (err error) {
 	}
 	var newQuantiles quantiles
 	for _, q := range gcQuantiles {
-		item, position, found := gcQuantiles.Get(q.Fraction)
-		if !found {
-			continue
-		}
 		newPosition := quantilePosition(gcSize, q.Numerator, q.Denominator)
-		diff := uint64Diff(position, newPosition)
-		if diff == 0 {
-			continue
-		}
-		newItem, err := db.gcIndex.Offset(&item, diff)
-		if err != nil {
-			return err
-		}
-		newQuantiles.Set(q.Fraction, newItem, newPosition)
+		newQuantiles = newQuantiles.Set(q.Fraction, q.Item, newPosition)
 	}
 	return db.gcQuantiles.Put(newQuantiles)
 }

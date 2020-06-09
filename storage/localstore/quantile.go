@@ -66,26 +66,15 @@ func (q quantiles) Set(f Fraction, item shed.Item, position uint64) quantiles {
 			return q
 		}
 	}
-	q = append(q, quantile{
+	newQ := append(q, quantile{
 		Fraction: f,
 		Item:     item,
 	})
-	sort.Sort(q)
-	return q
+	sort.Sort(newQ)
+	return newQ
 }
 
 func quantilePosition(total, numerator, denominator uint64) uint64 {
 	return total / denominator * numerator
 }
 
-// based on https://hackmd.io/t-OQFK3mTsGfrpLCqDrdlw#Synced-chunks
-// TODO: review and document exact quantiles for chunks
-func chunkQuantileFraction(po, responsibilityRadius int) Fraction {
-	if po < responsibilityRadius {
-		// More Distant Chunks
-		n := uint64(responsibilityRadius - po)
-		return Fraction{Numerator: n, Denominator: n + 1}
-	}
-	// Most Proximate Chunks
-	return Fraction{Numerator: 1, Denominator: 3}
-}

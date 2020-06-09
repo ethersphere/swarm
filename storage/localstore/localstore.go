@@ -89,6 +89,8 @@ type DB struct {
 	// pin files Index
 	pinIndex shed.Index
 
+	gcPolicy GCPolicy
+
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
 
@@ -183,6 +185,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		collectGarbageWorkerDone: make(chan struct{}),
 		putToGCCheck:             o.PutToGCCheck,
 	}
+	db.gcPolicy = &DefaultGCPolicy{db}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity
 	}

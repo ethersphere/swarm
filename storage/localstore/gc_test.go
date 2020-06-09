@@ -578,5 +578,4 @@ func TestUpdateGCQuantiles(t *testing.T) {
 	defer db.Close()
 
 	db.collectGarbage()
-	db.collectGarbage()
 }
