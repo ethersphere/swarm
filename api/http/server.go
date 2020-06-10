@@ -48,6 +48,7 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/pin"
 	"github.com/rs/cors"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -241,6 +242,8 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 	publisher := r.URL.Query().Get("publisher")
 	log.Debug("handleBzzGet", "publisher", publisher)
+	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
+	log.Debug("handleBzzGet", "ctx", r.Context())
 	if r.Header.Get("Accept") == tarContentType {
 		uri := GetURI(r.Context())
 		_, credentials, _ := r.BasicAuth()
