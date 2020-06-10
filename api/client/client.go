@@ -284,8 +284,8 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials string) erro
 // DownloadFile downloads a single file into the destination directory
 // if the manifest entry does not specify a file name - it will fallback
 // to the hash of the file as a filename
-func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
-	log.Error("DownloadFile", "path", path)
+func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) error {
+	log.Error("DownloadFile", "publisher", publisher)
 	hasDestinationFilename := false
 	if stat, err := os.Stat(dest); err == nil {
 		hasDestinationFilename = !stat.IsDir()
@@ -313,8 +313,9 @@ func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 	}
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
-	//publisher := "0x666"
-	//uri = uri + "?publisher=" + publisher
+	if publisher != "" {
+		uri = uri + "?publisher=" + publisher
+	}
 	log.Error("DOWNLOAD", "uri", uri)
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {

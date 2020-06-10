@@ -264,4 +264,8 @@ var (
 		Name:  "block-profile",
 		Usage: "Enable pprof block profile",
 	}
+	SwarmPublisher = cli.StringFlag{
+		Name:  "publisher",
+		Usage: "Manually specify Publisher",
+	}
 )
