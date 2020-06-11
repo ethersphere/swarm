@@ -31,7 +31,7 @@ import (
 var downloadCommand = cli.Command{
 	Action:      download,
 	Name:        "down",
-	Flags:       []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
+	Flags:       []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag, SwarmPublisher},
 	Usage:       "downloads a swarm manifest or a file inside a manifest",
 	ArgsUsage:   " <uri> [<dir>]",
 	Description: `Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.`,
@@ -60,6 +60,7 @@ func download(ctx *cli.Context) {
 		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		isRecursive = ctx.Bool(SwarmRecursiveFlag.Name)
 		client      = swarm.NewClient(bzzapi)
+		publisher   = ctx.String(SwarmPublisher.Name)
 	)
 
 	if fi, err := os.Stat(dest); err == nil {
@@ -80,7 +81,7 @@ func download(ctx *cli.Context) {
 	dl := func(credentials string) error {
 		// assume behaviour according to --recursive switch
 		if isRecursive {
-			if err := client.DownloadDirectory(uri.Addr, uri.Path, dest, credentials); err != nil {
+			if err := client.DownloadDirectory(uri.Addr, uri.Path, dest, credentials, publisher); err != nil {
 				if err == swarm.ErrUnauthorized {
 					return err
 				}
@@ -90,7 +91,7 @@ func download(ctx *cli.Context) {
 			// we are downloading a file
 			log.Debug("downloading file/path from a manifest", "uri.Addr", uri.Addr, "uri.Path", uri.Path)
 
-			err := client.DownloadFile(uri.Addr, uri.Path, dest, credentials)
+			err := client.DownloadFile(uri.Addr, uri.Path, dest, credentials, publisher)
 			if err != nil {
 				if err == swarm.ErrUnauthorized {
 					return err

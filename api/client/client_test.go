@@ -258,7 +258,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	if err := client.DownloadDirectory(hash, "", tmp, ""); err != nil {
+	if err := client.DownloadDirectory(hash, "", tmp, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range testDirFiles {

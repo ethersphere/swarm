@@ -176,6 +176,10 @@ func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
+	publisher, ok := ctx.Value("publisher").(string)
+	if ok {
+		log.Debug("api.get", "netstore test", publisher)
+	}
 
 	start := time.Now()
 
@@ -201,7 +205,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
-					if n.recoveryCallback != nil {
+					if n.recoveryCallback != nil && hex.EncodeToString(ref) == publisher {
 						n.recoveryCallback(ctx, ref)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
 						return n.RemoteFetch(ctx, req, fi)

@@ -21,6 +21,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -239,6 +240,9 @@ type Server struct {
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
+	publisher := r.URL.Query().Get("publisher")
+	log.Debug("handleBzzGet", "publisher", publisher)
+	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
 	if r.Header.Get("Accept") == tarContentType {
 		uri := GetURI(r.Context())
 		_, credentials, _ := r.BasicAuth()
