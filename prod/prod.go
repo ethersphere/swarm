@@ -85,7 +85,6 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
 	publisher, _ := ctx.Value("publisher").(string)
-	// REMOVE THIS
 	log.Debug("gp getPinners", "publisher", publisher)
 
 	// query feed using recovery topic and publisher
