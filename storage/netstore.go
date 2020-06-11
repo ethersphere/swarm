@@ -178,7 +178,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
 	publisher, ok := ctx.Value("publisher").(string)
 	if ok {
-		log.Debug("api.get", "netstore test", publisher)
+		log.Debug("api.get", "netstore publisher", publisher)
 	}
 
 	start := time.Now()
@@ -205,7 +205,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
-					if n.recoveryCallback != nil && hex.EncodeToString(ref) == publisher {
+					if n.recoveryCallback != nil && publisher != "" {
 						n.recoveryCallback(ctx, ref)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
 						return n.RemoteFetch(ctx, req, fi)
