@@ -163,11 +163,11 @@ func Open(path string) (*File, error) {
 // (if the manifest argument is non-empty) or creates a new manifest containing
 // the file, returning the resulting manifest hash (the file will then be
 // available at bzz:/<hash>/<path>)
-func (c *Client) Upload(file *File, manifest string, toEncrypt, toPin, anonymous bool, publisher string) (string, error) {
+func (c *Client) Upload(file *File, manifest string, toEncrypt, toPin, anonymous bool) (string, error) {
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt, toPin, anonymous, publisher)
+	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt, toPin, anonymous)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -197,7 +197,7 @@ func (c *Client) Download(hash, path string) (*File, error) {
 // directory will then be available at bzz:/<hash>/path/to/file), with
 // the file specified in defaultPath being uploaded to the root of the manifest
 // (i.e. bzz:/<hash>/)
-func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt, toPin, anonymous bool, publisher string) (string, error) {
+func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt, toPin, anonymous bool) (string, error) {
 	stat, err := os.Stat(dir)
 	if err != nil {
 		return "", err
@@ -212,12 +212,13 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt, t
 			return "", fmt.Errorf("default path: %v", err)
 		}
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt, toPin, anonymous, publisher)
+	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt, toPin, anonymous)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
 // the given path into a local directory (existing files will be overwritten)
 func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher string) error {
+	log.Debug("DownloadDirectory", "publisher", publisher)
 	stat, err := os.Stat(destDir)
 	if err != nil {
 		return err
@@ -288,6 +289,7 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher s
 // if the manifest entry does not specify a file name - it will fallback
 // to the hash of the file as a filename
 func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) error {
+	log.Debug("DownloadFile", "publisher", publisher)
 	hasDestinationFilename := false
 	if stat, err := os.Stat(dest); err == nil {
 		hasDestinationFilename = !stat.IsDir()
@@ -517,7 +519,7 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt, toPin, anonymous bool, publisher string) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt, toPin, anonymous bool) (string, error) {
 	ctx, sp := spancontext.StartSpan(context.Background(), "api.client.tarupload")
 	defer sp.Finish()
 
@@ -545,7 +547,6 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 	transport := http.DefaultTransport
 
 	req.Header.Set("Content-Type", "application/x-tar")
-	req.Header.Set("publisher", publisher)
 	if defaultPath != "" {
 		q := req.URL.Query()
 		q.Set("defaultpath", defaultPath)

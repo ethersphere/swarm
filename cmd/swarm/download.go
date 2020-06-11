@@ -77,6 +77,8 @@ func download(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("could not parse uri argument: %v", err)
 	}
+	log.Error("uri address", "address", uri.Addr)
+	log.Error("uri publisher", "publisher", publisher)
 
 	dl := func(credentials string) error {
 		// assume behaviour according to --recursive switch
