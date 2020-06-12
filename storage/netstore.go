@@ -178,7 +178,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
 	publisher, ok := ctx.Value("publisher").(string)
 	if ok {
-		log.Debug("gp netstore.get", "netstore publisher", publisher)
+		log.Debug("netstore get publisher received", "publisher", publisher)
 	}
 
 	start := time.Now()
@@ -206,7 +206,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					if n.recoveryCallback != nil && publisher != "" {
-						log.Debug("gp netstore recovery triggered")
+						log.Debug("content recovery callback triggered", "ref", ref.String())
 						n.recoveryCallback(ctx, ref)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
 						return n.RemoteFetch(ctx, req, fi)
