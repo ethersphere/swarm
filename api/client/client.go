@@ -218,7 +218,6 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt, t
 // DownloadDirectory downloads the files contained in a swarm manifest under
 // the given path into a local directory (existing files will be overwritten)
 func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher string) error {
-	log.Debug("DownloadDirectory", "publisher", publisher)
 	stat, err := os.Stat(destDir)
 	if err != nil {
 		return err
@@ -228,7 +227,7 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher s
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
 	if publisher != "" {
-		uri = uri + "?publisher=" + publisher
+		uri += "?publisher=" + publisher
 	}
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
@@ -289,7 +288,6 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher s
 // if the manifest entry does not specify a file name - it will fallback
 // to the hash of the file as a filename
 func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) error {
-	log.Debug("DownloadFile", "publisher", publisher)
 	hasDestinationFilename := false
 	if stat, err := os.Stat(dest); err == nil {
 		hasDestinationFilename = !stat.IsDir()
@@ -318,7 +316,7 @@ func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) e
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
 	if publisher != "" {
-		uri = uri + "?publisher=" + publisher
+		uri += "?publisher=" + publisher
 	}
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {

@@ -178,7 +178,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
 	publisher, ok := ctx.Value("publisher").(string)
 	if ok {
-		log.Debug("api.get", "netstore publisher", publisher)
+		log.Debug("gp netstore.get", "netstore publisher", publisher)
 	}
 
 	start := time.Now()

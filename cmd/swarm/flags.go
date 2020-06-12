@@ -267,6 +267,6 @@ var (
 	}
 	SwarmPublisher = cli.StringFlag{
 		Name:  "publisher",
-		Usage: "Manually specify Publisher",
+		Usage: "Manually specify content recovery publisher for a hash",
 	}
 )

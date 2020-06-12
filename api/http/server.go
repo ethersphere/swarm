@@ -241,7 +241,6 @@ type Server struct {
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 	publisher := r.URL.Query().Get("publisher")
-	log.Debug("handleBzzGet", "publisher", publisher)
 	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
 	if r.Header.Get("Accept") == tarContentType {
 		uri := GetURI(r.Context())
@@ -840,7 +839,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 // common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 	publisher := r.URL.Query().Get("publisher")
-	log.Debug("handleBzzGet", "publisher", publisher)
 	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())

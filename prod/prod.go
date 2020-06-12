@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -85,7 +84,6 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
 	publisher, _ := ctx.Value("publisher").(string)
-	log.Debug("gp getPinners", "publisher", publisher)
 
 	// query feed using recovery topic and publisher
 	feedContent, err := queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
