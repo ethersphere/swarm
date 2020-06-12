@@ -839,6 +839,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
+	publisher := r.URL.Query().Get("publisher")
+	log.Debug("handleBzzGet", "publisher", publisher)
+	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
 	_, credentials, _ := r.BasicAuth()

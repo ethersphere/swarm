@@ -302,7 +302,7 @@ func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) e
 		}
 	}
 
-	manifestList, err := c.List(hash, path, credentials)
+	manifestList, err := c.List(hash, path, credentials, publisher)
 	if err != nil {
 		return err
 	}
@@ -418,8 +418,12 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
 // - a prefix of "dir1/" would return [dir1/dir2/, dir1/file3.txt]
 //
 // where entries ending with "/" are common prefixes.
-func (c *Client) List(hash, prefix, credentials string) (*api.ManifestList, error) {
-	req, err := http.NewRequest(http.MethodGet, c.Gateway+"/bzz-list:/"+hash+"/"+prefix, nil)
+func (c *Client) List(hash, prefix, credentials, publisher string) (*api.ManifestList, error) {
+	uri := c.Gateway + "/bzz-list:/" + hash + "/" + prefix
+	if publisher != "" {
+		uri = uri + "?publisher=" + publisher
+	}
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, err
 	}
