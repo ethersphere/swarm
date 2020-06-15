@@ -62,7 +62,7 @@ type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
-		log.Debug("recovery hook triggered", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress))
+		log.Debug("recovery hook called", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress))
 		targets, err := getPinners(ctx, handler)
 		if err != nil {
 			return err
@@ -81,7 +81,7 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 	return func(m trojan.Message) {
 		chAddr := m.Payload
-		log.Debug("repairing chunk", "process", "global-pinning", "chunk", hex.EncodeToString(chAddr))
+		log.Debug("repair handler called", "process", "global-pinning", "chunk", hex.EncodeToString(chAddr))
 		err := s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
 		log.Debug("repair result", "process", "global-pinning", "chunk", hex.EncodeToString(chAddr), "err", err)
 	}
