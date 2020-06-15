@@ -18,11 +18,13 @@ package pss
 
 import (
 	"context"
+	"encoding/hex"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	trojan "github.com/ethersphere/swarm/pss/trojan"
 )
 
@@ -116,9 +118,12 @@ func (p *Pss) Deliver(c chunk.Chunk) {
 		m, _ := trojan.Unwrap(c) // if err occurs unwrapping, there will be no handler
 		h := p.getHandler(m.Topic)
 		if h != nil {
+			log.Debug("executing handler for trojan", "process", "global-pinning", "chunk", hex.EncodeToString(c.Address()))
 			h(*m)
+			return
 		}
 	}
+	log.Debug("chunk not trojan or no handler found", "process", "global-pinning", "chunk", hex.EncodeToString(c.Address()))
 }
 
 // getHandler returns the Handler func registered in pss for the given topic
