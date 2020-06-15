@@ -227,7 +227,9 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher s
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
 	req, err := http.NewRequest("GET", uri, nil)
-	req.URL.Query().Add("publisher", publisher)
+	values := req.URL.Query()
+	values.Add("publisher", publisher)
+	req.URL.RawQuery = values.Encode()
 	if err != nil {
 		return err
 	}
@@ -314,7 +316,9 @@ func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) e
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
 	req, err := http.NewRequest("GET", uri, nil)
-	req.URL.Query().Add("publisher", publisher)
+	values := req.URL.Query()
+	values.Add("publisher", publisher)
+	req.URL.RawQuery = values.Encode()
 	if err != nil {
 		return err
 	}
@@ -415,7 +419,9 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
 func (c *Client) List(hash, prefix, credentials, publisher string) (*api.ManifestList, error) {
 	uri := c.Gateway + "/bzz-list:/" + hash + "/" + prefix
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
-	req.URL.Query().Add("publisher", publisher)
+	values := req.URL.Query()
+	values.Add("publisher", publisher)
+	req.URL.RawQuery = values.Encode()
 	if err != nil {
 		return nil, err
 	}
