@@ -875,6 +875,11 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
+		if isRecoveryAttemptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
+			respondError(w, r, err.Error(), http.StatusPaymentRequired)
+			return
+		}
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
