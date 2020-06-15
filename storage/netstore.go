@@ -202,7 +202,8 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					if n.recoveryCallback != nil {
-						n.recoveryCallback(ctx, ref)
+						err = n.recoveryCallback(ctx, ref)
+						n.logger.Debug("recovery result", "process", "global-pinning", "chunk", hex.EncodeToString(ref), "err", err)
 						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
 						return n.RemoteFetch(ctx, req, fi)
 					}
