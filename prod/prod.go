@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -59,6 +60,7 @@ type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
+		log.Debug("NewRecoveryHook invoked")
 		targets, err := getPinners(ctx, handler)
 		if err != nil {
 			return err
@@ -84,6 +86,7 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 // getPinners returns the specific target pinners for a corresponding chunk
 func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
 	publisher, _ := ctx.Value("publisher").(string)
+	log.Debug("getPinners", "publisher", publisher)
 
 	// query feed using recovery topic and publisher
 	feedContent, err := queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
@@ -103,6 +106,7 @@ func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Target
 // queryRecoveryFeed attempts to create a feed topic and user, and query a feed based on these to fetch its content
 func queryRecoveryFeed(ctx context.Context, topicText string, publisher string, handler feed.GenericHandler) ([]byte, error) {
 	topic, user, err := getFeedTopicAndUser(topicText, publisher)
+	log.Debug("queryRecoveryFeed", "after getFeedTopicAndUser", "")
 	if err != nil {
 		return nil, err
 	}
@@ -130,18 +134,22 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 		Topic: topic,
 		User:  user,
 	}
+	log.Debug("getFeedContent", "pre NewQueryLatest", "")
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
+	log.Debug("getFeedContent", "post NewQueryLatest", "")
 
 	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
 		return nil, ErrFeedLookup
 	}
+	log.Debug("getFeedContent", "post Lookup", "")
 
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
 		return nil, ErrFeedContent
 	}
+	log.Debug("getFeedContent", "post GetContent", "")
 
 	return content, nil
 }

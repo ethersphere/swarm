@@ -208,6 +208,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 					if n.recoveryCallback != nil && publisher != "" {
 						log.Debug("content recovery callback triggered", "ref", ref.String())
 						n.recoveryCallback(ctx, ref)
+						log.Debug("after recovery")
 						return nil, errors.New("recovery was initiated")
 					}
 					return nil, err
