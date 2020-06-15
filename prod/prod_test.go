@@ -23,10 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethersphere/swarm/chunk"
 	ctest "github.com/ethersphere/swarm/chunk/testing"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/pss"
@@ -40,9 +38,9 @@ import (
 func TestRecoveryHook(t *testing.T) {
 	// test variables needed to be correctly set for any recovery hook to reach the sender func
 	chunkAddr := ctest.GenerateTestRandomChunk().Address()
-	ctx := context.Background()
+	publisher := "0xedC69a0F0E81394bb08F90F89e35F93287E99dc1"
+	ctx := context.WithValue(context.Background(), "publisher", publisher)
 	handler := newTestRecoveryFeedsHandler(t)
-	publisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
 
 	// setup the sender
 	hookWasCalled := false // test variable to check if hook is called
@@ -52,7 +50,7 @@ func TestRecoveryHook(t *testing.T) {
 	}
 
 	// create recovery hook and call it
-	recoveryHook := NewRecoveryHook(testSender, handler, publisher)
+	recoveryHook := NewRecoveryHook(testSender, handler)
 	if err := recoveryHook(ctx, chunkAddr); err != nil {
 		t.Fatal(err)
 	}
@@ -65,46 +63,47 @@ func TestRecoveryHook(t *testing.T) {
 // RecoveryHookTestCase is a struct used as test cases for the TestRecoveryHookCalls func
 type RecoveryHookTestCase struct {
 	name           string
-	publisher      string
+	ctx            context.Context
 	feedsHandler   feed.GenericHandler
 	expectsFailure bool
 }
 
 // TestRecoveryHookCalls verifies that recovery hooks are being called as expected when net store attempts to get a chunk
 func TestRecoveryHookCalls(t *testing.T) {
-	// generate test chunk and store
+	// generate test chunk, store and publisher
 	netStore := newTestNetStore(t)
 	c := ctest.GenerateTestRandomChunk()
 	ref := c.Address()
+	p := "0xbE165fe06c03e4387F79615b7A0b79d535e8D325"
 
 	// test cases variables
-	dummyPublisher := ""
-	recoveryPublisher := "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a"
+	dummyContext := context.Background() // has no publisher
+	publisherContext := context.WithValue(context.Background(), "publisher", p)
 	dummyHandler := feed.NewDummyHandler() // returns empty content for feed
 	feedsHandler := newTestRecoveryFeedsHandler(t)
 
 	for _, tc := range []RecoveryHookTestCase{
 		{
 			name:           "no publisher, no feed content",
-			publisher:      dummyPublisher,
+			ctx:            dummyContext,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
 		{
 			name:           "publisher set, no feed content",
-			publisher:      recoveryPublisher,
+			ctx:            publisherContext,
 			feedsHandler:   dummyHandler,
 			expectsFailure: true,
 		},
 		{
 			name:           "feed content set, no publisher",
-			publisher:      dummyPublisher,
+			ctx:            dummyContext,
 			feedsHandler:   feedsHandler,
 			expectsFailure: true,
 		},
 		{
 			name:           "publisher and feed content set",
-			publisher:      recoveryPublisher,
+			ctx:            publisherContext,
 			feedsHandler:   feedsHandler,
 			expectsFailure: false,
 		},
@@ -117,13 +116,13 @@ func TestRecoveryHookCalls(t *testing.T) {
 				hookWasCalled <- true
 				return nil, nil
 			}
-			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler, tc.publisher)
+			recoverFunc := NewRecoveryHook(testHook, tc.feedsHandler)
 
 			// set hook in net store
 			netStore.WithRecoveryCallback(recoverFunc)
 
 			// fetch test chunk
-			netStore.Get(context.Background(), chunk.ModeGetRequest, storage.NewRequest(ref))
+			netStore.Get(tc.ctx, chunk.ModeGetRequest, storage.NewRequest(ref))
 
 			// checks whether the callback is invoked or the test case times out
 			select {
@@ -188,15 +187,4 @@ func newTestRecoveryFeedsHandler(t *testing.T) *feed.DummyHandler {
 	h.SetContent(b)
 
 	return h
-}
-
-func testPubKey(t *testing.T) {
-	// investigate this failure
-	pub := "04de1909c84d13508a06bb2e75bdd80382a8d308ddfce35ea6e51f47fe2e9c5a2861f8792c61d2a09308625de82afe45bbee6a2b2189aa29df8c87e299e4e19d65"
-	ecdsaPub, err := crypto.UnmarshalPubkey([]byte(pub))
-	if err != nil {
-		t.Fatal(err)
-	}
-	pubcompressed := crypto.CompressPubkey(ecdsaPub)
-	log.Debug(string(pubcompressed))
 }

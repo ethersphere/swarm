@@ -154,7 +154,16 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	// update retrieve access index
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 	// add new entry to gc index
-	db.gcIndex.PutInBatch(batch, item)
+	ok, err := db.pinIndex.Has(item)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		err = db.gcIndex.PutInBatch(batch, item)
+		if err != nil {
+			return err
+		}
+	}
 
 	return db.shed.WriteBatch(batch)
 }

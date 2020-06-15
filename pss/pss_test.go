@@ -210,10 +210,12 @@ func TestDeliver(t *testing.T) {
 	// test chunk
 	target := trojan.Target([]byte{1}) // arbitrary test target
 	targets := trojan.Targets([]trojan.Target{target})
-	chunk, err := msg.Wrap(targets)
+	c, err := msg.Wrap(targets)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// trojan chunk has its type set through the validator called by the store, so this needs to be simulated
+	c.WithType(chunk.ContentAddressed)
 
 	// create and register handler
 	var tt trojan.Topic // test variable to check handler func was correctly called
@@ -223,7 +225,7 @@ func TestDeliver(t *testing.T) {
 	pss.Register(topic, hndlr)
 
 	// call pss Deliver on chunk and verify test topic variable value changes
-	pss.Deliver(chunk)
+	pss.Deliver(c)
 	if tt != msg.Topic {
 		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
 	}

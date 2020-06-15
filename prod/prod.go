@@ -18,14 +18,12 @@ package prod
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -38,8 +36,8 @@ const RecoveryTopicText = "RECOVERY"
 // RecoveryTopic is the topic used for repairing globally pinned chunks
 var RecoveryTopic = trojan.NewTopic(RecoveryTopicText)
 
-// ErrPublisher is returned when the publisher string cannot be decoded into bytes
-var ErrPublisher = errors.New("failed to decode publisher")
+// ErrPublisher is returned when the publisher address turns out to be empty
+var ErrPublisher = errors.New("content publisher is empty")
 
 // ErrPubKey is returned when the publisher bytes cannot be decompressed as a public key
 var ErrPubKey = errors.New("failed to decompress public key")
@@ -60,31 +58,18 @@ type RecoveryHook func(ctx context.Context, chunkAddress chunk.Address) error
 type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*pss.Monitor, error)
 
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
-func NewRecoveryHook(send sender, handler feed.GenericHandler, publisher string) RecoveryHook {
+func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
-		log.Debug("gp recovery hook triggered", "chunk", hex.EncodeToString(chunkAddress))
-
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer func() {
-			cancel()
-		}()
-
-		targets, err := getPinners(ctx, handler, publisher)
+		targets, err := getPinners(ctx, handler)
 		if err != nil {
-			log.Debug("gp error recovering targets", "error", err.Error(), "chunk", hex.EncodeToString(chunkAddress))
 			return err
-		}
-		for _, t := range targets {
-			log.Debug("gp target found", "target", t, "chunk", hex.EncodeToString(chunkAddress))
 		}
 		payload := chunkAddress
 
 		// TODO: returned monitor should be made use of
 		if _, err := send(ctx, targets, RecoveryTopic, payload); err != nil {
-			log.Debug("gp send err", "err", err.Error(), "chunk", hex.EncodeToString(chunkAddress))
 			return err
 		}
-		log.Debug("gp send successful", "chunk", hex.EncodeToString(chunkAddress))
 		return nil
 	}
 }
@@ -98,7 +83,9 @@ func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 }
 
 // getPinners returns the specific target pinners for a corresponding chunk
-func getPinners(ctx context.Context, handler feed.GenericHandler, publisher string) (trojan.Targets, error) {
+func getPinners(ctx context.Context, handler feed.GenericHandler) (trojan.Targets, error) {
+	publisher, _ := ctx.Value("publisher").(string)
+
 	// query feed using recovery topic and publisher
 	feedContent, err := queryRecoveryFeed(ctx, RecoveryTopicText, publisher, handler)
 	if err != nil {
@@ -131,9 +118,9 @@ func getFeedTopicAndUser(topicText string, publisher string) (feed.Topic, common
 		return feed.Topic{}, common.Address{}, err
 	}
 	// get feed user from publisher
-	user, err := publisherToAddress(publisher)
-	if err != nil {
-		return feed.Topic{}, common.Address{}, err
+	user := common.HexToAddress(publisher)
+	if (user == common.Address{}) {
+		return feed.Topic{}, common.Address{}, ErrPublisher
 	}
 	return topic, user, nil
 }
@@ -145,30 +132,19 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 		User:  user,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
 	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
 	if err != nil && err.Error() != "no feed updates found" {
-		return nil, err
+		return nil, ErrFeedLookup
 	}
 
 	_, content, err := handler.GetContent(&fd)
 	if err != nil {
-		return nil, err
+		return nil, ErrFeedContent
 	}
 
 	return content, nil
-}
-
-// publisherToAddress derives an address based on the given publisher string
-func publisherToAddress(publisher string) (common.Address, error) {
-	/* publisherBytes, err := hex.DecodeString(publisher)
-	if err != nil {
-		return common.Address{}, ErrPublisher
-	}
-	pubKey, err := crypto.DecompressPubkey(publisherBytes)
-	if err != nil {
-		return common.Address{}, ErrPubKey
-	}
-	return crypto.PubkeyToAddress(*pubKey), nil */
-	return common.HexToAddress(publisher), nil
 }
