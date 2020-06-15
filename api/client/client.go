@@ -226,10 +226,8 @@ func (c *Client) DownloadDirectory(hash, path, destDir, credentials, publisher s
 	}
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
-	if publisher != "" {
-		uri += "?publisher=" + publisher
-	}
 	req, err := http.NewRequest("GET", uri, nil)
+	req.URL.Query().Add("publisher", publisher)
 	if err != nil {
 		return err
 	}
@@ -315,10 +313,8 @@ func (c *Client) DownloadFile(hash, path, dest, credentials, publisher string) e
 	}
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
-	if publisher != "" {
-		uri += "?publisher=" + publisher
-	}
 	req, err := http.NewRequest("GET", uri, nil)
+	req.URL.Query().Add("publisher", publisher)
 	if err != nil {
 		return err
 	}
@@ -418,10 +414,8 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
 // where entries ending with "/" are common prefixes.
 func (c *Client) List(hash, prefix, credentials, publisher string) (*api.ManifestList, error) {
 	uri := c.Gateway + "/bzz-list:/" + hash + "/" + prefix
-	if publisher != "" {
-		uri = uri + "?publisher=" + publisher
-	}
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req.URL.Query().Add("publisher", publisher)
 	if err != nil {
 		return nil, err
 	}

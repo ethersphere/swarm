@@ -208,8 +208,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 					if n.recoveryCallback != nil && publisher != "" {
 						log.Debug("content recovery callback triggered", "ref", ref.String())
 						n.recoveryCallback(ctx, ref)
-						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
-						return n.RemoteFetch(ctx, req, fi)
+						return nil, errors.New("recovery was initiated")
 					}
 					return nil, err
 				}
