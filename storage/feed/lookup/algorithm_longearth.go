@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethersphere/swarm/log"
 )
 
 type stepFunc func(ctx context.Context, t uint64, hint Epoch) interface{}
@@ -82,6 +84,7 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 			}
 			if err != nil && err != context.Canceled {
 				gerr = err
+				log.Error("error", "err", err.Error())
 				close(errc)
 			}
 		}()
