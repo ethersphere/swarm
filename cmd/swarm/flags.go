@@ -158,10 +158,6 @@ var (
 		Name:  "stdin",
 		Usage: "reads data to be uploaded from stdin",
 	}
-	SwarmUploadPublisher = cli.StringFlag{
-		Name:  "publisher",
-		Usage: "Manually specify Publisher",
-	}
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
 		Usage: "Manually specify MIME type",
@@ -268,5 +264,9 @@ var (
 	SwarmBlockProfileFlag = cli.BoolFlag{
 		Name:  "block-profile",
 		Usage: "Enable pprof block profile",
+	}
+	SwarmPublisher = cli.StringFlag{
+		Name:  "publisher",
+		Usage: "Manually specify content recovery publisher",
 	}
 )

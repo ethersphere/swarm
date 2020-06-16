@@ -21,6 +21,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,8 +81,9 @@ const (
 	AnonymousHeaderName = "x-swarm-anonymous" // Presence of this in header indicates only pull sync should be used for upload
 	PinHeaderName       = "x-swarm-pin"       // Presence of this in header indicates pinning required
 
-	encryptAddr    = "encrypt"
-	tarContentType = "application/x-tar"
+	encryptAddr           = "encrypt"
+	tarContentType        = "application/x-tar"
+	StatusEnhanceYourCalm = 420
 )
 
 type methodHandler map[string]http.Handler
@@ -239,6 +241,8 @@ type Server struct {
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
+	publisher := r.URL.Query().Get("publisher")
+	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
 	if r.Header.Get("Accept") == tarContentType {
 		uri := GetURI(r.Context())
 		_, credentials, _ := r.BasicAuth()
@@ -247,6 +251,11 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 			if isDecryptError(err) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
 				respondError(w, r, err.Error(), http.StatusUnauthorized)
+				return
+			}
+			if isRecoveryAttemptError(err) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
+				respondError(w, r, err.Error(), StatusEnhanceYourCalm)
 				return
 			}
 			respondError(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
@@ -468,12 +477,8 @@ func (s *Server) handleTarUpload(r *http.Request, mw *api.ManifestWriter) (stora
 	log.Debug("handle.tar.upload", "ruid", GetRUID(r.Context()), "tag", sctx.GetTag(r.Context()))
 
 	defaultPath := r.URL.Query().Get("defaultpath")
-	var publisher string
-	if len(r.Header["Publisher"]) > 0 {
-		publisher = r.Header["Publisher"][0]
-	}
 
-	key, err := s.api.UploadTar(r.Context(), r.Body, GetURI(r.Context()).Path, defaultPath, mw, publisher)
+	key, err := s.api.UploadTar(r.Context(), r.Body, GetURI(r.Context()).Path, defaultPath, mw)
 	if err != nil {
 		return nil, err
 	}
@@ -839,6 +844,8 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
+	publisher := r.URL.Query().Get("publisher")
+	r = r.WithContext(context.WithValue(r.Context(), "publisher", publisher))
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
 	_, credentials, _ := r.BasicAuth()
@@ -865,6 +872,11 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 		if isDecryptError(err) {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
 			respondError(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		if isRecoveryAttemptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
+			respondError(w, r, err.Error(), StatusEnhanceYourCalm)
 			return
 		}
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -940,6 +952,11 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		if isDecryptError(err) {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
 			respondError(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		if isRecoveryAttemptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
+			respondError(w, r, err.Error(), StatusEnhanceYourCalm)
 			return
 		}
 
@@ -1175,4 +1192,8 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
+}
+
+func isRecoveryAttemptError(err error) bool {
+	return strings.Contains(err.Error(), storage.ErrRecoveryAttempt.Error())
 }

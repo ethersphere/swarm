@@ -57,7 +57,6 @@ type ManifestEntry struct {
 	Status      int          `json:"status,omitempty"`
 	Access      *AccessEntry `json:"access,omitempty"`
 	Feed        *feed.Feed   `json:"feed,omitempty"`
-	Publisher   string       `json:"publisher,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -243,7 +242,6 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
 		log.Trace("manifest not found", "addr", addr)
-		err = fmt.Errorf("Manifest not Found")
 		return
 	}
 	if size > manifestSizeLimit {
