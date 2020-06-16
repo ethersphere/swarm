@@ -64,14 +64,17 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 		log.Debug("recovery hook called", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress))
 		targets, err := getPinners(ctx, handler)
 		if err != nil {
+			log.Debug("recovery hook failed to get pinners", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress), "err", err) // err logged as it is not handled
 			return err
 		}
 		payload := chunkAddress
 
 		// TODO: returned monitor should be made use of
 		if _, err := send(ctx, targets, RecoveryTopic, payload); err != nil {
+			log.Debug("recovery hook failed to send trojan", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress), "err", err) // err logged as it is not handled
 			return err
 		}
+		log.Debug("recovery hook successful", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress))
 		return nil
 	}
 }
