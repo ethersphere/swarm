@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -53,29 +52,28 @@ import (
 )
 
 var (
-	postRawCount       = metrics.NewRegisteredCounter("api/http/post/raw/count", nil)
-	postRawFail        = metrics.NewRegisteredCounter("api/http/post/raw/fail", nil)
-	postFilesCount     = metrics.NewRegisteredCounter("api/http/post/files/count", nil)
-	postFilesFail      = metrics.NewRegisteredCounter("api/http/post/files/fail", nil)
-	deleteCount        = metrics.NewRegisteredCounter("api/http/delete/count", nil)
-	deleteFail         = metrics.NewRegisteredCounter("api/http/delete/fail", nil)
-	getCount           = metrics.NewRegisteredCounter("api/http/get/count", nil)
-	getFail            = metrics.NewRegisteredCounter("api/http/get/fail", nil)
-	getFileCount       = metrics.NewRegisteredCounter("api/http/get/file/count", nil)
-	getFileNotFound    = metrics.NewRegisteredCounter("api/http/get/file/notfound", nil)
-	getFileFail        = metrics.NewRegisteredCounter("api/http/get/file/fail", nil)
-	getListCount       = metrics.NewRegisteredCounter("api/http/get/list/count", nil)
-	getListFail        = metrics.NewRegisteredCounter("api/http/get/list/fail", nil)
-	getTagCount        = metrics.NewRegisteredCounter("api/http/get/tag/count", nil)
-	getTagNotFound     = metrics.NewRegisteredCounter("api/http/get/tag/notfound", nil)
-	getTagFail         = metrics.NewRegisteredCounter("api/http/get/tag/fail", nil)
-	getPinCount        = metrics.NewRegisteredCounter("api/http/get/pin/count", nil)
-	getPinFail         = metrics.NewRegisteredCounter("api/http/get/pin/fail", nil)
-	postPinCount       = metrics.NewRegisteredCounter("api/http/post/pin/count", nil)
-	postPinFail        = metrics.NewRegisteredCounter("api/http/post/pin/fail", nil)
-	deletePinCount     = metrics.NewRegisteredCounter("api/http/delete/pin/count", nil)
-	deletePinFail      = metrics.NewRegisteredCounter("api/http/delete/pin/fail", nil)
-	errRecoveryAttempt = errors.New("recovery was initiated")
+	postRawCount    = metrics.NewRegisteredCounter("api/http/post/raw/count", nil)
+	postRawFail     = metrics.NewRegisteredCounter("api/http/post/raw/fail", nil)
+	postFilesCount  = metrics.NewRegisteredCounter("api/http/post/files/count", nil)
+	postFilesFail   = metrics.NewRegisteredCounter("api/http/post/files/fail", nil)
+	deleteCount     = metrics.NewRegisteredCounter("api/http/delete/count", nil)
+	deleteFail      = metrics.NewRegisteredCounter("api/http/delete/fail", nil)
+	getCount        = metrics.NewRegisteredCounter("api/http/get/count", nil)
+	getFail         = metrics.NewRegisteredCounter("api/http/get/fail", nil)
+	getFileCount    = metrics.NewRegisteredCounter("api/http/get/file/count", nil)
+	getFileNotFound = metrics.NewRegisteredCounter("api/http/get/file/notfound", nil)
+	getFileFail     = metrics.NewRegisteredCounter("api/http/get/file/fail", nil)
+	getListCount    = metrics.NewRegisteredCounter("api/http/get/list/count", nil)
+	getListFail     = metrics.NewRegisteredCounter("api/http/get/list/fail", nil)
+	getTagCount     = metrics.NewRegisteredCounter("api/http/get/tag/count", nil)
+	getTagNotFound  = metrics.NewRegisteredCounter("api/http/get/tag/notfound", nil)
+	getTagFail      = metrics.NewRegisteredCounter("api/http/get/tag/fail", nil)
+	getPinCount     = metrics.NewRegisteredCounter("api/http/get/pin/count", nil)
+	getPinFail      = metrics.NewRegisteredCounter("api/http/get/pin/fail", nil)
+	postPinCount    = metrics.NewRegisteredCounter("api/http/post/pin/count", nil)
+	postPinFail     = metrics.NewRegisteredCounter("api/http/post/pin/fail", nil)
+	deletePinCount  = metrics.NewRegisteredCounter("api/http/delete/pin/count", nil)
+	deletePinFail   = metrics.NewRegisteredCounter("api/http/delete/pin/fail", nil)
 )
 
 const (
@@ -83,8 +81,9 @@ const (
 	AnonymousHeaderName = "x-swarm-anonymous" // Presence of this in header indicates only pull sync should be used for upload
 	PinHeaderName       = "x-swarm-pin"       // Presence of this in header indicates pinning required
 
-	encryptAddr    = "encrypt"
-	tarContentType = "application/x-tar"
+	encryptAddr           = "encrypt"
+	tarContentType        = "application/x-tar"
+	StatusRecoveryAttempt = 420
 )
 
 type methodHandler map[string]http.Handler
@@ -256,7 +255,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 			}
 			if isRecoveryAttemptError(err) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
-				respondError(w, r, err.Error(), http.StatusPaymentRequired)
+				respondError(w, r, err.Error(), StatusRecoveryAttempt)
 				return
 			}
 			respondError(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
@@ -876,8 +875,8 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if isRecoveryAttemptError(err) {
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
-			respondError(w, r, err.Error(), http.StatusPaymentRequired)
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
+			respondError(w, r, err.Error(), StatusRecoveryAttempt)
 			return
 		}
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -1191,5 +1190,5 @@ func isDecryptError(err error) bool {
 }
 
 func isRecoveryAttemptError(err error) bool {
-	return strings.Contains(err.Error(), errRecoveryAttempt.Error())
+	return strings.Contains(err.Error(), storage.ErrRecoveryAttempt.Error())
 }

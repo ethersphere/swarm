@@ -44,7 +44,8 @@ const (
 )
 
 var (
-	ErrNoSuitablePeer = errors.New("no suitable peer")
+	ErrNoSuitablePeer  = errors.New("no suitable peer")
+	ErrRecoveryAttempt = errors.New("recovery was initiated")
 )
 
 // Fetcher is a struct which maintains state of remote requests.
@@ -208,7 +209,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 					if n.recoveryCallback != nil && publisher != "" {
 						log.Debug("content recovery callback triggered", "ref", ref.String())
 						go n.recoveryCallback(ctx, ref)
-						return nil, errors.New("recovery was initiated")
+						return nil, ErrRecoveryAttempt
 					}
 					return nil, err
 				}
