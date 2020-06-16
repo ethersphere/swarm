@@ -44,7 +44,8 @@ const (
 )
 
 var (
-	ErrNoSuitablePeer = errors.New("no suitable peer")
+	ErrNoSuitablePeer  = errors.New("no suitable peer")
+	ErrRecoveryAttempt = errors.New("recovery was initiated")
 )
 
 // Fetcher is a struct which maintains state of remote requests.
@@ -176,6 +177,10 @@ func (n *NetStore) WithRecoveryCallback(f func(ctx context.Context, chunkAddress
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (ch Chunk, err error) {
 	metrics.GetOrRegisterCounter("netstore/get", nil).Inc(1)
+	publisher, ok := ctx.Value("publisher").(string)
+	if ok {
+		log.Debug("netstore get publisher received", "publisher", publisher)
+	}
 
 	start := time.Now()
 
@@ -201,11 +206,10 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 			if ok {
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
-					if n.recoveryCallback != nil {
-						err = n.recoveryCallback(ctx, ref)
-						n.logger.Debug("recovery result", "process", "global-pinning", "chunk", hex.EncodeToString(ref), "err", err)
-						time.Sleep(500 * time.Millisecond) // TODO: view what the ideal timeout is
-						return n.RemoteFetch(ctx, req, fi)
+					if n.recoveryCallback != nil && publisher != "" {
+						log.Debug("content recovery callback triggered", "ref", ref.String())
+						go n.recoveryCallback(ctx, ref)
+						return nil, ErrRecoveryAttempt
 					}
 					return nil, err
 				}

@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/chunk"
@@ -137,8 +136,6 @@ func getFeedContent(ctx context.Context, handler feed.GenericHandler, topic feed
 		User:  user,
 	}
 	query := feed.NewQueryLatest(&fd, lookup.NoClue)
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer cancel()
 
 	_, err := handler.Lookup(ctx, query)
 	// feed should still be queried even if there are no updates
