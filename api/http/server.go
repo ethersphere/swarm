@@ -954,6 +954,11 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
+		if isRecoveryAttemptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
+			respondError(w, r, err.Error(), StatusRecoveryAttempt)
+			return
+		}
 
 		switch status {
 		case http.StatusNotFound:
