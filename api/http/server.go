@@ -83,7 +83,7 @@ const (
 
 	encryptAddr           = "encrypt"
 	tarContentType        = "application/x-tar"
-	StatusRecoveryAttempt = 420
+	StatusEnhanceYourCalm = 420
 )
 
 type methodHandler map[string]http.Handler
@@ -255,7 +255,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 			}
 			if isRecoveryAttemptError(err) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
-				respondError(w, r, err.Error(), StatusRecoveryAttempt)
+				respondError(w, r, err.Error(), StatusEnhanceYourCalm)
 				return
 			}
 			respondError(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
@@ -876,7 +876,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 		}
 		if isRecoveryAttemptError(err) {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
-			respondError(w, r, err.Error(), StatusRecoveryAttempt)
+			respondError(w, r, err.Error(), StatusEnhanceYourCalm)
 			return
 		}
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -956,7 +956,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		}
 		if isRecoveryAttemptError(err) {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
-			respondError(w, r, err.Error(), StatusRecoveryAttempt)
+			respondError(w, r, err.Error(), StatusEnhanceYourCalm)
 			return
 		}
 
