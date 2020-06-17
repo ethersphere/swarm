@@ -207,7 +207,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (c
 				ch, err = n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					if n.recoveryCallback != nil && publisher != "" {
-						log.Debug("content recovery callback triggered", "ref", ref.String())
+						log.Debug("content recovery callback triggered", "process", "global-pinning", "chunk", hex.EncodeToString(ref))
 						go n.recoveryCallback(ctx, ref)
 						return nil, ErrRecoveryAttempt
 					}
