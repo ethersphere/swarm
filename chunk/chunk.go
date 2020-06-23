@@ -18,10 +18,12 @@ package chunk
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethersphere/swarm/log"
 )
 
 const (
@@ -340,6 +342,7 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, chs ...Chunk) (e
 	if s.deliverCallback != nil {
 		for i, exists := range exist {
 			if !exists {
+				log.Debug("validator store callback invoked", "process", "global-pinning", "chunk", hex.EncodeToString(chs[i].Address()))
 				go s.deliverCallback(chs[i])
 			}
 		}

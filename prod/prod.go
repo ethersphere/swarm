@@ -18,11 +18,13 @@ package prod
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/pss/trojan"
 	"github.com/ethersphere/swarm/storage/feed"
@@ -59,16 +61,20 @@ type sender func(ctx context.Context, targets trojan.Targets, topic trojan.Topic
 // NewRecoveryHook returns a new RecoveryHook with the sender function defined
 func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 	return func(ctx context.Context, chunkAddress chunk.Address) error {
+		log.Debug("recovery hook called", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress))
 		targets, err := getPinners(ctx, handler)
 		if err != nil {
+			log.Debug("recovery hook failed to get pinners", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress), "err", err) // err logged as it is not handled
 			return err
 		}
 		payload := chunkAddress
 
 		// TODO: returned monitor should be made use of
 		if _, err := send(ctx, targets, RecoveryTopic, payload); err != nil {
+			log.Debug("recovery hook failed to send trojan", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress), "err", err) // err logged as it is not handled
 			return err
 		}
+		log.Debug("recovery hook successful", "process", "global-pinning", "chunk", hex.EncodeToString(chunkAddress))
 		return nil
 	}
 }
@@ -77,7 +83,9 @@ func NewRecoveryHook(send sender, handler feed.GenericHandler) RecoveryHook {
 func NewRepairHandler(s *chunk.ValidatorStore) pss.Handler {
 	return func(m trojan.Message) {
 		chAddr := m.Payload
-		s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
+		log.Debug("repair handler called", "process", "global-pinning", "chunk", hex.EncodeToString(chAddr))
+		err := s.Set(context.Background(), chunk.ModeSetReUpload, chAddr)
+		log.Debug("repair result", "process", "global-pinning", "chunk", hex.EncodeToString(chAddr), "err", err)
 	}
 }
 
