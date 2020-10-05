@@ -260,10 +260,6 @@ func doLint(cmdline []string) {
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
-	// Get metalinter and install all supported linters
-	lintcmd := goTool("get", "github.com/golangci/golangci-lint/cmd/golangci-lint")
-	lintcmd.Env = append(lintcmd.Env, "GO111MODULE=off") // do not interfere with project modules
-	build.MustRun(lintcmd)
 
 	// Run fast linters batched together
 	configs := []string{
