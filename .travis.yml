@@ -18,7 +18,7 @@ jobs:
       env:
         - lint
       script:
-        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.30.0
+        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.30.0
         - go run build/ci.go lint
 
     # These are the latest Go versions.
