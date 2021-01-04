@@ -108,12 +108,27 @@ const bzzList = `{{ define "content" }}
 
 const errorResponse = `{{ define "content" }}
 <div class="errorContainer">
-	<div class="errorHeader"><h1>Error</h1></div>
-	<div class="errorMessage"><h3>{{.Msg}}</h3></div>
+	{{if (eq .Code 404)}}
+		<div class="errorHeader"><h1>404 Not Found</h1></div>
+		<div class="errorMessage"><h3>{{.Msg}}</h3></div>
+		<div class="redirectToBee">
+			<button class="orangeButton" href="#" onclick="
+				let s = window.location.href.split('/'); 
+				s.splice(0,4); 
+				s.unshift(['https://gateway.ethswarm.org/bzz']); 
+				window.location.href = s.join('/');
+			">🐝 Click here to check for this file using the ⭐ all ⭐ new ⭐ Bee gateway 🐝</button class="orangeButton"></div>
+		<div class="errorCode"><h5>Error code: {{.Code}}</h5></div>
+	{{else}}
+		<div class="errorHeader"><h1>Error</h1></div>
+		<div class="errorMessage"><h3>{{.Msg}}</h3></div>
 
-	<div class="errorCode"><h5>Error code: {{.Code}}</h5></div>
+		<div class="errorCode"><h5>Error code: {{.Code}}</h5></div>
+	{{end}}
 </div>
 {{ end }}`
+
+//if 404, render a message which includes a link to Bee
 
 const landing = `{{ define "content" }}
 <div class="control">
@@ -309,6 +324,10 @@ const baseTemplate = `
 </head>
 
 <body>
+<div id="depNotice">
+	<a href="">Deprecation Notice: </a> Swarm has a new client! 🎉 <a href="https://gateway.ethswarm.org/bzz/docs.swarm.eth">Download Bee</a> to 
+	join us in the latest and greatest <a href="https://gateway.ethswarm.org/bzz/swarm.eth">Swarm! 🐝</a> <a href="#" onclick="document.getElementById('depNotice').remove()">[✖]</a>
+</div>
 <div class="wrapper">
 	<div class="main">
 		<div class="header">
@@ -543,6 +562,38 @@ const baseTemplate = `
 `
 
 const css = `{{ define "css" }}
+#depNotice{
+    background: #FFA500;
+    padding: 12px 12px 15px 12px;
+    margin: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 14px;
+    text-align: center;
+}
+
+.redirectToBee {
+	text-align: center;
+}
+
+.redirectToBee button {
+	transition: opacity 1s;
+    cursor: pointer;
+    position: relative;
+    font-size: 18px;
+    /* width: 104px; */
+    border-radius: 6px;
+    text-align: left;
+    height: 32px;
+    padding-right: 3px;
+    top: 2px;
+    background: #FFA500;
+    color: #ffffff;
+    border: 1px solid #FFA500;
+}
+
 .hidden{
 	display: none;
 }
