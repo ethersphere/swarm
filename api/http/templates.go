@@ -587,15 +587,12 @@ const css = `{{ define "css" }}
     font-size: 18px;
     border-radius: 6px;
     text-align: left;
-    /* height: 32px; */
     padding-right: 9px;
     top: 2px;
     background: #FFA500;
     color: #ffffff;
     border: 1px solid #FFA500;
     font-size: 20px;
-    /* padding-top: 5px; */
-    /* padding-bottom: 13px; */
     padding: 10px;
 }
 
