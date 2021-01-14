@@ -4,6 +4,20 @@
 
 Swarm is a distributed storage platform and content distribution service, a native base layer service of the ethereum web3 stack. The primary objective of Swarm is to provide a decentralized and redundant store for dapp code and data as well as block chain and state data. Swarm is also set out to provide various base layer services for web3, including node-to-node messaging, media streaming, decentralised database services and scalable state-channel infrastructure for decentralised service economies.
 
+## New Bee client
+
+In the effort to release a production-ready version of Swarm, the Swarm dev team has migrated their effort to build the [new Bee client](https://github.com/ethersphere/bee), a brand-new implementation of Swarm. The main reason for this switch was the availability of a more mature networking layer (libp2p) and the secondary reason being that the insight gained from developing Swarm taught us many lessons which can be implemented best from scratch. While Bee does not currently expose every feature in the original Swarm client, development is happening at lightspeed and soon, it will surpass Swarm in functionality and stability!
+
+Please refer to [Swarm webpage](https://ethswarm.org) for more information about the state of the Bee client and to [the Bee documentation](https://bee.ethswarm.org) for info on installing and using the new client.
+
+### Original Swarm client
+
+The old Swarm client, contained in this repository, can still be used while the network exists, however no maintenance or upgrades are planned for it.
+
+### Compatibility of Bee with the first Swarm
+
+No compatibility on the network layer with the first Ethereum Swarm implementation can be provided, mainly due to the migration in underlying network protocol from devp2p to libp2p. This means that a Bee node cannot join first Swarm network and vice versa. Migrating data is possible, please refer to Bee documentation.
+
 [![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![](https://godoc.org/github.com/nathany/looper?status.svg)](https://godoc.org/github.com/ethersphere/swarm/)
