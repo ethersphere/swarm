@@ -14,9 +14,19 @@ Please refer to [Swarm webpage](https://ethswarm.org) for more information about
 
 The old Swarm client, contained in this repository, can still be used while the network exists, however no maintenance or upgrades are planned for it.
 
+Please read the [The sun is setting for the old Swarm](https://medium.com/ethereum-swarm/the-sun-is-setting-for-the-old-swarm-network-46cdc8048f8b) network blog post for more information and also how to reach out for help with migration.
+
 ### Compatibility of Bee with the first Swarm
 
 No compatibility on the network layer with the first Ethereum Swarm implementation can be provided, mainly due to the migration in underlying network protocol from devp2p to libp2p. This means that a Bee node cannot join first Swarm network and vice versa. Migrating data is possible, please refer to Bee documentation.
+
+### How to get in touch
+
+Please use any of the following channels for help with migration or any other questions:
+
+The Swarm team is reachable on [Mattermost](http://beehive.ethswarm.org/).
+Join the Swarm Orange Lounge on [Telegram](https://t.me/joinchat/GoVG8RHYjUpD_-bEnLC4EQ).
+Follow us on [Twitter](https://twitter.com/ethswarm).
 
 [![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
