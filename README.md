@@ -8,7 +8,7 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 In the effort to release a production-ready version of Swarm, the Swarm dev team has migrated their effort to build the [new Bee client](https://github.com/ethersphere/bee), a brand-new implementation of Swarm. The main reason for this switch was the availability of a more mature networking layer (libp2p) and the secondary reason being that the insight gained from developing Swarm taught us many lessons which can be implemented best from scratch. While Bee does not currently expose every feature in the original Swarm client, development is happening at lightspeed and soon, it will surpass Swarm in functionality and stability!
 
-Please refer to [Swarm webpage](https://ethswarm.org) for more information about the state of the Bee client and to [the Bee documentation](https://bee.ethswarm.org) for info on installing and using the new client.
+Please refer to [Swarm webpage](https://ethswarm.org) for more information about the state of the Bee client and to [the Bee documentation](https://docs.ethswarm.org) for info on installing and using the new client.
 
 ### Original Swarm client
 
@@ -18,7 +18,7 @@ Please read the [The sun is setting for the old Swarm](https://medium.com/ethere
 
 ### Compatibility of Bee with the first Swarm
 
-No compatibility on the network layer with the first Ethereum Swarm implementation can be provided, mainly due to the migration in underlying network protocol from devp2p to libp2p. This means that a Bee node cannot join first Swarm network and vice versa. Migrating data is possible, please refer to Bee documentation.
+No compatibility on the network layer with the first Ethereum Swarm implementation can be provided, mainly due to the migration in underlying network protocol from devp2p to libp2p. This means that a Bee node cannot join first Swarm network and vice versa. Migrating data is possible, please get in touch for more info on how to approach this. 🐝 
 
 ### How to get in touch
 
