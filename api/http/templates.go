@@ -108,12 +108,26 @@ const bzzList = `{{ define "content" }}
 
 const errorResponse = `{{ define "content" }}
 <div class="errorContainer">
-	<div class="errorHeader"><h1>Error</h1></div>
-	<div class="errorMessage"><h3>{{.Msg}}</h3></div>
+	{{if (eq .Code 404)}}
+		<div class="errorHeader"><h1>404 Not Found</h1></div>
+		<div class="redirectToBee">
+			<p>Swarm-Gateways is deprecated. Swarm has a <a href="https://gateway.ethswarm.org/bzz" target="_blank">new gateway</a> running the latest version of <a href="https://gateway.ethswarm.org/docs.swarm.eth" target="_blank">Bee</a>. Try to resolve the reference on the new gateway.</p>
+			<button class="orangeButton" href="#" onclick="
+				let s = window.location.href.split('/'); 
+				s.splice(0,4); 
+				s.unshift(['https://gateway.ethswarm.org/bzz']); 
+				window.location.href = s.join('/');
+			">Check availability</button class="orangeButton"></div>
+	{{else}}
+		<div class="errorHeader"><h1>Error</h1></div>
+		<div class="errorMessage"><h3>{{.Msg}}</h3></div>
 
-	<div class="errorCode"><h5>Error code: {{.Code}}</h5></div>
+		<div class="errorCode"><h5>Error code: {{.Code}}</h5></div>
+	{{end}}
 </div>
 {{ end }}`
+
+//if 404, render a message which includes a link to Bee
 
 const landing = `{{ define "content" }}
 <div class="control">
@@ -309,6 +323,10 @@ const baseTemplate = `
 </head>
 
 <body>
+<div id="depNotice">
+	<a href="">Deprecation Notice: </a> Swarm has a new client! 🎉 <a href="https://gateway.ethswarm.org/bzz/docs.swarm.eth">Download Bee</a> to 
+	join us in the latest and greatest <a href="https://gateway.ethswarm.org/bzz/swarm.eth">Swarm! 🐝</a> <a href="#" onclick="document.getElementById('depNotice').remove()">[✖]</a>
+</div>
 <div class="wrapper">
 	<div class="main">
 		<div class="header">
@@ -543,6 +561,41 @@ const baseTemplate = `
 `
 
 const css = `{{ define "css" }}
+#depNotice{
+    background: #FFA500;
+    margin: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 9px 0px 12px;
+    text-align: center;
+}
+
+.redirectToBee {
+    text-align: center;
+    width: 60%;
+    margin: auto;
+    line-height: 130%;
+    font-weight: bold;
+}
+
+.redirectToBee button {
+    transition: opacity 1s;
+    cursor: pointer;
+    position: relative;
+    font-size: 18px;
+    border-radius: 6px;
+    text-align: left;
+    padding-right: 9px;
+    top: 2px;
+    background: #FFA500;
+    color: #ffffff;
+    border: 1px solid #FFA500;
+    font-size: 20px;
+    padding: 10px;
+}
+
 .hidden{
 	display: none;
 }
@@ -622,7 +675,7 @@ a{
 
 .title{
 	text-align: center;
-	margin-top: 50px;
+	margin-top: 100px;
 }
 
 .title svg{
