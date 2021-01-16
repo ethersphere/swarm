@@ -24,6 +24,7 @@ import (
 )
 
 // KademliaBackend is the required interface of KademliaLoadBalancer.
+// TODO: Consider if KademliaLoadBalancer itself should implement KademliaBackend
 type KademliaBackend interface {
 	SubscribeToPeerChanges() *pubsubchannel.Subscription
 	BaseAddr() []byte
@@ -122,6 +123,11 @@ func (klb *KademliaLoadBalancer) EachBinDesc(base []byte, consumeBin LBBinConsum
 		peers := klb.peerBinToPeerList(peerBin)
 		return consumeBin(LBBin{LBPeers: peers, ProximityOrder: peerBin.ProximityOrder})
 	})
+}
+
+// BaseAddr returns the base address of the underlying kademlia backend
+func (klb *KademliaLoadBalancer) BaseAddr() []byte {
+	return klb.kademlia.BaseAddr()
 }
 
 func (klb *KademliaLoadBalancer) peerBinToPeerList(bin *PeerBin) []LBPeer {
