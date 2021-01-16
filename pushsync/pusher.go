@@ -56,7 +56,7 @@ type Pusher struct {
 	syncedAddrs    []storage.Address
 	syncedAddrsMu  sync.Mutex
 	receipts       chan []byte // channel to receive receipts
-	ps             PubSub      // PubSub interface to send chunks and receive receipts
+	ps             TopicFilter // TopicFilter interface to send chunks and receive receipts
 	logger         log.Logger  // custom logger
 }
 
@@ -73,9 +73,9 @@ type pushedItem struct {
 // NewPusher constructs a Pusher and starts up the push sync protocol
 // takes
 // - a DB interface to subscribe to push sync index to allow iterating over recently stored chunks
-// - a pubsub interface to send chunks and receive statements of custody
+// - a TopicFilter interface to send chunks and receive statements of custody
 // - tags that hold the tags
-func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
+func NewPusher(store DB, ps TopicFilter, tags *chunk.Tags) *Pusher {
 	p := &Pusher{
 		store:          store,
 		tags:           tags,
@@ -296,7 +296,7 @@ func (p *Pusher) pushReceipt(addr []byte) {
 }
 
 // sendChunkMsg sends chunks to their destination
-// using the PubSub interface Send method (e.g., pss neighbourhood addressing)
+// using the TopicFilter interface Send method (e.g., pss neighbourhood addressing)
 func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
 	rlpTimer := time.Now()
 

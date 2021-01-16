@@ -204,13 +204,13 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	r := retrieval.New(kad, netStore, addr, nil)
 	netStore.RemoteGet = r.RequestFromPeers
 
-	pubSub := pss.NewPubSub(ps, 1*time.Second)
+	topicFilter := pss.NewTopicFilter(ps, 1*time.Second)
 	// setup pusher
-	p := NewPusher(lstore, pubSub, tags)
+	p := NewPusher(lstore, topicFilter, tags)
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(netStore, pubSub)
+	s := NewStorer(netStore, topicFilter)
 
 	cleanup := func() {
 		p.Close()

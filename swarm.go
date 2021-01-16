@@ -271,9 +271,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	if config.PushSyncEnabled {
 		// expire time for push-sync messages should be lower than regular chat-like messages to avoid network flooding
-		pubsub := pss.NewPubSub(self.ps, 20*time.Second)
-		self.pushSync = pushsync.NewPusher(localStore, pubsub, self.tags)
-		self.storer = pushsync.NewStorer(self.netStore, pubsub)
+		topicFilter := pss.NewTopicFilter(self.ps, 20*time.Second)
+		self.pushSync = pushsync.NewPusher(localStore, topicFilter, self.tags)
+		self.storer = pushsync.NewStorer(self.netStore, topicFilter)
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, self.rns, feedsHandler, self.privateKey, self.tags)

@@ -37,10 +37,10 @@ type Store interface {
 
 // Storer is the object used by the push-sync server side protocol
 type Storer struct {
-	store      Store      // store to put chunks in, and retrieve them from
-	ps         PubSub     // pubsub interface to receive chunks and send receipts
-	deregister func()     // deregister the registered handler when Storer is closed
-	logger     log.Logger // custom logger
+	store      Store       // store to put chunks in, and retrieve them from
+	ps         TopicFilter // TopicFilter interface to receive chunks and send receipts
+	deregister func()      // deregister the registered handler when Storer is closed
+	logger     log.Logger  // custom logger
 }
 
 // NewStorer constructs a Storer
@@ -50,7 +50,7 @@ type Storer struct {
 // - the chunks are stored and synced to their nearest neighbours and
 // - a statement of custody receipt is sent as a response to the originator
 // it sets a cancel function that deregisters the handler
-func NewStorer(store Store, ps PubSub) *Storer {
+func NewStorer(store Store, ps TopicFilter) *Storer {
 	s := &Storer{
 		store:  store,
 		ps:     ps,

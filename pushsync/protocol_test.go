@@ -29,7 +29,7 @@ import (
 )
 
 // TestProtocol tests the push sync protocol
-// push syncer node communicate with storers via mock loopback PubSub
+// push syncer node communicate with storers via mock loopback TopicFilter
 func TestProtocol(t *testing.T) {
 	timeout := 10 * time.Second
 	chunkCnt := 1024
@@ -51,7 +51,7 @@ func TestProtocol(t *testing.T) {
 			log.Debug("closest node?", "n", n, "n%storerCnt", n%storerCnt, "storer", j)
 			return n%storerCnt == j
 		}
-		storers[j] = NewStorer(&testStore{store}, &testPubSub{lb, isClosestTo})
+		storers[j] = NewStorer(&testStore{store}, &testTopicFilter{lb, isClosestTo})
 	}
 
 	tags, tagIDs := setupTags(chunkCnt, tagCnt)
@@ -60,7 +60,7 @@ func TestProtocol(t *testing.T) {
 	// isClosestTo function mocked
 	isClosestTo := func([]byte) bool { return false }
 	// start push syncing in a go routine
-	p := NewPusher(tp, &testPubSub{lb, isClosestTo}, tags)
+	p := NewPusher(tp, &testTopicFilter{lb, isClosestTo}, tags)
 	defer p.Close()
 
 	synced := make(map[int]int)
