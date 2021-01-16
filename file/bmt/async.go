@@ -22,6 +22,8 @@ import (
 	"sync"
 
 	"github.com/ethersphere/swarm/bmt"
+	"github.com/ethersphere/swarm/file"
+	"github.com/ethersphere/swarm/log"
 )
 
 // NewAsyncWriter extends Hasher with an interface for concurrent segment.GetSection() writes
@@ -176,4 +178,10 @@ func (sw *AsyncHasher) SumIndexed(b []byte, length int) (s []byte) {
 	hsh.Write(meta)
 	hsh.Write(s)
 	return hsh.Sum(b)
+}
+
+// SetWriter implements file.SectionWriter
+func (sw *AsyncHasher) SetWriter(_ file.SectionWriterFunc) file.SectionWriter {
+	log.Warn("BMT hasher does not currently support SectionWriter chaining")
+	return sw
 }
