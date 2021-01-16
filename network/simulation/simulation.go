@@ -117,6 +117,15 @@ func NewBzzInProc(services map[string]ServiceFunc, disableAutoConnect bool) (s *
 			Address:    addr,
 			HiveParams: hp,
 		}
+
+		// Check for relevant properties
+		for _, property := range ctx.Config.Properties {
+			switch property {
+			case PropertyBootnode:
+				config.BootnodeMode = true
+			}
+		}
+
 		return network.NewBzz(config, kad, nil, nil, nil, nil, nil), nil, nil
 	}
 

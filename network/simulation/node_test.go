@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -216,6 +217,49 @@ func TestAddNodes(t *testing.T) {
 	if count != nodesCount {
 		t.Errorf("expected %v nodes, got %v", nodesCount, count)
 	}
+}
+
+// TestAddBootnode adds a bootnode to a simulation network
+//  and checks that the bootnode is returned by GetNodeIDsByProperty with PropertyBootnode
+// If other nodes are returned, or the bootnode ID is incorrect, the test fails
+func TestAddBootnode(t *testing.T) {
+	sim := NewInProc(noopServiceFuncMap)
+	defer sim.Close()
+
+	// Add some normal nodes for the sake of the bootnode not being the only node
+	_, err := sim.AddNodes(4)
+
+	bootnodeID, err := sim.AddBootnode()
+	if err != nil {
+		t.Fatalf("Failed to add bootnode: %s", err)
+	}
+
+	gotBootnodeIDs := sim.Net.GetNodeIDsByProperty(PropertyBootnode)
+	if len(gotBootnodeIDs) != 1 {
+		t.Fatalf("Expected 1 bootnode, got %d", len(gotBootnodeIDs))
+	}
+
+	if !bytes.Equal(gotBootnodeIDs[0].Bytes(), bootnodeID.Bytes()) {
+		t.Fatalf("Found an unexpected bootnode with ID: %s", gotBootnodeIDs[0].String())
+	}
+}
+
+// TestAddNodesAndConnectToBootnode adds nodeCount nodes, and a bootnode in a star topology
+// VerifyStar is then used to confirm that the nodes connected to the bootnode as expected
+func TestAddNodesAndConnectToBootnode(t *testing.T) {
+	nodeCount := 5
+
+	sim := NewInProc(noopServiceFuncMap)
+	defer sim.Close()
+
+	ids, bootNodeID, err := sim.AddNodesAndConnectToBootnode(nodeCount)
+	if err != nil {
+		t.Fatalf("AddNodesAndConnectToBootnode Failed: %s", err)
+	}
+
+	// VerifyStar takes a map and an index to the bootnode, so append it and use the index
+	ids = append(ids, bootNodeID)
+	simulations.VerifyStar(t, sim.Net, ids, len(ids)-1)
 }
 
 func TestAddNodesAndConnectFull(t *testing.T) {
