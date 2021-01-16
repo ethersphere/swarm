@@ -17,7 +17,7 @@ require (
 	github.com/docker/docker v0.7.3-0.20190806133308-ecdb0b22393b
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
-	github.com/ethereum/go-ethereum v1.9.2
+	github.com/ethereum/go-ethereum v1.9.7
 	github.com/ethersphere/go-sw3 v0.2.1
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
@@ -45,7 +45,7 @@ require (
 	github.com/rnsdomains/rns-go-lib v0.0.0-20191114120302-3505575b0b8f
 	github.com/robertkrimen/otto v0.0.0-20170205013659-6a77b7cbc37d // indirect
 	github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00
-	github.com/syndtr/goleveldb v0.0.0-20190318030020-c3a204f8e965
+	github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
 	github.com/tilinna/clock v1.0.2
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v0.0.0-20180607151842-f7e0d4744fa6
