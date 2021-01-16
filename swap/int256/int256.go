@@ -30,6 +30,11 @@ type Int256 struct {
 	value *big.Int
 }
 
+// BigIntWrapper represents a struct with an underlying big.Int value
+type BigIntWrapper interface {
+	Value() *big.Int
+}
+
 var minInt256 = new(big.Int).Mul(big.NewInt(-1), new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil)) // -(2^255)
 var maxInt256 = new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(255), nil), big.NewInt(1))  // 2^255 - 1
 
@@ -57,6 +62,10 @@ func (u *Int256) Copy() *Int256 {
 
 // Value returns the underlying private value for a Int256 struct
 func (u *Int256) Value() *big.Int {
+	if u.value == nil {
+		return nil
+	}
+	// clone the value to avoid external modification
 	return new(big.Int).Set(u.value)
 }
 
@@ -110,13 +119,13 @@ func (u *Int256) Mul(multiplicand, multiplier *Int256) (*Int256, error) {
 }
 
 // cmp calls the underlying Cmp method for the big.Int stored in a Int256 struct as its value field
-func (u *Int256) cmp(v *Int256) int {
-	return u.value.Cmp(v.value)
+func (u *Int256) Cmp(v BigIntWrapper) int {
+	return u.value.Cmp(v.Value())
 }
 
 // Equals returns true if the two Int256 structs have the same underlying values, false otherwise
-func (u *Int256) Equals(v *Int256) bool {
-	return u.cmp(v) == 0
+func (u *Int256) Equals(v BigIntWrapper) bool {
+	return u.Cmp(v) == 0
 }
 
 // String returns the string representation for Int256 structs

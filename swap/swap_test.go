@@ -65,7 +65,7 @@ var (
 // if `amount` is positive, it means the node which adds this booking will be credited in respect to `peer`
 // otherwise it will be debited
 type booking struct {
-	amount int64
+	amount *int256.Int256
 	peer   *protocols.Peer
 }
 
@@ -156,7 +156,7 @@ func TestStoreBalances(t *testing.T) {
 		t.Fatal(err)
 	}
 	testPeerID := testPeer.ID()
-	peerBalance := int64(29)
+	peerBalance := int256.Int256From(29)
 	if err := testPeer.setBalance(peerBalance); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestStoreBalances(t *testing.T) {
 		t.Fatal(err)
 	}
 	testPeer2ID := testPeer2.ID()
-	peer2Balance := int64(-76)
+	peer2Balance := int256.Int256From(-76)
 
 	if err := testPeer2.setBalance(peer2Balance); err != nil {
 		t.Fatal(err)
@@ -179,15 +179,15 @@ func TestStoreBalances(t *testing.T) {
 	comparePeerBalance(t, s, testPeer2ID, peer2Balance)
 }
 
-func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance int64) {
+func comparePeerBalance(t *testing.T, s *Swap, peer enode.ID, expectedPeerBalance *int256.Int256) {
 	t.Helper()
-	var peerBalance int64
+	var peerBalance *int256.Int256
 	err := s.store.Get(balanceKey(peer), &peerBalance)
 	if err != nil && err != state.ErrNotFound {
 		t.Error("Unexpected peer balance retrieval failure.")
 	}
-	if peerBalance != expectedPeerBalance {
-		t.Errorf("Expected peer store balance to be %d, but is %d instead.", expectedPeerBalance, peerBalance)
+	if !peerBalance.Equals(expectedPeerBalance) {
+		t.Errorf("Expected peer store balance to be %v, but is %v instead.", expectedPeerBalance, peerBalance)
 	}
 }
 
@@ -219,9 +219,9 @@ func TestRepeatedBookings(t *testing.T) {
 
 	// credits and debits to peer 2
 	mixedBookings := []booking{
-		{int64(mrand.Intn(100)), testPeer2.Peer},
-		{int64(0 - mrand.Intn(55)), testPeer2.Peer},
-		{int64(0 - mrand.Intn(999)), testPeer2.Peer},
+		{int256.Int256From(int64(mrand.Intn(100))), testPeer2.Peer},
+		{int256.Int256From(int64(0 - mrand.Intn(55))), testPeer2.Peer},
+		{int256.Int256From(int64(0 - mrand.Intn(999))), testPeer2.Peer},
 	}
 	addBookings(swap, mixedBookings)
 	verifyBookings(t, swap, append(bookings, mixedBookings...))
@@ -313,7 +313,10 @@ func TestNewSwapFailure(t *testing.T) {
 				config.dbPath = dir
 				config.prvkey = prvKey
 				config.backendURL = ipcEndpoint
-				params.PaymentThreshold = params.DisconnectThreshold + 1
+				params.PaymentThreshold, err = new(int256.Uint256).Add(params.DisconnectThreshold, int256.Uint256From(1))
+				if err != nil {
+					t.Fatal(err)
+				}
 				config.factoryAddress = testBackend.factoryAddress
 			},
 			check: func(t *testing.T, config *testSwapConfig) {
@@ -363,7 +366,7 @@ func TestNewSwapFailure(t *testing.T) {
 			configure: func(config *testSwapConfig) {
 				config.prvkey = prvKey
 				config.backendURL = "invalid backendURL"
-				params.PaymentThreshold = int64(DefaultPaymentThreshold)
+				params.PaymentThreshold = DefaultPaymentThreshold
 				config.skipDeposit = false
 				config.factoryAddress = testBackend.factoryAddress
 			},
@@ -555,8 +558,9 @@ func TestDisconnectThreshold(t *testing.T) {
 	testPeer := newDummyPeer()
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
 
+	amount := DefaultDisconnectThreshold.Value()
 	// leave balance exactly at disconnect threshold
-	swap.Add(int64(DefaultDisconnectThreshold), testPeer.Peer)
+	swap.Add(amount.Int64(), testPeer.Peer)
 	// account for traffic which increases debt
 	err := swap.Add(1, testPeer.Peer)
 	if err == nil {
@@ -576,16 +580,17 @@ func TestDisconnectThreshold(t *testing.T) {
 func TestPaymentThreshold(t *testing.T) {
 	swap, clean := newTestSwap(t, ownerKey, nil)
 	defer clean()
-	testDeploy(context.Background(), swap, int256.Uint256From(DefaultPaymentThreshold))
+	testDeploy(context.Background(), swap, DefaultPaymentThreshold)
 	testPeer := newDummyPeerWithSpec(Spec)
 	swap.addPeer(testPeer.Peer, swap.owner.address, swap.GetParams().ContractAddress)
-	if err := swap.Add(-int64(DefaultPaymentThreshold), testPeer.Peer); err != nil {
+	amount := DefaultPaymentThreshold.Value()
+	if err := swap.Add(-amount.Int64(), testPeer.Peer); err != nil {
 		t.Fatal()
 	}
 
 	var cheque *Cheque
 	_ = swap.store.Get(pendingChequeKey(testPeer.Peer.ID()), &cheque)
-	if !cheque.CumulativePayout.Equals(int256.Uint256From(DefaultPaymentThreshold)) {
+	if !cheque.CumulativePayout.Equals(DefaultPaymentThreshold) {
 		t.Fatal()
 	}
 }
@@ -606,14 +611,18 @@ func TestResetBalance(t *testing.T) {
 	defer clean1()
 	defer clean2()
 
-	testAmount := DefaultPaymentThreshold + 42
+	testAmount, err := new(int256.Uint256).Add(DefaultPaymentThreshold, int256.Uint256From(42))
 
-	ctx := context.Background()
-	err := testDeploy(ctx, creditorSwap, int256.Uint256From(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testDeploy(ctx, debitorSwap, int256.Uint256From(testAmount))
+
+	ctx := context.Background()
+	err = testDeploy(ctx, creditorSwap, int256.Uint256From(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = testDeploy(ctx, debitorSwap, testAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,11 +641,20 @@ func TestResetBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// set balances arbitrarily
-	if err = debitor.setBalance(int64(testAmount)); err != nil {
+	amount := testAmount.Value()
+	debitorBalance, err := int256.NewInt256(amount)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err = creditor.setBalance(int64(-testAmount)); err != nil {
+	creditorBalance, err := int256.NewInt256(new(big.Int).Mul(big.NewInt(-1), amount))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// set balances arbitrarily
+	if err = debitor.setBalance(debitorBalance); err != nil {
+		t.Fatal(err)
+	}
+	if err = creditor.setBalance(creditorBalance); err != nil {
 		t.Fatal(err)
 	}
 
@@ -653,8 +671,8 @@ func TestResetBalance(t *testing.T) {
 		Cheque: creditor.getPendingCheque(),
 	})
 	// the debitor should have already reset its balance
-	if creditor.getBalance() != 0 {
-		t.Fatalf("unexpected balance to be 0, but it is %d", creditor.getBalance())
+	if !creditor.getBalance().Equals(int256.Int256From(0)) {
+		t.Fatalf("unexpected balance to be 0, but it is %v", creditor.getBalance())
 	}
 
 	// now load the cheque that the debitor created...
@@ -681,8 +699,8 @@ func TestResetBalance(t *testing.T) {
 		t.Fatalf("Timeout waiting for cash transactions to complete")
 	}
 	// finally check that the creditor also successfully reset the balances
-	if debitor.getBalance() != 0 {
-		t.Fatalf("unexpected balance to be 0, but it is %d", debitor.getBalance())
+	if !debitor.getBalance().Equals(int256.Int256From(0)) {
+		t.Fatalf("unexpected balance to be 0, but it is %v", debitor.getBalance())
 	}
 }
 
@@ -702,7 +720,11 @@ func TestDebtCheques(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, int256.Uint256From((DefaultPaymentThreshold * 2)))
+	amount, err := new(int256.Uint256).Mul(DefaultPaymentThreshold, int256.Uint256From(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	debitorChequebook, err := testDeployWithPrivateKey(ctx, testBackend, ownerKey, ownerAddress, amount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -767,7 +789,7 @@ func testPeerBookings(t *testing.T, s *Swap, bookings *[]booking, bookingAmount 
 // generate as many bookings as specified by `quantity`, each one with the indicated `amount` and `peer`
 func generateBookings(amount int64, quantity int, peer *protocols.Peer) (bookings []booking) {
 	for i := 0; i < quantity; i++ {
-		bookings = append(bookings, booking{amount, peer})
+		bookings = append(bookings, booking{int256.Int256From(amount), peer})
 	}
 	return
 }
@@ -776,14 +798,15 @@ func generateBookings(amount int64, quantity int, peer *protocols.Peer) (booking
 func addBookings(swap *Swap, bookings []booking) {
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
-		swap.Add(booking.amount, booking.peer)
+		amount := booking.amount.Value()
+		swap.Add(amount.Int64(), booking.peer)
 	}
 }
 
 // take a Swap struct and a list of bookings, and verify the resulting balances are as expected
 func verifyBookings(t *testing.T, s *Swap, bookings []booking) {
 	t.Helper()
-	expectedBalances := calculateExpectedBalances(s, bookings)
+	expectedBalances := calculateExpectedBalances(t, s, bookings)
 	realBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
@@ -794,7 +817,7 @@ func verifyBookings(t *testing.T, s *Swap, bookings []booking) {
 }
 
 // converts a balance map to a one-line string representation
-func stringifyBalance(balance map[enode.ID]int64) string {
+func stringifyBalance(balance map[enode.ID]*int256.Int256) string {
 	marshaledBalance, err := json.Marshal(balance)
 	if err != nil {
 		return err.Error()
@@ -805,15 +828,20 @@ func stringifyBalance(balance map[enode.ID]int64) string {
 // take a swap struct and a list of bookings, and calculate the expected balances.
 // the result is a map which stores the balance for all the peers present in the bookings,
 // from the perspective of the node that loaded the Swap struct.
-func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int64 {
-	expectedBalances := make(map[enode.ID]int64)
+func calculateExpectedBalances(t *testing.T, swap *Swap, bookings []booking) map[enode.ID]*int256.Int256 {
+	expectedBalances := make(map[enode.ID]*int256.Int256)
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
 		peerID := booking.peer.ID()
-		peerBalance := expectedBalances[peerID]
+		peerBalance, ok := expectedBalances[peerID]
+		if !ok {
+			peerBalance = int256.Int256From(0)
+		}
 		// peer balance should only be affected if debt is being reduced or if balance is smaller than disconnect threshold
-		if peerBalance < swap.params.DisconnectThreshold || booking.amount < 0 {
-			peerBalance += booking.amount
+		if peerBalance.Cmp(swap.params.DisconnectThreshold) < 0 || booking.amount.Cmp(int256.Int256From(0)) < 0 {
+			if _, err := peerBalance.Add(peerBalance, booking.amount); err != nil {
+				t.Fatal(err)
+			}
 		}
 		expectedBalances[peerID] = peerBalance
 	}
@@ -838,7 +866,8 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = testPeer.setBalance(-8888); err != nil {
+
+	if err = testPeer.setBalance(int256.Int256From(-8888)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -857,12 +886,12 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var newBalance int64
+	var newBalance *int256.Int256
 	stateStore.Get(testPeer.Peer.ID().String(), &newBalance)
 
 	// compare the balances
-	if tmpBalance != newBalance {
-		t.Fatalf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d", tmpBalance, newBalance)
+	if !tmpBalance.Equals(newBalance) {
+		t.Fatalf("Unexpected balance value after sending cheap message test. Expected balance: %v, balance is: %v", tmpBalance, newBalance)
 	}
 }
 
@@ -1268,10 +1297,13 @@ func TestSwapLogToFile(t *testing.T) {
 	}
 	defer clean()
 
-	testAmount := DefaultPaymentThreshold + 42
+	testAmount, err := new(int256.Uint256).Add(DefaultPaymentThreshold, int256.Uint256From(42))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
-	err = testDeploy(ctx, creditorSwap, int256.Uint256From(testAmount))
+	err = testDeploy(ctx, creditorSwap, testAmount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1294,11 +1326,14 @@ func TestSwapLogToFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ta := testAmount.Value()
+	debitorAmount, err := int256.NewInt256(ta)
+	creditorAmount, err := int256.NewInt256(new(big.Int).Mul(big.NewInt(-1), ta))
 	// set balances arbitrarily
-	if err = debitor.setBalance(int64(testAmount)); err != nil {
+	if err = debitor.setBalance(debitorAmount); err != nil {
 		t.Fatal(err)
 	}
-	if err = creditor.setBalance(int64(-testAmount)); err != nil {
+	if err = creditor.setBalance(creditorAmount); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1487,9 +1522,10 @@ func TestAvailableBalance(t *testing.T) {
 	// send a cheque worth 42
 	chequeAmount := uint64(42)
 	// create a dummy peer. Note: the peer's contract address and the peers address are resp the swap contract and the swap owner
-	if err = peer.setBalance(int64(-chequeAmount)); err != nil {
+	if err = peer.setBalance(int256.Int256From(int64(-chequeAmount))); err != nil {
 		t.Fatal(err)
 	}
+
 	if err = peer.sendCheque(); err != nil {
 		t.Fatal(err)
 	}

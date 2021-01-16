@@ -26,8 +26,8 @@ func (s *Swap) APIs() []rpc.API {
 
 type swapAPI interface {
 	AvailableBalance() (*int256.Uint256, error)
-	PeerBalance(peer enode.ID) (int64, error)
-	Balances() (map[enode.ID]int64, error)
+	PeerBalance(peer enode.ID) (*int256.Int256, error)
+	Balances() (map[enode.ID]*int256.Int256, error)
 	PeerCheques(peer enode.ID) (PeerCheques, error)
 	Cheques() (map[enode.ID]*PeerCheques, error)
 }
@@ -95,7 +95,7 @@ func (s *Swap) AvailableBalance() (*int256.Uint256, error) {
 }
 
 // PeerBalance returns the balance for a given peer
-func (s *Swap) PeerBalance(peer enode.ID) (balance int64, err error) {
+func (s *Swap) PeerBalance(peer enode.ID) (balance *int256.Int256, err error) {
 	if swapPeer := s.getPeer(peer); swapPeer != nil {
 		swapPeer.lock.Lock()
 		defer swapPeer.lock.Unlock()
@@ -106,8 +106,8 @@ func (s *Swap) PeerBalance(peer enode.ID) (balance int64, err error) {
 }
 
 // Balances returns the balances for all known SWAP peers
-func (s *Swap) Balances() (map[enode.ID]int64, error) {
-	balances := make(map[enode.ID]int64)
+func (s *Swap) Balances() (map[enode.ID]*int256.Int256, error) {
+	balances := make(map[enode.ID]*int256.Int256)
 
 	s.peersLock.Lock()
 	for peer, swapPeer := range s.peers {
@@ -121,7 +121,7 @@ func (s *Swap) Balances() (map[enode.ID]int64, error) {
 	balanceIterFunction := func(key []byte, value []byte) (stop bool, err error) {
 		peer := keyToID(string(key), balancePrefix)
 		if _, peerHasBalance := balances[peer]; !peerHasBalance {
-			var peerBalance int64
+			var peerBalance *int256.Int256
 			err = json.Unmarshal(value, &peerBalance)
 			if err == nil {
 				balances[peer] = peerBalance

@@ -83,8 +83,8 @@ func newDefaultParams(t *testing.T) *Params {
 		BaseAddrs:           network.NewBzzAddr(baseKey, nil),
 		LogPath:             emptyLogPath,
 		LogLevel:            DefaultSwapLogLevel, //Info level
-		PaymentThreshold:    int64(DefaultPaymentThreshold),
-		DisconnectThreshold: int64(DefaultDisconnectThreshold),
+		PaymentThreshold:    DefaultPaymentThreshold,
+		DisconnectThreshold: DefaultDisconnectThreshold,
 	}
 }
 

@@ -18,6 +18,8 @@ package swap
 
 import (
 	"time"
+
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 // These are currently arbitrary values which have not been verified nor tested
@@ -25,11 +27,11 @@ import (
 const (
 	// Thresholds which trigger payment or disconnection. The unit is in honey (internal accounting unit)
 	// DefaultPaymentThreshold is set to be equivalent to requesting and serving 10mb of data (2441 chunks (4096 bytes) = 10 mb, 10^7 bytes = 10 mb)
-	DefaultPaymentThreshold    = 2441*RetrieveRequestPrice + (10^7)*ChunkDeliveryPrice // 4096 * 2441 = 10 mb,
-	DefaultDisconnectThreshold = 20 * DefaultPaymentThreshold
+	defaultPaymentThreshold    = 2441*RetrieveRequestPrice + (10^7)*ChunkDeliveryPrice // 4096 * 2441 = 10 mb,
+	defaultDisconnectThreshold = 20 * defaultPaymentThreshold
 	// ChequeDebtTolerance is the lowest resulting balance a node is willing to accept when receiving a cheque
 	// the value is meant to be used below 0, as positive resulting balances should always be accepted when receiving cheques
-	ChequeDebtTolerance = DefaultPaymentThreshold * 20 / 100 // roughly 20% of the payment threshold
+	ChequeDebtTolerance = defaultPaymentThreshold * 20 / 100 // roughly 20% of the payment threshold
 	// DefaultDepositAmount is the default amount to send to the contract when initially deploying
 	// NOTE: deliberate value for now; needs experimentation
 	DefaultDepositAmount = 0
@@ -40,3 +42,6 @@ const (
 	AllowedNetworkID          = 5
 	DefaultTransactionTimeout = 10 * time.Minute
 )
+
+var DefaultPaymentThreshold = int256.Uint256From(defaultPaymentThreshold)
+var DefaultDisconnectThreshold = int256.Uint256From(defaultDisconnectThreshold)

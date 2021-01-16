@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
+	"github.com/ethersphere/swarm/swap/int256"
 )
 
 type peerChequesTestCase struct {
@@ -40,19 +41,19 @@ func TestPeerBalance(t *testing.T) {
 	defer clean()
 
 	// test balance
-	setBalance(t, testPeer, 888)
-	testPeerBalance(t, swap, testPeerID, 888)
+	setBalance(t, testPeer, int256.Int256From(888))
+	testPeerBalance(t, swap, testPeerID, int256.Int256From(888))
 
 	// test balance after change
-	setBalance(t, testPeer, 17000)
-	testPeerBalance(t, swap, testPeerID, 17000)
+	setBalance(t, testPeer, int256.Int256From(17000))
+	testPeerBalance(t, swap, testPeerID, int256.Int256From(17000))
 
 	// test balance for second peer
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
-	setBalance(t, testPeer2, 4)
-	testPeerBalance(t, swap, testPeer2ID, 4)
+	setBalance(t, testPeer2, int256.Int256From(4))
+	testPeerBalance(t, swap, testPeer2ID, int256.Int256From(4))
 
 	// test balance for inexistent node
 	invalidPeerID := adapters.RandomNodeConfig().ID
@@ -67,23 +68,23 @@ func TestPeerBalance(t *testing.T) {
 	// test balance for disconnected node
 	testPeer3 := newDummyPeer().Peer
 	testPeer3ID := testPeer3.ID()
-	err = swap.saveBalance(testPeer3ID, 777)
-	testPeerBalance(t, swap, testPeer3ID, 777)
+	err = swap.saveBalance(testPeer3ID, int256.Int256From(777))
+	testPeerBalance(t, swap, testPeer3ID, int256.Int256From(777))
 
 	// test previous results are still correct
-	testPeerBalance(t, swap, testPeerID, 17000)
-	testPeerBalance(t, swap, testPeer2ID, 4)
+	testPeerBalance(t, swap, testPeerID, int256.Int256From(17000))
+	testPeerBalance(t, swap, testPeer2ID, int256.Int256From(4))
 }
 
 // tests that expected balance for peer matches the result of the Balance function
-func testPeerBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance int64) {
+func testPeerBalance(t *testing.T, s *Swap, id enode.ID, expectedBalance *int256.Int256) {
 	t.Helper()
 	b, err := s.PeerBalance(id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b != expectedBalance {
-		t.Fatalf("Expected peer's balance to be %d, but is %d", expectedBalance, b)
+	if !b.Equals(expectedBalance) {
+		t.Fatalf("Expected peer's balance to be %v, but is %v", expectedBalance, b)
 	}
 }
 
@@ -97,7 +98,7 @@ func addPeer(t *testing.T, s *Swap) *Peer {
 }
 
 // sets the given balance for the given peer, fails if there are errors
-func setBalance(t *testing.T, p *Peer, balance int64) {
+func setBalance(t *testing.T, p *Peer, balance *int256.Int256) {
 	t.Helper()
 	err := p.setBalance(balance)
 	if err != nil {
@@ -112,38 +113,42 @@ func TestBalances(t *testing.T) {
 	defer clean()
 
 	// test balances are empty
-	testBalances(t, swap, map[enode.ID]int64{})
+	testBalances(t, swap, map[enode.ID]*int256.Int256{})
 
 	// add peer
 	testPeer := addPeer(t, swap)
 	testPeerID := testPeer.ID()
 
 	// test balances with one peer
-	setBalance(t, testPeer, 808)
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808})
+	balancePeer := int256.Int256From(808)
+	setBalance(t, testPeer, int256.Int256From(808))
+	testBalances(t, swap, map[enode.ID]*int256.Int256{testPeerID: balancePeer})
 
 	// add second peer
 	testPeer2 := addPeer(t, swap)
 	testPeer2ID := testPeer2.ID()
 
 	// test balances with second peer
-	setBalance(t, testPeer2, 123)
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 808, testPeer2ID: 123})
+	balancePeer2 := int256.Int256From(123)
+	setBalance(t, testPeer2, int256.Int256From(123))
+	testBalances(t, swap, map[enode.ID]*int256.Int256{testPeerID: balancePeer, testPeer2ID: balancePeer2})
 
 	// test balances after balance change for peer
-	setBalance(t, testPeer, 303)
-	testBalances(t, swap, map[enode.ID]int64{testPeerID: 303, testPeer2ID: 123})
+	balancePeer = int256.Int256From(303)
+	balancePeer2 = int256.Int256From(123)
+	setBalance(t, testPeer, int256.Int256From(303))
+	testBalances(t, swap, map[enode.ID]*int256.Int256{testPeerID: balancePeer, testPeer2ID: balancePeer2})
 }
 
 // tests that a map of peerID:balance matches the result of the Balances function
-func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]int64) {
+func testBalances(t *testing.T, s *Swap, expectedBalances map[enode.ID]*int256.Int256) {
 	t.Helper()
 	actualBalances, err := s.Balances()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(actualBalances, expectedBalances) {
-		t.Fatalf("Expected node's balances to be %d, but are %d", expectedBalances, actualBalances)
+		t.Fatalf("Expected node's balances to be %v, but are %v", expectedBalances, actualBalances)
 	}
 }
 

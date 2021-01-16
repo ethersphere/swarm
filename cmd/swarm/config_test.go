@@ -24,7 +24,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/swap"
+	"github.com/ethersphere/swarm/swap/int256"
 	"github.com/ethersphere/swarm/testutil"
 )
 
@@ -227,6 +227,20 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// add 1 to payment threshold
+	paymentThresholdOverride, err := new(int256.Uint256).Add(swap.DefaultPaymentThreshold, int256.Uint256From(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	paymentThreshold := paymentThresholdOverride.Value()
+
+	// add 1 to disconnect threshold
+	disconnectThresholdOverride, err := new(int256.Uint256).Add(swap.DefaultDisconnectThreshold, int256.Uint256From(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	disconnectThreshold := disconnectThresholdOverride.Value()
+
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
@@ -238,8 +252,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 		"--verbosity", fmt.Sprintf("%d", *testutil.Loglevel),
-		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), strconv.FormatUint(swap.DefaultPaymentThreshold+1, 10),
-		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), strconv.FormatUint(swap.DefaultDisconnectThreshold+1, 10),
+		fmt.Sprintf("--%s", SwarmSwapPaymentThresholdFlag.Name), paymentThreshold.String(),
+		fmt.Sprintf("--%s", SwarmSwapDisconnectThresholdFlag.Name), disconnectThreshold.String(),
 		fmt.Sprintf("--%s", SwarmEnablePinningFlag.Name),
 	}
 
@@ -287,12 +301,12 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if info.SwapPaymentThreshold != (swap.DefaultPaymentThreshold + 1) {
-		t.Fatalf("Expected SwapPaymentThreshold to be %d, but got %d", swap.DefaultPaymentThreshold+1, info.SwapPaymentThreshold)
+	if !info.SwapPaymentThreshold.Equals(paymentThresholdOverride) {
+		t.Fatalf("Expected SwapPaymentThreshold to be %v, but got %v", paymentThresholdOverride, info.SwapPaymentThreshold)
 	}
 
-	if info.SwapDisconnectThreshold != (swap.DefaultDisconnectThreshold + 1) {
-		t.Fatalf("Expected SwapDisconnectThreshold to be %d, but got %d", swap.DefaultDisconnectThreshold+1, info.SwapDisconnectThreshold)
+	if !info.SwapDisconnectThreshold.Equals(disconnectThresholdOverride) {
+		t.Fatalf("Expected SwapDisconnectThreshold to be %v, but got %v", disconnectThresholdOverride, info.SwapDisconnectThreshold)
 	}
 
 	if info.EnablePinning != true {

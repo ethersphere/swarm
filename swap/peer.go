@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -42,7 +42,7 @@ type Peer struct {
 	lastReceivedCheque *Cheque        // last cheque we received from the peer
 	lastSentCheque     *Cheque        // last cheque that was sent to peer that was confirmed
 	pendingCheque      *Cheque        // last cheque that was sent to peer but is not yet confirmed
-	balance            int64          // current balance of the peer
+	balance            *int256.Int256 // current balance of the peer
 	logger             Logger         // logger for swap related messages and audit trail with peer identifier
 }
 
@@ -125,26 +125,29 @@ func (p *Peer) getLastSentCumulativePayout() *int256.Uint256 {
 }
 
 // the caller is expected to hold p.lock
-func (p *Peer) setBalance(balance int64) error {
+func (p *Peer) setBalance(balance *int256.Int256) error {
 	p.balance = balance
 	return p.swap.saveBalance(p.ID(), balance)
 }
 
 // getBalance returns the current balance for this peer
 // the caller is expected to hold p.lock
-func (p *Peer) getBalance() int64 {
+func (p *Peer) getBalance() *int256.Int256 {
 	return p.balance
 }
 
 // the caller is expected to hold p.lock
-func (p *Peer) updateBalance(amount int64) error {
+func (p *Peer) updateBalance(amount *int256.Int256) error {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
-	newBalance := p.getBalance() + amount
+	newBalance, err := new(int256.Int256).Add(p.getBalance(), amount)
+	if err != nil {
+		return err
+	}
 	if err := p.setBalance(newBalance); err != nil {
 		return err
 	}
-	p.logger.Debug(UpdateBalanceAction, "balance", strconv.FormatInt(newBalance, 10))
+	p.logger.Debug(UpdateBalanceAction, "balance", newBalance)
 	return nil
 }
 
@@ -156,11 +159,13 @@ func (p *Peer) createCheque() (*Cheque, error) {
 	var cheque *Cheque
 	var err error
 
-	if p.getBalance() >= 0 {
-		return nil, fmt.Errorf("expected negative balance, found: %d", p.getBalance())
+	if p.getBalance().Cmp(int256.Int256From(0)) >= 0 {
+		return nil, fmt.Errorf("expected negative balance, found: %v", p.getBalance())
 	}
 	// the balance should be negative here, we take the absolute value:
-	honey := uint64(-p.getBalance())
+	b := p.getBalance().Value()
+	balance := new(big.Int).Mul(b, big.NewInt(-1))
+	honey := balance.Uint64()
 
 	oraclePrice, err := p.swap.honeyPriceOracle.GetPrice(honey)
 	if err != nil {
@@ -208,14 +213,14 @@ func (p *Peer) sendCheque() error {
 		return fmt.Errorf("error while saving pending cheque: %v", err)
 	}
 
-	honeyAmount := int64(cheque.Honey)
+	honeyAmount := int256.Int256From(int64(cheque.Honey))
 	err = p.updateBalance(honeyAmount)
 	if err != nil {
 		return fmt.Errorf("error while updating balance: %v", err)
 	}
 
 	metrics.GetOrRegisterCounter("swap/cheques/emitted/num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap/cheques/emitted/honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap/cheques/emitted/honey", nil).Inc(int64(cheque.Honey))
 	p.logger.Info(SendChequeAction, "sending cheque to peer", "cheque", cheque)
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,

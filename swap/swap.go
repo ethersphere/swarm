@@ -79,8 +79,8 @@ type Params struct {
 	BaseAddrs           *network.BzzAddr // this node's base address
 	LogPath             string           // optional audit log path
 	LogLevel            int              // optional indicates audit filter level of swap log messages
-	PaymentThreshold    int64            // honey amount at which a payment is triggered
-	DisconnectThreshold int64            // honey amount at which a peer disconnects
+	PaymentThreshold    *int256.Uint256  // honey amount at which a payment is triggered
+	DisconnectThreshold *int256.Uint256  // honey amount at which a peer disconnects
 }
 
 // newSwapInstance is a swap constructor function without integrity checks
@@ -122,8 +122,8 @@ func New(dbPath string, prvkey *ecdsa.PrivateKey, backendURL string, params *Par
 	if stateStore, err = state.NewDBStore(filepath.Join(dbPath, "swap.db")); err != nil {
 		return nil, fmt.Errorf("initializing statestore: %w", err)
 	}
-	if params.DisconnectThreshold <= params.PaymentThreshold {
-		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %d, PaymentThreshold: %d", params.DisconnectThreshold, params.PaymentThreshold)
+	if params.DisconnectThreshold.Cmp(params.PaymentThreshold) < 1 {
+		return nil, fmt.Errorf("disconnect threshold lower or at payment threshold. DisconnectThreshold: %v, PaymentThreshold: %v", params.DisconnectThreshold, params.PaymentThreshold)
 	}
 	// connect to the backend
 	backend, err := ethclient.Dial(backendURL)
@@ -270,11 +270,11 @@ func createOwner(prvkey *ecdsa.PrivateKey) *Owner {
 }
 
 // modifyBalanceOk checks that the amount would not result in crossing the disconnection threshold
-func (s *Swap) modifyBalanceOk(amount int64, swapPeer *Peer) (err error) {
+func (s *Swap) modifyBalanceOk(amount *int256.Int256, swapPeer *Peer) (err error) {
 	// check if balance with peer is over the disconnect threshold and if the message would increase the existing debt
 	balance := swapPeer.getBalance()
-	if balance >= s.params.DisconnectThreshold && amount > 0 {
-		return fmt.Errorf("balance for peer %s is over the disconnect threshold %d and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
+	if balance.Cmp(s.params.DisconnectThreshold) >= 0 && amount.Cmp(int256.Int256From(0)) > 0 {
+		return fmt.Errorf("balance for peer %s is over the disconnect threshold %v and cannot incur more debt, disconnecting", swapPeer.ID().String(), s.params.DisconnectThreshold)
 	}
 
 	return nil
@@ -292,7 +292,7 @@ func (s *Swap) Check(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer.lock.Lock()
 	defer swapPeer.lock.Unlock()
 	// currently this is the only real check needed:
-	return s.modifyBalanceOk(amount, swapPeer)
+	return s.modifyBalanceOk(int256.Int256From(amount), swapPeer)
 }
 
 // Add is the (sole) accounting function
@@ -306,11 +306,11 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	swapPeer.lock.Lock()
 	defer swapPeer.lock.Unlock()
 	// we should probably check here again:
-	if err = s.modifyBalanceOk(amount, swapPeer); err != nil {
+	if err = s.modifyBalanceOk(int256.Int256From(amount), swapPeer); err != nil {
 		return err
 	}
 
-	if err = swapPeer.updateBalance(amount); err != nil {
+	if err = swapPeer.updateBalance(int256.Int256From(amount)); err != nil {
 		return err
 	}
 
@@ -322,7 +322,20 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 // that the balance is *below* the threshold
 // the caller is expected to hold swapPeer.lock
 func (s *Swap) checkPaymentThresholdAndSendCheque(swapPeer *Peer) error {
-	if swapPeer.getBalance() <= -s.params.PaymentThreshold {
+	balance := swapPeer.getBalance()
+	thresholdValue := s.params.PaymentThreshold.Value()
+	// transform Uint256 to Int256
+	threshold, err := int256.NewInt256(thresholdValue)
+	if err != nil {
+		return err
+	}
+
+	negativeThreshold, err := new(int256.Int256).Mul(int256.Int256From(-1), threshold)
+	if err != nil {
+		return err
+	}
+
+	if balance.Cmp(negativeThreshold) < 1 {
 		swapPeer.logger.Info(SendChequeAction, "balance for peer went over the payment threshold, sending cheque", "payment threshold", s.params.PaymentThreshold)
 		return swapPeer.sendCheque()
 	}
@@ -370,14 +383,19 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 	// reset balance by amount
 	// as this is done by the creditor, receiving the cheque, the amount should be negative,
 	// so that updateBalance will calculate balance + amount which result in reducing the peer's balance
-	honeyAmount := int64(cheque.Honey)
-	err = p.updateBalance(-honeyAmount)
+	honeyAmount := int256.Int256From(int64(cheque.Honey))
+	honey, err := new(int256.Int256).Mul(int256.Int256From(-1), honeyAmount)
+	if err != nil {
+		return protocols.Break(err)
+	}
+
+	err = p.updateBalance(honey)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("updating balance: %w", err))
 	}
 
 	metrics.GetOrRegisterCounter("swap/cheques/received/num", nil).Inc(1)
-	metrics.GetOrRegisterCounter("swap/cheques/received/honey", nil).Inc(honeyAmount)
+	metrics.GetOrRegisterCounter("swap/cheques/received/honey", nil).Inc(int64(cheque.Honey))
 
 	err = p.Send(ctx, &ConfirmChequeMsg{
 		Cheque: cheque,
@@ -476,11 +494,27 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 		return nil, err
 	}
 
+	chequeHoney := new(big.Int).SetUint64(cheque.Honey)
+	honey, err := int256.NewInt256(chequeHoney)
+	if err != nil {
+		return nil, err
+	}
+
 	// calculate tentative new balance after cheque is processed
-	newBalance := p.getBalance() - int64(cheque.Honey)
+	newBalance, err := new(int256.Int256).Sub(p.getBalance(), honey)
+	if err != nil {
+		return nil, err
+	}
+
+	debtTolerance := big.NewInt(-int64(ChequeDebtTolerance))
+	tolerance, err := int256.NewInt256(debtTolerance)
+	if err != nil {
+		return nil, err
+	}
+
 	// check if this new balance would put creditor into debt
-	if newBalance < -int64(ChequeDebtTolerance) {
-		return nil, fmt.Errorf("received cheque would result in balance %d which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
+	if newBalance.Cmp(tolerance) == -1 {
+		return nil, fmt.Errorf("received cheque would result in balance %v which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
@@ -532,13 +566,13 @@ func (s *Swap) loadPendingCheque(p enode.ID) (cheque *Cheque, err error) {
 
 // loadBalance loads the current balance for the peer from the store
 // and returns 0 if there was no prior balance saved
-func (s *Swap) loadBalance(p enode.ID) (balance int64, err error) {
+func (s *Swap) loadBalance(p enode.ID) (balance *int256.Int256, err error) {
 	err = s.store.Get(balanceKey(p), &balance)
 	if err == state.ErrNotFound {
-		return 0, nil
+		return int256.Int256From(0), nil
 	}
 	if err != nil {
-		return 0, err
+		return int256.Int256From(0), err
 	}
 	return balance, nil
 }
@@ -559,7 +593,7 @@ func (s *Swap) savePendingCheque(p enode.ID, cheque *Cheque) error {
 }
 
 // saveBalance saves balance as the current balance for peer
-func (s *Swap) saveBalance(p enode.ID, balance int64) error {
+func (s *Swap) saveBalance(p enode.ID, balance *int256.Int256) error {
 	return s.store.Put(balanceKey(p), balance)
 }
 
