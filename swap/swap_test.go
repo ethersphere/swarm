@@ -1506,5 +1506,4 @@ func TestAvailableBalance(t *testing.T) {
 	if !availableBalance.Equals(expectedBalance) {
 		t.Fatalf("available balance not equal to deposited minus withdraw. available balance: %v, expected balance: %v", availableBalance, expectedBalance)
 	}
-
 }
