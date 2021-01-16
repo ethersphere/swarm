@@ -18,6 +18,8 @@ package shed
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -75,7 +77,7 @@ func (i Item) Merge(i2 Item) (new Item) {
 
 // Index represents a set of LevelDB key value pairs that have common
 // prefix. It holds functions for encoding and decoding keys and values
-// to provide transparent actions on saved data which inclide:
+// to provide transparent actions on saved data which include:
 // - getting a particular Item
 // - saving a particular Item
 // - iterating over a sorted LevelDB keys
@@ -448,4 +450,53 @@ func (f Index) CountFrom(start Item) (count int, err error) {
 		count++
 	}
 	return count, it.Error()
+}
+
+func (f Index) Offset(start *Item, shift int64) (i Item, err error) {
+	var startKey []byte
+	if start != nil {
+		startKey, err = f.encodeKeyFunc(*start)
+		if err != nil {
+			return i, err
+		}
+	} else {
+		startKey = f.prefix
+	}
+
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	ok := it.Seek(startKey)
+	if !ok || !bytes.HasPrefix(it.Key(), startKey) {
+		return i, errors.New("start Item not found in index")
+	}
+
+	next := it.Next
+	if shift < 0 {
+		next = it.Prev
+		shift *= -1
+	}
+
+	key := it.Key()
+	for shift != 0 && next() {
+		key = it.Key()
+		if key[0] != f.prefix[0] {
+			break
+		}
+		shift--
+	}
+	if shift != 0 {
+		return i, fmt.Errorf("key not found, start: %p, shift: %d", start, shift)
+	}
+
+	keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
+	if err != nil {
+		return i, err
+	}
+	// create a copy of value byte slice not to share leveldb underlaying slice array
+	valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
+	if err != nil {
+		return i, err
+	}
+	return keyItem.Merge(valueItem), it.Error()
 }

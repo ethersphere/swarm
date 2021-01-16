@@ -242,6 +242,24 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.retrieval = retrieval.New(to, self.netStore, bzzconfig.Address, self.swap)
 	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
+	// update localstore responsibility radius on kademlia
+	// neighbourhood depth change.
+	go func() {
+		c, unsbscribe := to.SubscribeToNeighbourhoodDepthChange()
+		self.cleanupFuncs = append(self.cleanupFuncs, func() error {
+			unsbscribe()
+			return nil
+		})
+
+		for {
+			_, ok := <-c
+			if !ok {
+				return
+			}
+			localStore.SetResponsibilityRadius(to.NeighbourhoodDepth())
+		}
+	}()
+
 	feedsHandler.SetStore(self.netStore)
 
 	syncing := true

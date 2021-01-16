@@ -1104,3 +1104,172 @@ func TestIndex_HasMulti(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
+
+func generateItems(n int) []Item {
+	items := make([]Item, 0, n)
+
+	for i := 0; i < n; i++ {
+		items = append(items, Item{
+			Address:        []byte(fmt.Sprintf("hash%03d", i)),
+			Data:           []byte(fmt.Sprintf("data%06d", i)),
+			StoreTimestamp: time.Now().UnixNano(),
+		})
+	}
+
+	return items
+}
+
+func TestIndexOffset(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index1, err := db.NewIndex("test1", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index2, err := db.NewIndex("test2", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index3, err := db.NewIndex("test3", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index4, err := db.NewIndex("test4", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items := generateItems(100)
+	for _, item := range items {
+		index1.Put(item)
+		index2.Put(item)
+		// index3 is intentionally empty
+		index4.Put(item)
+	}
+
+	tests := []struct {
+		start, offset int
+	}{
+		{0, 0},
+		{0, 1},
+		{0, 50},
+		{44, 0},
+		{10, 10},
+		{0, len(items) - 1},
+		{10, -3},
+		{10, -10},
+		{len(items) - 1, 0},
+		{len(items) - 2, 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%d_%d", tc.start, tc.offset), func(tt *testing.T) {
+			item, err := index1.Offset(&items[tc.start], int64(tc.offset))
+			if err != nil {
+				tt.Error(err)
+			}
+			checkItem(tt, item, items[tc.start+tc.offset])
+
+			item, err = index2.Offset(&items[tc.start], int64(tc.offset))
+			if err != nil {
+				tt.Error(err)
+			}
+			checkItem(tt, item, items[tc.start+tc.offset])
+
+			item, err = index3.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+
+			item, err = index4.Offset(&items[tc.start], int64(tc.offset))
+			if err != nil {
+				tt.Error(err)
+			}
+			checkItem(tt, item, items[tc.start+tc.offset])
+		})
+	}
+
+	// special cases - testing all indexes, to catch all edge cases
+	tests = []struct {
+		start, offset int
+	}{
+		{0, -1},
+		{len(items) - 1, 1},
+		{0, -1000},
+		{len(items) - 1, 1000},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%d_%d", tc.start, tc.offset), func(tt *testing.T) {
+			_, err := index1.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+			_, err = index2.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+			_, err = index3.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+			_, err = index4.Offset(&items[tc.start], int64(tc.offset))
+			if err == nil {
+				tt.Error("expected error")
+			}
+		})
+	}
+
+	t.Run("Invalid start Item", func(tt *testing.T) {
+		invalid := Item{
+			Address:         []byte("out-of-index"),
+			Data:            []byte("not so random data"),
+			AccessTimestamp: time.Now().UnixNano(),
+		}
+		_, err := index1.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+		_, err = index2.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+		_, err = index3.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+		_, err = index4.Offset(&invalid, 0)
+		if err == nil {
+			tt.Error("expected error")
+		}
+	})
+
+	t.Run("nil start Item", func(tt *testing.T) {
+		item, err := index1.Offset(nil, 0)
+		if err != nil {
+			t.Error(err)
+		}
+		checkItem(t, item, items[0])
+
+		item, err = index1.Offset(nil, 1)
+		if err != nil {
+			t.Error(err)
+		}
+		checkItem(t, item, items[1])
+
+		item, err = index1.Offset(nil, -1)
+		if err == nil {
+			t.Error("Error was expected!")
+		}
+
+		item, err = index2.Offset(nil, 10)
+		if err != nil {
+			t.Error(err)
+		}
+		checkItem(t, item, items[10])
+	})
+}

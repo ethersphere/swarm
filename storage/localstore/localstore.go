@@ -89,8 +89,14 @@ type DB struct {
 	// pin files Index
 	pinIndex shed.Index
 
+	gcPolicy GCPolicy
+
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
+
+	// field that stores all positions (item and index)
+	// of all gc quantiles
+	gcQuantiles shed.JSONField
 
 	// garbage collection is triggered when gcSize exceeds
 	// the capacity value
@@ -106,6 +112,9 @@ type DB struct {
 	// a wait group to ensure all updateGC goroutines
 	// are done before closing the database
 	updateGCWG sync.WaitGroup
+
+	responsibilityRadius   int
+	responsibilityRadiusMu sync.RWMutex
 
 	baseKey []byte
 
@@ -176,6 +185,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		collectGarbageWorkerDone: make(chan struct{}),
 		putToGCCheck:             o.PutToGCCheck,
 	}
+	db.gcPolicy = &DefaultGCPolicy{db}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity
 	}
@@ -386,6 +396,8 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+	// create a bucket for gc index quantiles
+	db.gcQuantiles, err = db.shed.NewJSONField("gc-quantiles")
 
 	// Create a index structure for storing pinned chunks and their pin counts
 	db.pinIndex, err = db.shed.NewIndex("Hash->PinCounter", shed.IndexFuncs{
@@ -492,6 +504,20 @@ func (db *DB) DebugIndices() (indexInfo map[string]int, err error) {
 	indexInfo["gcSize"] = int(val)
 
 	return indexInfo, err
+}
+
+func (db *DB) SetResponsibilityRadius(r int) {
+	db.responsibilityRadiusMu.Lock()
+	defer db.responsibilityRadiusMu.Unlock()
+
+	db.responsibilityRadius = r
+}
+
+func (db *DB) getResponsibilityRadius() (r int) {
+	db.responsibilityRadiusMu.RLock()
+	defer db.responsibilityRadiusMu.RUnlock()
+
+	return db.responsibilityRadius
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.

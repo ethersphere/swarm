@@ -529,3 +529,53 @@ func TestSetTestHookCollectGarbage(t *testing.T) {
 		t.Errorf("got hook value %v, want %v", got, original)
 	}
 }
+
+func TestUpdateGCQuantiles(t *testing.T) {
+	dir, err := ioutil.TempDir("", "localstore-gc-quantiles-update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	baseKey := make([]byte, 32)
+	if _, err := rand.Read(baseKey); err != nil {
+		t.Fatal(err)
+	}
+	options := &Options{Capacity: 100}
+	db, err := New(dir, baseKey, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := int(2 * options.Capacity)
+
+	for i := 0; i < count; i++ {
+		ch := generateTestRandomChunk()
+
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = db.Set(context.Background(), chunk.ModeSetAccess, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = db.Set(context.Background(), chunk.ModeSetSyncPush, ch.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err = New(dir, baseKey, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	db.collectGarbage()
+}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethersphere/swarm/shed"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -201,7 +202,7 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	// provided by the access function, and it is not
 	// a property of a chunk provided to Accessor.Put.
 
-	i, err := db.retrievalDataIndex.Get(item)
+	accessIndexItem, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 			// chunk is not found,
@@ -213,8 +214,8 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		}
 		return 0, err
 	}
-	item.StoreTimestamp = i.StoreTimestamp
-	item.BinID = i.BinID
+	item.StoreTimestamp = accessIndexItem.StoreTimestamp
+	item.BinID = accessIndexItem.BinID
 
 	switch mode {
 	case chunk.ModeSetSyncPull:
@@ -286,10 +287,10 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 		db.pushIndex.DeleteInBatch(batch, item)
 	}
 
-	i, err = db.retrievalAccessIndex.Get(item)
+	accessIndexItem, err = db.retrievalAccessIndex.Get(item)
 	switch err {
 	case nil:
-		item.AccessTimestamp = i.AccessTimestamp
+		item.AccessTimestamp = accessIndexItem.AccessTimestamp
 		db.gcIndex.DeleteInBatch(batch, item)
 		gcSizeChange--
 	case leveldb.ErrNotFound:
@@ -301,12 +302,12 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	// Add in gcIndex only if this chunk is not pinned
-	ok, err := db.pinIndex.Has(item)
+	pinned, err := db.pinIndex.Has(item)
 	if err != nil {
 		return 0, err
 	}
-	if !ok {
-		err = db.gcIndex.PutInBatch(batch, item)
+	if !pinned {
+		err := db.addToGC(batch, item, accessIndexItem)
 		if err != nil {
 			return 0, err
 		}
@@ -314,6 +315,49 @@ func (db *DB) setSync(batch *leveldb.Batch, addr chunk.Address, mode chunk.ModeS
 	}
 
 	return gcSizeChange, nil
+}
+
+func (db *DB) addToGC(batch *leveldb.Batch, item shed.Item, i shed.Item) error {
+	// set access timestamp based on quantile calculated from
+	// chunk proximity and db.responsibilityRadius
+	f := db.gcPolicy.GetEvictionMetric(item.Address)
+	gcSize, err := db.gcSize.Get()
+	if err != nil {
+		return err
+	}
+	position := quantilePosition(gcSize, f.Numerator, f.Denominator)
+	var gcQuantiles quantiles
+	err = db.gcQuantiles.Get(&gcQuantiles)
+	if err != nil && err != leveldb.ErrNotFound {
+		return err
+	}
+	var found bool
+	for _, q := range gcQuantiles {
+		if q.Fraction == f {
+			item.AccessTimestamp = q.Item.AccessTimestamp + 1
+			found = true
+			break
+		}
+	}
+	if len(gcQuantiles) > 0 && !found {
+		var shift int64
+		if closest := gcQuantiles.Closest(f); closest == nil {
+			shift = int64(position)
+		} else {
+			shift = int64(closest.Position) - int64(position)
+		}
+		i, err = db.gcIndex.Offset(nil, shift)
+		if err == nil {
+			item.AccessTimestamp = i.AccessTimestamp + 1
+		}
+	}
+	gcQuantiles = gcQuantiles.Set(f, item, position)
+	db.gcQuantiles.PutInBatch(batch, gcQuantiles)
+
+	db.retrievalAccessIndex.PutInBatch(batch, item)
+	db.pushIndex.DeleteInBatch(batch, item)
+	db.gcIndex.PutInBatch(batch, item)
+	return nil
 }
 
 // setRemove removes the chunk by updating indexes:
