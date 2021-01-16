@@ -914,8 +914,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
 			return
 		}
-	} else {
-		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
 
 	log.Debug("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
