@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	contract "github.com/ethersphere/go-sw3/contracts-v0-2-0/erc20simpleswap"
+	contract "github.com/ethersphere/go-sw3/contracts-v0-2-3/erc20simpleswap"
 	"github.com/ethersphere/swarm/swap/chain"
 	"github.com/ethersphere/swarm/swap/int256"
 )
@@ -53,6 +53,8 @@ type Contract interface {
 	Issuer(opts *bind.CallOpts) (common.Address, error)
 	// PaidOut returns the total paid out amount for the given address
 	PaidOut(opts *bind.CallOpts, addr common.Address) (*big.Int, error)
+	// Bounced returns if there has been a bounced cheque from the chequebook
+	Bounced(opts *bind.CallOpts) (bool, error)
 }
 
 // CashChequeResult summarizes the result of a CashCheque or CashChequeBeneficiary call
@@ -89,6 +91,12 @@ func InstanceAt(address common.Address, backend chain.Backend) (Contract, error)
 	}
 	c := simpleContract{instance: instance, address: address, backend: backend}
 	return c, err
+}
+
+// Bounced returns the boolean indicating if a cheque attempted to be cashed has been bounced it in the receiver contract
+// Once its bounced, it will not change it's state again, unless re deployed.
+func (s simpleContract) Bounced(opts *bind.CallOpts) (bool, error) {
+	return s.instance.Bounced(opts)
 }
 
 // Withdraw withdraws amount from the chequebook and blocks until the transaction is mined

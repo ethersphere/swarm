@@ -463,6 +463,14 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 		return nil, err
 	}
 
+	bouncedCheque, err := p.hasBouncedCheque()
+	if err != nil {
+		return nil, err
+	}
+	if bouncedCheque {
+		return nil, ErrBouncedCheque
+	}
+
 	lastCheque := p.getLastReceivedCheque()
 
 	// TODO: there should probably be a lock here?

@@ -39,6 +39,9 @@ var (
 	// structure of the HandshakeMsg
 	ErrInvalidHandshakeMsg = errors.New("invalid handshake message")
 
+	// ErrBouncedCheque is used when the peer has a bounced cheque and should be disconnected
+	ErrBouncedCheque = errors.New("bounced cheque detected")
+
 	// Spec is the swap protocol specification
 	Spec = &protocols.Spec{
 		Name:       "swap",

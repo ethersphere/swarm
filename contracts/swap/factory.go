@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
+	chequebookFactory "github.com/ethersphere/go-sw3/contracts-v0-2-3/simpleswapfactory"
 	"github.com/ethersphere/swarm/swap/chain"
 )
 

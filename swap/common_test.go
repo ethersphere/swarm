@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-0/simpleswapfactory"
+	contractFactory "github.com/ethersphere/go-sw3/contracts-v0-2-3/simpleswapfactory"
 	cswap "github.com/ethersphere/swarm/contracts/swap"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"

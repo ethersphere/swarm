@@ -72,6 +72,15 @@ func NewPeer(p *protocols.Peer, s *Swap, beneficiary common.Address, contractAdd
 		return nil, err
 	}
 
+	bouncedCheque := false
+	bouncedCheque, err = peer.hasBouncedCheque()
+	if err != nil {
+		return nil, err
+	}
+	if bouncedCheque {
+		return nil, ErrBouncedCheque
+	}
+
 	return peer, nil
 }
 
@@ -220,4 +229,21 @@ func (p *Peer) sendCheque() error {
 	return p.Send(context.Background(), &EmitChequeMsg{
 		Cheque: cheque,
 	})
+}
+
+// hasBouncedCheque returns the boolean indicating if a cheque attempted to be cashed has been bounced it in the receiver peer
+// Once its bounced, it will not change it's state again, unless re deployed.
+func (p *Peer) hasBouncedCheque() (bool, error) {
+	bouncedCheque := false
+	var err error
+
+	// if chequebook not defined don't call contract methods
+	if p.swap.contract != nil {
+		bouncedCheque, err = p.swap.contract.Bounced(nil)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return bouncedCheque, nil
 }
