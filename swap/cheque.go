@@ -132,22 +132,22 @@ func (cheque *Cheque) verifyChequeProperties(p *Peer, expectedBeneficiary common
 
 // verifyChequeAgainstLast verifies that the amount is higher than in the previous cheque and the increase is as expected
 // returns the actual amount received in this cheque
-func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *int256.Uint256) (*int256.Uint256, error) {
+func (cheque *Cheque) verifyChequeAgainstLast(lastCheque *Cheque, expectedAmount *int256.Uint256) error {
 	actualAmount := cheque.CumulativePayout.Copy()
 
 	if lastCheque != nil {
 		if cheque.CumulativePayout.Cmp(lastCheque.CumulativePayout) < 1 {
-			return nil, fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %v, was: %v", lastCheque.CumulativePayout, cheque.CumulativePayout)
+			return fmt.Errorf("wrong cheque parameters: expected cumulative payout larger than %v, was: %v", lastCheque.CumulativePayout, cheque.CumulativePayout)
 		}
 
 		actualAmount.Sub(actualAmount, lastCheque.CumulativePayout)
 	}
 
 	if !expectedAmount.Equals(actualAmount) {
-		return nil, fmt.Errorf("unexpected amount for honey, expected %v was %v", expectedAmount, actualAmount)
+		return fmt.Errorf("unexpected amount for honey, expected %v was %v", expectedAmount, actualAmount)
 	}
 
-	return actualAmount, nil
+	return nil
 }
 
 func (cheque *Cheque) String() string {

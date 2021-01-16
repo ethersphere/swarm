@@ -44,6 +44,4 @@ allowing for a multi-currency design.
 const (
 	RetrieveRequestPrice = uint64(8043036262)
 	ChunkDeliveryPrice   = uint64(17672687)
-	// default conversion of honey into output currency - currently ETH in Wei
-	defaultHoneyPrice = uint64(1)
 )

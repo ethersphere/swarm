@@ -62,7 +62,6 @@ type Swap struct {
 	params            *Params                    // economic and operational parameters
 	contract          contract.Contract          // reference to the smart contract
 	chequebookFactory contract.SimpleSwapFactory // the chequebook factory used
-	honeyPriceOracle  HoneyOracle                // oracle which resolves the price of honey (in Wei)
 	cashoutProcessor  *CashoutProcessor          // processor for cashing out
 	logger            Logger                     //Swap Logger
 }
@@ -92,7 +91,6 @@ func newSwapInstance(stateStore state.Store, owner *Owner, backend chain.Backend
 		owner:             owner,
 		params:            params,
 		chequebookFactory: chequebookFactory,
-		honeyPriceOracle:  NewHoneyPriceOracle(),
 		chainID:           chainID,
 		cashoutProcessor:  newCashoutProcessor(backend, owner.privateKey),
 		logger:            logger,
@@ -360,7 +358,7 @@ func (s *Swap) handleEmitChequeMsg(ctx context.Context, p *Peer, msg *EmitCheque
 		})
 	}
 
-	_, err := s.processAndVerifyCheque(cheque, p)
+	err := s.processAndVerifyCheque(cheque, p)
 	if err != nil {
 		return protocols.Break(fmt.Errorf("processing and verifying received cheque: %w", err))
 	}
@@ -458,29 +456,22 @@ func cashCheque(s *Swap, cheque *Cheque) {
 // processAndVerifyCheque verifies the cheque and compares it with the last received cheque
 // if the cheque is valid it will also be saved as the new last cheque
 // the caller is expected to hold p.lock
-func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256, error) {
+func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) error {
 	if err := cheque.verifyChequeProperties(p, s.owner.address); err != nil {
-		return nil, err
+		return err
 	}
 
 	lastCheque := p.getLastReceivedCheque()
 
-	// TODO: there should probably be a lock here?
-	expectedAmount, err := s.honeyPriceOracle.GetPrice(cheque.Honey)
-	if err != nil {
-		return nil, err
-	}
-
-	actualAmount, err := cheque.verifyChequeAgainstLast(lastCheque, int256.Uint256From(expectedAmount))
-	if err != nil {
-		return nil, err
+	if err := cheque.verifyChequeAgainstLast(lastCheque, int256.Uint256From(cheque.Honey)); err != nil {
+		return err
 	}
 
 	// calculate tentative new balance after cheque is processed
 	newBalance := p.getBalance() - int64(cheque.Honey)
 	// check if this new balance would put creditor into debt
 	if newBalance < -int64(ChequeDebtTolerance) {
-		return nil, fmt.Errorf("received cheque would result in balance %d which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
+		return fmt.Errorf("received cheque would result in balance %d which exceeds tolerance %d and would cause debt", newBalance, ChequeDebtTolerance)
 	}
 
 	if err := p.setLastReceivedCheque(cheque); err != nil {
@@ -488,7 +479,7 @@ func (s *Swap) processAndVerifyCheque(cheque *Cheque, p *Peer) (*int256.Uint256,
 		// TODO: what do we do here? Related issue: https://github.com/ethersphere/swarm/issues/1515
 	}
 
-	return actualAmount, nil
+	return nil
 }
 
 // loadLastReceivedCheque loads the last received cheque for the peer from the store
