@@ -1,37 +1,40 @@
-## Swarm  <!-- omit in toc -->
 
-[https://swarm.ethereum.org](https://swarm.ethereum.org)
+⚠️ This repository is archived and not anymore under active development. Read below to learn about the continuation of this project ⚠️
 
-Swarm is a distributed storage platform and content distribution service, a native base layer service of the ethereum web3 stack. The primary objective of Swarm is to provide a decentralized and redundant store for dapp code and data as well as block chain and state data. Swarm is also set out to provide various base layer services for web3, including node-to-node messaging, media streaming, decentralised database services and scalable state-channel infrastructure for decentralised service economies.
-
-## New Bee client
+## Swarm is reincarnated as Bee
 
 In the effort to release a production-ready version of Swarm, the Swarm dev team has migrated their effort to build the [new Bee client](https://github.com/ethersphere/bee), a brand-new implementation of Swarm. The main reason for this switch was the availability of a more mature networking layer (libp2p) and the secondary reason being that the insight gained from developing Swarm taught us many lessons which can be implemented best from scratch. While Bee does not currently expose every feature in the original Swarm client, development is happening at lightspeed and soon, it will surpass Swarm in functionality and stability!
 
 Please refer to [Swarm webpage](https://ethswarm.org) for more information about the state of the Bee client and to [the Bee documentation](https://docs.ethswarm.org) for info on installing and using the new client.
 
-### Original Swarm client
+## Original Swarm client
 
 The old Swarm client, contained in this repository, can still be used while the network exists, however no maintenance or upgrades are planned for it.
 
 Please read the [The sun is setting for the old Swarm](https://medium.com/ethereum-swarm/the-sun-is-setting-for-the-old-swarm-network-46cdc8048f8b) network blog post for more information and also how to reach out for help with migration.
 
-### Compatibility of Bee with the first Swarm
 
-No compatibility on the network layer with the first Ethereum Swarm implementation can be provided, mainly due to the migration in underlying network protocol from devp2p to libp2p. This means that a Bee node cannot join first Swarm network and vice versa. Migrating data is possible, please get in touch for more info on how to approach this. 🐝 
+## Compatibility of Bee with the first Swarm
 
-### How to get in touch
+No compatibility on the network layer with the first Ethereum Swarm implementation can be provided, mainly due to the migration in underlying network protocol from devp2p to libp2p. This means that a Bee node cannot join first Swarm network and vice versa. Migrating data is possible, please get in touch for more info on how to approach this.
+
+## How to get in touch
 
 Please use any of the following channels for help with migration or any other questions:
 
-The Swarm team is reachable on [Mattermost](http://beehive.ethswarm.org/).
-Join the Swarm Orange Lounge on [Telegram](https://t.me/joinchat/GoVG8RHYjUpD_-bEnLC4EQ).
+The Swarm team is reachable on [Discord](https://discord.gg/wdghaQsGq5).
+
 Follow us on [Twitter](https://twitter.com/ethswarm).
 
+---
+
+# Swarm  <!-- omit in toc -->
 [![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![](https://godoc.org/github.com/nathany/looper?status.svg)](https://godoc.org/github.com/ethersphere/swarm/)
 
+[https://swarm.ethereum.org](https://swarm.ethereum.org)
+
+Swarm is a distributed storage platform and content distribution service, a native base layer service of the ethereum web3 stack. The primary objective of Swarm is to provide a decentralized and redundant store for dapp code and data as well as block chain and state data. Swarm is also set out to provide various base layer services for web3, including node-to-node messaging, media streaming, decentralised database services and scalable state-channel infrastructure for decentralised service economies.
 
 ## Table of Contents  <!-- omit in toc -->
 
